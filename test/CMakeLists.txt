@@ -9,6 +9,8 @@ set(SRCS
     
 add_executable(tu_cgmath ${SRCS})
 
+gtest_discover_tests(tu_cgmath)
+
 target_link_libraries(tu_cgmath cgmath gtest pthread)
 
 install(TARGETS tu_cgmath DESTINATION .)
