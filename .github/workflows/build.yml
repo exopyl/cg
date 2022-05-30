@@ -42,5 +42,3 @@ jobs:
       # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
       run: ctest -C ${{env.BUILD_TYPE}}
       
-    - name: Coverage
-      run: curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov
