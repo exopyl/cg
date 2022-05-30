@@ -5,9 +5,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -g")
 set(CMAKE_INSTALL_PREFIX "./build")
 
-#set(build "build")
-#set(include_dest "include/${PROJECT_NAME}")
-
 enable_testing()
 
 add_subdirectory(src)
