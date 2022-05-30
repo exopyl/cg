@@ -8,5 +8,7 @@ set(CMAKE_INSTALL_PREFIX "./build")
 #set(build "build")
 #set(include_dest "include/${PROJECT_NAME}")
 
+enable_testing()
+
 add_subdirectory(src)
 add_subdirectory(test)
