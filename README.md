@@ -1,3 +1,3 @@
 ## cg
 
-[![Build](https://github.com/exopyl/cg/actions/workflows/cmake.yml/badge.svg)](https://github.com/exopyl/cg/actions)
+[![Build](https://github.com/exopyl/cg/actions/workflows/build.yml/badge.svg)](https://github.com/exopyl/cg/actions)
