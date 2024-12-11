@@ -82,7 +82,7 @@ GEN_T BINTREE BINTREE::get_right (void) const
 {
 	return m_right;
 }
-
+#if 0
 GEN_T BINTREE& BINTREE::operator= (const bintree& src)
 {
 	if (&src != this)
@@ -92,6 +92,7 @@ GEN_T BINTREE& BINTREE::operator= (const bintree& src)
 	}
 	return &this;
 }
+#endif
 
 #undef GEN_T
 #undef BINTREE
