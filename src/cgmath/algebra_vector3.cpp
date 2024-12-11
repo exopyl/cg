@@ -1,4 +1,4 @@
-#include "vec3f.h"
+#include "algebra_vector3.h"
 
 void vec3_triangle_normal (vec3 n, vec3 v1, vec3 v2, vec3 v3)
 {

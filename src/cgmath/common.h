@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <math.h>
+#include <float.h>
 
 #ifdef _MSC_VER
 
@@ -179,7 +180,10 @@ private:
 //const double nan = (std::numeric_limits<double>::quiet_NaN());
 //const double NAN = (std::numeric_limits<double>::quiet_NaN());
 
+#ifndef INFINITY
 #define INFINITY numeric_limits<float>::infinity()
+#endif // INFINITY
+
 #ifdef WIN32
     #ifndef NAN
         static const unsigned long __nan[2] = {0xffffffff, 0x7fffffff};

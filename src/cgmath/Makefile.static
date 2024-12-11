@@ -1,0 +1,23 @@
+include ../Makefile.inc
+
+CFLAGS	= $(CFLAGS_INC)
+OBJLIBS	= libcgmath.a
+SRCS     = $(wildcard *.cpp)
+OBJS 	 = $(SRCS:.cpp=.o)
+
+all : $(OBJLIBS)
+
+%.o: %.cpp
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(OBJLIBS) : $(OBJS)
+	$(AR) $(ARFLAGS) rv ../$(OBJLIBS) $?
+	$(RANLIB) ../$(OBJLIBS)
+
+clean :
+	$(ECHO) cleaning up in subdir
+	-$(RM) -f $(OBJS) *~
+
+force_look :
+	true
+

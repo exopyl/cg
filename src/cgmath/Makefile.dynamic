@@ -1,0 +1,24 @@
+include ../Makefile.inc
+
+CFLAGS	      = $(CFLAGS_INC)
+OBJLIBDYNAMIC = libcgmath.so
+SRCS          = $(wildcard *.cpp)
+OBJS 	      = $(SRCS:.cpp=.o)
+
+all : $(OBJLIBDYNAMIC)
+
+%.o: %.cpp
+	$(CC) $(CFLAGS) -fPIC -c -o $@ $<
+
+$(OBJLIBDYNAMIC) : $(OBJS)
+	$(CC) -shared -Wl,-soname,$(OBJLIBDYNAMIC).1 -o ../$(OBJLIBDYNAMIC).1.0 $(OBJS)
+	ln -sf $(OBJLIBDYNAMIC).1.0 ../$(OBJLIBDYNAMIC)
+	ln -sf $(OBJLIBDYNAMIC).1.0 ../$(OBJLIBDYNAMIC).1
+
+clean :
+	$(ECHO) cleaning up in subdir
+	-$(RM) -f $(OBJS) ../$(OBJLIBDYNAMIC) ../$(OBJLIBDYNAMIC).1 ../$(OBJLIBDYNAMIC).1.0 *~
+
+force_look :
+	true
+

@@ -2,16 +2,9 @@ cmake_minimum_required(VERSION 3.18.4)
 
 project(libcgmath)
 
-set(srcs
-    common.cpp
-    vec3f.cpp
-    )
-    
-set(headers
-    common.h
-    vec3f.h
-    )
+file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/*.cpp)
+file(GLOB HEADER_FILES ${PROJECT_SOURCE_DIR}/*.h)
 
-add_library(cgmath SHARED ${headers} ${srcs})
+add_library(cgmath SHARED ${HEADER_FILES} ${SRC_FILES})
 
 install(TARGETS cgmath DESTINATION .)
