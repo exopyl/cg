@@ -1,0 +1,17 @@
+#include "mesh.h"
+#include "./io/FileFormat_U3D.h"
+
+//
+// U3D
+//
+int Mesh::import_u3d (char *filename)
+{
+	if (filename == NULL)
+		return -1;
+		
+	U3DModel *pU3DModel = LoadU3DFile (filename);
+	DumpU3DFile (pU3DModel, "u3d_output.html");
+	FreeU3DModel (pU3DModel);
+
+	return 0;
+}

@@ -1,0 +1,60 @@
+#ifndef __LSYSTEM_INIT_H__
+#define __LSYSTEM_INIT_H__
+
+#include "lsystem.h"
+
+#include <map>
+
+enum LSystemType {
+
+	// Closed curves
+	LSYSTEM_KOCH_CURVE,
+	LSYSTEM_QUADRATIC_KOCH_ISLAND_A,
+	LSYSTEM_QUADRATIC_KOCH_ISLAND_B,
+	LSYSTEM_SQUARE_SIERPINSKI,
+	LSYSTEM_VAN_KOCH_SNOWFLAKE,
+
+	// Opened curves
+	LSYSTEM_PEANO_CURVE,
+	LSYSTEM_DRAGON_CURVE,
+	LSYSTEM_HEXAGONAL_GOSPER,
+	LSYSTEM_QUADRATIC_GOSPER,
+	LSYSTEM_HILBERT,
+	LSYSTEM_QUADRATIC_SNOWFLAKE,
+	LSYSTEM_SIERPINSKI_ARROWHEAD,
+
+	// Triangles
+	LSYSTEM_TRIANGLE,
+
+	// Squares
+	LSYSTEM_BOARD,
+	LSYSTEM_CROSS_A,
+	LSYSTEM_CROSS_B,
+	LSYSTEM_RINGS,
+
+	// Vegetals
+	LSYSTEM_LEAF,
+	LSYSTEM_BUSH1,
+	LSYSTEM_BUSH2,
+	LSYSTEM_BUSH3,
+	LSYSTEM_BUSH4,
+
+	// 3D
+	LSYSTEM_HILBERT_CURVE_3D,
+
+	// PLANT 3D
+	LSYSTEM_PLANT1,
+	LSYSTEM_PLANT2,
+	LSYSTEM_PLANT3
+};
+
+typedef struct LSystemData
+{
+	unsigned int nNberIterations;
+	LSystem* pLSystem;
+	bool bClosed;
+} LSystemData;
+
+extern void InitLSystems (std::map<int,LSystemData*>& mapLSystems);
+
+#endif // __LSYSTEM_INIT_H__

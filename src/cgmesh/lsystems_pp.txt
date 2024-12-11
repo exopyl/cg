@@ -1,0 +1,32 @@
+25
+F:[+F+F+F+F][-F-F-F-F][^F^F^F^F][&F&F&F&F]
+
+15
+X
+X:F&[+F+F+F+F][-F-F-F-F][^F^F^F^F][&F&F&F&F]FX
+
+
+25
+Y
+Y: YFA[+Y][-Y][^Y][&Y]
+A: A[^FF][&FF][-FF][+FF]FA
+
+
+10
+F
+F:-+F^F[^F][&F][+&F][-/&F/F]
+
+
+40
+F
+F: [^F][&F]F[+F][-F]F
+
+
+45
+F
+F:F[^F][&F]F[+F][-F]F
+
+
+30
+F
+F:F[^F][&F]F[+F][-F]^F
