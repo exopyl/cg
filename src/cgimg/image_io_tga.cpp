@@ -674,7 +674,7 @@ int Img::export_tga (const char *filename)
     case TGA_TYPE_TRUE_COLOR:
 		{
       // header
-      unsigned char *id = (unsigned char*)_strdup ("created by cgimg\0");
+      unsigned char *id = (unsigned char*)strdup ("created by cgimg\0");
       size_t id_length = strlen ((char*)id)+1;
       fwrite (&id_length, sizeof(unsigned char), 1, ptr);
       
@@ -729,7 +729,7 @@ int Img::export_tga (const char *filename)
     case TGA_TYPE_MAPPED:
 		{
       // header
-      unsigned char *id = (unsigned char*)_strdup ("created by cl\0");
+      unsigned char *id = (unsigned char*)strdup ("created by cl\0");
       size_t id_length = strlen ((char*)id)+1;
       fwrite (&id_length, sizeof(unsigned char), 1, ptr);
       
