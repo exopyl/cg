@@ -213,7 +213,7 @@ public:
 
 	TSquareMatrix<TValue> operator+ (const TSquareMatrix<TValue> &right)
 	{
-		assert (m_dimension == right.m_dimension);
+		//assert (m_dimension == right.m_dimension);
 		TValue *res = (TValue*) malloc (m_dimension*sizeof(TValue));
 		for (int i=0; i<m_dimension; i++)
 			for (int j=0; j<m_dimension; j++)
@@ -230,7 +230,7 @@ public:
 
 	TSquareMatrix<TValue> operator-  (const TSquareMatrix<TValue> &right)
 	{
-		assert (m_dimension == right.m_dimension);
+		//assert (m_dimension == right.m_dimension);
 		TValue *res = (TValue*) malloc (m_dimension*sizeof(TValue));
 		for (int i=0; i<m_dimension; i++)
 			for (int j=0; j<m_dimension; j++)
