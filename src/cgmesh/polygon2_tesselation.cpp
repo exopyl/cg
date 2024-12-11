@@ -34,6 +34,7 @@ struct glutess_state {
 //
 // Callbacks for "mesh_tesselate"
 //
+#if 0
 static void glutess_begin(int type, void *user_data)
 {
 	struct glutess_state *state = (struct glutess_state *) user_data;
@@ -142,6 +143,7 @@ static void glutess_combine(double coords[3],
 	} else
 		*outData = (void *) vi;
 }
+#endif
 //
 ///////////////////////
 
