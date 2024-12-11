@@ -7,7 +7,7 @@
 
 
 //#define JPEGLIB
-#define PNG
+//#define PNG
 
 class Img
 {
