@@ -7,7 +7,9 @@
 #include <windows.h>
 #include <gl/GLU.h>
 #else
+#if 0
 #include "glutess/sgi-glu.h"
+#endif
 #endif // WIN32
 
 ///////////////////////
@@ -148,6 +150,7 @@ static void glutess_combine(double coords[3],
 int Polygon2::tesselate (float **_pVertices, unsigned int *_nVertices,
 			  unsigned int **_pFaces, unsigned int *_nFaces)
 {
+#if 0
 	GLUtesselator *tess;
 	double *coords;
 	unsigned int nVertices;
@@ -224,6 +227,6 @@ int Polygon2::tesselate (float **_pVertices, unsigned int *_nVertices,
 	*_nFaces = state.fn;
 
 	free(coords);
-
+#endif
 	return 0;
 }
