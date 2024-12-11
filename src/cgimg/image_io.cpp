@@ -18,9 +18,10 @@ int Img::load (char const *filename, char const *path)
 	else
 		sprintf (filename_full, "%s", filename);
 
-
+#ifdef PNG
 	if (strcmp (filename+(strlen(filename)-4), ".png") == 0)
 	     return import_png (filename_full);
+#endif
 #ifdef JPEGLIB
 	if (strcmp (filename+(strlen(filename)-4), ".jpg") == 0)
 	     return import_jpg (filename_full);
@@ -42,8 +43,10 @@ int Img::save (char const *filename)
 	if (!filename)
 		return -1;
 
+#ifdef PNG
 	if (strcmp (filename+(strlen(filename)-4), ".png") == 0)
 	     return export_png (filename);
+#endif
 #ifdef JPEGLIB
 	if (strcmp (filename+(strlen(filename)-4), ".jpg") == 0)
 	     return export_jpg (filename);
