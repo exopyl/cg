@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <cstdint>
 
 #include "regions_faces.h"
 #include "regions_vertices.h"
@@ -197,7 +198,7 @@ Cregions_faces::init_segmentation (float epsilon)
 				
 				for (j=0; j<neighborhood->get_size (); j++)
 				{
-					int index_walk = (int)(neighborhood->get_data (j));
+					uintptr_t index_walk = (uintptr_t)(neighborhood->get_data (j));
 					if (regions[index_walk] == -1)
 					{
 						Vector3d ntmp (fn[3*index_walk], fn[3*index_walk+1], fn[3*index_walk+2]);

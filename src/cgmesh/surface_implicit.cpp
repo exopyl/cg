@@ -219,25 +219,27 @@ void ImplicitSurface::compute_cube (unsigned int iX, unsigned int iY, unsigned i
 	float afCubeValue[8];
 	vec3f asEdgeVertex[12];
 	vec3f asEdgeNorm[12];
-	int aiTable[12] = {
-		3*((resolution[0]+1)*iY + iX),
-		3*((resolution[0]+1)*iY + iX+1)+1,
-		3*((resolution[0]+1)*(iY+1) + iX),
-		3*((resolution[0]+1)*iY + iX)+1,
-		3*((resolution[0]+1)*(resolution[1]+1)) + 3*((resolution[0]+1)*iY + iX),
-		3*((resolution[0]+1)*(resolution[1]+1)) + 3*((resolution[0]+1)*iY + iX+1)+1,
-		3*((resolution[0]+1)*(resolution[1]+1)) + 3*((resolution[0]+1)*(iY+1) + iX),
-		3*((resolution[0]+1)*(resolution[1]+1)) + 3*((resolution[0]+1)*iY + iX)+1,
-		3*((resolution[0]+1)*iY + iX)+2,
-		3*((resolution[0]+1)*iY + iX+1)+2,
-		3*((resolution[0]+1)*(iY+1) + (iX+1))+2,
-		3*((resolution[0]+1)*(iY+1) + iX)+2
+	auto resX = static_cast<unsigned int>(resolution[0]);
+	auto resY = static_cast<unsigned int>(resolution[1]);
+	unsigned int aiTable[12] = {
+		3U * ((resX +1U)*iY + iX),
+		3U * ((resX +1U)*iY + iX+1U)+1U,
+		3U * ((resX +1U)*(iY+1U) + iX),
+		3U *((resX +1U)*iY + iX)+1U,
+		3U *((resX +1U)*(resY +1U)) + 3U *((resX +1U)*iY + iX),
+		3U *((resX +1U)*(resY +1U)) + 3U *((resX +1U)*iY + iX+1U)+1U,
+		3U *((resX +1U)*(resY +1U)) + 3U *((resX +1U)*(iY+1U) + iX),
+		3U *((resX +1U)*(resY +1U)) + 3U *((resX +1U)*iY + iX)+1U,
+		3U *((resX +1U)*iY + iX)+2U,
+		3U *((resX +1U)*iY + iX+1U)+2U,
+		3U *((resX +1U)*(iY+1U) + (iX+1U))+2U,
+		3U *((resX +1U)*(iY+1U) + iX)+2U
 	};
 
     // Make a local copy of the values at the cube's corners
 	if (fValueCached) // use cache
 	{
-		int iCacheOrder[2] = {iZ % 2, (iZ+1) % 2};
+		unsigned int iCacheOrder[2] = {iZ % 2U, (iZ+1U) % 2U};
 		for(iVertex = 0; iVertex < 8; iVertex++)
 		{
 			int index = iCacheOrder[a2fVertexOffset[iVertex][2]]*(resolution[1]+1)*(resolution[0]+1) +

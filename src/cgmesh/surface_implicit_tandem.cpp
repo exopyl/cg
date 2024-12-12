@@ -177,7 +177,7 @@ static int tandem_update_edge_quadric (mc_triangulation_t *pTri, Che_edge *he, f
 	{
 		//printf ("evaluate %d -> %d\n", v0, v1);
 		bool bFlip = false;
-		int vis[2] = {v0, v1};
+		unsigned int vis[2] = {v0, v1};
 		vec3 vec0, vec1, vec2, n, nnew;
 		float *vertices = pTri->vertices;
 		for (int i=0; i<2; i++)
