@@ -12,7 +12,7 @@ inline void vec2_init (vec2 v, float x, float y)
 	v[1] = y;
 }
 
-inline float vec2_copy (vec2 res, vec2 u)
+inline void vec2_copy (vec2 res, vec2 u)
 {
 	res[0] = u[0];
 	res[1] = u[1];

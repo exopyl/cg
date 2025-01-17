@@ -32,11 +32,11 @@ Voxels* loadkvx (char *filename)
 
 	//Load KVX file data into memory
 	fread(&numbytes,4,1,fil);
-	printf ("%d\n", numbytes);
+	printf ("%ld\n", numbytes);
 	fread(&xsiz,4,1,fil);
 	fread(&ysiz,4,1,fil);
 	fread(&zsiz,4,1,fil);
-	printf ("%d %d %d\n", xsiz, ysiz, zsiz);
+	printf ("%ld %ld %ld\n", xsiz, ysiz, zsiz);
 	Voxels *pVoxels = new Voxels (xsiz, ysiz, zsiz);
 	if ((xsiz > MAXXSIZ) || (ysiz > MAXYSIZ) || (zsiz > LIMZSIZ))
 	{
@@ -52,7 +52,7 @@ Voxels* loadkvx (char *filename)
 		fread(&xyoffs[i][0],(ysiz+1)<<1,1,fil);
 
 	unsigned char voxdata[40000];
-	printf ("%d\n", numbytes-24-(xsiz+1)*4-xsiz*(ysiz+1)*2);
+	printf ("%ld\n", numbytes-24-(xsiz+1)*4-xsiz*(ysiz+1)*2);
 
 	for(x=0;x<xsiz;x++) //Set all surface voxels to 0
 		for(y=0;y<ysiz;y++)

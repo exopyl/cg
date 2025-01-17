@@ -145,7 +145,7 @@ int Voxels::input_vxl (char *filename)
 	}
 
 	fclose (ptr);
-	export_palette_to_mtl ("toto_pixelart.mtl");
+	export_palette_to_mtl ((char*)"toto_pixelart.mtl");
 	return 0;
 }
 
@@ -179,6 +179,8 @@ int Voxels::input_img (Img *img)
 		}
 
 	export_palette_to_mtl ((char*)"toto_pixelart.mtl");
+
+	return 0;
 }
 
 int Voxels::input_imgs (Img **imgs, unsigned int nImgs)
@@ -234,6 +236,8 @@ int Voxels::input_imgs (Img **imgs, unsigned int nImgs)
 		fprintf (ptr, "\n");
 	}
 	fclose (ptr);
+
+	return 0;
 }
 
 int Voxels::input (char *filename)

@@ -13,7 +13,7 @@ public:
 	virtual double getX (void) { return x; };
 	virtual double getY (void) { return y; };
 	virtual double getZ (void) { return z; };
-	bool get_signature (char **signature, int *length) { *signature = 0; *length = 0; };
+	bool get_signature (char **signature, int *length) { *signature = 0; *length = 0; return true; };
 
 	virtual void next (void) {};
 	

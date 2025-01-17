@@ -99,7 +99,7 @@ void Face::SetQuad (unsigned int a, unsigned int b, unsigned int c, unsigned int
 
 void Face::dump (void)
 {
-	printf ("%d vertices stored in %xd : ", m_nVertices, m_pVertices);
+	printf ("%ld vertices stored in %xd : ", m_nVertices, m_pVertices);
 	for (unsigned int i=0; i<m_nVertices; i++)
 		printf ("%d ", m_pVertices[i]);
 	printf ("\n");
@@ -364,14 +364,14 @@ Mesh::~Mesh ()
 void Mesh::Dump ()
 {
 	printf ("nVertices : %d\n", m_nVertices);
-	printf ("pVertices : 0x%x\n", &m_pVertices);
-	printf ("pVertexNormals : 0x%x\n", &m_pVertexNormals);
-	printf ("pVertexColors : 0x%x\n", &m_pVertexColors);
+	printf ("pVertices : 0x%p\n", &m_pVertices);
+	printf ("pVertexNormals : 0x%p\n", &m_pVertexNormals);
+	printf ("pVertexColors : 0x%p\n", &m_pVertexColors);
 	printf ("nFace : %d\n", m_nFaces);
-	printf ("pFaces : 0x%x\n", &m_pFaces);
-	printf ("pTextureCoordinates : 0x%x\n", &m_pTextureCoordinates);
+	printf ("pFaces : 0x%p\n", &m_pFaces);
+	printf ("pTextureCoordinates : 0x%p\n", &m_pTextureCoordinates);
 	printf ("nMaterials : %d\n", m_nMaterials);
-	printf ("pMaterials : 0x%x\n", &m_pMaterials);
+	printf ("pMaterials : 0x%p\n", &m_pMaterials);
 	for (int i=0; i<m_nMaterials; i++)
 		m_pMaterials[i]->Dump();
 }

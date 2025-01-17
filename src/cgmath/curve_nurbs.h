@@ -22,11 +22,16 @@ public:
 	int normalizeKnots (void);
 
 	int nControlPoints (void) { return m_nControlPoints; };
-	void getControlPoints (int index, vec3 &v)
+	bool getControlPoints (int index, vec3 &v)
 	{
+		if (index > m_nControlPoints)
+			return false;
+		
 		v[0] = m_controlPoints[index][0];
 		v[1] = m_controlPoints[index][1];
 		v[2] = m_controlPoints[index][2];
+
+		return true;
 	};
 	
 	float basisFunction (int i, int j, float u);

@@ -320,8 +320,8 @@ Cmesh_orientation_pca::compute_pca_weighted_vertices (void)
   mrot[7] = ev3.y;
   mrot[8] = ev3.z;
 
-  delete a;
-  delete w;
+  delete[] a;
+  delete[] w;
 
 }
 
@@ -436,7 +436,7 @@ Cmesh_orientation_pca::compute_pca_barycenter (void)
   mrot[7] = ev3.y;
   mrot[8] = ev3.z;
 
-  delete w;
+  delete[] w;
 }
 
 void

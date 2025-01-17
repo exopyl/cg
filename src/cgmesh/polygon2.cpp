@@ -190,6 +190,8 @@ int Polygon2::add_polygon2d (Polygon2 *pol)
 		m_pPoints[m_nContours] = NULL;
 		add_contour (m_nContours, pol->m_nPoints[i], pol->m_pPoints[i]);
 	}
+
+	return 0;
 }
 
 int Polygon2::set_point (unsigned int ci, unsigned int pi, float x, float y)

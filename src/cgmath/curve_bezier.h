@@ -7,12 +7,12 @@
 /**
 * TODO
 *
-* Implémenter intersection avec droites
-* Faire inventaire des différentes méthodes d'interpolation
+* Implï¿½menter intersection avec droites
+* Faire inventaire des diffï¿½rentes mï¿½thodes d'interpolation
 */
 
 /**
-* Bézier curve
+* Bezier curve
 */
 class CurveBezier //: public Curve
 {
@@ -27,12 +27,16 @@ public:
 	~CurveBezier ();
 
 	int getDegree (void) { return m_nControlPoints-1; };
-	int getControlPoint (int index, vec3 v)
+	bool getControlPoint (int index, vec3 v)
 	{
-		if (index > m_nControlPoints) return 0;
+		if (index > m_nControlPoints)
+			return false;
+		
 		v[0] = m_controlPoints[index][0];
 		v[1] = m_controlPoints[index][1];
 		v[2] = m_controlPoints[index][2];
+
+		return true;
 	}
 
 	// Construction of the Bezier curve

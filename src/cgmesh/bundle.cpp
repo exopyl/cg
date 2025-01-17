@@ -83,17 +83,17 @@ int Bundle::Load (char *filename)
 int Bundle::Load2 (char *bundlefilename, char *imageslistfilename, char *rootpath)
 {
 	if (!bundlefilename || !imageslistfilename)
-		return NULL;
+		return -1;
 
 	// open the files
 	FILE *bundlefile = fopen (bundlefilename, "r");
 	if (!bundlefile)
-		return NULL;
+		return -1;
 	FILE *imageslistfile = fopen (imageslistfilename, "r");
 	if (!imageslistfile)
 	{
 		fclose (bundlefile);
-		return NULL;
+		return -1;
 	}
 
 	// read the files

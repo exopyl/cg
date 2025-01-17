@@ -420,8 +420,8 @@ static void tandem_end_layer (void *data)
 	mc_triangulation_t *pTri = (mc_triangulation_t*)data;
 
 	tandem_simplify (pTri);
-	export_tandem (pTri, "export_simplified.obj");
-	printf ("slice %d : %d\n", slice, pTri->he_mesh->map_edges_face->size());
+	export_tandem (pTri, (char*)"export_simplified.obj");
+	printf ("slice %ld : %ld\n", slice, pTri->he_mesh->map_edges_face->size());
 	slice++;
 	//return;
 	if (slice == 2)

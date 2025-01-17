@@ -60,10 +60,11 @@ int Audio::import_wav (char const *filename, int verbose)
 
 	FILE *f = fopen(filename, "rb");
 
-	if (fread(&hdr, sizeof(hdr), 1, f) != 1) {
+	if (fread(&hdr, sizeof(hdr), 1, f) != 1)
+	{
 		printf ("could not read %s\n", filename);
 		fclose(f);
-		return NULL;
+		return 0;
 	}
 
 	if (verbose)
@@ -106,7 +107,7 @@ int Audio::import_wav (char const *filename, int verbose)
 	if (hdr.bps != 16 && hdr.bps != 8) {
 		printf("invalid format (%d bps)\n", hdr.bps);
 		fclose(f);
-		return NULL;
+		return 0;
 	}
   
 	// convert audio data to NSArray

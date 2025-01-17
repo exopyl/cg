@@ -361,7 +361,7 @@ void CLitRasterToVector::WriteFilePolygonWithHole(/*bool bBottomTop,
 						  bool bBorder*/) const
 {
 	WriterSVG *pWriter = new WriterSVG ();
-	pWriter->InitFile ("output2.svg");
+	pWriter->InitFile ((char*)"output2.svg");
 	pWriter->WriteHeader (500, 500);
 	list<point2D> listPoints;
 
@@ -485,7 +485,7 @@ void CLitRasterToVector::WriteFilePolygonWithHole(/*bool bBottomTop,
 void CLitRasterToVector::WriteFilePolygonWithHole2 (float fLineWidth)
 {
 	WriterSVG *pWriter = new WriterSVG ();
-	pWriter->InitFile ("output.svg");
+	pWriter->InitFile ((char*)"output.svg");
 	pWriter->WriteHeader (500, 500);
 	list<point2D> listPoints;
 
@@ -543,7 +543,7 @@ void CLitRasterToVector::WriteFilePolygonWithHole2 (float fLineWidth)
 void CLitRasterToVector::WriteFile(float fLineWidth) const
 {
 	WriterSVG *pWriter = new WriterSVG ();
-	pWriter->InitFile ("output.svg");
+	pWriter->InitFile ((char*)"output.svg");
 	pWriter->WriteHeader (500, 500);
 	list<point2D> listPoints;
 	for(list<TPath*>::const_iterator itLayer  = m_layerOrder.begin() ;itLayer!=m_layerOrder.end(); itLayer++)
@@ -1103,7 +1103,7 @@ void CLitRasterToVector::CalculateLayerOrder(const Img& sPalettized)
 	}
 
 	// Sort path
-	printf("   CalculateLayerOrder_Sort path (size = %d): \n", mmorders.size());
+	printf("   CalculateLayerOrder_Sort path (size = %ld): \n", mmorders.size());
 	while(mmorders.size())
 	{
 		// search the layer above all 

@@ -284,7 +284,7 @@ Cset_lines::merge_close_lines_mean_shift (float hd, float hp,
 #ifdef USE_OCTREE
       delete octree;
       free (ivertices);
-#endif USE_OCTREE
+#endif
       
     /* merging */
     if (1)
@@ -329,10 +329,10 @@ Cset_lines::merge_close_lines_mean_shift (float hd, float hp,
 #endif
   *n_ite = (n_iterations > 50)? 50 : n_iterations;
 
-  delete positions_init;
-  delete positions;
-  delete directions_init;
-  delete directions;
+  delete[] positions_init;
+  delete[] positions;
+  delete[] directions_init;
+  delete[] directions;
 }
 
 #ifdef AAA

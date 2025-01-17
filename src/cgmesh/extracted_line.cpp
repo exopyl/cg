@@ -126,7 +126,7 @@ void Cextracted_line::apply_least_square_fitting (void)
   compute_extremities ();
 
   delete line;
-  delete array;
+  delete[] array;
 }
 
 /* update parameters */
