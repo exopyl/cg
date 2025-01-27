@@ -1,5 +1,4 @@
-#ifndef __PALETTE_H__
-#define __PALETTE_H__
+#pragma once
 
 #include "color.h"
 
@@ -21,5 +20,3 @@ public:
 	unsigned int m_nMaxColors;
 	Color *m_pColors;
 };
-
-#endif // __PALETTE_H__

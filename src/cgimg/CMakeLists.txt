@@ -5,6 +5,6 @@ project(libcgimg)
 file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/*.cpp)
 file(GLOB HEADER_FILES ${PROJECT_SOURCE_DIR}/*.h)
 
-add_library(cgimg SHARED ${HEADER_FILES} ${SRC_FILES})
+add_library(cgimg STATIC ${HEADER_FILES} ${SRC_FILES})
 
 install(TARGETS cgimg DESTINATION .)

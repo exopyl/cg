@@ -1,5 +1,4 @@
-#ifndef __IMAGE_H__
-#define __IMAGE_H__
+#pragma once
 
 #include <stdio.h>
 #include "../cgmath/cgmath.h"
@@ -173,6 +172,3 @@ public:
 	int bUsePalette;
 	Palette *m_pPalette;
 };
-
-#endif // __IMAGE_H__
-

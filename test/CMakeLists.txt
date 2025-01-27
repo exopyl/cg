@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18.4)
 include(GoogleTest)
 
-project(tu)
+project(tu_cgmath)
 
 # Options
 if ( ENABLE_COVERAGE )
@@ -10,11 +10,15 @@ endif ()
 
 set(SRCS
     tu_all.cpp
-    tu_cgmath.cpp
+    tu_cgmath_aabox.cpp
+    tu_cgmath_algebra_vector3.cpp
+    tu_cgmath_triangle.cpp
     )
 	
-add_executable(tu_cgmath ${SRCS})
+add_executable(${PROJECT_NAME} ${SRCS})
 
-gtest_discover_tests(tu_cgmath)
+target_link_libraries(${PROJECT_NAME} cgmath)
 
-target_link_libraries(tu_cgmath gtest pthread gcov)
+gtest_discover_tests(${PROJECT_NAME})
+
+target_link_libraries(${PROJECT_NAME} gtest pthread gcov)

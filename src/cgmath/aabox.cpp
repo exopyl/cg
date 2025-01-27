@@ -30,9 +30,9 @@ void AABox::AddVertex (float x, float y, float z)
 
 bool AABox::contains (float x, float y, float z) const
 {
-	return ((x >= parameters[0].x) && (x <= parameters[0].x) &&
-			(y >= parameters[0].y) && (y <= parameters[0].y) &&
-			(z >= parameters[0].z) && (z <= parameters[0].z));
+	return ((x >= parameters[0].x) && (x <= parameters[1].x) &&
+			(y >= parameters[0].y) && (y <= parameters[1].y) &&
+			(z >= parameters[0].z) && (z <= parameters[1].z));
 }
 
 /*

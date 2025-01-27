@@ -1,5 +1,4 @@
-#ifndef __AABOX_H__
-#define __AABOX_H__
+#pragma once
 
 #include "TVector3.h"
 #include "ray.h"
@@ -36,5 +35,3 @@ public:
 	// corners
 	Vector3 parameters[2];
 };
-
-#endif // __AABOX_H__

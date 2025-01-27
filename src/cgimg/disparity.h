@@ -1,5 +1,4 @@
-#ifndef __DISPARITY_H__
-#define __DISPARITY_H__
+#pragma once
 
 #include "../cgimg/cgimg.h"
 
@@ -22,6 +21,3 @@ private:
 
 	Img *m_pLeft, *m_pRight, *m_pDisparity;
 };
-
-#endif // __DISPARITY_H__
-

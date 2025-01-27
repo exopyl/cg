@@ -1,5 +1,5 @@
-#ifndef TGA_LOADER
-#define TGA_LOADER
+#pragma once
+
 // TGA Loader - 16/11/04 Codehead
 
 #include <iostream>
@@ -38,5 +38,3 @@ class TGAImg
    void BGRtoRGB();
    void FlipImg();
  };
-
-#endif // TGA_LOADER

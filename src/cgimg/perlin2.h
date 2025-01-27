@@ -1,5 +1,4 @@
-#ifndef __PERLIN2_H__
-#define __PERLIN2_H__
+#pragma once
 
 #include "../cgmath/cgmath.h"
 
@@ -48,5 +47,3 @@ class Cperlin2
   unsigned char *image;
   int w, h;
 };
-
-#endif // __PERLIN2_H__

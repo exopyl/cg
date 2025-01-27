@@ -1,5 +1,4 @@
-#ifndef  __IMAGE_DISPARITY_BIRCHFIELD_H__
-#define  __IMAGE_DISPARITY_BIRCHFIELD_H__
+#pragma once
 
 #include "image.h"
 
@@ -30,5 +29,3 @@ private:
 	Img *m_pDisparity1, *m_pDiscontinuities1; // Results after matching the scanlines independently
 	Img *m_pDisparity2, *m_pDiscontinuities2; // Results after postprocessing the first disparity map
 };
-
-#endif // __IMAGE_DISPARITY_BIRCHFIELD_H__

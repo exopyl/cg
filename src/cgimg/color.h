@@ -1,5 +1,4 @@
-#ifndef __COLOR_H__
-#define __COLOR_H__
+#pragma once
 
 #include "../cgmath/common.h"
 
@@ -55,5 +54,3 @@ private:
 // http://stackoverflow.com/questions/7706339/grayscale-to-red-green-blue-matlab-jet-color-scale
 extern void color_jet(float index, float *_r, float *_g, float *_b);
 extern void color_jet_int (float index, int *_r, int *_g, int *_b);
-
-#endif // __COLOR_H__

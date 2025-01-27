@@ -1,5 +1,4 @@
-#ifndef __GEOMETRY_H__
-#define __GEOMETRY_H__
+#pragma once
 
 #include "algebra_vector3.h"
 #include "ray.h"
@@ -190,6 +189,3 @@ public:
 public:
 	vec3 m_v[3];
 };
-
-
-#endif // __GEOMETRY_H__
