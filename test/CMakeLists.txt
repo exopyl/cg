@@ -17,8 +17,20 @@ set(SRCS
 	
 add_executable(${PROJECT_NAME} ${SRCS})
 
+if (WIN32)
+    add_subdirectory(${EXTERN_GOOGLETEST} gtest)
+    target_link_libraries(${PROJECT_NAME} GTest::gtest_main)
+    target_link_libraries(${PROJECT_NAME} GTest::gmock_main)
+endif (WIN32)
+
 target_link_libraries(${PROJECT_NAME} cgmath)
 
 gtest_discover_tests(${PROJECT_NAME})
 
-target_link_libraries(${PROJECT_NAME} gtest pthread gcov)
+target_link_libraries(${PROJECT_NAME} gtest)
+
+if ( ENABLE_COVERAGE )
+if ( UNIX )
+    target_link_libraries(${PROJECT_NAME} pthread gcov)
+endif ()
+endif ()

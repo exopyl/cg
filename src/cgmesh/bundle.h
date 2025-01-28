@@ -1,5 +1,4 @@
-#ifndef __BUNDLE_H__
-#define __BUNDLE_H__
+#pragma once
 
 #include "cgmesh.h"
 
@@ -29,5 +28,3 @@ public:
 	unsigned int **pt_visible_from_cameras; // for each pt, stores the cameras from where it is visible
 	unsigned int *n_pt_visible_from_cameras; // for each pt, number of cameras from where it is visible
 };
-
-#endif // __BUNDLE_H__

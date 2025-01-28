@@ -1,5 +1,4 @@
-#ifndef __BUNDLE_CAMERA_H__
-#define __BUNDLE_CAMERA_H__
+#pragma once
 
 #include "../cgmath/cgmath.h"
 
@@ -32,5 +31,3 @@ public:
 	vec3 d; // direction of the camera, directly update from R
 	vec3 pos; // position of the camera directly updated from Rinv
 };
-
-#endif // __BUNDLE_CAMERA_H__
