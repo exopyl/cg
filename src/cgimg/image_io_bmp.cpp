@@ -322,22 +322,22 @@ int Img::export_bmp (const char *filename)
   ptr = fopen (filename, "w");
   if (!ptr)
     return -1;
-  /*
+
   uchar id[2] = {'B','M'};
   struct bmp_file_header_s fh;
   struct bmp_bitmap_header_s bh;
 
-  fh.size           = sizeof(id) + sizeof(fh) + sizeof(bh) + sizeof(datas);
+  fh.size           = sizeof(id) + sizeof(fh) + sizeof(bh) + sizeof(m_pPixels);
   fh.reserved       = 0;
   fh.offsettobits   = sizeof(id) + sizeof(fh) + sizeof(bh);
   
   bh.size           = sizeof(bh);
-  bh.width          = width;
-  bh.height         = height;
+  bh.width          = width();
+  bh.height         = height();
   bh.planes         = 1;
   bh.bpp            = 24;
   bh.compression    = BI_RGB;
-  bh.imagesize      = 3*width*height;
+  bh.imagesize      = 3*width()*height();
   bh.widthppm       = 0;
   bh.heightppm      = 0;
   bh.colorused      = 0;
@@ -346,10 +346,10 @@ int Img::export_bmp (const char *filename)
   fwrite (&id, sizeof(unsigned char), 2, ptr);
   fwrite (&fh, sizeof(fh), 1, ptr);
   fwrite (&bh, sizeof(bh), 1, ptr);
-  fwrite (m_pPixels, sizeof(unsigned char), 3*width*height, ptr); // todo : dismiss alpha
+  fwrite (m_pPixels, sizeof(unsigned char), 3*width()*height(), ptr); // todo : dismiss alpha
   fclose (ptr);  
-  */
-  return -1;
+
+  return 0;
 }
 
 #endif // WIN32

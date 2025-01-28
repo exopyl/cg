@@ -10,5 +10,6 @@ if (UNIX)
 endif (UNIX)
 
 add_library(cgmesh STATIC ${HEADER_FILES} ${SRC_FILES})
+target_link_libraries(cgmesh cgimg)
 
 install(TARGETS cgmesh DESTINATION .)
