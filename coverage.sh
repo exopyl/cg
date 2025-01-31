@@ -13,18 +13,16 @@ echo "Compilation ... "
 cmake --build ${BUILD_DIR}
 echo "=> DONE"
 
-cd ${BUILD_DIR}
-
 echo "Cleaning old possible data ... "
 rm -f *profraw *gcov *profdata
 echo "=> DONE"
 
-CXX_EXECUTABLE=$PWD/test/tu_cgmath
+CXX_EXECUTABLE=$PWD/${BUILD_DIR}/test/tu_cgmath
+#echo ${CXX_EXECUTABLE}
 LLVM_PROFILE_FILE="code-%p.profraw" ${CXX_EXECUTABLE}
 
 echo "Launching 'llvm-profdata merge' ..."
 llvm-profdata-18 merge -output=$PWD/code.profdata $PWD/code-*.profraw
-ls -l
 echo "=> DONE"
 
 echo "Launching 'llvm-cov report' ..."
