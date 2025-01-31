@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+
 #ifndef WIN32
 #include <libgen.h>
 #endif
@@ -12,37 +13,51 @@
 
 int Mesh::load (char *filename)
 {
+	int res = -1;
 	if (!filename)
-		return -1;
+		return res;
 
 	/*if (strcmp (filename+(strlen(filename)-4), ".out") == 0)
 		LoadBundleOut (0);
 		else*/
 	if (strcmp (filename+(strlen(filename)-4), ".asc") == 0)
-	  return import_asc (filename);
+	  res = import_asc (filename);
 	else if (strcmp (filename+(strlen(filename)-5), ".npts") == 0 ||
 		 strcmp (filename+(strlen(filename)-5), ".pset") == 0)
-	  return import_pset (filename);
+		res = import_pset (filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".obj") == 0)
-	  return import_obj (filename);
+		res = import_obj (filename);
+	else if (strcmp(filename + (strlen(filename) - 4), ".stl") == 0)
+		res = import_stl(filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".3ds") == 0)
-	  return import_3ds (filename);
+		res = import_3ds (filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".ifs") == 0)
-	  return import_ifs (filename);
+		res = import_ifs (filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".lwo") == 0)
-	  return import_lwo (filename);
+		res = import_lwo (filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".off") == 0)
-	  return import_off (filename);
+		res = import_off (filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".pgm") == 0)
-	  return import_pgm (filename);
+		res = import_pgm (filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".pts") == 0)
-	  return import_pts (filename);
+		res = import_pts (filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".ply") == 0)
-	  return import_ply (filename);
+		res = import_ply (filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".u3d") == 0)
-	  return import_u3d (filename);
+		res = import_u3d (filename);
 
-	return -1;
+	// check coherency
+	if (m_nTextureCoordinates == 0)
+	{
+		// desactivate texture coordinates if they are not provided
+		for (unsigned int iFace = 0; iFace < m_nFaces; iFace++)
+		{
+			auto& face = m_pFaces[iFace];
+			face->m_bUseTextureCoordinates = false;
+		}
+	}
+
+	return res;
 }
 
 int Mesh::save (char *filename)
@@ -67,8 +82,10 @@ int Mesh::save (char *filename)
 	  return export_off (filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".pts") == 0)
 	  return export_pts (filename);
-	else if (strcmp (filename+(strlen(filename)-4), ".ply") == 0)
-	  return export_ply (filename);
+	else if (strcmp(filename + (strlen(filename) - 4), ".ply") == 0)
+		return export_ply(filename);
+	else if (strcmp(filename + (strlen(filename) - 4), ".stl") == 0)
+		return export_stl(filename);
 
 	return -1;
 }
@@ -168,22 +185,26 @@ int Mesh::import_obj (char *filename)
 	mtlfile[0] = '\0';
 	while (fgets (buffer, BUFFER_SIZE, file))
 	{
-		sscanf (buffer, "%s", prefix);
-		if (strcmp (prefix, "mtllib") == 0)
-			sscanf (buffer, "%s %s", prefix, mtlfile);
-		else if (strcmp (prefix, "v") == 0)
-			nPoints++;
-		else if (strcmp (prefix, "vt") == 0)
-			nTexCoords++;
-		else if (strcmp (prefix, "f") == 0)
-			nFaces++;
+		if (sscanf(buffer, "%s", prefix) != -1)
+		{
+			if (strcmp(prefix, "mtllib") == 0)
+				sscanf(buffer, "%s %s", prefix, mtlfile);
+			else if (strcmp(prefix, "v") == 0)
+				nPoints++;
+			else if (strcmp(prefix, "vt") == 0)
+				nTexCoords++;
+			else if (strcmp(prefix, "f") == 0)
+				nFaces++;
+		}
 	}
 	//printf ("%d %d %d\n", nPoints, nTexCoords, nFaces);
 	rewind (file);
 	Init (nPoints, nFaces);
 #ifndef WIN32
 	if (strlen (mtlfile) != 0)
+	{
 		import_mtl (mtlfile, dirname(filename)); // todo : find equivalent for windows
+	}
 #endif
 	if (nTexCoords)
 	{
@@ -194,7 +215,8 @@ int Mesh::import_obj (char *filename)
 	int usemtl = -1;
 	while (fgets (buffer, BUFFER_SIZE, file))
 	{
-		sscanf (buffer, "%s", prefix);
+		if (sscanf(buffer, "%s", prefix) == -1)
+			continue;
 		if (strcmp (prefix, "usemtl") == 0)
 		{
 			char mtl_name[BUFFER_SIZE];
@@ -400,7 +422,7 @@ int Mesh::export_obj (char *filename)
 			fprintf (fp, "%d", 1+m_pFaces[i]->m_pVertices[j]);
 
 			// texture coordinates
-			if (m_pFaces[i]->m_pTextureCoordinatesIndices)
+			if (m_pFaces[i]->m_bUseTextureCoordinates && m_pFaces[i]->m_pTextureCoordinatesIndices)
 				fprintf (fp, "/%d", 1+m_pFaces[i]->m_pTextureCoordinatesIndices[j]);//m_pFaces[i]->m_nVertices);
 
 			// normal
@@ -1566,6 +1588,43 @@ int Mesh::export_ply  (char *filename)
     return 0;
 }
 
+
+int Mesh::import_stl(char* filename)
+{
+	FILE* ptr = nullptr;
+	ptr = fopen(filename, "rb");
+	if (ptr == nullptr)
+		return 1;
+
+	char header[80];
+	fread(header, 80, sizeof(char), ptr);
+
+	unsigned int nTriangles = 0;
+	fread((char*)&nTriangles, 4, 1, ptr);
+
+	Init(3 * nTriangles, nTriangles);
+
+	float coords[12];
+	char attributes[2];
+	for (unsigned int iface = 0; iface < nTriangles; iface++)
+	{
+		fread((char*)coords, sizeof(float), 12, ptr);
+		memcpy(m_pVertices + 9*iface, coords + 3, 9 * sizeof(float));
+
+		Face* pFace = m_pFaces[iface];
+		if (!pFace)
+			pFace = new Face();
+		pFace->SetNVertices(3);
+
+		for (int j = 0; j < 3; j++)
+			pFace->SetVertex(j, 3*iface+j);
+
+		fread(attributes, sizeof(unsigned char), 2, ptr);
+	}
+
+	return 0;
+}
+/*
 int Mesh::import_stl (char *filename)
 {
 	FILE *ptr = fopen (filename, "rb");
@@ -1601,12 +1660,12 @@ int Mesh::import_stl (char *filename)
 		n++;
 		if (n == nfaces)
 			break;
-/*
+
 		printf ("%f %f %f\n", normal[0], normal[1], normal[2]);
 		printf ("%f %f %f\n", v1[0], v1[1], v1[2]);
 		printf ("%f %f %f\n", v2[0], v2[1], v2[2]);
 		printf ("%f %f %f\n", v3[0], v3[1], v3[2]);
-*/
+
 	};
 	for (int i=0; i<nf; i++)
 		fprintf (out, "f %d %d %d\n", 1+3*i, 1+3*i+1, 1+3*i+2);
@@ -1617,7 +1676,7 @@ int Mesh::import_stl (char *filename)
 
 	return 0;
 }
-
+*/
 int Mesh::export_stl (char *filename)
 {
 	return -1;

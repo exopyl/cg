@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <map>
+#include <algorithm>
 
 #include "mesh.h"
 #include "../cgmath/cgmath.h"
@@ -13,10 +15,10 @@
 void Face::Init (void)
 {
 	m_nVertices = 0;
-	m_pVertices = NULL;
+	m_pVertices = nullptr;
 	m_bUseTextureCoordinates = false;
-	m_pTextureCoordinatesIndices = NULL;
-	m_pTextureCoordinates = NULL;
+	m_pTextureCoordinatesIndices = nullptr;
+	m_pTextureCoordinates = nullptr;
 	m_iMaterialId = MATERIAL_NONE;
 };
 
@@ -68,7 +70,7 @@ int Face::SetNVertices (unsigned int n)
 	if (m_pVertices)
 		delete m_pVertices;
 	m_pVertices = new unsigned int[m_nVertices];
-/*
+
 	if (m_pTextureCoordinatesIndices)
 		delete m_pTextureCoordinatesIndices;
 	m_pTextureCoordinatesIndices = new unsigned int[2*m_nVertices];
@@ -76,7 +78,7 @@ int Face::SetNVertices (unsigned int n)
 	if (m_pTextureCoordinates)
 		delete m_pTextureCoordinates;
 	m_pTextureCoordinates = new float[2*m_nVertices];
-*/
+
 	return 0;
 }
 
@@ -99,7 +101,7 @@ void Face::SetQuad (unsigned int a, unsigned int b, unsigned int c, unsigned int
 
 void Face::dump (void)
 {
-	printf ("%ld vertices stored in %xd : ", m_nVertices, m_pVertices);
+	printf ("%d vertices stored in %xd : ", m_nVertices, m_pVertices);
 	for (unsigned int i=0; i<m_nVertices; i++)
 		printf ("%d ", m_pVertices[i]);
 	printf ("\n");
@@ -110,6 +112,7 @@ void Face::dump (void)
 //
 void Mesh::Init ()
 {
+	m_name = std::string("#NoName#");
 	m_nVertices = 0;
 	m_nFaces = 0;
 	m_pVertices = NULL;
@@ -364,14 +367,14 @@ Mesh::~Mesh ()
 void Mesh::Dump ()
 {
 	printf ("nVertices : %d\n", m_nVertices);
-	printf ("pVertices : 0x%p\n", &m_pVertices);
-	printf ("pVertexNormals : 0x%p\n", &m_pVertexNormals);
-	printf ("pVertexColors : 0x%p\n", &m_pVertexColors);
+	printf ("pVertices : 0x%x\n", &m_pVertices);
+	printf ("pVertexNormals : 0x%x\n", &m_pVertexNormals);
+	printf ("pVertexColors : 0x%x\n", &m_pVertexColors);
 	printf ("nFace : %d\n", m_nFaces);
-	printf ("pFaces : 0x%p\n", &m_pFaces);
-	printf ("pTextureCoordinates : 0x%p\n", &m_pTextureCoordinates);
+	printf ("pFaces : 0x%x\n", &m_pFaces);
+	printf ("pTextureCoordinates : 0x%x\n", &m_pTextureCoordinates);
 	printf ("nMaterials : %d\n", m_nMaterials);
-	printf ("pMaterials : 0x%p\n", &m_pMaterials);
+	printf ("pMaterials : 0x%x\n", &m_pMaterials);
 	for (int i=0; i<m_nMaterials; i++)
 		m_pMaterials[i]->Dump();
 }
@@ -450,58 +453,42 @@ int Mesh::SetFace (unsigned int i,
 	m_pFaces[i] = new Face ();
 	m_pFaces[i]->SetQuad (a, b, c, d);
 	return 0;
-/*
-	m_pFaces[i]->SetNVertices (4);
-	m_pFaces[i]->m_pVertices[0] = a;
-	m_pFaces[i]->m_pVertices[1] = b;
-	m_pFaces[i]->m_pVertices[2] = c;
-	m_pFaces[i]->m_pVertices[3] = d;
-
-	return 0;
-*/
 }
 
 
 int Mesh::computebbox (void)
 {
-	int i, j;
-	if (m_nVertices == 0)
-		return -1;
-
-	for (j=0; j<3; j++)
+	/*
+	for (int i = 0; i < m_nFaces; i++)
 	{
-		bbox_min[j] = m_pVertices[j];
-		bbox_max[j] = bbox_min[j];
-	}
-	for (int i=1; i<m_nVertices; i++)
-	{
-		for (j=0; j<3; j++)
+		auto pFace = m_pFaces[i];
+		for (int j = 0; j < pFace->GetNVertices(); j++)
 		{
-			if (m_pVertices[3*i+j] < bbox_min[j]) bbox_min[j] = m_pVertices[3*i+j];
-			if (m_pVertices[3*i+j] > bbox_max[j]) bbox_max[j] = m_pVertices[3*i+j];
+			int vindex = pFace->GetVertex(j);
+			m_bbox.AddPoint(m_pVertices[3 * vindex], m_pVertices[3 * vindex + 1], m_pVertices[3 * vindex + 2]);
 		}
 	}
+	*/
+
+	for (int i = 0; i < m_nVertices; i++)
+		m_bbox.AddPoint(m_pVertices[3 * i], m_pVertices[3 * i + 1], m_pVertices[3 * i + 2]);
 	
 	return 0;
 }
 
-int Mesh::bbox (float min[3], float max[3])
+const BoundingBox& Mesh::bbox() const
 {
-	min[0] = bbox_min[0];
-	min[1] = bbox_min[1];
-	min[2] = bbox_min[2];
-	max[0] = bbox_max[0];
-	max[1] = bbox_max[1];
-	max[2] = bbox_max[2];
-
-	return 0;
+	return m_bbox;
 }
 
-float Mesh::bbox_diagonal_length (void)
+float Mesh::bbox_diagonal_length(void) const
 {
-	vec3 diagonal;
-	vec3_init (diagonal, bbox_max[0]-bbox_min[0], bbox_max[1]-bbox_min[1], bbox_max[2]-bbox_min[2]);
-	return vec3_length (diagonal);
+	return m_bbox.GetDiagonalLength();
+}
+
+float Mesh::GetLargestLength(void) const
+{
+	return m_bbox.GetLargestLength();
 }
 
 //
@@ -560,6 +547,27 @@ int Mesh::stats_vertices_in_faces (int *verticesinfaces, int n)
 	}
 
 	return 0;
+}
+
+unsigned int Mesh::GetNVertices() const
+{
+	return m_nVertices;
+}
+
+unsigned int Mesh::GetNFaces() const
+{
+	return m_nFaces;
+}
+
+bool Mesh::IsTriangleMesh() const
+{
+	for (int i = 0; i < m_nFaces; i++)
+	{
+		Face* pFace = m_pFaces[i];
+		if (pFace->GetNVertices() != 3)
+			return false;
+	}
+	return true;
 }
 
 //
@@ -799,11 +807,78 @@ void Mesh::add_gaussian_noise (float variance)
 	}
 }
 
+// topololy
+void Mesh::GetTopologicIssues(vector<unsigned int>& nonManifoldEdges, vector<unsigned int>& borders) const
+{
+	std::map<unsigned int, std::map<unsigned int, unsigned int>> occurences;
+	for (int i = 0; i < m_nFaces; i++)
+	{
+		Face* pFace = m_pFaces[i];
+		unsigned int nVertices = pFace->GetNVertices();
+		for (int j = 0; j < nVertices; j++)
+		{
+			unsigned int v1 = pFace->GetVertex(j);
+			unsigned int v2 = pFace->GetVertex((j + 1) % nVertices);
+			if (v1 > v2) // v1 should be the smallest index
+			{
+				unsigned int tmp = v1;
+				v1 = v2;
+				v2 = tmp;
+			}
+			auto it = occurences.find(v1);
+			if (it == occurences.end())
+			{
+				std::map<unsigned int, unsigned int> newOccurence;
+				newOccurence.insert(std::pair<unsigned int, unsigned int>(v2, 1));
+				occurences.insert(std::pair<unsigned int, std::map<unsigned int, unsigned int>>(v1, newOccurence));
+			}
+			else
+			{
+				auto it2 = it->second.find(v2);
+				if (it2 != it->second.end())
+				{
+					//if (std::find(it->second.begin(), it->second.end(), v2) != it->second.end())
+					it2->second++;
+				}
+				else
+				{
+					it->second.insert(std::pair<unsigned int, unsigned int>(v2, 1));
+				}
+			}
+		}
+	}
+
+	for (auto occurence : occurences)
+	{
+		auto v1 = occurence.first;
+		for (auto links : occurence.second)
+		{
+			auto v2 = links.first;
+			auto n = links.second;
+			if (n == 1)
+			{
+				borders.push_back(v1);
+				borders.push_back(v2);
+			}
+			else if (n >= 3)
+			{
+				nonManifoldEdges.push_back(v1);
+				nonManifoldEdges.push_back(v2);
+			}
+		}
+	}
+
+	occurences.clear();
+}
+
 //
 // from class Geometry
 //
 bool Mesh::GetIntersectionBboxWithRay (vec3 o, vec3 d)
 {
+	float bbox_min[3];
+	float bbox_max[3];
+	m_bbox.GetMinMax(bbox_min, bbox_max);
 	AABox *m_pAABox = new AABox (bbox_min[0], bbox_min[1], bbox_min[2]);
 	if (m_pAABox)
 	{

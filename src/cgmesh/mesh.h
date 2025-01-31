@@ -4,10 +4,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <vector>
 
 #include "../cgmath/cgmath.h"
 #include "material.h"
 #include "tensor.h"
+#include "bounding_box.h"
 
 class Octree;
 
@@ -108,6 +110,9 @@ public:
 	Mesh ();
 	Mesh (unsigned int nVertices, unsigned int nFaces);
 	Mesh (Mesh &m);
+	~Mesh();
+
+	void Dump();
 
 	// from class Geometry
 	bool GetIntersectionBboxWithRay (vec3 o, vec3 d);
@@ -118,10 +123,6 @@ public:
 
 private:
 	void DeleteFaces (void);
-public:
-	~Mesh ();
-
-	void Dump ();
 
 	// Init
 protected:
@@ -195,6 +196,8 @@ public:
 	// noise
 	void add_gaussian_noise (float variance);
 
+	void GetTopologicIssues(std::vector<unsigned int>& nonManifoldBorders, std::vector<unsigned int>& borders) const;
+
 	// IO
 private:
 	int import_mtl (char *filename, char *path);
@@ -229,8 +232,9 @@ public:
 
 	// bbox
 	int computebbox (void);
-	int bbox (float min[3], float max[3]);
-	float bbox_diagonal_length (void);
+	const BoundingBox& bbox() const;
+	float bbox_diagonal_length (void) const;
+	float GetLargestLength(void) const;
 
 	// area
 	float GetFaceArea (unsigned int fi);
@@ -247,6 +251,10 @@ public:
 	// stats
 	//
 	int stats_vertices_in_faces (int *verticesinfaces, int n);
+
+	unsigned int GetNVertices() const;
+	unsigned int GetNFaces() const;
+	bool IsTriangleMesh() const;
 
 	// triangulation
 	void triangulate_regular_heightfield (unsigned int width, unsigned int height);
@@ -321,6 +329,7 @@ public:
 	int Append (Mesh *m);
 
 public:
+	std::string m_name;
 	unsigned int m_nVertices;
 	unsigned int m_nFaces;
 	float *m_pVertices;
@@ -334,7 +343,7 @@ public:
 	Material **m_pMaterials;
 	Tensor **m_pTensors;
 
-	float bbox_min[3], bbox_max[3];
+	BoundingBox m_bbox;
 
 	Octree *m_pOctree;
 };

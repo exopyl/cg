@@ -166,7 +166,7 @@ void Mesh_half_edge::export_statistics (char *filename)
 
 	computebbox ();
 	float min[3], max[3];
-	bbox (min, max);
+	m_bbox.GetMinMax(min, max);
 	fprintf (ptr, "<p>bbox :\n");
 	fprintf (ptr, "<br> x : %f -> %f\n", min[0], max[0]);
 	fprintf (ptr, "<br> y : %f -> %f\n", min[1], max[1]);

@@ -1,5 +1,4 @@
-#ifndef __MATERIAL_H__
-#define __MATERIAL_H__
+#pragma once
 
 #include "../cgimg/cgimg.h"
 
@@ -44,6 +43,12 @@ public:
 
 	//virtual ~MaterialColor () {};
 	MaterialType GetType (void);
+
+	float GetFloatRed() const { return m_r / 255.f; };
+	float GetFloatGreen() const { return m_g / 255.f; };
+	float GetFloatBlue() const { return m_b / 255.f; };
+	float GetFloatAlpha() const { return m_a / 255.f; };
+
 	void Dump (void);
 private:
 	unsigned char m_r, m_g, m_b, m_a;
@@ -185,5 +190,3 @@ private:
 	unsigned int m_nWidth, m_nHeight;
 	unsigned char *m_pPixels;
 };
-
-#endif // __MATERIAL_H__
