@@ -5,6 +5,7 @@
 
 TEST(TEST_cgmesh_audio, audio_2_image)
 {
+    //return; // TOFIX
     // context
     char* input = (char*)"./test/data/M1F1-Alaw-AFsp.wav";
     Audio* audio = new Audio();
