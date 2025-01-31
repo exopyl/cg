@@ -11,7 +11,7 @@ set(ENABLE_SINAIA Off CACHE BOOL "Enable sinaia.")
 add_subdirectory(src/cgmath)
 add_subdirectory(src/cgimg)
 add_subdirectory(src/cgmesh)
-if ( NOT ENABLE_COVERAGE )
+if ( ENABLE_SINAIA )
 	add_subdirectory(src/cgre)
 endif ()
 
