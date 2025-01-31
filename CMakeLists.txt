@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 # Options
 set(ENABLE_COVERAGE Off CACHE BOOL "Enable coverage.")
+set(ENABLE_SINAIA Off CACHE BOOL "Enable sinaia.")
 
 add_subdirectory(src/cgmath)
 add_subdirectory(src/cgimg)
@@ -17,7 +18,7 @@ endif ()
 add_subdirectory(test)
 
 
-if (NOT ENABLE_COVERAGE )
+if ( ENABLE_SINAIA )
 	add_subdirectory(sinaia)
 endif ()
 
