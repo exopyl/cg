@@ -8,6 +8,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(ENABLE_COVERAGE Off CACHE BOOL "Enable coverage.")
 set(ENABLE_SINAIA Off CACHE BOOL "Enable sinaia.")
 
+if ( ENABLE_COVERAGE )
+	set(CMAKE_CXX_FLAGS "-g -O0 -Wall -W -Wshadow -Wunused-variable -Wunused-parameter -Wunused-function -Wunused -Wno-system-headers -Wno-deprecated -Woverloaded-virtual -Wwrite-strings -Wno-pointer-to-int-cast -fprofile-instr-generate -fcoverage-mapping")
+endif ()
+
 add_subdirectory(src/cgmath)
 add_subdirectory(src/cgimg)
 add_subdirectory(src/cgmesh)
