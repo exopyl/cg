@@ -33,5 +33,6 @@ llvm-cov-18 report ${CXX_EXECUTABLE} \
 echo "=> DONE"
 
 echo "Launching 'llvm-cov show' ..."
-llvm-cov-18 show ${CXX_EXECUTABLE} -instr-profile=$PWD/code.profdata > $PWD/coverage.txt
+llvm-cov-18 show ${CXX_EXECUTABLE} \
+  -instr-profile=$PWD/code.profdata > $PWD/coverage.txt
 echo "=> DONE"
