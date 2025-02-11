@@ -1589,12 +1589,8 @@ void StoreUnknownChunk (t3DSModel *pModel, UINT16 fatherID, UINT16 chunkID)
 	}
 
 	// insert
-	pModel->numOfUnknownChunks++;					// Increase the number of unknown chunks
-	pModel->pUnknownChunks.push_back(unknownChunk);	// Add an empty animation structure to our animations list
-
-	// init
-	pModel->pUnknownChunks[pModel->numOfUnknownChunks - 1].chunkID	= chunkID;
-	pModel->pUnknownChunks[pModel->numOfUnknownChunks - 1].fatherID	= fatherID;
+	//pModel->numOfUnknownChunks++;					// Increase the number of unknown chunks
+	//pModel->pUnknownChunks.push_back({ chunkID , fatherID });	// Add a newx animation structure to our animations list
 }
 
 /**

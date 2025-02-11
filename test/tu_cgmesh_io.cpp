@@ -20,3 +20,16 @@ TEST(TEST_cgmesh_io, stl)
 
     mesh->export_statistics("stats.html");
 }
+
+TEST(TEST_cgmesh_io, 3ds)
+{
+    // context
+    Object3D* object = new Object3D();
+
+    // action
+    object->import_file("./test/data/sink.3ds");
+
+    // expectations
+    auto & list = object->GetMeshes();
+    ASSERT_EQ(list.size(), 4);
+}

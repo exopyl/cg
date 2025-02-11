@@ -12,7 +12,6 @@ set(sources
     gl_wrapper.h
     background_manager.cpp
     capabilities_manager.cpp
-    camera.cpp
     #console.cpp
     #examinator_fly.cpp
     #examinator_glulookat.cpp
@@ -45,7 +44,6 @@ set(headers
 	glad/gl.h
 	glad/wgl.h
     cgre.h
-    camera.h
     capabilities_manager.h
     #console.h
     display_list_manager.h
