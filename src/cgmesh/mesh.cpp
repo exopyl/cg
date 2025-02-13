@@ -429,6 +429,8 @@ int Mesh::SetVertex (unsigned int i, float x, float y, float z)
 	m_pVertices[3*i+0] = x;
 	m_pVertices[3*i+1] = y;
 	m_pVertices[3*i+2] = z;
+
+	return 0;
 }
 
 int Mesh::SetFace (unsigned int i,

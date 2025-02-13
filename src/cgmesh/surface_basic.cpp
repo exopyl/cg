@@ -619,7 +619,7 @@ static float r (float alpha)
 
 Mesh* CreateKleinBottle (int ThetaResolution, int PhiResolution)
 {
-	unsigned int vn = 10000;
+	unsigned int vn = (ThetaResolution + 1) * (PhiResolution + 1);
 	unsigned int fn = 2*((ThetaResolution-1)*(PhiResolution)+PhiResolution-1+1);
 	Mesh *mesh = new Mesh (vn, fn);
 
@@ -714,7 +714,6 @@ Mesh* CreateKleinBottle (int ThetaResolution, int PhiResolution)
 	mesh->m_pFaces[fi] = new Face ();
 	mesh->m_pFaces[fi++]->SetTriangle (i2, i4, i3);
 
-	printf ("%d %d\n", vi, fi);
 	mesh->m_nVertices = vi;
 	mesh->m_nFaces = fi;
 
