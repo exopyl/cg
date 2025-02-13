@@ -1139,18 +1139,17 @@ int Mesh::import_lwo  (char *filename)
 */
 int Mesh::import_off (char *filename)
 {
-  FILE *ptr;
-  char id[3];
+  char id[4];
   int i, nSegments;
 
-  ptr = fopen (filename,"r");
-  if (!ptr) return false;
+  FILE* ptr = fopen (filename,"r");
+  if (!ptr)
+	  return -1;
   
   // Get header information
   fgets (id, 4, ptr);
   DASSERT (id[0]=='O' && id[1]=='F' && id[2]=='F');
   fscanf (ptr, "%d %d %d", &m_nVertices, &m_nFaces, &nSegments);
-  //printf ("%d %d\n", n_vertices, n_faces);
   
   // memory allocation
   Init (m_nVertices, m_nFaces);
@@ -1163,7 +1162,7 @@ int Mesh::import_off (char *filename)
   for (i=0; i<m_nFaces; i++)
     {
       //float r_tmp, g_tmp, b_tmp;
-      int n_vertices_in_face; /* should be 3 for a triangular mesh */
+      int n_vertices_in_face;
 
       fscanf (ptr, "%d", &n_vertices_in_face);
       if (n_vertices_in_face != 3)

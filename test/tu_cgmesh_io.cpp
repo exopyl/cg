@@ -14,11 +14,19 @@ TEST(TEST_cgmesh_io, obj)
     // expectations
     EXPECT_EQ(mesh->GetNVertices(), 8);
     EXPECT_EQ(mesh->GetNFaces(), 12);
+}
 
-    // export
-    return;
+TEST(TEST_cgmesh_io, off)
+{
+    // context
+    Mesh_half_edge* mesh = new Mesh_half_edge();
 
-    mesh->export_statistics("stats.html");
+    // action
+    mesh->load("./test/data/cube.off");
+
+    // expectations
+    EXPECT_EQ(mesh->GetNVertices(), 8);
+    EXPECT_EQ(mesh->GetNFaces(), 12);
 }
 
 TEST(TEST_cgmesh_io, stl)
