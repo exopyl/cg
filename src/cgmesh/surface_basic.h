@@ -1,5 +1,4 @@
-#ifndef __SURFACE_BASIC_H__
-#define __SURFACE_BASIC_H__
+#pragma once
 
 #include "mesh.h"
 
@@ -19,5 +18,3 @@ extern Mesh* CreateCapsule (unsigned int n, float height, float radius);
 
 extern Mesh* CreateTeapot (void);
 extern Mesh* CreateKleinBottle (int ThetaResolution, int PhiResolution);
-
-#endif // __SURFACE_BASIC_H__

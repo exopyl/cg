@@ -3,6 +3,24 @@
 #include "../src/cgmesh/cgmesh.h"
 
 
+TEST(TEST_cgmesh_io, obj)
+{
+    // context
+    Mesh_half_edge* mesh = new Mesh_half_edge();
+
+    // action
+    mesh->load("./test/data/cube.obj");
+
+    // expectations
+    EXPECT_EQ(mesh->GetNVertices(), 8);
+    EXPECT_EQ(mesh->GetNFaces(), 12);
+
+    // export
+    return;
+
+    mesh->export_statistics("stats.html");
+}
+
 TEST(TEST_cgmesh_io, stl)
 {
     // context
