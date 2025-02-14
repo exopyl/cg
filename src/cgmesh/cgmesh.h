@@ -10,8 +10,6 @@
 #include "mesh_nm.h"
 #include "object3D.h"
 
-#include "rendered_geometry.h"
-
 // polygon
 #include "polygon2.h"
 

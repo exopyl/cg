@@ -100,38 +100,7 @@ void CreateScene (Scene *pScene, int id)
 		pMesh->centerize ();
 		pMesh->scale (1./5.);
 		pMesh->computebbox();
-		if (pMesh)
-		{
-			if (0) // isolated triangles
-			{
-				// init a material for the mesh
-				MaterialColorExt *pMaterials[2];
-				pMaterials[0] = new MaterialColorExt();
-				pMaterials[1] = new MaterialColorExt();
-				pMaterials[0]->Init_From_Library (MaterialColorExt::EMERALD);
-				pMaterials[1]->Init_From_Library (MaterialColorExt::RUBY);
-
-				float *pVertices = pMesh->m_pVertices;
-				for (unsigned int i=0; i<pMesh->m_nFaces; i++)
-				{
-					Face *face = pMesh->m_pFaces[i];
-					unsigned int a = face->m_pVertices[0];
-					unsigned int b = face->m_pVertices[1];
-					unsigned int c = face->m_pVertices[2];
-				
-					RenderedTriangle *pTri = new RenderedTriangle ();
-					pTri->Init (pVertices[3*a], pVertices[3*a+1], pVertices[3*a+2],
-								pVertices[3*b], pVertices[3*b+1], pVertices[3*b+2],
-								pVertices[3*c], pVertices[3*c+1], pVertices[3*c+2]);
-					pTri->SetMaterial (pMaterials[i%2]);
-					pScene->AddObject (pTri);
-				}
-			}
-			else // all the mesh
-			{
-				pScene->AddObject (pMesh);
-			}
-		}
+		pScene->AddObject (pMesh);
 	}
 	break;
 	default:
