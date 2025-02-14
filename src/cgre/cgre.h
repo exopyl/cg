@@ -8,7 +8,6 @@
 #include "viewer3D_core.h"
 #include "background_manager.h"
 #include "material_renderer.h"
-#include "camera.h"
 
 // examinators
 #include "examinator_fly.h"
