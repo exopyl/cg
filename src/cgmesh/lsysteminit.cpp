@@ -14,7 +14,7 @@ static void LoadFile (char *strFilename, LSystem *pLSystem)
 	char pBuffer[256];
 
 	// Init
-	fscanf (pIn, "%s\n", &pBuffer);
+	fscanf (pIn, "%256s\n", &pBuffer);
 	pLSystem->Init (pBuffer);
 
 	// Angle
@@ -29,7 +29,7 @@ static void LoadFile (char *strFilename, LSystem *pLSystem)
 	// Rules
 	do
 	{
-		fscanf (pIn, "%s\n", &pBuffer);
+		fscanf (pIn, "%256s\n", &pBuffer);
 		pBuffer[1]='\0';
 		pLSystem->AddRule (pBuffer, pBuffer+2);
 	} while (!feof (pIn));
