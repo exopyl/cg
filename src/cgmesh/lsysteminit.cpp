@@ -43,9 +43,12 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	LSystem *t = NULL;
 	LSystemData *pLSystemData = NULL;
 
-	//LoadFile ("lsystems_def.txt", t);
+	//t = new LSystem();
+	//pLSystemData = new LSystemData;
+	//LoadFile ("./test/data/lsystem_koch_curve.txt", t);
+	//mapLSystems[LSYSTEM_KOCH_CURVE] = pLSystemData;
+	//return;
 
-/*
 	// courbe de Koch (LSYSTEM_KOCH_CURVE)
 	t = new LSystem ();
 	t->SetName ("Koch Curve");
@@ -54,10 +57,11 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	t->AddRule ("F", "F+F-F-FF+F+F-F");
 	pLSystemData = new LSystemData;
 	pLSystemData->bClosed = true;
-	pLSystemData->nNberIterations = 5;
+	pLSystemData->nNberIterations = 4;
 	pLSystemData->pLSystem = t;
 	mapLSystems[LSYSTEM_KOCH_CURVE] = pLSystemData;
-
+	return;
+	/*
 	// quadratic Koch island a (LSYSTEM_QUADRATIC_KOCH_ISLAND_A)
 	t = new LSystem ();
 	t->SetName ("Quadratic Koch island A");
@@ -289,7 +293,7 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	t->AddRule ("y", "b");
 	pLSystemData = new LSystemData;
 	pLSystemData->bClosed = false;
-	pLSystemData->nNberIterations = 21;
+	pLSystemData->nNberIterations = 19;
 	pLSystemData->pLSystem = t;
 	mapLSystems[LSYSTEM_LEAF] = pLSystemData;
 
@@ -302,7 +306,7 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	t->AddRule ("Y", "YFX[+Y][-Y]");
 	pLSystemData = new LSystemData;
 	pLSystemData->bClosed = false;
-	pLSystemData->nNberIterations = 7;
+	pLSystemData->nNberIterations = 6;
 	pLSystemData->pLSystem = t;
 	mapLSystems[LSYSTEM_BUSH1] = pLSystemData;
 	
@@ -314,7 +318,7 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	t->AddRule ("F", "FF+[+F-F-F]-[-F+F+F]");
 	pLSystemData = new LSystemData;
 	pLSystemData->bClosed = false;
-	pLSystemData->nNberIterations = 6;
+	pLSystemData->nNberIterations = 5;
 	pLSystemData->pLSystem = t;
 	mapLSystems[LSYSTEM_BUSH2] = pLSystemData;
 	
@@ -326,7 +330,7 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	t->AddRule ("F", "F[+FF][-FF]F[-F][+F]F");
 	pLSystemData = new LSystemData;
 	pLSystemData->bClosed = false;
-	pLSystemData->nNberIterations = 6;
+	pLSystemData->nNberIterations = 5;
 	pLSystemData->pLSystem = t;
 	mapLSystems[LSYSTEM_BUSH3] = pLSystemData;
 
@@ -342,7 +346,7 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	t->AddRule ("Z", "[-FFF][+FFF]F");
 	pLSystemData = new LSystemData;
 	pLSystemData->bClosed = false;
-	pLSystemData->nNberIterations = 14;
+	pLSystemData->nNberIterations = 12;
 	pLSystemData->pLSystem = t;
 	mapLSystems[LSYSTEM_BUSH4] = pLSystemData;
 
