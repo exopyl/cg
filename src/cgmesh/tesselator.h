@@ -62,11 +62,11 @@ public:
 	void DumpPolygon ()
 	{
 		std::list<std::list<vertex_s> >::iterator itContour;
-		printf ("Dump polygon : %d contours\n", m_listContours.size ());
+		printf ("Dump polygon : %zu contours\n", m_listContours.size ());
 		for (itContour = m_listContours.begin(); itContour != m_listContours.end (); itContour++)
 		{
 			std::list<vertex_s> contour = (*itContour);
-			printf ("-> New contour : %d vertices\n", contour.size ());
+			printf ("-> New contour : %zu vertices\n", contour.size ());
 
 			std::list<vertex_s>::iterator itVertex;
 			for (itVertex = contour.begin(); itVertex != contour.end (); itVertex++)

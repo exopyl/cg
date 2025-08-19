@@ -362,7 +362,7 @@ inline void Mesh::build_adjacencies()
 
 inline bool Mesh::verify()		//verifies connectivity of the mesh and prints some debug info
 {
-	bool bDump = false;
+	bool bDump = true;
 
 	if (bDump) std::cout << std::endl;
 	// make sure that all vertices are mentioned at least once. 
