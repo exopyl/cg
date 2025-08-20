@@ -1,10 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
-
-#ifndef WIN32
-#include <libgen.h>
-#endif
+#include <filesystem>
 
 #include "mesh.h"
 #include "mesh_io_3ds.h"
@@ -200,12 +197,13 @@ int Mesh::import_obj (const char *filename)
 	//printf ("%d %d %d\n", nPoints, nTexCoords, nFaces);
 	rewind (file);
 	Init (nPoints, nFaces);
-#ifndef WIN32
+
 	if (strlen (mtlfile) != 0)
 	{
-		import_mtl (mtlfile, dirname(filename)); // todo : find equivalent for windows
+		auto dir = std::filesystem::path(filename).parent_path();
+		import_mtl (mtlfile, dir.string().c_str());
 	}
-#endif
+
 	if (nTexCoords)
 	{
 		m_nTextureCoordinates = nTexCoords;
