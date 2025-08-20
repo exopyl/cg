@@ -11,7 +11,7 @@
 #include "../cgmath/cgmath.h"
 #include "endianness.h"
 
-int Mesh::load (char *filename)
+int Mesh::load (const char *filename)
 {
 	int res = -1;
 	if (!filename)
@@ -60,7 +60,7 @@ int Mesh::load (char *filename)
 	return res;
 }
 
-int Mesh::save (char *filename)
+int Mesh::save (const char *filename)
 {
 	if (!filename)
 		return -1;
@@ -95,7 +95,7 @@ int Mesh::save (char *filename)
 //
 #define BUFFER_SIZE 4096
 
-int Mesh::import_mtl (char *filename, char *path)
+int Mesh::import_mtl (const char *filename, const char *path)
 {
 	FILE *ptr = NULL;
 	char filename_full[BUFFER_SIZE];
@@ -163,7 +163,7 @@ int Mesh::import_mtl (char *filename, char *path)
 	return 0;
 }
 
-int Mesh::import_obj (char *filename)
+int Mesh::import_obj (const char *filename)
 {
 	if (filename == NULL)
 		return NULL;
@@ -336,7 +336,7 @@ int Mesh::import_obj (char *filename)
 //
 //
 //
-int Mesh::export_obj (char *filename)
+int Mesh::export_obj (const char *filename)
 {
 	FILE *fp;
 	unsigned int i;
@@ -504,7 +504,7 @@ int Mesh::export_obj (char *filename)
 //
 // ASC
 //
-int Mesh::import_asc (char *filename)
+int Mesh::import_asc (const char *filename)
 {
 	if (filename == NULL)
 		return -1;
@@ -548,7 +548,7 @@ int Mesh::import_asc (char *filename)
 	return 0;
 }
 
-int Mesh::export_asc (char *filename)
+int Mesh::export_asc (const char *filename)
 {
 	FILE *ptr = fopen (filename, "w");
 	printf ("ASC : %d\n", m_nVertices);
@@ -587,7 +587,7 @@ int Mesh::export_asc (char *filename)
 //
 // PSET
 //
-int Mesh::import_pset (char *filename)
+int Mesh::import_pset (const char *filename)
 {
 	if (filename == NULL)
 		return -1;
@@ -627,7 +627,7 @@ int Mesh::import_pset (char *filename)
 	return 0;
 }
 
-int Mesh::export_pset (char *filename)
+int Mesh::export_pset (const char *filename)
 {
 	FILE *ptr = fopen (filename, "w");
 	
@@ -649,7 +649,7 @@ int Mesh::export_pset (char *filename)
 //
 // DAE
 //
-int Mesh::export_dae (char *filename)
+int Mesh::export_dae (const char *filename)
 {
 	FILE *ptr = fopen (filename, "w");
 
@@ -788,7 +788,7 @@ int Mesh::export_dae (char *filename)
 //
 // cpp
 //
-int Mesh::export_cpp  (char *filename)
+int Mesh::export_cpp  (const char *filename)
 {
 	int i;
   FILE *ptr = fopen (filename, "w");
@@ -872,7 +872,7 @@ int Mesh::export_cpp  (char *filename)
 //
 // GTS
 //
-int Mesh::export_gts  (char *filename)
+int Mesh::export_gts (const char *filename)
 {
   int i;
   FILE *ptr = fopen (filename, "w");
@@ -906,7 +906,7 @@ int Mesh::export_gts  (char *filename)
 //
 // IFS
 //
-int Mesh::import_ifs (char *filename)
+int Mesh::import_ifs (const char *filename)
 {
 	FILE *ptr = fopen (filename, "rb");
 	if (ptr == NULL)
@@ -968,7 +968,7 @@ int Mesh::import_ifs (char *filename)
 //
 // import lwo
 //
-int Mesh::import_lwo  (char *filename)
+int Mesh::import_lwo (const char *filename)
 {
   FILE *ptr = fopen (filename, "rb");
   if (!ptr)
@@ -1137,7 +1137,7 @@ int Mesh::import_lwo  (char *filename)
 * ...
 * f3n f3n+1 f3n+2
 */
-int Mesh::import_off (char *filename)
+int Mesh::import_off (const char *filename)
 {
   char id[4];
   int i, nSegments;
@@ -1190,7 +1190,7 @@ int Mesh::import_off (char *filename)
 /**
 * export into off file
 */
-int Mesh::export_off (char *filename)
+int Mesh::export_off (const char *filename)
 {
   FILE *ptr;
   int i;
@@ -1200,7 +1200,7 @@ int Mesh::export_off (char *filename)
 
   // header
   fprintf (ptr, "OFF\n");
-  fprintf (ptr, "%d %d %d\n", m_nVertices, m_nFaces);
+  fprintf (ptr, "%ud %ud %d\n", m_nVertices, m_nFaces, 0);
 
   // vertices
   for (i=0; i<m_nVertices; i++)
@@ -1254,7 +1254,7 @@ _pgm_skip_spaces(FILE *file)
 /**
 * Reads a mesh from a 'pgm' file. It creates a 3D surface as a height field.
 */
-int Mesh::import_pgm (char *filename)
+int Mesh::import_pgm (const char *filename)
 {
   int width, height, levels;
   //int level_walk;
@@ -1353,7 +1353,7 @@ int Mesh::import_pgm (char *filename)
 //
 // PTS
 //
-int Mesh::import_pts  (char *filename)
+int Mesh::import_pts (const char *filename)
 {
 	int i;
   FILE *ptr = fopen (filename, "r");
@@ -1410,7 +1410,7 @@ int Mesh::import_pts  (char *filename)
   return 0;
 }
 
-int Mesh::export_pts  (char *filename)
+int Mesh::export_pts (const char *filename)
 {
   FILE *ptr = fopen (filename, "w");
   if (!ptr)
@@ -1501,7 +1501,7 @@ static int face_cb(p_ply_argument argument) {
     return 1;
 }
 
-int Mesh::import_ply  (char *filename)
+int Mesh::import_ply (const char *filename)
 {
 	int i;
 	long nvertices, ntriangles;
@@ -1546,7 +1546,7 @@ int Mesh::import_ply  (char *filename)
 	return 0;
 }
 
-int Mesh::export_ply  (char *filename)
+int Mesh::export_ply (const char *filename)
 {
     const char *value;
     p_ply oply = ply_create(filename, PLY_LITTLE_ENDIAN, NULL, 0, NULL);
@@ -1588,7 +1588,7 @@ int Mesh::export_ply  (char *filename)
 }
 
 
-int Mesh::import_stl(char* filename)
+int Mesh::import_stl(const char* filename)
 {
 	FILE* ptr = nullptr;
 	ptr = fopen(filename, "rb");
@@ -1676,20 +1676,20 @@ int Mesh::import_stl (char *filename)
 	return 0;
 }
 */
-int Mesh::export_stl (char *filename)
+int Mesh::export_stl (const char *filename)
 {
 	return -1;
 }
 
 
-int Mesh::import_3ds (char *filename)
+int Mesh::import_3ds (const char *filename)
 {
 	t3DSModel *p = Load3DSFile(filename, NULL);
 	Free3DSModel(p);
 	return 0;
 }
 
-int Mesh::export_3ds (char *filename)
+int Mesh::export_3ds (const char *filename)
 {
 	t3DSModel *p = Allocate3DSModel();
 	Write3DSFile(p, filename, NULL);

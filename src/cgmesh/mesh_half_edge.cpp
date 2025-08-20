@@ -128,7 +128,7 @@ Mesh_half_edge::Mesh_half_edge ()
 	check_border ();
 }
 
-Mesh_half_edge::Mesh_half_edge (char *par_filename)
+Mesh_half_edge::Mesh_half_edge (const char *par_filename)
 {
 	load (par_filename);
 

@@ -3,7 +3,7 @@
 #include "io/FileFormat_U3D.h"
 #endif
 
-int Mesh::import_u3d (char *filename)
+int Mesh::import_u3d (const char *filename)
 {
 	if (filename == NULL)
 		return -1;
@@ -16,7 +16,7 @@ int Mesh::import_u3d (char *filename)
 	return 0;
 }
 
-int Mesh::export_u3d (char *filename)
+int Mesh::export_u3d (const char *filename)
 {
 	/*
 	if (filename == NULL)

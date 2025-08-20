@@ -14,7 +14,7 @@
 	\param ExtraParameters - Some extra parameters
 	\return t3DSModel* - An OS independant structure describing the 3D model
 	*/
-	t3DSModel *Load3DSFile				(char *szFile, void *ExtraParameters );
+	t3DSModel *Load3DSFile				(const char *szFile, void *ExtraParameters );
 
 	/*! Free any previously allocated 3D model
 	\param pModel - The model to deallocate
@@ -75,7 +75,7 @@
 	@param ExtraParameters - Some extra parameters
 	@return int - S_OK, an error code otherwise
 	*/
-	int Write3DSFile				(t3DSModel *pModel, char *szFile, void *ExtraParameters );
+	int Write3DSFile				(t3DSModel *pModel, const char *szFile, void *ExtraParameters );
 
 	// Editor
 	UINT32 WriteEditor					(t3DSModel *pModel);

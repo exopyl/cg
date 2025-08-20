@@ -85,7 +85,12 @@ bool MeshAlgoTensorEvaluator::ApplyTaubin (void)
 			
 			e_walk = e_walk->m_he_next->m_he_next->m_pair;
 		} while (e_walk && e_walk != e);
-		
+
+		// make the complete (symmetric) matrix
+		m[3] = m[1];
+		m[6] = m[2];
+		m[7] = m[5];
+
 		// find the eigenvectors and eigenvalues of the matrix
 		Matrix3 es (m);
 		Vector3 evector1, evector2, evector3, evalues;

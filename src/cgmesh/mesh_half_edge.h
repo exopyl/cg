@@ -29,7 +29,7 @@ public:
 	Mesh_half_edge ();//!<  Constructor
 	Mesh_half_edge (int par_nv, float *par_v, int par_nf, unsigned int *par_f);
 	Mesh_half_edge (Mesh *pMesh);
-	Mesh_half_edge (char *par_filename);//!<  Constructor
+	Mesh_half_edge (const char *par_filename);//!<  Constructor
 	~Mesh_half_edge ();//!< Destructor
 
 	void create_half_edge (void);

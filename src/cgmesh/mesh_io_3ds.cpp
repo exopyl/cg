@@ -99,7 +99,7 @@ return hr;
 // @param ExtraParameters - Some extra parameters
 // @return t3DSModel* - A structure that decsribe our 3D model
 //*****************************************************************************
-t3DSModel *Load3DSFile (char *szFile, void *ExtraParameters)
+t3DSModel *Load3DSFile (const char *szFile, void *ExtraParameters)
 {
 t3DSChunk currentChunk;
 
@@ -1694,7 +1694,7 @@ UINT32 WriteColorRGBAFLOAT32 (FLOAT32 r, FLOAT32 g, FLOAT32 b, FLOAT32 a)
 // @param ExtraParameters - Some extra parameters
 // @return int - 0, an error code otherwise
 //*****************************************************************************
-int Write3DSFile (t3DSModel *pModel, char *szFile, void *ExtraParameters )
+int Write3DSFile (t3DSModel *pModel, const char *szFile, void *ExtraParameters )
 {
 	int hr = 0;
 

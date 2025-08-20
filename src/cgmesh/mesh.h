@@ -200,35 +200,35 @@ public:
 
 	// IO
 private:
-	int import_mtl (char *filename, char *path);
-	int import_obj (char *filename);
-	int import_objnm (char *filename);
-	int export_obj (char *filename);
-	int import_3ds (char *filename);
-	int export_3ds (char *filename);
-	int import_asc (char*filename);
-	int export_asc (char*filename);
-	int import_pset (char *filename);
-	int export_pset (char *filename);
-	int export_dae (char *filename);
-	int export_cpp (char *filename);
-	int export_gts (char *filename);
-	int import_ifs (char *filename);
-	int import_lwo (char *filename);
-	int import_off (char *filename);
-	int export_off (char *filename);
-	int import_pgm (char *filename);
-	int import_pts (char *filename);
-	int export_pts (char *filename);
-	int import_ply (char *filename);
-	int export_ply (char *filename);
-	int import_stl (char *filename);
-	int export_stl (char *filename);
-	int import_u3d (char *filename);
-	int export_u3d (char *filename);
+	int import_mtl (const char *filename, const char *path);
+	int import_obj (const char *filename);
+	int import_objnm (const char *filename);
+	int export_obj (const char *filename);
+	int import_3ds (const char *filename);
+	int export_3ds (const char *filename);
+	int import_asc (const char *filename);
+	int export_asc (const char *filename);
+	int import_pset (const char *filename);
+	int export_pset (const char *filename);
+	int export_dae (const char *filename);
+	int export_cpp (const char *filename);
+	int export_gts (const char *filename);
+	int import_ifs (const char *filename);
+	int import_lwo (const char *filename);
+	int import_off (const char *filename);
+	int export_off (const char *filename);
+	int import_pgm (const char *filename);
+	int import_pts (const char *filename);
+	int export_pts (const char *filename);
+	int import_ply (const char *filename);
+	int export_ply (const char *filename);
+	int import_stl (const char *filename);
+	int export_stl (const char *filename);
+	int import_u3d (const char *filename);
+	int export_u3d (const char *filename);
 public:
-	int load (char *filename);
-	int save (char *filename);
+	int load (const char *filename);
+	int save (const char *filename);
 
 	// bbox
 	int computebbox (void);
