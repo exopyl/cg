@@ -18,7 +18,9 @@ rm -f *profraw *gcov *profdata
 echo "=> DONE"
 
 CXX_EXECUTABLE=$PWD/${BUILD_DIR}/test/tu_cgmath
-#echo ${CXX_EXECUTABLE}
+echo ${CXX_EXECUTABLE}
+ls -l $PWD/${BUILD_DIR}
+ls -l $PWD/${BUILD_DIR}/test
 LLVM_PROFILE_FILE="code-%p.profraw" ${CXX_EXECUTABLE}
 
 echo "Launching 'llvm-profdata merge' ..."
