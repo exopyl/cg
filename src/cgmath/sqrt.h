@@ -1,5 +1,4 @@
-#ifndef __SQRT_H__
-#define __SQRT_H__
+#pragma once
 
 extern float sqrt1(const float x);
 extern float sqrt2(const float x);
@@ -15,5 +14,3 @@ extern double sqrt12(unsigned long N);
 extern double sqrt13(int n);
 extern double sqrt13(double n);
 //extern double inline __declspec (naked) __fastcall sqrt14(double n);
-
-#endif // __SQRT_H__

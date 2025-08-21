@@ -31,6 +31,16 @@
 *.out
 *.app
 
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.sln.docstates
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
 # CMake
 CMakeLists.txt.user
 CMakeCache.txt

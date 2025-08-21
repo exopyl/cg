@@ -1,5 +1,4 @@
-#ifndef __CGMATH_H__
-#define __CGMATH_H__
+#pragma once
 
 #include "common.h"
 
@@ -59,5 +58,3 @@
 #include "random_generator.h"
 
 #include "sqrt.h"
-
-#endif // __CGMATH_H__

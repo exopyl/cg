@@ -1,5 +1,4 @@
-#ifndef __COMMON_H__
-#define __COMMON_H__
+#pragma once
 
 #include <stdlib.h>
 #include <math.h>
@@ -12,7 +11,6 @@
 #pragma warning (disable : 4530) // disable : "C++ exception handler used"
 
 #endif // _MSC_VER
-
 
 // Constants rounded for 21 decimals
 #ifndef M_E
@@ -209,5 +207,3 @@ const double nan = 0.0 / sin (0.0);
 */
 
 #endif // _MSC_VER
-
-#endif // __COMMON_H__

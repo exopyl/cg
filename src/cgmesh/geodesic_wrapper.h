@@ -1,5 +1,4 @@
-#ifndef __GEODESIC_WRAPPER_H__
-#define __GEODESIC_WRAPPER_H__
+#pragma once
 
 //
 // wrapper for the code found here :
@@ -49,5 +48,3 @@ private:
 	std::vector<geodesic::SurfacePoint> sources;
 	std::vector<geodesic::SurfacePoint> targets;
 };
-
-#endif // __GEODESIC_WRAPPER_H__
