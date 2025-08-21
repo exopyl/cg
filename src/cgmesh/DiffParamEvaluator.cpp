@@ -305,7 +305,7 @@ bool MeshAlgoTensorEvaluator::Evaluate (TensorMethodId tensorMethodId)
 		break;
 	case TENSOR_STEINER:
 		{
-			//ApplySteiner ();
+			ApplySteiner ();
 		}
 		break;
 	case TENSOR_GOLDFEATHER:

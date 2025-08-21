@@ -125,7 +125,7 @@ TEST(TEST_cgmesh_he, normals)
 //
 //
 //
-TEST(TEST_cgmesh_he, diff)
+static void diff_common(TensorMethodId tensorMethodId)
 {
 	Mesh_half_edge* he = load_mesh();
 
@@ -137,7 +137,7 @@ TEST(TEST_cgmesh_he, diff)
 	MeshAlgoTensorEvaluator *pDiffParamEvaluator = new MeshAlgoTensorEvaluator();
 	pDiffParamEvaluator->Init (he);
 	
-	pDiffParamEvaluator->Evaluate (TENSOR_TAUBIN);
+	pDiffParamEvaluator->Evaluate (tensorMethodId);
 	float fCurvature;
 	//pDiffParamEvaluator->Dump ();
 	pDiffParamEvaluator->GetExtremalCurvature (CURVATURE_MAX, 1, &fCurvature);
@@ -185,14 +185,47 @@ TEST(TEST_cgmesh_he, diff)
 		SAFE_FREE (histogram);
 	}
 	
-	
 	delete pDiffParamEvaluator;
+}
+
+TEST(TEST_cgmesh_he, diff_hamman)
+{
+	diff_common(TENSOR_HAMANN);
+}
+
+TEST(TEST_cgmesh_he, diff_taubin)
+{
+	diff_common(TENSOR_TAUBIN);
+}
+
+TEST(TEST_cgmesh_he, diff_desbrun)
+{
+	diff_common(TENSOR_DESBRUN);
+}
+
+TEST(TEST_cgmesh_he, diff_steiner)
+{
+	//diff_common(TENSOR_STEINER);
+}
+
+TEST(TEST_cgmesh_he, diff_goldfeather)
+{
+	//diff_common(TENSOR_GOLDFEATHER);
 }
 
 TEST(TEST_cgmesh_he, clipper)
 {
 	Mesh_half_edge* he = load_mesh();
 	Cmodel3d_half_edge_clipper *clipper = new Cmodel3d_half_edge_clipper (he);
+
+	clipper->set_plane(Vector3d(0., 0., .3), Vector3d(0., 0., 1.));
+
+	int n_intersections;
+	int* n_vertices;
+	float** intersections;
+	clipper->get_intersections(&n_intersections, &n_vertices, &intersections);
+
+	EXPECT_EQ(n_intersections, 5);
 }
 
 //
