@@ -90,13 +90,15 @@ bool CLitRasterToVector::Vectorize(Img* pInput,
 		printf ("   mask : %d %d %d\n", m_palette[m_iPaletteSize].r(), m_palette[m_iPaletteSize].g(), m_palette[m_iPaletteSize].b());
 	}
 	
-	for(int y=0;y<sPalettized.height();y++)
+	if (0)
 	{
-		for(int x=0;x<sPalettized.width();x++)
-			printf ("%d ", sPalettized.get_pixel_index (x, y));
-		printf ("\n");
+		for (int y = 0; y < sPalettized.height(); y++)
+		{
+			for (int x = 0; x < sPalettized.width(); x++)
+				printf("%d ", sPalettized.get_pixel_index(x, y));
+			printf("\n");
+		}
 	}
-	
 	
 	// VECTORIZE
 	bool bOK = true;

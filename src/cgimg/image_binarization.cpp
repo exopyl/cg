@@ -130,6 +130,7 @@ int Img::bin_floyd_steinberg (void)
 	unsigned int i, j, error, threshold=255;
 
 	unsigned int *buffer = (unsigned int*)malloc(m_iWidth*m_iHeight*sizeof(unsigned int));
+
 	for (j=0; j<m_iHeight; j++)
 		for (i=0; i<m_iWidth; i++)
 			buffer[m_iWidth*j+i] = m_pPixels[4*(j*m_iWidth+i)];
@@ -149,6 +150,7 @@ int Img::bin_floyd_steinberg (void)
 				error=value-threshold;
 			}
 			
+#if 0
 			// error diffusion
 			if (j != m_iHeight-1)
 			{
@@ -159,8 +161,9 @@ int Img::bin_floyd_steinberg (void)
 			}
 			else if (i != m_iWidth-1)
 				buffer[(j)*m_iWidth+(i+1)]   += (int)(error);	
+#endif	
 		}
-	
+
 	// cleaning
 	free (buffer);
 
