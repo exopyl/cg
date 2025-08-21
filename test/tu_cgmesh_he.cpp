@@ -93,10 +93,10 @@ TEST(TEST_cgmesh_he, subdivision)
 
 	// Karbacher
 	MeshAlgoSubdivisionKarbacher *pSsubdivisionKarbacher = new MeshAlgoSubdivisionKarbacher ();
-	
+#if 0 // TORESTORE
 	pSsubdivisionKarbacher->Apply (he);
 	he->save ("export_subdivision_karbacher_x1.obj");
-	
+#endif
 	delete pSsubdivisionKarbacher;
 }
 

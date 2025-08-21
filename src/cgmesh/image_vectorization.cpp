@@ -299,7 +299,7 @@ bool CLitRasterToVector::GeneratePath (const Img& sIndexed)
 				}
 			}
 
-			if (1)
+			if (0)
 			{	
 				int iNbPath = (*pListPath).size();
 				printf ("iNbPath : %d (%d %d %d)\n", iNbPath,
