@@ -38,3 +38,21 @@ echo "Launching 'llvm-cov show' ..."
 llvm-cov-18 show ${CXX_EXECUTABLE} \
   -instr-profile=$PWD/code.profdata > $PWD/coverage.txt
 echo "=> DONE"
+
+echo "Launching 'llvm-cov export' ..."
+llvm-cov-18 export ${CXX_EXECUTABLE} \
+  -format=lcov -instr-profile=$PWD/code.profdata > $PWD/coverage.info
+echo "=> DONE"
+
+#echo "Launching 'gcov export' ..."
+#ls -l ${BUILD_DIR}
+#echo "---"
+#gcovr --sonarqube coverage.xml \
+#      --root . \
+#      --verbose \
+#      ${BUILD_DIR}/
+#echo "=> DONE"
+#ls -l $PWD
+#head -n 30 coverage.xml
+
+echo "coverage DONE"
