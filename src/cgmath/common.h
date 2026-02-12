@@ -1,7 +1,11 @@
 #pragma once
 
 #include <stdlib.h>
+#if defined(__cplusplus)
+#include <cmath>
+#else
 #include <math.h>
+#endif
 #include <float.h>
 
 #ifdef _MSC_VER
