@@ -192,7 +192,6 @@ void computeIntensityGradientsX(Img *m_pImgLeft,
       if (max2 - min2 >= th)
          no_igR[i] = 0;
    }
-   printf ("%d %d %d %d\n", min1, max1, min2, max2);
 
 #ifdef USE_SYMMETRIC_GRADIENTS
 
@@ -369,9 +368,7 @@ void print_phi(int phi[ROWS][COLS+SLOP][MAXDISP + 1],
    if (scanline<0) scanline=0;
    if (scanline>=ROWS) scanline=ROWS-1;
 
-   printf("\n(PRINT_PHI)\n");
    fflush(stdout);
-   printf("\nSCANLINE %3d\n", scanline);
    printf("Disp: ");
    for (d=d0 ; d<=d1 ; d++) {
       printf("%3d ", d);
@@ -962,9 +959,6 @@ void DisparityBirchfield::Process(void)
 
 	for (scanline = 0 ; scanline < ROWS ; scanline++)
 	{
-		if (scanline % 50 == 0 && ROWS > 200)
-			printf("     scanline %d\n", scanline);
-
 		// Fill tables
 		fillDissimilarityTable(m_pImgLeft, m_pImgRight, dis, scanline);
 		//if (ptr_ig == NULL)

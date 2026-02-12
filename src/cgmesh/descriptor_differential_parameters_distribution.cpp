@@ -91,7 +91,6 @@ Cdifferential_parameters_distribution::compute_distribution (shape_function_type
 		{
 			data[i] = (pDiffParam->GetKappaMax () * pDiffParam->GetKappaMin ());
 		}
-		printf ("%f\n", data[i]);
 	  }
       break;
     case MEAN_CURVATURE:
@@ -121,7 +120,6 @@ Cdifferential_parameters_distribution::compute_distribution (shape_function_type
 	  }
       break;
     case MPEG7:
-		printf ("MPEG7\n");
       for (i=0; i<nv; i++)
 	  {
 	  Tensor *pDiffParam = pTensorEvaluator->GetDiffParam (i);
@@ -192,7 +190,6 @@ Cdifferential_parameters_distribution::compute_distribution (shape_function_type
 	  if (data[i] > max) max = data[i];
 	}
     }
-  printf ("gaussian curvatures : %f -> %f\n", min, max);
 
   float threshold = 0.7;
   if (type != MPEG7 && 0)

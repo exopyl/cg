@@ -209,6 +209,10 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 			float kappa_gaussian = a*c-b*b;
 			float kappa_mean = (a+c)/2.0;
 			float temp = kappa_mean * kappa_mean - kappa_gaussian;
+			if (std::fabs(temp) < 10.f * std::numeric_limits<float>::epsilon())
+			{
+				temp = 0.f;
+			}
 			if (temp < 0.0)
 			{
 				printf ("!!! Problem : kappa_mean * kappa_mean - kappa_gaussian = %f < 0\n", temp);

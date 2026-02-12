@@ -1,5 +1,4 @@
-#ifndef __CURVE_BEZIER_H__
-#define __CURVE_BEZIER_H__
+#pragma once
 
 #include "curve.h"
 #include "algebra_vector3.h"
@@ -7,7 +6,7 @@
 /**
 * TODO
 *
-* Impl�menter intersection avec droites
+* Implementer intersection avec droites
 * Faire inventaire des diff�rentes m�thodes d'interpolation
 */
 
@@ -71,5 +70,3 @@ private:
 	int m_nControlPoints;
 	vec3 *m_controlPoints;
 };
-
-#endif // __CURVE_BEZIER_H__

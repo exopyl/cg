@@ -1,5 +1,4 @@
-#ifndef __MINIMIZATION_SIMPLEX_H__
-#define __MINIMIZATION_SIMPLEX_H__
+#pragma once
 
 /* example
 
@@ -25,5 +24,3 @@
 */
 
 extern void amoeba (float **p, float y[], int ndim, float ftol, float (*funk)(float []), int *nfunk);
-
-#endif /* __MINIMIZATION_SIMPLE_H__ */

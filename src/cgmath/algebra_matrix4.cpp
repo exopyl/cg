@@ -36,7 +36,7 @@ int mat4_get_inverse (float *_dst, float *_src)
 	float det;     // determinant
 
 	float tmp2[16];
-	for (int i=0; i<16; i++)
+	for (i=0; i<16; i++)
 		tmp2[i] = _src[i];
 
 	// transpose matrix

@@ -1,5 +1,4 @@
-#ifndef __CURVE_NURBS_H__
-#define __CURVE_NURBS_H__
+#pragma once
 
 #include "algebra_vector3.h"
 
@@ -55,5 +54,3 @@ private:
 	int m_nKnots;
 	float *m_knots;
 };
-
-#endif // __CURVE_NURBS_H__

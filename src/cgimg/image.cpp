@@ -131,7 +131,6 @@ void Img::set_pixel_int (unsigned int i, unsigned int j, int c)
 {
 	RGBc rgb;
 	Color::Int2RGBc (c, rgb);
-	printf ("##%d => %d %d %d\n", c, rgb.r, rgb.g, rgb.b);
 	set_pixel (i, j, rgb.r, rgb.g, rgb.b, 255);
 }
 
@@ -622,8 +621,7 @@ int Img::resize (unsigned int width, unsigned int height, int mode)
 				int c11g = m_pPixels[i11+1];
 				int c11b = m_pPixels[i11+2];
 				int c11a = m_pPixels[i11+3];
-				
-				int r, g, b, a;
+
 				r = 	(((int) c00r) * (1.f-x)*(1.f-y) +
 					 ((int) c01r) * x      *(1.f-y) +
 					 ((int) c10r) * (1.f-x)*      y  +

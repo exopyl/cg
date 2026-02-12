@@ -1,5 +1,4 @@
-#ifndef __ALGEBRA_VECTOR2_H__
-#define __ALGEBRA_VECTOR2_H__
+#pragma once
 
 #include <stdio.h>
 #include <math.h>
@@ -77,5 +76,3 @@ typedef struct seg2
 	vec2 vs;
 	vec2 ve;
 } seg2;
-
-#endif // __ALGEBRA_VECTOR2_H__

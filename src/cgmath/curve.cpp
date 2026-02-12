@@ -80,7 +80,6 @@ void Curve::Export (char *filename)
 	
 	// faces
 	unsigned int offset = 0;
-	unsigned int iface = 0;
 	for (unsigned int j=0; j<nvertices-1; j++)
 	{
 		unsigned int k=0;
@@ -137,25 +136,25 @@ void Curve01::GetPosition (float t, float p[3]) const
 // v = dr / dt
 void Curve01::GetVelocity (float t, float v[3]) const
 {
-	v[0] = -m_r*sin(t);
-	v[1] =  m_r*cos(t);
-	v[2] = -m_a*m_m*sin(m_m*t);
+	v[0] = -m_r * sin(t);
+	v[1] = m_r * cos(t);
+	v[2] = -m_a * m_m * sin(m_m * t);
 }
 
 // a = d^2r / dt^2
 void Curve01::GetAcceleration (float t, float a[3]) const
 {
-	a[0] = -m_r*cos(t);
-	a[1] = -m_r*sin(t);
-	a[2] = -m_a*m_m*m_m*cos(m_m*t);
+	a[0] = -m_r * cos(t);
+	a[1] = -m_r * sin(t);
+	a[2] = -m_a * m_m * m_m * cos(m_m * t);
 }
 
 // j = d^3r / dt^3
 void Curve01::GetJerk (float t, float j[3]) const
 {
-	j[0] = 0.;
-	j[1] = 0.;
-	j[2] = 0.;
+	j[0] = m_r * sin(t);
+	j[1] = -m_r * cos(t);
+	j[2] = m_a * m_m * m_m * m_m * sin(m_m * t);
 }
 
 // |v|

@@ -1,5 +1,4 @@
-#ifndef __TMATRIX2_H__
-#define __TMATRIX2_H__
+#pragma once
 
 #include <string.h>
 #include <iostream>
@@ -382,5 +381,3 @@ typedef TMatrix2<int>    Matrix2i;
 typedef TMatrix2<float>  Matrix2f;
 typedef TMatrix2<double> Matrix2d;
 typedef TMatrix2<float>  Matrix2;
-
-#endif	// __TMATRIX2_H__

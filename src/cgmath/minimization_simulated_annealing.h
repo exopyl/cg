@@ -1,5 +1,4 @@
-#ifndef __MINIMIZATION_SIMULATED_ANNEALING_H__
-#define __MINIMIZATION_SIMULATED_ANNEALING_H__
+#pragma once
 
 /* example
   
@@ -31,5 +30,3 @@
 
 extern void amebsa(float **p, float y[], int ndim, float pb[], float *yb, float ftol,
 		   float (*funk)(float []), int *iter, float temptr);
-
-#endif /* __MINIMIZATION_SIMULATED_ANNEALING_H__ */

@@ -1,5 +1,4 @@
-#ifndef __CURVE_H__
-#define __CURVE_H__
+#pragma once
 
 class Curve
 {
@@ -120,5 +119,3 @@ private:
 	float m; // angular rate
 	float n; // angular rate
 };
-
-#endif // __CURVE_H__

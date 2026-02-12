@@ -1,5 +1,4 @@
-#ifndef __SEGMENT_H__
-#define __SEGMENT_H__
+#pragma once
 
 #include "line.h"
 #include "common.h"
@@ -39,5 +38,3 @@ public:
 private:
 	double m_begin, m_end;
 };
-
-#endif /* __SEGMENT_H__ */

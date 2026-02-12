@@ -1,5 +1,4 @@
-#ifndef __CURVE_KAPPATAU_H__
-#define __CURVE_KAPPATAU_H__
+#pragma once
 
 //
 // http://www.cs.sjsu.edu/faculty/rucker/kaptaudoc/ktpaper.htm
@@ -23,5 +22,3 @@ private:
 	float (*m_kappa)(float);
 	float (*m_tau)(float);
 };
-
-#endif // __CURVE_KAPPATAU_H__

@@ -1,5 +1,4 @@
-#ifndef __ALGEBRA_MATRIC_H__
-#define __ALGEBRA_MATRIC_H__
+#pragma once
 
 #include <string.h>
 
@@ -47,5 +46,3 @@ extern int mat3_solve_eigensystem (mat3 m,
 				    vec3 evector2,
 				    vec3 evector3);
 extern int mat3_solve_linearsystem (mat3 m, vec3 right, vec3 res);
-
-#endif // __ALGEBRA_MATRIC_H__

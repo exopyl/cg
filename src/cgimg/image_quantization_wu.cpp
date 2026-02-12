@@ -412,10 +412,8 @@ int MedianCut_Wu(unsigned char *pPixels, int iSize, int ncolors)
 
 	Hist3d(wt, mr, mg, mb, m2);
 	free(Ig); free(Ib); free(Ir);
-	printf("Histogram done\n");
 
 	M3d(wt, mr, mg, mb, m2);
-	printf("Moments done\n");
 
 	cube[0].r0 = cube[0].g0 = cube[0].b0 = 0;
 	cube[0].r1 = cube[0].g1 = cube[0].b1 = 32;
@@ -444,7 +442,6 @@ int MedianCut_Wu(unsigned char *pPixels, int iSize, int ncolors)
               break;
 	    }
 	}
-    	printf("Partition done\n");
 
 	/* the space for array m2 can be freed now */
 

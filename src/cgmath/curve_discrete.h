@@ -1,5 +1,4 @@
-#ifndef __CURVE_DISCRETE_H__
-#define __CURVE_DISCRETE_H__
+#pragma once
 
 class CurveDiscrete
 {
@@ -21,5 +20,3 @@ private:
 	int m_nPoints;
 	float *m_pPoints;
 };
-
-#endif // __CURVE_DISCRETE_H__

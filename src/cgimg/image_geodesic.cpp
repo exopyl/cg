@@ -198,7 +198,6 @@ int Img::geodesic (void)
 				float Delta = b*b-4*a*c;
 				d[offsetneighbours[i]] = (-b+sqrt(Delta))/(2*a);
 				pc_new.d = d[offsetneighbours[i]];
-				printf (" -> %f\n", d[offsetneighbours[i]]);
 
 				// add the pixel in the priority queue
 				pq.push(pc_new);

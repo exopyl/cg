@@ -1,5 +1,4 @@
-#ifndef __LINE_H__
-#define __LINE_H__
+#pragma once
 
 #include <stdio.h>
 #include <string.h>
@@ -226,6 +225,3 @@ protected:
 	LineImpl* m_lineImpl;
 	line_type m_line_type;
 };
-
-#endif // __LINE_H__
-

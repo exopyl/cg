@@ -1105,7 +1105,7 @@ void CLitRasterToVector::CalculateLayerOrder(const Img& sPalettized)
 	}
 
 	// Sort path
-	printf("   CalculateLayerOrder_Sort path (size = %ld): \n", mmorders.size());
+	printf("   CalculateLayerOrder_Sort path (size = %zd): \n", mmorders.size());
 	while(mmorders.size())
 	{
 		// search the layer above all 

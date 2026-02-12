@@ -1,5 +1,4 @@
-#ifndef __ALGEBRA_QUATERNION_H__
-#define __ALGEBRA_QUATERNION_H__
+#pragma once
 
 #include "algebra_matrix3.h"
 
@@ -19,6 +18,3 @@ extern void  quaternion_convert_to_matrix3 (quaternion q, mat3 mat);
 extern void  quaternion_dump (quaternion q);
 
 extern int  quaternion_rotate (quaternion q, vec3 res, vec3 v);
-
-#endif // __ALGEBRA_QUATERNION_H__
-

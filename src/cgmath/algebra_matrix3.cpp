@@ -317,7 +317,7 @@ static void mat3_decreasingsort (mat3 m, vec3 diag)
 {
   int i0, i1, i2;
 
-  for (i0=0, i1; i0<=1; i0++)
+  for (i0=0; i0<=1; i0++)
     {
       float max;
       i1 = i0;

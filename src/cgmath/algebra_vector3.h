@@ -1,5 +1,4 @@
-#ifndef __ALGEBRA_VECTOR3_H__
-#define __ALGEBRA_VECTOR3_H__
+#pragma once
 
 #include <stdio.h>
 #include <math.h>
@@ -97,5 +96,3 @@ inline void vec3_dump (vec3 v)
 {
 	printf ("vec3 : %f %f %f\n", v[0], v[1], v[2]);
 }
-
-#endif // __ALGEBRA_VECTOR3_H__

@@ -125,17 +125,19 @@ Che_edge::~Che_edge ()
 
 void Che_edge::dump (void)
 {
-	printf ("edge 0x%x : ", this);
+	printf ("edge 0x%p : ", (void*)this);
 	if (m_valid)
 	{
-		printf ("(face %d) (vertices %d -> %d) (pair 0x%x %d -> %d) (next 0x%x %d -> %d) (data : %x)\n",
+		printf ("(face %d) (vertices %d -> %d) (pair %p %d -> %d) (next %p %d -> %d) (data : %p)\n",
 			m_face, m_v_begin, m_v_end,
-			m_pair, (m_pair)?m_pair->m_v_begin:-1, (m_pair)?m_pair->m_v_end:-1,
-			m_he_next, (m_he_next)?m_he_next->m_v_begin:-1, (m_he_next)?m_he_next->m_v_end:-1,
-			m_data);
+			(void*)m_pair, (m_pair)?m_pair->m_v_begin:-1, (m_pair)?m_pair->m_v_end:-1,
+			(void*)m_he_next, (m_he_next)?m_he_next->m_v_begin:-1, (m_he_next)?m_he_next->m_v_end:-1,
+			(void*)m_data);
 	}
 	else
-		printf ("not valid\n", m_valid);
+	{
+		printf("not valid\n");
+	}
 }
 
 Che_mesh::Che_mesh ()
@@ -593,7 +595,7 @@ int Che_mesh::is_edge_contract2_valid (Che_edge *edge)
 {
 	if (!edge->m_valid)
 	{
-		printf ("unvalid edge : 0x%x : %d -> %d\n", edge, edge->m_v_begin, edge->m_v_end);
+		printf ("invalid edge : %p : %d -> %d\n", (void*)edge, edge->m_v_begin, edge->m_v_end);
 		return 0;
 	}
 

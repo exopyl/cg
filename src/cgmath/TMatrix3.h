@@ -438,11 +438,11 @@ public:
 
 		TValue d = Determinant();
 				
-			if (d == 0.f)	//Impossible to inverse the matrix
-				return false;
+		if (d == 0.f)	//Impossible to inverse the matrix
+			return false;
 
-			//To avoid multiple division
-			d = 1.f / d;
+		//To avoid multiple division
+		d = 1.f / d;
 
 /*
   TValue inv[9];
@@ -637,7 +637,7 @@ void decreasingsort (TValue diag[3], TValue subd[3])
 {
   int i0, i1, i2;
 
-  for (i0=0, i1; i0<=1; i0++)
+  for (i0=0; i0<=1; i0++)
     {
       TValue max;
       i1 = i0;

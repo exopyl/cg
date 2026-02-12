@@ -1,5 +1,4 @@
-#ifndef __ALGEBRA_MATRIX2_H__
-#define __ALGEBRA_MATRIX2_H__
+#pragma once
 
 #include "algebra_vector2.h"
 
@@ -12,5 +11,3 @@ extern float mat2_determinant (mat2 m);
 extern int mat2_inverse (mat2 m);
 extern int mat2_solve_eigensystem (mat2 m, vec2 evector1, vec2 evector2, vec2 evalues);
 extern void mat2_dump (mat2 m);
-
-#endif // __ALGEBRA_MATRIX2_H__

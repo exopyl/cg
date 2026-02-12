@@ -1,5 +1,4 @@
-#ifndef __ALGEBRA_MATRIX4_H__
-#define __ALGEBRA_MATRIX4_H__
+#pragma once
 
 typedef float mat4[16];
 
@@ -11,5 +10,3 @@ extern int mat4_init (mat4 m,
 extern int mat4_set_identity (float *m);
 extern int mat4_get_inverse (float *dst, float *src);
 extern int mat4_transform (float *dst, float *m, float *v);
-
-#endif // __ALGEBRA_MATRIX4_H__

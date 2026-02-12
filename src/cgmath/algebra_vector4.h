@@ -1,5 +1,4 @@
-#ifndef __ALGEBRA_PLANE_H__
-#define __ALGEBRA_PLANE_H__
+#pragma once
 
 #include "algebra_vector3.h"
 
@@ -14,5 +13,3 @@ inline void vec4_init (vec4 v, float x, float y, float z, float w)
 }
 
 extern void plane_init(vec4 plane, vec3 v1, vec3 v2, vec3 v3);
-
-#endif // __ALGEBRA_PLANE_H__

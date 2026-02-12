@@ -191,10 +191,10 @@ int BSP::Choose_Plane (list<Polygon3*> polygons)
 
 int BSP::Build (list<Polygon3*> polygons)
 {
-	printf ("treating %d polygons\n", polygons.size());
+	printf ("treating %zd polygons\n", polygons.size());
 	if (polygons.size () < 1000)
 	{
-		printf ("stop with %d polygons\n", polygons.size());
+		printf ("stop with %zd polygons\n", polygons.size());
 		m_pPolygons = polygons;
 		return 0;
 	}

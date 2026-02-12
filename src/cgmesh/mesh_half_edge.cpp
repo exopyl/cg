@@ -405,7 +405,7 @@ int Mesh_half_edge::get_n_neighbours (int par_ivertex)
 }
 
 // "Discrete differential-geometry operators for triangulated 2-manifolds"
-// M Meyer, M Desbrun, P Schröder, AH Barr
+// M Meyer, M Desbrun, P Schroder, AH Barr
 // Visualization and mathematics III, 35-57
 // http://www.multires.caltech.edu/pubs/diffGeoOps.pdf
 //
