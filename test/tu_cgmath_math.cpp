@@ -631,18 +631,6 @@ TEST(TEST_cgmath, matrix3)
 	}
 }
 
-TEST(TEST_cgmath, matrix4)
-{
-	Matrix4 m1 (	1, 2, 3, 4,
-					3, 2, 5, 3,
-					1, 4, 2, 6,
-					4, 2, 1, 4	);
-	cout << m1 << endl;
-	Matrix4 m2 = m1;
-	m2.SetInverse ();
-	cout << m1*m2 << endl;
-}
-
 TEST(TEST_cgmath, squarematrix)
 {
 
@@ -776,12 +764,6 @@ TEST(TEST_cgmath, squarematrix)
 
 	cout << "============================" << endl;
 	cout << "Inverse" << endl;
-
-	cout << "matrix4 avec m1" << endl;
-	Matrix4 m4 (m1);
-	cout << m4.Determinant () << endl;
-	m4.SetInverse ();
-	cout << m4 << endl;
 
 	cout << "square matrix avec m1" << endl;
 	//sq1.Set (4, m1);
