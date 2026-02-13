@@ -205,12 +205,34 @@ void quaternion_dump (quaternion q)
 
 int  quaternion_rotate (quaternion q, vec3 res, vec3 orig)
 {
-	quaternion qtmp;
-	quaternion_init (qtmp, orig[0], orig[1], orig[2], 0.0);
-	quaternion quat_pt_rotated;
-	printf ("[quaternion_rotate] TODO\n");
-	//quat_pt_rotated = *this * qtmp * GetInverse();
-	vec3_copy (res, quat_pt_rotated);
+	// q is normalized
+	auto qx = q[0];
+	auto qy = q[1];
+	auto qz = q[2];
+	auto qw = q[3];
+	auto x = orig[0];
+	auto y = orig[1];
+	auto z = orig[2];
+
+	float uvx = qy * z - qz * y;
+	float uvy = qz * x - qx * z;
+	float uvz = qx * y - qy * x;
+
+	float uuvx = qy * uvz - qz * uvy;
+	float uuvy = qz * uvx - qx * uvz;
+	float uuvz = qx * uvy - qy * uvx;
+
+	uvx *= (2.0f * qw);
+	uvy *= (2.0f * qw);
+	uvz *= (2.0f * qw);
+
+	uuvx *= 2.0f;
+	uuvy *= 2.0f;
+	uuvz *= 2.0f;
+
+	res[0] = x + uvx + uuvx;
+	res[1] = y + uvy + uuvy;
+	res[2] = z + uvz + uuvz;
 
 	return 0;
 }

@@ -144,7 +144,7 @@ void Color::RGBftoHSL (RGBf rgb, HSLf hsl)
         float add = max + min;
         float sub = max - min;
         
-        float h;
+        float h = 0.f;
 	if (max == min) {
 		h = 0;
         } else if (max == rgb.r) {

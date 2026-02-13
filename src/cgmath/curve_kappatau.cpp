@@ -73,7 +73,6 @@ void CurveKappaTau::Export (char *filename)
 	
 	// faces
 	unsigned int offset = 0;
-	unsigned int iface = 0;
 	for (unsigned int j=0; j<nvertices-1; j++)
 	{
 		unsigned int k=0;

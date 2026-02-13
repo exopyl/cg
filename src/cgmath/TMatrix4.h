@@ -1,552 +1,426 @@
-#ifndef __TMATRIX4_H__
-#define __TMATRIX4_H__
+#pragma once
+
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <ostream>
+#include <limits>
 
 #include "TVector4.h"
 
-#include <iostream>
-using namespace std;
+/// Storage order for matrix data in memory.
+enum class StorageOrder { RowMajor, ColumnMajor };
 
-// TMatrix4[n][m] addresses the following element :
-// n = row
-// m = column
-// ie
-// m_Mat[0][0] m_Mat[0][1] m_Mat[0][2] m_Mat[0][3]
-// m_Mat[1][0] m_Mat[1][1] m_Mat[1][2] m_Mat[1][3]
-// m_Mat[2][0] m_Mat[2][1] m_Mat[2][2] m_Mat[2][3]
-// m_Mat[3][0] m_Mat[3][1] m_Mat[3][2] m_Mat[3][3]
-
-template <class TValue>
-class TMatrix4 
-{
+/// 4x4 matrix template with configurable storage order.
+///
+/// Based on TMatrix4 from cgmath, modernized for C++20.
+///
+/// Logical indexing is always (row, col) via at(row, col):
+/// - RowMajor:    m_data[row * 4 + col] — rows contiguous in memory
+/// - ColumnMajor: m_data[col * 4 + row] — columns contiguous in memory (Vulkan-ready)
+///
+/// All mathematical conventions follow standard (GLM/GLU):
+/// - SetLookAt: side/up/-forward as rows
+/// - SetPerspective: Vulkan conventions (Y-flip, depth [0,1])
+/// - Rotations: right-hand rule
+///
+/// With ColumnMajor (default), data() can be uploaded directly to Vulkan push constants.
+template <class TValue, StorageOrder Order = StorageOrder::ColumnMajor>
+class TMatrix4 {
 public:
 
-	//
-	// Constructors
-	//
-
-	TMatrix4<TValue>()
-	{
-		SetIdentity();
-	}
-
-	TMatrix4<TValue>(TValue *mat)
-	{
-		memcpy( m_Mat, mat, 16*sizeof(TValue) );
-	}
-
-	TMatrix4<TValue>(
-				TValue m0, TValue m4, TValue  m8, TValue m12,
-				TValue m1, TValue m5, TValue  m9, TValue m13,
-				TValue m2, TValue m6, TValue m10, TValue m14,
-				TValue m3, TValue m7, TValue m11, TValue m15
-				)
-	{
-		m_Mat[0][0]=m0; m_Mat[0][1]=m4; m_Mat[0][2]=m8;  m_Mat[0][3]=m12;
-		m_Mat[1][0]=m1; m_Mat[1][1]=m5; m_Mat[1][2]=m9;  m_Mat[1][3]=m13;
-		m_Mat[2][0]=m2; m_Mat[2][1]=m6; m_Mat[2][2]=m10; m_Mat[2][3]=m14;
-		m_Mat[3][0]=m3; m_Mat[3][1]=m7; m_Mat[3][2]=m11; m_Mat[3][3]=m15;
-	}
-
-	//
-	// Destructor
-	//
-
-	~TMatrix4<TValue>()
-	{
-	}
-
-	//
-	// Operators
-	//
-
-	inline TMatrix4<TValue>& operator=(TValue *mat)
-	{
-		memcpy( m_Mat, mat, 16*sizeof(TValue) );
-		return *this;
-	}
-
-	inline TMatrix4<TValue>& operator=(const TMatrix4<TValue> &src)
-	{
-		memcpy( m_Mat, src.m_Mat, 16*sizeof(TValue) );
-		return *this;
-	}
-
-	inline bool operator==(const TMatrix4<TValue> &right) const
-	{
-	int i,j;
-	bool bRet = true;
-		
-		for (i=0; i<4; i++) 
-			for (j=0; j<4; j++) 
-				if ( m_Mat[i][j] != right.m_Mat[i][j] )
-					bRet = false;
-
-	return bRet;
-	}
-
-	inline bool operator!=(const TMatrix4<TValue> &right) const
-	{
-	int i,j;
-	bool bRet = true;
-		
-		for (i=0; i<4; i++) 
-			for (j=0; j<4; j++) 
-				if ( m_Mat[i][j] != right.m_Mat[i][j] )
-					bRet = false;
-
-		//Reverse the result
-		bRet = !bRet;
-
-	return bRet;
-	}
-
-	inline TMatrix4<TValue>& operator*=(const TMatrix4<TValue>& right)
-	{
-	TMatrix4<TValue> res;
-	int i,j,k;
-		
-		for (i=0; i<4; i++) 
-		{
-			for (j=0; j<4; j++) 
-			{
-				res.m_Mat[i][j] = 0.0;
-				for (k=0; k<4; k++) 
-				{
-					res.m_Mat[i][j] += m_Mat[i][k] * (right.m_Mat[k][j]);
-				}
-			}
-		}
-
-		*this = res;
-	return *this;
-	}
-
-	TMatrix4<TValue> operator*(const TMatrix4<TValue>& right) const
-	{
-	TMatrix4<TValue> res;
-	int i,j,k;
-		
-		for (i=0; i<4; i++) 
-		{
-			for (j=0; j<4; j++) 
-			{
-				res.m_Mat[i][j] = 0.0;
-				for (k=0; k<4; k++) 
-				{
-					res.m_Mat[i][j] += m_Mat[i][k] * (right.m_Mat[k][j]);
-				}
-			}
-		}
-
-	return res;
-	}
-
-	//
-	// Set
-	//
-
-	inline void SetIdentity(void)
-	{
-		m_Mat[0][0]=1; m_Mat[1][0]=0; m_Mat[2][0]=0; m_Mat[3][0]=0;
-		m_Mat[0][1]=0; m_Mat[1][1]=1; m_Mat[2][1]=0; m_Mat[3][1]=0;
-		m_Mat[0][2]=0; m_Mat[1][2]=0; m_Mat[2][2]=1; m_Mat[3][2]=0;
-		m_Mat[0][3]=0; m_Mat[1][3]=0; m_Mat[2][3]=0; m_Mat[3][3]=1;
-	}
-
-	// ref : https://www.opengl.org/wiki/GluLookAt_code
-	inline void SetLookAt(Vector3 &eye, Vector3 &center, Vector3 &up)
-	{
-		Vector3 forward = eye - center;
-		forward.Normalize();
-		Vector3 side; // side = forward x up
-		up.Normalize();
-		side.CrossProduct(up, forward);
-		side.Normalize();
-		up.CrossProduct(forward, side); // recompute up as: up = side x forward
-
-		//------------------
-		m_Mat[0][0] = side[0];
-		m_Mat[1][0] = side[1];
-		m_Mat[2][0] = side[2];
-		//------------------
-		m_Mat[0][1] = up[0];
-		m_Mat[1][1] = up[1];
-		m_Mat[2][1] = up[2];
-		//------------------
-		m_Mat[0][2] = forward[0];
-		m_Mat[1][2] = forward[1];
-		m_Mat[2][2] = forward[2];
-		//------------------
-		m_Mat[0][3] = m_Mat[1][3] = m_Mat[2][3] = 0.0;
-		//------------------
-		m_Mat[3][0] =  -(side * eye);
-		m_Mat[3][1] =  -(up * eye);
-		m_Mat[3][2] =  -(forward * eye);
-		//------------------
-		m_Mat[3][3] = 1.0;
-	}
-
-	// ref : // https://www.opengl.org/wiki/GluPerspective_code
-	inline void frustrum(float left, float right, float bottom, float top, float znear, float zfar)
-	{
-		float temp, temp2, temp3, temp4;
-		temp = 2.0 * znear;
-		temp2 = right - left;
-		temp3 = top - bottom;
-		temp4 = zfar - znear;
-		m_Mat[0][0] = temp / temp2;
-		m_Mat[0][1] = 0.0;
-		m_Mat[0][2] = 0.0;
-		m_Mat[0][3] = 0.0;
-		m_Mat[1][0] = 0.0;
-		m_Mat[1][1] = temp / temp3;
-		m_Mat[1][2] = 0.0;
-		m_Mat[1][3] = 0.0;
-		m_Mat[2][0] = (right + left) / temp2;
-		m_Mat[2][1] = (top + bottom) / temp3;
-		m_Mat[2][2] = (-zfar - znear) / temp4;
-		m_Mat[2][3] = -1.0;
-		m_Mat[3][0] = 0.0;
-		m_Mat[3][1] = 0.0;
-		m_Mat[3][2] = (-temp * zfar) / temp4;
-		m_Mat[3][3] = 0.0;
-	}
-
-	// ref : // https://www.opengl.org/wiki/GluPerspective_code
-	inline void SetPerspective(float fovy /* degrees */, float aspect, float znear, float zfar)
-	{
-		float ymax, xmax;
-		ymax = znear * tanf(fovy * M_PI / 360.0);
-		//ymin = -ymax;
-		//xmin = -ymax * aspectRatio;
-		xmax = ymax * aspect;
-		frustrum(-xmax, xmax, -ymax, ymax, znear, zfar);
-	}
-
-	// ref : http://www.songho.ca/opengl/gl_projectionmatrix.html#ortho (not tested)
-	inline void SetOrtho(float left, float right, float bottom, float top, float n, float f)
-	{
-		m_Mat[0][0] = 2.0f / (right - left);
-		m_Mat[0][1] = 0.f;
-		m_Mat[0][2] = 0.f;
-		m_Mat[0][3] = 0.f;
-		m_Mat[1][0] = 0.f;
-		m_Mat[1][1] = 2.0f / (top - bottom);
-		m_Mat[1][2] = 0.f;
-		m_Mat[1][3] = 0.f;
-		m_Mat[2][0] = 0.f;
-		m_Mat[2][1] = 0.f;
-		m_Mat[2][2] = -2.0f / (f - n);
-		m_Mat[2][3] = 0.f;
-		m_Mat[3][0] = -(right + left) / (right - left);
-		m_Mat[3][1] = -(top + bottom) / (top - bottom);
-		m_Mat[3][2] = -(f + n) / (f - n);
-		m_Mat[3][3] = 1.f;
-	}
-
-	inline TValue *Multiply(TValue *mat)
-	{
-	TMatrix4<TValue> res;
-	int i,j,k;
-	TMatrix4<TValue> TempMatrice(mat);
-		
-		for (i=0; i<4; i++) 
-		{
-			for (j=0; j<4; j++) 
-			{
-				res.m_Mat[i][j] = 0.0;
-				for (k=0; k<4; k++) 
-				{
-					res.m_Mat[i][j] += m_Mat[i][k] * (TempMatrice.m_Mat[k][j]);
-				}
-			}
-		}
-
-		*this = res;
-
-		return (TMatrix4<TValue>)(&res.m_Mat[0][0]);
-	}
-
-
-	//Exactly the same function as above in the form of operator
-	inline friend TVector3<TValue> operator * (const TVector3<TValue> &t,const TMatrix4<TValue> &mat)
-	{
-		return TVector3<TValue>(
-				mat.m_Mat[0][0]*t.x + mat.m_Mat[0][1]*t.y + mat.m_Mat[0][2]*t.z + mat.m_Mat[0][3],
-				mat.m_Mat[1][0]*t.x + mat.m_Mat[1][1]*t.y + mat.m_Mat[1][2]*t.z + mat.m_Mat[1][3],
-				mat.m_Mat[2][0]*t.x + mat.m_Mat[2][1]*t.y + mat.m_Mat[2][2]*t.z + mat.m_Mat[2][3]
-				);
-	}
-
-	inline friend TVector3<TValue> operator * (const TMatrix4<TValue> &mat,const TVector3<TValue> &t)
-	{
-		return TVector3<TValue>(
-				mat.m_Mat[0][0]*t.x + mat.m_Mat[0][1]*t.y + mat.m_Mat[0][2]*t.z + mat.m_Mat[0][3],
-				mat.m_Mat[1][0]*t.x + mat.m_Mat[1][1]*t.y + mat.m_Mat[1][2]*t.z + mat.m_Mat[1][3],
-				mat.m_Mat[2][0]*t.x + mat.m_Mat[2][1]*t.y + mat.m_Mat[2][2]*t.z + mat.m_Mat[2][3]
-				);
-	}
-
-	inline friend TVector4<TValue> operator * (const TMatrix4<TValue> &mat, const TVector4<TValue> &t)
-	{
-		return TVector4<TValue>(
-				mat.m_Mat[0][0]*t.x + mat.m_Mat[0][1]*t.y + mat.m_Mat[0][2]*t.z + mat.m_Mat[0][3]*t.w,
-				mat.m_Mat[1][0]*t.x + mat.m_Mat[1][1]*t.y + mat.m_Mat[1][2]*t.z + mat.m_Mat[1][3]*t.w,
-				mat.m_Mat[2][0]*t.x + mat.m_Mat[2][1]*t.y + mat.m_Mat[2][2]*t.z + mat.m_Mat[2][3]*t.w,
-				mat.m_Mat[3][0]*t.x + mat.m_Mat[3][1]*t.y + mat.m_Mat[3][2]*t.z + mat.m_Mat[3][3]*t.w
-				);
-	}
-
-	inline friend TVector4<TValue> operator * (const TVector4<TValue> &t,const TMatrix4<TValue> &mat)
-	{
-		return TVector4<TValue>(
-				mat.m_Mat[0][0]*t.x + mat.m_Mat[0][1]*t.y + mat.m_Mat[0][2]*t.z + mat.m_Mat[0][3]*t.w,
-				mat.m_Mat[1][0]*t.x + mat.m_Mat[1][1]*t.y + mat.m_Mat[1][2]*t.z + mat.m_Mat[1][3]*t.w,
-				mat.m_Mat[2][0]*t.x + mat.m_Mat[2][1]*t.y + mat.m_Mat[2][2]*t.z + mat.m_Mat[2][3]*t.w,
-				mat.m_Mat[3][0]*t.x + mat.m_Mat[3][1]*t.y + mat.m_Mat[3][2]*t.z + mat.m_Mat[3][3]*t.w
-				);
-	}
-
-	inline friend void operator *=(TVector3<TValue> &t,const TMatrix4<TValue> &mat)
-	{
-		t.Set(
-			mat.m_Mat[0][0]*t.x + mat.m_Mat[0][1]*t.y + mat.m_Mat[0][2]*t.z + mat.m_Mat[0][3],
-			mat.m_Mat[1][0]*t.x + mat.m_Mat[1][1]*t.y + mat.m_Mat[1][2]*t.z + mat.m_Mat[1][3],
-			mat.m_Mat[2][0]*t.x + mat.m_Mat[2][1]*t.y + mat.m_Mat[2][2]*t.z + mat.m_Mat[2][3]
-			);
-	}
-
-	inline friend void operator *=(TVector4<TValue> &t,const TMatrix4<TValue> &mat)
-	{
-		t.Set(
-			mat.m_Mat[0][0]*t.x + mat.m_Mat[0][1]*t.y + mat.m_Mat[0][2]*t.z + mat.m_Mat[0][3]*t.w,
-			mat.m_Mat[1][0]*t.x + mat.m_Mat[1][1]*t.y + mat.m_Mat[1][2]*t.z + mat.m_Mat[1][3]*t.w,
-			mat.m_Mat[2][0]*t.x + mat.m_Mat[2][1]*t.y + mat.m_Mat[2][2]*t.z + mat.m_Mat[2][3]*t.w,
-			mat.m_Mat[3][0]*t.x + mat.m_Mat[3][1]*t.y + mat.m_Mat[3][2]*t.z + mat.m_Mat[3][3]*t.w
-			);
-	}
-
-
-	/*! Transpose the matrice
-	*/
-	void Transpose()
-	{
-		int i,j;
-		TMatrix4<TValue> TempMatrice;
-			
-		for ( i=0; i<4; i++ ) 
-			for ( j=0; j<4; j++ ) 
-				TempMatrice.m_Mat[i][j]= m_Mat[j][i];
-
-		//Now copy the result
-		for ( i=0; i<4; i++ ) 
-			for ( j=0; j<4; j++ ) 
-				m_Mat[i][j] = TempMatrice.m_Mat[i][j];
-	}
-
-	/*! Return transpose matrice
-	\param TransposeMatrix - The matrix to transpose
-	\return TValue* - Transpose matrix
-	*/
-	TValue *GetTranspose(TValue *TransposeMatrix)
-	{
-		int i,j;
-		TMatrix4<TValue> TempMatrice(TransposeMatrix);
-			
-			for ( i=0; i<4; i++ ) 
-				for ( j=0; j<4; j++ ) 
-					TempMatrice.m_Mat[i][j]= m_Mat[j][i];
-
-			return (TMatrix4<TValue>)(&TempMatrice.m_Mat[0][0]);
-	}
-
-	inline TValue Determinant()
-	{
-		TValue d = (m_Mat[0][0] * m_Mat[1][1] - m_Mat[1][0] * m_Mat[0][1]) * (m_Mat[2][2] * m_Mat[3][3] - m_Mat[3][2] * m_Mat[2][3])
-			- (m_Mat[0][0] * m_Mat[2][1] - m_Mat[2][0] * m_Mat[0][1]) * (m_Mat[1][2] * m_Mat[3][3] - m_Mat[3][2] * m_Mat[1][3])
-			+ (m_Mat[0][0] * m_Mat[3][1] - m_Mat[3][0] * m_Mat[0][1]) * (m_Mat[1][2] * m_Mat[2][3] - m_Mat[2][2] * m_Mat[1][3])
-			+ (m_Mat[1][0] * m_Mat[2][1] - m_Mat[2][0] * m_Mat[1][1]) * (m_Mat[0][2] * m_Mat[3][3] - m_Mat[3][2] * m_Mat[0][3])
-			- (m_Mat[1][0] * m_Mat[3][1] - m_Mat[3][0] * m_Mat[1][1]) * (m_Mat[0][2] * m_Mat[2][3] - m_Mat[2][2] * m_Mat[0][3])
-			+ (m_Mat[2][0] * m_Mat[3][1] - m_Mat[3][0] * m_Mat[2][1]) * (m_Mat[0][2] * m_Mat[1][3] - m_Mat[1][2] * m_Mat[0][3]);
-
-		return d;
-	}
-
-	/*! Calculate the inverse of the current matrix
-	Brute force a bit slow
-	\param OutMatrix - In return contains the inverted matrix
-	\return Returns false if there is no inverse matrix.
-	*/
-	inline bool GetInverse(TMatrix4<TValue>& OutMatrix)
-	{
-		// Calculates the inverse of this Matrix 
-		// The inverse is calculated using Cramers rule.
-		// If no inverse exists then 'false' is returned.
-
-		const TMatrix4<TValue> &m = *this;
-
-		TValue d = Determinant();
-				
-			if (d == 0.f)	//Impossible to inverse the matrix
-				return false;
-
-			//To avoid multiple division
-			d = 1.f / d;
-
-			//First row
-			OutMatrix.m_Mat[0][0] = d * (
-				  m_Mat[1][1] * (m_Mat[2][2] * m_Mat[3][3] - m_Mat[3][2] * m_Mat[2][3])
-				+ m_Mat[2][1] * (m_Mat[3][2] * m_Mat[1][3] - m_Mat[1][2] * m_Mat[3][3])
-				+ m_Mat[3][1] * (m_Mat[1][2] * m_Mat[2][3] - m_Mat[2][2] * m_Mat[1][3])
-				);
-
-			OutMatrix.m_Mat[1][0] = d * (
-				  m_Mat[1][2] * (m_Mat[2][0] * m_Mat[3][3] - m_Mat[3][0] * m_Mat[2][3])
-				+ m_Mat[2][2] * (m_Mat[3][0] * m_Mat[1][3] - m_Mat[1][0] * m_Mat[3][3])
-				+ m_Mat[3][2] * (m_Mat[1][0] * m_Mat[2][3] - m_Mat[2][0] * m_Mat[1][3])
-				);
-
-			OutMatrix.m_Mat[2][0] = d * (
-				m_Mat[1][3] * (m_Mat[2][0] * m_Mat[3][1] - m_Mat[3][0] * m_Mat[2][1])
-				+ m_Mat[2][3] * (m_Mat[3][0] * m_Mat[1][1] - m_Mat[1][0] * m_Mat[3][1])
-				+ m_Mat[3][3] * (m_Mat[1][0] * m_Mat[2][1] - m_Mat[2][0] * m_Mat[1][1])
-				);
-
-			OutMatrix.m_Mat[3][0] = d * (
-				m_Mat[1][0] * (m_Mat[3][1] * m_Mat[2][2] - m_Mat[2][1] * m_Mat[3][2])
-				+ m_Mat[2][0] * (m_Mat[1][1] * m_Mat[3][2] - m_Mat[3][1] * m_Mat[1][2])
-				+ m_Mat[3][0] * (m_Mat[2][1] * m_Mat[1][2] - m_Mat[1][1] * m_Mat[2][2])
-				);
-
-			//Second row
-			OutMatrix.m_Mat[0][1] = d * (
-				  m_Mat[2][1] * (m_Mat[0][2] * m_Mat[3][3] - m_Mat[3][2] * m_Mat[0][3])
-				+ m_Mat[3][1] * (m_Mat[2][2] * m_Mat[0][3] - m_Mat[0][2] * m_Mat[2][3])
-				+ m_Mat[0][1] * (m_Mat[3][2] * m_Mat[2][3] - m_Mat[2][2] * m_Mat[3][3])
-				);
-
-			OutMatrix.m_Mat[1][1] = d * (
-				  m_Mat[2][2] * (m_Mat[0][0] * m_Mat[3][3] - m_Mat[3][0] * m_Mat[0][3])
-				+ m_Mat[3][2] * (m_Mat[2][0] * m_Mat[0][3] - m_Mat[0][0] * m_Mat[2][3])
-				+ m_Mat[0][2] * (m_Mat[3][0] * m_Mat[2][3] - m_Mat[2][0] * m_Mat[3][3])
-				);
-
-			OutMatrix.m_Mat[2][1] = d * (
-				  m_Mat[2][3] * (m_Mat[0][0] * m_Mat[3][1] - m_Mat[3][0] * m_Mat[0][1])
-				+ m_Mat[3][3] * (m_Mat[2][0] * m_Mat[0][1] - m_Mat[0][0] * m_Mat[2][1])
-				+ m_Mat[0][3] * (m_Mat[3][0] * m_Mat[2][1] - m_Mat[2][0] * m_Mat[3][1])
-				);
-
-			OutMatrix.m_Mat[3][1] = d * (
-				  m_Mat[2][0] * (m_Mat[3][1] * m_Mat[0][2] - m_Mat[0][1] * m_Mat[3][2])
-				+ m_Mat[3][0] * (m_Mat[0][1] * m_Mat[2][2] - m_Mat[2][1] * m_Mat[0][2])
-				+ m_Mat[0][0] * (m_Mat[2][1] * m_Mat[3][2] - m_Mat[3][1] * m_Mat[2][2])
-				);
-
-			//Third row
-			OutMatrix.m_Mat[0][2] = d * (
-				  m_Mat[3][1] * (m_Mat[0][2] * m_Mat[1][3] - m_Mat[1][2] * m_Mat[0][3])
-				+ m_Mat[0][1] * (m_Mat[1][2] * m_Mat[3][3] - m_Mat[3][2] * m_Mat[1][3])
-				+ m_Mat[1][1] * (m_Mat[3][2] * m_Mat[0][3] - m_Mat[0][2] * m_Mat[3][3])
-				);
-
-			OutMatrix.m_Mat[1][2] = d * (
-				  m_Mat[3][2] * (m_Mat[0][0] * m_Mat[1][3] - m_Mat[1][0] * m_Mat[0][3])
-				+ m_Mat[0][2] * (m_Mat[1][0] * m_Mat[3][3] - m_Mat[3][0] * m_Mat[1][3])
-				+ m_Mat[1][2] * (m_Mat[3][0] * m_Mat[0][3] - m_Mat[0][0] * m_Mat[3][3])
-				);
-
-			OutMatrix.m_Mat[2][2] = d * (
-				  m_Mat[3][3] * (m_Mat[0][0] * m_Mat[1][1] - m_Mat[1][0] * m_Mat[0][1])
-				+ m_Mat[0][3] * (m_Mat[1][0] * m_Mat[3][1] - m_Mat[3][0] * m_Mat[1][1])
-				+ m_Mat[1][3] * (m_Mat[3][0] * m_Mat[0][1] - m_Mat[0][0] * m_Mat[3][1])
-				);
-
-			OutMatrix.m_Mat[3][2] = d * (
-				  m_Mat[3][0] * (m_Mat[1][1] * m_Mat[0][2] - m_Mat[0][1] * m_Mat[1][2])
-				+ m_Mat[0][0] * (m_Mat[3][1] * m_Mat[1][2] - m_Mat[1][1] * m_Mat[3][2])
-				+ m_Mat[1][0] * (m_Mat[0][1] * m_Mat[3][2] - m_Mat[3][1] * m_Mat[0][2])
-				);
-
-			//Fourth row
-			OutMatrix.m_Mat[0][3] = d * (
-				  m_Mat[0][1] * (m_Mat[2][2] * m_Mat[1][3] - m_Mat[1][2] * m_Mat[2][3])
-				+ m_Mat[1][1] * (m_Mat[0][2] * m_Mat[2][3] - m_Mat[2][2] * m_Mat[0][3])
-				+ m_Mat[2][1] * (m_Mat[1][2] * m_Mat[0][3] - m_Mat[0][2] * m_Mat[1][3])
-				);
-
-			OutMatrix.m_Mat[1][3] = d * (
-				  m_Mat[0][2] * (m_Mat[2][0] * m_Mat[1][3] - m_Mat[1][0] * m_Mat[2][3])
-				+ m_Mat[1][2] * (m_Mat[0][0] * m_Mat[2][3] - m_Mat[2][0] * m_Mat[0][3])
-				+ m_Mat[2][2] * (m_Mat[1][0] * m_Mat[0][3] - m_Mat[0][0] * m_Mat[1][3])
-				);
-
-			OutMatrix.m_Mat[2][3] = d * (
-				  m_Mat[0][3] * (m_Mat[2][0] * m_Mat[1][1] - m_Mat[1][0] * m_Mat[2][1])
-				+ m_Mat[1][3] * (m_Mat[0][0] * m_Mat[2][1] - m_Mat[2][0] * m_Mat[0][1])
-				+ m_Mat[2][3] * (m_Mat[1][0] * m_Mat[0][1] - m_Mat[0][0] * m_Mat[1][1])
-				);
-
-			OutMatrix.m_Mat[3][3] = d * (
-				  m_Mat[0][0] * (m_Mat[1][1] * m_Mat[2][2] - m_Mat[2][1] * m_Mat[1][2])
-				+ m_Mat[1][0] * (m_Mat[2][1] * m_Mat[0][2] - m_Mat[0][1] * m_Mat[2][2])
-				+ m_Mat[2][0] * (m_Mat[0][1] * m_Mat[1][2] - m_Mat[1][1] * m_Mat[0][2])
-				);
-
-		return true;
-	}
-
-	/*! Calculate the inverse of the current matrix and assign
-	the result to our object
-	\return Returns false if there is no inverse matrix.
-	*/
-	inline bool SetInverse()
-	{
-		TMatrix4<TValue> OutMatrix;
-
-		bool bRet = GetInverse( OutMatrix );
-
-		*this = OutMatrix;
-		return bRet;
-	}
-
-
-	/*! Return a pointer to the array of value used as our matrix
-	\return TValue* - Pointer to a linear array of value
-	*/
-	inline TValue *GetMatPtr()
-	{
-		return &m_Mat[0][0];
-	}
-
-	/*! Return a pointer to the array of value used as our matrix
-	\return TValue* - Pointer to a linear array of value
-	*/
-	inline operator TValue* ()
-	{
-		return &m_Mat[0][0];
-	}   
-
-	//
-	// IOstream
-	//
-
-	friend ostream & operator << ( ostream & out, const TMatrix4<TValue> &right)
-	{
-		return out << "( " << right.m_Mat[0][0] << " , " << right.m_Mat[0][1] << " , " << right.m_Mat[0][2] << " , " << right.m_Mat[0][3] << " )" << endl \
-			<< "( " << right.m_Mat[1][0] << " , " << right.m_Mat[1][1] << " , " << right.m_Mat[1][2] << " , " << right.m_Mat[1][3] << " )" << endl \
-			<< "( " << right.m_Mat[2][0] << " , " << right.m_Mat[2][1] << " , " << right.m_Mat[2][2] << " , " << right.m_Mat[2][3] << " )" << endl \
-			<< "( " << right.m_Mat[3][0] << " , " << right.m_Mat[3][1] << " , " << right.m_Mat[3][2] << " , " << right.m_Mat[3][3] << " )";
-	}
-
-public:
-
-	TValue m_Mat[4][4];
+    // ========================================================================
+    // Element access
+    // ========================================================================
+
+    /// Access element at logical (row, col), storage-order independent.
+    TValue& at(int row, int col) {
+        if constexpr (Order == StorageOrder::RowMajor)
+            return m_data[row * 4 + col];
+        else
+            return m_data[col * 4 + row];
+    }
+
+    const TValue& at(int row, int col) const {
+        if constexpr (Order == StorageOrder::RowMajor)
+            return m_data[row * 4 + col];
+        else
+            return m_data[col * 4 + row];
+    }
+
+    // ========================================================================
+    // Constructors
+    // ========================================================================
+
+    /// Default: identity matrix.
+    TMatrix4() { SetIdentity(); }
+
+    /// Construct from raw flat array (interpreted in current StorageOrder).
+    explicit TMatrix4(const TValue* rawData) {
+        std::memcpy(m_data, rawData, 16 * sizeof(TValue));
+    }
+
+    /// Construct from explicit values in logical (row, col) order.
+    TMatrix4(
+        TValue m00, TValue m01, TValue m02, TValue m03,
+        TValue m10, TValue m11, TValue m12, TValue m13,
+        TValue m20, TValue m21, TValue m22, TValue m23,
+        TValue m30, TValue m31, TValue m32, TValue m33)
+    {
+        at(0,0)=m00; at(0,1)=m01; at(0,2)=m02; at(0,3)=m03;
+        at(1,0)=m10; at(1,1)=m11; at(1,2)=m12; at(1,3)=m13;
+        at(2,0)=m20; at(2,1)=m21; at(2,2)=m22; at(2,3)=m23;
+        at(3,0)=m30; at(3,1)=m31; at(3,2)=m32; at(3,3)=m33;
+    }
+
+    // ========================================================================
+    // Operators
+    // ========================================================================
+
+    bool operator==(const TMatrix4& right) const {
+        for (int i = 0; i < 16; ++i)
+            if (m_data[i] != right.m_data[i])
+                return false;
+        return true;
+    }
+
+    bool operator!=(const TMatrix4& right) const { return !(*this == right); }
+
+    TMatrix4& operator*=(const TMatrix4& right) {
+        *this = *this * right;
+        return *this;
+    }
+
+    TMatrix4 operator*(const TMatrix4& right) const {
+        TMatrix4 res;
+        for (int i = 0; i < 4; ++i)
+            for (int j = 0; j < 4; ++j) {
+                TValue sum = TValue(0);
+                for (int k = 0; k < 4; ++k)
+                    sum += at(i, k) * right.at(k, j);
+                res.at(i, j) = sum;
+            }
+        return res;
+    }
+
+    // ========================================================================
+    // Set methods
+    // ========================================================================
+
+    void SetIdentity() {
+        std::fill(m_data, m_data + 16, TValue(0));
+        at(0,0) = at(1,1) = at(2,2) = at(3,3) = TValue(1);
+    }
+
+    /// Rotation around X axis (right-hand rule, radians).
+    void SetRotateX(TValue angleRadians) {
+        TValue c = std::cos(angleRadians);
+        TValue s = std::sin(angleRadians);
+        SetIdentity();
+        at(1,1) =  c; at(1,2) = -s;
+        at(2,1) =  s; at(2,2) =  c;
+    }
+
+    /// Rotation around Y axis (right-hand rule, radians).
+    ///     cos   0   sin   0
+    ///       0   1     0   0
+    ///    -sin   0   cos   0
+    ///       0   0     0   1
+    void SetRotateY(TValue angleRadians) {
+        TValue c = std::cos(angleRadians);
+        TValue s = std::sin(angleRadians);
+        SetIdentity();
+        at(0,0) =  c; at(0,2) = s;
+        at(2,0) = -s; at(2,2) = c;
+    }
+
+    /// Rotation around Z axis (right-hand rule, radians).
+    void SetRotateZ(TValue angleRadians) {
+        TValue c = std::cos(angleRadians);
+        TValue s = std::sin(angleRadians);
+        SetIdentity();
+        at(0,0) =  c; at(0,1) = -s;
+        at(1,0) =  s; at(1,1) =  c;
+    }
+
+    /// Standard lookAt view matrix (same convention as GLM/GLU).
+    /// @param eye    Camera position (3 floats)
+    /// @param center Target position (3 floats)
+    /// @param up     World up vector (3 floats)
+    void SetLookAt(const TValue* eye, const TValue* center, const TValue* up) {
+        constexpr auto epsilon = std::numeric_limits<TValue>::epsilon();
+
+        // forward = normalize(center - eye)
+        TValue f[3] = {
+            center[0] - eye[0],
+            center[1] - eye[1],
+            center[2] - eye[2]
+        };
+        TValue fLen = std::sqrt(f[0]*f[0] + f[1]*f[1] + f[2]*f[2]);
+        if (fLen < epsilon) { SetIdentity(); return; }
+        f[0] /= fLen; f[1] /= fLen; f[2] /= fLen;
+
+        // side = normalize(forward x up)
+        TValue s[3] = {
+            f[1]*up[2] - f[2]*up[1],
+            f[2]*up[0] - f[0]*up[2],
+            f[0]*up[1] - f[1]*up[0]
+        };
+        TValue sLen = std::sqrt(s[0]*s[0] + s[1]*s[1] + s[2]*s[2]);
+        if (sLen < epsilon) { SetIdentity(); return; }
+        s[0] /= sLen; s[1] /= sLen; s[2] /= sLen;
+
+        // recompute up = side x forward
+        TValue u[3] = {
+            s[1]*f[2] - s[2]*f[1],
+            s[2]*f[0] - s[0]*f[2],
+            s[0]*f[1] - s[1]*f[0]
+        };
+
+        // View matrix: side/up/-forward as rows
+        at(0,0) =  s[0]; at(0,1) =  s[1]; at(0,2) =  s[2]; at(0,3) = -(s[0]*eye[0] + s[1]*eye[1] + s[2]*eye[2]);
+        at(1,0) =  u[0]; at(1,1) =  u[1]; at(1,2) =  u[2]; at(1,3) = -(u[0]*eye[0] + u[1]*eye[1] + u[2]*eye[2]);
+        at(2,0) = -f[0]; at(2,1) = -f[1]; at(2,2) = -f[2]; at(2,3) =  (f[0]*eye[0] + f[1]*eye[1] + f[2]*eye[2]);
+        at(3,0) = TValue(0); at(3,1) = TValue(0); at(3,2) = TValue(0); at(3,3) = TValue(1);
+    }
+
+    /// Vulkan perspective projection (Y-flip, depth [0,1]).
+    /// @param fovyRadians Vertical field of view in radians
+    void SetPerspective(TValue fovyRadians, TValue aspect, TValue nearPlane, TValue farPlane) {
+
+        constexpr auto epsilon = std::numeric_limits<TValue>::epsilon();
+        TValue tanHalfFovy = std::tan(fovyRadians / TValue(2));
+
+        std::fill(m_data, m_data + 16, TValue(0));
+
+        if (std::abs(aspect) < epsilon || std::abs(tanHalfFovy) < epsilon) {
+            SetIdentity();
+            return;
+        }
+
+        at(0,0) = TValue(1) / (aspect * tanHalfFovy);
+        at(1,1) = TValue(-1) / tanHalfFovy;  // Y-flip for Vulkan
+        at(2,2) = farPlane / (nearPlane - farPlane);
+        at(2,3) = (farPlane * nearPlane) / (nearPlane - farPlane);
+        at(3,2) = TValue(-1);
+    }
+
+    /// OpenGL frustum projection (no Y-flip, depth [-1,1]).
+    void SetFrustumGL(TValue left, TValue right, TValue bottom, TValue top,
+                      TValue znear, TValue zfar) {
+        TValue w = right - left;
+        TValue h = top - bottom;
+        TValue d = zfar - znear;
+
+        std::fill(m_data, m_data + 16, TValue(0));
+        at(0,0) = TValue(2) * znear / w;
+        at(1,1) = TValue(2) * znear / h;
+        at(0,2) = (right + left) / w;
+        at(1,2) = (top + bottom) / h;
+        at(2,2) = -(zfar + znear) / d;
+        at(2,3) = TValue(-2) * zfar * znear / d;
+        at(3,2) = TValue(-1);
+    }
+
+    /// OpenGL symmetric perspective (no Y-flip, depth [-1,1]).
+    /// @param fovyDegrees Vertical field of view in degrees
+    void SetPerspectiveGL(TValue fovyDegrees, TValue aspect, TValue znear, TValue zfar) {
+        constexpr TValue PI = TValue(3.14159265358979323846);
+        TValue ymax = znear * std::tan(fovyDegrees * PI / TValue(360));
+        TValue xmax = ymax * aspect;
+        SetFrustumGL(-xmax, xmax, -ymax, ymax, znear, zfar);
+    }
+
+    /// Orthographic projection (OpenGL conventions).
+    void SetOrtho(TValue left, TValue right, TValue bottom, TValue top,
+                  TValue nearPlane, TValue farPlane) {
+        std::fill(m_data, m_data + 16, TValue(0));
+        at(0,0) = TValue(2) / (right - left);
+        at(1,1) = TValue(2) / (top - bottom);
+        at(2,2) = TValue(-2) / (farPlane - nearPlane);
+        at(0,3) = -(right + left) / (right - left);
+        at(1,3) = -(top + bottom) / (top - bottom);
+        at(2,3) = -(farPlane + nearPlane) / (farPlane - nearPlane);
+        at(3,3) = TValue(1);
+    }
+
+    // ========================================================================
+    // Operations
+    // ========================================================================
+
+    /// Transpose in place.
+    void Transpose() {
+        for (int i = 0; i < 4; ++i)
+            for (int j = i + 1; j < 4; ++j)
+                std::swap(at(i, j), at(j, i));
+    }
+
+    /// Return transposed copy.
+    TMatrix4 GetTransposed() const {
+        TMatrix4 result;
+        for (int i = 0; i < 4; ++i)
+            for (int j = 0; j < 4; ++j)
+                result.at(i, j) = at(j, i);
+        return result;
+    }
+
+    TValue Determinant() const {
+        return (at(0,0)*at(1,1) - at(1,0)*at(0,1)) * (at(2,2)*at(3,3) - at(3,2)*at(2,3))
+             - (at(0,0)*at(2,1) - at(2,0)*at(0,1)) * (at(1,2)*at(3,3) - at(3,2)*at(1,3))
+             + (at(0,0)*at(3,1) - at(3,0)*at(0,1)) * (at(1,2)*at(2,3) - at(2,2)*at(1,3))
+             + (at(1,0)*at(2,1) - at(2,0)*at(1,1)) * (at(0,2)*at(3,3) - at(3,2)*at(0,3))
+             - (at(1,0)*at(3,1) - at(3,0)*at(1,1)) * (at(0,2)*at(2,3) - at(2,2)*at(0,3))
+             + (at(2,0)*at(3,1) - at(3,0)*at(2,1)) * (at(0,2)*at(1,3) - at(1,2)*at(0,3));
+    }
+
+    /// Compute inverse using Cramer's rule.
+    /// @return false if matrix is singular (determinant == 0).
+    bool GetInverse(TMatrix4& out) const {
+        TValue d = Determinant();
+        if (d == TValue(0))
+            return false;
+
+        d = TValue(1) / d;
+
+        out.at(0,0) = d * (at(1,1)*(at(2,2)*at(3,3) - at(3,2)*at(2,3))
+                         + at(2,1)*(at(3,2)*at(1,3) - at(1,2)*at(3,3))
+                         + at(3,1)*(at(1,2)*at(2,3) - at(2,2)*at(1,3)));
+
+        out.at(1,0) = d * (at(1,2)*(at(2,0)*at(3,3) - at(3,0)*at(2,3))
+                         + at(2,2)*(at(3,0)*at(1,3) - at(1,0)*at(3,3))
+                         + at(3,2)*(at(1,0)*at(2,3) - at(2,0)*at(1,3)));
+
+        out.at(2,0) = d * (at(1,3)*(at(2,0)*at(3,1) - at(3,0)*at(2,1))
+                         + at(2,3)*(at(3,0)*at(1,1) - at(1,0)*at(3,1))
+                         + at(3,3)*(at(1,0)*at(2,1) - at(2,0)*at(1,1)));
+
+        out.at(3,0) = d * (at(1,0)*(at(3,1)*at(2,2) - at(2,1)*at(3,2))
+                         + at(2,0)*(at(1,1)*at(3,2) - at(3,1)*at(1,2))
+                         + at(3,0)*(at(2,1)*at(1,2) - at(1,1)*at(2,2)));
+
+        out.at(0,1) = d * (at(2,1)*(at(0,2)*at(3,3) - at(3,2)*at(0,3))
+                         + at(3,1)*(at(2,2)*at(0,3) - at(0,2)*at(2,3))
+                         + at(0,1)*(at(3,2)*at(2,3) - at(2,2)*at(3,3)));
+
+        out.at(1,1) = d * (at(2,2)*(at(0,0)*at(3,3) - at(3,0)*at(0,3))
+                         + at(3,2)*(at(2,0)*at(0,3) - at(0,0)*at(2,3))
+                         + at(0,2)*(at(3,0)*at(2,3) - at(2,0)*at(3,3)));
+
+        out.at(2,1) = d * (at(2,3)*(at(0,0)*at(3,1) - at(3,0)*at(0,1))
+                         + at(3,3)*(at(2,0)*at(0,1) - at(0,0)*at(2,1))
+                         + at(0,3)*(at(3,0)*at(2,1) - at(2,0)*at(3,1)));
+
+        out.at(3,1) = d * (at(2,0)*(at(3,1)*at(0,2) - at(0,1)*at(3,2))
+                         + at(3,0)*(at(0,1)*at(2,2) - at(2,1)*at(0,2))
+                         + at(0,0)*(at(2,1)*at(3,2) - at(3,1)*at(2,2)));
+
+        out.at(0,2) = d * (at(3,1)*(at(0,2)*at(1,3) - at(1,2)*at(0,3))
+                         + at(0,1)*(at(1,2)*at(3,3) - at(3,2)*at(1,3))
+                         + at(1,1)*(at(3,2)*at(0,3) - at(0,2)*at(3,3)));
+
+        out.at(1,2) = d * (at(3,2)*(at(0,0)*at(1,3) - at(1,0)*at(0,3))
+                         + at(0,2)*(at(1,0)*at(3,3) - at(3,0)*at(1,3))
+                         + at(1,2)*(at(3,0)*at(0,3) - at(0,0)*at(3,3)));
+
+        out.at(2,2) = d * (at(3,3)*(at(0,0)*at(1,1) - at(1,0)*at(0,1))
+                         + at(0,3)*(at(1,0)*at(3,1) - at(3,0)*at(1,1))
+                         + at(1,3)*(at(3,0)*at(0,1) - at(0,0)*at(3,1)));
+
+        out.at(3,2) = d * (at(3,0)*(at(1,1)*at(0,2) - at(0,1)*at(1,2))
+                         + at(0,0)*(at(3,1)*at(1,2) - at(1,1)*at(3,2))
+                         + at(1,0)*(at(0,1)*at(3,2) - at(3,1)*at(0,2)));
+
+        out.at(0,3) = d * (at(0,1)*(at(2,2)*at(1,3) - at(1,2)*at(2,3))
+                         + at(1,1)*(at(0,2)*at(2,3) - at(2,2)*at(0,3))
+                         + at(2,1)*(at(1,2)*at(0,3) - at(0,2)*at(1,3)));
+
+        out.at(1,3) = d * (at(0,2)*(at(2,0)*at(1,3) - at(1,0)*at(2,3))
+                         + at(1,2)*(at(0,0)*at(2,3) - at(2,0)*at(0,3))
+                         + at(2,2)*(at(1,0)*at(0,3) - at(0,0)*at(1,3)));
+
+        out.at(2,3) = d * (at(0,3)*(at(2,0)*at(1,1) - at(1,0)*at(2,1))
+                         + at(1,3)*(at(0,0)*at(2,1) - at(2,0)*at(0,1))
+                         + at(2,3)*(at(1,0)*at(0,1) - at(0,0)*at(1,1)));
+
+        out.at(3,3) = d * (at(0,0)*(at(1,1)*at(2,2) - at(2,1)*at(1,2))
+                         + at(1,0)*(at(2,1)*at(0,2) - at(0,1)*at(2,2))
+                         + at(2,0)*(at(0,1)*at(1,2) - at(1,1)*at(0,2)));
+
+        return true;
+    }
+
+    /// Invert in place. Returns false if singular.
+    bool SetInverse() {
+        TMatrix4 out;
+        if (!GetInverse(out))
+            return false;
+        *this = out;
+        return true;
+    }
+
+    // ========================================================================
+    // Data access
+    // ========================================================================
+
+    /// Raw pointer to internal data (layout depends on StorageOrder).
+    TValue* data() { return m_data; }
+    const TValue* data() const { return m_data; }
+
+    /// Alias for compatibility with original cgmath API.
+    TValue* GetMatPtr() { return m_data; }
+    const TValue* GetMatPtr() const { return m_data; }
+
+    operator TValue*() { return m_data; }
+    operator const TValue*() const { return m_data; }
+
+    // ========================================================================
+    // Conversion
+    // ========================================================================
+
+    /// Convert to a matrix with different storage order.
+    /// The mathematical matrix is preserved; only the memory layout changes.
+    template <StorageOrder OtherOrder>
+    TMatrix4<TValue, OtherOrder> toOrder() const {
+        TMatrix4<TValue, OtherOrder> result;
+        for (int i = 0; i < 4; ++i)
+            for (int j = 0; j < 4; ++j)
+                result.at(i, j) = at(i, j);
+        return result;
+    }
+
+    // ========================================================================
+    // IOstream
+    // ========================================================================
+
+    friend std::ostream& operator<<(std::ostream& out, const TMatrix4& m) {
+        for (int i = 0; i < 4; ++i) {
+            out << "( " << m.at(i,0) << " , " << m.at(i,1)
+                << " , " << m.at(i,2) << " , " << m.at(i,3) << " )";
+            if (i < 3) out << "\n";
+        }
+        return out;
+    }
+
+private:
+    TValue m_data[16];
 };
 
-typedef TMatrix4<int>    Matrix4i;
-typedef TMatrix4<float>  Matrix4f;
-typedef TMatrix4<double> Matrix4d;
-typedef TMatrix4<float>  Matrix4;
+// Non-member matrix * vector operator. Computes logical product using at(row,col).
+template <class TValue, StorageOrder Order>
+TVector4<TValue> operator*(const TMatrix4<TValue, Order>& m, const TVector4<TValue>& v) {
+    TVector4<TValue> res;
+    res.x = m.at(0, 0) * v.x + m.at(0, 1) * v.y + m.at(0, 2) * v.z + m.at(0, 3) * v.w;
+    res.y = m.at(1, 0) * v.x + m.at(1, 1) * v.y + m.at(1, 2) * v.z + m.at(1, 3) * v.w;
+    res.z = m.at(2, 0) * v.x + m.at(2, 1) * v.y + m.at(2, 2) * v.z + m.at(2, 3) * v.w;
+    res.w = m.at(3, 0) * v.x + m.at(3, 1) * v.y + m.at(3, 2) * v.z + m.at(3, 3) * v.w;
+    return res;
+}
 
-#endif	// __MATRIX4_H__
+// Type aliases (default: ColumnMajor for Vulkan)
+using Matrix4f = TMatrix4<float>;
+using Matrix4d = TMatrix4<double>;
+using Matrix4i = TMatrix4<int>;
+
+/// Défini quand cette API (at(), StorageOrder, data(), etc.) est utilisée.
+/// Les tests peuvent faire #ifdef TMATRIX4_CGMATH_NEW_API pour adapter.
+#define TMATRIX4_CGMATH_NEW_API 1
