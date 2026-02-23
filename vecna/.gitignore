@@ -1,0 +1,57 @@
+# Build directories
+build/
+out/
+cmake-build-*/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Compiled shaders
+shaders/compiled/*.spv
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies (fetched by CMake)
+_deps/
+
+# Executables
+*.exe
+vecna
+
+# Object files
+*.o
+*.obj
+
+# Libraries
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+
+# CMake generated
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Visual Studio
+.vs/
+*.vcxproj.user
+*.user
+*.suo
+*.sln.docstates
+
+# Debug files
+*.pdb
+*.ilk
+
+# BMAD output (keep in repo for documentation)
+# _bmad-output/
