@@ -25,6 +25,7 @@ function(set_project_warnings target_name)
         /w14905     # Wide string literal cast to LPSTR
         /w14906     # String literal cast to LPWSTR
         /w14928     # Illegal copy-initialization
+        /wd4127     # Conditional expression is constant (VMA header triggers this)
     )
 
     set(CLANG_WARNINGS

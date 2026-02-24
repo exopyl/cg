@@ -7,7 +7,14 @@
 #include "Vecna/Renderer/Swapchain.hpp"
 #include "Vecna/Renderer/VulkanDevice.hpp"
 #include "Vecna/Renderer/VulkanInstance.hpp"
-#include "TMatrix4.h"
+#ifdef _MSC_VER
+#pragma warning(push, 0)
+#endif
+#include "src/cgmath/TMatrix4.h"
+#include "src/cgmesh/mesh.h"
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 #include <GLFW/glfw3.h>
 #include <imgui.h>
@@ -19,6 +26,7 @@
 #include <cmath>
 #include <fstream>
 #include <stdexcept>
+#include <unordered_map>
 
 // Shader directory search paths (in order of priority)
 // Supports running from: build/Debug, build/Release, build/, project root, or installed location
@@ -100,11 +108,11 @@ Application::~Application() {
     shutdownImGui();
 
     // Destroy in reverse order of creation
-    // Cube buffers → Pipeline → Swapchain → VulkanDevice → Surface → VulkanInstance → Window (GLFW)
-    // IMPORTANT: Cube buffers must be destroyed BEFORE VulkanDevice (require VMA allocator)
+    // Geometry buffers → Pipeline → Swapchain → VulkanDevice → Surface → VulkanInstance → Window (GLFW)
+    // IMPORTANT: Geometry buffers must be destroyed BEFORE VulkanDevice (require VMA allocator)
     // IMPORTANT: Pipeline must be destroyed BEFORE Swapchain (references render pass)
-    m_cubeIndexBuffer.reset();
-    m_cubeVertexBuffer.reset();
+    m_indexBuffer.reset();
+    m_vertexBuffer.reset();
     m_pipeline.reset();
     m_swapchain.reset();
     m_vulkanDevice.reset();
@@ -199,12 +207,12 @@ void Application::createCube() {
         20, 21, 22,  22, 23, 20, // Left
     };
 
-    m_cubeVertexBuffer = std::make_unique<Renderer::VertexBuffer>(*m_vulkanDevice, vertices);
-    m_cubeIndexBuffer = std::make_unique<Renderer::IndexBuffer>(*m_vulkanDevice, indices);
+    m_vertexBuffer = std::make_unique<Renderer::VertexBuffer>(*m_vulkanDevice, vertices);
+    m_indexBuffer = std::make_unique<Renderer::IndexBuffer>(*m_vulkanDevice, indices);
 
     Logger::info("Core", "Cube buffers created (vertex: " +
-                 std::to_string(m_cubeVertexBuffer->getSize()) + " bytes, index: " +
-                 std::to_string(m_cubeIndexBuffer->getSize()) + " bytes)");
+                 std::to_string(m_vertexBuffer->getSize()) + " bytes, index: " +
+                 std::to_string(m_indexBuffer->getSize()) + " bytes)");
 }
 
 void Application::run() {
@@ -320,17 +328,17 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t im
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
     // Validate buffers exist before binding (defensive check)
-    if (!m_cubeVertexBuffer || !m_cubeIndexBuffer) {
-        throw std::runtime_error("Cube buffers not initialized");
+    if (!m_vertexBuffer || !m_indexBuffer) {
+        throw std::runtime_error("Geometry buffers not initialized");
     }
 
     // Bind vertex buffer
-    VkBuffer vertexBuffers[] = {m_cubeVertexBuffer->getBuffer()};
+    VkBuffer vertexBuffers[] = {m_vertexBuffer->getBuffer()};
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
     // Bind index buffer
-    vkCmdBindIndexBuffer(commandBuffer, m_cubeIndexBuffer->getBuffer(), 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer->getBuffer(), 0, VK_INDEX_TYPE_UINT32);
 
     // Calculate MVP matrix using TMatrix4 (column-major, Vulkan-ready)
     Matrix4f model;
@@ -357,7 +365,7 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t im
                        sizeof(Renderer::PushConstants), &pushConstants);
 
     // Draw indexed cube
-    vkCmdDrawIndexed(commandBuffer, m_cubeIndexBuffer->getIndexCount(), 1, 0, 0, 0);
+    vkCmdDrawIndexed(commandBuffer, m_indexBuffer->getIndexCount(), 1, 0, 0, 0);
 
     // Render ImGUI overlay (Story 3-4)
     renderImGui(commandBuffer);
@@ -516,10 +524,197 @@ void Application::openFileDialog() {
 }
 
 void Application::loadModel(const std::filesystem::path& path) {
-    // TODO: Implement actual model loading when parsers are available (Stories 3-1, 3-2, 3-3)
-    // For now, just log the selected file
-    Logger::info("Loader", "File selected: " + path.string());
-    Logger::warn("Loader", "Model loading not yet implemented - waiting for parser integration");
+    Logger::info("Loader", "Loading model: " + path.filename().string());
+
+    // Load mesh using cgmesh
+    Mesh mesh;
+    int rc = mesh.load(path.string().c_str());
+    if (rc != 0) {
+        Logger::error("Loader", "Failed to load model: " + path.string());
+        return;
+    }
+
+    Logger::info("Loader", "Parsed " + std::to_string(mesh.m_nVertices) + " vertices, " +
+                 std::to_string(mesh.m_nFaces) + " faces");
+
+    // Compute normals if not present
+    if (mesh.m_pVertexNormals == nullptr) {
+        mesh.ComputeNormals();
+    }
+
+    // Convert cgmesh data to Vecna vertex/index format
+    std::vector<Renderer::Vertex> vertices;
+    std::vector<uint32_t> indices;
+
+    // Build vertex array from mesh data
+    vertices.resize(mesh.m_nVertices);
+    for (unsigned int i = 0; i < mesh.m_nVertices; i++) {
+        Renderer::Vertex& v = vertices[i];
+        v.position[0] = mesh.m_pVertices[3 * i];
+        v.position[1] = mesh.m_pVertices[3 * i + 1];
+        v.position[2] = mesh.m_pVertices[3 * i + 2];
+
+        if (mesh.m_pVertexNormals) {
+            v.normal[0] = mesh.m_pVertexNormals[3 * i];
+            v.normal[1] = mesh.m_pVertexNormals[3 * i + 1];
+            v.normal[2] = mesh.m_pVertexNormals[3 * i + 2];
+        } else if (mesh.m_pFaceNormals) {
+            // Fallback: will be overwritten per-face below
+            v.normal[0] = 0.0f;
+            v.normal[1] = 1.0f;
+            v.normal[2] = 0.0f;
+        }
+
+        // Default gray color
+        v.color[0] = 0.7f;
+        v.color[1] = 0.7f;
+        v.color[2] = 0.7f;
+    }
+
+    // Build index array, triangulating quads (fan triangulation)
+    unsigned int skippedFaces = 0;
+    for (unsigned int fi = 0; fi < mesh.m_nFaces; fi++) {
+        Face* face = mesh.GetFace(fi);
+        unsigned int nv = face->GetNVertices();
+
+        if (nv < 3) {
+            continue;
+        }
+
+        // Validate all vertex indices for this face before emitting triangles
+        bool validFace = true;
+        for (unsigned int j = 0; j < nv; j++) {
+            int idx = face->GetVertex(j);
+            if (idx < 0 || static_cast<unsigned int>(idx) >= mesh.m_nVertices) {
+                validFace = false;
+                break;
+            }
+        }
+        if (!validFace) {
+            skippedFaces++;
+            continue;
+        }
+
+        // Fan triangulation: for each face with N vertices, emit N-2 triangles
+        auto v0 = static_cast<uint32_t>(face->GetVertex(0));
+        for (unsigned int j = 1; j + 1 < nv; j++) {
+            auto v1 = static_cast<uint32_t>(face->GetVertex(j));
+            auto v2 = static_cast<uint32_t>(face->GetVertex(j + 1));
+            indices.push_back(v0);
+            indices.push_back(v1);
+            indices.push_back(v2);
+        }
+    }
+
+    if (skippedFaces > 0) {
+        Logger::warn("Loader", "Skipped " + std::to_string(skippedFaces) +
+                     " faces with out-of-bounds vertex indices");
+    }
+
+    if (indices.empty()) {
+        Logger::error("Loader", "Model has no valid faces");
+        return;
+    }
+
+    Logger::info("Loader", "Converted to " + std::to_string(vertices.size()) + " vertices, " +
+                 std::to_string(indices.size() / 3) + " triangles");
+
+    // STL files have 3 unique vertices per triangle (no sharing).
+    // Weld duplicate vertices by position and recompute smooth normals.
+    std::string ext = path.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (ext == ".stl") {
+        // Spatial hash: quantize positions to merge vertices within epsilon
+        struct PositionHash {
+            size_t operator()(const std::array<int32_t, 3>& k) const {
+                size_t h = 0;
+                for (auto v : k) {
+                    h ^= std::hash<int32_t>{}(v) + 0x9e3779b9 + (h << 6) + (h >> 2);
+                }
+                return h;
+            }
+        };
+
+        constexpr float WELD_SCALE = 1e5f;  // ~0.01mm precision
+        std::unordered_map<std::array<int32_t, 3>, uint32_t, PositionHash> posMap;
+        std::vector<Renderer::Vertex> weldedVerts;
+        std::vector<uint32_t> remap(vertices.size());
+
+        for (size_t i = 0; i < vertices.size(); i++) {
+            std::array<int32_t, 3> key = {
+                static_cast<int32_t>(std::round(vertices[i].position[0] * WELD_SCALE)),
+                static_cast<int32_t>(std::round(vertices[i].position[1] * WELD_SCALE)),
+                static_cast<int32_t>(std::round(vertices[i].position[2] * WELD_SCALE))
+            };
+
+            auto [it, inserted] = posMap.emplace(key, static_cast<uint32_t>(weldedVerts.size()));
+            if (inserted) {
+                weldedVerts.push_back(vertices[i]);
+            }
+            remap[i] = it->second;
+        }
+
+        // Remap indices
+        for (auto& idx : indices) {
+            idx = remap[idx];
+        }
+
+        size_t beforeCount = vertices.size();
+        vertices = std::move(weldedVerts);
+
+        // Recompute smooth normals (average of adjacent face normals)
+        for (auto& v : vertices) {
+            v.normal[0] = v.normal[1] = v.normal[2] = 0.0f;
+        }
+        for (size_t i = 0; i + 2 < indices.size(); i += 3) {
+            auto& a = vertices[indices[i]];
+            auto& b = vertices[indices[i + 1]];
+            auto& c = vertices[indices[i + 2]];
+
+            // Edge vectors
+            float e1[3] = {b.position[0] - a.position[0], b.position[1] - a.position[1], b.position[2] - a.position[2]};
+            float e2[3] = {c.position[0] - a.position[0], c.position[1] - a.position[1], c.position[2] - a.position[2]};
+
+            // Cross product (face normal, not normalized - area-weighted)
+            float fn[3] = {
+                e1[1] * e2[2] - e1[2] * e2[1],
+                e1[2] * e2[0] - e1[0] * e2[2],
+                e1[0] * e2[1] - e1[1] * e2[0]
+            };
+
+            // Accumulate to each vertex of the triangle
+            for (uint32_t vi : {indices[i], indices[i + 1], indices[i + 2]}) {
+                vertices[vi].normal[0] += fn[0];
+                vertices[vi].normal[1] += fn[1];
+                vertices[vi].normal[2] += fn[2];
+            }
+        }
+        // Normalize
+        for (auto& v : vertices) {
+            float len = std::sqrt(v.normal[0] * v.normal[0] + v.normal[1] * v.normal[1] + v.normal[2] * v.normal[2]);
+            if (len > 1e-8f) {
+                v.normal[0] /= len;
+                v.normal[1] /= len;
+                v.normal[2] /= len;
+            }
+        }
+
+        Logger::info("Loader", "Welded " + std::to_string(beforeCount) + " -> " +
+                     std::to_string(vertices.size()) + " vertices");
+    }
+
+    // Wait for GPU idle before replacing buffers
+    vkDeviceWaitIdle(m_vulkanDevice->getDevice());
+
+    // Destroy old buffers and create new ones
+    m_indexBuffer.reset();
+    m_vertexBuffer.reset();
+
+    m_vertexBuffer = std::make_unique<Renderer::VertexBuffer>(*m_vulkanDevice, vertices);
+    m_indexBuffer = std::make_unique<Renderer::IndexBuffer>(*m_vulkanDevice, indices);
+
+    Logger::info("Loader", "Model loaded successfully");
 }
 
 } // namespace Vecna::Core

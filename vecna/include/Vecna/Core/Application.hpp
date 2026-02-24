@@ -77,10 +77,10 @@ private:
     std::unique_ptr<Renderer::Swapchain> m_swapchain;
     std::unique_ptr<Renderer::Pipeline> m_pipeline;
 
-    // Cube test geometry (Story 2-4)
+    // Geometry buffers (cube default or loaded model)
     // IMPORTANT: Must be destroyed BEFORE VulkanDevice (requires VMA for cleanup)
-    std::unique_ptr<Renderer::VertexBuffer> m_cubeVertexBuffer;
-    std::unique_ptr<Renderer::IndexBuffer> m_cubeIndexBuffer;
+    std::unique_ptr<Renderer::VertexBuffer> m_vertexBuffer;
+    std::unique_ptr<Renderer::IndexBuffer> m_indexBuffer;
 
     // Time tracking for animation
     float m_rotationAngle = 0.0f;

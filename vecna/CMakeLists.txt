@@ -34,6 +34,18 @@ find_package(Vulkan REQUIRED)
 # Shader compilation
 include(ShaderCompilation)
 
+# Add cgmath/cgimg/cgmesh libraries (OBJ parser dependency)
+add_subdirectory(../src/cgmath ${CMAKE_CURRENT_BINARY_DIR}/cgmath)
+add_subdirectory(../src/cgimg ${CMAKE_CURRENT_BINARY_DIR}/cgimg)
+add_subdirectory(../src/cgmesh ${CMAKE_CURRENT_BINARY_DIR}/cgmesh)
+
+# cgmesh is legacy C++ code: relax conformance and suppress warnings
+if(MSVC)
+    target_compile_options(cgmath PRIVATE /permissive /w)
+    target_compile_options(cgimg PRIVATE /permissive /w)
+    target_compile_options(cgmesh PRIVATE /permissive /w)
+endif()
+
 # Add shaders subdirectory
 add_subdirectory(shaders)
 
@@ -58,6 +70,7 @@ add_executable(${PROJECT_NAME} ${VECNA_SOURCES})
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
 # Link libraries
@@ -67,6 +80,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     imgui
     vma
     pfd
+    cgmesh
 )
 
 # Apply compiler warnings
