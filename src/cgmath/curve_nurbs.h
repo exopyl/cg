@@ -44,13 +44,13 @@ private:
 
 	// control points
 	int m_nControlPoints;
-	vec3 *m_controlPoints;
+	vec3 *m_controlPoints = nullptr;
 
 	// weights
-	float *m_weights;
+	float *m_weights = nullptr;
 
 	// knots
 	int m_degree;
 	int m_nKnots;
-	float *m_knots;
+	float *m_knots = nullptr;
 };

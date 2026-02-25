@@ -1,3 +1,5 @@
+#include <cmath>
+
 // ref : https://www.codeproject.com/Articles/69941/Best-Square-Root-Method-Algorithm-Function-Precisi
 
 // Sqrt1
@@ -192,27 +194,23 @@ double sqrt11(const double number)
 }
 
 // Sqrt11
-// Reference : http://www.drdobbs.com/184409869;jsessionid=AIDFL0EBECDYLQE1GHOSKH4ATMY32JVN
+// Reference : https://fr.wikipedia.org/wiki/M%C3%A9thode_de_Newton
 // Algorithm: Newton's Approximation Method
-double sqrt12(unsigned long N)
+double sqrt12(double a)
 {
-	double n, p, low, high;
-	if (2 > N)
-		return(N);
-	low = 0;
-	high = N;
-	while (high > low + 1)
-	{
-		n = (high + low) / 2;
-		p = n * n;
-		if (N < p)
-			high = n;
-		else if (N > p)
-			low = n;
-		else
-			break;
+	if (a < 0) {
+		return -1; // erreur : racine carrée non définie
 	}
-	return(N == p ? n : low);
+
+	double x = a;              // approximation initiale
+	double epsilon = 1e-6;     // précision souhaitée
+
+	while (std::fabs(x * x - a) > epsilon)
+	{
+		x = 0.5 * (x + a / x);
+	}
+
+	return x;
 }
 
 // Sqrt12

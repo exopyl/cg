@@ -37,6 +37,8 @@
 
 #include "TQuaternion.h"
 
+#include "TCamera.h"
+
 ///////////////////////
 // geometry
 ///////////////////////

@@ -38,7 +38,10 @@ CurveNURBS::CurveNURBS (const CurveNURBS &curveNURBS)
 
 	m_nKnots = curveNURBS.m_nKnots;
 	if (curveNURBS.m_knots)
-		memcpy (m_knots, curveNURBS.m_knots, m_nKnots*sizeof(float));
+	{
+		m_knots = (float*)malloc(m_nKnots * sizeof(float));
+		memcpy(m_knots, curveNURBS.m_knots, m_nKnots * sizeof(float));
+	}
 }
 
 /**

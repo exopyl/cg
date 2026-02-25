@@ -7,9 +7,7 @@
 #include <limits>
 
 #include "TVector4.h"
-
-/// Storage order for matrix data in memory.
-enum class StorageOrder { RowMajor, ColumnMajor };
+#include "StorageOrder.h"
 
 /// 4x4 matrix template with configurable storage order.
 ///
