@@ -13,6 +13,16 @@ file(GLOB HEADER_FILES ${PROJECT_SOURCE_DIR}/*.h)
 
 add_executable(${PROJECT_NAME} ${HEADER_FILES} ${SRC_FILES})
 
+# Copier test/data dans le repertoire de l'executable de test apres build
+if(EXISTS "${CMAKE_SOURCE_DIR}/test/data")
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/test/data"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/test/data"
+        COMMENT "Copying test/data to $<TARGET_FILE_DIR:${PROJECT_NAME}>/test/data"
+    )
+endif()
+
 if (WIN32)
     add_subdirectory(${EXTERN_GOOGLETEST} gtest)
     target_link_libraries(${PROJECT_NAME} GTest::gtest_main)
