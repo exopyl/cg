@@ -5,6 +5,11 @@
 #include <filesystem>
 #include <memory>
 
+// Forward-declare cgmath camera (full include in .cpp behind #pragma warning suppression)
+#include "src/cgmath/StorageOrder.h"
+template <class TValue, StorageOrder Order> class TCamera;
+using Cameraf = TCamera<float, StorageOrder::ColumnMajor>;
+
 namespace Vecna::Core {
 class Window;
 } // namespace Vecna::Core
@@ -84,6 +89,11 @@ private:
 
     // Time tracking for animation
     float m_rotationAngle = 0.0f;
+
+    // Camera (position, target, projection — adapted to loaded model size)
+    // std::unique_ptr to keep TCamera.h include confined to the .cpp
+    // (TVector3.h has 'using namespace std' that would pollute all consumers)
+    std::unique_ptr<Cameraf> m_camera;
 
     // ImGUI resources (Story 3-4)
     VkDescriptorPool m_imguiDescriptorPool = VK_NULL_HANDLE;

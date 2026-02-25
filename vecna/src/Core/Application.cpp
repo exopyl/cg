@@ -10,6 +10,7 @@
 #ifdef _MSC_VER
 #pragma warning(push, 0)
 #endif
+#include "src/cgmath/TCamera.h"
 #include "src/cgmath/TMatrix4.h"
 #include "src/cgmesh/mesh.h"
 #ifdef _MSC_VER
@@ -57,18 +58,15 @@ namespace Vecna::Core {
 // Clear color for the render pass (dark blue)
 static constexpr VkClearColorValue CLEAR_COLOR = {{0.1f, 0.1f, 0.2f, 1.0f}};
 
-// Camera and projection constants
+// Animation constant
 static constexpr float ROTATION_SPEED = 0.785398f;  // π/4 radians per second (~45°/s)
-static constexpr float CAMERA_DISTANCE = 3.0f;      // Distance from origin on Z axis
-static constexpr float FOV_RADIANS = 0.785398f;     // 45 degrees field of view
-static constexpr float NEAR_PLANE = 0.1f;           // Near clipping plane
-static constexpr float FAR_PLANE = 100.0f;          // Far clipping plane
 
 Application::Application() {
     Logger::info("Core", "Application starting");
 
     // Create window with default configuration (1280x720, "Vecna", resizable)
     // Window must be created BEFORE VulkanInstance (GLFW must be initialized for extensions)
+    m_camera = std::make_unique<Cameraf>();
     m_window = std::make_unique<Window>();
 
     // Create Vulkan instance (requires GLFW to be initialized)
@@ -344,15 +342,9 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t im
     Matrix4f model;
     model.SetRotateY(-m_rotationAngle);  // Negated: TMatrix4 uses right-hand convention
 
-    float eye[3] = {0.0f, 0.0f, CAMERA_DISTANCE};
-    float center[3] = {0.0f, 0.0f, 0.0f};
-    float up[3] = {0.0f, 1.0f, 0.0f};
-    Matrix4f view;
-    view.SetLookAt(eye, center, up);
-
     float aspect = viewport.width / viewport.height;
-    Matrix4f projection;
-    projection.SetPerspective(FOV_RADIANS, aspect, NEAR_PLANE, FAR_PLANE);
+    Matrix4f view = m_camera->GetViewMatrix();
+    Matrix4f projection = m_camera->GetProjectionMatrix(aspect);
 
     // MVP = Projection * View * Model
     Matrix4f mvp = projection * view * model;
@@ -536,6 +528,31 @@ void Application::loadModel(const std::filesystem::path& path) {
 
     Logger::info("Loader", "Parsed " + std::to_string(mesh.m_nVertices) + " vertices, " +
                  std::to_string(mesh.m_nFaces) + " faces");
+
+    // Center model at origin using bounding box center
+    mesh.computebbox();
+    float bboxCenter[3];
+    if (!mesh.bbox().GetCenter(bboxCenter)) {
+        Logger::error("Loader", "Model has empty bounding box");
+        return;
+    }
+    float diagonal = mesh.bbox().GetDiagonalLength();
+    mesh.translate(-bboxCenter[0], -bboxCenter[1], -bboxCenter[2]);
+
+    // Adapt camera and clipping planes to model size
+    // Guard against degenerate models (points, lines) where diagonal is zero or near-zero
+    static constexpr float MIN_DIAGONAL = 1e-6f;
+    if (diagonal < MIN_DIAGONAL) {
+        diagonal = 1.0f;
+    }
+    static constexpr float VIEW_MARGIN = 1.5f;  // Extra margin so model doesn't fill the entire frustum
+    float cameraDistance = (diagonal / (2.0f * std::tan(m_camera->GetFov() / 2.0f))) * VIEW_MARGIN;
+    m_camera->SetTarget(0.0f, 0.0f, 0.0f);
+    m_camera->SetPosition(0.0f, 0.0f, cameraDistance);
+    m_camera->SetClippingPlanes(cameraDistance * 0.01f, cameraDistance * 10.0f);
+
+    Logger::info("Loader", "Centered model (diagonal: " + std::to_string(diagonal) +
+                 ", camera distance: " + std::to_string(cameraDistance) + ")");
 
     // Compute normals if not present
     if (mesh.m_pVertexNormals == nullptr) {

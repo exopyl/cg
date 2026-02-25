@@ -62,13 +62,13 @@ development_status:
   3-3-structure-mesh-et-model: done  # Covered by cgmesh integration (3-1)
   3-4-chargement-via-menu-fichier: done
   3-5-chargement-via-drag-and-drop: backlog
-  3-6-centrage-automatique: backlog
+  3-6-centrage-automatique: done
   3-7-gestion-des-erreurs-de-chargement: backlog
   epic-3-retrospective: optional
 
   # Epic 4: Navigation Camera
   epic-4: backlog
-  4-1-classe-camera: backlog
+  4-1-classe-camera: done
   4-2-rotation-trackball: backlog
   4-3-zoom-molette: backlog
   4-4-pan-deplacement-lateral: backlog
