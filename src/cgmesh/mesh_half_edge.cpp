@@ -151,9 +151,9 @@ void Mesh_half_edge::create_half_edge (void)
 }
 
 // export statistics in html format
-void Mesh_half_edge::export_statistics (char *filename)
+void Mesh_half_edge::export_statistics (const std::string & filename)
 {
-	FILE *ptr = fopen (filename, "w");
+	FILE *ptr = fopen (filename.c_str(), "w");
 	if (!ptr)
 		return;
 

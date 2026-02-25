@@ -37,7 +37,7 @@ public:
 
 	inline int is_manifold (int i) { check_topology (); return m_topology_ok[i]; };
 
-	void export_statistics (char *filename); // export statistics in html format
+	void export_statistics (const std::string & filename); // export statistics in html format
 
 	////////////////////////////////////////////////////////////////////////////////
 	//

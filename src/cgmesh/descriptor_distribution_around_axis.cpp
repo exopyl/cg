@@ -404,36 +404,36 @@ Cdistribution_around_axis::compute_second_order_distributions_paquet (orientatio
 
 
 void
-Cdistribution_around_axis::export_histogram1k (char *filename)
+Cdistribution_around_axis::export_histogram1k (const std::string & filename)
 {
-  FILE *ptr = fopen (filename, "w");
+  FILE *ptr = fopen (filename.c_str(), "w");
   for (int i=0; i<nbins; i++)
     fprintf (ptr, "%f\n", histogram1k[i]);
   fclose (ptr);
 }
 
 void
-Cdistribution_around_axis::export_histogram2k1 (char *filename)
+Cdistribution_around_axis::export_histogram2k1 (const std::string & filename)
 {
-  FILE *ptr = fopen (filename, "w");
+  FILE *ptr = fopen (filename.c_str(), "w");
   for (int i=0; i<nbins; i++)
     fprintf (ptr, "%f\n", histogram2k1[i]);
   fclose (ptr);
 }
 
 void
-Cdistribution_around_axis::export_histogram2k2 (char *filename)
+Cdistribution_around_axis::export_histogram2k2 (const std::string & filename)
 {
-  FILE *ptr = fopen (filename, "w");
+  FILE *ptr = fopen (filename.c_str(), "w");
   for (int i=0; i<nbins; i++)
     fprintf (ptr, "%f\n", histogram2k2[i]);
   fclose (ptr);
 }
 
 void
-Cdistribution_around_axis::export_histogram3k (char *filename)
+Cdistribution_around_axis::export_histogram3k (const std::string & filename)
 {
-  FILE *ptr = fopen (filename, "w");
+  FILE *ptr = fopen (filename.c_str(), "w");
   for (int i=0; i<nbins; i++)
     {
       for (int j=0; j<nbins; j++)

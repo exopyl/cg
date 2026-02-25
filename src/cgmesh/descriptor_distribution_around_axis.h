@@ -1,5 +1,4 @@
-#ifndef __DISTRIBUTION_AROUND_AXIS_H__
-#define __DISTRIBUTION_AROUND_AXIS_H__
+#pragma once
 
 #include "mesh_half_edge.h"
 
@@ -30,10 +29,10 @@ class Cdistribution_around_axis
   void compute_second_order_distributions_paquet (orientation_type type, int npoints, int nbins);
   void normalize_distributions (void);
 
-  void export_histogram1k  (char *filename);
-  void export_histogram2k1 (char *filename);
-  void export_histogram2k2 (char *filename);
-  void export_histogram3k  (char *filename);
+  void export_histogram1k  (const std::string & filename);
+  void export_histogram2k1 (const std::string & filename);
+  void export_histogram2k2 (const std::string & filename);
+  void export_histogram3k  (const std::string & filename);
 
   float  *get_histogram1k  (void) { return histogram1k; };
   float  *get_histogram2k1 (void) { return histogram2k1; };
@@ -65,5 +64,3 @@ class Cdistribution_around_axis
   float *histogram2k1, *histogram2k2;
   float **histogram3k;
 };
-
-#endif /* __MODEL3D_FEATURES_DISTRIBUTION_AROUND_AXIS_H__ */

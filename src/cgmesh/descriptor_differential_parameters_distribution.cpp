@@ -229,9 +229,9 @@ Cdifferential_parameters_distribution::normalize_distribution (void)
 }
 
 void
-Cdifferential_parameters_distribution::export_distribution (char *filename)
+Cdifferential_parameters_distribution::export_distribution (const std::string & filename)
 {
-  FILE *ptr = fopen (filename, "w");
+  FILE *ptr = fopen (filename.c_str(), "w");
   for (int i=0; i<n_bins; i++)
 	fprintf (ptr, "%f\n", histogram[i]);
     //fprintf (ptr, "%f %f\n", i*3.14159/n_bins, histogram[i]); // for Besl

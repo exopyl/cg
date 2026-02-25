@@ -16,7 +16,7 @@ class Cdifferential_parameters_distribution
 
   void compute_distribution (shape_function_type type, int n_bins);
   void normalize_distribution (void);
-  void export_distribution (char *filename);
+  void export_distribution (const std::string & filename);
 
  private:
   Mesh_half_edge *model;
