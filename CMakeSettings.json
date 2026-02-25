@@ -74,6 +74,80 @@
           "type": "PATH"
         }
       ]
+    },
+    {
+      "name": "x64-Debug-Sinaia",
+      "generator": "Ninja",
+      "configurationType": "Debug",
+      "inheritEnvironments": [ "msvc_x64" ],
+      "buildRoot": "${projectDir}\\build_vs\\build\\${name}",
+      "installRoot": "${projectDir}\\build_vs\\install\\${name}",
+      "cmakeCommandArgs": "",
+      "cmakeToolchain": "",
+      "variables": [
+        {
+          "name": "CMAKE_CXX_STANDARD",
+          "value": "17",
+          "type": "STRING"
+        },
+        {
+          "name": "ENABLE_COVERAGE",
+          "value": "False",
+          "type": "BOOL"
+        },
+        {
+          "name": "ENABLE_SINAIA",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "EXTERN_GOOGLETEST",
+          "value": "C:/home/dev/extern/googletest-1.15.2",
+          "type": "PATH"
+        },
+        {
+          "name": "EXTERN_WXWIDGETS",
+          "value": "C:/home/dev/extern/wxWidgets-3.2.6",
+          "type": "PATH"
+        }
+      ]
+    },
+    {
+      "name": "x64-Release-Sinaia",
+      "generator": "Ninja",
+      "configurationType": "Release",
+      "inheritEnvironments": [ "msvc_x64" ],
+      "buildRoot": "${projectDir}\\build_vs\\build\\${name}",
+      "installRoot": "${projectDir}\\build_vs\\install\\${name}",
+      "cmakeCommandArgs": "",
+      "cmakeToolchain": "",
+      "variables": [
+        {
+          "name": "CMAKE_CXX_STANDARD",
+          "value": "17",
+          "type": "STRING"
+        },
+        {
+          "name": "ENABLE_COVERAGE",
+          "value": "False",
+          "type": "BOOL"
+        },
+        {
+          "name": "ENABLE_SINAIA",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "EXTERN_GOOGLETEST",
+          "value": "C:/home/dev/extern/googletest-1.15.2",
+          "type": "PATH"
+        },
+        {
+          "name": "EXTERN_WXWIDGETS",
+          "value": "C:/home/dev/extern/wxWidgets-3.2.6",
+          "type": "PATH"
+        }
+      ]
     }
   ]
 }

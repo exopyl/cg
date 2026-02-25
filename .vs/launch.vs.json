@@ -7,6 +7,18 @@
       "project": "CMakeLists.txt",
       "projectTarget": "tu_cgmath.exe (test\\tu_cgmath.exe)",
       "name": "tu_cgmath.exe (test\\tu_cgmath.exe)"
+    },
+    {
+      "type": "default",
+      "project": "CMakeLists.txt",
+      "projectTarget": "sinaia.exe (sinaia\\sinaia.exe)",
+      "name": "sinaia.exe (sinaia\\sinaia.exe) - Debug"
+    },
+    {
+      "type": "default",
+      "project": "CMakeLists.txt",
+      "projectTarget": "sinaia.exe (sinaia\\sinaia.exe)",
+      "name": "sinaia.exe (sinaia\\sinaia.exe) - Release"
     }
   ]
 }
