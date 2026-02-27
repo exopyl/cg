@@ -16,6 +16,8 @@ int nnls_solve(double* A, int m, int n, double *B, double *X)
 	int *index = (int*)malloc(10*n*sizeof(int));
 
 	nnls_c (A, &tmda, &tm, &tn, B, X, &rnorm, w, zz, index, &mode);
+
+	/*
 	printf ("rnorm : %.6f\n", rnorm);
 
 	printf ("mode = %d\n", mode);
@@ -28,6 +30,7 @@ int nnls_solve(double* A, int m, int n, double *B, double *X)
 		printf ("%.3f ", B[i]);
 	printf ("\n");
 	printf ("mda = %d\n", tmda);
+	*/
 
 	// cleaning
 	free (index);

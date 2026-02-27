@@ -34,10 +34,7 @@ bool CLitRasterToVector::Vectorize(Img* pInput,
 				   bool bUseMask,
 				   Palette *pPalette)
 {
-	printf("\n########### Vectorize ############\n");
-
 	// initialize the palette
-	printf("InitializePalette :\n");
 	if (!pPalette)
 		pPalette = pInput->get_palette ();
 	
@@ -46,10 +43,6 @@ bool CLitRasterToVector::Vectorize(Img* pInput,
 	for(int i=0;i<m_iPaletteSize;i++)
 		m_palette[i] = Color (pPalette->m_pColors[i]);
 
-	printf ("   use the following palette :\n");
-	for(int i=0;i<m_iPaletteSize;i++)
-		printf ("   %d / %d : %d %d %d\n", i, m_iPaletteSize, m_palette[i].r(), m_palette[i].g(), m_palette[i].b());
-	
 
 	Img sPalettizedNoBorder;
 	sPalettizedNoBorder.palettize(pInput);
@@ -87,7 +80,6 @@ bool CLitRasterToVector::Vectorize(Img* pInput,
 				if (r == colorMask.r() && g == colorMask.g() && b == colorMask.b() && a == colorMask.a())
 					sPalettized.set_pixel_index(x, y, m_iPaletteSize);
 			}
-		printf ("   mask : %d %d %d\n", m_palette[m_iPaletteSize].r(), m_palette[m_iPaletteSize].g(), m_palette[m_iPaletteSize].b());
 	}
 	
 	if (0)
@@ -102,25 +94,20 @@ bool CLitRasterToVector::Vectorize(Img* pInput,
 	
 	// VECTORIZE
 	bool bOK = true;
-	printf("GeneratePath :\n");
 	bOK = GeneratePath(sPalettized);
 	if(!bOK)
 		return false;
 
 	// SMOOTH 
-	printf("SmoothCoords :\n");
 	SmoothCoords();
 
 	// SIMPLE SIMPLIFY, we keep all corners -> needed to sort layers
-	printf("RemoveUselessPoint :\n");
 	RemoveUselessPoint();
 
 	// SORT LAYER
-	printf("CalculateLayerOrder :\n");
 	CalculateLayerOrder(sPalettized);
 	
 	// SIMPLIFY
-	printf("Simplify :\n");
 	Simplify(.5);
 
 	return bOK;
@@ -371,7 +358,6 @@ void CLitRasterToVector::WriteFilePolygonWithHole(/*bool bBottomTop,
 
 	for(list<TPath*>::const_iterator itLayer  = m_layerOrder.begin() ;itLayer!=m_layerOrder.end(); itLayer++)
 	{
-		printf ("+ layer\n");
 /*
 		if(!bDrawWhiteLayer)
 		{

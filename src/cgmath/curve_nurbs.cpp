@@ -152,7 +152,6 @@ CurveNURBS::basisFunction (int i, int j, float u)
 	*/
 	if (j==0)
 	{
-		printf ("%d\n", m_knots[i] <= u && u < m_knots[i+1]);
 		return (m_knots[i] <= u && u < m_knots[i+1])? 1. : 0.;
 	}
 	else
@@ -165,7 +164,6 @@ CurveNURBS::basisFunction (int i, int j, float u)
 		float a = 1.0, b = 1.0;
 		if (d1 > 0.00001) a = n1 / d1;
 		if (d2 > 0.00001) b = n2 / d2;
-		printf ("a+b = %f\n", a+b);
 		return a + b;
 	}
 }

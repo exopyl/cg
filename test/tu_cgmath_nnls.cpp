@@ -69,7 +69,7 @@ TEST(TEST_cgmath_nnls, nnls3)
 			XX[j*n+i] = nnls_solve (A, m, n, matdat, X_nnls);
 
 
-	for (i=0; i<n; i++)
-		printf ("%f ", X_nnls[i]);
-	printf ("\n");
+	//for (i=0; i<n; i++)
+	//	printf ("%f ", X_nnls[i]);
+	//printf ("\n");
 }

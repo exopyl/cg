@@ -117,7 +117,7 @@ int Img::geodesic (void)
 		offset = m_iWidth*pc.j+pc.i;
 
 		// debug
-		printf ("%d %d\n", pc.i, pc.j);
+		//printf ("%d %d\n", pc.i, pc.j);
 		mm++;
 		m_pPixels[4*offset]   = (unsigned char)d[offset];
 		m_pPixels[4*offset+1] = (unsigned char)d[offset];

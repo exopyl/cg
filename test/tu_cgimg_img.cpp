@@ -393,7 +393,7 @@ TEST(TEST_cgimg_img, vectorization)
 		pPalette->AddColor (55, 155, 59, 255);
 */
 	}
-	pPalette->dump ();
+	//pPalette->dump ();
 
 	CLitRasterToVector *pRasterToVector = new CLitRasterToVector ();
 	bool bOk = pRasterToVector->Vectorize(img,
@@ -483,7 +483,6 @@ TEST(TEST_cgimg_img, temperature2color)
 	{
 		unsigned char r, g, b;
 		float temp = 1000 + (11000-1000) * i / (width-1); // [1000 , 11000]
-		printf ("%f\n", temp);
 		temperature2color(temp, r, g, b);
 		for (int j=0; j<height; j++)
 		{
