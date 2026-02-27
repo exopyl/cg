@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <map>
+#include <set>
 #include <algorithm>
 
 #include "mesh.h"
@@ -633,6 +634,23 @@ void Mesh::ComputeNormals (void)
 
 	// cleaning
 	delete[] nfaces;
+}
+
+unsigned int Mesh::CountEdges (void)
+{
+	std::set<std::pair<unsigned int, unsigned int>> edges;
+	for (unsigned int f = 0; f < m_nFaces; f++)
+	{
+		unsigned int nv = m_pFaces[f]->GetNVertices();
+		for (unsigned int e = 0; e < nv; e++)
+		{
+			unsigned int a = m_pFaces[f]->GetVertex(e);
+			unsigned int b = m_pFaces[f]->GetVertex((e + 1) % nv);
+			if (a > b) std::swap(a, b);
+			edges.insert({a, b});
+		}
+	}
+	return (unsigned int)edges.size();
 }
 
 int Mesh::Append (Mesh *m)

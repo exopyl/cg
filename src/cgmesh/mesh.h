@@ -326,6 +326,7 @@ public:
 	void transform4 (mat4 m);
 
 	//
+	unsigned int CountEdges (void);
 	int Append (Mesh *m);
 
 public:
