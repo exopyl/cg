@@ -105,6 +105,7 @@ Application::Application() {
     glfwSetMouseButtonCallback(m_window->getHandle(), mouseButtonCallback);
     glfwSetCursorPosCallback(m_window->getHandle(), cursorPosCallback);
     glfwSetScrollCallback(m_window->getHandle(), scrollCallback);
+    glfwSetDropCallback(m_window->getHandle(), dropCallback);
 
     // Initialize UI renderer via abstraction (Story 5-1)
     // ImGui_ImplGlfw_InitForVulkan with install_callbacks=true chains to our callbacks above
@@ -780,6 +781,26 @@ void Application::scrollCallback(GLFWwindow* window, double /*xoffset*/, double 
                                target[1] + (pos[1] - target[1]) * ratio,
                                target[2] + (pos[2] - target[2]) * ratio);
     app->m_camera->SetClippingPlanes(app->m_cameraDistance * 0.01f, app->m_cameraDistance * 10.0f);
+}
+
+void Application::dropCallback(GLFWwindow* window, int count, const char** paths) {
+    if (count < 1) {
+        return;
+    }
+
+    auto* app = static_cast<Application*>(glfwGetWindowUserPointer(window));
+
+    std::filesystem::path filePath(paths[0]);
+    std::string ext = filePath.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    if (ext != ".obj" && ext != ".stl") {
+        app->showUIError("Format non supporte : " + filePath.extension().string());
+        return;
+    }
+
+    app->m_pendingModelPath = filePath;
 }
 
 } // namespace Vecna::Core

@@ -106,6 +106,7 @@ private:
     static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
     static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos);
     static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
+    static void dropCallback(GLFWwindow* window, int count, const char** paths);
 
     // Camera (position, target, projection — adapted to loaded model size)
     // std::unique_ptr to keep TCamera.h include confined to the .cpp
