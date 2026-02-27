@@ -8,6 +8,7 @@
 #include "Vecna/Renderer/VulkanDevice.hpp"
 #include "Vecna/Renderer/VulkanInstance.hpp"
 #include "Vecna/Scene/Trackball.hpp"
+#include "Vecna/UI/ImGuiRenderer.hpp"
 #ifdef _MSC_VER
 #pragma warning(push, 0)
 #endif
@@ -19,9 +20,9 @@
 #endif
 
 #include <GLFW/glfw3.h>
+// ImGui header needed only for WantCaptureMouse check in GLFW callbacks
+// (known technical debt — abstracting input capture is out of scope for Story 5-1)
 #include <imgui.h>
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_vulkan.h>
 
 #include <algorithm>
 #include <array>
@@ -105,9 +106,13 @@ Application::Application() {
     glfwSetCursorPosCallback(m_window->getHandle(), cursorPosCallback);
     glfwSetScrollCallback(m_window->getHandle(), scrollCallback);
 
-    // Initialize ImGUI (Story 3-4)
+    // Initialize UI renderer via abstraction (Story 5-1)
     // ImGui_ImplGlfw_InitForVulkan with install_callbacks=true chains to our callbacks above
-    initImGui();
+    auto imguiRenderer = std::make_unique<UI::ImGuiRenderer>(
+        *m_vulkanInstance, *m_vulkanDevice, *m_swapchain, *m_window);
+    imguiRenderer->setOnFileOpen([this]() { openFileDialog(); });
+    m_uiRenderer = std::move(imguiRenderer);
+    m_uiRenderer->init();
 
     Logger::info("Core", "Application initialized");
 }
@@ -120,8 +125,8 @@ Application::~Application() {
         vkDeviceWaitIdle(m_vulkanDevice->getDevice());
     }
 
-    // Shutdown ImGUI before destroying Vulkan resources (Story 3-4)
-    shutdownImGui();
+    // Shutdown UI renderer before destroying Vulkan resources (Story 5-1)
+    m_uiRenderer.reset();
 
     // Destroy in reverse order of creation
     // Geometry buffers → Pipeline → Swapchain → VulkanDevice → Surface → VulkanInstance → Window (GLFW)
@@ -240,6 +245,13 @@ void Application::run() {
         // Handle keyboard shortcuts (Story 3-4)
         handleKeyboardShortcuts();
 
+        // Process deferred model load (set by Ctrl+O or ImGui menu callback)
+        // Must happen outside drawFrame() to avoid destroying buffers mid-render
+        if (m_pendingModelPath) {
+            loadModel(*m_pendingModelPath);
+            m_pendingModelPath.reset();
+        }
+
         drawFrame();
     }
 
@@ -259,6 +271,7 @@ void Application::drawFrame() {
         m_pipeline.reset();
         m_swapchain->recreate();
         createPipeline();
+        m_uiRenderer->onSwapchainRecreated();
         auto newExtent = m_swapchain->getExtent();
         m_trackball->setDimensions(static_cast<int>(newExtent.width), static_cast<int>(newExtent.height));
         return;
@@ -283,6 +296,7 @@ void Application::drawFrame() {
         m_pipeline.reset();
         m_swapchain->recreate();
         createPipeline();
+        m_uiRenderer->onSwapchainRecreated();
         auto newExtent = m_swapchain->getExtent();
         m_trackball->setDimensions(static_cast<int>(newExtent.width), static_cast<int>(newExtent.height));
     } else if (result != VK_SUCCESS) {
@@ -374,134 +388,14 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t im
     // Draw indexed cube
     vkCmdDrawIndexed(commandBuffer, m_indexBuffer->getIndexCount(), 1, 0, 0, 0);
 
-    // Render ImGUI overlay (Story 3-4)
-    renderImGui(commandBuffer);
+    // Render UI overlay via abstraction (Story 5-1)
+    m_uiRenderer->beginFrame();
+    m_uiRenderer->render(commandBuffer);
 
     vkCmdEndRenderPass(commandBuffer);
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
         throw std::runtime_error("Failed to record command buffer");
-    }
-}
-
-// ============================================================================
-// ImGUI Integration (Story 3-4)
-// ============================================================================
-
-void Application::initImGui() {
-    // Create descriptor pool for ImGUI
-    // Conservative sizes sufficient for menu bar and basic UI elements
-    VkDescriptorPoolSize poolSizes[] = {
-        {VK_DESCRIPTOR_TYPE_SAMPLER, 10},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10},
-        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 10},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10},
-        {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 10},
-        {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 10},
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10},
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10},
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 10},
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 10},
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 10}
-    };
-
-    VkDescriptorPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    poolInfo.maxSets = 100;  // Sufficient for ImGUI needs
-    poolInfo.poolSizeCount = static_cast<uint32_t>(std::size(poolSizes));
-    poolInfo.pPoolSizes = poolSizes;
-
-    if (vkCreateDescriptorPool(m_vulkanDevice->getDevice(), &poolInfo, nullptr,
-                               &m_imguiDescriptorPool) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create ImGUI descriptor pool");
-    }
-
-    // Initialize ImGUI context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-
-    // Setup style
-    ImGui::StyleColorsDark();
-
-    // Initialize ImGUI GLFW backend
-    ImGui_ImplGlfw_InitForVulkan(m_window->getHandle(), true);
-
-    // Initialize ImGUI Vulkan backend
-    ImGui_ImplVulkan_InitInfo initInfo{};
-    initInfo.Instance = m_vulkanInstance->getInstance();
-    initInfo.PhysicalDevice = m_vulkanDevice->getPhysicalDevice();
-    initInfo.Device = m_vulkanDevice->getDevice();
-    initInfo.QueueFamily = m_vulkanDevice->getGraphicsQueueFamily();
-    initInfo.Queue = m_vulkanDevice->getGraphicsQueue();
-    initInfo.DescriptorPool = m_imguiDescriptorPool;
-    initInfo.MinImageCount = 2;
-    initInfo.ImageCount = static_cast<uint32_t>(m_swapchain->getImageCount());
-    initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-    initInfo.Subpass = 0;
-
-    ImGui_ImplVulkan_Init(&initInfo, m_swapchain->getRenderPass());
-
-    // Upload fonts
-    ImGui_ImplVulkan_CreateFontsTexture();
-
-    m_imguiInitialized = true;
-    Logger::info("UI", "ImGUI initialized");
-}
-
-void Application::shutdownImGui() {
-    if (!m_imguiInitialized) {
-        return;
-    }
-
-    ImGui_ImplVulkan_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-
-    if (m_imguiDescriptorPool != VK_NULL_HANDLE) {
-        vkDestroyDescriptorPool(m_vulkanDevice->getDevice(), m_imguiDescriptorPool, nullptr);
-        m_imguiDescriptorPool = VK_NULL_HANDLE;
-    }
-
-    m_imguiInitialized = false;
-    Logger::info("UI", "ImGUI shutdown");
-}
-
-void Application::renderImGui(VkCommandBuffer commandBuffer) {
-    if (!m_imguiInitialized) {
-        return;
-    }
-
-    // Start new ImGUI frame
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    // Render menu bar
-    renderMenuBar();
-
-    // Finalize ImGUI frame
-    ImGui::Render();
-
-    // Record ImGUI draw commands
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
-}
-
-void Application::renderMenuBar() {
-    if (ImGui::BeginMainMenuBar()) {
-        if (ImGui::BeginMenu("Fichier")) {
-            if (ImGui::MenuItem("Ouvrir...", "Ctrl+O")) {
-                openFileDialog();
-            }
-            ImGui::Separator();
-            if (ImGui::MenuItem("Quitter", "Alt+F4")) {
-                m_window->close();
-            }
-            ImGui::EndMenu();
-        }
-        ImGui::EndMainMenuBar();
     }
 }
 
@@ -526,7 +420,7 @@ void Application::openFileDialog() {
     auto path = FileDialog::openModel();
 
     if (path) {
-        loadModel(*path);
+        m_pendingModelPath = *path;
     }
 }
 
@@ -538,6 +432,7 @@ void Application::loadModel(const std::filesystem::path& path) {
     int rc = mesh.load(path.string().c_str());
     if (rc != 0) {
         Logger::error("Loader", "Failed to load model: " + path.string());
+        showUIError("Impossible de charger le fichier : " + path.filename().string());
         return;
     }
 
@@ -549,9 +444,16 @@ void Application::loadModel(const std::filesystem::path& path) {
     float bboxCenter[3];
     if (!mesh.bbox().GetCenter(bboxCenter)) {
         Logger::error("Loader", "Model has empty bounding box");
+        showUIError("Le modele est vide ou invalide");
         return;
     }
     float diagonal = mesh.bbox().GetDiagonalLength();
+
+    // Capture original bounding box BEFORE centering (Story 5-3)
+    m_modelInfo.filename = path.filename().string();
+    mesh.bbox().GetMinMax(m_modelInfo.bboxMin, m_modelInfo.bboxMax);
+    m_modelInfo.diagonal = diagonal;
+
     mesh.translate(-bboxCenter[0], -bboxCenter[1], -bboxCenter[2]);
 
     // Adapt camera and clipping planes to model size
@@ -642,10 +544,12 @@ void Application::loadModel(const std::filesystem::path& path) {
     if (skippedFaces > 0) {
         Logger::warn("Loader", "Skipped " + std::to_string(skippedFaces) +
                      " faces with out-of-bounds vertex indices");
+        showUIError(std::to_string(skippedFaces) + " faces ignorees (indices invalides)");
     }
 
     if (indices.empty()) {
         Logger::error("Loader", "Model has no valid faces");
+        showUIError("Le modele ne contient aucune face valide");
         return;
     }
 
@@ -737,6 +641,11 @@ void Application::loadModel(const std::filesystem::path& path) {
                      std::to_string(vertices.size()) + " vertices");
     }
 
+    // Capture final vertex/triangle counts AFTER welding (Story 5-3)
+    m_modelInfo.vertexCount = static_cast<uint32_t>(vertices.size());
+    m_modelInfo.triangleCount = static_cast<uint32_t>(indices.size() / 3);
+    m_modelInfo.computeDerived();
+
     // Wait for GPU idle before replacing buffers
     vkDeviceWaitIdle(m_vulkanDevice->getDevice());
 
@@ -747,7 +656,18 @@ void Application::loadModel(const std::filesystem::path& path) {
     m_vertexBuffer = std::make_unique<Renderer::VertexBuffer>(*m_vulkanDevice, vertices);
     m_indexBuffer = std::make_unique<Renderer::IndexBuffer>(*m_vulkanDevice, indices);
 
+    // Transmit model info to UI for display (Story 5-3)
+    if (auto* imgui = dynamic_cast<UI::ImGuiRenderer*>(m_uiRenderer.get())) {
+        imgui->setModelInfo(m_modelInfo);
+    }
+
     Logger::info("Loader", "Model loaded successfully");
+}
+
+void Application::showUIError(const std::string& message) {
+    if (auto* imgui = dynamic_cast<UI::ImGuiRenderer*>(m_uiRenderer.get())) {
+        imgui->showErrorMessage(message);
+    }
 }
 
 // ============================================================================

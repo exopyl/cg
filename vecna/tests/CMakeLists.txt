@@ -11,6 +11,7 @@ set(TEST_SOURCES
     Renderer/BufferTest.cpp
     Renderer/PipelineTest.cpp
     Renderer/QueueFamilyIndicesTest.cpp
+    UI/UIAbstractionTest.cpp
 )
 
 # Create test executable
@@ -19,6 +20,7 @@ add_executable(vecna_tests ${TEST_SOURCES})
 # Include directories
 target_include_directories(vecna_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/..
 )
 
 # Link against Google Test and project dependencies

@@ -2,8 +2,11 @@
 
 #include <vulkan/vulkan.h>
 
+#include "Vecna/Scene/ModelInfo.hpp"
+
 #include <filesystem>
 #include <memory>
+#include <optional>
 
 struct GLFWwindow;
 
@@ -19,6 +22,10 @@ class Window;
 namespace Vecna::Scene {
 class Trackball;
 } // namespace Vecna::Scene
+
+namespace Vecna::UI {
+class IUIRenderer;
+} // namespace Vecna::UI
 
 namespace Vecna::Renderer {
 class IndexBuffer;
@@ -66,16 +73,14 @@ private:
     void drawFrame();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
-    // ImGUI integration (Story 3-4)
-    void initImGui();
-    void shutdownImGui();
-    void renderImGui(VkCommandBuffer commandBuffer);
-    void renderMenuBar();
     void handleKeyboardShortcuts();
 
     // File operations (Story 3-4)
     void openFileDialog();
     void loadModel(const std::filesystem::path& path);
+
+    // UI error notification helper (Story 5-5)
+    void showUIError(const std::string& message);
 
     // Creation order: Window → VulkanInstance → Surface → VulkanDevice → Swapchain → Pipeline
     // Destruction order (explicit in destructor): Pipeline → Swapchain → VulkanDevice → Surface → VulkanInstance → Window
@@ -113,9 +118,15 @@ private:
     double m_lastPanX = 0.0;
     double m_lastPanY = 0.0;
 
-    // ImGUI resources (Story 3-4)
-    VkDescriptorPool m_imguiDescriptorPool = VK_NULL_HANDLE;
-    bool m_imguiInitialized = false;
+    // Deferred model load (avoids buffer destruction mid-render when triggered from ImGui menu)
+    std::optional<std::filesystem::path> m_pendingModelPath;
+
+    // Model metadata (Story 5-3)
+    Scene::ModelInfo m_modelInfo;
+
+    // UI renderer abstraction (Story 5-1)
+    // IMPORTANT: Must be destroyed BEFORE VulkanDevice (uses Vulkan resources)
+    std::unique_ptr<UI::IUIRenderer> m_uiRenderer;
 };
 
 } // namespace Vecna::Core

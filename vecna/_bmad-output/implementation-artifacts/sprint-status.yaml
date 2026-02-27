@@ -75,11 +75,11 @@ development_status:
   epic-4-retrospective: optional
 
   # Epic 5: Informations Modele & Interface
-  epic-5: backlog
-  5-1-abstraction-interface-ui: backlog
-  5-2-implementation-imgui: backlog
-  5-3-panneau-dinformation-modele: backlog
+  epic-5: in-progress
+  5-1-abstraction-interface-ui: done
+  5-2-implementation-imgui: done
+  5-3-panneau-dinformation-modele: done
   5-4-affichage-bounding-box-visuelle: backlog
-  5-5-messages-derreur-ui: backlog
+  5-5-messages-derreur-ui: done
   5-6-fermeture-propre-application: backlog
   epic-5-retrospective: optional
