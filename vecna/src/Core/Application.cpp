@@ -15,6 +15,7 @@
 #include "src/cgmath/TCamera.h"
 #include "src/cgmath/TMatrix4.h"
 #include "src/cgmesh/mesh.h"
+#include "src/cgmesh/ticker.h"
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
@@ -430,7 +431,10 @@ void Application::loadModel(const std::filesystem::path& path) {
 
     // Load mesh using cgmesh
     Mesh mesh;
+    Ticker ticker;
+    ticker.start();
     int rc = mesh.load(path.string().c_str());
+    double loadTimeMs = ticker.stop();
     if (rc != 0) {
         Logger::error("Loader", "Failed to load model: " + path.string());
         showUIError("Impossible de charger le fichier : " + path.filename().string());
@@ -454,6 +458,8 @@ void Application::loadModel(const std::filesystem::path& path) {
     m_modelInfo.filename = path.filename().string();
     mesh.bbox().GetMinMax(m_modelInfo.bboxMin, m_modelInfo.bboxMax);
     m_modelInfo.diagonal = diagonal;
+    m_modelInfo.loadTimeMs = loadTimeMs;
+    m_modelInfo.edgeCount = mesh.CountEdges();
 
     mesh.translate(-bboxCenter[0], -bboxCenter[1], -bboxCenter[2]);
 
@@ -645,6 +651,7 @@ void Application::loadModel(const std::filesystem::path& path) {
     // Capture final vertex/triangle counts AFTER welding (Story 5-3)
     m_modelInfo.vertexCount = static_cast<uint32_t>(vertices.size());
     m_modelInfo.triangleCount = static_cast<uint32_t>(indices.size() / 3);
+
     m_modelInfo.computeDerived();
 
     // Wait for GPU idle before replacing buffers

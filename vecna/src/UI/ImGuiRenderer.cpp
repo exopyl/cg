@@ -181,11 +181,13 @@ void ImGuiRenderer::renderInfoPanel() {
     if (ImGui::Begin("Infos Modele", nullptr, flags)) {
         // Filename
         ImGui::Text("Fichier: %s", m_modelInfo.filename.c_str());
+        ImGui::Text("Chargement: %.1f ms", m_modelInfo.loadTimeMs);
         ImGui::Separator();
 
         // Geometry stats
         ImGui::Text("Sommets: %u", m_modelInfo.vertexCount);
         ImGui::Text("Triangles: %u", m_modelInfo.triangleCount);
+        ImGui::Text("Aretes: %u", m_modelInfo.edgeCount);
         ImGui::Separator();
 
         // Bounding box dimensions (pre-computed in ModelInfo::computeDerived)
