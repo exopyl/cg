@@ -62,6 +62,7 @@ set(VECNA_SOURCES
     src/Renderer/Swapchain.cpp
     src/Renderer/VulkanDevice.cpp
     src/Renderer/VulkanInstance.cpp
+    src/Scene/Trackball.cpp
 )
 
 # Create executable

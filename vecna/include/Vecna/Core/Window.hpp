@@ -51,8 +51,10 @@ public:
     [[nodiscard]] bool wasResized() const { return m_framebufferResized; }
     void resetResizedFlag() { m_framebufferResized = false; }
 
+    /// Called by Application when framebuffer is resized (routed via GLFW callback).
+    void onFramebufferResize(int width, int height);
+
 private:
-    static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
     GLFWwindow* m_window = nullptr;
     uint32_t m_width = 0;

@@ -67,11 +67,11 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: Navigation Camera
-  epic-4: backlog
+  epic-4: done
   4-1-classe-camera: done
-  4-2-rotation-trackball: backlog
-  4-3-zoom-molette: backlog
-  4-4-pan-deplacement-lateral: backlog
+  4-2-rotation-trackball: done
+  4-3-zoom-molette: done
+  4-4-pan-deplacement-lateral: done
   epic-4-retrospective: optional
 
   # Epic 5: Informations Modele & Interface

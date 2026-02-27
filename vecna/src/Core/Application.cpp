@@ -7,6 +7,7 @@
 #include "Vecna/Renderer/Swapchain.hpp"
 #include "Vecna/Renderer/VulkanDevice.hpp"
 #include "Vecna/Renderer/VulkanInstance.hpp"
+#include "Vecna/Scene/Trackball.hpp"
 #ifdef _MSC_VER
 #pragma warning(push, 0)
 #endif
@@ -58,8 +59,10 @@ namespace Vecna::Core {
 // Clear color for the render pass (dark blue)
 static constexpr VkClearColorValue CLEAR_COLOR = {{0.1f, 0.1f, 0.2f, 1.0f}};
 
-// Animation constant
-static constexpr float ROTATION_SPEED = 0.785398f;  // π/4 radians per second (~45°/s)
+// Zoom constants (Story 4-3)
+static constexpr float ZOOM_FACTOR = 0.1f;     // 10% per scroll notch
+static constexpr float MIN_DISTANCE = 0.01f;    // Minimum camera distance
+static constexpr float MAX_DISTANCE = 10000.0f;  // Maximum camera distance
 
 Application::Application() {
     Logger::info("Core", "Application starting");
@@ -67,6 +70,8 @@ Application::Application() {
     // Create window with default configuration (1280x720, "Vecna", resizable)
     // Window must be created BEFORE VulkanInstance (GLFW must be initialized for extensions)
     m_camera = std::make_unique<Cameraf>();
+    // Set initial clipping planes consistent with default camera distance (Z=3)
+    m_camera->SetClippingPlanes(m_cameraDistance * 0.01f, m_cameraDistance * 10.0f);
     m_window = std::make_unique<Window>();
 
     // Create Vulkan instance (requires GLFW to be initialized)
@@ -88,7 +93,20 @@ Application::Application() {
     // Create cube test geometry (Story 2-4)
     createCube();
 
+    // Initialize trackball rotation (Story 4-2)
+    // Callbacks registered BEFORE ImGui so ImGui chains to them (ImGui calls prev callbacks)
+    m_trackball = std::make_unique<Scene::Trackball>();
+    auto extent = m_swapchain->getExtent();
+    m_trackball->setDimensions(static_cast<int>(extent.width), static_cast<int>(extent.height));
+    // Application owns the GLFW user pointer (all callbacks route through Application)
+    glfwSetWindowUserPointer(m_window->getHandle(), this);
+    glfwSetFramebufferSizeCallback(m_window->getHandle(), framebufferResizeCallback);
+    glfwSetMouseButtonCallback(m_window->getHandle(), mouseButtonCallback);
+    glfwSetCursorPosCallback(m_window->getHandle(), cursorPosCallback);
+    glfwSetScrollCallback(m_window->getHandle(), scrollCallback);
+
     // Initialize ImGUI (Story 3-4)
+    // ImGui_ImplGlfw_InitForVulkan with install_callbacks=true chains to our callbacks above
     initImGui();
 
     Logger::info("Core", "Application initialized");
@@ -216,21 +234,11 @@ void Application::createCube() {
 void Application::run() {
     Logger::info("Core", "Entering main loop");
 
-    auto lastTime = glfwGetTime();
-
     while (!m_window->shouldClose()) {
         m_window->pollEvents();
 
         // Handle keyboard shortcuts (Story 3-4)
         handleKeyboardShortcuts();
-
-        // Update rotation angle based on elapsed time
-        auto currentTime = glfwGetTime();
-        auto deltaTime = static_cast<float>(currentTime - lastTime);
-        lastTime = currentTime;
-
-        // Rotate based on elapsed time
-        m_rotationAngle += deltaTime * ROTATION_SPEED;
 
         drawFrame();
     }
@@ -251,6 +259,8 @@ void Application::drawFrame() {
         m_pipeline.reset();
         m_swapchain->recreate();
         createPipeline();
+        auto newExtent = m_swapchain->getExtent();
+        m_trackball->setDimensions(static_cast<int>(newExtent.width), static_cast<int>(newExtent.height));
         return;
     }
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
@@ -273,6 +283,8 @@ void Application::drawFrame() {
         m_pipeline.reset();
         m_swapchain->recreate();
         createPipeline();
+        auto newExtent = m_swapchain->getExtent();
+        m_trackball->setDimensions(static_cast<int>(newExtent.width), static_cast<int>(newExtent.height));
     } else if (result != VK_SUCCESS) {
         throw std::runtime_error("Failed to present swapchain image");
     }
@@ -339,8 +351,11 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t im
     vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer->getBuffer(), 0, VK_INDEX_TYPE_UINT32);
 
     // Calculate MVP matrix using TMatrix4 (column-major, Vulkan-ready)
+    // Model rotation from trackball (Story 4-2) — always centered on model origin.
+    // Pan offset is handled entirely in the view matrix (camera position/target).
+    // This keeps pan direction always aligned with screen axes regardless of rotation.
     Matrix4f model;
-    model.SetRotateY(-m_rotationAngle);  // Negated: TMatrix4 uses right-hand convention
+    std::copy(m_trackball->getTransform(), m_trackball->getTransform() + 16, model.data());
 
     float aspect = viewport.width / viewport.height;
     Matrix4f view = m_camera->GetViewMatrix();
@@ -547,9 +562,10 @@ void Application::loadModel(const std::filesystem::path& path) {
     }
     static constexpr float VIEW_MARGIN = 1.5f;  // Extra margin so model doesn't fill the entire frustum
     float cameraDistance = (diagonal / (2.0f * std::tan(m_camera->GetFov() / 2.0f))) * VIEW_MARGIN;
+    m_cameraDistance = cameraDistance;
     m_camera->SetTarget(0.0f, 0.0f, 0.0f);
-    m_camera->SetPosition(0.0f, 0.0f, cameraDistance);
-    m_camera->SetClippingPlanes(cameraDistance * 0.01f, cameraDistance * 10.0f);
+    m_camera->SetPosition(0.0f, 0.0f, m_cameraDistance);
+    m_camera->SetClippingPlanes(m_cameraDistance * 0.01f, m_cameraDistance * 10.0f);
 
     Logger::info("Loader", "Centered model (diagonal: " + std::to_string(diagonal) +
                  ", camera distance: " + std::to_string(cameraDistance) + ")");
@@ -732,6 +748,118 @@ void Application::loadModel(const std::filesystem::path& path) {
     m_indexBuffer = std::make_unique<Renderer::IndexBuffer>(*m_vulkanDevice, indices);
 
     Logger::info("Loader", "Model loaded successfully");
+}
+
+// ============================================================================
+// GLFW callbacks (routed via glfwSetWindowUserPointer → Application*)
+// ============================================================================
+
+void Application::framebufferResizeCallback(GLFWwindow* window, int width, int height) {
+    auto* app = static_cast<Application*>(glfwGetWindowUserPointer(window));
+    app->m_window->onFramebufferResize(width, height);
+}
+
+void Application::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+    // Let ImGui handle mouse if it wants it
+    if (ImGui::GetIO().WantCaptureMouse) {
+        return;
+    }
+
+    auto* app = static_cast<Application*>(glfwGetWindowUserPointer(window));
+    double xpos = 0;
+    double ypos = 0;
+    glfwGetCursorPos(window, &xpos, &ypos);
+
+    // Pan: middle mouse button OR Shift+left click (Story 4-4)
+    bool isPanButton = (button == GLFW_MOUSE_BUTTON_MIDDLE) ||
+                       (button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_SHIFT));
+    if (isPanButton) {
+        if (action == GLFW_PRESS) {
+            app->m_panning = true;
+            app->m_lastPanX = xpos;
+            app->m_lastPanY = ypos;
+        } else {
+            app->m_panning = false;
+        }
+        return;  // Don't forward pan clicks to trackball
+    }
+
+    // Stop panning if left button released without Shift (edge case: Shift released mid-drag)
+    // Don't forward to trackball — this release belongs to the pan gesture
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE && app->m_panning) {
+        app->m_panning = false;
+        return;
+    }
+
+    app->m_trackball->onMousePress(button, action == GLFW_PRESS,
+                                   static_cast<int>(xpos), static_cast<int>(ypos));
+}
+
+void Application::cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
+    // Let ImGui handle mouse if it wants it
+    if (ImGui::GetIO().WantCaptureMouse) {
+        return;
+    }
+
+    auto* app = static_cast<Application*>(glfwGetWindowUserPointer(window));
+
+    // Pan movement (Story 4-4): translate camera + target in screen plane
+    if (app->m_panning) {
+        double dx = xpos - app->m_lastPanX;
+        double dy = ypos - app->m_lastPanY;
+        app->m_lastPanX = xpos;
+        app->m_lastPanY = ypos;
+
+        // Scale pan speed proportional to camera distance and inversely to window height
+        // This gives consistent feel: 1 pixel of drag ≈ same world-space distance at any zoom
+        // Using height for both axes (pixels are square on modern displays)
+        int winHeight = 0;
+        glfwGetWindowSize(window, nullptr, &winHeight);
+        if (winHeight <= 0) {
+            return;
+        }
+        float panScale = app->m_cameraDistance / static_cast<float>(winHeight);
+
+        // Pan in world X/Y — valid because camera is always aligned to Z axis
+        // (rotation is in the model matrix via trackball, not in the view matrix).
+        // Screen X → world X (negated), Screen Y → world Y (inverted: screen down = +dy)
+        float offsetX = -static_cast<float>(dx) * panScale;
+        float offsetY = static_cast<float>(dy) * panScale;
+
+        // Move both position and target by the same offset so the view direction stays constant
+        auto pos = app->m_camera->GetPosition();
+        auto target = app->m_camera->GetTarget();
+        app->m_camera->SetPosition(pos[0] + offsetX, pos[1] + offsetY, pos[2]);
+        app->m_camera->SetTarget(target[0] + offsetX, target[1] + offsetY, target[2]);
+        return;
+    }
+
+    app->m_trackball->onMouseMove(static_cast<int>(xpos), static_cast<int>(ypos));
+}
+
+void Application::scrollCallback(GLFWwindow* window, double /*xoffset*/, double yoffset) {
+    // Let ImGui handle scroll if it wants it
+    if (ImGui::GetIO().WantCaptureMouse) {
+        return;
+    }
+
+    auto* app = static_cast<Application*>(glfwGetWindowUserPointer(window));
+
+    // Multiplicative zoom using authoritative m_cameraDistance
+    float scale = 1.0f - static_cast<float>(yoffset) * ZOOM_FACTOR;
+    // Cap scale factor to prevent negative distance or extreme jumps (high-res scroll wheels)
+    scale = std::clamp(scale, 0.1f, 10.0f);
+    float oldDistance = app->m_cameraDistance;
+    app->m_cameraDistance = std::clamp(app->m_cameraDistance * scale, MIN_DISTANCE, MAX_DISTANCE);
+
+    // Zoom along the view direction (target→position), preserving pan offset (Story 4-4)
+    auto pos = app->m_camera->GetPosition();
+    auto target = app->m_camera->GetTarget();
+    float ratio = app->m_cameraDistance / oldDistance;
+    app->m_camera->SetPosition(target[0] + (pos[0] - target[0]) * ratio,
+                               target[1] + (pos[1] - target[1]) * ratio,
+                               target[2] + (pos[2] - target[2]) * ratio);
+    app->m_camera->SetClippingPlanes(app->m_cameraDistance * 0.01f, app->m_cameraDistance * 10.0f);
 }
 
 } // namespace Vecna::Core

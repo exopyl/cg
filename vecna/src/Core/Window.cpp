@@ -47,10 +47,6 @@ Window::Window(const Config& config)
         throw std::runtime_error("Failed to create GLFW window");
     }
 
-    // Set user pointer for callbacks
-    glfwSetWindowUserPointer(m_window, this);
-    glfwSetFramebufferSizeCallback(m_window, framebufferResizeCallback);
-
     Logger::info("Core", "Window created: " + std::to_string(m_width) + "x" + std::to_string(m_height));
 }
 
@@ -75,14 +71,11 @@ void Window::close() {
     glfwSetWindowShouldClose(m_window, GLFW_TRUE);
 }
 
-void Window::framebufferResizeCallback(GLFWwindow* window, int width, int height) {
-    auto* self = static_cast<Window*>(glfwGetWindowUserPointer(window));
-    if (self != nullptr) {
-        self->m_framebufferResized = true;
-        self->m_width = static_cast<uint32_t>(width);
-        self->m_height = static_cast<uint32_t>(height);
-        Logger::debug("Core", "Window resized: " + std::to_string(width) + "x" + std::to_string(height));
-    }
+void Window::onFramebufferResize(int width, int height) {
+    m_framebufferResized = true;
+    m_width = static_cast<uint32_t>(width);
+    m_height = static_cast<uint32_t>(height);
+    Logger::debug("Core", "Window resized: " + std::to_string(width) + "x" + std::to_string(height));
 }
 
 } // namespace Vecna::Core

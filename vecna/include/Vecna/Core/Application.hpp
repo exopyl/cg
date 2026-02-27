@@ -5,6 +5,8 @@
 #include <filesystem>
 #include <memory>
 
+struct GLFWwindow;
+
 // Forward-declare cgmath camera (full include in .cpp behind #pragma warning suppression)
 #include "src/cgmath/StorageOrder.h"
 template <class TValue, StorageOrder Order> class TCamera;
@@ -13,6 +15,10 @@ using Cameraf = TCamera<float, StorageOrder::ColumnMajor>;
 namespace Vecna::Core {
 class Window;
 } // namespace Vecna::Core
+
+namespace Vecna::Scene {
+class Trackball;
+} // namespace Vecna::Scene
 
 namespace Vecna::Renderer {
 class IndexBuffer;
@@ -87,13 +93,25 @@ private:
     std::unique_ptr<Renderer::VertexBuffer> m_vertexBuffer;
     std::unique_ptr<Renderer::IndexBuffer> m_indexBuffer;
 
-    // Time tracking for animation
-    float m_rotationAngle = 0.0f;
+    // Trackball rotation (Story 4-2)
+    std::unique_ptr<Scene::Trackball> m_trackball;
+
+    // GLFW callbacks (routed via glfwSetWindowUserPointer → Application*)
+    static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
+    static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+    static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos);
+    static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
     // Camera (position, target, projection — adapted to loaded model size)
     // std::unique_ptr to keep TCamera.h include confined to the .cpp
     // (TVector3.h has 'using namespace std' that would pollute all consumers)
     std::unique_ptr<Cameraf> m_camera;
+    float m_cameraDistance = 3.0f;  // Authoritative camera distance (matches TCamera default Z=3)
+
+    // Pan state (Story 4-4)
+    bool m_panning = false;
+    double m_lastPanX = 0.0;
+    double m_lastPanY = 0.0;
 
     // ImGUI resources (Story 3-4)
     VkDescriptorPool m_imguiDescriptorPool = VK_NULL_HANDLE;
