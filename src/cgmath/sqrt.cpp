@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstdint>
 
 // ref : https://www.codeproject.com/Articles/69941/Best-Square-Root-Method-Algorithm-Function-Precisi
 
@@ -100,7 +101,7 @@ float sqrt5(const float m)
 double sqrt6(double y)
 {
 	double x, z, tempf;
-	unsigned long *tfptr = ((unsigned long *)&tempf) + 1;
+	uint32_t *tfptr = ((uint32_t *)&tempf) + 1;
 	tempf = y;
 	*tfptr = (0xbfcdd90a - *tfptr) >> 1;
 	x = tempf;
