@@ -104,14 +104,12 @@ TEST(TEST_cgmath_sqrt, Sqrt5_Small)
 
 TEST(TEST_cgmath_sqrt, Sqrt6_PerfectSquare)
 {
-	if (sizeof(void*) == 8) // only works on 64-bit platforms
-		EXPECT_NEAR(sqrt6(4.0), 2.0, 0.01);
+	EXPECT_NEAR(sqrt6(4.0), 2.0, 0.01);
 }
 
 TEST(TEST_cgmath_sqrt, Sqrt6_General)
 {
-	if (sizeof(void*) == 8) // only works on 64-bit platforms
-		EXPECT_NEAR(sqrt6(2.0), sqrt(2.0), 0.01);
+	EXPECT_NEAR(sqrt6(2.0), sqrt(2.0), 0.01);
 }
 
 // =====================
