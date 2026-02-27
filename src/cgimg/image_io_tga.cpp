@@ -175,8 +175,8 @@ int Img::import_tga (const char *filename)
 int Img::import_tga (const char *filename)
 {
 	FILE *ptr;
-	unsigned int w, h;
-	unsigned int i,j;
+	int w, h;
+	int i,j;
 	unsigned char *color_map;
 
 	if ((ptr = fopen (filename, "rb")) == NULL)
@@ -485,9 +485,9 @@ int Img::import_tga (const char *filename)
 	  {
 	case 0:
 	  {
-	    unsigned short current_line = height-1;
+	    int current_line = height-1;
 	    unsigned short pixels_on_line = 0;
-	    while (pixels_read < w*h)
+	    while (pixels_read < w*h && current_line >= 0)
 	      {
 			// read a packet
 			fread (&repetition_block, sizeof(unsigned char), 1, ptr);
@@ -501,8 +501,16 @@ int Img::import_tga (const char *filename)
 				a = 255;
 				if (pixel_depth == 32)
 					fread (&a, sizeof(unsigned char), 1, ptr);
-				for (i=0; i<pixel_count; i++)
-					set_pixel (pixels_on_line+i, current_line, r, g, b, a);
+				for (i=0; i<pixel_count && current_line >= 0; i++)
+				{
+					set_pixel (pixels_on_line, current_line, r, g, b, a);
+					pixels_on_line++;
+					if (pixels_on_line >= width)
+					{
+						current_line--;
+						pixels_on_line = 0;
+					}
+				}
 			}
 			else
 			{
@@ -516,15 +524,18 @@ int Img::import_tga (const char *filename)
 					a = 255;
 					if (pixel_depth == 32)
 						fread (&a, sizeof(unsigned char), 1, ptr);
-					set_pixel (pixels_on_line+i, current_line, r, g, b, a);
+					if (current_line >= 0)
+					{
+						set_pixel (pixels_on_line, current_line, r, g, b, a);
+						pixels_on_line++;
+						if (pixels_on_line >= width)
+						{
+							current_line--;
+							pixels_on_line = 0;
+						}
+					}
 				}
 			}
-			pixels_on_line += pixel_count;
-			if (pixels_on_line >= width)
-			  {
-				current_line--;
-				pixels_on_line = 0;
-			  }
 			pixels_read += pixel_count;
 	      }
 	    printf ("pixels read: %d\n", pixels_read);
