@@ -74,6 +74,7 @@ private:
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
     void handleKeyboardShortcuts();
+    void onShadingModeChanged(bool flat);
 
     // File operations (Story 3-4)
     void openFileDialog();
@@ -118,6 +119,10 @@ private:
     bool m_panning = false;
     double m_lastPanX = 0.0;
     double m_lastPanY = 0.0;
+
+    // Flat shading mode (specialization constant in pipeline)
+    bool m_flatShading = false;
+    bool m_pendingShadingChange = false;
 
     // Deferred model load (avoids buffer destruction mid-render when triggered from ImGui menu)
     std::optional<std::filesystem::path> m_pendingModelPath;

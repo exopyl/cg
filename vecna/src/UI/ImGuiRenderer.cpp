@@ -154,6 +154,15 @@ void ImGuiRenderer::renderMenuBar() {
             }
             ImGui::EndMenu();
         }
+        if (ImGui::BeginMenu("Affichage")) {
+            if (ImGui::Checkbox("Flat shading", &m_flatShading)) {
+                if (m_onShadingModeChanged) {
+                    m_onShadingModeChanged(m_flatShading);
+                }
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndMenu();
+        }
         ImGui::EndMainMenuBar();
     }
 }

@@ -45,8 +45,9 @@ std::array<VkVertexInputAttributeDescription, 3> Vertex::getAttributeDescription
 
 // Pipeline implementation
 
-Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass, const std::string& shaderDir)
-    : m_device(device) {
+Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass, const std::string& shaderDir,
+                   bool flatShading)
+    : m_device(device), m_flatShading(flatShading) {
     createPipelineLayout();
     createGraphicsPipeline(renderPass, shaderDir);
 }
@@ -68,7 +69,7 @@ Pipeline::~Pipeline() {
 void Pipeline::createPipelineLayout() {
     // Configure push constant range for MVP matrix
     VkPushConstantRange pushConstantRange{};
-    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     pushConstantRange.offset = 0;
     pushConstantRange.size = PUSH_CONSTANT_SIZE;
 
@@ -107,11 +108,26 @@ void Pipeline::createGraphicsPipeline(VkRenderPass renderPass, const std::string
     vertShaderStageInfo.module = vertShaderModule;
     vertShaderStageInfo.pName = "main";
 
+    // Specialization constant for flat shading toggle (constant_id = 0)
+    VkBool32 flatShadingValue = m_flatShading ? VK_TRUE : VK_FALSE;
+
+    VkSpecializationMapEntry specEntry{};
+    specEntry.constantID = 0;
+    specEntry.offset = 0;
+    specEntry.size = sizeof(VkBool32);
+
+    VkSpecializationInfo specInfo{};
+    specInfo.mapEntryCount = 1;
+    specInfo.pMapEntries = &specEntry;
+    specInfo.dataSize = sizeof(VkBool32);
+    specInfo.pData = &flatShadingValue;
+
     VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
     fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
     fragShaderStageInfo.module = fragShaderModule;
     fragShaderStageInfo.pName = "main";
+    fragShaderStageInfo.pSpecializationInfo = &specInfo;
 
     std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {
         vertShaderStageInfo,

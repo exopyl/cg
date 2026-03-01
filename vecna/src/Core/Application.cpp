@@ -113,6 +113,7 @@ Application::Application() {
     auto imguiRenderer = std::make_unique<UI::ImGuiRenderer>(
         *m_vulkanInstance, *m_vulkanDevice, *m_swapchain, *m_window);
     imguiRenderer->setOnFileOpen([this]() { openFileDialog(); });
+    imguiRenderer->setOnShadingModeChanged([this](bool flat) { onShadingModeChanged(flat); });
     m_uiRenderer = std::move(imguiRenderer);
     m_uiRenderer->init();
 
@@ -174,7 +175,8 @@ void Application::createPipeline() {
     m_pipeline = std::make_unique<Renderer::Pipeline>(
         *m_vulkanDevice,
         m_swapchain->getRenderPass(),
-        shaderDir
+        shaderDir,
+        m_flatShading
     );
 }
 
@@ -252,6 +254,15 @@ void Application::run() {
         if (m_pendingModelPath) {
             loadModel(*m_pendingModelPath);
             m_pendingModelPath.reset();
+        }
+
+        // Process deferred shading mode change (set by ImGui checkbox callback)
+        if (m_pendingShadingChange) {
+            m_pendingShadingChange = false;
+            vkDeviceWaitIdle(m_vulkanDevice->getDevice());
+            m_pipeline.reset();
+            createPipeline();
+            Logger::info("Core", m_flatShading ? "Switched to flat shading" : "Switched to smooth shading");
         }
 
         drawFrame();
@@ -380,11 +391,12 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t im
     // MVP = Projection * View * Model
     Matrix4f mvp = projection * view * model;
 
-    // Push MVP matrix (ColumnMajor data() is directly Vulkan-compatible)
+    // Push MVP + model matrices (ColumnMajor data() is directly Vulkan-compatible)
     Renderer::PushConstants pushConstants{};
     std::copy(mvp.data(), mvp.data() + 16, pushConstants.mvp);
+    std::copy(model.data(), model.data() + 16, pushConstants.model);
     vkCmdPushConstants(commandBuffer, m_pipeline->getPipelineLayout(),
-                       VK_SHADER_STAGE_VERTEX_BIT, 0,
+                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                        sizeof(Renderer::PushConstants), &pushConstants);
 
     // Draw indexed cube
@@ -416,6 +428,11 @@ void Application::handleKeyboardShortcuts() {
 
     // Always update state to handle release properly
     oKeyWasPressed = oKeyPressed;
+}
+
+void Application::onShadingModeChanged(bool flat) {
+    m_flatShading = flat;
+    m_pendingShadingChange = true;
 }
 
 void Application::openFileDialog() {

@@ -28,10 +28,11 @@ struct Vertex {
 /// Size of a 4x4 matrix in floats.
 inline constexpr size_t MVP_MATRIX_FLOATS = 16;
 
-/// Push constants structure for MVP matrix.
-/// Size: 64 bytes (mat4), well within Vulkan's 128 byte minimum guarantee.
+/// Push constants structure for MVP and model matrices.
+/// Size: 128 bytes (2 x mat4), exactly Vulkan's 128 byte minimum guarantee.
 struct PushConstants {
-    float mvp[MVP_MATRIX_FLOATS];  // 4x4 matrix
+    float mvp[MVP_MATRIX_FLOATS];    // 4x4 MVP matrix
+    float model[MVP_MATRIX_FLOATS];  // 4x4 model matrix (for world-space normals)
 };
 
 /// Size of push constants in bytes.
@@ -54,7 +55,8 @@ public:
     /// @param renderPass The render pass this pipeline will be used with.
     /// @param shaderDir Directory containing compiled SPIR-V shaders.
     /// @throws std::runtime_error if pipeline creation fails or shaders not found.
-    Pipeline(VulkanDevice& device, VkRenderPass renderPass, const std::string& shaderDir);
+    Pipeline(VulkanDevice& device, VkRenderPass renderPass, const std::string& shaderDir,
+             bool flatShading = false);
     ~Pipeline();
 
     // Non-copyable, non-movable
@@ -78,6 +80,7 @@ private:
     [[nodiscard]] VkShaderModule createShaderModule(const std::vector<uint32_t>& code) const;
 
     VulkanDevice& m_device;
+    bool m_flatShading = false;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
 };

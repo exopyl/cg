@@ -18,8 +18,8 @@ message(STATUS "Found glslc: ${GLSLC}")
 
 # Vulkan push constant size limits
 # Vulkan spec guarantees minimum 128 bytes for push constants
-# Our shaders use mat4 (64 bytes) which is well within limits
-set(VECNA_PUSH_CONSTANT_SIZE 64 CACHE INTERNAL "Push constant size in bytes (mat4 = 64)")
+# Our shaders use 2 x mat4 (128 bytes) which is exactly at the minimum guarantee
+set(VECNA_PUSH_CONSTANT_SIZE 128 CACHE INTERNAL "Push constant size in bytes (2 x mat4 = 128)")
 set(VULKAN_MIN_PUSH_CONSTANT_SIZE 128 CACHE INTERNAL "Vulkan minimum guaranteed push constant size")
 
 if(VECNA_PUSH_CONSTANT_SIZE GREATER VULKAN_MIN_PUSH_CONSTANT_SIZE)
