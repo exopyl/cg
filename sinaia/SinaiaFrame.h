@@ -100,6 +100,8 @@ class MyFrame : public wxFrame
 		ID_BUTTON_NPR_EXPORT,
 
 	ID_TREATMENT_MERGE_VERTICES,
+	ID_TREATMENT_SMOOTHING_TAUBIN,
+	ID_TREATMENT_SMOOTHING_LAPLACIAN,
 
 	ID_ShowProperties,
 	ID_ShowMeshes,
@@ -187,6 +189,8 @@ private:
 	void OnSlider(wxScrollEvent& event);
 
 	void OnTreatmentMergeVertices(wxCommandEvent& evt);
+	void OnTreatmentSmoothingTaubin(wxCommandEvent& evt);
+	void OnTreatmentSmoothingLaplacian(wxCommandEvent& evt);
 
     void OnGradient(wxCommandEvent& evt);
     void OnManagerFlag(wxCommandEvent& evt);

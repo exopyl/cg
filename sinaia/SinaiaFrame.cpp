@@ -23,6 +23,9 @@
 //#include "DrawingArea.h"
 #include "SettingsPanel.h"
 
+#include "../src/cgmesh/smoothing_taubin.h"
+#include "../src/cgmesh/smoothing_laplacian.h"
+
 // control ids
 enum
 {
@@ -118,6 +121,8 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU_RANGE(MyFrame::ID_FirstPerspective, MyFrame::ID_FirstPerspective+1000,
                    MyFrame::OnRestorePerspective)
     EVT_MENU(ID_TREATMENT_MERGE_VERTICES, MyFrame::OnTreatmentMergeVertices)
+    EVT_MENU(ID_TREATMENT_SMOOTHING_TAUBIN, MyFrame::OnTreatmentSmoothingTaubin)
+    EVT_MENU(ID_TREATMENT_SMOOTHING_LAPLACIAN, MyFrame::OnTreatmentSmoothingLaplacian)
     EVT_MENU(ID_ShowProperties, MyFrame::OnShowWindow)
     EVT_MENU(ID_ShowMeshes, MyFrame::OnShowWindow)
     EVT_MENU(ID_ShowLogging, MyFrame::OnShowWindow)
@@ -253,6 +258,11 @@ MyFrame::MyFrame(wxWindow* parent,
 
     wxMenu* treatments_menu = new wxMenu;
     treatments_menu->Append(ID_TREATMENT_MERGE_VERTICES, _("Merge vertices"));
+
+    wxMenu* smoothing_menu = new wxMenu;
+    smoothing_menu->Append(ID_TREATMENT_SMOOTHING_TAUBIN, _("Taubin"));
+    smoothing_menu->Append(ID_TREATMENT_SMOOTHING_LAPLACIAN, _("Laplacian"));
+    treatments_menu->AppendSubMenu(smoothing_menu, _("Smoothing"));
 
     mb->Append(file_menu, _("File"));
     mb->Append(geometry_menu, _("Geometry"));
@@ -1749,4 +1759,64 @@ void MyFrame::OnTreatmentMergeVertices(wxCommandEvent& WXUNUSED(event))
 
 	pGLCanvas->Refresh();
 	UpdatePropertiesGrid();
+}
+
+void MyFrame::OnTreatmentSmoothingTaubin(wxCommandEvent& WXUNUSED(event))
+{
+	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+	if (!pGLCanvas)
+		return;
+
+	Object3D *pObject = pGLCanvas->GetObject3D();
+	if (!pObject)
+		return;
+
+	MeshAlgoSmoothingTaubin algo;
+	for (auto& pMesh : pObject->GetMeshes())
+	{
+		Mesh_half_edge meshHE(pMesh);
+		algo.Apply(&meshHE);
+
+		// Copy smoothed vertices back
+		for (unsigned int i = 0; i < pMesh->m_nVertices; i++)
+		{
+			pMesh->m_pVertices[3 * i]     = meshHE.m_pVertices[3 * i];
+			pMesh->m_pVertices[3 * i + 1] = meshHE.m_pVertices[3 * i + 1];
+			pMesh->m_pVertices[3 * i + 2] = meshHE.m_pVertices[3 * i + 2];
+		}
+		pMesh->ComputeNormals();
+	}
+
+	pGLCanvas->Refresh();
+	*m_pWndLogging << _T("Smoothing Taubin applied\n");
+}
+
+void MyFrame::OnTreatmentSmoothingLaplacian(wxCommandEvent& WXUNUSED(event))
+{
+	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+	if (!pGLCanvas)
+		return;
+
+	Object3D *pObject = pGLCanvas->GetObject3D();
+	if (!pObject)
+		return;
+
+	MeshAlgoSmoothingLaplacian algo;
+	for (auto& pMesh : pObject->GetMeshes())
+	{
+		Mesh_half_edge meshHE(pMesh);
+		algo.Apply(&meshHE);
+
+		// Copy smoothed vertices back
+		for (unsigned int i = 0; i < pMesh->m_nVertices; i++)
+		{
+			pMesh->m_pVertices[3 * i]     = meshHE.m_pVertices[3 * i];
+			pMesh->m_pVertices[3 * i + 1] = meshHE.m_pVertices[3 * i + 1];
+			pMesh->m_pVertices[3 * i + 2] = meshHE.m_pVertices[3 * i + 2];
+		}
+		pMesh->ComputeNormals();
+	}
+
+	pGLCanvas->Refresh();
+	*m_pWndLogging << _T("Smoothing Laplacian applied\n");
 }
