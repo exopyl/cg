@@ -117,6 +117,14 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_UPDATE_UI(ID_NotebookWindowList, MyFrame::OnUpdateUI)
     EVT_MENU_RANGE(MyFrame::ID_FirstPerspective, MyFrame::ID_FirstPerspective+1000,
                    MyFrame::OnRestorePerspective)
+    EVT_MENU(ID_ShowProperties, MyFrame::OnShowWindow)
+    EVT_MENU(ID_ShowMeshes, MyFrame::OnShowWindow)
+    EVT_MENU(ID_ShowLogging, MyFrame::OnShowWindow)
+    EVT_MENU(ID_ShowExplorer, MyFrame::OnShowWindow)
+    EVT_UPDATE_UI(ID_ShowProperties, MyFrame::OnUpdateUI)
+    EVT_UPDATE_UI(ID_ShowMeshes, MyFrame::OnUpdateUI)
+    EVT_UPDATE_UI(ID_ShowLogging, MyFrame::OnUpdateUI)
+    EVT_UPDATE_UI(ID_ShowExplorer, MyFrame::OnUpdateUI)
     EVT_AUITOOLBAR_TOOL_DROPDOWN(ID_DropDownToolbarItem, MyFrame::OnDropDownToolbarItem)
     EVT_AUI_PANE_CLOSE(MyFrame::OnPaneClose)
     EVT_AUINOTEBOOK_ALLOW_DND(wxID_ANY, MyFrame::OnAllowNotebookDnD)
@@ -182,6 +190,7 @@ MyFrame::MyFrame(wxWindow* parent,
 
     // tell wxAuiManager to manage this frame
     m_mgr.SetManagedWindow(this);
+    m_mgr.SetFlags(m_mgr.GetFlags() | wxAUI_MGR_LIVE_RESIZE);
 
     // set frame icon
     SetIcon(wxIcon(sample_xpm));
@@ -230,6 +239,13 @@ MyFrame::MyFrame(wxWindow* parent,
     panel_menu->AppendCheckItem(ID_NotebookTabFixedWidth, _("Fixed-width Tabs"));
 
     options_menu->AppendSubMenu(panel_menu, wxT("3D Panel"));
+
+    wxMenu* windows_menu = new wxMenu;
+    windows_menu->AppendCheckItem(ID_ShowProperties, _("Properties"));
+    windows_menu->AppendCheckItem(ID_ShowMeshes, _("Meshes"));
+    windows_menu->AppendCheckItem(ID_ShowLogging, _("Logging Window"));
+    windows_menu->AppendCheckItem(ID_ShowExplorer, _("Explorer"));
+    options_menu->AppendSubMenu(windows_menu, wxT("Windows"));
 
     wxMenu* help_menu = new wxMenu;
     help_menu->Append(wxID_ABOUT, _("About..."));
@@ -407,15 +423,24 @@ MyFrame::MyFrame(wxWindow* parent,
         property->ChangeFlag(wxPG_PROP_READONLY, true);
     }
 
-    m_mgr.AddPane(m_propertiesGrid, wxRIGHT, wxT("Properties"));
+    m_mgr.AddPane(m_propertiesGrid, wxAuiPaneInfo().Name(wxT("Properties")).Caption(wxT("Properties")).Right().BestSize(250, -1).MinSize(200, -1));
 
 
     m_hierarchyMeshes = CreateHierarchyMeshesTreeCtrl();
-    m_mgr.AddPane(m_hierarchyMeshes, wxRIGHT, wxT("Meshes"));
+    m_mgr.AddPane(m_hierarchyMeshes, wxAuiPaneInfo().Name(wxT("Meshes")).Caption(wxT("Meshes")).Right().BestSize(250, -1).MinSize(200, -1));
 
 
     m_dcDirectory = new wxGenericDirCtrl(this, ID_DIRCTRL, wxT(""), wxDefaultPosition, wxSize(142, 120), wxSIMPLE_BORDER | wxDIRCTRL_DIR_ONLY, wxT("All files (*.*)|*.*"), 0);
-    m_mgr.AddPane(m_dcDirectory, wxLEFT, wxT("Explorer"));
+    {
+        wxTreeCtrl* tree = m_dcDirectory->GetTreeCtrl();
+        wxTreeItemIdValue cookie;
+        wxTreeItemId child = tree->GetFirstChild(tree->GetRootItem(), cookie);
+        while (child.IsOk()) {
+            tree->Expand(child);
+            child = tree->GetNextChild(tree->GetRootItem(), cookie);
+        }
+    }
+    m_mgr.AddPane(m_dcDirectory, wxAuiPaneInfo().Name(wxT("Explorer")).Caption(wxT("Explorer")).Left());
 
     /*m_mgr.AddPane(m_dcDirectory, wxAuiPaneInfo().
         Name(wxT("test7")).Caption(wxT("Dir Tree")).
@@ -423,30 +448,18 @@ MyFrame::MyFrame(wxWindow* parent,
         CloseButton(true).MaximizeButton(true));
  */
 
-    m_filesCtrl = new wxListCtrl(this, ID_FILESCTRL, wxDefaultPosition, wxDefaultSize, wxLC_SINGLE_SEL | wxLC_ICON);
+    m_filesCtrl = new wxListCtrl(this, ID_FILESCTRL, wxDefaultPosition, wxDefaultSize, wxLC_SINGLE_SEL | wxLC_LIST);
 
-
-
-    /*
-    wxMimeTypesManager mtmgr;
-    wxFileType* pFileType= mtmgr.GetFileTypeFromExtension(wxT("doc"));
-    wxIconLocation iconLoc;
-    bool bRes = pFileType->GetIcon(&iconLoc);
-    const wxIcon iconTxt(iconLoc);
-    wxSize size2 = iconTxt.GetSize();
-    */
     wxIcon iconObj(format_obj);
     wxIcon iconStl(format_stl);
     wxIcon icon3ds(format_3ds);
 
-    wxImageList* pImageList = new wxImageList(32, 32, false, 1);
-    int toto = pImageList->GetImageCount();
-    int indexObj = pImageList->Add(iconObj);
-    int indexStl = pImageList->Add(iconStl);
-    int index3ds = pImageList->Add(icon3ds);
-    pImageList->GetImageCount();
-    m_filesCtrl->SetImageList(pImageList, wxIMAGE_LIST_NORMAL);
-    m_mgr.AddPane(m_filesCtrl, wxBOTTOM, wxT("Files"));
+    wxImageList* pImageList = new wxImageList(16, 16, false, 3);
+    pImageList->Add(wxBitmap(iconObj).ConvertToImage().Rescale(16, 16, wxIMAGE_QUALITY_HIGH));
+    pImageList->Add(wxBitmap(iconStl).ConvertToImage().Rescale(16, 16, wxIMAGE_QUALITY_HIGH));
+    pImageList->Add(wxBitmap(icon3ds).ConvertToImage().Rescale(16, 16, wxIMAGE_QUALITY_HIGH));
+    m_filesCtrl->SetImageList(pImageList, wxIMAGE_LIST_SMALL);
+    m_mgr.AddPane(m_filesCtrl, wxAuiPaneInfo().Name(wxT("Files")).Caption(wxT("Files")).Bottom());
 
     /*
     m_mgr.AddPane(CreateNotebookActions(), wxAuiPaneInfo().
@@ -462,7 +475,7 @@ MyFrame::MyFrame(wxWindow* parent,
     */
 
     m_pWndLogging = CreateTextCtrl(wxT("Logging...\n"));
-    m_mgr.AddPane(m_pWndLogging, wxBOTTOM, wxT("Logging Window"));
+    m_mgr.AddPane(m_pWndLogging, wxAuiPaneInfo().Name(wxT("Logging Window")).Caption(wxT("Logging Window")).Bottom());
     /*
     m_mgr.AddPane(m_pWndLogging, wxAuiPaneInfo().
                   Name(wxT("test10")).Caption(wxT("Logging Window")).
@@ -725,7 +738,43 @@ void MyFrame::OnUpdateUI(wxUpdateUIEvent& event)
             event.Check(m_notebook_style == 1);
             break;
 
+        case ID_ShowProperties:
+            event.Check(m_mgr.GetPane(wxT("Properties")).IsShown());
+            break;
+        case ID_ShowMeshes:
+            event.Check(m_mgr.GetPane(wxT("Meshes")).IsShown());
+            break;
+        case ID_ShowLogging:
+            event.Check(m_mgr.GetPane(wxT("Logging Window")).IsShown());
+            break;
+        case ID_ShowExplorer:
+            event.Check(m_mgr.GetPane(wxT("Explorer")).IsShown());
+            break;
     }
+}
+
+void MyFrame::OnShowWindow(wxCommandEvent& evt)
+{
+    wxString paneName;
+    switch (evt.GetId())
+    {
+        case ID_ShowProperties: paneName = wxT("Properties"); break;
+        case ID_ShowMeshes:     paneName = wxT("Meshes"); break;
+        case ID_ShowLogging:    paneName = wxT("Logging Window"); break;
+        case ID_ShowExplorer:   paneName = wxT("Explorer"); break;
+        default: return;
+    }
+
+    wxAuiPaneInfo& pane = m_mgr.GetPane(paneName);
+    pane.Show(!pane.IsShown());
+
+    if (evt.GetId() == ID_ShowExplorer)
+    {
+        wxAuiPaneInfo& filesPane = m_mgr.GetPane(wxT("Files"));
+        filesPane.Show(pane.IsShown());
+    }
+
+    m_mgr.Update();
 }
 
 void MyFrame::OnPaneClose(wxAuiManagerEvent& evt)
