@@ -1045,3 +1045,116 @@ void* Mesh::GetMaterial (void)
 	return GetMaterial (0);
 }
 
+//
+// MergeVertices
+// Merge vertices that are closer than the given tolerance.
+// Face indices are remapped accordingly. Degenerate faces are removed.
+//
+int Mesh::MergeVertices (float tolerance)
+{
+	if (m_nVertices == 0)
+		return 0;
+
+	// Build a mapping: old vertex index -> new vertex index
+	unsigned int *remap = new unsigned int[m_nVertices];
+	float *newVertices = new float[3 * m_nVertices];
+	unsigned int nNewVertices = 0;
+	float tol2 = tolerance * tolerance;
+
+	for (unsigned int i = 0; i < m_nVertices; i++)
+	{
+		float xi = m_pVertices[3 * i];
+		float yi = m_pVertices[3 * i + 1];
+		float zi = m_pVertices[3 * i + 2];
+
+		// Search for an existing vertex within tolerance
+		bool found = false;
+		for (unsigned int j = 0; j < nNewVertices; j++)
+		{
+			float dx = newVertices[3 * j]     - xi;
+			float dy = newVertices[3 * j + 1] - yi;
+			float dz = newVertices[3 * j + 2] - zi;
+			if (dx * dx + dy * dy + dz * dz <= tol2)
+			{
+				remap[i] = j;
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+		{
+			newVertices[3 * nNewVertices]     = xi;
+			newVertices[3 * nNewVertices + 1] = yi;
+			newVertices[3 * nNewVertices + 2] = zi;
+			remap[i] = nNewVertices;
+			nNewVertices++;
+		}
+	}
+
+	// Replace vertex array
+	delete[] m_pVertices;
+	m_pVertices = new float[3 * nNewVertices];
+	memcpy(m_pVertices, newVertices, 3 * nNewVertices * sizeof(float));
+	delete[] newVertices;
+
+	// Rebuild vertex normals
+	if (m_pVertexNormals)
+	{
+		delete[] m_pVertexNormals;
+		m_pVertexNormals = new float[3 * nNewVertices];
+		memset(m_pVertexNormals, 0, 3 * nNewVertices * sizeof(float));
+	}
+
+	// Rebuild vertex colors
+	if (m_pVertexColors)
+	{
+		float *newColors = new float[3 * nNewVertices];
+		memset(newColors, 0, 3 * nNewVertices * sizeof(float));
+		// Copy color from first occurrence
+		for (unsigned int i = 0; i < m_nVertices; i++)
+		{
+			unsigned int ni = remap[i];
+			newColors[3 * ni]     = m_pVertexColors[3 * i];
+			newColors[3 * ni + 1] = m_pVertexColors[3 * i + 1];
+			newColors[3 * ni + 2] = m_pVertexColors[3 * i + 2];
+		}
+		delete[] m_pVertexColors;
+		m_pVertexColors = newColors;
+	}
+
+	unsigned int nOldVertices = m_nVertices;
+	m_nVertices = nNewVertices;
+
+	// Remap face indices and remove degenerate faces
+	unsigned int nNewFaces = 0;
+	for (unsigned int i = 0; i < m_nFaces; i++)
+	{
+		Face *f = m_pFaces[i];
+		for (unsigned int v = 0; v < f->m_nVertices; v++)
+			f->m_pVertices[v] = remap[f->m_pVertices[v]];
+
+		// Check for degenerate face (duplicate vertex indices)
+		bool degenerate = false;
+		for (unsigned int a = 0; a < f->m_nVertices && !degenerate; a++)
+			for (unsigned int b = a + 1; b < f->m_nVertices && !degenerate; b++)
+				if (f->m_pVertices[a] == f->m_pVertices[b])
+					degenerate = true;
+
+		if (!degenerate)
+		{
+			m_pFaces[nNewFaces] = m_pFaces[i];
+			nNewFaces++;
+		}
+		else
+		{
+			delete m_pFaces[i];
+		}
+	}
+	m_nFaces = nNewFaces;
+
+	delete[] remap;
+
+	return (int)(nOldVertices - nNewVertices);
+}
+

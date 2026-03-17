@@ -98,7 +98,14 @@ class MyFrame : public wxFrame
 
 		ID_BUTTON_NPR_COMPUTE,
 		ID_BUTTON_NPR_EXPORT,
-        
+
+	ID_TREATMENT_MERGE_VERTICES,
+
+	ID_ShowProperties,
+	ID_ShowMeshes,
+	ID_ShowLogging,
+	ID_ShowExplorer,
+
         ID_FirstPerspective = ID_CreatePerspective+1000
     };
 
@@ -179,12 +186,15 @@ private:
 	void OnButtonNPRExport(wxCommandEvent& evt);
 	void OnSlider(wxScrollEvent& event);
 
+	void OnTreatmentMergeVertices(wxCommandEvent& evt);
+
     void OnGradient(wxCommandEvent& evt);
     void OnManagerFlag(wxCommandEvent& evt);
     void OnNotebookFlag(wxCommandEvent& evt);
     void OnUpdateUI(wxUpdateUIEvent& evt);
 
     void OnPaneClose(wxAuiManagerEvent& evt);
+    void OnShowWindow(wxCommandEvent& evt);
 
 private:
     void OpenDocument(const wxString& filename);

@@ -117,6 +117,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_UPDATE_UI(ID_NotebookWindowList, MyFrame::OnUpdateUI)
     EVT_MENU_RANGE(MyFrame::ID_FirstPerspective, MyFrame::ID_FirstPerspective+1000,
                    MyFrame::OnRestorePerspective)
+    EVT_MENU(ID_TREATMENT_MERGE_VERTICES, MyFrame::OnTreatmentMergeVertices)
     EVT_MENU(ID_ShowProperties, MyFrame::OnShowWindow)
     EVT_MENU(ID_ShowMeshes, MyFrame::OnShowWindow)
     EVT_MENU(ID_ShowLogging, MyFrame::OnShowWindow)
@@ -250,8 +251,12 @@ MyFrame::MyFrame(wxWindow* parent,
     wxMenu* help_menu = new wxMenu;
     help_menu->Append(wxID_ABOUT, _("About..."));
 
+    wxMenu* treatments_menu = new wxMenu;
+    treatments_menu->Append(ID_TREATMENT_MERGE_VERTICES, _("Merge vertices"));
+
     mb->Append(file_menu, _("File"));
     mb->Append(geometry_menu, _("Geometry"));
+    mb->Append(treatments_menu, _("Treatments"));
     mb->Append(options_menu, _("Options"));
     mb->Append(help_menu, _("Help"));
 
@@ -1716,4 +1721,32 @@ void MyFrame::OnSlider(wxScrollEvent& event)
 	//pGLCanvas->SetNPRAngleThreshold (fValue);
 
 	//pGLCanvas->Refresh ();
+}
+
+//
+// Treatments
+//
+void MyFrame::OnTreatmentMergeVertices(wxCommandEvent& WXUNUSED(event))
+{
+	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+	if (!pGLCanvas)
+		return;
+
+	Object3D *pObject = pGLCanvas->GetObject3D();
+	if (!pObject)
+		return;
+
+	for (auto& pMesh : pObject->GetMeshes())
+	{
+		unsigned int nVerticesBefore = pMesh->GetNVertices();
+		pMesh->MergeVertices();
+		unsigned int nVerticesAfter = pMesh->GetNVertices();
+
+		pMesh->ComputeNormals();
+
+		*m_pWndLogging << wxString::Format(_T("Merge vertices: %u -> %u\n"), nVerticesBefore, nVerticesAfter);
+	}
+
+	pGLCanvas->Refresh();
+	UpdatePropertiesGrid();
 }

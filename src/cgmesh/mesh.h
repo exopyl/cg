@@ -192,6 +192,7 @@ public:
 
 	// edit
 	int DeleteVertices (funcptr_v func);
+	int MergeVertices (float tolerance = 1e-6f);
 
 	// noise
 	void add_gaussian_noise (float variance);
