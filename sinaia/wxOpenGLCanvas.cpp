@@ -360,23 +360,19 @@ void MyGLCanvas::DrawGL()
 void MyGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
 	wxGLCanvas::SetCurrent(*m_context);
-
 	wxPaintDC dc(this);
 
-#ifndef __WXMOTIF__
-	//if (!GetContext()) return;
-#endif
-	wxGLCanvas::SetCurrent(*m_context);
-
+	ResetProjectionMode();
 	DrawGL();
 }
 
 void MyGLCanvas::OnSize(wxSizeEvent& event)
 {
-    // this is also necessary to update the context on some platforms
-    //wxGLCanvas::OnSize(event);
-    // Reset the OpenGL view aspect
-    ResetProjectionMode();
+    if (IsShownOnScreen()) {
+        wxGLCanvas::SetCurrent(*m_context);
+        ResetProjectionMode();
+        Refresh(false);
+    }
 }
 
 void MyGLCanvas::OnEraseBackground(wxEraseEvent& WXUNUSED(event))
