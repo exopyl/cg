@@ -102,16 +102,20 @@ Mesh_half_edge::Mesh_half_edge (int par_nv, float *par_v, int par_nf, unsigned i
 
 Mesh_half_edge::Mesh_half_edge (Mesh *pMesh)
 {
+	Init();
+
 	if (!pMesh)
 		return;
 
 	SetVertices (pMesh->m_nVertices, pMesh->m_pVertices);
+	SetVertexNormals(pMesh->m_nVertices, pMesh->m_pVertexNormals);
 	SetFaces (pMesh->m_nFaces, 3, pMesh->GetTriangles());
 
 	m_topology_ok = NULL;
 	m_border = NULL;
 
 	Che_mesh::create_half_edge (m_nVertices, m_nFaces, GetTriangles());
+	check_topology ();
 	check_border ();
 }
 

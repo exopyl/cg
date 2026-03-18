@@ -167,7 +167,8 @@ public:
 			}
 		};
 
-	int SetVertices (unsigned int nVertices, float *pVertices);
+	int SetVertices(unsigned int nVertices, float* pVertices);
+	int SetVertexNormals(unsigned int nVerticesNormals, float* pVerticesNormals);
 	int SetFaces (unsigned int nFaces, unsigned int nVerticesPerFace,
 		      unsigned int *pFaces, unsigned int *pTextureCoordinates=NULL);
 	//int SetTextureCoordinates (unsigned int nTextureCoordinates, float *pTextureCoordinates);

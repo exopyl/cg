@@ -405,6 +405,25 @@ int Mesh::SetVertices (unsigned int nVertices, float *pVertices)
 	return 0;
 }
 
+int Mesh::SetVertexNormals(unsigned int nVertexNormals, float* pVertexNormals)
+{
+	if (nVertexNormals != m_nVertices)
+	{
+		return -1;
+	}
+
+	if (!m_pVertexNormals || (m_pVertexNormals && nVertexNormals != m_nVertices))
+	{
+		delete m_pVertexNormals;
+		m_pVertexNormals = new float[3 * nVertexNormals];
+	}
+
+	memcpy(m_pVertexNormals, pVertexNormals, 3 * nVertexNormals * sizeof(float));
+
+	return 0;
+
+}
+
 int Mesh::SetFaces (unsigned int nFaces, unsigned int nVerticesPerFace, unsigned int *pFaces, unsigned int *pTextureCoordinates)
 {
 	if (m_pFaces) delete m_pFaces;

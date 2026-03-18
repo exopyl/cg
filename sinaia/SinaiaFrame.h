@@ -102,6 +102,8 @@ class MyFrame : public wxFrame
 	ID_TREATMENT_MERGE_VERTICES,
 	ID_TREATMENT_SMOOTHING_TAUBIN,
 	ID_TREATMENT_SMOOTHING_LAPLACIAN,
+	ID_TREATMENT_CURVATURES_DESBRUN,
+	ID_TREATMENT_CURVATURES_HAMANN,
 
 	ID_ShowProperties,
 	ID_ShowMeshes,
@@ -191,6 +193,8 @@ private:
 	void OnTreatmentMergeVertices(wxCommandEvent& evt);
 	void OnTreatmentSmoothingTaubin(wxCommandEvent& evt);
 	void OnTreatmentSmoothingLaplacian(wxCommandEvent& evt);
+	void OnTreatmentCurvaturesDesbrun(wxCommandEvent& evt);
+	void OnTreatmentCurvaturesHamann(wxCommandEvent& evt);
 
     void OnGradient(wxCommandEvent& evt);
     void OnManagerFlag(wxCommandEvent& evt);

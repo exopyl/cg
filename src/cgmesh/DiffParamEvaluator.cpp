@@ -401,27 +401,29 @@ void MeshAlgoTensorEvaluator::EvaluateColors (CurvatureId type)
 	//array[i] = (array[i] > 1.0)? 1.0 : array[i];
 	
 	// get the extremal values
-	float min_value, max_value;
+	float min_value = 0.0f, max_value = 0.0f;
+	bool found = false;
 	for (i=0; i<nv; i++)
 	{
 		if (defined[i])
 		{
-			min_value = array[i];
-			max_value = array[i];
-			break;
+			if (!found)
+			{
+				min_value = array[i];
+				max_value = array[i];
+				found = true;
+			}
+			else
+			{
+				if (min_value > array[i]) min_value = array[i];
+				if (max_value < array[i]) max_value = array[i];
+			}
 		}
-	}
-	for (i=0; i<nv; i++)
-	{
-		if (!defined[i]) continue;
-		//printf ("array[%d] = %f\n", i, array[i]);
-		min_value = (min_value > array[i])? array[i] : min_value;
-		max_value = (max_value < array[i])? array[i] : max_value;
 	}
 	printf ("   %f -> %f\n", min_value, max_value);
 	//min_value = 0.0;
 	//max_value = 1000.0;
-	
+
 	m_pModel->InitVertexColors();
 	for (i=0; i<nv; i++)
 	{
@@ -452,22 +454,24 @@ static float* get_colors_from_array (unsigned int n, float *array, int *defined)
 		array[i] = fabs (array[i]);
 	
 	/* get the maximal value */
-	float min_value, max_value;
+	float min_value = 0.0f, max_value = 0.0f;
+	bool found = false;
 	for (i=0; i<n; i++)
 	{
 		if (defined[i])
 		{
-			min_value = array[i];
-			max_value = array[i];
-			break;
+			if (!found)
+			{
+				min_value = array[i];
+				max_value = array[i];
+				found = true;
+			}
+			else
+			{
+				if (min_value > array[i]) min_value = array[i];
+				if (max_value < array[i]) max_value = array[i];
+			}
 		}
-	}
-	for (i=0; i<n; i++)
-	{
-		if (!defined[i]) continue;
-		//printf ("array[%d] = %f\n", i, array[i]);
-		min_value = (min_value > array[i])? array[i] : min_value;
-		max_value = (max_value < array[i])? array[i] : max_value;
 	}
 	printf ("   %f -> %f\n", min_value, max_value);
 	

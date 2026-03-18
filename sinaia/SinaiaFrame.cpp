@@ -25,6 +25,7 @@
 
 #include "../src/cgmesh/smoothing_taubin.h"
 #include "../src/cgmesh/smoothing_laplacian.h"
+#include "../src/cgmesh/DiffParamEvaluator.h"
 
 // control ids
 enum
@@ -123,6 +124,8 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_TREATMENT_MERGE_VERTICES, MyFrame::OnTreatmentMergeVertices)
     EVT_MENU(ID_TREATMENT_SMOOTHING_TAUBIN, MyFrame::OnTreatmentSmoothingTaubin)
     EVT_MENU(ID_TREATMENT_SMOOTHING_LAPLACIAN, MyFrame::OnTreatmentSmoothingLaplacian)
+    EVT_MENU(ID_TREATMENT_CURVATURES_DESBRUN, MyFrame::OnTreatmentCurvaturesDesbrun)
+    EVT_MENU(ID_TREATMENT_CURVATURES_HAMANN, MyFrame::OnTreatmentCurvaturesHamann)
     EVT_MENU(ID_ShowProperties, MyFrame::OnShowWindow)
     EVT_MENU(ID_ShowMeshes, MyFrame::OnShowWindow)
     EVT_MENU(ID_ShowLogging, MyFrame::OnShowWindow)
@@ -263,6 +266,11 @@ MyFrame::MyFrame(wxWindow* parent,
     smoothing_menu->Append(ID_TREATMENT_SMOOTHING_TAUBIN, _("Taubin"));
     smoothing_menu->Append(ID_TREATMENT_SMOOTHING_LAPLACIAN, _("Laplacian"));
     treatments_menu->AppendSubMenu(smoothing_menu, _("Smoothing"));
+
+    wxMenu* curvatures_menu = new wxMenu;
+    curvatures_menu->Append(ID_TREATMENT_CURVATURES_DESBRUN, _("Desbrun"));
+    curvatures_menu->Append(ID_TREATMENT_CURVATURES_HAMANN, _("Hamann"));
+    treatments_menu->AppendSubMenu(curvatures_menu, _("Curvatures"));
 
     mb->Append(file_menu, _("File"));
     mb->Append(geometry_menu, _("Geometry"));
@@ -1819,4 +1827,60 @@ void MyFrame::OnTreatmentSmoothingLaplacian(wxCommandEvent& WXUNUSED(event))
 
 	pGLCanvas->Refresh();
 	*m_pWndLogging << _T("Smoothing Laplacian applied\n");
+}
+
+void MyFrame::OnTreatmentCurvaturesDesbrun(wxCommandEvent& WXUNUSED(event))
+{
+	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+	if (!pGLCanvas)
+		return;
+
+	Object3D *pObject = pGLCanvas->GetObject3D();
+	if (!pObject)
+		return;
+
+	for (auto& pMesh : pObject->GetMeshes())
+	{
+		Mesh_half_edge meshHE(pMesh);
+
+		MeshAlgoTensorEvaluator algo;
+		algo.Init(&meshHE);
+		algo.Evaluate(TENSOR_DESBRUN);
+		algo.EvaluateColors(CURVATURE_MEAN);
+
+		// Copy colors back to original mesh
+		pMesh->InitVertexColors();
+		memcpy(pMesh->m_pVertexColors, meshHE.m_pVertexColors, 3 * pMesh->m_nVertices * sizeof(float));
+	}
+
+	pGLCanvas->Refresh();
+	*m_pWndLogging << _T("Curvatures Desbrun (mean) applied\n");
+}
+
+void MyFrame::OnTreatmentCurvaturesHamann(wxCommandEvent& WXUNUSED(event))
+{
+	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+	if (!pGLCanvas)
+		return;
+
+	Object3D *pObject = pGLCanvas->GetObject3D();
+	if (!pObject)
+		return;
+
+	for (auto& pMesh : pObject->GetMeshes())
+	{
+		Mesh_half_edge meshHE(pMesh);
+
+		MeshAlgoTensorEvaluator algo;
+		algo.Init(&meshHE);
+		algo.Evaluate(TENSOR_HAMANN);
+		algo.EvaluateColors(CURVATURE_MEAN);
+
+		// Copy colors back to original mesh
+		pMesh->InitVertexColors();
+		memcpy(pMesh->m_pVertexColors, meshHE.m_pVertexColors, 3 * pMesh->m_nVertices * sizeof(float));
+	}
+
+	pGLCanvas->Refresh();
+	*m_pWndLogging << _T("Curvatures Hamann (mean) applied\n");
 }
