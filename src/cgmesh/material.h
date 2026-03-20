@@ -16,18 +16,18 @@ enum MaterialType {
 class Material
 {
 public:
-	Material () { m_pName = NULL; };
+	Material () = default;
 	Material (const Material &m) {}; // constructor of copy
 	//virtual ~Material ();
 
 	virtual MaterialType GetType (void) { return MATERIAL_NONE; };
 	virtual void Dump (void) {};
 	
-	void SetName (char const *name) { m_pName = strdup (name); };
-	char *GetName (void) { return m_pName; };
+	void SetName (const std::string & name) { m_name = name; };
+	std::string GetName (void) { return m_name; };
 
 protected:
-	char *m_pName;
+	std::string m_name;
 };
 
 //

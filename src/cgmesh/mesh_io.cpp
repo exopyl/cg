@@ -126,7 +126,7 @@ int Mesh::import_mtl (const char *filename, const char *path)
 		{
 			mat = new MaterialColorExt ();
 			mi = Material_Add(mat);
-			mat->m_pName = strdup(name);
+			mat->m_name = name;
 		}
 		else if (sscanf(line, " Kd %f %f %f", &r, &g, &b) == 3 && mat) mat->SetDiffuse (r, g, b, 1.);
 		else if (sscanf(line, " Ka %f %f %f", &r, &g, &b) == 3 && mat) mat->SetAmbient (r, g, b, 1.);
@@ -142,7 +142,6 @@ int Mesh::import_mtl (const char *filename, const char *path)
 		else if (sscanf(line, " map_Kd %s", name) == 1) { // diffuse texture
 			MaterialTexture *tex = new MaterialTexture (name, path);
 			tex->SetName (mat->GetName());
-			printf ("%d %d\n", tex->GetImage()->m_iWidth, tex->GetImage()->m_iHeight);
 			delete mat;
 			mat = NULL;
 			SetMaterial (mi, tex);

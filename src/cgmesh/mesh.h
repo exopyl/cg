@@ -270,10 +270,10 @@ public:
 				return m_pMaterials[id];
 			return NULL;
 		}
-	int GetMaterialId (char *material_name)
+	int GetMaterialId (const std::string & material_name)
 		{
 			for (unsigned int i=0; i<m_nMaterials; i++)
-				if (strcmp (m_pMaterials[i]->GetName(), material_name) == 0)
+				if (m_pMaterials[i]->GetName() == material_name)
 					return i;
 			return -1;
 		}
