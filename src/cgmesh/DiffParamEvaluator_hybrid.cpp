@@ -5,10 +5,10 @@
 //
 bool MeshAlgoTensorEvaluator::ApplyHybrid (void)
 {
-	int nv = m_pModel->m_nVertices;
-	float *v = m_pModel->m_pVertices;
-	float *vn = m_pModel->m_pVertexNormals;
-	Che_edge** m_edges_vertex = m_pModel->m_edges_vertex;
+	int nv = m_pModel->m_pMesh->m_nVertices;
+	float *v = m_pModel->m_pMesh->m_pVertices;
+	float *vn = m_pModel->m_pMesh->m_pVertexNormals;
+	Che_edge** m_edges_vertex = m_pModel->m_pCheMesh->m_edges_vertex;
 
 	int i;
 	Tensor **hybrid = (Tensor**)malloc(nv*sizeof(Tensor*));

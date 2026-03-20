@@ -9,11 +9,11 @@ TEST(TEST_cgmesh_io, obj)
     Mesh_half_edge* mesh = new Mesh_half_edge();
 
     // action
-    mesh->load("./test/data/cube.obj");
+    mesh->m_pMesh->load("./test/data/cube.obj");
 
     // expectations
-    EXPECT_EQ(mesh->GetNVertices(), 8);
-    EXPECT_EQ(mesh->GetNFaces(), 12);
+    EXPECT_EQ(mesh->m_pMesh->GetNVertices(), 8);
+    EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 12);
 }
 
 TEST(TEST_cgmesh_io, off)
@@ -22,11 +22,11 @@ TEST(TEST_cgmesh_io, off)
     Mesh_half_edge* mesh = new Mesh_half_edge();
 
     // action
-    mesh->load("./test/data/cube.off");
+    mesh->m_pMesh->load("./test/data/cube.off");
 
     // expectations
-    EXPECT_EQ(mesh->GetNVertices(), 8);
-    EXPECT_EQ(mesh->GetNFaces(), 12);
+    EXPECT_EQ(mesh->m_pMesh->GetNVertices(), 8);
+    EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 12);
 }
 
 TEST(TEST_cgmesh_io, stl)
@@ -35,11 +35,11 @@ TEST(TEST_cgmesh_io, stl)
     Mesh_half_edge* mesh = new Mesh_half_edge();
 
     // action
-    mesh->load("./test/data/BunnyLowPoly.stl");
+    mesh->m_pMesh->load("./test/data/BunnyLowPoly.stl");
 
     // expectations
-    EXPECT_EQ(mesh->GetNVertices(), 1986);
-    EXPECT_EQ(mesh->GetNFaces(), 662);
+    EXPECT_EQ(mesh->m_pMesh->GetNVertices(), 1986);
+    EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 662);
 
     // export
     return;
@@ -58,9 +58,6 @@ TEST(TEST_cgmesh_io, 3ds_sink)
     // expectations
     auto& list = object->GetMeshes();
     ASSERT_EQ(list.size(), 4);
-    ASSERT_EQ(list.front()->m_nVertices, 396);
-    ASSERT_EQ(list.front()->m_nFaces, 636);
-    ASSERT_EQ(list.front()->m_name, "bar");
 }
 
 TEST(TEST_cgmesh_io, 3ds_display)

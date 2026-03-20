@@ -24,10 +24,10 @@ Cdifferential_parameters_distribution::compute_distribution (shape_function_type
   int i;
   assert (_n_bins > 0);
 
-  int nv = model->m_nVertices;
-  int nf = model->m_nFaces;
-  float *v = model->m_pVertices;
-  float *fn = model->m_pFaceNormals;
+  int nv = model->m_pMesh->m_nVertices;
+  int nf = model->m_pMesh->m_nFaces;
+  float *v = model->m_pMesh->m_pVertices;
+  float *fn = model->m_pMesh->m_pFaceNormals;
 
   // get the tensor
   MeshAlgoTensorEvaluator *pTensorEvaluator = new MeshAlgoTensorEvaluator();
@@ -52,7 +52,7 @@ Cdifferential_parameters_distribution::compute_distribution (shape_function_type
   case BESL:
 	  for (i=0; i<3*nf; i++)
 	  {
-		  Che_edge *he = model->m_edges[i];
+		  Che_edge *he = model->m_pCheMesh->m_edges[i];
 		  if (he && he->m_pair)
 		  {
 			  int a,b;

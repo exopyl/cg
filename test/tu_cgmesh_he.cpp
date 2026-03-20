@@ -7,7 +7,7 @@ static Mesh_half_edge* load_mesh()
 	std::string filename("./test/data/rabbit.obj");
 
 	Mesh_half_edge* he = new Mesh_half_edge();
-	he->load(filename.c_str());
+	he->m_pMesh->load(filename.c_str());
 	he->create_half_edge();
 
 	return he;
@@ -31,12 +31,12 @@ TEST(TEST_cgmesh_he, constructor)
 	ticker->start ();
 	Mesh_half_edge *hemodel = new Mesh_half_edge (filename.c_str());
 	dElapsedTime = ticker->stop ();
-	cout << hemodel->m_nVertices << " vertices" << endl;
-	cout << hemodel->m_nFaces << " faces" << endl;
+	cout << hemodel->m_pMesh->m_nVertices << " vertices" << endl;
+	cout << hemodel->m_pMesh->m_nFaces << " faces" << endl;
 	cout << dElapsedTime << "ms" << endl;
 
-	EXPECT_EQ(hemodel->m_nVertices, 453);
-	EXPECT_EQ(hemodel->m_nFaces, 902);
+	EXPECT_EQ(hemodel->m_pMesh->m_nVertices, 453);
+	EXPECT_EQ(hemodel->m_pMesh->m_nFaces, 902);
 
 	delete hemodel;
 }
@@ -49,13 +49,13 @@ TEST(TEST_cgmesh_he, smoothing)
 	MeshAlgoSmoothingLaplacian *pSmoothingLaplacian = new MeshAlgoSmoothingLaplacian ();
 	
 	pSmoothingLaplacian->Apply (he);
-	he->save ("export_smoothing_laplacian_x1.obj");
+	he->m_pMesh->save ("export_smoothing_laplacian_x1.obj");
 	
 	pSmoothingLaplacian->Apply (he);
-	he->save ("export_smoothing_laplacian_x2.obj");
+	he->m_pMesh->save ("export_smoothing_laplacian_x2.obj");
 	
 	pSmoothingLaplacian->Apply (he);
-	he->save ("export_smoothing_laplacian_x3.obj");
+	he->m_pMesh->save ("export_smoothing_laplacian_x3.obj");
 	
 	delete pSmoothingLaplacian;
 
@@ -63,13 +63,13 @@ TEST(TEST_cgmesh_he, smoothing)
 	MeshAlgoSmoothingTaubin *pSmoothingTaubin = new MeshAlgoSmoothingTaubin ();
 	
 	pSmoothingTaubin->Apply (he);
-	he->save ("export_smoothing_taubin_x1.obj");
+	he->m_pMesh->save ("export_smoothing_taubin_x1.obj");
 	
 	pSmoothingTaubin->Apply (he);
-	he->save ("export_smoothing_taubin_x2.obj");
+	he->m_pMesh->save ("export_smoothing_taubin_x2.obj");
 	
 	pSmoothingTaubin->Apply (he);
-	he->save ("export_smoothing_taubin_x3.obj");
+	he->m_pMesh->save ("export_smoothing_taubin_x3.obj");
 	
 	delete pSmoothingTaubin;
 }
@@ -82,7 +82,7 @@ TEST(TEST_cgmesh_he, subdivision)
 	MeshAlgoSubdivisionLoop *pSsubdivisionLoop = new MeshAlgoSubdivisionLoop ();
 	
 	pSsubdivisionLoop->Apply (he);
-	he->save ("export_subdivision_loop_x1.obj");
+	he->m_pMesh->save ("export_subdivision_loop_x1.obj");
 	
 	//pSsubdivisionLoop->Apply (model);
 	//model->save ("export_subdivision_loop_x2.obj");
@@ -95,7 +95,7 @@ TEST(TEST_cgmesh_he, subdivision)
 	MeshAlgoSubdivisionKarbacher *pSsubdivisionKarbacher = new MeshAlgoSubdivisionKarbacher ();
 #if 0 // TORESTORE
 	pSsubdivisionKarbacher->Apply (he);
-	he->save ("export_subdivision_karbacher_x1.obj");
+	he->m_pMesh->save ("export_subdivision_karbacher_x1.obj");
 #endif
 	delete pSsubdivisionKarbacher;
 }
@@ -269,8 +269,8 @@ static void evaluate_shape_descriptors (Mesh_half_edge *model)
 	
 #ifdef HISTOGRAM_OSADA
 	Cshape_distribution_osada *osada;
-	osada = new Cshape_distribution_osada (model->m_nVertices, model->m_pVertices,
-					       model->m_nFaces, model->GetTriangles ());
+	osada = new Cshape_distribution_osada (model->m_pMesh->m_nVertices, model->m_pMesh->m_pVertices,
+					       model->m_pMesh->m_nFaces, model->m_pMesh->GetTriangles ());
 #endif /* HISTOGRAM_OSADA */
 	
 #ifdef VERTICES_DISTRIBUTION_PCA_PAQUET
@@ -292,7 +292,7 @@ static void evaluate_shape_descriptors (Mesh_half_edge *model)
 #endif /* CURVATURE_HISTOGRAM */
 	
 	
-	printf ("%d %d\n", model->m_nVertices, model->m_nFaces);
+	printf ("%d %d\n", model->m_pMesh->m_nVertices, model->m_pMesh->m_nFaces);
 	int n_data = 2000000; // nombre maximal de relevés sur le modèle 3D
 	int istart = 200000;    // nombre de relevés de départ
 	int istep  = 100000;    // pas pour le nombre de relevés
@@ -399,10 +399,10 @@ static void evaluate_shape_descriptors (Mesh_half_edge *model)
 //
 static void evaluate_shape_distribution_osada (Mesh_half_edge *model, int nPoints, int nBins)
 {
-	Cshape_distribution_osada *osada = new Cshape_distribution_osada (model->m_nVertices,
-									  model->m_pVertices,
-									  model->m_nFaces,
-									  model->GetTriangles ());
+	Cshape_distribution_osada *osada = new Cshape_distribution_osada (model->m_pMesh->m_nVertices,
+									  model->m_pMesh->m_pVertices,
+									  model->m_pMesh->m_nFaces,
+									  model->m_pMesh->GetTriangles ());
 	
 	// A3
 	osada->evaluate_distribution (Cshape_distribution_osada::A3, nPoints, nBins);

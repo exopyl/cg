@@ -42,8 +42,8 @@ Cset_lines::extract_ridges_and_valleys (float kappa_epsilon)
   //hemodel->extract_straight_ridges_ravines_belyaev2000 (kappa_epsilon, kappa_threshold, &n_selected_vertices, &iselected_vertices, &directions);
 
   // get the vertices from the model
-  float *v = model->m_pVertices;
-  int   nv = model->m_nVertices;
+  float *v = model->m_pMesh->m_pVertices;
+  int   nv = model->m_pMesh->m_nVertices;
 
 #ifdef FUR
   float zmax, zmin;
@@ -91,7 +91,7 @@ printf ("length diagonal bbox : %f\n", model->get_length_bounding_box_diagonal()
       this->add_line (pluecker1, pluecker2,
 							v_walk, v_walk, n_vertices_in_the_line,
 							ivertices_in_the_line, vertices_in_the_line,
-							model->GetTensor (index)->GetKappaMax() + model->GetTensor (index)->GetKappaMax());
+							model->m_pMesh->GetTensor (index)->GetKappaMax() + model->m_pMesh->GetTensor (index)->GetKappaMax());
     }
   free (iselected_vertices);
 }

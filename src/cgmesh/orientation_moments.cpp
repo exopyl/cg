@@ -20,10 +20,10 @@ Cmesh_orientation_moments::Cmesh_orientation_moments (Mesh_half_edge *mesh)
 void
 Cmesh_orientation_moments::compute_orientation (void)
 {
-  int   nf      = model3d_half_edge->m_nFaces;
-  float *v      = model3d_half_edge->m_pVertices;
-  Face **f      = model3d_half_edge->m_pFaces;
-  float *norm_f = model3d_half_edge->m_pFaceNormals;
+  int   nf      = model3d_half_edge->m_pMesh->m_nFaces;
+  float *v      = model3d_half_edge->m_pMesh->m_pVertices;
+  Face **f      = model3d_half_edge->m_pMesh->m_pFaces;
+  float *norm_f = model3d_half_edge->m_pMesh->m_pFaceNormals;
 
   int A;   /* alpha */
   int B;   /* beta */

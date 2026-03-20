@@ -1788,9 +1788,9 @@ void MyFrame::OnTreatmentSmoothingTaubin(wxCommandEvent& WXUNUSED(event))
 		// Copy smoothed vertices back
 		for (unsigned int i = 0; i < pMesh->m_nVertices; i++)
 		{
-			pMesh->m_pVertices[3 * i]     = meshHE.m_pVertices[3 * i];
-			pMesh->m_pVertices[3 * i + 1] = meshHE.m_pVertices[3 * i + 1];
-			pMesh->m_pVertices[3 * i + 2] = meshHE.m_pVertices[3 * i + 2];
+			pMesh->m_pVertices[3 * i]     = meshHE.m_pMesh->m_pVertices[3 * i];
+			pMesh->m_pVertices[3 * i + 1] = meshHE.m_pMesh->m_pVertices[3 * i + 1];
+			pMesh->m_pVertices[3 * i + 2] = meshHE.m_pMesh->m_pVertices[3 * i + 2];
 		}
 		pMesh->ComputeNormals();
 	}
@@ -1818,9 +1818,9 @@ void MyFrame::OnTreatmentSmoothingLaplacian(wxCommandEvent& WXUNUSED(event))
 		// Copy smoothed vertices back
 		for (unsigned int i = 0; i < pMesh->m_nVertices; i++)
 		{
-			pMesh->m_pVertices[3 * i]     = meshHE.m_pVertices[3 * i];
-			pMesh->m_pVertices[3 * i + 1] = meshHE.m_pVertices[3 * i + 1];
-			pMesh->m_pVertices[3 * i + 2] = meshHE.m_pVertices[3 * i + 2];
+			pMesh->m_pVertices[3 * i]     = meshHE.m_pMesh->m_pVertices[3 * i];
+			pMesh->m_pVertices[3 * i + 1] = meshHE.m_pMesh->m_pVertices[3 * i + 1];
+			pMesh->m_pVertices[3 * i + 2] = meshHE.m_pMesh->m_pVertices[3 * i + 2];
 		}
 		pMesh->ComputeNormals();
 	}
@@ -1850,7 +1850,7 @@ void MyFrame::OnTreatmentCurvaturesDesbrun(wxCommandEvent& WXUNUSED(event))
 
 		// Copy colors back to original mesh
 		pMesh->InitVertexColors();
-		memcpy(pMesh->m_pVertexColors, meshHE.m_pVertexColors, 3 * pMesh->m_nVertices * sizeof(float));
+		memcpy(pMesh->m_pVertexColors, meshHE.m_pMesh->m_pVertexColors, 3 * pMesh->m_nVertices * sizeof(float));
 	}
 
 	pGLCanvas->Refresh();
@@ -1878,7 +1878,7 @@ void MyFrame::OnTreatmentCurvaturesHamann(wxCommandEvent& WXUNUSED(event))
 
 		// Copy colors back to original mesh
 		pMesh->InitVertexColors();
-		memcpy(pMesh->m_pVertexColors, meshHE.m_pVertexColors, 3 * pMesh->m_nVertices * sizeof(float));
+		memcpy(pMesh->m_pVertexColors, meshHE.m_pMesh->m_pVertexColors, 3 * pMesh->m_nVertices * sizeof(float));
 	}
 
 	pGLCanvas->Refresh();

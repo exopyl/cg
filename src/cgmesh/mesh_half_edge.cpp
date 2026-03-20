@@ -20,15 +20,15 @@ static int is_visited (Che_edge *edge, Che_edge **array, int n)
 void
 Mesh_half_edge::check_topology (void)
 {
-	m_topology_ok = (char*)malloc(m_nVertices*sizeof(char));
-	for (int i=0; i<m_nVertices; i++)
+	m_topology_ok = (char*)malloc(m_pMesh->m_nVertices*sizeof(char));
+	for (unsigned int i=0; i<m_pMesh->m_nVertices; i++)
 	{
 		m_topology_ok[i] = 1;
-		
+
 		Che_edge **visited_edges = NULL;
 		int n_visited_edges = 0;
-		
-		Che_edge *e = m_edges_vertex[i];
+
+		Che_edge *e = m_pCheMesh->m_edges_vertex[i];
 		Che_edge *e_walk = e;
 		if (!e) // isolated vertex
 		{
@@ -61,21 +61,21 @@ void
 Mesh_half_edge::check_border (void)
 {
 	if (!m_topology_ok) check_topology ();
-	m_border = (char*)malloc(m_nVertices*sizeof(char));
-	for (int i=0; i<m_nVertices; i++)
+	m_border = (char*)malloc(m_pMesh->m_nVertices*sizeof(char));
+	for (unsigned int i=0; i<m_pMesh->m_nVertices; i++)
 	{
 		if (!m_topology_ok[i])
 			m_border[i] = 1;
 		else
 		{
-			Che_edge *loc_e_walk = m_edges_vertex[i];
+			Che_edge *loc_e_walk = m_pCheMesh->m_edges_vertex[i];
 			if (!loc_e_walk)
 				m_border[i] = 1;
 			else
 			{
 				do {
 					loc_e_walk = loc_e_walk->m_he_next->m_he_next->m_pair;
-				} while (loc_e_walk && loc_e_walk != m_edges_vertex[i]);
+				} while (loc_e_walk && loc_e_walk != m_pCheMesh->m_edges_vertex[i]);
 				if (!loc_e_walk)
 					m_border[i] = 1;
 				else
@@ -90,31 +90,41 @@ Mesh_half_edge::check_border (void)
 */
 Mesh_half_edge::Mesh_half_edge (int par_nv, float *par_v, int par_nf, unsigned int *par_f)
 {
-	SetVertices (par_nv, par_v);
-	SetFaces (par_nf, 3, par_f);
+	m_pMesh = new Mesh();
+	m_pCheMesh = new Che_mesh();
+
+	m_pMesh->SetVertices (par_nv, par_v);
+	m_pMesh->SetFaces (par_nf, 3, par_f);
 
 	m_topology_ok = NULL;
 	m_border = NULL;
 
-	Che_mesh::create_half_edge (m_nVertices, m_nFaces, GetTriangles());
+	m_pCheMesh->create_half_edge (m_pMesh->m_nVertices, m_pMesh->m_nFaces, m_pMesh->GetTriangles());
 	check_border ();
 }
 
 Mesh_half_edge::Mesh_half_edge (Mesh *pMesh)
 {
-	Init();
+	m_pMesh = new Mesh();
+	m_pCheMesh = new Che_mesh();
+
+	m_pMesh->Init();
 
 	if (!pMesh)
+	{
+		m_topology_ok = NULL;
+		m_border = NULL;
 		return;
+	}
 
-	SetVertices (pMesh->m_nVertices, pMesh->m_pVertices);
-	SetVertexNormals(pMesh->m_nVertices, pMesh->m_pVertexNormals);
-	SetFaces (pMesh->m_nFaces, 3, pMesh->GetTriangles());
+	m_pMesh->SetVertices (pMesh->m_nVertices, pMesh->m_pVertices);
+	m_pMesh->SetVertexNormals(pMesh->m_nVertices, pMesh->m_pVertexNormals);
+	m_pMesh->SetFaces (pMesh->m_nFaces, 3, pMesh->GetTriangles());
 
 	m_topology_ok = NULL;
 	m_border = NULL;
 
-	Che_mesh::create_half_edge (m_nVertices, m_nFaces, GetTriangles());
+	m_pCheMesh->create_half_edge (m_pMesh->m_nVertices, m_pMesh->m_nFaces, m_pMesh->GetTriangles());
 	check_topology ();
 	check_border ();
 }
@@ -123,23 +133,28 @@ Mesh_half_edge::Mesh_half_edge (Mesh *pMesh)
 * Constructor.
 */
 Mesh_half_edge::Mesh_half_edge ()
-: Mesh ()
 {
+	m_pMesh = new Mesh();
+	m_pCheMesh = new Che_mesh();
+
 	m_topology_ok = NULL;
 	m_border = NULL;
 
-	Che_mesh::create_half_edge (m_nVertices, m_nFaces, GetTriangles());
+	m_pCheMesh->create_half_edge (m_pMesh->m_nVertices, m_pMesh->m_nFaces, m_pMesh->GetTriangles());
 	check_border ();
 }
 
 Mesh_half_edge::Mesh_half_edge (const char *par_filename)
 {
-	load (par_filename);
+	m_pMesh = new Mesh();
+	m_pCheMesh = new Che_mesh();
+
+	m_pMesh->load (par_filename);
 
 	m_topology_ok = NULL;
 	m_border = NULL;
 
-	Che_mesh::create_half_edge (m_nVertices, m_nFaces, GetTriangles());
+	m_pCheMesh->create_half_edge (m_pMesh->m_nVertices, m_pMesh->m_nFaces, m_pMesh->GetTriangles());
 	check_topology ();
 	check_border ();
 }
@@ -149,7 +164,7 @@ void Mesh_half_edge::create_half_edge (void)
 	m_topology_ok = NULL;
 	m_border = NULL;
 
-	Che_mesh::create_half_edge (m_nVertices, m_nFaces, GetTriangles());
+	m_pCheMesh->create_half_edge (m_pMesh->m_nVertices, m_pMesh->m_nFaces, m_pMesh->GetTriangles());
 	check_topology ();
 	check_border ();
 }
@@ -164,18 +179,18 @@ void Mesh_half_edge::export_statistics (const std::string & filename)
 	fprintf (ptr, "<html>\n");
 	fprintf (ptr, "<head><title></title></head>\n");
 	fprintf (ptr, "<body>\n");
-	fprintf (ptr, "<p>number of vertices : %d\n", m_nVertices);
-	fprintf (ptr, "<p>number of faces : %d\n", m_nFaces);
+	fprintf (ptr, "<p>number of vertices : %d\n", m_pMesh->m_nVertices);
+	fprintf (ptr, "<p>number of faces : %d\n", m_pMesh->m_nFaces);
 
 
-	computebbox ();
+	m_pMesh->computebbox ();
 	float min[3], max[3];
-	m_bbox.GetMinMax(min, max);
+	m_pMesh->m_bbox.GetMinMax(min, max);
 	fprintf (ptr, "<p>bbox :\n");
 	fprintf (ptr, "<br> x : %f -> %f\n", min[0], max[0]);
 	fprintf (ptr, "<br> y : %f -> %f\n", min[1], max[1]);
 	fprintf (ptr, "<br> z : %f -> %f\n", min[2], max[2]);
-	fprintf (ptr, "<br>diagonal length : %f\n", bbox_diagonal_length ());
+	fprintf (ptr, "<br>diagonal length : %f\n", m_pMesh->bbox_diagonal_length ());
 
 	fprintf (ptr, "<p>center : (%.3f , %.3f , %.3f)\n", (max[0]+min[0])/2., (max[1]+min[1])/2., (max[2]+min[2])/2.);
 	fprintf (ptr, "<p>dimensions : %.3f x %.3f x %.3f\n", max[0]-min[0], max[1]-min[1], max[2]-min[2]);
@@ -183,7 +198,7 @@ void Mesh_half_edge::export_statistics (const std::string & filename)
 	//
 	int nverticesinfaces = 13;
 	int *verticesinfaces = (int*)malloc(nverticesinfaces*sizeof(int));
-	stats_vertices_in_faces (verticesinfaces, nverticesinfaces);
+	m_pMesh->stats_vertices_in_faces (verticesinfaces, nverticesinfaces);
 	printf ("vertices in faces : ");
 	for (int i=3; i<nverticesinfaces; i++)
 	{
@@ -195,10 +210,10 @@ void Mesh_half_edge::export_statistics (const std::string & filename)
 	fprintf (ptr, "<br>");
 
 	// materials
-	fprintf (ptr, "<p>Materials : %d", m_nMaterials);
-	for (int i=0; i<m_nMaterials; i++)
+	fprintf (ptr, "<p>Materials : %d", m_pMesh->m_nMaterials);
+	for (unsigned int i=0; i<m_pMesh->m_nMaterials; i++)
 	{
-		Material *pMaterial = (Material*)m_pMaterials[i];
+		Material *pMaterial = (Material*)m_pMesh->m_pMaterials[i];
 		fprintf (ptr, "<br>material %d : %s", i, pMaterial->GetName());
 	}
 
@@ -215,7 +230,7 @@ Che_edge *Mesh_half_edge::get_edge (unsigned int v1, unsigned int v2)
 	if (!is_manifold (v1))
 		return NULL;
 
-	Che_edge *he = m_edges_vertex[v1];
+	Che_edge *he = m_pCheMesh->m_edges_vertex[v1];
 	Che_edge *he_walk = he;
 	int bFound = 0;
 	do
@@ -227,10 +242,10 @@ Che_edge *Mesh_half_edge::get_edge (unsigned int v1, unsigned int v2)
 			bFound = 1;
 			break;
 		}
-		
+
 		he_walk = he_walk->m_he_next->m_he_next->m_pair;
 	} while (he_walk != he);
-	
+
 	return (bFound)? he_walk : NULL;
 }
 
@@ -239,11 +254,13 @@ Che_edge *Mesh_half_edge::get_edge (unsigned int v1, unsigned int v2)
 */
 Mesh_half_edge::~Mesh_half_edge ()
 {
+	delete m_pMesh;
+	delete m_pCheMesh;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 //
-// methods inherited from Che_mesh
+// half-edge operations
 //
 void Mesh_half_edge::edge_flip (Che_edge *par_edge)
 {
@@ -261,16 +278,16 @@ void Mesh_half_edge::edge_flip (Che_edge *par_edge)
 	unsigned int f2_v2 = par_edge->m_pair->m_v_end;
 	unsigned int f2_v3 = par_edge->m_pair->m_he_next->m_v_end;
 
-	m_pFaces[f1]->SetVertex (0, f2_v3);
-	m_pFaces[f1]->SetVertex (1, f1_v3);
-	m_pFaces[f1]->SetVertex (2, f1_v1);
+	m_pMesh->m_pFaces[f1]->SetVertex (0, f2_v3);
+	m_pMesh->m_pFaces[f1]->SetVertex (1, f1_v3);
+	m_pMesh->m_pFaces[f1]->SetVertex (2, f1_v1);
 
-	m_pFaces[f2]->SetVertex (0, f1_v3);
-	m_pFaces[f2]->SetVertex (1, f2_v3);
-	m_pFaces[f2]->SetVertex (2, f1_v2);
+	m_pMesh->m_pFaces[f2]->SetVertex (0, f1_v3);
+	m_pMesh->m_pFaces[f2]->SetVertex (1, f2_v3);
+	m_pMesh->m_pFaces[f2]->SetVertex (2, f1_v2);
 
 	// update the half edge mesh
-	Che_mesh::edge_flip (par_edge);
+	m_pCheMesh->edge_flip (par_edge);
 }
 
 void Mesh_half_edge::edge_split (Che_edge *par_edge)
@@ -286,20 +303,20 @@ void Mesh_half_edge::edge_contract (Che_edge *edge)
 	int iv1 = edge->m_v_begin;
 	int iv2 = edge->m_v_end;
 
-	m_pVertices[3*iv1]   = (m_pVertices[3*iv1] + m_pVertices[3*iv2])*0.5;
-	m_pVertices[3*iv1+1] = (m_pVertices[3*iv1+1] + m_pVertices[3*iv2+1])*0.5;
-	m_pVertices[3*iv1+2] = (m_pVertices[3*iv1+2] + m_pVertices[3*iv2+2])*0.5;
+	m_pMesh->m_pVertices[3*iv1]   = (m_pMesh->m_pVertices[3*iv1] + m_pMesh->m_pVertices[3*iv2])*0.5;
+	m_pMesh->m_pVertices[3*iv1+1] = (m_pMesh->m_pVertices[3*iv1+1] + m_pMesh->m_pVertices[3*iv2+1])*0.5;
+	m_pMesh->m_pVertices[3*iv1+2] = (m_pMesh->m_pVertices[3*iv1+2] + m_pMesh->m_pVertices[3*iv2+2])*0.5;
 
 	// move all the vertices iv2 into iv1
-	Che_edge *he = m_edges_vertex[iv2];
+	Che_edge *he = m_pCheMesh->m_edges_vertex[iv2];
 	Che_edge *he_walk = he;
 	do
 	{
 		int f_walk = he_walk->m_face;
-		for (int j=0; j<m_pFaces[f_walk]->m_nVertices; j++)
+		for (int j=0; j<m_pMesh->m_pFaces[f_walk]->m_nVertices; j++)
 		{
-			if (m_pFaces[f_walk]->m_pVertices[j] == iv2)
-				m_pFaces[f_walk]->m_pVertices[j] = iv1;
+			if (m_pMesh->m_pFaces[f_walk]->m_pVertices[j] == iv2)
+				m_pMesh->m_pFaces[f_walk]->m_pVertices[j] = iv1;
 		}
 		he_walk = he_walk->m_he_next->m_he_next->m_pair;
 	} while (he_walk != he);
@@ -308,13 +325,13 @@ void Mesh_half_edge::edge_contract (Che_edge *edge)
 	int f1 = edge->m_face;
 	int f2 = edge->m_pair->m_face;
 
-	delete m_pFaces[f1];
-	m_pFaces[f1] = NULL;
-	delete m_pFaces[f2];
-	m_pFaces[f2] = NULL;
+	delete m_pMesh->m_pFaces[f1];
+	m_pMesh->m_pFaces[f1] = NULL;
+	delete m_pMesh->m_pFaces[f2];
+	m_pMesh->m_pFaces[f2] = NULL;
 
 	// update the half edge mesh
-	Che_mesh::edge_contract (edge);
+	m_pCheMesh->edge_contract (edge);
 }
 
 //
@@ -336,8 +353,8 @@ float Mesh_half_edge::edge_length (Che_edge *par_edge)
 	int iv1 = par_edge->m_v_begin;
 	int iv2 = par_edge->m_v_end;
 	vec3 loc_v1, loc_v2, loc_v1v2;
-	vec3_init (loc_v1, m_pVertices[3*iv1], m_pVertices[3*iv1+1], m_pVertices[3*iv1+2]);
-	vec3_init (loc_v2, m_pVertices[3*iv2], m_pVertices[3*iv2+1], m_pVertices[3*iv2+2]);
+	vec3_init (loc_v1, m_pMesh->m_pVertices[3*iv1], m_pMesh->m_pVertices[3*iv1+1], m_pMesh->m_pVertices[3*iv1+2]);
+	vec3_init (loc_v2, m_pMesh->m_pVertices[3*iv2], m_pMesh->m_pVertices[3*iv2+1], m_pMesh->m_pVertices[3*iv2+2]);
 	vec3_subtraction (loc_v1v2, loc_v2, loc_v1);
 	return vec3_length (loc_v1v2);
 }
@@ -351,15 +368,15 @@ float Mesh_half_edge::get_average_edges_length (void)
 {
 	int loc_i;
 	float loc_length = 0.0;
-	for (loc_i=0; loc_i<m_ne; loc_i++)
+	for (loc_i=0; loc_i<m_pCheMesh->m_ne; loc_i++)
 	{
-		Che_edge *loc_e_walk = m_edges[loc_i];
-		Vector3d loc_v1 (m_pVertices[3*loc_e_walk->m_v_begin], m_pVertices[3*loc_e_walk->m_v_begin+1], m_pVertices[3*loc_e_walk->m_v_begin+2]);
-		Vector3d loc_v2 (m_pVertices[3*loc_e_walk->m_v_end], m_pVertices[3*loc_e_walk->m_v_end+1], m_pVertices[3*loc_e_walk->m_v_end+2]);
+		Che_edge *loc_e_walk = m_pCheMesh->m_edges[loc_i];
+		Vector3d loc_v1 (m_pMesh->m_pVertices[3*loc_e_walk->m_v_begin], m_pMesh->m_pVertices[3*loc_e_walk->m_v_begin+1], m_pMesh->m_pVertices[3*loc_e_walk->m_v_begin+2]);
+		Vector3d loc_v2 (m_pMesh->m_pVertices[3*loc_e_walk->m_v_end], m_pMesh->m_pVertices[3*loc_e_walk->m_v_end+1], m_pMesh->m_pVertices[3*loc_e_walk->m_v_end+2]);
 		loc_v1 = loc_v2 - loc_v1;
 		loc_length += loc_v1.getLength ();
 	}
-	return loc_length / m_ne;
+	return loc_length / m_pCheMesh->m_ne;
 }
 
 /**
@@ -372,16 +389,16 @@ Mesh_half_edge::get_shortest_edge_length (void)
 {
 	int loc_i;
 	float loc_length = 0.0, loc_length_walk;
-	Vector3d loc_v1 (m_pVertices[3*m_edges[0]->m_v_begin], m_pVertices[3*m_edges[0]->m_v_begin+1], m_pVertices[3*m_edges[0]->m_v_begin+2]);
-	Vector3d loc_v2 (m_pVertices[3*m_edges[0]->m_v_end], m_pVertices[3*m_edges[0]->m_v_end+1], m_pVertices[3*m_edges[0]->m_v_end+2]);
+	Vector3d loc_v1 (m_pMesh->m_pVertices[3*m_pCheMesh->m_edges[0]->m_v_begin], m_pMesh->m_pVertices[3*m_pCheMesh->m_edges[0]->m_v_begin+1], m_pMesh->m_pVertices[3*m_pCheMesh->m_edges[0]->m_v_begin+2]);
+	Vector3d loc_v2 (m_pMesh->m_pVertices[3*m_pCheMesh->m_edges[0]->m_v_end], m_pMesh->m_pVertices[3*m_pCheMesh->m_edges[0]->m_v_end+1], m_pMesh->m_pVertices[3*m_pCheMesh->m_edges[0]->m_v_end+2]);
 	loc_v1 = loc_v2 - loc_v1;
 	loc_length += loc_v1.getLength ();
-	
-	for (loc_i=0; loc_i<m_ne; loc_i++)
+
+	for (loc_i=0; loc_i<m_pCheMesh->m_ne; loc_i++)
 	{
-		Che_edge *loc_e_walk = m_edges[loc_i];
-		loc_v1.Set (m_pVertices[3*loc_e_walk->m_v_begin], m_pVertices[3*loc_e_walk->m_v_begin+1], m_pVertices[3*loc_e_walk->m_v_begin+2]);
-		loc_v2.Set (m_pVertices[3*loc_e_walk->m_v_end], m_pVertices[3*loc_e_walk->m_v_end+1], m_pVertices[3*loc_e_walk->m_v_end+2]);
+		Che_edge *loc_e_walk = m_pCheMesh->m_edges[loc_i];
+		loc_v1.Set (m_pMesh->m_pVertices[3*loc_e_walk->m_v_begin], m_pMesh->m_pVertices[3*loc_e_walk->m_v_begin+1], m_pMesh->m_pVertices[3*loc_e_walk->m_v_begin+2]);
+		loc_v2.Set (m_pMesh->m_pVertices[3*loc_e_walk->m_v_end], m_pMesh->m_pVertices[3*loc_e_walk->m_v_end+1], m_pMesh->m_pVertices[3*loc_e_walk->m_v_end+2]);
 		loc_v1 = loc_v2 - loc_v1;
 		loc_length_walk = loc_v1.getLength ();
 		loc_length = (loc_length_walk < loc_length)? loc_length_walk : loc_length;
@@ -398,7 +415,7 @@ int Mesh_half_edge::get_n_neighbours (int par_ivertex)
 {
 	if (!m_topology_ok[par_ivertex] || m_border[par_ivertex]) return -1;
 	int loc_n_neighbours = 0;
-	Che_edge *loc_e = m_edges_vertex[par_ivertex];
+	Che_edge *loc_e = m_pCheMesh->m_edges_vertex[par_ivertex];
 	Che_edge *loc_e_walk = loc_e;
 	do
 	{
@@ -447,10 +464,10 @@ double Mesh_half_edge::cotangent_weight_formula(Che_edge *edge)
 
 	assert (edge && edge->m_pair);
 
-	GetVertex(edge->m_v_begin, v_begin);
-	GetVertex(edge->m_v_end, v_end);
-	GetVertex(edge->m_he_next->m_v_end, v1);
-	GetVertex(edge->m_pair->m_he_next->m_v_end, v2);
+	m_pMesh->GetVertex(edge->m_v_begin, v_begin);
+	m_pMesh->GetVertex(edge->m_v_end, v_end);
+	m_pMesh->GetVertex(edge->m_he_next->m_v_end, v1);
+	m_pMesh->GetVertex(edge->m_pair->m_he_next->m_v_end, v2);
 
 	vec3_subtraction (tmp1, v_end, v1);
 	vec3_subtraction (tmp2, v_begin, v1);
@@ -471,13 +488,13 @@ double Mesh_half_edge::cotangent_weight_formula(Che_edge *edge)
 */
 void Mesh_half_edge::dump (void)
 {
-	printf ("%d edges :\n", m_ne);
-	for (int i=0; i<m_ne; i++)
-		if (m_edges[i])
-			m_edges[i]->dump ();
+	printf ("%d edges :\n", m_pCheMesh->m_ne);
+	for (int i=0; i<m_pCheMesh->m_ne; i++)
+		if (m_pCheMesh->m_edges[i])
+			m_pCheMesh->m_edges[i]->dump ();
 
 	check_topology ();
-	for (int i=0; i<m_nVertices; i++)
+	for (unsigned int i=0; i<m_pMesh->m_nVertices; i++)
 		printf ("topology on vertex %d : %d\n", i, m_topology_ok[i]);
 
 }

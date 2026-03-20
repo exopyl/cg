@@ -66,10 +66,10 @@ Cmesh_orientation_pca::compute_pca (void)
   }
   if (model3d_half_edge)
   {
-	  nv = model3d_half_edge->m_nVertices;
-	  v = model3d_half_edge->m_pVertices;
+	  nv = model3d_half_edge->m_pMesh->m_nVertices;
+	  v = model3d_half_edge->m_pMesh->m_pVertices;
   }
-  
+
   // center
   center[0] = center[1] = center[2] = 0.0;
   for (i=0; i<nv; i++)
@@ -224,10 +224,10 @@ Cmesh_orientation_pca::compute_pca_weighted_vertices (void)
   }
   if (model3d_half_edge)
   {
-	  nv = model3d_half_edge->m_nVertices;
-	  v  = model3d_half_edge->m_pVertices;
-	  nf = model3d_half_edge->m_nFaces;
-	  f  = model3d_half_edge->m_pFaces;
+	  nv = model3d_half_edge->m_pMesh->m_nVertices;
+	  v  = model3d_half_edge->m_pMesh->m_pVertices;
+	  nf = model3d_half_edge->m_pMesh->m_nFaces;
+	  f  = model3d_half_edge->m_pMesh->m_pFaces;
   }
 
   // compute the areas of the triangles
@@ -257,7 +257,7 @@ Cmesh_orientation_pca::compute_pca_weighted_vertices (void)
 	  }
 
 	  w[i] = 0.0;
-	  Che_edge *e = model3d_half_edge->m_edges_vertex[i];
+	  Che_edge *e = model3d_half_edge->m_pCheMesh->m_edges_vertex[i];
 	  if (!e) continue;
 	  Che_edge *e_walk = e;
 	  do
@@ -343,12 +343,12 @@ Cmesh_orientation_pca::compute_pca_barycenter (void)
   }
   if (model3d_half_edge)
   {
-	  nv = model3d_half_edge->m_nVertices;
-	  v  = model3d_half_edge->m_pVertices;
-	  nf = model3d_half_edge->m_nFaces;
-	  f  = model3d_half_edge->m_pFaces;
+	  nv = model3d_half_edge->m_pMesh->m_nVertices;
+	  v  = model3d_half_edge->m_pMesh->m_pVertices;
+	  nf = model3d_half_edge->m_pMesh->m_nFaces;
+	  f  = model3d_half_edge->m_pMesh->m_pFaces;
   }
-  
+
   // compute the weights for the triangles
   float *w = new float[nf];
   float atot = 0.0;
@@ -455,10 +455,10 @@ Cmesh_orientation_pca::compute_pca_continuous (void)
   }
   if (model3d_half_edge)
   {
-	  nv = model3d_half_edge->m_nVertices;
-	  v  = model3d_half_edge->m_pVertices;
-	  nf = model3d_half_edge->m_nFaces;
-	  f  = model3d_half_edge->m_pFaces;
+	  nv = model3d_half_edge->m_pMesh->m_nVertices;
+	  v  = model3d_half_edge->m_pMesh->m_pVertices;
+	  nf = model3d_half_edge->m_pMesh->m_nFaces;
+	  f  = model3d_half_edge->m_pMesh->m_pFaces;
   }
   int i;
   

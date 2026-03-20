@@ -9,7 +9,7 @@ TEST(TEST_cgmesh_tensor, bunny)
 	if (model == NULL)
 		return;
 
-	model->ComputeNormals();
+	model->m_pMesh->ComputeNormals();
 
 
 	//

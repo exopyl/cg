@@ -30,8 +30,8 @@ Cmesh_orientation::apply_orientation (void)
   }
   if (model3d_half_edge)
   {
-	  model3d_half_edge->translate (-center[0], -center[1], -center[2]);
-	  model3d_half_edge->transform (mrot);
+	  model3d_half_edge->m_pMesh->translate (-center[0], -center[1], -center[2]);
+	  model3d_half_edge->m_pMesh->transform (mrot);
   }
 }
 
@@ -48,8 +48,8 @@ Cmesh_orientation::normalize (void)
   }
   if (model3d_half_edge)
   {
-	  nv = model3d_half_edge->m_nVertices;
-	  v = model3d_half_edge->m_pVertices;
+	  nv = model3d_half_edge->m_pMesh->m_nVertices;
+	  v = model3d_half_edge->m_pMesh->m_pVertices;
   }
   if (nv < 1 || !v)
 	  return;

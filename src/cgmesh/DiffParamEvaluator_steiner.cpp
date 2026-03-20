@@ -158,12 +158,12 @@ static int is_already_visited (int index, int *array, int n)
 
 void MeshAlgoTensorEvaluator::ApplySteinerAux (int index, float radius, int *_n_edges, Che_edge ***_edges)
 {
-	int nv = m_pModel->m_nVertices;
-	int nf = m_pModel->m_nFaces;
-	float *v = m_pModel->m_pVertices;
-	Face **f = m_pModel->m_pFaces;
-	float *vn = m_pModel->m_pVertexNormals;
-	Che_edge** m_edges_vertex = m_pModel->m_edges_vertex;
+	int nv = m_pModel->m_pMesh->m_nVertices;
+	int nf = m_pModel->m_pMesh->m_nFaces;
+	float *v = m_pModel->m_pMesh->m_pVertices;
+	Face **f = m_pModel->m_pMesh->m_pFaces;
+	float *vn = m_pModel->m_pMesh->m_pVertexNormals;
+	Che_edge** m_edges_vertex = m_pModel->m_pCheMesh->m_edges_vertex;
 
 	int j;
 	if (radius == 0.0)
@@ -213,12 +213,12 @@ void MeshAlgoTensorEvaluator::ApplySteinerAux (int index, float radius, int *_n_
 bool MeshAlgoTensorEvaluator::ApplySteiner (void)
 {
 #if 0
-	int nv = m_pModel->nv;
-	float *v = m_pModel->v;
-	int *f = m_pModel->f;
-	float *vn = m_pModel->vn;
-	float *fn = m_pModel->fn;
-	Che_edge** m_edges_vertex = m_pModel->m_edges_vertex;
+	int nv = m_pModel->m_pMesh->nv;
+	float *v = m_pModel->m_pMesh->v;
+	int *f = m_pModel->m_pMesh->f;
+	float *vn = m_pModel->m_pMesh->vn;
+	float *fn = m_pModel->m_pMesh->fn;
+	Che_edge** m_edges_vertex = m_pModel->m_pCheMesh->m_edges_vertex;
 
 	int i,j,k;
 	CDiffParam *pDiffParamWalk;

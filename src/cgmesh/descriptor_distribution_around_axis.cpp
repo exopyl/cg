@@ -17,10 +17,10 @@ Cdistribution_around_axis::Cdistribution_around_axis (Mesh_half_edge *_model)
   histogram2k2 = NULL;
   histogram3k  = NULL;
 
-  nv = model->m_nVertices;
-  nf = model->m_nFaces;
-  v  = model->m_pVertices;
-  f  = model->m_pFaces;
+  nv = model->m_pMesh->m_nVertices;
+  nf = model->m_pMesh->m_nFaces;
+  v  = model->m_pMesh->m_pVertices;
+  f  = model->m_pMesh->m_pFaces;
 
   compute_cumulative_areas ();
 
@@ -32,8 +32,8 @@ void
 Cdistribution_around_axis::compute_length_dmean_variance_deviation (vec3 axis,
 								    float *_length, float *_dmean, float *_variance, float *_deviation)
 {
-  int i, nv = model->m_nVertices;
-  float  *v = model->m_pVertices;
+  int i, nv = model->m_pMesh->m_nVertices;
+  float  *v = model->m_pMesh->m_pVertices;
   float length, dmean, variance, deviation;
   vec3 pt;
   float *positions = (float*)malloc(nv*sizeof(float));
@@ -167,7 +167,7 @@ Cdistribution_around_axis::compute_first_order_distributions_paquet (orientation
   vec3_init (axis3, mrot[6], mrot[7], mrot[8]);
 
   opca->apply_orientation ();
-  model->ComputeNormals ();
+  model->m_pMesh->ComputeNormals ();
   int i, j;
 
   npoints = _npoints;
@@ -290,10 +290,10 @@ Cdistribution_around_axis::compute_second_order_distributions_paquet (orientatio
   vec3_init (axis3, mrot[6], mrot[7], mrot[8]);
 
   opca->apply_orientation ();
-  model->ComputeNormals ();
-  int i, j, nv = model->m_nVertices;
-  float *vn = model->m_pVertexNormals;
-  float *fn = model->m_pFaceNormals;
+  model->m_pMesh->ComputeNormals ();
+  int i, j, nv = model->m_pMesh->m_nVertices;
+  float *vn = model->m_pMesh->m_pVertexNormals;
+  float *fn = model->m_pMesh->m_pFaceNormals;
   assert (vn);
 
   npoints = _npoints;

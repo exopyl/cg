@@ -16,11 +16,11 @@
 int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 {
 	int i;
-	int nv = mesh->m_nVertices;
+	int nv = mesh->m_pMesh->m_nVertices;
 
 	// initialization
-	memset (mesh->m_pVertexNormals, 0., 3*nv*sizeof(float));
-	
+	memset (mesh->m_pMesh->m_pVertexNormals, 0., 3*nv*sizeof(float));
+
 	switch (MethodId)
 	{
 	case GOURAUD:
@@ -31,14 +31,14 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 
 			vec3 n;
 			vec3_init (n, 0.0, 0.0, 0.0);
-			
-			Citerator_half_edges_vertex he_ite (mesh, i);
+
+			Citerator_half_edges_vertex he_ite (mesh->m_pCheMesh, i);
 			Che_edge *he;
 			int a,b,c;
-			float *v = mesh->m_pVertices;
+			float *v = mesh->m_pMesh->m_pVertices;
 			for (he = he_ite.first (); he && !he_ite.isLast (); he = he_ite.next ())
 			{
-				Face *f = mesh->m_pFaces[he->m_face];
+				Face *f = mesh->m_pMesh->m_pFaces[he->m_face];
 				a = f->GetVertex (0);
 				b = f->GetVertex(1);
 				c = f->GetVertex(2);
@@ -58,9 +58,9 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 			}
 			
 			vec3_normalize (n);
-			mesh->m_pVertexNormals[3*i]   = n[0];
-			mesh->m_pVertexNormals[3*i+1] = n[1];
-			mesh->m_pVertexNormals[3*i+2] = n[2];
+			mesh->m_pMesh->m_pVertexNormals[3*i]   = n[0];
+			mesh->m_pMesh->m_pVertexNormals[3*i+1] = n[1];
+			mesh->m_pMesh->m_pVertexNormals[3*i+2] = n[2];
 		}
 		break;
 	case THURMER:
@@ -69,13 +69,13 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 			vec3 n;
 			vec3_init (n, 0.0, 0.0, 0.0);
 
-			Citerator_half_edges_vertex he_ite (mesh, i);
+			Citerator_half_edges_vertex he_ite (mesh->m_pCheMesh, i);
 			Che_edge *he;
 			int a,b,c;
-			float *v = mesh->m_pVertices;
+			float *v = mesh->m_pMesh->m_pVertices;
 			for (he = he_ite.first (); he && !he_ite.isLast (); he = he_ite.next ())
 			{
-				Face *f = mesh->m_pFaces[he->m_face];
+				Face *f = mesh->m_pMesh->m_pFaces[he->m_face];
 				if (f->GetVertex (0) == i)
 				{
 					a = f->GetVertex (0);
@@ -123,9 +123,9 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 
 			}
 			vec3_normalize (n);
-			mesh->m_pVertexNormals[3*i]   = n[0];
-			mesh->m_pVertexNormals[3*i+1] = n[1];
-			mesh->m_pVertexNormals[3*i+2] = n[2];
+			mesh->m_pMesh->m_pVertexNormals[3*i]   = n[0];
+			mesh->m_pMesh->m_pVertexNormals[3*i+1] = n[1];
+			mesh->m_pMesh->m_pVertexNormals[3*i+2] = n[2];
 		}
 		break;
 	case MAX:
@@ -143,8 +143,8 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 
 void Normals::invert_vertices_normales (Mesh_half_edge *mesh)
 {
-	for (int i=0; i<3*mesh->m_nVertices; i++)
-		mesh->m_pVertexNormals[i] *= -1.;
+	for (unsigned int i=0; i<3*mesh->m_pMesh->m_nVertices; i++)
+		mesh->m_pMesh->m_pVertexNormals[i] *= -1.;
 }
 
 /**
@@ -154,14 +154,14 @@ void Normals::invert_vertices_normales (Mesh_half_edge *mesh)
 */
 int EvalOnFaces (Mesh_half_edge *mesh)
 {
-	if (!mesh || !mesh->m_pVertices)
+	if (!mesh || !mesh->m_pMesh->m_pVertices)
 		return -1;
 
 	int i, a, b, c;
-	float *v = mesh->m_pVertices;
-	for (i=0; i<mesh->m_nFaces; i++)
+	float *v = mesh->m_pMesh->m_pVertices;
+	for (i=0; i<(int)mesh->m_pMesh->m_nFaces; i++)
 	{
-		Face *f = mesh->m_pFaces[i];
+		Face *f = mesh->m_pMesh->m_pFaces[i];
 		a = f->GetVertex(0);
 		b = f->GetVertex(1);
 		c = f->GetVertex(2);
@@ -175,9 +175,9 @@ int EvalOnFaces (Mesh_half_edge *mesh)
 		vec3_triangle_normal (n, v1, v2, v3);
 		vec3_normalize (n);
 
-		mesh->m_pFaceNormals[3*i]   = n[0];
-		mesh->m_pFaceNormals[3*i+1] = n[1];
-		mesh->m_pFaceNormals[3*i+2] = n[2];
+		mesh->m_pMesh->m_pFaceNormals[3*i]   = n[0];
+		mesh->m_pMesh->m_pFaceNormals[3*i+1] = n[1];
+		mesh->m_pMesh->m_pFaceNormals[3*i+2] = n[2];
 	}
 
 	return 0;

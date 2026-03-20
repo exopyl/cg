@@ -81,11 +81,11 @@ region_area (vec3 a, vec3 b, vec3 c)
 //
 bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 {
-	int nv = m_pModel->m_nVertices;
-	float *v = m_pModel->m_pVertices;
-	Face **faces = m_pModel->m_pFaces;
-	float *vn = m_pModel->m_pVertexNormals;
-	Che_edge** m_edges_vertex = m_pModel->m_edges_vertex;
+	int nv = m_pModel->m_pMesh->m_nVertices;
+	float *v = m_pModel->m_pMesh->m_pVertices;
+	Face **faces = m_pModel->m_pMesh->m_pFaces;
+	float *vn = m_pModel->m_pMesh->m_pVertexNormals;
+	Che_edge** m_edges_vertex = m_pModel->m_pCheMesh->m_edges_vertex;
 
 	int i,a,b,c;
 	vec3 v1, v2, v3;

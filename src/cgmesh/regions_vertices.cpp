@@ -15,7 +15,7 @@ Cregions_vertices::Cregions_vertices (Mesh_half_edge *_mesh_half_edge)
 {
   assert (_mesh_half_edge);
   mesh_half_edge  = _mesh_half_edge;
-  size            = mesh_half_edge->m_nVertices;
+  size            = mesh_half_edge->m_pMesh->m_nVertices;
   datas           = new float[size];
   regions         = new int[size];
   selected_region = new int[size];
@@ -181,8 +181,8 @@ Cregions_vertices::export_selected_region_cloud_points (char *filename)
   // get the mesh
   if (mesh_half_edge)
     {
-      v  = mesh_half_edge->m_pVertices;
-      vn = mesh_half_edge->m_pVertexNormals;
+      v  = mesh_half_edge->m_pMesh->m_pVertices;
+      vn = mesh_half_edge->m_pMesh->m_pVertexNormals;
    }
   if (!v || !vn) return;
  
@@ -478,7 +478,7 @@ Cregions_vertices::init_cylinders (float threshold, float epsilon)
 void
 Cregions_vertices::refresh_colors (void)
 {
-  float *vc = mesh_half_edge->m_pVertexColors;
+  float *vc = mesh_half_edge->m_pMesh->m_pVertexColors;
   for (int i=0; i<size; i++)
     {
       if (regions[i] == 1)

@@ -3,15 +3,15 @@
 bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 {
 	m_pModel = model;
-	int nv = model->m_nVertices;
-	int nf = model->m_nFaces;
-	float *v = model->m_pVertices;
-	Face **f = model->m_pFaces;
-	int m_ne = model->m_ne;
-	Che_edge** m_edges = model->m_edges;
-	Che_edge** m_edges_face = model->m_edges_face;
-	Che_edge** m_edges_vertex = model->m_edges_vertex;
-	float *vn = model->m_pVertexNormals;
+	int nv = model->m_pMesh->m_nVertices;
+	int nf = model->m_pMesh->m_nFaces;
+	float *v = model->m_pMesh->m_pVertices;
+	Face **f = model->m_pMesh->m_pFaces;
+	int m_ne = model->m_pCheMesh->m_ne;
+	Che_edge** m_edges = model->m_pCheMesh->m_edges;
+	Che_edge** m_edges_face = model->m_pCheMesh->m_edges_face;
+	Che_edge** m_edges_vertex = model->m_pCheMesh->m_edges_vertex;
+	float *vn = model->m_pMesh->m_pVertexNormals;
 
 	int i;
 
@@ -148,11 +148,11 @@ bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 		m_edges_vertex[iv4] = e41;
 	}
 
-	model->m_nFaces = nf_new;
-	model->m_nFaces = nv_new;
-	model->m_pVertices = v_new;
-	model->m_pFaces = f_new;
-	model->m_edges = e_new;
+	model->m_pMesh->m_nFaces = nf_new;
+	model->m_pMesh->m_nVertices = nv_new;
+	model->m_pMesh->m_pVertices = v_new;
+	model->m_pMesh->m_pFaces = f_new;
+	model->m_pCheMesh->m_edges = e_new;
 
 	//DeleteAngles ();
 
@@ -197,10 +197,10 @@ void MeshAlgoSubdivisionKarbacher::InitializePosition (Vector3d &pos, Vector3d &
 
 void MeshAlgoSubdivisionKarbacher::DeleteAngles (void)
 {
-	int nf = m_pModel->m_nFaces;
-	float *v = m_pModel->m_pVertices;
-	int m_ne = m_pModel->m_ne;
-	Che_edge** m_edges = m_pModel->m_edges;
+	int nf = m_pModel->m_pMesh->m_nFaces;
+	float *v = m_pModel->m_pMesh->m_pVertices;
+	int m_ne = m_pModel->m_pCheMesh->m_ne;
+	Che_edge** m_edges = m_pModel->m_pCheMesh->m_edges;
 
 	m_ne = 3*nf;
 	for (int i=0; i<m_ne; i++)

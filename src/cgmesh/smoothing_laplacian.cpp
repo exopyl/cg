@@ -5,8 +5,8 @@
 //
 bool MeshAlgoSmoothingLaplacian::Apply (Mesh_half_edge *model)
 {
-	int nv = model->m_nVertices;
-	float *v = model->m_pVertices;
+	int nv = model->m_pMesh->m_nVertices;
+	float *v = model->m_pMesh->m_pVertices;
 
 	int i;
 	float *vnew;
@@ -14,7 +14,7 @@ bool MeshAlgoSmoothingLaplacian::Apply (Mesh_half_edge *model)
 	vnew = new float[3*nv];
 	if (!vnew)
 		return false;
-	
+
 	for (i=0; i<nv; i++)
     {
 		if (!model->m_topology_ok[i] || model->m_border[i])
@@ -24,10 +24,10 @@ bool MeshAlgoSmoothingLaplacian::Apply (Mesh_half_edge *model)
 			vnew[3*i+2] = v[3*i+2];
 			continue;
 		}
-		
+
 		vec3 v_mean, v_walk;
 		vec3_init (v_mean, 0.0, 0.0, 0.0);
-		Citerator_half_edges_vertex he_ite (model, i);
+		Citerator_half_edges_vertex he_ite (model->m_pCheMesh, i);
 		int n_neighbours = 0;
 		for (Che_edge *he_walk = he_ite.first (); he_walk && !he_ite.isLast (); he_walk = he_ite.next ())
 		{
@@ -49,9 +49,9 @@ bool MeshAlgoSmoothingLaplacian::Apply (Mesh_half_edge *model)
 			vnew[3*i+2] = v[3*i+2];
 		}
     }
-	
-	delete (model->m_pVertices);
-	model->m_pVertices = vnew;
+
+	delete (model->m_pMesh->m_pVertices);
+	model->m_pMesh->m_pVertices = vnew;
 
 	return true;
 }

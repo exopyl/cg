@@ -28,8 +28,8 @@ Cmodel3d_half_edge_sliced::~Cmodel3d_half_edge_sliced ()
 void
 Cmodel3d_half_edge_sliced::scan_model_along_Oz (void)
 {
-	float *vertices = model->m_pVertices;
-	int n_vertices  = model->m_nVertices;
+	float *vertices = model->m_pMesh->m_pVertices;
+	int n_vertices  = model->m_pMesh->m_nVertices;
 	int i,j,k;
 	
 	Cgarray *x;
@@ -119,8 +119,8 @@ Cmodel3d_half_edge_sliced::scan_model_along_Oz (void)
 void
 Cmodel3d_half_edge_sliced::scan_model_along_Ox (void)
 {
-	float *vertices = model->m_pVertices;
-	int n_vertices  = model->m_nVertices;
+	float *vertices = model->m_pMesh->m_pVertices;
+	int n_vertices  = model->m_pMesh->m_nVertices;
 	int i,j,k;
 	
 	Cgarray *y;

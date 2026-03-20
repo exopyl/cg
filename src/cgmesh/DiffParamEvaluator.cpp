@@ -50,7 +50,7 @@ bool MeshAlgoTensorEvaluator::Init (Mesh_half_edge *mesh)
 
 	Reset ();
 	m_pModel = mesh;
-	m_nDiffParams = mesh->m_nVertices;
+	m_nDiffParams = mesh->m_pMesh->m_nVertices;
 	m_pDiffParams = (Tensor**)malloc(m_nDiffParams*sizeof(Tensor*));
 	if (m_pDiffParams == NULL)
 	{
@@ -318,7 +318,7 @@ bool MeshAlgoTensorEvaluator::Evaluate (TensorMethodId tensorMethodId)
 		break;
 	}
 	
-	m_pModel->m_pTensors = m_pDiffParams;
+	m_pModel->m_pMesh->m_pTensors = m_pDiffParams;
 
 	return true;
 }
@@ -357,10 +357,10 @@ static get_jet_color (float index, float *r, float *g, float *b)
 
 void MeshAlgoTensorEvaluator::EvaluateColors (CurvatureId type)
 {
-	int nv = m_pModel->m_nVertices;
-	float *v = m_pModel->m_pVertices;
-	float *vn = m_pModel->m_pVertexNormals;
-	Che_edge** m_edges_vertex = m_pModel->m_edges_vertex;
+	int nv = m_pModel->m_pMesh->m_nVertices;
+	float *v = m_pModel->m_pMesh->m_pVertices;
+	float *vn = m_pModel->m_pMesh->m_pVertexNormals;
+	Che_edge** m_edges_vertex = m_pModel->m_pCheMesh->m_edges_vertex;
 
 	int i;
 	float r, g, b;
@@ -424,21 +424,21 @@ void MeshAlgoTensorEvaluator::EvaluateColors (CurvatureId type)
 	//min_value = 0.0;
 	//max_value = 1000.0;
 
-	m_pModel->InitVertexColors();
+	m_pModel->m_pMesh->InitVertexColors();
 	for (i=0; i<nv; i++)
 	{
 		if (defined[i])
 		{
 			get_jet_color (array[i]/max_value, &r, &g, &b);
-			m_pModel->m_pVertexColors[3*i]   = r;
-			m_pModel->m_pVertexColors[3*i+1] = g;
-			m_pModel->m_pVertexColors[3*i+2] = b;
+			m_pModel->m_pMesh->m_pVertexColors[3*i]   = r;
+			m_pModel->m_pMesh->m_pVertexColors[3*i+1] = g;
+			m_pModel->m_pMesh->m_pVertexColors[3*i+2] = b;
 		}
 		else
 		{
-			m_pModel->m_pVertexColors[3*i]   = 0.0;
-			m_pModel->m_pVertexColors[3*i+1] = 0.0;
-			m_pModel->m_pVertexColors[3*i+2] = 0.0;
+			m_pModel->m_pMesh->m_pVertexColors[3*i]   = 0.0;
+			m_pModel->m_pMesh->m_pVertexColors[3*i+1] = 0.0;
+			m_pModel->m_pMesh->m_pVertexColors[3*i+2] = 0.0;
 		}
 	}
 }
@@ -497,13 +497,13 @@ static float* get_colors_from_array (unsigned int n, float *array, int *defined)
 
 float* MeshAlgoTensorEvaluator::ComparisonCurvatures (CurvatureId type)
 {
-	unsigned int nv = m_pModel->m_nVertices;
-	Tensor **pTensors = m_pModel->m_pTensors;
+	unsigned int nv = m_pModel->m_pMesh->m_nVertices;
+	Tensor **pTensors = m_pModel->m_pMesh->m_pTensors;
 
 	int i;
 	float *array = (float*)malloc(nv*sizeof(float));
 	int *defined = (int*)malloc(nv*sizeof(int));
-	
+
 	for (i=0; i<nv; i++)
 	{
 		if (!m_pDiffParams[i])
@@ -544,13 +544,13 @@ float* MeshAlgoTensorEvaluator::ComparisonCurvatures (CurvatureId type)
 
 float* MeshAlgoTensorEvaluator::ComparisonDirections (void)
 {
-	unsigned int nv = m_pModel->m_nVertices;
-	Tensor **pTensors = m_pModel->m_pTensors;
+	unsigned int nv = m_pModel->m_pMesh->m_nVertices;
+	Tensor **pTensors = m_pModel->m_pMesh->m_pTensors;
 
 	int i;
 	float *array = (float*)malloc(nv*sizeof(float));
 	int *defined = (int*)malloc(nv*sizeof(int));
-	
+
 	for (i=0; i<nv; i++)
 	{
 		if (!m_pDiffParams[i])

@@ -20,9 +20,9 @@
 */
 bool MeshAlgoSubdivisionLoop::Apply (Mesh_half_edge *model)
 {
-	int nf = model->m_nFaces;
-	int nv = model->m_nVertices;
-	float *v = model->m_pVertices;
+	int nf = model->m_pMesh->m_nFaces;
+	int nv = model->m_pMesh->m_nVertices;
+	float *v = model->m_pMesh->m_pVertices;
 
 	int i, ne = 3*nf;
 
@@ -104,7 +104,7 @@ bool MeshAlgoSubdivisionLoop::Apply (Mesh_half_edge *model)
 
 		// old half edges
 		Che_edge *e12, *e23, *e31;
-		e12 = model->m_edges_face[i];
+		e12 = model->m_pCheMesh->m_edges_face[i];
 		e23 = e12->m_he_next;
 		e31 = e23->m_he_next;
 		assert (e31->m_he_next == e12);
@@ -268,11 +268,11 @@ bool MeshAlgoSubdivisionLoop::Apply (Mesh_half_edge *model)
 	nv_new = nv_new_walk;
 
 
-	model->m_nVertices = nv_new;
-	model->m_nFaces = nf_new;
+	model->m_pMesh->m_nVertices = nv_new;
+	model->m_pMesh->m_nFaces = nf_new;
 
-	model->m_pVertices = v_new;
-	model->m_pFaces = f_new;
+	model->m_pMesh->m_pVertices = v_new;
+	model->m_pMesh->m_pFaces = f_new;
 
 	return true;
 }

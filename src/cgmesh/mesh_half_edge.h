@@ -6,8 +6,10 @@
 
 /**
 * class Mesh_half_edge.
+*
+* Combines a Mesh (geometry) with a Che_mesh (half-edge topology) via composition.
 */
-class Mesh_half_edge : public Mesh, public Che_mesh
+class Mesh_half_edge
 {
 	friend class MeshAlgoTensorEvaluator;
 
@@ -22,15 +24,19 @@ class Mesh_half_edge : public Mesh, public Che_mesh
 	friend class Cregions_faces;
 	friend class Cmesh_orientation_pca;
 	friend class Cset_lines;
-	
+
 	friend class Citerator_half_edge_vertex;
-	
+
 public:
 	Mesh_half_edge ();//!<  Constructor
 	Mesh_half_edge (int par_nv, float *par_v, int par_nf, unsigned int *par_f);
 	Mesh_half_edge (Mesh *pMesh);
 	Mesh_half_edge (const char *par_filename);//!<  Constructor
 	~Mesh_half_edge ();//!< Destructor
+
+	// Composition members
+	Mesh     *m_pMesh;
+	Che_mesh *m_pCheMesh;
 
 	void create_half_edge (void);
 	Che_edge *get_edge (unsigned int v1, unsigned int v2);
@@ -41,7 +47,7 @@ public:
 
 	////////////////////////////////////////////////////////////////////////////////
 	//
-	// methods inherited from Che_mesh
+	// half-edge operations
 	//
 	void edge_flip     (Che_edge *par_edge);
 	void edge_split    (Che_edge *e);
@@ -55,10 +61,10 @@ public:
 	// Dijkstra
 public:
 	void dijkstra_shortest_path (int par_source, int par_target, int *par_n, int **par_path);
-	
+
 	// find the local maximal in a neighborough
 	void search_maximal (float *par_fdata, float par_angle_max);
-	
+
 	// misc
 	float edge_length (Che_edge *edge);
 	float get_average_edges_length (void); //<! Get the average edges length.
@@ -67,12 +73,12 @@ public:
 	double cotangent_weight_formula(Che_edge *edge);
 
 	void dump (void);
-	
+
 private:
 	// topology
 	void check_topology (void);
 	char *m_topology_ok;
-	
+
 	// border
 	void check_border (void); // check_topology should be called before
 	char *m_border;

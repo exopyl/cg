@@ -12,7 +12,7 @@ Cset_lines::Cset_lines (Mesh_half_edge *_model)
   model = _model;
   n_extracted_lines = 0;
   extracted_lines = NULL;
-  colors = (float*)malloc(3*model->m_nVertices*sizeof(float));
+  colors = (float*)malloc(3*model->m_pMesh->m_nVertices*sizeof(float));
 }
 
 Cset_lines::~Cset_lines ()
@@ -47,8 +47,8 @@ Cextracted_line* Cset_lines::get_extracted_line (int index) { return extracted_l
 
 void Cset_lines::apply_gaussian_noise (float variance)
 {
-	float *v = model->m_pVertices;
-	int nv = model->m_nVertices;
+	float *v = model->m_pMesh->m_pVertices;
+	int nv = model->m_pMesh->m_nVertices;
   for (int i=0; i<nv; i++)
     {
       static long idum = -247;
@@ -59,7 +59,7 @@ void Cset_lines::apply_gaussian_noise (float variance)
       v[3*i+2] += variance*perturb.z;
     }
 
-  model->ComputeNormals ();
+  model->m_pMesh->ComputeNormals ();
 }
 
 
@@ -478,7 +478,7 @@ Cset_lines::apply_random_colors (void)
 void
 Cset_lines::compute_colors (void)
 {
-  int i, j, nv = model->m_nVertices;
+  int i, j, nv = model->m_pMesh->m_nVertices;
   for (i=0; i<3*nv; i++) colors[i] = 0.6;
   for (i=0; i<n_extracted_lines; i++)
     {
@@ -497,7 +497,7 @@ Cset_lines::compute_colors (void)
 int
 Cset_lines::compute_colors_for_selection (float _weight, int _minimum_n_vertices, float _length, float _density, float _mean_deviation)
 {
-  int i, j, nv = model->m_nVertices;
+  int i, j, nv = model->m_pMesh->m_nVertices;
   for (i=0; i<3*nv; i++) colors[i] = 0.6;
   int new_n_lines = 0;
   for (i=0; i<n_extracted_lines; i++)
