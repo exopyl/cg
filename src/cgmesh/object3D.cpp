@@ -93,6 +93,11 @@ bool Object3D::import_file (char *filename)
   if (filename[size-3] == '3' && filename[size-2] == 'd' && filename[size-1] == 's')
     res = import_3ds (filename);
 
+
+  // ply
+  if (filename[size - 3] == 'p' && filename[size - 2] == 'l' && filename[size - 1] == 'y')
+	  res = import_ply(filename);
+
   return res;
 }
 
@@ -159,6 +164,21 @@ bool Object3D::export_stl(char* filename)
 	}
 
 	return true;
+}
+
+bool Object3D::import_ply(char* filename)
+{
+	auto pMesh = new Mesh();
+	pMesh->load(filename);
+
+	m_listMeshes.push_back(pMesh);
+
+	return true;
+}
+
+bool Object3D::export_ply(char* filename)
+{
+	return false;
 }
 
 bool Object3D::import_3ds(char* filename)

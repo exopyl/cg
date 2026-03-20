@@ -47,7 +47,7 @@ TEST(TEST_cgmesh_io, stl)
     mesh->export_statistics("stats.html");
 }
 
-TEST(TEST_cgmesh_io, 3ds)
+TEST(TEST_cgmesh_io, 3ds_sink)
 {
     // context
     Object3D* object = new Object3D();
@@ -56,6 +56,58 @@ TEST(TEST_cgmesh_io, 3ds)
     object->import_file("./test/data/sink.3ds");
 
     // expectations
-    auto & list = object->GetMeshes();
+    auto& list = object->GetMeshes();
     ASSERT_EQ(list.size(), 4);
+}
+
+TEST(TEST_cgmesh_io, 3ds_display)
+{
+    // context
+    Object3D* object = new Object3D();
+
+    // action
+    object->import_file("./test/data/display.3ds");
+
+    // expectations
+    auto& list = object->GetMeshes();
+    ASSERT_EQ(list.size(), 3);
+}
+
+TEST(TEST_cgmesh_io, 3ds_floppy)
+{
+    // context
+    Object3D* object = new Object3D();
+
+    // action
+    object->import_file("./test/data/floppy.3ds");
+
+    // expectations
+    auto& list = object->GetMeshes();
+    ASSERT_EQ(list.size(), 1);
+}
+
+TEST(TEST_cgmesh_io, ply)
+{
+    // context
+    Object3D* object = new Object3D();
+
+    // action
+    object->import_file("./test/data/sofa.ply");
+
+    // expectations
+    auto& list = object->GetMeshes();
+    ASSERT_EQ(list.size(), 1);
+}
+
+TEST(TEST_cgmesh_io, ply_ascii)
+{
+    // context
+    Object3D* object = new Object3D();
+
+    // action
+    object->import_file("./test/data/sofa_ascii.ply");
+
+    // expectations
+    auto& list = object->GetMeshes();
+    ASSERT_EQ(list.size(), 1);
 }

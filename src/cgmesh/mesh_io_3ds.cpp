@@ -25,8 +25,6 @@ t3DSModel *Allocate3DSModel()
 	if (pModel == NULL)
 		return NULL;
 
-	memset (pModel, 0, sizeof(t3DSModel));
-
 return pModel;
 }
 
@@ -267,8 +265,7 @@ void ProcessNextChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 			// This chunk is the header for the material info chunks
 			case CHK3DS_A_MAT_ENTRY:	// This holds the material information
 			{
-				t3DSMaterialInfo newTexture; // This is used to add to our material list
-				memset( &newTexture, 0, sizeof(t3DSMaterialInfo));
+				t3DSMaterialInfo newTexture = {}; // This is used to add to our material list
 
 				pModel->numOfMaterials++; // Increase the number of materials
 				pModel->pMaterials.push_back(newTexture); // Add an empty texture structure to our texture list
@@ -341,17 +338,13 @@ void ProcessNextObjectChunk_3DS(t3DSModel *pModel, char *strName, t3DSChunk *pPr
 			// a new object
 			case CHK3DS_4_N_TRI_OBJECT:
 			{
-				t3DSObject newObject;
-				memset( &newObject, 0, sizeof(t3DSObject));
+				t3DSObject newObject = {};
 
 				// Increase the object count
 				pModel->numOfObjects++;
 
 				// Add a new tObject node to our list of objects
 				pModel->pObject.push_back(newObject);
-
-				// Initialize the object and all it's data members
-				memset(&(pModel->pObject[pModel->numOfObjects - 1]), 0, sizeof(t3DSObject));
 
 				// Store it, then add the read bytes to our byte counter.
 				memcpy ((void*)pModel->pObject[pModel->numOfObjects - 1].strName, (void*)strName, strlen(strName)+1);
@@ -364,17 +357,13 @@ void ProcessNextObjectChunk_3DS(t3DSModel *pModel, char *strName, t3DSChunk *pPr
 			// a new light
 			case CHK3DS_4_N_DIRECT_LIGHT:
 			{
-				t3DSLight newLight;
-				memset( &newLight, 0, sizeof(t3DSLight));
+				t3DSLight newLight = {};
 
 				// Increase the object count
 				pModel->numOfLights++;
 
 				// Add a new tObject node to our list of objects
 				pModel->pLights.push_back(newLight);
-
-				// Initialize the object and all it's data members
-				memset(&(pModel->pLights[pModel->numOfLights - 1]), 0, sizeof(t3DSLight));
 
 				// Store it, then add the read bytes to our byte counter.
 				memcpy ((void*)pModel->pLights[pModel->numOfLights - 1].strName, (void*)strName, strlen(strName)+1);
@@ -390,17 +379,13 @@ void ProcessNextObjectChunk_3DS(t3DSModel *pModel, char *strName, t3DSChunk *pPr
 			// a new camera
 			case CHK3DS_4_N_CAMERA:
 			{
-				t3DSCamera newCamera; // This is used to add to our object list
-				memset( &newCamera, 0, sizeof(t3DSCamera));
+				t3DSCamera newCamera = {}; // This is used to add to our object list
 
 				// Increase the object count
 				pModel->numOfCameras++;
 
 				// Add a new tObject node to our list of objects
 				pModel->pCameras.push_back(newCamera);
-
-				// Initialize the object and all it's data members
-				memset(&(pModel->pCameras[pModel->numOfCameras - 1]), 0, sizeof(t3DSCamera));
 
 				// Store it, then add the read bytes to our byte counter.
 				memcpy ((void*)pModel->pCameras[pModel->numOfCameras - 1].strName, (void*)strName, strlen(strName)+1);
@@ -476,17 +461,13 @@ void ProcessNextTriMeshChunk_3DS (t3DSModel *pModel, t3DSObject *pObject, t3DSCh
 			// material name
 			case CHK3DS_4_MSH_MAT_GROUP:
 			{
-				t3DSFacesMaterialList newFacesMaterialList;
-				memset( &newFacesMaterialList, 0, sizeof(t3DSFacesMaterialList));
+				t3DSFacesMaterialList newFacesMaterialList = {};
 
 				// Increase the material count
 				pObject->numOfMaterials++;
 
 				// Add a new tObject node to our list of objects
 				pObject->pFacesMaterialList.push_back(newFacesMaterialList);
-
-				// Initialize the structure and all the data members
-				memset(&(pObject->pFacesMaterialList[pObject->numOfMaterials - 1]), 0, sizeof(t3DSFacesMaterialList));
 
 				ReadObjectMaterial_3DS(pModel, pObject, &currentChunk);
 			}
@@ -727,8 +708,7 @@ void ProcessNextKeyFrameChunk_3DS (t3DSModel* pModel, t3DSChunk *pPreviousChunk)
 			case CHK3DS_B_OBJECT_NODE_TAG:
 			{
 				// allocation
-				t3DSAnimation newAnimation;
-				memset( &newAnimation, 0, sizeof(t3DSAnimation));
+				t3DSAnimation newAnimation = {};
 
 				// insert
 				pModel->numOfAnimations++; // Increase the number of animations
