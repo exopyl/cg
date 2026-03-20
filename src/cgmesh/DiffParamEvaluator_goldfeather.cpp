@@ -9,10 +9,8 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 	int nv = m_pModel->m_pMesh->m_nVertices;
 	float *v = m_pModel->m_pMesh->m_pVertices;
 	float *vn = m_pModel->m_pMesh->m_pVertexNormals;
-	Che_edge** m_edges_vertex = m_pModel->m_pCheMesh->m_edges_vertex;
-
 	int i,j,k,l;
-	
+
 	for (i=0; i<nv; i++)
     {
 		if (!m_pModel->m_topology_ok[i] || m_pModel->m_border[i])
@@ -20,17 +18,17 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 			m_pDiffParams[i] = NULL;
 			continue;
 		}
-		
+
 		vec3 v_current, n;
 		vec3_init (v_current, v[3*i], v[3*i+1], v[3*i+2]);
 		vec3_init (n, vn[3*i], vn[3*i+1], vn[3*i+2]);
 		vec3_normalize (n);
 		float D = - vec3_dot_product (v_current, n);
-		
+
 		// local basis
 		vec3_init (n, vn[3*i], vn[3*i+1], vn[3*i+2]);
 		vec3_normalize (n);
-		
+
 		vec3 b1, b2;
 		if (n[0])
 			vec3_init (b1, -(n[1]+n[2])/n[0], 1, 1);
@@ -43,7 +41,7 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 		}
 		vec3_normalize (b1);
 		vec3_cross_product (b2, n, b1);
-		
+
 		// compute the rotation we will apply on the normales
 		vec3 axis;
 		vec3_init (axis, n[1], -n[0], 0.0);
@@ -51,21 +49,21 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 		float theta = acos (n[2]);
 		quaternion rot;
 		quaternion_init_axis_angle (rot, axis, theta);
-		
+
 		// allocate memory for the matrices
 		int n_neighbours = m_pModel->get_n_neighbours (i);
 		float *A = (float*)malloc(n_neighbours*7*3*sizeof(float));
 		for (j=0; j<n_neighbours*7*3; j++) A[j] = 0.0;
 		float *B = (float*)malloc(n_neighbours*3*sizeof(float));
 		for (j=0; j<n_neighbours*3; j++) B[j] = 0.0;
-		
+
 		int iwalk = 0;
-		Che_edge *e = m_edges_vertex[i];
-		Che_edge *e_walk = e;
-		e_walk = e;
+		int e = m_pModel->m_pCheMesh->m_edges_vertex[i];
+		int e_walk = e;
 		do
 		{
-			int index = e_walk->m_v_end;
+			Che_edge &ew = m_pModel->m_pCheMesh->edge(e_walk);
+			int index = ew.m_v_end;
 			if (m_pModel->m_border[index]) break;
 			
 			vec3 v_walk;
@@ -122,8 +120,9 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 			B[3*iwalk+2] = -nyi/nzi;
 			
 			iwalk++;
-			e_walk = e_walk->m_he_next->m_he_next->m_pair;
-		} while (e_walk && e_walk != e);
+			int he_next = m_pModel->m_pCheMesh->edge(e_walk).m_he_next;
+			e_walk = m_pModel->m_pCheMesh->edge(m_pModel->m_pCheMesh->edge(he_next).m_he_next).m_pair;
+		} while (e_walk >= 0 && e_walk != e);
 		
 		if (iwalk != n_neighbours)
 		{

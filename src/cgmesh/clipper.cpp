@@ -75,7 +75,8 @@ Cmodel3d_half_edge_clipper::get_intersections (int *n_intersections, int **n_ver
   assert (visited_faces);
   for (i=0; i<nf; i++) visited_faces[i] = 0;
 
-  Che_edge *e, *e_walk;
+  Che_mesh *cheMesh = model->m_pCheMesh;
+  int e, e_walk;
   int a,b,c;
   for (i=0; i<nf; i++)
     {
@@ -91,26 +92,26 @@ Cmodel3d_half_edge_clipper::get_intersections (int *n_intersections, int **n_ver
       current_intersections[current_n_intersections] = (float*)malloc(n_vertices_max*sizeof(float));
 
       /* look for the first edges of the intersection */
-      e = model->m_pCheMesh->m_edges_face[i];
-      a = e->m_v_begin;
-      b = e->m_v_end;
-      c = e->m_he_next->m_v_end;
+      e = cheMesh->m_edges_face[i];
+      a = cheMesh->edge(e).m_v_begin;
+      b = cheMesh->edge(e).m_v_end;
+      c = cheMesh->edge(cheMesh->edge(e).m_he_next).m_v_end;
 
       if (distances[a] * distances[b] <= 0)
 	{
 	  if (distances[b] * distances[c] <= 0)
-	    e_walk = e->m_he_next->m_pair;
+	    e_walk = cheMesh->edge(cheMesh->edge(e).m_he_next).m_pair;
 	  else
-	    e_walk = e->m_he_next->m_he_next->m_pair;
+	    e_walk = cheMesh->edge(cheMesh->edge(cheMesh->edge(e).m_he_next).m_he_next).m_pair;
 	}
       else
 	{
-	  e = e->m_he_next;
-	  e_walk = e->m_he_next->m_pair;
+	  e = cheMesh->edge(e).m_he_next;
+	  e_walk = cheMesh->edge(cheMesh->edge(e).m_he_next).m_pair;
 	}
-      if (!e_walk) continue;
+      if (e_walk < 0) continue;
 
-      get_vertex_intersection (e->m_v_begin, e->m_v_end, v_walk);
+      get_vertex_intersection (cheMesh->edge(e).m_v_begin, cheMesh->edge(e).m_v_end, v_walk);
       current_intersections[current_n_intersections][3*iwalk]   = v_walk.x;
       current_intersections[current_n_intersections][3*iwalk+1] = v_walk.y;
       current_intersections[current_n_intersections][3*iwalk+2] = v_walk.z;
@@ -119,26 +120,27 @@ Cmodel3d_half_edge_clipper::get_intersections (int *n_intersections, int **n_ver
       /* look for the complete intersection */
       do
 	{
-	  visited_faces[e_walk->m_face] = 1;
+	  visited_faces[cheMesh->edge(e_walk).m_face] = 1;
 
 	  /* next vertex in the intersection */
-	  get_vertex_intersection (e_walk->m_v_begin, e_walk->m_v_end, v_walk);
+	  get_vertex_intersection (cheMesh->edge(e_walk).m_v_begin, cheMesh->edge(e_walk).m_v_end, v_walk);
 	  current_intersections[current_n_intersections][3*iwalk]   = v_walk.x;
 	  current_intersections[current_n_intersections][3*iwalk+1] = v_walk.y;
 	  current_intersections[current_n_intersections][3*iwalk+2] = v_walk.z;
 	  iwalk++;
 
 	  /* go to the next intersected edge */
-	  a = e_walk->m_he_next->m_v_begin;
-	  b = e_walk->m_he_next->m_v_end;
-	  c = e_walk->m_he_next->m_he_next->m_v_end;
+	  int next1 = cheMesh->edge(e_walk).m_he_next;
+	  a = cheMesh->edge(next1).m_v_begin;
+	  b = cheMesh->edge(next1).m_v_end;
+	  c = cheMesh->edge(cheMesh->edge(next1).m_he_next).m_v_end;
 	  if (distances[a] * distances[b] <= 0)
-	    e_walk = e_walk->m_he_next;
+	    e_walk = next1;
 	  else
-	    e_walk = e_walk->m_he_next->m_he_next;
-	  assert (e_walk);
-	  e_walk = e_walk->m_pair;
-	} while (e_walk && e_walk != e);
+	    e_walk = cheMesh->edge(next1).m_he_next;
+	  assert (e_walk >= 0);
+	  e_walk = cheMesh->edge(e_walk).m_pair;
+	} while (e_walk >= 0 && e_walk != e);
       current_n_vertices[current_n_intersections] = iwalk;
       current_n_intersections++;
     }

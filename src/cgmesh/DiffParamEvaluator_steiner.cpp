@@ -138,14 +138,18 @@ area_triangle_in_sphere (vec3 v1, vec3 v2, vec3 v3, vec3 center, float radius)
 	return 0.0;
 }
 
-static int is_already_visited (Che_edge *e, Che_edge **array, int n)
+static int is_already_visited (int e_idx, Che_mesh *che, int *array, int n)
 {
+	Che_edge &e = che->edge(e_idx);
 	for (int i=0; i<n; i++)
-		if (array[i] == e ||
-			(array[i]->m_v_begin == e->m_v_begin && array[i]->m_v_end == e->m_v_end) ||
-			(array[i]->m_v_begin == e->m_v_end && array[i]->m_v_end == e->m_v_begin))
+	{
+		Che_edge &a = che->edge(array[i]);
+		if (array[i] == e_idx ||
+			(a.m_v_begin == e.m_v_begin && a.m_v_end == e.m_v_end) ||
+			(a.m_v_begin == e.m_v_end && a.m_v_end == e.m_v_begin))
 			return 1;
-		return 0;
+	}
+	return 0;
 }
 
 static int is_already_visited (int index, int *array, int n)
@@ -156,14 +160,13 @@ static int is_already_visited (int index, int *array, int n)
 		return 0;
 }
 
-void MeshAlgoTensorEvaluator::ApplySteinerAux (int index, float radius, int *_n_edges, Che_edge ***_edges)
+void MeshAlgoTensorEvaluator::ApplySteinerAux (int index, float radius, int *_n_edges, int **_edges)
 {
 	int nv = m_pModel->m_pMesh->m_nVertices;
 	int nf = m_pModel->m_pMesh->m_nFaces;
 	float *v = m_pModel->m_pMesh->m_pVertices;
 	Face **f = m_pModel->m_pMesh->m_pFaces;
 	float *vn = m_pModel->m_pMesh->m_pVertexNormals;
-	Che_edge** m_edges_vertex = m_pModel->m_pCheMesh->m_edges_vertex;
 
 	int j;
 	if (radius == 0.0)
@@ -173,13 +176,13 @@ void MeshAlgoTensorEvaluator::ApplySteinerAux (int index, float radius, int *_n_
     }
 	else
     {
-		Che_edge **new_edges = (Che_edge**)malloc(3*nf*sizeof(Che_edge*));
+		int *new_edges = (int*)malloc(3*nf*sizeof(int));
 		int n_new_edges = 0;
-		
+
 		int *new_vertices = (int*)malloc(nv*sizeof(int));
 		int n_new_vertices = 0;
 		new_vertices[n_new_vertices++] = index;
-		
+
 		vec3 v_current, v_walk, tmp;
 		vec3_init (v_current, v[3*index], v[3*index+1], v[3*index+2]);
 		for (j=0; j<n_new_vertices; j++)
@@ -189,22 +192,23 @@ void MeshAlgoTensorEvaluator::ApplySteinerAux (int index, float radius, int *_n_
 			if (vec3_length (tmp) < radius)
 			{
 				/* add the new edges */
-				Che_edge *e = m_edges_vertex[new_vertices[j]];
-				Che_edge *e_walk = e;
+				int e = m_pModel->m_pCheMesh->m_edges_vertex[new_vertices[j]];
+				int e_walk = e;
 				do
 				{
-					if (!is_already_visited (e_walk, new_edges, n_new_edges))
+					if (!is_already_visited (e_walk, m_pModel->m_pCheMesh, new_edges, n_new_edges))
 					{
 						new_edges[n_new_edges++] = e_walk;
-						new_vertices[n_new_vertices++] = e_walk->m_v_end;
+						new_vertices[n_new_vertices++] = m_pModel->m_pCheMesh->edge(e_walk).m_v_end;
 					}
-					e_walk = e_walk->m_he_next->m_he_next->m_pair;
-				} while (e_walk && e_walk != e);
+					int he_next = m_pModel->m_pCheMesh->edge(e_walk).m_he_next;
+					e_walk = m_pModel->m_pCheMesh->edge(m_pModel->m_pCheMesh->edge(he_next).m_he_next).m_pair;
+				} while (e_walk >= 0 && e_walk != e);
 			}
 		}
 		free (new_vertices);
-		
-		new_edges = (Che_edge**)realloc(new_edges, n_new_edges*sizeof(Che_edge*));
+
+		new_edges = (int*)realloc(new_edges, n_new_edges*sizeof(int));
 		*_n_edges = n_new_edges;
 		*_edges = new_edges;
     }

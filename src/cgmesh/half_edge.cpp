@@ -40,7 +40,7 @@ Cedges_visited::~Cedges_visited ()
 	if (m_n_connections_max)
 		free (m_n_connections_max);
 }
-  
+
 void Cedges_visited::add_edge (int par_a, int par_b, int par_index)
 {
 	// update the connections to par_a
@@ -52,7 +52,7 @@ void Cedges_visited::add_edge (int par_a, int par_b, int par_index)
 	m_connected_to[par_a][2*m_n_connected_to[par_a]]   = par_b;
 	m_connected_to[par_a][2*m_n_connected_to[par_a]+1] = par_index;
 	m_n_connected_to[par_a]++;
-	
+
 	// update the connections to par_b
 	if (m_n_connected_to[par_b] == m_n_connections_max[par_b])
 	{
@@ -67,7 +67,7 @@ void Cedges_visited::add_edge (int par_a, int par_b, int par_index)
 void Cedges_visited::delete_edge (int par_a, int par_b)
 {
 	int i;
-	
+
 	// update the connections to a
 	for (i=0; i<m_n_connected_to[par_a]; i++)
 	{
@@ -79,7 +79,7 @@ void Cedges_visited::delete_edge (int par_a, int par_b)
 			break;
 		}
 	}
-	
+
 	// update the connections to b
 	for (i=0; i<m_n_connected_to[par_b]; i++)
 	{
@@ -111,27 +111,22 @@ Che_edge::Che_edge ()
 {
 	m_v_begin = -1;
 	m_v_end = -1;
-	m_pair = NULL;
+	m_pair = -1;
 	m_face = -1;
-	m_he_next = NULL;
+	m_he_next = -1;
 	m_visited = false;
 	m_valid = 1;
 	m_data = NULL;
 }
 
-Che_edge::~Che_edge ()
+void Che_edge::dump (int index)
 {
-}
-
-void Che_edge::dump (void)
-{
-	printf ("edge 0x%p : ", (void*)this);
+	printf ("edge [%d] : ", index);
 	if (m_valid)
 	{
-		printf ("(face %d) (vertices %d -> %d) (pair %p %d -> %d) (next %p %d -> %d) (data : %p)\n",
+		printf ("(face %d) (vertices %d -> %d) (pair %d) (next %d) (data : %p)\n",
 			m_face, m_v_begin, m_v_end,
-			(void*)m_pair, (m_pair)?m_pair->m_v_begin:-1, (m_pair)?m_pair->m_v_end:-1,
-			(void*)m_he_next, (m_he_next)?m_he_next->m_v_begin:-1, (m_he_next)?m_he_next->m_v_end:-1,
+			m_pair, m_he_next,
 			(void*)m_data);
 	}
 	else
@@ -142,135 +137,133 @@ void Che_edge::dump (void)
 
 Che_mesh::Che_mesh ()
 {
-	m_edges = NULL;
-	//n_vertices = 0;
-	m_edges_vertex = NULL;
-	//n_faces = 0;
-	m_edges_face = NULL;
+	m_ne = 0;
 	m_map_edges = new map_edges;
-	map_edges_vertex = new std::map<int,Che_edge*>;
-	map_edges_face = new std::map<int,Che_edge*>;
+	map_edges_vertex = new std::map<int,int>;
+	map_edges_face = new std::map<int,int>;
 }
 
 Che_mesh::~Che_mesh ()
 {
-	if (m_edges)
-	{
-		for (int i=0; i<m_ne; i++)
-		{
-			delete m_edges[i];
-			m_edges[i] = NULL;
-		}
-		free (m_edges);
-	}
+	if (m_map_edges) delete m_map_edges;
+	if (map_edges_vertex) delete map_edges_vertex;
+	if (map_edges_face) delete map_edges_face;
 }
 
 void Che_mesh::dump (void)
 {
 	printf ("map_edges :\n");
-	for (std::map<std::pair<int,int>,Che_edge*>::iterator it=m_map_edges->begin ();
+	for (map_edges::iterator it=m_map_edges->begin ();
 	     it != m_map_edges->end ();
 	     it++)
 	{
-		Che_edge *he = it->second;
-		if (he)
-			he->dump ();
+		int idx = it->second;
+		if (idx >= 0)
+			m_edges[idx].dump (idx);
 	}
 }
 
 void Che_mesh::dump_around_vertex (unsigned int vi)
 {
-	std::map<int,Che_edge*>::iterator it = map_edges_vertex->find (vi);
+	std::map<int,int>::iterator it = map_edges_vertex->find (vi);
 	if (it == map_edges_vertex->end())
 	{
 		printf ("no edge starting from %d\n", vi);
 		return;
 	}
-		
-	Che_edge *e = it->second;
-	if (!e) // isolated vertex
+
+	int e = it->second;
+	if (e < 0) // isolated vertex
 	{
 		printf ("no edge starting from %d (isolated vertex)\n", vi);
 		return;
 	}
 
-	Che_edge *e_walk = e;
+	int e_walk = e;
 	do
 	{
-		if (e_walk && e_walk->m_valid)
-			e_walk->dump ();
+		if (e_walk >= 0 && m_edges[e_walk].m_valid)
+			m_edges[e_walk].dump (e_walk);
 
-		e_walk = e_walk->m_he_next->m_he_next->m_pair;
+		int n1 = m_edges[e_walk].m_he_next;
+		int n2 = m_edges[n1].m_he_next;
+		e_walk = m_edges[n2].m_pair;
 	} while (e_walk != e);
 }
 
 void Che_mesh::add_face (int fi, int v1, int v2, int v3)
 {
-	std::map<std::pair<int,int>,Che_edge*>::iterator it;
+	// Push 3 new edges into m_edges and record their indices
+	int idx_v1v2 = (int)m_edges.size();
+	m_edges.push_back(Che_edge());
+	int idx_v2v3 = (int)m_edges.size();
+	m_edges.push_back(Che_edge());
+	int idx_v3v1 = (int)m_edges.size();
+	m_edges.push_back(Che_edge());
 
-	Che_edge *e_v1v2 = new Che_edge ();
-	Che_edge *e_v2v3 = new Che_edge ();
-	Che_edge *e_v3v1 = new Che_edge ();
+	m_edges[idx_v1v2].m_v_begin = v1;
+	m_edges[idx_v1v2].m_v_end = v2;
+	m_edges[idx_v1v2].m_he_next = idx_v2v3;
+	m_edges[idx_v1v2].m_face = fi;
 
-	e_v1v2->m_v_begin = v1;
-	e_v1v2->m_v_end = v2;
-	e_v1v2->m_he_next = e_v2v3;
-	e_v1v2->m_face = fi;
+	map_edges::iterator it;
 	it = m_map_edges->find (std::make_pair(v2, v1));
 	if (it != m_map_edges->end ())
 	{
-		e_v1v2->m_pair = it->second;
-		it->second->m_pair = e_v1v2;
+		m_edges[idx_v1v2].m_pair = it->second;
+		m_edges[it->second].m_pair = idx_v1v2;
 	}
 
-	e_v2v3->m_v_begin = v2;
-	e_v2v3->m_v_end = v3;
-	e_v2v3->m_he_next = e_v3v1;
-	e_v2v3->m_face = fi;
+	m_edges[idx_v2v3].m_v_begin = v2;
+	m_edges[idx_v2v3].m_v_end = v3;
+	m_edges[idx_v2v3].m_he_next = idx_v3v1;
+	m_edges[idx_v2v3].m_face = fi;
 	it = m_map_edges->find (std::make_pair(v3, v2));
 	if (it != m_map_edges->end ())
 	{
-		e_v2v3->m_pair = it->second;
-		it->second->m_pair = e_v2v3;
+		m_edges[idx_v2v3].m_pair = it->second;
+		m_edges[it->second].m_pair = idx_v2v3;
 	}
 
-	e_v3v1->m_v_begin = v3;
-	e_v3v1->m_v_end = v1;
-	e_v3v1->m_he_next = e_v1v2;
-	e_v3v1->m_face = fi;
+	m_edges[idx_v3v1].m_v_begin = v3;
+	m_edges[idx_v3v1].m_v_end = v1;
+	m_edges[idx_v3v1].m_he_next = idx_v1v2;
+	m_edges[idx_v3v1].m_face = fi;
 	it = m_map_edges->find (std::make_pair(v1, v3));
 	if (it != m_map_edges->end ())
 	{
-		e_v3v1->m_pair = it->second;
-		it->second->m_pair = e_v3v1;
+		m_edges[idx_v3v1].m_pair = it->second;
+		m_edges[it->second].m_pair = idx_v3v1;
 	}
 
-	m_map_edges->insert (std::make_pair (std::make_pair(v1,v2), e_v1v2));
-	m_map_edges->insert (std::make_pair (std::make_pair(v2,v3), e_v2v3));
-	m_map_edges->insert (std::make_pair (std::make_pair(v3,v1), e_v3v1));
+	m_map_edges->insert (std::make_pair (std::make_pair(v1,v2), idx_v1v2));
+	m_map_edges->insert (std::make_pair (std::make_pair(v2,v3), idx_v2v3));
+	m_map_edges->insert (std::make_pair (std::make_pair(v3,v1), idx_v3v1));
 
-	map_edges_vertex->insert (std::make_pair (v1, e_v1v2));
-	map_edges_vertex->insert (std::make_pair (v2, e_v2v3));
-	map_edges_vertex->insert (std::make_pair (v3, e_v3v1));
-	map_edges_face->insert (std::make_pair (fi, e_v1v2));
+	map_edges_vertex->insert (std::make_pair (v1, idx_v1v2));
+	map_edges_vertex->insert (std::make_pair (v2, idx_v2v3));
+	map_edges_vertex->insert (std::make_pair (v3, idx_v3v1));
+	map_edges_face->insert (std::make_pair (fi, idx_v1v2));
 }
 
 int Che_mesh::is_border (int vi)
 {
-	std::map<int,Che_edge*>::iterator it = map_edges_vertex->find (vi);
+	std::map<int,int>::iterator it = map_edges_vertex->find (vi);
 	if (it == map_edges_vertex->end())
 		return -1;
-		
-	Che_edge *e = it->second;
-	if (!e) // isolated vertex
+
+	int e = it->second;
+	if (e < 0) // isolated vertex
 		return 1;
 
-	Che_edge *e_walk = e;
+	int e_walk = e;
 	do
 	{
-		if (e_walk == NULL || !e_walk->m_valid)
+		if (e_walk < 0 || !m_edges[e_walk].m_valid)
 			return 1;
-		e_walk = e_walk->m_he_next->m_he_next->m_pair;
+		int n1 = m_edges[e_walk].m_he_next;
+		int n2 = m_edges[n1].m_he_next;
+		e_walk = m_edges[n2].m_pair;
 	} while (e_walk != e);
 
  	return 0;
@@ -278,43 +271,45 @@ int Che_mesh::is_border (int vi)
 
 int Che_mesh::vertex_is_near_border (int vi)
 {
-	std::map<int,Che_edge*>::iterator it = map_edges_vertex->find (vi);
+	std::map<int,int>::iterator it = map_edges_vertex->find (vi);
 	if (it == map_edges_vertex->end ())
 		return -1;
 
-	Che_edge *e = it->second;
-	Che_edge *e_walk = e;
+	int e = it->second;
+	int e_walk = e;
 	do
 	{
-		if (is_border (e_walk->m_v_end))
+		if (is_border (m_edges[e_walk].m_v_end))
 			return 1;
-		
-		e_walk = e_walk->m_he_next->m_he_next->m_pair;
+
+		int n1 = m_edges[e_walk].m_he_next;
+		int n2 = m_edges[n1].m_he_next;
+		e_walk = m_edges[n2].m_pair;
 	} while (e_walk != e);
 
 	return 0;
 }
 
-// search
-Che_edge* Che_mesh::get_edge (int v1, int v2)
+// search - returns edge index, -1 if not found
+int Che_mesh::get_edge (int v1, int v2)
 {
-	std::map<std::pair<int,int>,Che_edge*>::iterator it = m_map_edges->find (std::make_pair(v1, v2));
-	return (it == m_map_edges->end())? NULL : it->second;
+	map_edges::iterator it = m_map_edges->find (std::make_pair(v1, v2));
+	return (it == m_map_edges->end())? -1 : it->second;
 }
 
-Che_edge* Che_mesh::get_edge_from_vertex (int vi)
+int Che_mesh::get_edge_from_vertex (int vi)
 {
-	std::map<int,Che_edge*>::iterator it = map_edges_vertex->find (vi);
+	std::map<int,int>::iterator it = map_edges_vertex->find (vi);
 	if (it == map_edges_vertex->end())
-		return NULL;
+		return -1;
 	return it->second;
 }
 
-Che_edge* Che_mesh::get_edge_from_face (int fi)
+int Che_mesh::get_edge_from_face (int fi)
 {
-	std::map<int,Che_edge*>::iterator it = map_edges_face->find (fi);
-	if (it == map_edges_vertex->end())
-		return NULL;
+	std::map<int,int>::iterator it = map_edges_face->find (fi);
+	if (it == map_edges_face->end())
+		return -1;
 	return it->second;
 }
 
@@ -327,443 +322,312 @@ void Che_mesh::create_half_edge (unsigned int nVertices, unsigned int nFaces, un
 		m_map_edges = new map_edges;
 	int i;
 
-	// init the half edge structure
-	m_edges_vertex = (Che_edge**)malloc(nVertices*sizeof(Che_edge*));
-	m_edges_face   = (Che_edge**)malloc(nFaces*sizeof(Che_edge*));
-	m_ne           = 3*nFaces;
-	m_edges        = (Che_edge**)malloc(m_ne*sizeof(Che_edge*));
-	for (i=0; i<nVertices; i++)
-		m_edges_vertex[i] = NULL;
-	for (i=0; i<nFaces; i++)
+	// init
+	m_edges_vertex.assign(nVertices, -1);
+	m_edges_face.assign(nFaces, -1);
+	m_ne = 3*nFaces;
+	m_edges.resize(m_ne);
+
+	for (i=0; i<(int)nFaces; i++)
 	{
 		int loc_a = pFaces[3*i];
 		int loc_b = pFaces[3*i+1];
 		int loc_c = pFaces[3*i+2];
 
-		add_face (i, loc_a, loc_b, loc_c); // fill m_map_edges
-		
-		m_edges[3*i] = new Che_edge ();
-		m_edges[3*i]->m_v_begin = loc_a;
-		m_edges[3*i]->m_v_end   = loc_b;
-		m_edges[3*i]->m_face    = i;
-		m_edges_vertex[loc_a] = m_edges[3*i];
-		
-		m_edges[3*i+1] = new Che_edge ();
-		m_edges[3*i+1]->m_v_begin = loc_b;
-		m_edges[3*i+1]->m_v_end   = loc_c;
-		m_edges[3*i+1]->m_face    = i;
-		m_edges_vertex[loc_b] = m_edges[3*i+1];
-		
-		m_edges[3*i+2] = new Che_edge ();
-		m_edges[3*i+2]->m_v_begin = loc_c;
-		m_edges[3*i+2]->m_v_end   = loc_a;
-		m_edges[3*i+2]->m_face    = i;
-		m_edges_vertex[loc_c] = m_edges[3*i+2];
-		
-		m_edges[3*i]->m_he_next   = m_edges[3*i+1];
-		m_edges[3*i+1]->m_he_next = m_edges[3*i+2];
-		m_edges[3*i+2]->m_he_next = m_edges[3*i];
-		
-		m_edges_face[i] = m_edges[3*i+2];
+		// Note: add_face uses m_edges.push_back, but we already sized m_edges.
+		// Instead, populate m_edges directly and fill maps manually.
+
+		int e0 = 3*i;
+		int e1 = 3*i+1;
+		int e2 = 3*i+2;
+
+		m_edges[e0] = Che_edge();
+		m_edges[e0].m_v_begin = loc_a;
+		m_edges[e0].m_v_end   = loc_b;
+		m_edges[e0].m_face    = i;
+		m_edges_vertex[loc_a] = e0;
+
+		m_edges[e1] = Che_edge();
+		m_edges[e1].m_v_begin = loc_b;
+		m_edges[e1].m_v_end   = loc_c;
+		m_edges[e1].m_face    = i;
+		m_edges_vertex[loc_b] = e1;
+
+		m_edges[e2] = Che_edge();
+		m_edges[e2].m_v_begin = loc_c;
+		m_edges[e2].m_v_end   = loc_a;
+		m_edges[e2].m_face    = i;
+		m_edges_vertex[loc_c] = e2;
+
+		m_edges[e0].m_he_next = e1;
+		m_edges[e1].m_he_next = e2;
+		m_edges[e2].m_he_next = e0;
+
+		m_edges_face[i] = e2;
 	}
-	
-	// build the half edge structure
+
+	// build the pair links
 	Cedges_visited *loc_ev = new Cedges_visited (nVertices);
-	for (i=0; i<3*nFaces; i++)
+	for (i=0; i<3*(int)nFaces; i++)
 	{
-		int loc_a,loc_b,index;
-		loc_a = m_edges[i]->m_v_begin;
-		loc_b = m_edges[i]->m_v_end;
-		
-		index = loc_ev->is_edge_visited (loc_a,loc_b);
+		int loc_a = m_edges[i].m_v_begin;
+		int loc_b = m_edges[i].m_v_end;
+
+		int index = loc_ev->is_edge_visited (loc_a, loc_b);
 		if (index != -1)
 		{
-			m_edges[i]->m_pair	= m_edges[index];
-			m_edges[index]->m_pair	= m_edges[i];
-			loc_ev->delete_edge (loc_a,loc_b);
+			m_edges[i].m_pair     = index;
+			m_edges[index].m_pair = i;
+			loc_ev->delete_edge (loc_a, loc_b);
 		}
 		else
-			loc_ev->add_edge (loc_a,loc_b,i);
+			loc_ev->add_edge (loc_a, loc_b, i);
 	}
 	delete loc_ev;
+
+	// populate the maps from m_edges for lookup functions
+	m_map_edges->clear();
+	map_edges_vertex->clear();
+	map_edges_face->clear();
+	for (i=0; i<m_ne; i++)
+	{
+		m_map_edges->insert(std::make_pair(
+			std::make_pair(m_edges[i].m_v_begin, m_edges[i].m_v_end), i));
+	}
+	for (i=0; i<(int)nVertices; i++)
+	{
+		if (m_edges_vertex[i] >= 0)
+			map_edges_vertex->insert(std::make_pair(i, m_edges_vertex[i]));
+	}
+	for (i=0; i<(int)nFaces; i++)
+	{
+		if (m_edges_face[i] >= 0)
+			map_edges_face->insert(std::make_pair(i, m_edges_face[i]));
+	}
 }
 
 
 /**
 * Flip an edge.
-*
-\verbatim
-       *                     *
-      /|\                   / \ 
-     / | \                 /   \ 
- e1 /  |  \ e4         e1 /     \ e4
-   /   |   \             /  ep   \ 
-  * edge    *    --->   *---------*
-   \   |ep /             \ edge  /
- e2 \  |  / e3         e2 \     / e3
-     \ | /                 \   /
-      \|/                   \ /
-       *                     *
-\endverbatim
 */
-void Che_mesh::edge_flip (Che_edge *par_edge)
+void Che_mesh::edge_flip (int par_edge)
 {
-	if (par_edge->m_pair == NULL)
+	if (m_edges[par_edge].m_pair < 0)
 		return;
 
 	// get the half edges
-	Che_edge *loc_e1 = par_edge->m_he_next;
-	Che_edge *loc_e2 = loc_e1->m_he_next;
-	Che_edge *loc_ep = par_edge->m_pair;
-	Che_edge *loc_e3 = loc_ep->m_he_next;
-	Che_edge *loc_e4 = loc_e3->m_he_next;
+	int loc_e1 = m_edges[par_edge].m_he_next;
+	int loc_e2 = m_edges[loc_e1].m_he_next;
+	int loc_ep = m_edges[par_edge].m_pair;
+	int loc_e3 = m_edges[loc_ep].m_he_next;
+	int loc_e4 = m_edges[loc_e3].m_he_next;
 
 	// update the links
-	par_edge->m_he_next	= loc_e2;
-	loc_e2->m_he_next	= loc_e3;
-	loc_e3->m_he_next	= par_edge;
+	m_edges[par_edge].m_he_next = loc_e2;
+	m_edges[loc_e2].m_he_next   = loc_e3;
+	m_edges[loc_e3].m_he_next   = par_edge;
 
-	loc_ep->m_he_next	= loc_e4;
-	loc_e4->m_he_next	= loc_e1;
-	loc_e1->m_he_next	= loc_ep;
+	m_edges[loc_ep].m_he_next   = loc_e4;
+	m_edges[loc_e4].m_he_next   = loc_e1;
+	m_edges[loc_e1].m_he_next   = loc_ep;
 
 	// update the extremities
-	par_edge->m_v_begin	= loc_e3->m_v_end;
-	par_edge->m_v_end	= loc_e2->m_v_begin;
-	loc_ep->m_v_begin	= loc_e1->m_v_end;
-	loc_ep->m_v_end		= loc_e4->m_v_begin;
+	m_edges[par_edge].m_v_begin = m_edges[loc_e3].m_v_end;
+	m_edges[par_edge].m_v_end   = m_edges[loc_e2].m_v_begin;
+	m_edges[loc_ep].m_v_begin   = m_edges[loc_e1].m_v_end;
+	m_edges[loc_ep].m_v_end     = m_edges[loc_e4].m_v_begin;
 
 	// update the faces
-	int loc_f1 = par_edge->m_face;
-	int loc_f2 = loc_ep->m_face;
+	int loc_f1 = m_edges[par_edge].m_face;
+	int loc_f2 = m_edges[loc_ep].m_face;
 
-	loc_e1->m_face = loc_f2;
-	loc_e2->m_face = loc_f1;
-	loc_e3->m_face = loc_f1;
-	loc_e4->m_face = loc_f2;
-/*
-	m_pFaces[3*loc_f1]->SetVertex (0, loc_e4->m_v_begin);
-	m_pFaces[3*loc_f1]->SetVertex (1, loc_e2->m_v_begin);
-	m_pFaces[3*loc_f1]->SetVertex (2, loc_e3->m_v_begin);
+	m_edges[loc_e1].m_face = loc_f2;
+	m_edges[loc_e2].m_face = loc_f1;
+	m_edges[loc_e3].m_face = loc_f1;
+	m_edges[loc_e4].m_face = loc_f2;
 
-	m_pFaces[3*loc_f2]->SetVertex (0, loc_e2->m_v_begin);
-	m_pFaces[3*loc_f2]->SetVertex (1, loc_e4->m_v_begin);
-	m_pFaces[3*loc_f2]->SetVertex (2, loc_e1->m_v_begin);
-*/
 	// update half edge from vertex
-	m_edges_vertex[loc_e1->m_v_begin] = loc_e1;
-	m_edges_vertex[loc_e2->m_v_begin] = loc_e2;
-	m_edges_vertex[loc_e3->m_v_begin] = loc_e3;
-	m_edges_vertex[loc_e4->m_v_begin] = loc_e4;
+	m_edges_vertex[m_edges[loc_e1].m_v_begin] = loc_e1;
+	m_edges_vertex[m_edges[loc_e2].m_v_begin] = loc_e2;
+	m_edges_vertex[m_edges[loc_e3].m_v_begin] = loc_e3;
+	m_edges_vertex[m_edges[loc_e4].m_v_begin] = loc_e4;
 
-	// update half edge from face (not necessary)
+	// update half edge from face
 	m_edges_face[loc_f1] = par_edge;
 	m_edges_face[loc_f2] = loc_ep;
 }
 
-/**
-* Split an edge.
-*
-\verbatim
-
-       *                     *
-      / \                   /|\ 
-     /   \                 / | \ 
- e4 /     \ e3         e4 /  |  \ e3
-   /  ep   \             /   |   \ 
-  *---------*    --->   *----*----*
-   \ edge  /             \   |   /
- e1 \     / e2         e1 \  |  / e2
-     \   /                 \ | /
-      \ /                   \|/
-       *                     *
-
-\endverbatim
-*/
-void Che_mesh::edge_split (Che_edge *par_edge)
+void Che_mesh::edge_split (int par_edge)
 {
-	if (par_edge->m_pair == NULL)
+	if (m_edges[par_edge].m_pair < 0)
 		return;
 }
 
-/**
-* Contract an edge.
-*
-\verbatim
-    *---------*
-    |\       /|
-    | \     / |
-    |  \v2 /  |
-    |   \ /   |
-    |    *    |          *---------*
-    |e1p/|\e4p|          |\       /|
-    |  / | \  |          | \     / |
-    | /e1|e4\ |          |  \   /  |
-    |/   |   \|          |e1p\ /e4p|
- v3 *   e|ep  * v4--->   *----*----*
-    |\   |   /|          |e2p/ \e3p|
-    | \e2|e3/ |          |  /   \  |
-    |  \ | /  |          | /     \ |
-    |e2p\|/e3p|          |/       \|
-    |    *    |          *---------*
-    |   / \   |
-    |  / v1\  |
-    | /     \ |
-    |/       \|
-    *---------*
-\endverbatim
-*/
-void Che_mesh::edge_contract (Che_edge *edge)
+void Che_mesh::edge_contract (int ei)
 {
-	if (edge->m_pair == NULL)
+	if (m_edges[ei].m_pair < 0)
 		return;
 
 	// vertices implied in the edge
-	int iv1 = edge->m_v_begin;
-	int iv2 = edge->m_v_end;
-	
-	// faces implied int the edge
-	int f1 = edge->m_face;
-	int f2 = edge->m_pair->m_face;
+	int iv1 = m_edges[ei].m_v_begin;
+	int iv2 = m_edges[ei].m_v_end;
+
+	// faces implied in the edge
+	int f1 = m_edges[ei].m_face;
+	int f2 = m_edges[m_edges[ei].m_pair].m_face;
 
 	// init the half edges
-	Che_edge *e1 = edge->m_he_next;
-	Che_edge *e2 = e1->m_he_next;
-	Che_edge *ep = edge->m_pair;
-	Che_edge *e3 = ep->m_he_next;
-	Che_edge *e4 = e3->m_he_next;
+	int e1 = m_edges[ei].m_he_next;
+	int e2 = m_edges[e1].m_he_next;
+	int ep = m_edges[ei].m_pair;
+	int e3 = m_edges[ep].m_he_next;
+	int e4 = m_edges[e3].m_he_next;
 
-	Che_edge *e1p = e1->m_pair;
-	Che_edge *e2p = e2->m_pair;
-	Che_edge *e3p = e3->m_pair;
-	Che_edge *e4p = e4->m_pair;
+	int e1p = m_edges[e1].m_pair;
+	int e2p = m_edges[e2].m_pair;
+	int e3p = m_edges[e3].m_pair;
+	int e4p = m_edges[e4].m_pair;
 
 	// update the links between the remaining half edges
-	if (e1p != NULL) e1p->m_pair = e2p;
-	if (e2p != NULL) e2p->m_pair = e1p;
-	if (e3p != NULL) e3p->m_pair = e4p;
-	if (e4p != NULL) e4p->m_pair = e3p;
-	if (e1p != NULL) e1p->m_v_end   = iv1;
-	if (e4p != NULL) e4p->m_v_begin = iv1;
+	if (e1p >= 0) m_edges[e1p].m_pair = e2p;
+	if (e2p >= 0) m_edges[e2p].m_pair = e1p;
+	if (e3p >= 0) m_edges[e3p].m_pair = e4p;
+	if (e4p >= 0) m_edges[e4p].m_pair = e3p;
+	if (e1p >= 0) m_edges[e1p].m_v_end   = iv1;
+	if (e4p >= 0) m_edges[e4p].m_v_begin = iv1;
 
-/*
-	// update the vertex
-	m_pVertices[3*iv1]   = (m_pVertices[3*iv1] + m_pVertices[3*iv2])*0.5;
-	m_pVertices[3*iv1+1] = (m_pVertices[3*iv1+1] + m_pVertices[3*iv2+1])*0.5;
-	m_pVertices[3*iv1+2] = (m_pVertices[3*iv1+2] + m_pVertices[3*iv2+2])*0.5;
-*/
-	m_edges_vertex[iv1] = e4p;//NULL;
-	m_edges_vertex[iv2] = NULL;
+	m_edges_vertex[iv1] = e4p;
+	m_edges_vertex[iv2] = -1;
 
-	// delete e1, e2, e3, e4, edge and ep
-	/*
-	delete e1;		e1   = NULL;
-	delete e2;		e2   = NULL;
-	delete e3;		e3   = NULL;
-	delete e4;		e4   = NULL;
-	delete edge;	        edge = NULL;
-	delete ep;		ep   = NULL;
-	*/
-	e1->m_valid = 0;
-	e2->m_valid = 0;
-	e3->m_valid = 0;
-	e4->m_valid = 0;
-	edge->m_valid = 0;
-	ep->m_valid = 0;
+	// mark edges as invalid
+	m_edges[e1].m_valid = 0;
+	m_edges[e2].m_valid = 0;
+	m_edges[e3].m_valid = 0;
+	m_edges[e4].m_valid = 0;
+	m_edges[ei].m_valid = 0;
+	m_edges[ep].m_valid = 0;
 
-/*
-	// init the faces
-	int f1 = par_edge->m_face;
-	int f2 = ep->m_face;
-
-	// delete f1 and f2
-	m_pFaces[3*f1]->SetVertex (0, m_pFaces[3*(m_nFaces-1)]->GetVertex (0));
-	m_pFaces[3*f1]->SetVertex (1, m_pFaces[3*(m_nFaces-1)]->GetVertex (1));
-	m_pFaces[3*f1]->SetVertex (2, m_pFaces[3*(m_nFaces-1)]->GetVertex (2));
-
-	m_pFaces[3*f2]->SetVertex (0, m_pFaces[3*(m_nFaces-2)]->GetVertex (0));
-	m_pFaces[3*f2]->SetVertex (1, m_pFaces[3*(m_nFaces-2)]->GetVertex (1));
-	m_pFaces[3*f2]->SetVertex (2, m_pFaces[3*(m_nFaces-2)]->GetVertex (2));
-
-	m_nFaces -= 2;
-*/
-	m_edges_face[f1] = NULL;
-       	m_edges_face[f2] = NULL;
+	m_edges_face[f1] = -1;
+	m_edges_face[f2] = -1;
 }
 
-int Che_mesh::is_edge_contract2_valid (Che_edge *edge)
+int Che_mesh::is_edge_contract2_valid (int ei)
 {
-	if (!edge->m_valid)
+	if (!m_edges[ei].m_valid)
 	{
-		printf ("invalid edge : %p : %d -> %d\n", (void*)edge, edge->m_v_begin, edge->m_v_end);
+		printf ("invalid edge : [%d] : %d -> %d\n", ei, m_edges[ei].m_v_begin, m_edges[ei].m_v_end);
 		return 0;
 	}
 
-	if (edge->m_pair == NULL)
-		return 0;
-	// vertices implied in the edge
-	int iv1 = edge->m_v_begin;
-	int iv2 = edge->m_v_end;
-	
-	int iv3 = edge->m_he_next->m_v_end;
-	int iv4 = edge->m_pair->m_he_next->m_v_end;
-	
-	Che_edge *e1 = get_edge_from_vertex (iv1);
-	Che_edge *e2 = get_edge_from_vertex (iv2);
-	if (!e1 || !e2)
+	if (m_edges[ei].m_pair < 0)
 		return 0;
 
-	Che_edge *walk1 = e1;
+	int iv1 = m_edges[ei].m_v_begin;
+	int iv2 = m_edges[ei].m_v_end;
+
+	int iv3 = m_edges[m_edges[ei].m_he_next].m_v_end;
+	int iv4 = m_edges[m_edges[m_edges[ei].m_pair].m_he_next].m_v_end;
+
+	int e1 = get_edge_from_vertex (iv1);
+	int e2 = get_edge_from_vertex (iv2);
+	if (e1 < 0 || e2 < 0)
+		return 0;
+
+	int walk1 = e1;
 	do {
-		int vwalk1 = walk1->m_v_end;
+		int vwalk1 = m_edges[walk1].m_v_end;
 		if (vwalk1 == iv1 || vwalk1 == iv3 || vwalk1 == iv4)
+		{
+			walk1 = m_edges[walk1].m_pair;
 			continue;
+		}
 
-		Che_edge *walk2 = e2;
+		int walk2 = e2;
 		do {
-			int vwalk2 = walk1->m_v_end;
+			int vwalk2 = m_edges[walk2].m_v_end;
 			if (vwalk1 == vwalk2)
 				return 0;
 
-			walk2 = walk2->m_pair;
+			walk2 = m_edges[walk2].m_pair;
 		} while (walk2 != e2);
 
-		walk1 = walk1->m_pair;
+		walk1 = m_edges[walk1].m_pair;
 	} while (walk1 != e1);
 
 	return 1;
 }
 
-int Che_mesh::edge_contract2 (Che_edge *edge)
+int Che_mesh::edge_contract2 (int ei)
 {
-	if (!is_edge_contract2_valid (edge))
+	if (!is_edge_contract2_valid (ei))
 		return -1;
 
-	// vertices implied in the edge
-	int iv1 = edge->m_v_begin;
-	int iv2 = edge->m_v_end;
-	
-	int iv3 = edge->m_he_next->m_v_end;
-	int iv4 = edge->m_pair->m_he_next->m_v_end;
+	int iv1 = m_edges[ei].m_v_begin;
+	int iv2 = m_edges[ei].m_v_end;
 
-	// faces implied int the edge
-	int f1 = edge->m_face;
-	int f2 = edge->m_pair->m_face;
+	int iv3 = m_edges[m_edges[ei].m_he_next].m_v_end;
+	int iv4 = m_edges[m_edges[m_edges[ei].m_pair].m_he_next].m_v_end;
 
-	// init the half edges
-	Che_edge *e1 = edge->m_he_next;
-	Che_edge *e2 = e1->m_he_next;
-	Che_edge *ep = edge->m_pair;
-	Che_edge *e3 = ep->m_he_next;
-	Che_edge *e4 = e3->m_he_next;
+	int f1 = m_edges[ei].m_face;
+	int f2 = m_edges[m_edges[ei].m_pair].m_face;
 
-	Che_edge *e1p = e1->m_pair;
-	Che_edge *e2p = e2->m_pair;
-	Che_edge *e3p = e3->m_pair;
-	Che_edge *e4p = e4->m_pair;
+	int e1 = m_edges[ei].m_he_next;
+	int e2 = m_edges[e1].m_he_next;
+	int ep = m_edges[ei].m_pair;
+	int e3 = m_edges[ep].m_he_next;
+	int e4 = m_edges[e3].m_he_next;
+
+	int e1p = m_edges[e1].m_pair;
+	int e2p = m_edges[e2].m_pair;
+	int e3p = m_edges[e3].m_pair;
+	int e4p = m_edges[e4].m_pair;
 
 	// replace v2 by v1 all around v2
 	{
-		Che_edge *walk = edge->m_pair;
+		int walk = ep;
 		do {
-			std::map<std::pair<int,int>,Che_edge*>::iterator it;
-			it = m_map_edges->find (std::make_pair(walk->m_v_begin, walk->m_v_end));
+			map_edges::iterator it;
+			it = m_map_edges->find (std::make_pair(m_edges[walk].m_v_begin, m_edges[walk].m_v_end));
 			if (it != m_map_edges->end ())
 				m_map_edges->erase (it);
 
-
-			//printf ("%x %x\n", walk, edge->m_pair);
-			if (walk != e1 && walk != edge->m_pair)
+			if (walk != e1 && walk != ep)
 			{
-				walk->m_v_begin = iv1;
-				m_map_edges->insert (std::make_pair(std::make_pair(walk->m_v_begin, walk->m_v_end), walk));
+				m_edges[walk].m_v_begin = iv1;
+				m_map_edges->insert (std::make_pair(std::make_pair(m_edges[walk].m_v_begin, m_edges[walk].m_v_end), walk));
 			}
-			
-			walk = walk->m_he_next->m_he_next;
 
-			it = m_map_edges->find (std::make_pair(walk->m_v_begin, walk->m_v_end));
+			int n1 = m_edges[walk].m_he_next;
+			walk = m_edges[n1].m_he_next;
+
+			it = m_map_edges->find (std::make_pair(m_edges[walk].m_v_begin, m_edges[walk].m_v_end));
 			if (it != m_map_edges->end ())
 				m_map_edges->erase (it);
 
-			if (walk != edge && walk != e4)
+			if (walk != ei && walk != e4)
 			{
-				walk->m_v_end = iv1;
-				m_map_edges->insert (std::make_pair(std::make_pair(walk->m_v_begin, walk->m_v_end), walk));
+				m_edges[walk].m_v_end = iv1;
+				m_map_edges->insert (std::make_pair(std::make_pair(m_edges[walk].m_v_begin, m_edges[walk].m_v_end), walk));
 			}
 
-			walk = walk->m_pair;
-		} while (walk != edge->m_pair);
-/*
-		walk = edge;
-		do {
-			//printf ("%x %x\n", walk, edge);
-			walk = walk->m_he_next->m_he_next;
-			walk = walk->m_pair;
-		} while (walk != edge);
-*/
+			walk = m_edges[walk].m_pair;
+		} while (walk != ep);
 	}
 
 	// update the links between the remaining half edges
-	if (e1p) e1p->m_pair = e2p;
-	if (e2p) e2p->m_pair = e1p;
-	if (e3p) e3p->m_pair = e4p;
-	if (e4p) e4p->m_pair = e3p;
-	//if (e1p) e1p->m_v_end   = iv1;
-	//if (e4p) e4p->m_v_begin = iv1;
+	if (e1p >= 0) m_edges[e1p].m_pair = e2p;
+	if (e2p >= 0) m_edges[e2p].m_pair = e1p;
+	if (e3p >= 0) m_edges[e3p].m_pair = e4p;
+	if (e4p >= 0) m_edges[e4p].m_pair = e3p;
 
+	// mark as invalid
+	m_edges[e1].m_valid = 0;
+	m_edges[e2].m_valid = 0;
+	m_edges[e3].m_valid = 0;
+	m_edges[e4].m_valid = 0;
+	m_edges[ei].m_valid = 0;
+	m_edges[ep].m_valid = 0;
 
-	// discard edge, ep, e1, e2, e3 & e4
-/*
-	if (1) {
-		Che_edge *edges_to_delete[6] = {e1, e2, e3, e4, edge, ep};
-		for (int i=4; i<6; i++)
-		{
-			Che_edge *e = edges_to_delete[i];
-			e->dump ();
-			std::map<std::pair<int,int>,Che_edge*>::iterator it;
-			printf ("%d %d\n", e->m_v_begin, e->m_v_end);
-			it = m_map_edges->find (std::make_pair(e->m_v_begin, e->m_v_end));
-			if (it != m_map_edges->end ())
-			{
-				delete (it->second);
-				m_map_edges->erase (it);
-			}
-		}
-	}
-	else
-	{
-		std::map<std::pair<int,int>,Che_edge*>::iterator it;
-		it = m_map_edges->find (std::make_pair(iv1, iv2));
-		if (it != m_map_edges->end ())
-		{
-			delete (it->second);
-			m_map_edges->erase (it);
-		}
-		it = m_map_edges->find (std::make_pair(iv2, iv1));
-		if (it != m_map_edges->end ())
-		{
-			delete (it->second);
-			m_map_edges->erase (it);
-		}
-	}
-*/
-
-
-	e1->m_valid = 0;
-	e2->m_valid = 0;
-	e3->m_valid = 0;
-	e4->m_valid = 0;
-	edge->m_valid = 0;
-	ep->m_valid = 0;
-
-
-
-/*
-	// update the vertex
-	m_pVertices[3*iv1]   = (m_pVertices[3*iv1] + m_pVertices[3*iv2])*0.5;
-	m_pVertices[3*iv1+1] = (m_pVertices[3*iv1+1] + m_pVertices[3*iv2+1])*0.5;
-	m_pVertices[3*iv1+2] = (m_pVertices[3*iv1+2] + m_pVertices[3*iv2+2])*0.5;
-*/
 	map_edges_vertex->erase (iv1);
 	map_edges_vertex->insert (std::make_pair (iv1, e4p));
 	map_edges_vertex->erase (iv2);
@@ -773,35 +637,8 @@ int Che_mesh::edge_contract2 (Che_edge *edge)
 	map_edges_vertex->erase (iv4);
 	map_edges_vertex->insert (std::make_pair (iv4, e3p));
 
-	// delete e1, e2, e3, e4, edge and ep
-/*
-	delete e1;		e1   = NULL;
-	delete e2;		e2   = NULL;
-	delete e3;		e3   = NULL;
-	delete e4;		e4   = NULL;
-	delete edge;	        edge = NULL;
-	delete ep;		ep   = NULL;
-*/
-
-/*
-	// init the faces
-	int f1 = par_edge->m_face;
-	int f2 = ep->m_face;
-
-	// delete f1 and f2
-	m_pFaces[3*f1]->SetVertex (0, m_pFaces[3*(m_nFaces-1)]->GetVertex (0));
-	m_pFaces[3*f1]->SetVertex (1, m_pFaces[3*(m_nFaces-1)]->GetVertex (1));
-	m_pFaces[3*f1]->SetVertex (2, m_pFaces[3*(m_nFaces-1)]->GetVertex (2));
-
-	m_pFaces[3*f2]->SetVertex (0, m_pFaces[3*(m_nFaces-2)]->GetVertex (0));
-	m_pFaces[3*f2]->SetVertex (1, m_pFaces[3*(m_nFaces-2)]->GetVertex (1));
-	m_pFaces[3*f2]->SetVertex (2, m_pFaces[3*(m_nFaces-2)]->GetVertex (2));
-
-	m_nFaces -= 2;
-*/
 	map_edges_face->erase (f1);
 	map_edges_face->erase (f2);
 
 	return 0;
 }
-

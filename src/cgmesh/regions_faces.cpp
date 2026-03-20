@@ -80,15 +80,15 @@ Cregions_faces::export_selected_region_cloud_points (char *filename)
 	int i,j;
 	int *selected_vertices;
 	int n_selected_vertices;
-	
+
 	FILE *ptr = fopen (filename,"wt");
 	assert (ptr);
-	
+
 	int n_vertices;
 	float *vertices = NULL;
 	Face **faces;
 	float *normales;
-	
+
 	if (mesh_half_edge)
     {
 		n_vertices = mesh_half_edge->m_pMesh->m_nVertices;
@@ -97,11 +97,11 @@ Cregions_faces::export_selected_region_cloud_points (char *filename)
 		normales   = mesh_half_edge->m_pMesh->m_pVertexNormals;
 	}
 	if (!vertices) return;
-	
+
 	selected_vertices = new int[n_vertices];
 	assert (selected_vertices);
 	n_selected_vertices = 0;
-	
+
 	for (i=0; i<size; i++)
     {
 		if (selected_region[i] == 1)
@@ -141,7 +141,7 @@ Cregions_faces::export_selected_region_cloud_points (char *filename)
 			}
 		}
     }
-	
+
 	fprintf (ptr, "%d\n", n_selected_vertices);
 	for (i=0; i<n_selected_vertices; i++)
 		fprintf (ptr, "%f %f %f %f %f %f\n",
@@ -165,16 +165,17 @@ Cregions_faces::init_segmentation (float epsilon)
 	Cgarray *neighborhood;
 	int current_region;
 	int n_faces = size;
-	
+
 	// determine for each face the label of the region containing it
 	assert (data && regions && selected_region);
 	current_region = 0;
 	for (i=0; i<n_faces; i++) regions[i] = -1;
-	
+
 	if (mesh_half_edge)
 	{
+		Che_mesh *chePtr = mesh_half_edge->m_pCheMesh;
 		FILE* ptr = fopen ("output.txt", "w");
-		
+
 		float *fn = mesh_half_edge->m_pMesh->m_pFaceNormals;
 		for (i=0; i<n_faces; i++)
 		{
@@ -185,17 +186,17 @@ Cregions_faces::init_segmentation (float epsilon)
 				Vector3d n (fn[3*i], fn[3*i+1], fn[3*i+2]);
 				fprintf (ptr, "face %d / %d : %f %f %f\n", i, n_faces, n.x, n.y, n.z);
 				neighborhood = new Cgarray ();
-				
-				Che_edge *e = mesh_half_edge->m_pCheMesh->m_edges_face[i];
-				if (!e) continue;
-				Che_edge *e_walk = e;
+
+				int e = chePtr->m_edges_face[i];
+				if (e < 0) continue;
+				int e_walk = e;
 				do
 				{
-					if (e_walk->m_pair) neighborhood->add ((void*)e_walk->m_pair->m_face);
+					if (chePtr->edge(e_walk).m_pair >= 0) neighborhood->add ((void*)(uintptr_t)chePtr->edge(chePtr->edge(e_walk).m_pair).m_face);
 					else			    break;
-					e_walk = e_walk->m_he_next;
-				} while (e_walk && e_walk != e);
-				
+					e_walk = chePtr->edge(e_walk).m_he_next;
+				} while (e_walk >= 0 && e_walk != e);
+
 				for (j=0; j<neighborhood->get_size (); j++)
 				{
 					uintptr_t index_walk = (uintptr_t)(neighborhood->get_data (j));
@@ -208,16 +209,16 @@ Cregions_faces::init_segmentation (float epsilon)
 							n.Set ((n.x*count+ntmp.x)/(count+1),
 								(n.y*count+ntmp.y)/(count+1),
 								(n.z*count+ntmp.z)/(count+1));
-							
-							Che_edge *e = mesh_half_edge->m_pCheMesh->m_edges_face[index_walk];
-							if (!e) continue;
-							Che_edge *e_walk = e;
+
+							int e = chePtr->m_edges_face[index_walk];
+							if (e < 0) continue;
+							int e_walk = e;
 							do
 							{
-								if (e_walk->m_pair) neighborhood->add ((void*)e_walk->m_pair->m_face);
+								if (chePtr->edge(e_walk).m_pair >= 0) neighborhood->add ((void*)(uintptr_t)chePtr->edge(chePtr->edge(e_walk).m_pair).m_face);
 								else				break;
-								e_walk = e_walk->m_he_next;
-							} while (e_walk && e_walk != e);
+								e_walk = chePtr->edge(e_walk).m_he_next;
+							} while (e_walk >= 0 && e_walk != e);
 							count++;
 						}
 					}
@@ -238,18 +239,18 @@ Cregions_faces::clean_segmentation (float percentage)
 	float *areas_by_region;
 	int n_regions = 0;
 	int n_faces = mesh_half_edge->m_pMesh->m_nFaces;
-	
+
 	for (i=0; i<n_faces; i++)
 		if (n_regions < regions[i])
 			n_regions = regions[i];
 		n_regions++;
-		
+
 		areas_by_region = (float*)malloc(n_regions*sizeof(float));
 		assert (areas_by_region);
 		areas_by_region = (float*)memset((void*)areas_by_region, 0, n_regions*sizeof(float));
 		float *areas = mesh_half_edge->m_pMesh->GetAreas ();
 		assert (areas);
-		
+
 		// determine the area of each region
 		for (i=0; i<n_faces; i++)
 			areas_by_region[regions[i]] += areas[i];
@@ -285,7 +286,7 @@ Cregions_faces::clean_segmentation (float percentage)
 			}
 		}
 		*/
-		
+
 		free (areas_by_region);
 		free (areas);
 }
@@ -296,7 +297,7 @@ Cregions_faces::refresh_colors (void)
 	int i, j, nv, nf;
 	float *vc = NULL;
 	Face **f = NULL;
-	
+
 	// get the array for the colors
 	if (mesh_half_edge)
 	{
@@ -307,24 +308,29 @@ Cregions_faces::refresh_colors (void)
 	}
 	assert (vc && f);
 	if (!vc || !f) return;
-	
+
 	if (mesh_half_edge)
 	{
+		Che_mesh *chePtr = mesh_half_edge->m_pCheMesh;
+
 		// paint the boundaries
 		for (i=0; i<nv; i++)
 		{
 			int is_boundary = 0;
-			int region_walk = regions[mesh_half_edge->m_pCheMesh->m_edges_vertex[i]->m_face];
-			Che_edge *e = mesh_half_edge->m_pCheMesh->m_edges_vertex[i];
-			if (!e) continue;
-			Che_edge *e_walk = e;
+			int ev = chePtr->m_edges_vertex[i];
+			if (ev < 0) continue;
+			int region_walk = regions[chePtr->edge(ev).m_face];
+			int e = ev;
+			int e_walk = e;
 			do
 			{
-				if (regions[e_walk->m_face] != region_walk) is_boundary = 1;			  
-				
-				e_walk = e_walk->m_he_next->m_he_next->m_pair;
-			} while (e_walk && e_walk != e);
-			
+				if (regions[chePtr->edge(e_walk).m_face] != region_walk) is_boundary = 1;
+
+				int n1 = chePtr->edge(e_walk).m_he_next;
+				int n2 = chePtr->edge(n1).m_he_next;
+				e_walk = chePtr->edge(n2).m_pair;
+			} while (e_walk >= 0 && e_walk != e);
+
 			if (is_boundary)
 			{
 				vc[3*i]   = 1.0f;
@@ -337,7 +343,7 @@ Cregions_faces::refresh_colors (void)
 				vc[3*i+1] = 0.5f;
 				vc[3*i+2] = 0.5f;
 			}
-			
+
 		}
 		// paint the selected region
 		for (i=0; i<nf; i++)
@@ -348,19 +354,19 @@ Cregions_faces::refresh_colors (void)
 				vc[3*f[i]->GetVertex(0)]     = 1.0;
 				vc[3*f[i]->GetVertex(0)+1]   = 1.0;
 				vc[3*f[i]->GetVertex(0)+2]   = 0.0;
-				
+
 				/* second vertex */
 				vc[3*f[i]->GetVertex(1)]   = 1.0;
 				vc[3*f[i]->GetVertex(1)+1] = 1.0;
 				vc[3*f[i]->GetVertex(1)+2] = 0.0;
-				
+
 				/* third vertex */
 				vc[3*f[i]->GetVertex(2)]   = 1.0;
 				vc[3*f[i]->GetVertex(2)+1] = 1.0;
 				vc[3*f[i]->GetVertex(2)+2] = 0.0;
 			}
 		}
-		
+
 	}
 }
 
@@ -436,27 +442,28 @@ Cregions_faces::dilate_regions (void)
 
 	if (mesh_half_edge)
 	{
+		Che_mesh *chePtr = mesh_half_edge->m_pCheMesh;
 		for (i=0; i<size; i++)
 		{
 			res[i] = regions[i];
-			
+
 			// look for the neighbours
 			if (regions[i] == 0)
 			{
-				Che_edge *e = mesh_half_edge->m_pCheMesh->m_edges_face[i];
-				if (!e) continue;
-				Che_edge *e_walk = e;
+				int e = chePtr->m_edges_face[i];
+				if (e < 0) continue;
+				int e_walk = e;
 				do
 				{
-					if (regions[e_walk->m_pair->m_face] == 1)
+					if (chePtr->edge(e_walk).m_pair >= 0 && regions[chePtr->edge(chePtr->edge(e_walk).m_pair).m_face] == 1)
 						res[i] = 1;
-					
-					e_walk = e_walk->m_he_next;
-				} while (e_walk && e_walk != e);
+
+					e_walk = chePtr->edge(e_walk).m_he_next;
+				} while (e_walk >= 0 && e_walk != e);
 			}
 		}
 	}
-	
+
 	delete regions;
 	regions = res;
 }
@@ -469,30 +476,31 @@ Cregions_faces::erode_regions (void)
 {
 	int *res = new int[size];
 	int i;
-	
+
 	if (mesh_half_edge)
 	{
+		Che_mesh *chePtr = mesh_half_edge->m_pCheMesh;
 		for (i=0; i<size; i++)
 		{
 			res[i] = regions[i];
-			
+
 			// look for the neighbours
 			if (regions[i] == 1)
 			{
-				Che_edge *e = mesh_half_edge->m_pCheMesh->m_edges_face[i];
-				if (!e) continue;
-				Che_edge *e_walk = e;
+				int e = chePtr->m_edges_face[i];
+				if (e < 0) continue;
+				int e_walk = e;
 				do
 				{
-					if (regions[e_walk->m_pair->m_face] == 0)
+					if (chePtr->edge(e_walk).m_pair >= 0 && regions[chePtr->edge(chePtr->edge(e_walk).m_pair).m_face] == 0)
 						res[i] = 0;
-					
-					e_walk = e_walk->m_he_next;
-				} while (e_walk && e_walk != e);
+
+					e_walk = chePtr->edge(e_walk).m_he_next;
+				} while (e_walk >= 0 && e_walk != e);
 			}
 		}
 	}
-	
+
 	delete regions;
 	regions = res;
 }
@@ -547,31 +555,32 @@ Cregions_faces::dilate_selected_region (void)
 {
 	int *res = new int[size];
 	int i;
-	
+
 
 	if (mesh_half_edge)
 	{
+		Che_mesh *chePtr = mesh_half_edge->m_pCheMesh;
 		for (i=0; i<size; i++)
 		{
 			res[i] = selected_region[i];
-			
+
 			// look for the neighbours
 			if (selected_region[i] == 0)
 			{
-				Che_edge *e = mesh_half_edge->m_pCheMesh->m_edges_face[i];
-				if (!e) continue;
-				Che_edge *e_walk = e;
+				int e = chePtr->m_edges_face[i];
+				if (e < 0) continue;
+				int e_walk = e;
 				do
 				{
-					if (selected_region[e_walk->m_pair->m_face] == 1)
+					if (chePtr->edge(e_walk).m_pair >= 0 && selected_region[chePtr->edge(chePtr->edge(e_walk).m_pair).m_face] == 1)
 						res[i] = 1;
-					
-					e_walk = e_walk->m_he_next;
-				} while (e_walk && e_walk != e);
+
+					e_walk = chePtr->edge(e_walk).m_he_next;
+				} while (e_walk >= 0 && e_walk != e);
 			}
 		}
 	}
-	
+
 	delete selected_region;
 	selected_region = res;
 }
@@ -584,30 +593,31 @@ Cregions_faces::erode_selected_region (void)
 {
 	int *res = new int[size];
 	int i;
-	
+
 	if (mesh_half_edge)
 	{
+		Che_mesh *chePtr = mesh_half_edge->m_pCheMesh;
 		for (i=0; i<size; i++)
 		{
 			res[i] = selected_region[i];
-			
+
 			// look for the neighbours
 			if (selected_region[i] == 1)
 			{
-				Che_edge *e = mesh_half_edge->m_pCheMesh->m_edges_face[i];
-				if (!e) continue;
-				Che_edge *e_walk = e;
+				int e = chePtr->m_edges_face[i];
+				if (e < 0) continue;
+				int e_walk = e;
 				do
 				{
-					if (selected_region[e_walk->m_pair->m_face] == 0)
+					if (chePtr->edge(e_walk).m_pair >= 0 && selected_region[chePtr->edge(chePtr->edge(e_walk).m_pair).m_face] == 0)
 						res[i] = 0;
-					
-					e_walk = e_walk->m_he_next;
-				} while (e_walk && e_walk != e);
+
+					e_walk = chePtr->edge(e_walk).m_he_next;
+				} while (e_walk >= 0 && e_walk != e);
 			}
 		}
 	}
-	
+
 	delete selected_region;
 	selected_region = res;
 }
@@ -690,43 +700,43 @@ Plane* Cregions_faces::plane_fitting  (void)
 	float *v;
 	unsigned int *f;
 	float *fn;
-	
+
 	if (mesh_half_edge)
 	{
 		v  = mesh_half_edge->m_pMesh->m_pVertices;
 		f  = mesh_half_edge->m_pMesh->GetTriangles ();
 		fn = mesh_half_edge->m_pMesh->m_pFaceNormals;
 	}
-	
+
 	for (i=0; i<size; i++)
     {
 		if (selected_region[i] == 1)
 		{
-			
+
 			Vector3f v1 (v[3*f[3*i]], v[3*f[3*i]+1], v[3*f[3*i]+2]);
 			Vector3f v2 (v[3*f[3*i+1]], v[3*f[3*i+1]+1], v[3*f[3*i+1]+2]);
 			Vector3f v3 (v[3*f[3*i+2]], v[3*f[3*i+2]+1], v[3*f[3*i+2]+2]);
 			Vector3f barycenter ((v1.x + v2.x + v3.x) / 3.0,
 				(v1.y + v2.y + v3.y) / 3.0,
 				(v1.z + v2.z + v3.z) / 3.0);
-			
+
 			center = center + barycenter;
-			
+
 			Vector3f n (fn[3*i], fn[3*i+1], fn[3*i+2]);
 			normale = normale + n;
-			
+
 			n_selected_faces++;
 		}
 	}
-	
+
 	center.x /= n_selected_faces;
 	center.y /= n_selected_faces;
 	center.z /= n_selected_faces;
-	
+
 	normale.x /= n_selected_faces;
 	normale.y /= n_selected_faces;
 	normale.z /= n_selected_faces;
-	
+
 	Plane *plane = new Plane (center, normale);
 	return plane;
 }

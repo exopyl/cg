@@ -33,12 +33,13 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 			vec3_init (n, 0.0, 0.0, 0.0);
 
 			Citerator_half_edges_vertex he_ite (mesh->m_pCheMesh, i);
-			Che_edge *he;
+			int he;
 			int a,b,c;
 			float *v = mesh->m_pMesh->m_pVertices;
-			for (he = he_ite.first (); he && !he_ite.isLast (); he = he_ite.next ())
+			for (he = he_ite.first (); he >= 0 && !he_ite.isLast (); he = he_ite.next ())
 			{
-				Face *f = mesh->m_pMesh->m_pFaces[he->m_face];
+				Che_edge &e = mesh->m_pCheMesh->edge(he);
+				Face *f = mesh->m_pMesh->m_pFaces[e.m_face];
 				a = f->GetVertex (0);
 				b = f->GetVertex(1);
 				c = f->GetVertex(2);
@@ -70,12 +71,13 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 			vec3_init (n, 0.0, 0.0, 0.0);
 
 			Citerator_half_edges_vertex he_ite (mesh->m_pCheMesh, i);
-			Che_edge *he;
+			int he;
 			int a,b,c;
 			float *v = mesh->m_pMesh->m_pVertices;
-			for (he = he_ite.first (); he && !he_ite.isLast (); he = he_ite.next ())
+			for (he = he_ite.first (); he >= 0 && !he_ite.isLast (); he = he_ite.next ())
 			{
-				Face *f = mesh->m_pMesh->m_pFaces[he->m_face];
+				Che_edge &e = mesh->m_pCheMesh->edge(he);
+				Face *f = mesh->m_pMesh->m_pFaces[e.m_face];
 				if (f->GetVertex (0) == i)
 				{
 					a = f->GetVertex (0);

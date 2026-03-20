@@ -32,9 +32,9 @@ bool MeshAlgoSmoothingTaubin::ApplyCoefficient (Mesh_half_edge *model, float coe
 		x_translate = y_translate = z_translate = 0.0;
 		Citerator_half_edges_vertex he_ite (model->m_pCheMesh, i);
 		n_neighbours = 0;
-		for (Che_edge *he_walk = he_ite.first (); he_walk && !he_ite.isLast (); he_walk = he_ite.next ())
+		for (int he_walk = he_ite.first (); he_walk >= 0 && !he_ite.isLast (); he_walk = he_ite.next ())
 		{
-			int index = he_walk->m_v_end;
+			int index = model->m_pCheMesh->edge(he_walk).m_v_end;
 			x_translate += v[3*index]   - v[3*i];
 			y_translate += v[3*index+1] - v[3*i+1];
 			z_translate += v[3*index+2] - v[3*i+2];

@@ -8,16 +8,14 @@ bool MeshAlgoTensorEvaluator::ApplyTaubin (void)
 	int nv = m_pModel->m_pMesh->m_nVertices;
 	float *v = m_pModel->m_pMesh->m_pVertices;
 	float *vn = m_pModel->m_pMesh->m_pVertexNormals;
-	Che_edge** m_edges_vertex = m_pModel->m_pCheMesh->m_edges_vertex;
-
 	int i,k;
 	float eigenvectors[3][3];
 	float eigenvalues[3];
 	float m[9];
-	
+
 	//if (!m_tensor)
 	//	m_tensor = (Ctensor**)malloc(nv*sizeof(Ctensor*));
-	
+
 	for (i=0; i<nv; i++)
     {
 		if (!m_pModel->m_topology_ok[i] || m_pModel->m_border[i])
@@ -25,7 +23,7 @@ bool MeshAlgoTensorEvaluator::ApplyTaubin (void)
 			m_pDiffParams[i] = NULL;
 			continue;
 		}
-		
+
 		Tensor *pDiffParamWalk;
 		float u_x, u_y, u_z;
 		float v_x, v_y, v_z;
@@ -35,7 +33,7 @@ bool MeshAlgoTensorEvaluator::ApplyTaubin (void)
 		int neighbour, n_neighbours = m_pModel->get_n_neighbours (i);
 		int i_zero=0, i_min=0, i_max=0;
 		double zero;
-		
+
 		m[0]=m[1]=m[2]=m[3]=m[4]=m[5]=m[6]=m[7]=m[8]=0.0;
 		u_x = v[3*i];
 		u_y = v[3*i+1];
@@ -48,12 +46,12 @@ bool MeshAlgoTensorEvaluator::ApplyTaubin (void)
 		n_y = vn[3*i+1];
 		n_z = vn[3*i+2];
 		//printf ("n: %f %f %f\n", n_x, n_y, n_z);
-		
-		Che_edge *e = m_edges_vertex[i];
-		Che_edge *e_walk = e;
+
+		int e = m_pModel->m_pCheMesh->m_edges_vertex[i];
+		int e_walk = e;
 		do
 		{
-			neighbour = e_walk->m_v_end;
+			neighbour = m_pModel->m_pCheMesh->edge(e_walk).m_v_end;
 			v_x = v[3*neighbour];
 			v_y = v[3*neighbour+1];
 			v_z = v[3*neighbour+2];
@@ -83,8 +81,9 @@ bool MeshAlgoTensorEvaluator::ApplyTaubin (void)
 			m[3] += kappa*t_y*t_x;    m[4] += kappa*t_y*t_y;    m[5] += kappa*t_y*t_z;
 			m[6] += kappa*t_z*t_x;    m[7] += kappa*t_z*t_y;    m[8] += kappa*t_z*t_z;
 			
-			e_walk = e_walk->m_he_next->m_he_next->m_pair;
-		} while (e_walk && e_walk != e);
+			int he_next = m_pModel->m_pCheMesh->edge(e_walk).m_he_next;
+			e_walk = m_pModel->m_pCheMesh->edge(m_pModel->m_pCheMesh->edge(he_next).m_he_next).m_pair;
+		} while (e_walk >= 0 && e_walk != e);
 
 		// make the complete (symmetric) matrix
 		m[3] = m[1];

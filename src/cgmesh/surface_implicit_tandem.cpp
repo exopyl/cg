@@ -36,9 +36,9 @@ typedef struct _edge_data_
 	vec3 m_p;
 } edge_data_t;
 
-static void edge_data_dump (Che_edge *e)
+static void edge_data_dump (Che_edge &e)
 {
-	edge_data_t *edata = (edge_data_t*)e->m_data;
+	edge_data_t *edata = (edge_data_t*)e.m_data;
 	printf ("=> %f %f %f (%f)\n", edata->m_p[0], edata->m_p[1], edata->m_p[2], edata->m_error);
 }
 
@@ -99,17 +99,18 @@ static int tandem_update_vertex_quadric (mc_triangulation_t *pTri, int vi)
 	quadric_zero (qv);
 	
 	// iterate over faces adjacent to vi
-	std::map<int,Che_edge*>::iterator it = he_mesh->map_edges_vertex->find (vi);
+	std::map<int,int>::iterator it = he_mesh->map_edges_vertex->find (vi);
 	if (it == he_mesh->map_edges_vertex->end())
 		return -1;
-	
-	Che_edge *e = it->second;
-	Che_edge *e_walk = e;
+
+	int e_idx = it->second;
+	int e_walk_idx = e_idx;
 	do {
-		if (!e_walk)
+		if (e_walk_idx < 0)
 			break;
 
-		unsigned int f = e_walk->m_face;
+		Che_edge &e_walk = he_mesh->edge(e_walk_idx);
+		unsigned int f = e_walk.m_face;
 /*
 		printf ("face %d (%d %d %d) => %f\n", f,
 			pTri->faces[3*f], pTri->faces[3*f+1], pTri->faces[3*f+2],
@@ -119,18 +120,18 @@ static int tandem_update_vertex_quadric (mc_triangulation_t *pTri, int vi)
 		{
 			vec4 plane_eq;
 			quadric_t qf;
-			
+
 			plane_quadric(pTri->fplane[f], qf);
 //			quadric_dump (qf);
 
 			quadric_scale(qf, qf, pTri->farea[f]);
 			quadric_add(qv, qv, qf);
-			
+
 			total_area += pTri->farea[f];
 		}
-		
-		e_walk = e_walk->m_pair->m_he_next;
-	} while (e_walk != e);
+
+		e_walk_idx = he_mesh->edge(e_walk.m_pair).m_he_next;
+	} while (e_walk_idx != e_idx);
 
 	if (total_area != 0.0f)
 		quadric_scale(qv, qv, 1.0f / total_area);
@@ -142,12 +143,13 @@ static int tandem_update_vertex_quadric (mc_triangulation_t *pTri, int vi)
 }
 
 // evaluate quadric metric on an edge
-static int tandem_update_edge_quadric (mc_triangulation_t *pTri, Che_edge *he, float errors_range[2])
+static int tandem_update_edge_quadric (mc_triangulation_t *pTri, int he_idx, float errors_range[2])
 {
 	Che_mesh *he_mesh = pTri->he_mesh;
+	Che_edge &he = he_mesh->edge(he_idx);
 
-	unsigned int v0 = he->m_v_begin;
-	unsigned int v1 = he->m_v_end;
+	unsigned int v0 = he.m_v_begin;
+	unsigned int v1 = he.m_v_end;
 	vec3 vec0, vec1, vnew;
 	quadric_t q0, q1, qe;
 	float error;
@@ -186,20 +188,21 @@ static int tandem_update_edge_quadric (mc_triangulation_t *pTri, Che_edge *he, f
 			vec3_init (vec0, vertices[3*vi0], vertices[3*vi0+1], vertices[3*vi0+2]);
 			if (vec3_distance (vec0, vnew) < EPSILON)
 				continue;
-			std::map<int,Che_edge*>::iterator it = he_mesh->map_edges_vertex->find (vi0);
-			Che_edge *e = it->second;
-			Che_edge *e_walk = e;
+			std::map<int,int>::iterator it = he_mesh->map_edges_vertex->find (vi0);
+			int eidx = it->second;
+			int e_walk_idx = eidx;
 			do
 			{
-				if (e_walk && e_walk->m_valid)
+				if (e_walk_idx >= 0 && he_mesh->edge(e_walk_idx).m_valid)
 				{
-					int vi1 = e_walk->m_v_end;
-					int vi2 = e_walk->m_he_next->m_v_end;
+					Che_edge &ew = he_mesh->edge(e_walk_idx);
+					int vi1 = ew.m_v_end;
+					int vi2 = he_mesh->edge(ew.m_he_next).m_v_end;
 					if (vi1 != v0 && vi2 != v0 && vi1 != v1 && vi2 != v1)
 					{
 						vec3_init (vec1, vertices[3*vi1], vertices[3*vi1+1], vertices[3*vi1+2]);
 						vec3_init (vec2, vertices[3*vi2], vertices[3*vi2+1], vertices[3*vi2+2]);
-						
+
 						// compare (v0 v1 v2) & (vnew v1 v2)
 						//printf ("%d %d %d vs %d %d %d\n", vi0, vi1, vi2, vi0, vi1, vi2);
 						vec3_triangle_normal (n, vec0, vec1, vec2);
@@ -216,22 +219,23 @@ static int tandem_update_edge_quadric (mc_triangulation_t *pTri, Che_edge *he, f
 						}
 					}
 				}
-				
-				e_walk = e_walk->m_he_next->m_he_next->m_pair;
-			} while (e_walk != e);
+
+				Che_edge &ew = he_mesh->edge(e_walk_idx);
+				e_walk_idx = he_mesh->edge(he_mesh->edge(ew.m_he_next).m_he_next).m_pair;
+			} while (e_walk_idx != eidx);
 		}
 		if (bFlip)
 			error = INFINITY;
 	}
 	
 	edge_data_t *edata = NULL;
-	if (he->m_data == NULL)
+	if (he.m_data == NULL)
 	{
-		he->m_data = (edge_data_t*)malloc(sizeof(edge_data_t));
+		he.m_data = (edge_data_t*)malloc(sizeof(edge_data_t));
 	}
-	if (he->m_pair)
-		he->m_pair->m_data = he->m_data;
-	edata = (edge_data_t*)he->m_data;
+	if (he.m_pair >= 0)
+		he_mesh->edge(he.m_pair).m_data = he.m_data;
+	edata = (edge_data_t*)he.m_data;
 
 	// store info
 	quadric_copy (edata->q, qe);
@@ -269,13 +273,14 @@ static void tandem_simplify (mc_triangulation_t *pTri)
 
 	// initialize edge quadrics
 	float errors_range[2] = {INFINITY, -INFINITY};
-	for (std::map<std::pair<int,int>,Che_edge*>::iterator it=he_mesh->m_map_edges->begin ();
+	for (std::map<std::pair<int,int>,int>::iterator it=he_mesh->m_map_edges->begin ();
 	     it != he_mesh->m_map_edges->end ();
 	     it++)
 	{
-		Che_edge *he = it->second;
-		if (he && he->m_valid)
-			tandem_update_edge_quadric (pTri, he, errors_range);
+		int he_idx = it->second;
+		Che_edge &he = he_mesh->edge(he_idx);
+		if (he.m_valid)
+			tandem_update_edge_quadric (pTri, he_idx, errors_range);
 	}
 	//printf ("error_min = %f(%f) error_max = %f(%f)\n", errors_range[0], log(errors_range[0]), errors_range[1], log(errors_range[1]));
 
@@ -283,77 +288,80 @@ static void tandem_simplify (mc_triangulation_t *pTri)
 		//printf ("%d edges\t %d faces\t %d vertices\n",
 		//he_mesh->m_map_edges->size(), he_mesh->map_edges_face->size(), he_mesh->map_edges_vertex->size());
 		//printf ("%d\n", he_mesh->m_map_edges->size());
-		for (std::map<std::pair<int,int>,Che_edge*>::iterator ite=he_mesh->m_map_edges->begin ();
+		for (std::map<std::pair<int,int>,int>::iterator ite=he_mesh->m_map_edges->begin ();
 		     ite != he_mesh->m_map_edges->end ();
 		     ite++)
-		{	
-			Che_edge *he = ite->second;
-			if (!he || !he->m_valid)
+		{
+			int he_idx = ite->second;
+			Che_edge &he = he_mesh->edge(he_idx);
+			if (!he.m_valid)
 				continue;
 
-			if (he_mesh->is_border(he->m_v_begin) || he_mesh->is_border(he->m_v_end))
+			if (he_mesh->is_border(he.m_v_begin) || he_mesh->is_border(he.m_v_end))
 				continue;
 
-			edge_data_t *edata = (edge_data_t*)he->m_data;
+			edge_data_t *edata = (edge_data_t*)he.m_data;
 			bool bContract = true;
-			
-			int v1 = he->m_v_begin;
-			int v2 = he->m_v_end;
+
+			int v1 = he.m_v_begin;
+			int v2 = he.m_v_end;
 			if (he_mesh->vertex_is_near_border (v1) || he_mesh->vertex_is_near_border (v2))
 				bContract = false;
 
 			if (bContract
 			    && edata->m_error <= EPSILON //0.0000005
-			    && he_mesh->is_edge_contract2_valid (he))
+			    && he_mesh->is_edge_contract2_valid (he_idx))
 			{
 				bAgain = true;
 				vec3 vnew;
-				vec3_copy (vnew, ((edge_data_t*)he->m_data)->m_p);
+				vec3_copy (vnew, ((edge_data_t*)he.m_data)->m_p);
 
-				he_mesh->edge_contract2 (he);
+				he_mesh->edge_contract2 (he_idx);
 /*
 				printf ("~~~~~~~~ after contraction (%e) : (%d / %d) %f %f %f / %f %f %f => %f %f %f\n",
 					edata->m_error, v1, v2,
 					vertices[3*v1], vertices[3*v1+1], vertices[3*v1+2],
 					vertices[3*v2], vertices[3*v2+1], vertices[3*v2+2],
 					vnew[0], vnew[1], vnew[2]);
-*/				
+*/
 				vertices[3*v1]   = vnew[0];
 				vertices[3*v1+1] = vnew[1];
 				vertices[3*v1+2] = vnew[2];
-				
+
 				pTri->varea[v1] += pTri->varea[v2];
 				quadric_copy (pTri->q[v1], edata->q);
-				
+
 				//
-				std::map<int,Che_edge*>::iterator it = he_mesh->map_edges_vertex->find (v1);
+				std::map<int,int>::iterator it = he_mesh->map_edges_vertex->find (v1);
 				if (it == he_mesh->map_edges_vertex->end())
 				{
 					printf (":S\n");
 					continue;
 				}
-				
-				Che_edge *e = it->second;
-				
+
+				int e_idx = it->second;
+
 				// update info about faces around v1
-				Che_edge *e_walk = e;
+				int ew_idx = e_idx;
 				do
 				{
-					int fi = e_walk->m_face;
+					Che_edge &ew = he_mesh->edge(ew_idx);
+					int fi = ew.m_face;
 					tandem_update_face_info (pTri, fi);
-					
-					e_walk = e_walk->m_he_next->m_he_next->m_pair;
-				} while (e_walk != e);
-				
+
+					ew_idx = he_mesh->edge(he_mesh->edge(ew.m_he_next).m_he_next).m_pair;
+				} while (ew_idx != e_idx);
+
 				// update info about edges around v1
-				e_walk = e;
+				ew_idx = e_idx;
 				do
 				{
-					tandem_update_edge_quadric (pTri, e_walk, errors_range);
-					//tandem_update_edge_quadric (pTri, e_walk->m_pair, errors_range);
-					
-					e_walk = e_walk->m_he_next->m_he_next->m_pair;
-				} while (e_walk != e);
+					tandem_update_edge_quadric (pTri, ew_idx, errors_range);
+					//tandem_update_edge_quadric (pTri, he_mesh->edge(ew_idx).m_pair, errors_range);
+
+					Che_edge &ew = he_mesh->edge(ew_idx);
+					ew_idx = he_mesh->edge(he_mesh->edge(ew.m_he_next).m_he_next).m_pair;
+				} while (ew_idx != e_idx);
 			}
 		}
 		//printf ("%d edges\t %d faces\t %d vertices\n",
@@ -378,10 +386,10 @@ static void export_tandem (mc_triangulation_t *pTri, char *filename)
 	float errors_range[2] = {INFINITY, -INFINITY};
 	for (int i=0; i<nvertices; i++)
 	{
-		Che_edge *e = he_mesh->get_edge_from_vertex (i);
-		if (e)
+		int e_idx = he_mesh->get_edge_from_vertex (i);
+		if (e_idx >= 0)
 		{
-			edge_data_t *edata = (edge_data_t*)e->m_data;
+			edge_data_t *edata = (edge_data_t*)he_mesh->edge(e_idx).m_data;
 			if (edata->m_error < errors_range[0])
 				errors_range[0] = edata->m_error;
 			if (edata->m_error > errors_range[1])
@@ -390,10 +398,10 @@ static void export_tandem (mc_triangulation_t *pTri, char *filename)
 	}
 	for (int i=0; i<nvertices; i++)
 	{
-		Che_edge *e = he_mesh->get_edge_from_vertex (i);
-		if (e)
+		int e_idx = he_mesh->get_edge_from_vertex (i);
+		if (e_idx >= 0)
 		{
-			edge_data_t *edata = (edge_data_t*)e->m_data;
+			edge_data_t *edata = (edge_data_t*)he_mesh->edge(e_idx).m_data;
 			fprintf (ptr, "vt %f 0.\n", (edata->m_error-errors_range[0]) / (errors_range[1]-errors_range[0]));
 		}
 		else
@@ -401,14 +409,15 @@ static void export_tandem (mc_triangulation_t *pTri, char *filename)
 	}
 */
 	fprintf (ptr, "usemtl material\n");
-	for (std::map<int,Che_edge*>::iterator it=he_mesh->map_edges_face->begin ();
+	for (std::map<int,int>::iterator it=he_mesh->map_edges_face->begin ();
 	     it != he_mesh->map_edges_face->end ();
 	     it++)
 	{
-		Che_edge *he = it->second;
-		int v1 = he->m_v_begin;
-		int v2 = he->m_v_end;
-		int v3 = he->m_he_next->m_v_end;
+		int he_idx = it->second;
+		Che_edge &he = he_mesh->edge(he_idx);
+		int v1 = he.m_v_begin;
+		int v2 = he.m_v_end;
+		int v3 = he_mesh->edge(he.m_he_next).m_v_end;
 		fprintf (ptr, "f %d %d %d\n", 1+v1, 1+v2, 1+v3);
 	}
 	

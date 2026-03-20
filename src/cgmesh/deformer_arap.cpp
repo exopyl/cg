@@ -39,14 +39,16 @@ void DeformerARAP::ComputeCotangentWeights()
 		if (m_pMesh->get_n_neighbours(i) == -1) // topology not correct or vertex i is on the border
 			continue;
 
-		Che_edge *he = m_pMesh->m_pCheMesh->get_edge_from_vertex(i);
-		Che_edge *he_walk = he;
+		int he = m_pMesh->m_pCheMesh->get_edge_from_vertex(i);
+		int he_walk = he;
 		do {
-			j = he_walk->m_v_end;
+			j = m_pMesh->m_pCheMesh->edge(he_walk).m_v_end;
 			wij = 1.;//m_pMesh->cotangent_weight_formula(he_walk);
 			wij_weight.insert(std::make_pair(std::make_pair(i,j), wij));
 
-			he_walk = he_walk->m_he_next->m_he_next->m_pair;
+			int n1 = m_pMesh->m_pCheMesh->edge(he_walk).m_he_next;
+			int n2 = m_pMesh->m_pCheMesh->edge(n1).m_he_next;
+			he_walk = m_pMesh->m_pCheMesh->edge(n2).m_pair;
 		} while(he_walk != he);
 	}
 }
@@ -74,15 +76,17 @@ void DeformerARAP::PreFactor()
 
 		if(!isFixed[i])
 		{
-			Che_edge *he = m_pMesh->m_pCheMesh->get_edge_from_vertex(i);
-			Che_edge *he_walk = he;
+			int he = m_pMesh->m_pCheMesh->get_edge_from_vertex(i);
+			int he_walk = he;
 			do {
-				int j = he_walk->m_v_end;
+				int j = m_pMesh->m_pCheMesh->edge(he_walk).m_v_end;
 				double wij = GetWij(i,j);
 				weight += wij;
 				L.coeffRef(i,j) = -wij;
 
-				he_walk = he_walk->m_he_next->m_he_next->m_pair;
+				int n1 = m_pMesh->m_pCheMesh->edge(he_walk).m_he_next;
+				int n2 = m_pMesh->m_pCheMesh->edge(n1).m_he_next;
+				he_walk = m_pMesh->m_pCheMesh->edge(n2).m_pair;
 			} while(he_walk != he);
 		}
 		else
@@ -124,7 +128,7 @@ void DeformerARAP::SVDRotation(void)
 
 	for (int i=0; i<m_pMesh->m_pMesh->m_nVertices; i++)
 	{
-		Che_edge *he = m_pMesh->m_pCheMesh->get_edge_from_vertex(i);
+		int he = m_pMesh->m_pCheMesh->get_edge_from_vertex(i);
 		int valence = m_pMesh->get_n_neighbours(i);
 		if (valence == -1)
 			continue;
@@ -133,16 +137,18 @@ void DeformerARAP::SVDRotation(void)
 
 		Eigen::MatrixXd P(3, valence), Q(3, valence);
 
-		Che_edge *he_walk = he;
+		int he_walk = he;
 		do {
 			// eij = pi - pj, including weights wij
-			int j = he_walk->m_v_end;
+			int j = m_pMesh->m_pCheMesh->edge(he_walk).m_v_end;
 
 			double wij = GetWij(i,j);
 			P.col(degree) = (m_OrigMesh[i] - m_OrigMesh[j]) * wij;
 			Q.col(degree++) = (Eigen::Vector3d(xyz[0][i], xyz[1][i], xyz[2][i]) - Eigen::Vector3d(xyz[0][j], xyz[1][j], xyz[2][j]));
 
-			he_walk = he_walk->m_he_next->m_he_next->m_pair;
+			int n1 = m_pMesh->m_pCheMesh->edge(he_walk).m_he_next;
+			int n2 = m_pMesh->m_pCheMesh->edge(n1).m_he_next;
+			he_walk = m_pMesh->m_pCheMesh->edge(n2).m_pair;
 		} while (he != he_walk);
 
 		// Compute the 3 by 3 covariance matrix:
@@ -188,10 +194,10 @@ void DeformerARAP::Deform(int nIterations)
 				p = Eigen::Vector3d::Zero(); // Set to zero
 
 				// visit the neighbors
-				Che_edge *he = m_pMesh->m_pCheMesh->get_edge_from_vertex(i);
-				Che_edge *he_walk = he;
-				do { 
-					int j = he_walk->m_v_end;
+				int he = m_pMesh->m_pCheMesh->get_edge_from_vertex(i);
+				int he_walk = he;
+				do {
+					int j = m_pMesh->m_pCheMesh->edge(he_walk).m_v_end;
 
 					Eigen::Vector3d pij = m_OrigMesh[i] - m_OrigMesh[j];
 					Eigen::Vector3d RijPijMat = ((R[i] + R[j]) * pij);
@@ -200,7 +206,9 @@ void DeformerARAP::Deform(int nIterations)
 					p += RijPijMat * (wij / 2.0);
 					//p += ((R[i] + R[j]) * (m_OrigMesh[i] - m_OrigMesh[j])) * .5 * GetWij(i,j);
 
-					he_walk = he_walk->m_he_next->m_he_next->m_pair;
+					int n1 = m_pMesh->m_pCheMesh->edge(he_walk).m_he_next;
+					int n2 = m_pMesh->m_pCheMesh->edge(n1).m_he_next;
+					he_walk = m_pMesh->m_pCheMesh->edge(n2).m_pair;
 				} while (he != he_walk);
 			}
 

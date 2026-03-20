@@ -85,14 +85,12 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 	float *v = m_pModel->m_pMesh->m_pVertices;
 	Face **faces = m_pModel->m_pMesh->m_pFaces;
 	float *vn = m_pModel->m_pMesh->m_pVertexNormals;
-	Che_edge** m_edges_vertex = m_pModel->m_pCheMesh->m_edges_vertex;
-
 	int i,a,b,c;
 	vec3 v1, v2, v3;
 	Tensor *pDiffParam_walk;
-	Che_edge *e, *e_walk;
+	int e, e_walk;
 	int n_neighbours;
-	
+
 	for (i=0; i<nv; i++)
     {
 		if (!m_pModel->m_topology_ok[i] || m_pModel->m_border[i])
@@ -100,56 +98,57 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 			m_pDiffParams[i] = NULL;
 			continue;
 		}
-		
+
 		// check the number of neighbours
-		e = m_edges_vertex[i];
+		e = m_pModel->m_pCheMesh->m_edges_vertex[i];
 		e_walk = e;
 		n_neighbours = m_pModel->get_n_neighbours (i);
 		float area = 0.0; // init the area around the vertex
-		
+
 		// init for the mean curvature normal
 		vec3 mean_curvature_normal;
 		vec3_init (mean_curvature_normal, 0.0, 0.0, 0.0);
-		
+
 		// init for the gaussian curvature
 		float angle_sum = 0.0;
-		
-		e = m_edges_vertex[i];
+
+		e = m_pModel->m_pCheMesh->m_edges_vertex[i];
 		e_walk = e;
 		do
 		{
+			Che_edge &ew = m_pModel->m_pCheMesh->edge(e_walk);
 			a = -1;
-			if (i == faces[e_walk->m_face]->GetVertex(0))
+			if (i == faces[ew.m_face]->GetVertex(0))
 			{
-				a = faces[e_walk->m_face]->GetVertex(0);
-				b = faces[e_walk->m_face]->GetVertex(1);
-				c = faces[e_walk->m_face]->GetVertex(2);
+				a = faces[ew.m_face]->GetVertex(0);
+				b = faces[ew.m_face]->GetVertex(1);
+				c = faces[ew.m_face]->GetVertex(2);
 			}
-			if (i == faces[e_walk->m_face]->GetVertex(1))
+			if (i == faces[ew.m_face]->GetVertex(1))
 			{
-				c = faces[e_walk->m_face]->GetVertex(0);
-				a = faces[e_walk->m_face]->GetVertex(1);
-				b = faces[e_walk->m_face]->GetVertex(2);
+				c = faces[ew.m_face]->GetVertex(0);
+				a = faces[ew.m_face]->GetVertex(1);
+				b = faces[ew.m_face]->GetVertex(2);
 			}
-			if (i == faces[e_walk->m_face]->GetVertex(2))
+			if (i == faces[ew.m_face]->GetVertex(2))
 			{
-				b = faces[e_walk->m_face]->GetVertex(0);
-				c = faces[e_walk->m_face]->GetVertex(1);
-				a = faces[e_walk->m_face]->GetVertex(2);
+				b = faces[ew.m_face]->GetVertex(0);
+				c = faces[ew.m_face]->GetVertex(1);
+				a = faces[ew.m_face]->GetVertex(2);
 			}
 			if (a == -1)
 			{
 				printf ("!!! state not supposed to be reached !!!\n");
 				continue;
 			}
-			
+
 			vec3_init (v1, v[3*a], v[3*a+1], v[3*a+2]);
 			vec3_init (v2, v[3*b], v[3*b+1], v[3*b+2]);
 			vec3_init (v3, v[3*c], v[3*c+1], v[3*c+2]);
-			
+
 			// compute the local area
 			area += region_area (v1, v2, v3);
-			
+
 			//
 			// compute the mean curvature normal
 			//
@@ -158,20 +157,21 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 			mean_curvature_normal[0] += temp*(v3[0]-v1[0]);
 			mean_curvature_normal[1] += temp*(v3[1]-v1[1]);
 			mean_curvature_normal[2] += temp*(v3[2]-v1[2]);
-			
+
 			temp = cotan (v3, v1, v2);
 			mean_curvature_normal[0] += temp*(v2[0]-v1[0]);
 			mean_curvature_normal[1] += temp*(v2[1]-v1[1]);
 			mean_curvature_normal[2] += temp*(v2[2]-v1[2]);
-			
+
 			//
 			// compute the gaussian curvature
 			//
 			angle_sum += angle_from_cotan (v1, v2, v3);
-			
+
 			// next
-			e_walk = e_walk->m_he_next->m_he_next->m_pair;
-		} while (e_walk && e_walk != e);
+			int he_next = m_pModel->m_pCheMesh->edge(e_walk).m_he_next;
+			e_walk = m_pModel->m_pCheMesh->edge(m_pModel->m_pCheMesh->edge(he_next).m_he_next).m_pair;
+		} while (e_walk >= 0 && e_walk != e);
 		
 		if (area > 0.0)
 		{
@@ -225,14 +225,15 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 		else
 		{
 			vec3_init (basis3, 0.0, 0.0, 0.0);
-			e = m_edges_vertex[i];
+			e = m_pModel->m_pCheMesh->m_edges_vertex[i];
 			e_walk = e;
 			do
 			{
-				a = faces[e_walk->m_face]->GetVertex(0);
-				b = faces[e_walk->m_face]->GetVertex(1);
-				c = faces[e_walk->m_face]->GetVertex(2);
-				
+				Che_edge &ew = m_pModel->m_pCheMesh->edge(e_walk);
+				a = faces[ew.m_face]->GetVertex(0);
+				b = faces[ew.m_face]->GetVertex(1);
+				c = faces[ew.m_face]->GetVertex(2);
+
 				vec3 n_walk;
 				vec3_init (v1, v[3*a], v[3*a+1], v[3*a+2]);
 				vec3_init (v2, v[3*b], v[3*b+1], v[3*b+2]);
@@ -240,10 +241,11 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 				vec3_triangle_normal (n_walk, v1, v2, v3);
 				vec3_normalize (n_walk);
 				vec3_addition (basis3, basis3, n_walk);
-				
+
 				// next
-				e_walk = e_walk->m_he_next->m_he_next->m_pair;
-			} while (e_walk && e_walk != e);
+				int he_next = m_pModel->m_pCheMesh->edge(e_walk).m_he_next;
+				e_walk = m_pModel->m_pCheMesh->edge(m_pModel->m_pCheMesh->edge(he_next).m_he_next).m_pair;
+			} while (e_walk >= 0 && e_walk != e);
 		}
 		vec3_normalize (basis3);
 		
@@ -269,47 +271,48 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 		float *d2s     = (float*)malloc(n_neighbours*sizeof(float));
 		int n_neighbour_walk = 0;
 		
-		e = m_edges_vertex[i];
+		e = m_pModel->m_pCheMesh->m_edges_vertex[i];
 		e_walk = e;
 		do
 		{
+			Che_edge &ew = m_pModel->m_pCheMesh->edge(e_walk);
 			a = -1;
-			if (i == faces[e_walk->m_face]->GetVertex(0))
+			if (i == faces[ew.m_face]->GetVertex(0))
 			{
-				a = faces[e_walk->m_face]->GetVertex(0);
-				b = faces[e_walk->m_face]->GetVertex(1);
-				c = faces[e_walk->m_face]->GetVertex(2);
+				a = faces[ew.m_face]->GetVertex(0);
+				b = faces[ew.m_face]->GetVertex(1);
+				c = faces[ew.m_face]->GetVertex(2);
 			}
-			if (i == faces[e_walk->m_face]->GetVertex(1))
+			if (i == faces[ew.m_face]->GetVertex(1))
 			{
-				c = faces[e_walk->m_face]->GetVertex(0);
-				a = faces[e_walk->m_face]->GetVertex(1);
-				b = faces[e_walk->m_face]->GetVertex(2);
+				c = faces[ew.m_face]->GetVertex(0);
+				a = faces[ew.m_face]->GetVertex(1);
+				b = faces[ew.m_face]->GetVertex(2);
 			}
-			if (i == faces[e_walk->m_face]->GetVertex(2))
+			if (i == faces[ew.m_face]->GetVertex(2))
 			{
-				b = faces[e_walk->m_face]->GetVertex(0);
-				c = faces[e_walk->m_face]->GetVertex(1);
-				a = faces[e_walk->m_face]->GetVertex(2);
+				b = faces[ew.m_face]->GetVertex(0);
+				c = faces[ew.m_face]->GetVertex(1);
+				a = faces[ew.m_face]->GetVertex(2);
 			}
 			if (a == -1)
 			{
 				printf ("!!! state not supposed to be reached !!!\n");
 				continue;
 			}
-			
-			
+
+
 			vec3_init (v1, v[3*a], v[3*a+1], v[3*a+2]);
 			vec3_init (v2, v[3*b], v[3*b+1], v[3*b+2]);
 			vec3_init (v3, v[3*c], v[3*c+1], v[3*c+2]);
-			
+
 			// current edge
 			vec3 edge;
 			vec3_subtraction (edge, v2, v1);
-			
+
 			// curvature along the edge
 			float kappa_n = 2 * (vec3_dot_product(edge,basis3) / vec3_dot_product(edge,edge));
-			
+
 			// weight
 			float weight = 0.0;
 			if (!is_triangle_obtuse (v1, v2, v3))
@@ -323,10 +326,11 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 				else
 					weight += vec3_dot_product(edge,edge) * region_area (v1, v2, v3) / 8.0;
 			}
-			
+
 			// adjacent face
 			vec3 vv3;
-			int index = e_walk->m_pair->m_he_next->m_v_end;
+			int pair_idx = m_pModel->m_pCheMesh->edge(e_walk).m_pair;
+			int index = m_pModel->m_pCheMesh->edge(m_pModel->m_pCheMesh->edge(pair_idx).m_he_next).m_v_end;
 			vec3_init (vv3, v[3*index], v[3*index+1], v[3*index+2]);
 			if (!is_triangle_obtuse (v1, v2, vv3))
 			{
@@ -340,39 +344,40 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 					weight += vec3_dot_product(edge,edge) * region_area (v1, v2, vv3) / 8.0;
 			}
 			//weight = 1.0;
-			
+
 			// projection of the edge on the tangent plane
 			vec3 ve_tmp, ve_proj;
 			float vedotn = vec3_dot_product (edge, basis3);
 			vec3_init (ve_tmp, basis3[0]*vedotn, basis3[1]*vedotn, basis3[2]*vedotn);
 			vec3_subtraction (ve_proj, edge, ve_tmp);
 			vec3_normalize (ve_proj);
-			
+
 			// move d to 2D basis
 			float d1, d2;
 			d1 = vec3_dot_product (ve_proj, basis1);
 			d2 = vec3_dot_product (ve_proj, basis2);
-			
+
 			weights[n_neighbour_walk] = weight;
 			kappas[n_neighbour_walk]  = kappa_n;
 			d1s[n_neighbour_walk]     = d1;
 			d2s[n_neighbour_walk]     = d2;
 			n_neighbour_walk++;
-			
+
 			// update the linear system
 			m3[0] += weight * d1 * d1 * d1 * d1;
 			m3[1] += 2 * weight * d1 * d1 * d1 * d2;
 			m3[2] += weight * d1 *d1 *d2 *d2;
 			right[0] += weight * d1 * d1 * kappa_n;
-			
+
 			m3[3] += weight * d1 * d1 * d1 * d2;
 			m3[4] += 2 * weight * d1 * d1 * d2 * d2;
 			m3[5] += weight * d1 *d2 *d2 *d2;
 			right[1] += weight * d1 * d2 * kappa_n;
-			
+
 			// next
-			e_walk = e_walk->m_he_next->m_he_next->m_pair;
-		} while (e_walk && e_walk != e);
+			int he_next = m_pModel->m_pCheMesh->edge(e_walk).m_he_next;
+			e_walk = m_pModel->m_pCheMesh->edge(m_pModel->m_pCheMesh->edge(he_next).m_he_next).m_pair;
+		} while (e_walk >= 0 && e_walk != e);
 		
 		// complete the linear system with  a+c = 2*kappa_mean
 		m3[6] = 1; m3[7] = 0; m3[8] = 1;

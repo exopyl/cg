@@ -64,7 +64,7 @@ private:
 	bool ApplyHamann (void);
 	bool ApplyDesbrun (void);
 
-	void ApplySteinerAux (int index, float radius, int *_n_edges, Che_edge ***_edges);
+	void ApplySteinerAux (int index, float radius, int *_n_edges, int **_edges);
 	bool ApplySteiner (void);
 
 	bool ApplyHybrid (void);

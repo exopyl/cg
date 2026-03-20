@@ -257,15 +257,17 @@ Cmesh_orientation_pca::compute_pca_weighted_vertices (void)
 	  }
 
 	  w[i] = 0.0;
-	  Che_edge *e = model3d_half_edge->m_pCheMesh->m_edges_vertex[i];
-	  if (!e) continue;
-	  Che_edge *e_walk = e;
+	  int e = model3d_half_edge->m_pCheMesh->m_edges_vertex[i];
+	  if (e < 0) continue;
+	  int e_walk = e;
 	  do
 	    {
-          w[i] += a[e_walk->m_face];
-	      
-	      e_walk = e_walk->m_he_next->m_he_next->m_pair;
-	    } while (e_walk && e_walk != e);
+          w[i] += a[model3d_half_edge->m_pCheMesh->edge(e_walk).m_face];
+
+	      int next1 = model3d_half_edge->m_pCheMesh->edge(e_walk).m_he_next;
+	      int next2 = model3d_half_edge->m_pCheMesh->edge(next1).m_he_next;
+	      e_walk = model3d_half_edge->m_pCheMesh->edge(next2).m_pair;
+	    } while (e_walk >= 0 && e_walk != e);
 
 		w[i] /= (3*atot);
 	}

@@ -39,7 +39,7 @@ public:
 	Che_mesh *m_pCheMesh;
 
 	void create_half_edge (void);
-	Che_edge *get_edge (unsigned int v1, unsigned int v2);
+	int get_edge (unsigned int v1, unsigned int v2); // returns edge index, -1 if not found
 
 	inline int is_manifold (int i) { check_topology (); return m_topology_ok[i]; };
 
@@ -47,11 +47,11 @@ public:
 
 	////////////////////////////////////////////////////////////////////////////////
 	//
-	// half-edge operations
+	// half-edge operations (take edge index)
 	//
-	void edge_flip     (Che_edge *par_edge);
-	void edge_split    (Che_edge *e);
-	void edge_contract (Che_edge *e);
+	void edge_flip     (int par_edge);
+	void edge_split    (int e);
+	void edge_contract (int e);
 	//
 	////////////////////////////////////////////////////////////////////////////////
 
@@ -66,11 +66,11 @@ public:
 	void search_maximal (float *par_fdata, float par_angle_max);
 
 	// misc
-	float edge_length (Che_edge *edge);
+	float edge_length (int edge);  // takes edge index
 	float get_average_edges_length (void); //<! Get the average edges length.
 	float get_shortest_edge_length (void); //<! Get the shortest edge length.
 	int   get_n_neighbours (int par_ivertex); //<! Get the number of neighbours around vertex identified by par_ivertex.
-	double cotangent_weight_formula(Che_edge *edge);
+	double cotangent_weight_formula(int edge); // takes edge index
 
 	void dump (void);
 

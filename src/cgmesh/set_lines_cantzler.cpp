@@ -13,7 +13,7 @@ void Cset_lines::cantzler_extract_edges (float threshold)
 	float *v = model->m_pMesh->m_pVertices;
 	int nv = model->m_pMesh->m_nVertices;
 	int ne = 3*model->m_pMesh->m_nFaces;
-	Che_edge **edges = model->m_pCheMesh->m_edges;
+	Che_mesh *cheMesh = model->m_pCheMesh;
 
 	// visited half edges
 	Cedges_visited *ev = new Cedges_visited (nv);
@@ -21,12 +21,13 @@ void Cset_lines::cantzler_extract_edges (float threshold)
 	{
 		Vector3f n1, n2;
 		int f1, f2;
-		if (!edges[i]->m_pair || ev->is_edge_visited (edges[i]->m_v_begin, edges[i]->m_v_end) > 0)
+		Che_edge &ei = cheMesh->edge(i);
+		if (ei.m_pair < 0 || ev->is_edge_visited (ei.m_v_begin, ei.m_v_end) > 0)
 			continue;
-		ev->add_edge (edges[i]->m_v_begin, edges[i]->m_v_end,i);
+		ev->add_edge (ei.m_v_begin, ei.m_v_end,i);
 
-		f1 = edges[i]->m_face;
-		f2 = edges[i]->m_pair->m_face;
+		f1 = ei.m_face;
+		f2 = cheMesh->edge(ei.m_pair).m_face;
 		n1.Set (fn[3*f1], fn[3*f1+1], fn[3*f1+2]);
 		n2.Set (fn[3*f2], fn[3*f2+1], fn[3*f2+2]);
 		float dot = n1 * n2;
@@ -37,8 +38,8 @@ void Cset_lines::cantzler_extract_edges (float threshold)
 		{
 			Vector3f v1, v2, dir, pluecker1, pluecker2;
 			int iv1, iv2;
-			iv1 = edges[i]->m_v_begin;
-			iv2 = edges[i]->m_v_end;
+			iv1 = ei.m_v_begin;
+			iv2 = ei.m_v_end;
 			v1.Set (v[3*iv1], v[3*iv1+1], v[3*iv1+2]);
 			v2.Set (v[3*iv2], v[3*iv2+1], v[3*iv2+2]);
 			dir = v1 - v2;

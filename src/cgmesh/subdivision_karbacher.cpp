@@ -7,17 +7,11 @@ bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 	int nf = model->m_pMesh->m_nFaces;
 	float *v = model->m_pMesh->m_pVertices;
 	Face **f = model->m_pMesh->m_pFaces;
-	int m_ne = model->m_pCheMesh->m_ne;
-	Che_edge** m_edges = model->m_pCheMesh->m_edges;
-	Che_edge** m_edges_face = model->m_pCheMesh->m_edges_face;
-	Che_edge** m_edges_vertex = model->m_pCheMesh->m_edges_vertex;
+	Che_mesh *chePtr = model->m_pCheMesh;
+	int m_ne = chePtr->m_ne;
 	float *vn = model->m_pMesh->m_pVertexNormals;
 
 	int i;
-
-	Che_edge **edges_new        = NULL;
-	Che_edge **edges_vertex_new = NULL;
-	Che_edge **edges_face_new   = NULL;
 
 	// vertices
 	int nv_new = nv+nf;
@@ -29,15 +23,16 @@ bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 	int nf_new = 3*nf;
 	Face **f_new = (Face**) malloc (3*nf_new*sizeof(Face*));
 
-	// edges
+	// edges: copy existing edges and grow the vector for new ones
 	m_ne = 3*nf;
 	int ne_new = 3*nf_new;
-	Che_edge** e_new = (Che_edge**) malloc (ne_new*sizeof(Che_edge*));
-	e_new = (Che_edge**) memcpy ((void*)e_new, (const void*)m_edges, m_ne*sizeof(Che_edge*));
+	// We'll work directly with the chePtr->m_edges vector.
+	// First, reserve space for the new edges.
+	chePtr->m_edges.reserve(ne_new);
 	int ne_new_walk = m_ne;
 
-	m_edges_face   = (Che_edge**) realloc ((void*)m_edges_face, nf_new*sizeof (Che_edge*));
-	m_edges_vertex = (Che_edge**) realloc ((void*)m_edges_vertex, nv_new*sizeof (Che_edge*));
+	chePtr->m_edges_face.resize(nf_new, -1);
+	chePtr->m_edges_vertex.resize(nv_new, -1);
 
 
 	// create the new triangles and link the new edges
@@ -46,33 +41,35 @@ bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 		//
 		//             v1
 		//            *
-		//           /|\ 
-		//          / | \ 
-		//         /  |  \ 
+		//           /|\
+		//          / | \
+		//         /  |  \
 		//     e1 /   |   \ e3
-		//       /    * v4 \   
-		//      /   /   \   \ 
-		//     / /         \ \ 
+		//       /    * v4 \
+		//      /   /   \   \
+		//     / /         \ \
 		//    *---------------*
 		//  v2       e2        v3
 		//
 
-		Che_edge *e1 = m_edges_face[i];
-		Che_edge *e2 = e1->m_he_next;
-		Che_edge *e3 = e2->m_he_next;
+		int e1 = chePtr->m_edges_face[i];
+		int e2 = chePtr->edge(e1).m_he_next;
+		int e3 = chePtr->edge(e2).m_he_next;
 
-		// new half edges
-		Che_edge *e14 = new Che_edge ();
-		Che_edge *e41 = new Che_edge ();
-		Che_edge *e24 = new Che_edge ();
-		Che_edge *e42 = new Che_edge ();
-		Che_edge *e34 = new Che_edge ();
-		Che_edge *e43 = new Che_edge ();
+		// new half edges - push 6 new edges
+		int ie14_idx = ne_new_walk++;
+		int ie41_idx = ne_new_walk++;
+		int ie24_idx = ne_new_walk++;
+		int ie42_idx = ne_new_walk++;
+		int ie34_idx = ne_new_walk++;
+		int ie43_idx = ne_new_walk++;
+
+		chePtr->m_edges.resize(ne_new_walk);
 
 		// initialize the new vertex
-		int iv1 = f[e1->m_face]->GetVertex(0);
-		int iv2 = f[e1->m_face]->GetVertex(1);
-		int iv3 = f[e1->m_face]->GetVertex(2);
+		int iv1 = f[chePtr->edge(e1).m_face]->GetVertex(0);
+		int iv2 = f[chePtr->edge(e1).m_face]->GetVertex(1);
+		int iv3 = f[chePtr->edge(e1).m_face]->GetVertex(2);
 		int iv4 = nv_new_walk;
 		Vector3d v1 (v[3*iv1], v[3*iv1+1], v[3*iv1+2]);
 		Vector3d v2 (v[3*iv2], v[3*iv2+1], v[3*iv2+2]);
@@ -91,38 +88,31 @@ bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 		nv_new_walk++;
 
 		// update the links
-		e1->m_he_next  = e24;
-		e24->m_he_next = e41;
-		e41->m_he_next = e1;
+		chePtr->edge(e1).m_he_next  = ie24_idx;
+		chePtr->edge(ie24_idx).m_he_next = ie41_idx;
+		chePtr->edge(ie41_idx).m_he_next = e1;
 
-		e2->m_he_next  = e34;
-		e34->m_he_next = e42;
-		e42->m_he_next = e2;
+		chePtr->edge(e2).m_he_next  = ie34_idx;
+		chePtr->edge(ie34_idx).m_he_next = ie42_idx;
+		chePtr->edge(ie42_idx).m_he_next = e2;
 
-		e3->m_he_next  = e14;
-		e14->m_he_next = e43;
-		e43->m_he_next = e3;
+		chePtr->edge(e3).m_he_next  = ie14_idx;
+		chePtr->edge(ie14_idx).m_he_next = ie43_idx;
+		chePtr->edge(ie43_idx).m_he_next = e3;
 
-		e14->m_pair = e41;
-		e41->m_pair = e14;
-		e24->m_pair = e42;
-		e42->m_pair = e24;
-		e34->m_pair = e43;
-		e43->m_pair = e34;
+		chePtr->edge(ie14_idx).m_pair = ie41_idx;
+		chePtr->edge(ie41_idx).m_pair = ie14_idx;
+		chePtr->edge(ie24_idx).m_pair = ie42_idx;
+		chePtr->edge(ie42_idx).m_pair = ie24_idx;
+		chePtr->edge(ie34_idx).m_pair = ie43_idx;
+		chePtr->edge(ie43_idx).m_pair = ie34_idx;
 
-		e14->m_v_begin = iv1;	e14->m_v_end = iv4;
-		e41->m_v_begin = iv4;	e41->m_v_end = iv1;
-		e24->m_v_begin = iv2;	e24->m_v_end = iv4;
-		e42->m_v_begin = iv4;	e42->m_v_end = iv2;
-		e34->m_v_begin = iv3;	e34->m_v_end = iv4;
-		e43->m_v_begin = iv4;	e43->m_v_end = iv3;
-
-		e_new[ne_new_walk++] = e14;
-		e_new[ne_new_walk++] = e41;
-		e_new[ne_new_walk++] = e24;
-		e_new[ne_new_walk++] = e42;
-		e_new[ne_new_walk++] = e34;
-		e_new[ne_new_walk++] = e43;
+		chePtr->edge(ie14_idx).m_v_begin = iv1;	chePtr->edge(ie14_idx).m_v_end = iv4;
+		chePtr->edge(ie41_idx).m_v_begin = iv4;	chePtr->edge(ie41_idx).m_v_end = iv1;
+		chePtr->edge(ie24_idx).m_v_begin = iv2;	chePtr->edge(ie24_idx).m_v_end = iv4;
+		chePtr->edge(ie42_idx).m_v_begin = iv4;	chePtr->edge(ie42_idx).m_v_end = iv2;
+		chePtr->edge(ie34_idx).m_v_begin = iv3;	chePtr->edge(ie34_idx).m_v_end = iv4;
+		chePtr->edge(ie43_idx).m_v_begin = iv4;	chePtr->edge(ie43_idx).m_v_end = iv3;
 
 		// update the faces
 		f_new[3*i] = new Face ();
@@ -132,27 +122,26 @@ bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 		f_new[3*i+2] = new Face ();
 		f_new[3*i+2]->SetTriangle (iv3, iv1, iv4);
 
-		e1->m_face = 3*i;
-		e2->m_face = 3*i+1;
-		e3->m_face = 3*i+2;
+		chePtr->edge(e1).m_face = 3*i;
+		chePtr->edge(e2).m_face = 3*i+1;
+		chePtr->edge(e3).m_face = 3*i+2;
 
 		// edges_face
-		m_edges_face[3*i]   = e1;
-		m_edges_face[3*i+1] = e2;
-		m_edges_face[3*i+2] = e3;
+		chePtr->m_edges_face[3*i]   = e1;
+		chePtr->m_edges_face[3*i+1] = e2;
+		chePtr->m_edges_face[3*i+2] = e3;
 
 		// edges vertex
-		m_edges_vertex[iv1] = e1;
-		m_edges_vertex[iv2] = e2;
-		m_edges_vertex[iv3] = e3;
-		m_edges_vertex[iv4] = e41;
+		chePtr->m_edges_vertex[iv1] = e1;
+		chePtr->m_edges_vertex[iv2] = e2;
+		chePtr->m_edges_vertex[iv3] = e3;
+		chePtr->m_edges_vertex[iv4] = ie41_idx;
 	}
 
 	model->m_pMesh->m_nFaces = nf_new;
 	model->m_pMesh->m_nVertices = nv_new;
 	model->m_pMesh->m_pVertices = v_new;
 	model->m_pMesh->m_pFaces = f_new;
-	model->m_pCheMesh->m_edges = e_new;
 
 	//DeleteAngles ();
 
@@ -160,13 +149,13 @@ bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 }
 
 void MeshAlgoSubdivisionKarbacher::InitializePosition (Vector3d &pos, Vector3d &npos,
-						       Vector3d v1, Vector3d v2, Vector3d v3,
-						       Vector3d n1, Vector3d n2, Vector3d n3)
+					       Vector3d v1, Vector3d v2, Vector3d v3,
+					       Vector3d n1, Vector3d n2, Vector3d n3)
 {
 	pos.Barycenter (v1, v2, v3);
 	npos = n1 + n2; npos += n3;
 	npos.Normalize ();
-	
+
 	Vector3d posv1 = v1 - pos;
 	Vector3d posv2 = v2 - pos;
 	Vector3d posv3 = v3 - pos;
@@ -199,8 +188,8 @@ void MeshAlgoSubdivisionKarbacher::DeleteAngles (void)
 {
 	int nf = m_pModel->m_pMesh->m_nFaces;
 	float *v = m_pModel->m_pMesh->m_pVertices;
-	int m_ne = m_pModel->m_pCheMesh->m_ne;
-	Che_edge** m_edges = m_pModel->m_pCheMesh->m_edges;
+	Che_mesh *chePtr = m_pModel->m_pCheMesh;
+	int m_ne = chePtr->m_ne;
 
 	m_ne = 3*nf;
 	for (int i=0; i<m_ne; i++)
@@ -217,14 +206,18 @@ void MeshAlgoSubdivisionKarbacher::DeleteAngles (void)
 		//  *-------*
 		//  v4      v2
 		//
-		Che_edge *e = m_edges[i];
-		if (e->m_pair == NULL)
+		int e = i;
+		if (chePtr->edge(e).m_pair < 0)
 			continue;
 
-		int iv1 = e->m_he_next->m_v_end;
-		int iv2 = e->m_pair->m_he_next->m_v_end;
-		int iv3 = e->m_v_end;
-		int iv4 = e->m_v_begin;
+		int e_next = chePtr->edge(e).m_he_next;
+		int e_pair = chePtr->edge(e).m_pair;
+		int e_pair_next = chePtr->edge(e_pair).m_he_next;
+
+		int iv1 = chePtr->edge(e_next).m_v_end;
+		int iv2 = chePtr->edge(e_pair_next).m_v_end;
+		int iv3 = chePtr->edge(e).m_v_end;
+		int iv4 = chePtr->edge(e).m_v_begin;
 
 		Vector3d v1 (v[3*iv1], v[3*iv1+1], v[3*iv1+2]);
 		Vector3d v2 (v[3*iv2], v[3*iv2+1], v[3*iv2+2]);
