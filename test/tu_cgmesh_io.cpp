@@ -58,6 +58,9 @@ TEST(TEST_cgmesh_io, 3ds_sink)
     // expectations
     auto& list = object->GetMeshes();
     ASSERT_EQ(list.size(), 4);
+    ASSERT_EQ(list.front()->m_nVertices, 396);
+    ASSERT_EQ(list.front()->m_nFaces, 636);
+    ASSERT_EQ(list.front()->m_name, "bar");
 }
 
 TEST(TEST_cgmesh_io, 3ds_display)
