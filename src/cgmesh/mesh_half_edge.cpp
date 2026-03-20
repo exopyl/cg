@@ -218,7 +218,7 @@ void Mesh_half_edge::export_statistics (const std::string & filename)
 	for (unsigned int i=0; i<m_pMesh->m_nMaterials; i++)
 	{
 		Material *pMaterial = (Material*)m_pMesh->m_pMaterials[i];
-		fprintf (ptr, "<br>material %d : %s", i, pMaterial->GetName());
+		fprintf (ptr, "<br>material %d : %s", i, pMaterial->GetName().c_str());
 	}
 
 

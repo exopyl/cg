@@ -395,7 +395,7 @@ int Mesh::export_obj (const char *filename)
 		if (m_pFaces[i]->GetMaterialId () != MATERIAL_NONE &&
 		    m_pFaces[i]->GetMaterialId () != i_current_material)
 		{
-			fprintf (fp, "usemtl %s\n", m_pMaterials[m_pFaces[i]->GetMaterialId ()]->GetName());
+			fprintf (fp, "usemtl %s\n", m_pMaterials[m_pFaces[i]->GetMaterialId ()]->GetName().c_str());
 			i_current_material = m_pFaces[i]->GetMaterialId ();
 		}
 
@@ -474,7 +474,7 @@ int Mesh::export_obj (const char *filename)
 			case MATERIAL_TEXTURE:
 			{
 				MaterialTexture *pMaterialTexture = dynamic_cast<MaterialTexture*> (pMaterial);
-				fprintf (fp, "newmtl %s\n", pMaterialTexture->GetName ());
+				fprintf (fp, "newmtl %s\n", pMaterialTexture->GetName ().c_str());
 				fprintf (fp, "Ka 0.000000 0.000000 0.000000\n");
 				fprintf (fp, "Kd 0.000000 0.000000 0.000000\n");
 				fprintf (fp, "Ks 1.000000 1.000000 1.000000\n");
