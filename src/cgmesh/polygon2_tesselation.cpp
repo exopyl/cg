@@ -4,10 +4,6 @@
 
 #include "polygon2.h"
 
-#ifdef WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
 #include "glutess/glutess.h"
 
 ///////////////////////
@@ -32,7 +28,6 @@ struct glutess_state {
 //
 // Callbacks for "mesh_tesselate"
 //
-#if 1
 static void glutess_begin(int type, void *user_data)
 {
 	struct glutess_state *state = (struct glutess_state *) user_data;
@@ -141,7 +136,6 @@ static void glutess_combine(double coords[3],
 	} else
 		*outData = (void *) vi;
 }
-#endif
 //
 ///////////////////////
 
@@ -150,7 +144,6 @@ static void glutess_combine(double coords[3],
 int Polygon2::tesselate (float **_pVertices, unsigned int *_nVertices,
 			  unsigned int **_pFaces, unsigned int *_nFaces)
 {
-#if 1
 	GLUtesselator *tess;
 	double *coords;
 	unsigned int nVertices;
@@ -220,6 +213,6 @@ int Polygon2::tesselate (float **_pVertices, unsigned int *_nVertices,
 	*_nFaces = state.fn;
 
 	free(coords);
-#endif
+
 	return 0;
 }
