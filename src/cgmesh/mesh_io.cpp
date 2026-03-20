@@ -1620,59 +1620,7 @@ int Mesh::import_stl(const char* filename)
 
 	return 0;
 }
-/*
-int Mesh::import_stl (char *filename)
-{
-	FILE *ptr = fopen (filename, "rb");
-	if (!ptr)
-		return -1;
 
-	char header[81];
-	fread (header, sizeof(unsigned char), 80, ptr);
-	header[80] = '\0';
-	//printf ("%s\n", header);
-
-	unsigned int nfaces = 0;
-	fread (&nfaces, sizeof(unsigned int), 1, ptr);
-	printf ("%d faces\n", nfaces);
-
-	float normal[3];
-	float faceinfo[12];
-	unsigned char attribute_byte_count[2];
-	int n=0;
-	FILE *out = fopen ("out.obj", "w");
-	int nf = 1000000;
-	while (!feof (ptr))
-	{
-		fread (faceinfo, sizeof(float), 12, ptr);
-		fread (attribute_byte_count, sizeof(unsigned char), 2, ptr);
-		if (n<nf)
-		{
-			fprintf (out, "v %f %f %f\n", faceinfo[3], faceinfo[4], faceinfo[5]);
-			fprintf (out, "v %f %f %f\n", faceinfo[6], faceinfo[7], faceinfo[8]);
-			fprintf (out, "v %f %f %f\n", faceinfo[9], faceinfo[10], faceinfo[11]);
-		}
-
-		n++;
-		if (n == nfaces)
-			break;
-
-		printf ("%f %f %f\n", normal[0], normal[1], normal[2]);
-		printf ("%f %f %f\n", v1[0], v1[1], v1[2]);
-		printf ("%f %f %f\n", v2[0], v2[1], v2[2]);
-		printf ("%f %f %f\n", v3[0], v3[1], v3[2]);
-
-	};
-	for (int i=0; i<nf; i++)
-		fprintf (out, "f %d %d %d\n", 1+3*i, 1+3*i+1, 1+3*i+2);
-	fclose (out);
-	printf ("%d / %d\n", n, nfaces);
-
-	fclose (ptr);
-
-	return 0;
-}
-*/
 int Mesh::export_stl (const char *filename)
 {
 	return -1;

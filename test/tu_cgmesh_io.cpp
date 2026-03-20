@@ -14,6 +14,11 @@ TEST(TEST_cgmesh_io, obj)
     // expectations
     EXPECT_EQ(mesh->m_pMesh->GetNVertices(), 8);
     EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 12);
+
+    // action
+    auto exported = mesh->m_pMesh->save("./exported_cube.obj");
+
+    EXPECT_EQ(exported, 0);
 }
 
 TEST(TEST_cgmesh_io, off)
@@ -27,6 +32,11 @@ TEST(TEST_cgmesh_io, off)
     // expectations
     EXPECT_EQ(mesh->m_pMesh->GetNVertices(), 8);
     EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 12);
+
+    // action
+    auto exported = mesh->m_pMesh->save("./exported_cube.off");
+
+    EXPECT_EQ(exported, 0);
 }
 
 TEST(TEST_cgmesh_io, stl)
@@ -41,11 +51,69 @@ TEST(TEST_cgmesh_io, stl)
     EXPECT_EQ(mesh->m_pMesh->GetNVertices(), 1986);
     EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 662);
 
-    // export
-    return;
+    // action
+    auto exported = mesh->m_pMesh->save("./exported_BunnyLowPoly.stl");
 
-    mesh->export_statistics("stats.html");
+    EXPECT_EQ(exported, -1);
 }
+
+TEST(TEST_cgmesh_io, ply)
+{
+    // context
+    Mesh_half_edge* mesh = new Mesh_half_edge();
+
+    // action
+    mesh->m_pMesh->load("./test/data/sofa.ply");
+
+    // expectations
+    EXPECT_EQ(mesh->m_pMesh->GetNVertices(), 12103);
+    EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 24104);
+
+    // action
+    auto exported = mesh->m_pMesh->save("./exported_sofa.ply");
+
+    EXPECT_EQ(exported, 0);
+}
+
+TEST(TEST_cgmesh_io, ply_ascii)
+{
+    // context
+    Mesh_half_edge* mesh = new Mesh_half_edge();
+
+    // action
+    mesh->m_pMesh->load("./test/data/sofa_ascii.ply");
+
+    // expectations
+    EXPECT_EQ(mesh->m_pMesh->GetNVertices(), 12103);
+    EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 24104);
+}
+
+TEST(TEST_cgmesh_io, dae)
+{
+    // context
+    Mesh_half_edge* mesh = new Mesh_half_edge();
+    mesh->m_pMesh->load("./test/data/BunnyLowPoly.stl");
+
+    // action
+    auto exported = mesh->m_pMesh->save("./exported_BunnyLowPoly.dae");
+
+    // expectations
+    EXPECT_EQ(exported, 0);
+}
+
+TEST(TEST_cgmesh_io, cpp)
+{
+    // context
+    Mesh_half_edge* mesh = new Mesh_half_edge();
+    mesh->m_pMesh->load("./test/data/BunnyLowPoly.stl");
+
+    // action
+    auto exported = mesh->m_pMesh->save("./exported_BunnyLowPoly.cpp");
+
+    // expectations
+    EXPECT_EQ(exported, 0);
+}
+
 
 TEST(TEST_cgmesh_io, 3ds_sink)
 {
@@ -80,32 +148,6 @@ TEST(TEST_cgmesh_io, 3ds_floppy)
 
     // action
     pVMeshes->load("./test/data/floppy.3ds");
-
-    // expectations
-    auto& meshes = pVMeshes->GetMeshes();
-    ASSERT_EQ(meshes.size(), 1);
-}
-
-TEST(TEST_cgmesh_io, ply)
-{
-    // context
-    VMeshes* pVMeshes = new VMeshes();
-
-    // action
-    pVMeshes->load("./test/data/sofa.ply");
-
-    // expectations
-    auto& meshes = pVMeshes->GetMeshes();
-    ASSERT_EQ(meshes.size(), 1);
-}
-
-TEST(TEST_cgmesh_io, ply_ascii)
-{
-    // context
-    VMeshes* pVMeshes = new VMeshes();
-
-    // action
-    pVMeshes->load("./test/data/sofa_ascii.ply");
 
     // expectations
     auto& meshes = pVMeshes->GetMeshes();
