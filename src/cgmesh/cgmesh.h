@@ -8,7 +8,7 @@
 // mesh
 #include "mesh.h"
 #include "mesh_nm.h"
-#include "object3D.h"
+#include "vmeshes.h"
 
 // polygon
 #include "polygon2.h"

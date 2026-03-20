@@ -3,7 +3,7 @@
 
 #include "NPRStructures.h"
 #include "mesh_half_edge.h"
-#include "object3D.h"
+#include "vmeshes.h"
 
 //
 //
@@ -15,7 +15,7 @@ public:
 	~NPR_Silhouette ();
 
 	void SetMesh (Mesh_half_edge *hemodel);
-	void SetObject3D (Object3D *pObject3D);
+	void SetVMeshes (VMeshes *pVMeshes);
 	void SetCameraPosition (Vector3f vCameraPosition);
 
 	ListNPRSegments &ComputeSegments (void);
@@ -23,7 +23,7 @@ public:
 
 private:
 	Mesh_half_edge* m_pMesh;
-	Object3D* m_pObject3D;
+	VMeshes* m_pVMeshes;
 	Vector3f m_vCameraPosition;
 	ListNPRSegments m_listSegments;
 };

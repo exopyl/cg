@@ -1020,7 +1020,7 @@ void MyFrame::UpdatePropertiesGrid()
     if (!pGLCanvas)
         return;
 
-    auto pObject = pGLCanvas->GetObject3D();
+    auto pObject = pGLCanvas->GetVMeshes();
     m_propertiesGrid->ChangePropertyValue("Vertices", wxVariant(static_cast<int>(pObject->GetNVertices())));
     m_propertiesGrid->ChangePropertyValue("Faces", wxVariant(static_cast<int>(pObject->GetNFaces())));
     m_propertiesGrid->ChangePropertyValue("Meshes", wxVariant(static_cast<int>(pObject->GetNMeshes())));
@@ -1538,9 +1538,9 @@ wxAuiNotebook* MyFrame::CreateNotebook(void)
 
    int args[] = {WX_GL_RGBA, WX_GL_DOUBLEBUFFER, WX_GL_DEPTH_SIZE, 24, 0};
    m_pGLCanvas = new MyGLCanvas (m_pCtrl, m_pWndLogging, args);
-   auto pObject = new Object3D();
-   pObject->AddMesh(CreateCube());
-   m_pGLCanvas->SetObject3D(pObject);
+   auto pVMeshes = new VMeshes();
+   pVMeshes->AddMesh(CreateCube());
+   m_pGLCanvas->SetVMeshes(pVMeshes);
    m_pCtrl->AddPage( m_pGLCanvas , wxT("cube") );
    UpdatePropertiesGrid();
 
@@ -1750,11 +1750,11 @@ void MyFrame::OnTreatmentMergeVertices(wxCommandEvent& WXUNUSED(event))
 	if (!pGLCanvas)
 		return;
 
-	Object3D *pObject = pGLCanvas->GetObject3D();
-	if (!pObject)
+    VMeshes*pVMeshes = pGLCanvas->GetVMeshes();
+	if (!pVMeshes)
 		return;
 
-	for (auto& pMesh : pObject->GetMeshes())
+	for (auto& pMesh : pVMeshes->GetMeshes())
 	{
 		unsigned int nVerticesBefore = pMesh->GetNVertices();
 		pMesh->MergeVertices();
@@ -1775,12 +1775,12 @@ void MyFrame::OnTreatmentSmoothingTaubin(wxCommandEvent& WXUNUSED(event))
 	if (!pGLCanvas)
 		return;
 
-	Object3D *pObject = pGLCanvas->GetObject3D();
-	if (!pObject)
+	VMeshes *pVMeshes = pGLCanvas->GetVMeshes();
+	if (!pVMeshes)
 		return;
 
 	MeshAlgoSmoothingTaubin algo;
-	for (auto& pMesh : pObject->GetMeshes())
+	for (auto& pMesh : pVMeshes->GetMeshes())
 	{
 		Mesh_half_edge meshHE(pMesh);
 		algo.Apply(&meshHE);
@@ -1805,12 +1805,12 @@ void MyFrame::OnTreatmentSmoothingLaplacian(wxCommandEvent& WXUNUSED(event))
 	if (!pGLCanvas)
 		return;
 
-	Object3D *pObject = pGLCanvas->GetObject3D();
-	if (!pObject)
+    VMeshes* pVMeshes = pGLCanvas->GetVMeshes();
+	if (!pVMeshes)
 		return;
 
 	MeshAlgoSmoothingLaplacian algo;
-	for (auto& pMesh : pObject->GetMeshes())
+	for (auto& pMesh : pVMeshes->GetMeshes())
 	{
 		Mesh_half_edge meshHE(pMesh);
 		algo.Apply(&meshHE);
@@ -1835,11 +1835,11 @@ void MyFrame::OnTreatmentCurvaturesDesbrun(wxCommandEvent& WXUNUSED(event))
 	if (!pGLCanvas)
 		return;
 
-	Object3D *pObject = pGLCanvas->GetObject3D();
-	if (!pObject)
+    VMeshes*pVMeshes = pGLCanvas->GetVMeshes();
+	if (!pVMeshes)
 		return;
 
-	for (auto& pMesh : pObject->GetMeshes())
+	for (auto& pMesh : pVMeshes->GetMeshes())
 	{
 		Mesh_half_edge meshHE(pMesh);
 
@@ -1863,11 +1863,11 @@ void MyFrame::OnTreatmentCurvaturesHamann(wxCommandEvent& WXUNUSED(event))
 	if (!pGLCanvas)
 		return;
 
-	Object3D *pObject = pGLCanvas->GetObject3D();
-	if (!pObject)
+    VMeshes*pVMeshes = pGLCanvas->GetVMeshes();
+	if (!pVMeshes)
 		return;
 
-	for (auto& pMesh : pObject->GetMeshes())
+	for (auto& pMesh : pVMeshes->GetMeshes())
 	{
 		Mesh_half_edge meshHE(pMesh);
 

@@ -14,7 +14,7 @@ public:
 	~NPRManager ();
 	
 	void SetMesh (Mesh_half_edge *pMesh);
-	void SetObject3D (Object3D *pObject3D);
+	void SetVMeshes (VMeshes *pVMeshes);
 	void SetCameraPosition (Vector3f vCameraPosition);
 
 	void ComputeSegments (void);

@@ -26,16 +26,14 @@ void NPRManager::SetMesh (Mesh_half_edge *pMesh)
 		m_pNPRSilhouette->SetMesh (pMesh);
 }
 
-void NPRManager::SetObject3D (Object3D *pObject3D)
+void NPRManager::SetVMeshes (VMeshes *pVMeshes)
 {
 	if (m_pNPRAngle)
-		m_pNPRAngle->SetObject3D (pObject3D);
-
+		m_pNPRAngle->SetVMeshes (pVMeshes);
 	if (m_pNPRBorder)
-		m_pNPRBorder->SetObject3D (pObject3D);
-
+		m_pNPRBorder->SetVMeshes (pVMeshes);
 	if (m_pNPRSilhouette)
-		m_pNPRSilhouette->SetObject3D (pObject3D);
+		m_pNPRSilhouette->SetVMeshes (pVMeshes);
 }
 
 void NPRManager::SetCameraPosition (Vector3f vCameraPosition)

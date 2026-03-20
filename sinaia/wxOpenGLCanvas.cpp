@@ -75,8 +75,8 @@ MyGLCanvas::~MyGLCanvas()
 	delete m_pMesh;
 	m_pMesh = nullptr;
 	
-	delete m_pObject;
-	m_pObject = nullptr;
+	delete m_pVMeshes;
+	m_pVMeshes = nullptr;
 
 	delete m_context;
 /*
@@ -107,20 +107,20 @@ void MyGLCanvas::SetMesh(Mesh *pMesh)
 };
 
 
-Object3D* MyGLCanvas::GetObject3D(void)
+VMeshes* MyGLCanvas::GetVMeshes(void)
 {
-	return m_pObject;
+	return m_pVMeshes;
 };
 
-void MyGLCanvas::SetObject3D(Object3D* pObject)
+void MyGLCanvas::SetVMeshes(VMeshes* pObject)
 {
-	delete m_pObject;
+	delete m_pVMeshes;
 
-	m_pObject = pObject;
+	m_pVMeshes = pObject;
 
 
 	BoundingBox bbox;
-	for (const auto& mesh : m_pObject->GetMeshes())
+	for (const auto& mesh : m_pVMeshes->GetMeshes())
 	{
 		mesh->computebbox();
 		bbox.AddBoundingBox(mesh->bbox());
@@ -131,7 +131,7 @@ void MyGLCanvas::SetObject3D(Object3D* pObject)
 	float center[3];
 	bbox.GetCenter(center);
 	float fLargestLength = bbox.GetLargestLength();
-	for (const auto& mesh : m_pObject->GetMeshes())
+	for (const auto& mesh : m_pVMeshes->GetMeshes())
 	{
 		mesh->translate(-center[0], -center[1], -center[2]);
 		mesh->scale(1.f / fLargestLength);
@@ -142,8 +142,6 @@ void MyGLCanvas::SetObject3D(Object3D* pObject)
 		prop.nonManifoldEdges.insert(std::make_pair(mesh, nonManifoldEdges));
 		prop.borders.insert(std::make_pair(mesh, borders));
 	}
-
-
 
 	Refresh(false);
 }
@@ -161,10 +159,10 @@ void MyGLCanvas::LoadModel(const wxString& filename)
 
 	//cout << ((filename).mb_str(wxConvUTF8)) << endl;
 	//printf ("%s\n", (char*) ((filename).mb_str(wxConvUTF8)).data());
-	auto pObject = new Object3D();
-	pObject->import_file((char*) ((filename).mb_str(wxConvUTF8)).data() );
+	auto meshes = new VMeshes();
+	meshes->load((char*) ((filename).mb_str(wxConvUTF8)).data() );
 
-	SetObject3D(pObject);
+	SetVMeshes(meshes);
 
 /*
 	m_listId.clear ();
@@ -195,7 +193,7 @@ void MyGLCanvas::SaveModel(const wxString& filename)
 	//cout << ((filename).mb_str(wxConvUTF8)) << endl;
 	//printf ("%s\n", (char*) ((filename).mb_str(wxConvUTF8)).data());
 
-	m_pObject->export_file((char*)((filename).mb_str(wxConvUTF8)).data());
+	m_pVMeshes->save((char*)((filename).mb_str(wxConvUTF8)).data());
 }
 
 //
@@ -236,7 +234,7 @@ void MyGLCanvas::DrawGL()
 		glShadeModel (GL_FLAT);
 
 	repere_draw ();
-	for (const auto& mesh : m_pObject->GetMeshes())
+	for (const auto& mesh : m_pVMeshes->GetMeshes())
 		mesh_draw (mesh, prop);
 /*
 	else
@@ -248,7 +246,7 @@ void MyGLCanvas::DrawGL()
 	}
 */
 /*
-	if (m_pObject)
+	if (m_pVMeshes)
 	{
 		// draw model
 		list<int>::iterator itId;

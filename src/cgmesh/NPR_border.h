@@ -3,7 +3,7 @@
 
 #include "NPRStructures.h"
 #include "mesh_half_edge.h"
-#include "object3D.h"
+#include "vmeshes.h"
 
 //
 //
@@ -15,14 +15,14 @@ public:
 	~NPR_Border ();
 
 	void SetMesh (Mesh_half_edge *hemodel);
-	void SetObject3D (Object3D *pObject3D);
+	void SetVMeshes (VMeshes *pVMeshes);
 
 	ListNPRSegments& ComputeSegments (void);
 	ListNPRSegments& GetSegments (void);
 
 private:
 	Mesh_half_edge* m_pMesh;
-	Object3D *m_pObject3D;
+	VMeshes *m_pVMeshes;
 	ListNPRSegments m_listSegments;
 };
 

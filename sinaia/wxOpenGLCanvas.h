@@ -26,8 +26,8 @@ public:
 	Mesh* GetMesh(void);
 	void  SetMesh(Mesh *pMesh);
 
-	Object3D* GetObject3D(void);
-	void SetObject3D(Object3D* pObject);
+	VMeshes* GetVMeshes(void);
+	void SetVMeshes(VMeshes* pVMeshes);
 
 	void SetBackgroundColor (unsigned char r, unsigned char g, unsigned char b);
 	void GetBackgroundColor (unsigned char *r, unsigned char *g, unsigned char *b);
@@ -93,7 +93,7 @@ private:
 
 	Mesh *m_pMesh = nullptr;
 	//Mesh_half_edge *m_pMesh = nullptr;
-	Object3D *m_pObject = nullptr;
+	VMeshes *m_pVMeshes = nullptr;
 
 
 	// viewport

@@ -50,64 +50,64 @@ TEST(TEST_cgmesh_io, stl)
 TEST(TEST_cgmesh_io, 3ds_sink)
 {
     // context
-    Object3D* object = new Object3D();
+    VMeshes* pVMeshes = new VMeshes();
 
     // action
-    object->import_file("./test/data/sink.3ds");
+    pVMeshes->load("./test/data/sink.3ds");
 
     // expectations
-    auto& list = object->GetMeshes();
-    ASSERT_EQ(list.size(), 4);
+    auto& meshes = pVMeshes->GetMeshes();
+    ASSERT_EQ(meshes.size(), 4);
 }
 
 TEST(TEST_cgmesh_io, 3ds_display)
 {
     // context
-    Object3D* object = new Object3D();
+    VMeshes* pVMeshes = new VMeshes();
 
     // action
-    object->import_file("./test/data/display.3ds");
+    pVMeshes->load("./test/data/display.3ds");
 
     // expectations
-    auto& list = object->GetMeshes();
-    ASSERT_EQ(list.size(), 3);
+    auto& meshes = pVMeshes->GetMeshes();
+    ASSERT_EQ(meshes.size(), 3);
 }
 
 TEST(TEST_cgmesh_io, 3ds_floppy)
 {
     // context
-    Object3D* object = new Object3D();
+    VMeshes* pVMeshes = new VMeshes();
 
     // action
-    object->import_file("./test/data/floppy.3ds");
+    pVMeshes->load("./test/data/floppy.3ds");
 
     // expectations
-    auto& list = object->GetMeshes();
-    ASSERT_EQ(list.size(), 1);
+    auto& meshes = pVMeshes->GetMeshes();
+    ASSERT_EQ(meshes.size(), 1);
 }
 
 TEST(TEST_cgmesh_io, ply)
 {
     // context
-    Object3D* object = new Object3D();
+    VMeshes* pVMeshes = new VMeshes();
 
     // action
-    object->import_file("./test/data/sofa.ply");
+    pVMeshes->load("./test/data/sofa.ply");
 
     // expectations
-    auto& list = object->GetMeshes();
-    ASSERT_EQ(list.size(), 1);
+    auto& meshes = pVMeshes->GetMeshes();
+    ASSERT_EQ(meshes.size(), 1);
 }
 
 TEST(TEST_cgmesh_io, ply_ascii)
 {
     // context
-    Object3D* object = new Object3D();
+    VMeshes* pVMeshes = new VMeshes();
 
     // action
-    object->import_file("./test/data/sofa_ascii.ply");
+    pVMeshes->load("./test/data/sofa_ascii.ply");
 
     // expectations
-    auto& list = object->GetMeshes();
-    ASSERT_EQ(list.size(), 1);
+    auto& meshes = pVMeshes->GetMeshes();
+    ASSERT_EQ(meshes.size(), 1);
 }

@@ -2,22 +2,22 @@
 
 #include "mesh.h"
 
-#include <list>
+#include <vector>
 #include <memory>
 using namespace std;
 
-class Object3D
+class VMeshes
 {
 public:
-	Object3D ();
-	~Object3D ();
+	VMeshes ();
+	~VMeshes ();
 
-	bool import_file (char *filename);
-	bool export_file (char *filename);
+	bool load(char* filename);
+	bool save(char *filename);
 
-	void AddMesh (Mesh *pMesh) { m_listMeshes.push_back (pMesh); };
+	void AddMesh (Mesh *pMesh) { m_Meshes.push_back (pMesh); };
 
-	list<Mesh*>& GetMeshes (void) { return m_listMeshes; };
+	std::vector<Mesh*>& GetMeshes (void) { return m_Meshes; };
 
 	unsigned int GetNVertices() const;
 	unsigned int GetNFaces() const;
@@ -29,18 +29,13 @@ protected:
 	// import / export
 	void clean (void);
 
-	bool import_obj(char* filename);
 	bool export_obj(char* filename);
-
-	bool import_stl(char* filename);
 	bool export_stl(char* filename);
-
-	bool import_ply(char* filename);
 	bool export_ply(char* filename);
 
 	bool import_3ds(char* filename);
 	bool export_3ds(char* filename);
 
 private:
-	list<Mesh*> m_listMeshes;
+	std::vector<Mesh*> m_Meshes;
 };
