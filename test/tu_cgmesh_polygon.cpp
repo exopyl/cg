@@ -37,21 +37,16 @@ TEST(TEST_cgmesh_polygon, misc)
 	delete p_dilate;
 
 	// tesselate
-#if 0 // TORESTORE
 	float *_pVertices;
 	unsigned int _nVertices;
 	unsigned int *_pFaces;
 	unsigned int _nFaces;
 	p1->tesselate (&_pVertices, &_nVertices, &_pFaces, &_nFaces);
-	printf ("%d %d\n", _nVertices, _nFaces);
 	Mesh *m = new Mesh ();
-	printf ("paf\n");
 	m->SetVertices (_nVertices, _pVertices);
-	printf ("boum\n");
 	m->SetFaces (_nFaces, 3, _pFaces, NULL);
 	m->save ((char*)"polygon_tesselate.obj");
 	delete m;
-#endif
 
 	//moments
 	float moments[4];

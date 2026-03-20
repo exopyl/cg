@@ -6,12 +6,8 @@
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include <gl/GLU.h>
-#else
-#if 0
-#include "glutess/sgi-glu.h"
 #endif
-#endif // WIN32
+#include "glutess/glutess.h"
 
 ///////////////////////
 //
@@ -35,7 +31,7 @@ struct glutess_state {
 //
 // Callbacks for "mesh_tesselate"
 //
-#if 0
+#if 1
 static void glutess_begin(int type, void *user_data)
 {
 	struct glutess_state *state = (struct glutess_state *) user_data;
@@ -153,7 +149,7 @@ static void glutess_combine(double coords[3],
 int Polygon2::tesselate (float **_pVertices, unsigned int *_nVertices,
 			  unsigned int **_pFaces, unsigned int *_nFaces)
 {
-#if 0
+#if 1
 	GLUtesselator *tess;
 	double *coords;
 	unsigned int nVertices;
@@ -163,35 +159,27 @@ int Polygon2::tesselate (float **_pVertices, unsigned int *_nVertices,
 	nVertices = get_n_points();
 	coords = (double*)malloc(3*sizeof(double)*nVertices);
 	if (coords == NULL)
-		return NULL;
+		return 0;
 
-	state.v = (float*)malloc(1000*sizeof(float));
-	state.vn = 0;
-	state.f = (unsigned int*)malloc(1000*sizeof(unsigned int));
+	// allocate memory for the result. 
+	// The number of vertices can increase if there are self-intersections.
+	// We allocate a bit more than needed.
+	state.v = (float*)malloc(3 * (nVertices + 100) * sizeof(float));
+	state.vn = nVertices;
+	state.f = (unsigned int*)malloc(3 * (nVertices + 100) * 2 * sizeof(unsigned int));
 	state.fn = 0;
 	state.face = (unsigned int)-1;
 
 	tess = gluNewTess();
 	
-#ifdef WIN32
-	gluTessCallback(tess, GLU_TESS_BEGIN_DATA, (void (__stdcall *)(void)) glutess_begin);
-	gluTessCallback(tess, GLU_TESS_VERTEX_DATA, (void (__stdcall *) (void)) glutess_vertex);
-	gluTessCallback(tess, GLU_TESS_END_DATA, (void (__stdcall *) (void)) glutess_end);
-	gluTessCallback(tess, GLU_TESS_ERROR_DATA, (void (__stdcall *) (void)) glutess_error);
-	gluTessCallback(tess, GLU_TESS_COMBINE_DATA, (void (__stdcall *) (void)) glutess_combine);
-
-	// this will force GL_TRIANGLES rendering
-	gluTessCallback(tess, GLU_TESS_EDGE_FLAG, (void (__stdcall *) (void)) &glutess_edge_flag);
-#else
-	gluTessCallback(tess, GLU_TESS_BEGIN_DATA,(void(*)()) &glutess_begin);
+	gluTessCallback(tess, GLU_TESS_BEGIN_DATA, (void(*)()) &glutess_begin);
 	gluTessCallback(tess, GLU_TESS_VERTEX_DATA, (void(*)()) &glutess_vertex);
 	gluTessCallback(tess, GLU_TESS_END_DATA, (void(*)()) &glutess_end);
 	gluTessCallback(tess, GLU_TESS_ERROR_DATA, (void(*)()) &glutess_error);
 	gluTessCallback(tess, GLU_TESS_COMBINE_DATA, (void(*)()) &glutess_combine);
 
 	// this will force GL_TRIANGLES rendering
-	gluTessCallback(tess, GLU_TESS_EDGE_FLAG, (void(*)()) &glutess_edge_flag); // dont compile with g++
-#endif
+	gluTessCallback(tess, GLU_TESS_EDGE_FLAG, (void(*)()) &glutess_edge_flag);
 
 
 	gluTessNormal(tess, 0, 0, 1);
@@ -211,10 +199,11 @@ int Polygon2::tesselate (float **_pVertices, unsigned int *_nVertices,
 			coords[3 * iVertex + 0] = (double) pts[2*i];
 			coords[3 * iVertex + 1] = (double) pts[2*i+1];
 			coords[3 * iVertex + 2] = (double) 0.;
-			//printf ("%f %f %f\n", coords[3 * iVertex + 0], coords[3 * iVertex + 1], coords[3 * iVertex + 2]);
+			
 			state.v[3*iVertex+0] = (float) pts[2*i];
 			state.v[3*iVertex+1] = (float) pts[2*i+1];
 			state.v[3*iVertex+2] = (float) 0.;
+			
 			gluTessVertex(tess, &coords[3 * iVertex], (void *) iVertex);
 			iVertex++;
 		}
@@ -225,7 +214,7 @@ int Polygon2::tesselate (float **_pVertices, unsigned int *_nVertices,
 	gluDeleteTess(tess);
 
 	*_pVertices = state.v;
-	*_nVertices = iVertex+state.vn;
+	*_nVertices = state.vn;
 	*_pFaces = state.f;
 	*_nFaces = state.fn;
 
