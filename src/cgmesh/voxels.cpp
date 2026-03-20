@@ -333,7 +333,7 @@ void Voxels::smooth_data (int n)
 								iNeighbours++;	
 							}
 						}
-				//m_pVoxels[i][j][k].m_fData = fDataMean / iNeighbours;
+				m_pVoxels[i][j][k].m_fData = fDataMean / iNeighbours;
 			}
 }
 

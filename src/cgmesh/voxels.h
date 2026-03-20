@@ -40,6 +40,13 @@ public:
 	float get_data_for_intersection (unsigned int i, unsigned int j, unsigned int k);
 	void get_extremal_values (float *min, float *max);
 
+	unsigned int get_nx () const { return m_nx; }
+	unsigned int get_ny () const { return m_ny; }
+	unsigned int get_nz () const { return m_nz; }
+	bool is_activated (unsigned int i, unsigned int j, unsigned int k) const { return m_pVoxels[i][j][k].m_bActivated; }
+	unsigned int get_label (unsigned int i, unsigned int j, unsigned int k) const { return m_pVoxels[i][j][k].m_iLabel; }
+	void set_data (unsigned int i, unsigned int j, unsigned int k, float data) { m_pVoxels[i][j][k].m_fData = data; }
+
 	void smooth_data (int n);
 	void threshold_data (float threshold);
 
