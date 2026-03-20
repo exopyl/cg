@@ -47,7 +47,7 @@ static void glutess_begin(int type, void *user_data)
 static void glutess_vertex(void *vertex_data, void *user_data)
 {
 	struct glutess_state *state = (struct glutess_state *) user_data;
-	unsigned int vi = (unsigned int) vertex_data;
+	auto vi = reinterpret_cast<uintptr_t>(vertex_data);
 	state->tri[state->vc] = vi;
 
 	if (state->vc == 2)
