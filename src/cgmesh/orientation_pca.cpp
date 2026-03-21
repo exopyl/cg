@@ -250,23 +250,23 @@ Cmesh_orientation_pca::compute_pca_weighted_vertices (void)
   float *w = new float[nv];
   for (i=0; i<nv; i++)
 	{
-	  if (!model3d_half_edge->m_topology_ok[i])
+	  if (!model3d_half_edge->is_manifold(i))
 	  {
 		  w[i] = 0.0;
 		  continue;
 	  }
 
 	  w[i] = 0.0;
-	  int e = model3d_half_edge->m_pCheMesh->m_edges_vertex[i];
+	  int e = model3d_half_edge->GetCheMesh()->m_edges_vertex[i];
 	  if (e < 0) continue;
 	  int e_walk = e;
 	  do
 	    {
-          w[i] += a[model3d_half_edge->m_pCheMesh->edge(e_walk).m_face];
+          w[i] += a[model3d_half_edge->GetCheMesh()->edge(e_walk).m_face];
 
-	      int next1 = model3d_half_edge->m_pCheMesh->edge(e_walk).m_he_next;
-	      int next2 = model3d_half_edge->m_pCheMesh->edge(next1).m_he_next;
-	      e_walk = model3d_half_edge->m_pCheMesh->edge(next2).m_pair;
+	      int next1 = model3d_half_edge->GetCheMesh()->edge(e_walk).m_he_next;
+	      int next2 = model3d_half_edge->GetCheMesh()->edge(next1).m_he_next;
+	      e_walk = model3d_half_edge->GetCheMesh()->edge(next2).m_pair;
 	    } while (e_walk >= 0 && e_walk != e);
 
 		w[i] /= (3*atot);

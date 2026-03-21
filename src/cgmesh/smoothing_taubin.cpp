@@ -19,7 +19,7 @@ bool MeshAlgoSmoothingTaubin::ApplyCoefficient (Mesh_half_edge *model, float coe
 
 	for (i=0; i<nv; i++)
     {
-		if (!model->m_topology_ok[i] || model->m_border[i])
+		if (!model->is_manifold(i) || model->is_border(i))
 		{
 			vnew[3*i]   = v[3*i];
 			vnew[3*i+1] = v[3*i+1];
@@ -30,11 +30,11 @@ bool MeshAlgoSmoothingTaubin::ApplyCoefficient (Mesh_half_edge *model, float coe
 		int n_neighbours;
 
 		x_translate = y_translate = z_translate = 0.0;
-		Citerator_half_edges_vertex he_ite (model->m_pCheMesh, i);
+		Citerator_half_edges_vertex he_ite (model->GetCheMesh(), i);
 		n_neighbours = 0;
 		for (int he_walk = he_ite.first (); he_walk >= 0 && !he_ite.isLast (); he_walk = he_ite.next ())
 		{
-			int index = model->m_pCheMesh->edge(he_walk).m_v_end;
+			int index = model->GetCheMesh()->edge(he_walk).m_v_end;
 			x_translate += v[3*index]   - v[3*i];
 			y_translate += v[3*index+1] - v[3*i+1];
 			z_translate += v[3*index+2] - v[3*i+2];

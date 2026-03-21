@@ -75,7 +75,7 @@ Cmodel3d_half_edge_clipper::get_intersections (int *n_intersections, int **n_ver
   assert (visited_faces);
   for (i=0; i<nf; i++) visited_faces[i] = 0;
 
-  Che_mesh *cheMesh = model->m_pCheMesh;
+  Che_mesh *cheMesh = model->GetCheMesh();
   int e, e_walk;
   int a,b,c;
   for (i=0; i<nf; i++)

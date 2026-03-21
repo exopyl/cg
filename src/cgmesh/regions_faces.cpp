@@ -173,7 +173,7 @@ Cregions_faces::init_segmentation (float epsilon)
 
 	if (mesh_half_edge)
 	{
-		Che_mesh *chePtr = mesh_half_edge->m_pCheMesh;
+		Che_mesh *chePtr = mesh_half_edge->GetCheMesh();
 		FILE* ptr = fopen ("output.txt", "w");
 
 		float *fn = mesh_half_edge->m_pMesh->m_pFaceNormals;
@@ -311,7 +311,7 @@ Cregions_faces::refresh_colors (void)
 
 	if (mesh_half_edge)
 	{
-		Che_mesh *chePtr = mesh_half_edge->m_pCheMesh;
+		Che_mesh *chePtr = mesh_half_edge->GetCheMesh();
 
 		// paint the boundaries
 		for (i=0; i<nv; i++)
@@ -442,7 +442,7 @@ Cregions_faces::dilate_regions (void)
 
 	if (mesh_half_edge)
 	{
-		Che_mesh *chePtr = mesh_half_edge->m_pCheMesh;
+		Che_mesh *chePtr = mesh_half_edge->GetCheMesh();
 		for (i=0; i<size; i++)
 		{
 			res[i] = regions[i];
@@ -479,7 +479,7 @@ Cregions_faces::erode_regions (void)
 
 	if (mesh_half_edge)
 	{
-		Che_mesh *chePtr = mesh_half_edge->m_pCheMesh;
+		Che_mesh *chePtr = mesh_half_edge->GetCheMesh();
 		for (i=0; i<size; i++)
 		{
 			res[i] = regions[i];
@@ -559,7 +559,7 @@ Cregions_faces::dilate_selected_region (void)
 
 	if (mesh_half_edge)
 	{
-		Che_mesh *chePtr = mesh_half_edge->m_pCheMesh;
+		Che_mesh *chePtr = mesh_half_edge->GetCheMesh();
 		for (i=0; i<size; i++)
 		{
 			res[i] = selected_region[i];
@@ -596,7 +596,7 @@ Cregions_faces::erode_selected_region (void)
 
 	if (mesh_half_edge)
 	{
-		Che_mesh *chePtr = mesh_half_edge->m_pCheMesh;
+		Che_mesh *chePtr = mesh_half_edge->GetCheMesh();
 		for (i=0; i<size; i++)
 		{
 			res[i] = selected_region[i];

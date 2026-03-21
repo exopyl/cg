@@ -44,7 +44,7 @@ bool MeshAlgoSubdivisionLoop::Apply (Mesh_half_edge *model)
 	// The edge at old_edge_to_new[oe] replaces the first half, and
 	// old_edge_to_new[oe]+1 replaces the second half.
 	// -1 means not yet processed.
-	Che_mesh *chePtr = model->m_pCheMesh;
+	Che_mesh *chePtr = model->GetCheMesh();
 	std::vector<int> old_edge_to_new(chePtr->m_edges.size(), -1);
 
 	// create the new triangles and link the new edges

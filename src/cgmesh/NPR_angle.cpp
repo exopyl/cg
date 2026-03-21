@@ -50,7 +50,7 @@ ListNPRSegments& NPR_Angle::ComputeSegments (void)
 		float *pVertices = m_pMesh->m_pMesh->m_pVertices;
 		int nNberEdges = 3 * m_pMesh->m_pMesh->m_nFaces;
 		Face **f = m_pMesh->m_pMesh->m_pFaces;
-		Che_mesh *cheMesh = m_pMesh->m_pCheMesh;
+		Che_mesh *cheMesh = m_pMesh->GetCheMesh();
 
 		for (int i=0; i<nNberEdges; i++)
 		{

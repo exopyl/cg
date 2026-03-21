@@ -18,7 +18,7 @@ bool MeshAlgoTensorEvaluator::ApplyTaubin (void)
 
 	for (i=0; i<nv; i++)
     {
-		if (!m_pModel->m_topology_ok[i] || m_pModel->m_border[i])
+		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
 			m_pDiffParams[i] = NULL;
 			continue;
@@ -47,11 +47,11 @@ bool MeshAlgoTensorEvaluator::ApplyTaubin (void)
 		n_z = vn[3*i+2];
 		//printf ("n: %f %f %f\n", n_x, n_y, n_z);
 
-		int e = m_pModel->m_pCheMesh->m_edges_vertex[i];
+		int e = m_pModel->GetCheMesh()->m_edges_vertex[i];
 		int e_walk = e;
 		do
 		{
-			neighbour = m_pModel->m_pCheMesh->edge(e_walk).m_v_end;
+			neighbour = m_pModel->GetCheMesh()->edge(e_walk).m_v_end;
 			v_x = v[3*neighbour];
 			v_y = v[3*neighbour+1];
 			v_z = v[3*neighbour+2];
@@ -81,8 +81,8 @@ bool MeshAlgoTensorEvaluator::ApplyTaubin (void)
 			m[3] += kappa*t_y*t_x;    m[4] += kappa*t_y*t_y;    m[5] += kappa*t_y*t_z;
 			m[6] += kappa*t_z*t_x;    m[7] += kappa*t_z*t_y;    m[8] += kappa*t_z*t_z;
 			
-			int he_next = m_pModel->m_pCheMesh->edge(e_walk).m_he_next;
-			e_walk = m_pModel->m_pCheMesh->edge(m_pModel->m_pCheMesh->edge(he_next).m_he_next).m_pair;
+			int he_next = m_pModel->GetCheMesh()->edge(e_walk).m_he_next;
+			e_walk = m_pModel->GetCheMesh()->edge(m_pModel->GetCheMesh()->edge(he_next).m_he_next).m_pair;
 		} while (e_walk >= 0 && e_walk != e);
 
 		// make the complete (symmetric) matrix

@@ -3,6 +3,8 @@
 
 #include "mesh.h"
 #include "half_edge.h"
+#include <memory>
+#include <vector>
 
 /**
 * class Mesh_half_edge.
@@ -36,12 +38,13 @@ public:
 
 	// Composition members
 	Mesh     *m_pMesh;
-	Che_mesh *m_pCheMesh;
+	Che_mesh* GetCheMesh();
 
 	void create_half_edge (void);
 	int get_edge (unsigned int v1, unsigned int v2); // returns edge index, -1 if not found
 
-	inline int is_manifold (int i) { check_topology (); return m_topology_ok[i]; };
+	bool is_manifold (unsigned int i);
+	bool is_border (unsigned int i);
 
 	void export_statistics (const std::string & filename); // export statistics in html format
 
@@ -75,13 +78,15 @@ public:
 	void dump (void);
 
 private:
+	std::unique_ptr<Che_mesh> m_pCheMesh;
+
 	// topology
 	void check_topology (void);
-	char *m_topology_ok;
+	std::vector<char> m_topology_ok;
 
 	// border
 	void check_border (void); // check_topology should be called before
-	char *m_border;
+	std::vector<char> m_border;
 };
 
 #endif // __MESH_HALF_EDGE_H__

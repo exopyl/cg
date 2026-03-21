@@ -52,7 +52,7 @@ Cdifferential_parameters_distribution::compute_distribution (shape_function_type
   case BESL:
 	  for (i=0; i<3*nf; i++)
 	  {
-		  Che_edge &he = model->m_pCheMesh->edge(i);
+		  Che_edge &he = model->GetCheMesh()->edge(i);
 		  if (he.m_pair >= 0)
 		  {
 			  int a,b;
@@ -65,7 +65,7 @@ Cdifferential_parameters_distribution::compute_distribution (shape_function_type
 			  weights[iwalk] = v3.getLength ();
 
 			  a = he.m_face;
-			  b = model->m_pCheMesh->edge(he.m_pair).m_face;
+			  b = model->GetCheMesh()->edge(he.m_pair).m_face;
 			  Vector3f na (fn[3*a], fn[3*a+1], fn[3*a+2]);
 			  Vector3f nb (fn[3*b], fn[3*b+1], fn[3*b+2]);
 			  float dot = na * nb;

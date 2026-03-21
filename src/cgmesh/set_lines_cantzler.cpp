@@ -13,7 +13,7 @@ void Cset_lines::cantzler_extract_edges (float threshold)
 	float *v = model->m_pMesh->m_pVertices;
 	int nv = model->m_pMesh->m_nVertices;
 	int ne = 3*model->m_pMesh->m_nFaces;
-	Che_mesh *cheMesh = model->m_pCheMesh;
+	Che_mesh *cheMesh = model->GetCheMesh();
 
 	// visited half edges
 	Cedges_visited *ev = new Cedges_visited (nv);

@@ -14,13 +14,13 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 
 	for (i=0; i<nv; i++)
     {
-		if (!m_pModel->m_topology_ok[i] || m_pModel->m_border[i])
+		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
 			m_pDiffParams[i] = NULL;
 			continue;
 		}
 
-		int e = m_pModel->m_pCheMesh->m_edges_vertex[i];
+		int e = m_pModel->GetCheMesh()->m_edges_vertex[i];
 		int e_walk = e;
 		/*
 		if (!e) // isolated vertex
@@ -76,7 +76,7 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 		do
 		{
 			//n_neighbour++;
-			int index = m_pModel->m_pCheMesh->edge(e_walk).m_v_end;
+			int index = m_pModel->GetCheMesh()->edge(e_walk).m_v_end;
 			
 			vec3 v_walk;
 			vec3_init (v_walk, v[3*index], v[3*index+1], v[3*index+2]);
@@ -99,8 +99,8 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 			
 			right[0] += 2*ui*ui*d_walk;  right[1] += 2*2*ui*vi*d_walk;  right[2] += 2*vi*vi*d_walk;
 			
-			int he_next = m_pModel->m_pCheMesh->edge(e_walk).m_he_next;
-			e_walk = m_pModel->m_pCheMesh->edge(m_pModel->m_pCheMesh->edge(he_next).m_he_next).m_pair;
+			int he_next = m_pModel->GetCheMesh()->edge(e_walk).m_he_next;
+			e_walk = m_pModel->GetCheMesh()->edge(m_pModel->GetCheMesh()->edge(he_next).m_he_next).m_pair;
 		} while (e_walk >= 0 && e_walk != e);
 		/*
 		if (n_neighbour <= 4)

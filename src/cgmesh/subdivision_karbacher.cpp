@@ -7,7 +7,7 @@ bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 	int nf = model->m_pMesh->m_nFaces;
 	float *v = model->m_pMesh->m_pVertices;
 	Face **f = model->m_pMesh->m_pFaces;
-	Che_mesh *chePtr = model->m_pCheMesh;
+	Che_mesh *chePtr = model->GetCheMesh();
 	int m_ne = chePtr->m_ne;
 	float *vn = model->m_pMesh->m_pVertexNormals;
 
@@ -188,7 +188,7 @@ void MeshAlgoSubdivisionKarbacher::DeleteAngles (void)
 {
 	int nf = m_pModel->m_pMesh->m_nFaces;
 	float *v = m_pModel->m_pMesh->m_pVertices;
-	Che_mesh *chePtr = m_pModel->m_pCheMesh;
+	Che_mesh *chePtr = m_pModel->GetCheMesh();
 	int m_ne = chePtr->m_ne;
 
 	m_ne = 3*nf;

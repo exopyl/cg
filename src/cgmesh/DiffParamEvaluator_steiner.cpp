@@ -192,17 +192,17 @@ void MeshAlgoTensorEvaluator::ApplySteinerAux (int index, float radius, int *_n_
 			if (vec3_length (tmp) < radius)
 			{
 				/* add the new edges */
-				int e = m_pModel->m_pCheMesh->m_edges_vertex[new_vertices[j]];
+				int e = m_pModel->GetCheMesh()->m_edges_vertex[new_vertices[j]];
 				int e_walk = e;
 				do
 				{
-					if (!is_already_visited (e_walk, m_pModel->m_pCheMesh, new_edges, n_new_edges))
+					if (!is_already_visited (e_walk, m_pModel->GetCheMesh(), new_edges, n_new_edges))
 					{
 						new_edges[n_new_edges++] = e_walk;
-						new_vertices[n_new_vertices++] = m_pModel->m_pCheMesh->edge(e_walk).m_v_end;
+						new_vertices[n_new_vertices++] = m_pModel->GetCheMesh()->edge(e_walk).m_v_end;
 					}
-					int he_next = m_pModel->m_pCheMesh->edge(e_walk).m_he_next;
-					e_walk = m_pModel->m_pCheMesh->edge(m_pModel->m_pCheMesh->edge(he_next).m_he_next).m_pair;
+					int he_next = m_pModel->GetCheMesh()->edge(e_walk).m_he_next;
+					e_walk = m_pModel->GetCheMesh()->edge(m_pModel->GetCheMesh()->edge(he_next).m_he_next).m_pair;
 				} while (e_walk >= 0 && e_walk != e);
 			}
 		}
@@ -222,7 +222,7 @@ bool MeshAlgoTensorEvaluator::ApplySteiner (void)
 	int *f = m_pModel->m_pMesh->f;
 	float *vn = m_pModel->m_pMesh->vn;
 	float *fn = m_pModel->m_pMesh->fn;
-	Che_edge** m_edges_vertex = m_pModel->m_pCheMesh->m_edges_vertex;
+	Che_edge** m_edges_vertex = m_pModel->GetCheMesh()->m_edges_vertex;
 
 	int i,j,k;
 	CDiffParam *pDiffParamWalk;
@@ -257,7 +257,7 @@ bool MeshAlgoTensorEvaluator::ApplySteiner (void)
 	Che_edge **edges;
 	for (i=0; i<nv; i++)
     {
-		if (!m_pModel->m_topology_ok[i] || m_pModel->m_border[i])
+		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
 			m_pDiffParams[i] = NULL;
 			continue;

@@ -13,7 +13,7 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 
 	for (i=0; i<nv; i++)
     {
-		if (!m_pModel->m_topology_ok[i] || m_pModel->m_border[i])
+		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
 			m_pDiffParams[i] = NULL;
 			continue;
@@ -58,11 +58,11 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 		for (j=0; j<n_neighbours*3; j++) B[j] = 0.0;
 
 		int iwalk = 0;
-		int e = m_pModel->m_pCheMesh->m_edges_vertex[i];
+		int e = m_pModel->GetCheMesh()->m_edges_vertex[i];
 		int e_walk = e;
 		do
 		{
-			Che_edge &ew = m_pModel->m_pCheMesh->edge(e_walk);
+			Che_edge &ew = m_pModel->GetCheMesh()->edge(e_walk);
 			int index = ew.m_v_end;
 			if (m_pModel->m_border[index]) break;
 			
@@ -120,8 +120,8 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 			B[3*iwalk+2] = -nyi/nzi;
 			
 			iwalk++;
-			int he_next = m_pModel->m_pCheMesh->edge(e_walk).m_he_next;
-			e_walk = m_pModel->m_pCheMesh->edge(m_pModel->m_pCheMesh->edge(he_next).m_he_next).m_pair;
+			int he_next = m_pModel->GetCheMesh()->edge(e_walk).m_he_next;
+			e_walk = m_pModel->GetCheMesh()->edge(m_pModel->GetCheMesh()->edge(he_next).m_he_next).m_pair;
 		} while (e_walk >= 0 && e_walk != e);
 		
 		if (iwalk != n_neighbours)
