@@ -116,7 +116,7 @@ TEST(TEST_cgimg_img, quantization)
 	}
 
 	// kmean
-	if (0) {
+	{
 		Img *imgc = new Img (*img);
 		imgc->quant_kmean (0.05);
 		imgc->save ((char*)"./img_quant_kmean.ppm");
@@ -490,5 +490,208 @@ TEST(TEST_cgimg_img, temperature2color)
 		}
 	}
 	pImg->save("./toto.bmp");
+}
+
+TEST(TEST_cgimg_img, invert)
+{
+    // Context
+    Img img(10, 10);
+    img.init_color(100, 100, 100, 255);
+    img.set_pixel(0, 0, 50, 50, 50, 255);
+
+    // Action
+    img.invert();
+
+    // Expectations
+    unsigned char r, g, b, a;
+    img.get_pixel(0, 0, &r, &g, &b, &a);
+    EXPECT_EQ(r, 205); // 255 - 50
+    img.get_pixel(5, 5, &r, &g, &b, &a);
+    EXPECT_EQ(r, 155); // 255 - 100
+}
+
+TEST(TEST_cgimg_img, contrast)
+{
+    // Context
+    Img img(10, 10);
+    img.init_color(100, 100, 100, 255);
+    img.set_pixel(0, 0, 50, 50, 50, 255);
+
+    // Action
+    img.contrast(1.5f);
+
+    // Expectations
+    unsigned char r, g, b, a;
+    img.get_pixel(0, 0, &r, &g, &b, &a);
+    EXPECT_NE(r, 50);
+}
+
+TEST(TEST_cgimg_img, get_mean_value)
+{
+    // Context
+    Img img(10, 10);
+    img.init_color(100, 100, 100, 255);
+
+    // Action
+    int mean = img.get_mean_value();
+
+    // Expectations
+    EXPECT_EQ(mean, 100);
+}
+
+TEST(TEST_cgimg_img, get_median_value)
+{
+    // Context
+    Img img(10, 10);
+    img.init_color(0, 0, 0, 255);
+    for(int i=0; i<100; ++i) img.m_pPixels[4*i] = i * 2;
+
+    // Action
+    int median = img.get_median_value();
+
+    // Expectations
+    EXPECT_NEAR(median, 100, 5);
+}
+
+TEST(TEST_cgimg_img, resize)
+{
+    // Context
+    Img img(10, 10);
+
+    // Action
+    img.resize(20, 20);
+
+    // Expectations
+    EXPECT_EQ(img.width(), 20);
+    EXPECT_EQ(img.height(), 20);
+}
+
+TEST(TEST_cgimg_img, resize_pixel)
+{
+    // Context
+    Img img(10, 10);
+
+    // Action
+    img.resize_pixel(2);
+
+    // Expectations
+    EXPECT_EQ(img.width(), 20);
+    EXPECT_EQ(img.height(), 20);
+}
+
+TEST(TEST_cgimg_img, copy)
+{
+    // Context
+    Img src(10, 10);
+    src.init_color(50, 50, 50, 255);
+    Img dst(20, 20);
+    dst.init_color(0, 0, 0, 255);
+
+    // Action
+    dst.copy(5, 5, &src);
+
+    // Expectations
+    unsigned char r, g, b, a;
+    dst.get_pixel(5, 5, &r, &g, &b, &a);
+    EXPECT_EQ(r, 50);
+}
+
+TEST(TEST_cgimg_img, concatenate)
+{
+    // Context
+    Img img1(10, 10);
+    Img img2(10, 10);
+
+    // Action
+    img1.concatenate(&img2);
+
+    // Expectations
+    EXPECT_EQ(img1.width(), 20);
+    EXPECT_EQ(img1.height(), 10);
+}
+
+TEST(TEST_cgimg_img, rotate)
+{
+    // Context
+    Img img(4, 2); // Non-square image to clearly see dimension swaps
+    img.init_color(0, 0, 0, 255);
+    img.set_pixel(0, 0, 255, 0, 0, 255); // Top-left is Red
+
+    // Action & Expectations: Mode 0 (90 Right)
+    {
+        Img img0(img);
+        img0.rotate(0);
+        EXPECT_EQ(img0.width(), 2);
+        EXPECT_EQ(img0.height(), 4);
+        unsigned char r, g, b, a;
+        img0.get_pixel(1, 0, &r, &g, &b, &a); // (0,0) moves to (h-1-j, i) -> (1,0)
+        EXPECT_EQ(r, 255);
+    }
+
+    // Action & Expectations: Mode 1 (90 Left)
+    {
+        Img img1(img);
+        img1.rotate(1);
+        EXPECT_EQ(img1.width(), 2);
+        EXPECT_EQ(img1.height(), 4);
+        unsigned char r, g, b, a;
+        img1.get_pixel(0, 3, &r, &g, &b, &a); // (0,0) moves to (j, w-1-i) -> (0,3)
+        EXPECT_EQ(r, 255);
+    }
+
+    // Action & Expectations: Mode 2 (180)
+    {
+        Img img2(img);
+        img2.rotate(2);
+        EXPECT_EQ(img2.width(), 4);
+        EXPECT_EQ(img2.height(), 2);
+        unsigned char r, g, b, a;
+        img2.get_pixel(3, 1, &r, &g, &b, &a); // (0,0) moves to (w-1-i, h-1-j) -> (3,1)
+        EXPECT_EQ(r, 255);
+    }
+}
+
+TEST(TEST_cgimg_img, resize_canvas)
+{
+    // Context
+    Img img(10, 10);
+
+    // Action
+    img.resize_canvas(20, 20, 0, 255, 0, 0, 255);
+
+    // Expectations
+    EXPECT_EQ(img.width(), 20);
+    EXPECT_EQ(img.height(), 20);
+}
+
+TEST(TEST_cgimg_img, multiply)
+{
+    // Context
+    Img img1(10, 10);
+    img1.init_color(128, 128, 128, 255);
+    Img img2(10, 10);
+    img2.init_color(128, 128, 128, 255);
+
+    // Action
+    img1.multiply(&img2);
+
+    // Expectations
+    unsigned char r, g, b, a;
+    img1.get_pixel(5, 5, &r, &g, &b, &a);
+    EXPECT_NEAR(r, 64, 2);
+}
+
+TEST(TEST_cgimg_img, histogram_equalization_bezier)
+{
+    // Context
+    Img img(10, 10);
+    img.init_color(100, 100, 100, 255);
+    img.convert_to_grayscale();
+
+    // Action
+    img.histogram_equalization_bezier(NULL);
+
+    // Expectations
+    EXPECT_EQ(img.width(), 10);
 }
 

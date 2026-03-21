@@ -513,7 +513,7 @@ int Img::get_mean_value (void)
 	int sum = 0;
 	for (unsigned int j=0; j<m_iHeight; j++)
 		for (unsigned int i=0; i<m_iWidth; i++)
-			sum += m_pPixels[4*(j+m_iWidth+i)];
+			sum += m_pPixels[4*(j*m_iWidth+i)];
 
 	return (int)(sum/(m_iWidth*m_iHeight));
 }
