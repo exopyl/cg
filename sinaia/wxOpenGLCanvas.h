@@ -56,6 +56,8 @@ public:
 	unsigned int GetNNonManifoldEdges() const;
 	unsigned int GetNBorders() const;
 
+	void UpdateTopologicIssues();
+
 	void ResetProjectionMode();
 	void DrawGL();
 

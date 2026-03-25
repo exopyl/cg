@@ -135,13 +135,9 @@ void MyGLCanvas::SetVMeshes(VMeshes* pObject)
 	{
 		mesh->translate(-center[0], -center[1], -center[2]);
 		mesh->scale(1.f / fLargestLength);
-		
-		vector<unsigned int> nonManifoldEdges;
-		vector<unsigned int> borders;
-		mesh->GetTopologicIssues(nonManifoldEdges, borders);
-		prop.nonManifoldEdges.insert(std::make_pair(mesh, nonManifoldEdges));
-		prop.borders.insert(std::make_pair(mesh, borders));
 	}
+
+	UpdateTopologicIssues();
 
 	Refresh(false);
 }
@@ -625,6 +621,23 @@ unsigned int MyGLCanvas::GetNBorders() const
 	for (auto& element : prop.borders)
 		nBorders += element.second.size() / 2;
 	return nBorders;
+}
+
+void MyGLCanvas::UpdateTopologicIssues()
+{
+	prop.nonManifoldEdges.clear();
+	prop.borders.clear();
+	if (m_pVMeshes)
+	{
+		for (const auto& mesh : m_pVMeshes->GetMeshes())
+		{
+			vector<unsigned int> nonManifoldEdges;
+			vector<unsigned int> borders;
+			mesh->GetTopologicIssues(nonManifoldEdges, borders);
+			prop.nonManifoldEdges.insert(std::make_pair(mesh, nonManifoldEdges));
+			prop.borders.insert(std::make_pair(mesh, borders));
+		}
+	}
 }
 
 //

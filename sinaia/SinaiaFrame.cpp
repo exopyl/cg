@@ -1750,21 +1750,22 @@ void MyFrame::OnTreatmentMergeVertices(wxCommandEvent& WXUNUSED(event))
 	if (!pGLCanvas)
 		return;
 
-    VMeshes*pVMeshes = pGLCanvas->GetVMeshes();
+    VMeshes * pVMeshes = pGLCanvas->GetVMeshes();
 	if (!pVMeshes)
 		return;
 
 	for (auto& pMesh : pVMeshes->GetMeshes())
 	{
-		unsigned int nVerticesBefore = pMesh->GetNVertices();
+		auto nVerticesBefore = pMesh->GetNVertices();
 		pMesh->MergeVertices();
-		unsigned int nVerticesAfter = pMesh->GetNVertices();
+		auto nVerticesAfter = pMesh->GetNVertices();
 
 		pMesh->ComputeNormals();
 
 		*m_pWndLogging << wxString::Format(_T("Merge vertices: %u -> %u\n"), nVerticesBefore, nVerticesAfter);
 	}
 
+	pGLCanvas->UpdateTopologicIssues();
 	pGLCanvas->Refresh();
 	UpdatePropertiesGrid();
 }

@@ -846,7 +846,7 @@ void Mesh::add_gaussian_noise (float variance)
 	}
 }
 
-// topololy
+// topology
 void Mesh::GetTopologicIssues(vector<unsigned int>& nonManifoldEdges, vector<unsigned int>& borders) const
 {
 	std::map<unsigned int, std::map<unsigned int, unsigned int>> occurences;
