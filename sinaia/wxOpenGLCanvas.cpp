@@ -6,6 +6,7 @@
 #include "../src/cgmath/cgmath.h"
 #include "../src/cgmesh/bounding_box.h"
 #include "../src/cgmesh/cgmesh.h"
+#include "../src/cgmesh/mesh_data_manager.h"
 
 #include "wxOpenGLCanvas.h"
 
@@ -631,11 +632,9 @@ void MyGLCanvas::UpdateTopologicIssues()
 	{
 		for (const auto& mesh : m_pVMeshes->GetMeshes())
 		{
-			vector<unsigned int> nonManifoldEdges;
-			vector<unsigned int> borders;
-			mesh->GetTopologicIssues(nonManifoldEdges, borders);
-			prop.nonManifoldEdges.insert(std::make_pair(mesh, nonManifoldEdges));
-			prop.borders.insert(std::make_pair(mesh, borders));
+            const auto& issues = MeshDataManager::GetInstance().GetTopologicIssues(mesh);
+			prop.nonManifoldEdges.insert(std::make_pair(mesh, issues.nonManifoldEdges));
+			prop.borders.insert(std::make_pair(mesh, issues.borders));
 		}
 	}
 }

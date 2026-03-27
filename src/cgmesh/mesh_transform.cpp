@@ -22,12 +22,14 @@ void Mesh::centerize (void)
 		m_pVertices[3*i+1] -= cy;
 		m_pVertices[3*i+2] -= cz;
 	}
+	IncrementRevision();
 }
 
 void Mesh::scale (float s)
 {
 	for (unsigned int i=0; i<3*m_nVertices; i++)
 		m_pVertices[i] *= s;
+	IncrementRevision();
 }
 
 void Mesh::scale_xyz (float sx, float sy, float sz)
@@ -38,6 +40,7 @@ void Mesh::scale_xyz (float sx, float sy, float sz)
 		m_pVertices[3*i+1] *= sy;
 		m_pVertices[3*i+2] *= sz;
 	}
+	IncrementRevision();
 }
 
 void Mesh::translate (float tx, float ty, float tz)
@@ -48,6 +51,7 @@ void Mesh::translate (float tx, float ty, float tz)
 		m_pVertices[3*i+1] += ty;
 		m_pVertices[3*i+2] += tz;
 	}
+	IncrementRevision();
 }
 
 void Mesh::transform (float mrot[9])
@@ -62,6 +66,7 @@ void Mesh::transform (float mrot[9])
 		m_pVertices[3*i+1] = mrot[3]*tmp[0] + mrot[4]*tmp[1] + mrot[5]*tmp[2];
 		m_pVertices[3*i+2] = mrot[6]*tmp[0] + mrot[7]*tmp[1] + mrot[8]*tmp[2];
 	}
+	IncrementRevision();
 }
 
 void Mesh::transform (mat3 m)
@@ -75,6 +80,7 @@ void Mesh::transform (mat3 m)
 		m_pVertices[3*i+1] = vtmp[1];
 		m_pVertices[3*i+2] = vtmp[2];
 	}
+	IncrementRevision();
 }
 
 void Mesh::transform4 (mat4 m)
@@ -88,5 +94,5 @@ void Mesh::transform4 (mat4 m)
 		m_pVertices[3*i+1] = vtmp[1];
 		m_pVertices[3*i+2] = vtmp[2];
 	}
+	IncrementRevision();
 }
-

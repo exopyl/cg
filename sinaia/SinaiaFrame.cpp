@@ -26,6 +26,7 @@
 #include "../src/cgmesh/smoothing_taubin.h"
 #include "../src/cgmesh/smoothing_laplacian.h"
 #include "../src/cgmesh/DiffParamEvaluator.h"
+#include "../src/cgmesh/mesh_data_manager.h"
 
 // control ids
 enum
@@ -1783,17 +1784,18 @@ void MyFrame::OnTreatmentSmoothingTaubin(wxCommandEvent& WXUNUSED(event))
 	MeshAlgoSmoothingTaubin algo;
 	for (auto& pMesh : pVMeshes->GetMeshes())
 	{
-		Mesh_half_edge meshHE(pMesh);
-		algo.Apply(&meshHE);
+		Mesh_half_edge *pMeshHE = MeshDataManager::GetInstance().GetHalfEdge(pMesh);
+		algo.Apply(pMeshHE);
 
 		// Copy smoothed vertices back
 		for (unsigned int i = 0; i < pMesh->m_nVertices; i++)
 		{
-			pMesh->m_pVertices[3 * i]     = meshHE.m_pMesh->m_pVertices[3 * i];
-			pMesh->m_pVertices[3 * i + 1] = meshHE.m_pMesh->m_pVertices[3 * i + 1];
-			pMesh->m_pVertices[3 * i + 2] = meshHE.m_pMesh->m_pVertices[3 * i + 2];
+			pMesh->m_pVertices[3 * i]     = pMeshHE->m_pMesh->m_pVertices[3 * i];
+			pMesh->m_pVertices[3 * i + 1] = pMeshHE->m_pMesh->m_pVertices[3 * i + 1];
+			pMesh->m_pVertices[3 * i + 2] = pMeshHE->m_pMesh->m_pVertices[3 * i + 2];
 		}
 		pMesh->ComputeNormals();
+		pMesh->IncrementRevision();
 	}
 
 	pGLCanvas->Refresh();
@@ -1813,17 +1815,18 @@ void MyFrame::OnTreatmentSmoothingLaplacian(wxCommandEvent& WXUNUSED(event))
 	MeshAlgoSmoothingLaplacian algo;
 	for (auto& pMesh : pVMeshes->GetMeshes())
 	{
-		Mesh_half_edge meshHE(pMesh);
-		algo.Apply(&meshHE);
+		Mesh_half_edge *pMeshHE = MeshDataManager::GetInstance().GetHalfEdge(pMesh);
+		algo.Apply(pMeshHE);
 
 		// Copy smoothed vertices back
 		for (unsigned int i = 0; i < pMesh->m_nVertices; i++)
 		{
-			pMesh->m_pVertices[3 * i]     = meshHE.m_pMesh->m_pVertices[3 * i];
-			pMesh->m_pVertices[3 * i + 1] = meshHE.m_pMesh->m_pVertices[3 * i + 1];
-			pMesh->m_pVertices[3 * i + 2] = meshHE.m_pMesh->m_pVertices[3 * i + 2];
+			pMesh->m_pVertices[3 * i]     = pMeshHE->m_pMesh->m_pVertices[3 * i];
+			pMesh->m_pVertices[3 * i + 1] = pMeshHE->m_pMesh->m_pVertices[3 * i + 1];
+			pMesh->m_pVertices[3 * i + 2] = pMeshHE->m_pMesh->m_pVertices[3 * i + 2];
 		}
 		pMesh->ComputeNormals();
+		pMesh->IncrementRevision();
 	}
 
 	pGLCanvas->Refresh();
@@ -1842,16 +1845,16 @@ void MyFrame::OnTreatmentCurvaturesDesbrun(wxCommandEvent& WXUNUSED(event))
 
 	for (auto& pMesh : pVMeshes->GetMeshes())
 	{
-		Mesh_half_edge meshHE(pMesh);
+		Mesh_half_edge *pMeshHE = MeshDataManager::GetInstance().GetHalfEdge(pMesh);
 
 		MeshAlgoTensorEvaluator algo;
-		algo.Init(&meshHE);
+		algo.Init(pMeshHE);
 		algo.Evaluate(TENSOR_DESBRUN);
 		algo.EvaluateColors(CURVATURE_MEAN);
 
 		// Copy colors back to original mesh
 		pMesh->InitVertexColors();
-		memcpy(pMesh->m_pVertexColors, meshHE.m_pMesh->m_pVertexColors, 3 * pMesh->m_nVertices * sizeof(float));
+		memcpy(pMesh->m_pVertexColors, pMeshHE->m_pMesh->m_pVertexColors, 3 * pMesh->m_nVertices * sizeof(float));
 	}
 
 	pGLCanvas->Refresh();
@@ -1870,16 +1873,16 @@ void MyFrame::OnTreatmentCurvaturesHamann(wxCommandEvent& WXUNUSED(event))
 
 	for (auto& pMesh : pVMeshes->GetMeshes())
 	{
-		Mesh_half_edge meshHE(pMesh);
+		Mesh_half_edge *pMeshHE = MeshDataManager::GetInstance().GetHalfEdge(pMesh);
 
 		MeshAlgoTensorEvaluator algo;
-		algo.Init(&meshHE);
+		algo.Init(pMeshHE);
 		algo.Evaluate(TENSOR_HAMANN);
 		algo.EvaluateColors(CURVATURE_MEAN);
 
 		// Copy colors back to original mesh
 		pMesh->InitVertexColors();
-		memcpy(pMesh->m_pVertexColors, meshHE.m_pMesh->m_pVertexColors, 3 * pMesh->m_nVertices * sizeof(float));
+		memcpy(pMesh->m_pVertexColors, pMeshHE->m_pMesh->m_pVertexColors, 3 * pMesh->m_nVertices * sizeof(float));
 	}
 
 	pGLCanvas->Refresh();

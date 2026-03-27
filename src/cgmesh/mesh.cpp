@@ -127,6 +127,7 @@ void Mesh::Init ()
 	m_pTextureCoordinates = NULL;
 	m_pTensors = NULL;
 	m_pOctree = NULL;
+	m_revision = 0;
 }
 
 void Mesh::InitVertexColors (float r, float g, float b)
@@ -324,6 +325,8 @@ void Mesh::Init (unsigned int nVertices, unsigned int nFaces)
 
 	m_nMaterials = 0;
 	m_pMaterials = NULL;
+
+	IncrementRevision();
 }
 
 Mesh::Mesh () : Geometry()
@@ -844,11 +847,15 @@ void Mesh::add_gaussian_noise (float variance)
 		m_pVertices[3*i+1] += variance*disp[1];
 		m_pVertices[3*i+2] += variance*disp[2];
 	}
+	IncrementRevision();
 }
 
 // topology
 void Mesh::GetTopologicIssues(vector<unsigned int>& nonManifoldEdges, vector<unsigned int>& borders) const
 {
+	nonManifoldEdges.clear();
+	borders.clear();
+
 	std::map<unsigned int, std::map<unsigned int, unsigned int>> occurences;
 	for (int i = 0; i < m_nFaces; i++)
 	{
@@ -1173,6 +1180,8 @@ int Mesh::MergeVertices (float tolerance)
 	m_nFaces = nNewFaces;
 
 	delete[] remap;
+
+	IncrementRevision();
 
 	return (int)(nOldVertices - nNewVertices);
 }

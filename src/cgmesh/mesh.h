@@ -136,6 +136,10 @@ public:
 	void InitVertexColorsFromCurvatures (Tensor::eCurvature curvature);
 	void InitVertexColorsFromArray (float *array, char *defined = NULL);
 
+	// Revision
+	uint64_t GetRevision() const { return m_revision; }
+	void IncrementRevision() { m_revision++; }
+
 	// Getters / Setters
 	unsigned int* GetTriangles (void);
 	inline int GetVertex (unsigned int i, float v[3]) {
@@ -349,6 +353,9 @@ public:
 	BoundingBox m_bbox;
 
 	Octree *m_pOctree;
+
+private:
+	uint64_t m_revision = 0;
 };
 
 #endif // __MESH_H__
