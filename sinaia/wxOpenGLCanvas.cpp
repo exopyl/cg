@@ -232,7 +232,24 @@ void MyGLCanvas::DrawGL()
 
 	repere_draw ();
 	for (const auto& mesh : m_pVMeshes->GetMeshes())
-		mesh_draw (mesh, prop);
+	{
+		if (prop.display_fill && mesh->IsTriangleMesh())
+		{
+			int id = MeshDataManager::GetInstance().GetVertexArrayId(mesh);
+			MeshRenderer::getInstance()->Draw(id);
+
+			// Still call mesh_draw for extra features (wireframe, points, warnings)
+			// but with display_fill disabled to avoid double rendering
+			rendering_properties_s tempProp = prop;
+			tempProp.display_fill = 0;
+			mesh_draw (mesh, tempProp);
+		}
+		else
+		{
+			// For non-triangle meshes or when fill is off, use the standard renderer
+			mesh_draw (mesh, prop);
+		}
+	}
 /*
 	else
 	{

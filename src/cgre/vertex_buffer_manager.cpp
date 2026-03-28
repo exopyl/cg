@@ -1,6 +1,7 @@
 #include "gl_wrapper.h"
 
 #include "vertex_buffer_manager.h"
+#include "../cgmesh/mesh_data_manager.h"
 
 VertexBufferManager::VertexBufferManager()
 {
@@ -106,9 +107,11 @@ void VertexArrayManager::Draw (int id)
 	if (!mesh)
 		return;
 
-	unsigned int* pIndices = mesh->GetTriangles();
+	const std::vector<unsigned int>& triangles = MeshDataManager::GetInstance().GetTriangles(mesh);
+	if (triangles.empty())
+		return;
+
 	float* pVertices = mesh->m_pVertices;
-	assert (pIndices);
 
 	bool bHasNormals = (mesh->m_pVertexNormals)? true : false;
 	bool bHasColors = (mesh->m_pVertexColors)? true : false;
@@ -125,7 +128,7 @@ void VertexArrayManager::Draw (int id)
 	if (bHasColors)
 		glColorPointer(3, GL_FLOAT, 0, mesh->m_pVertexColors);
 
-	glDrawElements(GL_TRIANGLES, 3*mesh->m_nFaces, GL_UNSIGNED_INT, pIndices);
+	glDrawElements(GL_TRIANGLES, 3*mesh->m_nFaces, GL_UNSIGNED_INT, triangles.data());
 
 	if (bHasColors)
 		glDisableClientState(GL_COLOR_ARRAY);
@@ -163,7 +166,7 @@ int VBOManager::addMesh (Mesh *mesh)
 
 
 
-	// Génération des buffers
+	// Gï¿½nï¿½ration des buffers
 	glGenBuffers(3, info.buffers);
 
 	// Buffer d'informations de vertex

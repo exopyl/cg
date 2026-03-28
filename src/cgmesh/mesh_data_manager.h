@@ -36,8 +36,16 @@ private:
         uint64_t revision;
     };
 
+    struct CachedTriangles
+    {
+        std::vector<unsigned int> triangles;
+        uint64_t revision;
+    };
+
     std::map<Mesh*, CachedHalfEdge> m_halfEdges;
     std::map<Mesh*, CachedTopologicIssues> m_topologicIssues;
+    std::map<Mesh*, CachedTriangles> m_triangles;
+    std::map<Mesh*, int> m_vertexArrayIds;
 
     MeshDataManager() = default;
     ~MeshDataManager() = default;
@@ -48,6 +56,8 @@ public:
         static MeshDataManager instance;
         return instance;
     }
+
+    int GetVertexArrayId(Mesh* pMesh);
 
     // Get a valid Mesh_half_edge for the given mesh.
     // If it doesn't exist or is outdated, it will be recomputed.
@@ -100,11 +110,38 @@ public:
         return m_topologicIssues[pMesh].issues;
     }
 
+    const std::vector<unsigned int>& GetTriangles(Mesh* pMesh)
+    {
+        static std::vector<unsigned int> emptyTriangles;
+        if (!pMesh) return emptyTriangles;
+
+        uint64_t currentRevision = pMesh->GetRevision();
+        auto it = m_triangles.find(pMesh);
+
+        if (it != m_triangles.end() && it->second.revision == currentRevision)
+        {
+            return it->second.triangles;
+        }
+
+        // Recompute
+        CachedTriangles cached;
+        unsigned int* pTris = pMesh->GetTriangles();
+        if (pTris)
+        {
+            cached.triangles.assign(pTris, pTris + 3 * pMesh->m_nFaces);
+            free(pTris);
+        }
+        cached.revision = currentRevision;
+        m_triangles[pMesh] = std::move(cached);
+        return m_triangles[pMesh].triangles;
+    }
+
     // Invalidate all cached data for a specific mesh
     void Invalidate(Mesh* pMesh)
     {
         m_halfEdges.erase(pMesh);
         m_topologicIssues.erase(pMesh);
+        m_triangles.erase(pMesh);
     }
 
     // Clear all caches
@@ -112,6 +149,8 @@ public:
     {
         m_halfEdges.clear();
         m_topologicIssues.clear();
+        m_triangles.clear();
+        m_vertexArrayIds.clear();
     }
 };
 
