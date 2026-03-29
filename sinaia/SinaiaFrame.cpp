@@ -985,8 +985,7 @@ void MyFrame::OpenDocument(const wxString& strFilename)
 
     *m_pWndLogging << _T("Opening ") << strFilename << _T("\n");
 
-    int args[] = { WX_GL_RGBA, WX_GL_DOUBLEBUFFER, WX_GL_DEPTH_SIZE, 24, 0 };
-    MyGLCanvas* pGLCanvas = new MyGLCanvas(m_pCtrl, m_pWndLogging, args);
+    MyGLCanvas* pGLCanvas = new MyGLCanvas(m_pCtrl, m_pWndLogging, (int*)MyGLCanvas::GetDefaultAttributes());
     pGLCanvas->LoadModel(strFilename);
 
     wxArrayString aString = wxSplit(strFilename, '\\');
@@ -1537,8 +1536,7 @@ wxAuiNotebook* MyFrame::CreateNotebook(void)
                                     m_notebook_style);
    m_pCtrl->SetArtProvider(new wxAuiSimpleTabArt);
 
-   int args[] = {WX_GL_RGBA, WX_GL_DOUBLEBUFFER, WX_GL_DEPTH_SIZE, 24, 0};
-   m_pGLCanvas = new MyGLCanvas (m_pCtrl, m_pWndLogging, args);
+   m_pGLCanvas = new MyGLCanvas (m_pCtrl, m_pWndLogging, (int*)MyGLCanvas::GetDefaultAttributes());
    auto pVMeshes = new VMeshes();
    pVMeshes->AddMesh(CreateCube());
    m_pGLCanvas->SetVMeshes(pVMeshes);

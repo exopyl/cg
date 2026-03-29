@@ -17,13 +17,17 @@ BEGIN_EVENT_TABLE(MyGLCanvas, wxGLCanvas)
     EVT_MOUSE_EVENTS(MyGLCanvas::OnMouse)
 END_EVENT_TABLE()
 
+const int* MyGLCanvas::GetDefaultAttributes()
+{
+	static const int attributes[] = { WX_GL_RGBA, WX_GL_DOUBLEBUFFER, WX_GL_DEPTH_SIZE, 24, WX_GL_SAMPLE_BUFFERS, 1, WX_GL_SAMPLES, 4, 0 };
+	return attributes;
+}
+
 //
 //
 //
 MyGLCanvas::MyGLCanvas(wxWindow *parent, wxTextCtrl* pCtrlLog, int *args)
-	:wxGLCanvas(parent)//, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, wxT("GLCanvas"), args)
-//:wxGLCanvas(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, wxT("GLCanvas"), args)
-//:wxGLCanvas(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, wxT("GLCanvas"))
+	: wxGLCanvas(parent, wxID_ANY, args ? args : GetDefaultAttributes())
 {
 	m_CtrlLog = pCtrlLog;
 	m_context = new wxGLContext(this);
@@ -38,9 +42,6 @@ MyGLCanvas::MyGLCanvas(wxWindow *parent, wxTextCtrl* pCtrlLog, int *args)
 		printf("Failed to initialize OpenGL context\n");
 		return;
 	}
-
-	static int wx_gl_attribs[] = {WX_GL_RGBA, WX_GL_DOUBLEBUFFER, WX_GL_DEPTH_SIZE, 24, 0};
-	//printf ("%d\n", ChooseGLVisual (wx_gl_attribs) == NULL);
 
 	int argc = 1;
 	char* argv[1] = { wxString((wxTheApp->argv)[0]).char_str() };
@@ -450,6 +451,7 @@ void MyGLCanvas::InitGL()
     // remove back faces
     glDisable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_MULTISAMPLE);
 
     // speedups
     glEnable(GL_DITHER);

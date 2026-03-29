@@ -91,6 +91,9 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop)
 	// polygons
 	if (prop.display_fill)
 	{
+		glEnable(GL_POLYGON_OFFSET_FILL);
+		glPolygonOffset(1.0, 1.0);
+
 		for (unsigned int i=0; i<mesh->m_nFaces; i++)
 		{
 			Face *pFace = mesh->m_pFaces[i];
@@ -222,6 +225,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop)
 				glEnd ();
 			}
 		}
+		glDisable(GL_POLYGON_OFFSET_FILL);
 	}
 
 	// lines
@@ -231,10 +235,8 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop)
 		glDisable (GL_LIGHTING);
 		glColor3f (0., 0., 0.);
 
-		glEnable (GL_POLYGON_OFFSET_LINE); 
-		glPolygonOffset (1., 2.);
 		glEnable (GL_LINE_SMOOTH);
-		glLineWidth (.1f);
+		glLineWidth (prop.linesize);
 			
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		glBegin (GL_LINES);
@@ -259,10 +261,8 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop)
 		glPushAttrib(GL_ALL_ATTRIB_BITS);
 		glDisable(GL_LIGHTING);
 
-		glEnable(GL_POLYGON_OFFSET_LINE);
-		glPolygonOffset(1., 2.);
 		glEnable(GL_LINE_SMOOTH);
-		glLineWidth(.5f);
+		glLineWidth(1.0f);
 
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 

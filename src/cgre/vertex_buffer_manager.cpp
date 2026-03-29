@@ -128,7 +128,12 @@ void VertexArrayManager::Draw (int id)
 	if (bHasColors)
 		glColorPointer(3, GL_FLOAT, 0, mesh->m_pVertexColors);
 
+	glEnable(GL_POLYGON_OFFSET_FILL);
+	glPolygonOffset(1.0, 1.0);
+
 	glDrawElements(GL_TRIANGLES, 3*mesh->m_nFaces, GL_UNSIGNED_INT, triangles.data());
+
+	glDisable(GL_POLYGON_OFFSET_FILL);
 
 	if (bHasColors)
 		glDisableClientState(GL_COLOR_ARRAY);

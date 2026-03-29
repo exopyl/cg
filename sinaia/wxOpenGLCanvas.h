@@ -14,6 +14,8 @@ class Mesh;
 class MyGLCanvas: public wxGLCanvas
 {
 public:
+	static const int* GetDefaultAttributes();
+
 	wxGLContext*	m_context = nullptr;
 	wxTextCtrl*		m_CtrlLog = nullptr; // TODO : replace with a lambda
 	
