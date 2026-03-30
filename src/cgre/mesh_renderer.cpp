@@ -5,6 +5,7 @@
 
 #include "mesh_renderer.h"
 #include "material_renderer.h"
+#include "../cgmesh/mesh_data_manager.h"
 
 void rendering_properties_init (rendering_properties_s &prop)
 {
@@ -27,7 +28,7 @@ float pointsize = 1.;
 
 
 
-void mesh_draw (Mesh *mesh, rendering_properties_s &prop)
+void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& materialIds)
 {
 	if (!mesh)
 		return;
@@ -94,26 +95,33 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop)
 		glEnable(GL_POLYGON_OFFSET_FILL);
 		glPolygonOffset(1.0, 1.0);
 
+		int i_current_material = -1;
+
 		for (unsigned int i=0; i<mesh->m_nFaces; i++)
 		{
 			Face *pFace = mesh->m_pFaces[i];
-			if (pFace->GetMaterialId () != MATERIAL_NONE)
+			
+			// Material management
+			int meshMatId = pFace->GetMaterialId();
+			if (meshMatId != MATERIAL_NONE && meshMatId != i_current_material)
 			{
-				Material *mat = mesh->GetMaterial (pFace->GetMaterialId ());
-				if (mat->GetType () == MATERIAL_COLOR)
+				if (!materialIds.empty() && meshMatId < (int)materialIds.size())
 				{
+					int rendererId = materialIds[meshMatId];
+					if (rendererId != -1)
+					{
+						MaterialRenderer::getInstance()->ActivateMaterial(rendererId);
+						i_current_material = meshMatId;
+					}
 				}
-				else if (mat->GetType () == MATERIAL_COLOR_ADV)
-				{
-					MaterialColorExt *matExt = dynamic_cast<MaterialColorExt*> (mat);
-					float diffuse[4];
-					matExt->GetDiffuse (diffuse);
-					glColor3f (diffuse[0], diffuse[1], diffuse[2]);
-				}
-				else if (mat->GetType () == MATERIAL_TEXTURE)
-				{
-					glEnable(GL_TEXTURE_2D);
-					//MaterialRenderer::getInstance()->ActivateMaterial (mat);
+				else {
+					// fallback if no cache provided
+					Material* mat = mesh->GetMaterial(meshMatId);
+					if (mat) {
+						int rendererId = MaterialRenderer::getInstance()->AddMaterial(mat);
+						MaterialRenderer::getInstance()->ActivateMaterial(rendererId);
+						i_current_material = meshMatId;
+					}
 				}
 			}
 			if (pFace->m_nVertices == 3)
@@ -319,6 +327,12 @@ MeshRenderer::~MeshRenderer()
 
 int MeshRenderer::AddMesh (Mesh *pMesh, CG_rendering_method method)
 {
+	if (m_nMeshes >= 8)
+	{
+		printf("Error: MeshRenderer maximum capacity (8) reached!\n");
+		return -1;
+	}
+
 	m_meshes[m_nMeshes].method = method;
 	m_meshes[m_nMeshes].pMesh = pMesh;
 	rendering_properties_init (m_meshes[m_nMeshes].properties);
@@ -334,6 +348,7 @@ int MeshRenderer::AddMesh (Mesh *pMesh, CG_rendering_method method)
 		m_meshes[m_nMeshes].id = m_vertexArrayManager->addMesh (pMesh);
 		break;
 	case CG_RENDERING_VBO:
+
 		m_meshes[m_nMeshes].id = m_vboManager->addMesh (pMesh);
 		break;
 	case CG_RENDERING_VERTEX_BUFFER:
@@ -343,30 +358,85 @@ int MeshRenderer::AddMesh (Mesh *pMesh, CG_rendering_method method)
 		break;
 	}
 	
+	m_meshToId[pMesh] = m_nMeshes;
 	m_nMeshes++;
 	return m_nMeshes-1;
 }
 
 void MeshRenderer::Draw (int id)
 {
-	switch (m_meshes[id].method)
+	if (id < 0 || id >= (int)m_nMeshes)
+		return;
+
+	rendering_element_s& el = m_meshes[id];
+
+	switch (el.method)
 	{
 	case CG_RENDERING_DEFAULT:
-		mesh_draw (m_meshes[id].pMesh, m_meshes[id].properties);
-		break;
-	case CG_RENDERING_DISPLAY_LIST:
-		m_displayListManager->Draw (m_meshes[id].id);
+		mesh_draw (el.pMesh, el.properties, GetMaterialRendererIds(id));
 		break;
 	case CG_RENDERING_VERTEX_ARRAY:
-		m_vertexArrayManager->Draw (m_meshes[id].id);
+		if (el.properties.display_fill)
+			m_vertexArrayManager->Draw (el.id);
+		
+		// Always call mesh_draw for extras (wireframe, points, warnings)
+		{
+			rendering_properties_s extras = el.properties;
+			extras.display_fill = 0; // Surface already handled
+			mesh_draw(el.pMesh, extras, GetMaterialRendererIds(id));
+		}
+		break;
+	case CG_RENDERING_DISPLAY_LIST:
+		m_displayListManager->Draw (el.id);
 		break;
 	case CG_RENDERING_VBO:
-		m_vboManager->Draw (m_meshes[id].id);
+		m_vboManager->Draw (el.id);
 		break;
 	case CG_RENDERING_VERTEX_BUFFER:
-		m_vertexBufferManager->Draw (m_meshes[id].id);
+		m_vertexBufferManager->Draw (el.id);
 		break;
 	default:
 		break;
 	}
+}
+
+int MeshRenderer::GetMeshId (Mesh *pMesh, CG_rendering_method method)
+{
+	auto it = m_meshToId.find(pMesh);
+	if (it != m_meshToId.end())
+		return it->second;
+	
+	return AddMesh(pMesh, method);
+}
+
+void MeshRenderer::SetProperties(int id, const rendering_properties_s& prop)
+{
+	if (id >= 0 && id < (int)m_nMeshes)
+	{
+		m_meshes[id].properties = prop;
+	}
+}
+
+const vector<int>& MeshRenderer::GetMaterialRendererIds(int elementId)
+{
+	rendering_element_s& el = m_meshes[elementId];
+	uint64_t currentRevision = el.pMesh->GetRevision();
+
+	if (el.materialCache.revision == currentRevision)
+		return el.materialCache.rendererIds;
+
+	// Update cache
+	el.materialCache.rendererIds.clear();
+	el.materialCache.revision = currentRevision;
+
+	for (unsigned int i = 0; i < el.pMesh->m_nMaterials; i++)
+	{
+		Material* mat = el.pMesh->GetMaterial(i);
+		if (mat)
+			el.materialCache.rendererIds.push_back(MaterialRenderer::getInstance()->AddMaterial(mat));
+		else
+			el.materialCache.rendererIds.push_back(-1);
+	}
+
+	return el.materialCache.rendererIds;
 }

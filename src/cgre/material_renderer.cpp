@@ -39,17 +39,36 @@ int MaterialRenderer::AddMaterial (Material *pMaterial)
 
 void MaterialRenderer::ActivateMaterial (unsigned int id)
 {
-	if (m_pMaterials[id] == NULL)
+	if (id >= m_nMaterials || m_pMaterials[id] == NULL)
 		return;
 
 	Material *pMaterial = m_pMaterials[id];
 	if (pMaterial->GetType () == MATERIAL_TEXTURE)
 	{
+		glEnable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, m_pTexturesId[id]);
 	}
 	else if (pMaterial->GetType () == MATERIAL_COLOR_ADV)
 	{
-		MaterialTexture *pMaterialTexture = dynamic_cast<MaterialTexture*> (pMaterial);
+		glDisable(GL_TEXTURE_2D);
+		MaterialColorExt *pMatColExt = dynamic_cast<MaterialColorExt*>(pMaterial);
+		if (pMatColExt)
+		{
+			glMaterialfv (GL_FRONT, GL_AMBIENT, pMatColExt->m_fAmbient);
+			glMaterialfv (GL_FRONT, GL_DIFFUSE, pMatColExt->m_fDiffuse);
+			glMaterialfv (GL_FRONT, GL_SPECULAR, pMatColExt->m_fSpecular);
+			glMaterialf (GL_FRONT, GL_SHININESS, 128. * pMatColExt->m_fShininess[0]);
+			glMaterialfv (GL_FRONT, GL_EMISSION, pMatColExt->m_fEmission);
+		}
+	}
+	else if (pMaterial->GetType() == MATERIAL_COLOR)
+	{
+		glDisable(GL_TEXTURE_2D);
+		MaterialColor* pMatCol = dynamic_cast<MaterialColor*>(pMaterial);
+		if (pMatCol)
+		{
+			glColor4f(pMatCol->GetFloatRed(), pMatCol->GetFloatGreen(), pMatCol->GetFloatBlue(), pMatCol->GetFloatAlpha());
+		}
 	}
 }
 

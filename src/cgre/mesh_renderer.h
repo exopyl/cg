@@ -40,14 +40,19 @@ typedef struct rendering_element
 	CG_rendering_method method;
 	int id;
 	rendering_properties properties;
+
+	// Material cache
+	struct {
+		vector<int> rendererIds;
+		uint64_t revision = (uint64_t)-1;
+	} materialCache;
 } rendering_element_s;
 
 void rendering_properties_init (rendering_properties_s &prop);
 
-//
 // direct drawing
 //
-extern void  mesh_draw (Mesh *mesh, rendering_properties_s &prop);
+extern void  mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& materialIds = vector<int>());
 
 
 //
@@ -62,7 +67,13 @@ public:
 	static MeshRenderer* getInstance (void) { return m_pInstance; };
 
 	int AddMesh (Mesh *pMesh, CG_rendering_method method);
+	int GetMeshId (Mesh *pMesh, CG_rendering_method method);
 	void Draw (int id);
+
+	void SetProperties(int id, const rendering_properties_s& prop);
+
+	// Get or update material IDs for a specific rendering element
+	const vector<int>& GetMaterialRendererIds(int elementId);
 
 private:
 	static MeshRenderer *m_pInstance;
@@ -74,4 +85,5 @@ private:
 
 	unsigned int m_nMeshes;
 	rendering_element_s m_meshes[8];
+	map<Mesh*, int> m_meshToId; // New mapping
 };

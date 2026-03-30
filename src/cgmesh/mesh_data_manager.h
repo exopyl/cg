@@ -1,5 +1,4 @@
-#ifndef __MESH_DATA_MANAGER_H__
-#define __MESH_DATA_MANAGER_H__
+#pragma once
 
 #include <map>
 #include <memory>
@@ -45,7 +44,6 @@ private:
     std::map<Mesh*, CachedHalfEdge> m_halfEdges;
     std::map<Mesh*, CachedTopologicIssues> m_topologicIssues;
     std::map<Mesh*, CachedTriangles> m_triangles;
-    std::map<Mesh*, int> m_vertexArrayIds;
 
     MeshDataManager() = default;
     ~MeshDataManager() = default;
@@ -57,9 +55,8 @@ public:
         return instance;
     }
 
-    int GetVertexArrayId(Mesh* pMesh);
+    // Purely geometric methods
 
-    // Get a valid Mesh_half_edge for the given mesh.
     // If it doesn't exist or is outdated, it will be recomputed.
     Mesh_half_edge* GetHalfEdge(Mesh* pMesh)
     {
@@ -150,8 +147,5 @@ public:
         m_halfEdges.clear();
         m_topologicIssues.clear();
         m_triangles.clear();
-        m_vertexArrayIds.clear();
     }
 };
-
-#endif // __MESH_DATA_MANAGER_H__
