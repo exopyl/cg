@@ -182,11 +182,11 @@ public:
 
 	MaterialType GetType (void);
 	void Dump (void);
-	char* GetFilename ();
+	std::string GetFilename ();
 	Img* GetImage ();
 private:
-	char *m_pFilename;
-	Img *m_pImage;
+	std::string m_filename;
+	Img* m_pImage = nullptr;
 	unsigned int m_nWidth, m_nHeight;
-	unsigned char *m_pPixels;
+	unsigned char *m_pPixels = nullptr;
 };

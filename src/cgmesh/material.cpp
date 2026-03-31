@@ -80,7 +80,7 @@ void MaterialColorExt::Init_From_Library (MaterialColorExtType index)
 //
 MaterialTexture::MaterialTexture (char const *filename, char const *path)
 {
-	m_pFilename = strdup (filename);
+	m_filename = std::string (filename);
 	/*
 	m_pImage = new Img ();
 	m_pImage->load (m_pFilename, path);
@@ -107,12 +107,12 @@ MaterialType MaterialTexture::GetType (void)
 
 void MaterialTexture::Dump (void)
 {
-	printf ("MATERIAL_TEXTURE : %s\n", m_pFilename);
+	printf ("MATERIAL_TEXTURE : %s\n", m_filename.c_str());
 }
 
-char* MaterialTexture::GetFilename ()
+std::string MaterialTexture::GetFilename ()
 {
-	return m_pFilename;
+	return m_filename;
 }
 
 Img* MaterialTexture::GetImage ()

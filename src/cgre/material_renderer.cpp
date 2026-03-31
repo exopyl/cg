@@ -20,7 +20,7 @@ int MaterialRenderer::AddMaterial (Material *pMaterial)
 	if (pMaterial->GetType () == MATERIAL_TEXTURE)
 	{
 		MaterialTexture *pMaterialTexture = dynamic_cast<MaterialTexture*> (pMaterial);
-		if (pMaterialTexture)
+		if (pMaterialTexture && pMaterialTexture->GetImage())
 		{
 			glGenTextures(1, &m_pTexturesId[m_nMaterials]);
 			glBindTexture(GL_TEXTURE_2D, m_pTexturesId[m_nMaterials]);

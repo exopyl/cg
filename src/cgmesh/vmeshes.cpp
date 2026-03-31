@@ -148,6 +148,59 @@ bool VMeshes::import_3ds(char* filename)
 
 		pMesh->m_name = std::string(object.strName);
 
+		// Materials
+		std::vector<int> materialMapping;
+		for (int i = 0; i < p->numOfMaterials; i++)
+		{
+			auto& mat3ds = p->pMaterials[i];
+			Material* pMaterial = nullptr;
+
+			if (strlen(mat3ds.strFile) > 0)
+			{
+				pMaterial = new MaterialTexture(mat3ds.strFile);
+			}
+			else
+			{
+				auto pMatExt = new MaterialColorExt();
+				pMatExt->SetAmbient(mat3ds.sMaterial.Ambient.r / 255.f, mat3ds.sMaterial.Ambient.g / 255.f, mat3ds.sMaterial.Ambient.b / 255.f, mat3ds.sMaterial.Ambient.a / 255.f);
+				pMatExt->SetDiffuse(mat3ds.sMaterial.Diffuse.r / 255.f, mat3ds.sMaterial.Diffuse.g / 255.f, mat3ds.sMaterial.Diffuse.b / 255.f, mat3ds.sMaterial.Diffuse.a / 255.f);
+				pMatExt->SetSpecular(mat3ds.sMaterial.Specular.r / 255.f, mat3ds.sMaterial.Specular.g / 255.f, mat3ds.sMaterial.Specular.b / 255.f, mat3ds.sMaterial.Specular.a / 255.f);
+				pMatExt->SetEmission(mat3ds.sMaterial.Emissive.r / 255.f, mat3ds.sMaterial.Emissive.g / 255.f, mat3ds.sMaterial.Emissive.b / 255.f, mat3ds.sMaterial.Emissive.a / 255.f);
+				pMatExt->SetShininess(mat3ds.sMaterial.Power / 100.f);
+				pMaterial = pMatExt;
+			}
+
+			if (pMaterial)
+			{
+				pMaterial->SetName(mat3ds.strName);
+				materialMapping.push_back(pMesh->Material_Add(pMaterial));
+			}
+			else
+			{
+				materialMapping.push_back(-1);
+			}
+		}
+
+		// Assign materials to faces
+		for (auto& matList : object.pFacesMaterialList)
+		{
+			if (matList.materialID >= 0 && matList.materialID < (int)materialMapping.size())
+			{
+				int meshMatId = materialMapping[matList.materialID];
+				if (meshMatId != -1)
+				{
+					for (int i = 0; i < matList.numOfFaces; i++)
+					{
+						unsigned int faceIdx = matList.pFacesMaterialsList[i];
+						if (faceIdx < nFaces)
+						{
+							pMesh->m_pFaces[faceIdx]->SetMaterialId(meshMatId);
+						}
+					}
+				}
+			}
+		}
+
 		m_Meshes.push_back(pMesh);
 	}
 

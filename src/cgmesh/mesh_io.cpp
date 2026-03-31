@@ -1630,6 +1630,87 @@ int Mesh::export_stl (const char *filename)
 int Mesh::import_3ds (const char *filename)
 {
 	t3DSModel *p = Load3DSFile(filename, NULL);
+	if (!p) return -1;
+
+	if (p->numOfObjects > 0)
+	{
+		t3DSObject& object = p->pObject[0];
+		
+		unsigned int nVertices = object.numOfVerts;
+		unsigned int nFaces = object.numOfFaces;
+		Init(nVertices, nFaces);
+
+		for (unsigned int i = 0; i < nVertices; i++)
+		{
+			m_pVertices[3 * i] = object.pVerts[i].fX;
+			m_pVertices[3 * i + 1] = object.pVerts[i].fY;
+			m_pVertices[3 * i + 2] = object.pVerts[i].fZ;
+		}
+
+		for (unsigned int i = 0; i < nFaces; i++)
+		{
+			auto face = object.pFaces[i];
+			m_pFaces[i]->SetNVertices(3);
+			for (unsigned int j = 0; j < 3; j++)
+				m_pFaces[i]->SetVertex(j, face.vertIndex[j]);
+		}
+
+		m_name = std::string(object.strName);
+
+		// Materials
+		std::vector<int> materialMapping;
+		for (int i = 0; i < p->numOfMaterials; i++)
+		{
+			auto& mat3ds = p->pMaterials[i];
+			Material* pMaterial = nullptr;
+
+			if (strlen(mat3ds.strFile) > 0)
+			{
+				pMaterial = new MaterialTexture(mat3ds.strFile);
+			}
+			else
+			{
+				auto pMatExt = new MaterialColorExt();
+				pMatExt->SetAmbient(mat3ds.sMaterial.Ambient.r / 255.f, mat3ds.sMaterial.Ambient.g / 255.f, mat3ds.sMaterial.Ambient.b / 255.f, mat3ds.sMaterial.Ambient.a / 255.f);
+				pMatExt->SetDiffuse(mat3ds.sMaterial.Diffuse.r / 255.f, mat3ds.sMaterial.Diffuse.g / 255.f, mat3ds.sMaterial.Diffuse.b / 255.f, mat3ds.sMaterial.Diffuse.a / 255.f);
+				pMatExt->SetSpecular(mat3ds.sMaterial.Specular.r / 255.f, mat3ds.sMaterial.Specular.g / 255.f, mat3ds.sMaterial.Specular.b / 255.f, mat3ds.sMaterial.Specular.a / 255.f);
+				pMatExt->SetEmission(mat3ds.sMaterial.Emissive.r / 255.f, mat3ds.sMaterial.Emissive.g / 255.f, mat3ds.sMaterial.Emissive.b / 255.f, mat3ds.sMaterial.Emissive.a / 255.f);
+				pMatExt->SetShininess(mat3ds.sMaterial.Power / 100.f);
+				pMaterial = pMatExt;
+			}
+
+			if (pMaterial)
+			{
+				pMaterial->SetName(mat3ds.strName);
+				materialMapping.push_back(Material_Add(pMaterial));
+			}
+			else
+			{
+				materialMapping.push_back(-1);
+			}
+		}
+
+		// Assign materials to faces
+		for (auto& matList : object.pFacesMaterialList)
+		{
+			if (matList.materialID >= 0 && matList.materialID < (int)materialMapping.size())
+			{
+				int meshMatId = materialMapping[matList.materialID];
+				if (meshMatId != -1)
+				{
+					for (int i = 0; i < matList.numOfFaces; i++)
+					{
+						unsigned int faceIdx = matList.pFacesMaterialsList[i];
+						if (faceIdx < nFaces)
+						{
+							m_pFaces[faceIdx]->SetMaterialId(meshMatId);
+						}
+					}
+				}
+			}
+		}
+	}
+
 	Free3DSModel(p);
 	return 0;
 }
