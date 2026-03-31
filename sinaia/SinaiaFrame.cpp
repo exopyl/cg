@@ -129,10 +129,12 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_TREATMENT_CURVATURES_HAMANN, MyFrame::OnTreatmentCurvaturesHamann)
     EVT_MENU(ID_ShowProperties, MyFrame::OnShowWindow)
     EVT_MENU(ID_ShowMeshes, MyFrame::OnShowWindow)
+    EVT_MENU(ID_ShowMaterials, MyFrame::OnShowWindow)
     EVT_MENU(ID_ShowLogging, MyFrame::OnShowWindow)
     EVT_MENU(ID_ShowExplorer, MyFrame::OnShowWindow)
     EVT_UPDATE_UI(ID_ShowProperties, MyFrame::OnUpdateUI)
     EVT_UPDATE_UI(ID_ShowMeshes, MyFrame::OnUpdateUI)
+    EVT_UPDATE_UI(ID_ShowMaterials, MyFrame::OnUpdateUI)
     EVT_UPDATE_UI(ID_ShowLogging, MyFrame::OnUpdateUI)
     EVT_UPDATE_UI(ID_ShowExplorer, MyFrame::OnUpdateUI)
     EVT_AUITOOLBAR_TOOL_DROPDOWN(ID_DropDownToolbarItem, MyFrame::OnDropDownToolbarItem)
@@ -253,6 +255,7 @@ MyFrame::MyFrame(wxWindow* parent,
     wxMenu* windows_menu = new wxMenu;
     windows_menu->AppendCheckItem(ID_ShowProperties, _("Properties"));
     windows_menu->AppendCheckItem(ID_ShowMeshes, _("Meshes"));
+    windows_menu->AppendCheckItem(ID_ShowMaterials, _("Materials"));
     windows_menu->AppendCheckItem(ID_ShowLogging, _("Logging Window"));
     windows_menu->AppendCheckItem(ID_ShowExplorer, _("Explorer"));
     options_menu->AppendSubMenu(windows_menu, wxT("Windows"));
@@ -452,6 +455,9 @@ MyFrame::MyFrame(wxWindow* parent,
 
     m_hierarchyMeshes = CreateHierarchyMeshesTreeCtrl();
     m_mgr.AddPane(m_hierarchyMeshes, wxAuiPaneInfo().Name(wxT("Meshes")).Caption(wxT("Meshes")).Right().BestSize(250, -1).MinSize(200, -1));
+
+    m_hierarchyMaterials = CreateHierarchyMaterialsTreeCtrl();
+    m_mgr.AddPane(m_hierarchyMaterials, wxAuiPaneInfo().Name(wxT("Materials")).Caption(wxT("Materials")).Right().BestSize(250, -1).MinSize(200, -1));
 
 
     m_dcDirectory = new wxGenericDirCtrl(this, ID_DIRCTRL, wxT(""), wxDefaultPosition, wxSize(142, 120), wxSIMPLE_BORDER | wxDIRCTRL_DIR_ONLY, wxT("All files (*.*)|*.*"), 0);
@@ -768,6 +774,9 @@ void MyFrame::OnUpdateUI(wxUpdateUIEvent& event)
         case ID_ShowMeshes:
             event.Check(m_mgr.GetPane(wxT("Meshes")).IsShown());
             break;
+        case ID_ShowMaterials:
+            event.Check(m_mgr.GetPane(wxT("Materials")).IsShown());
+            break;
         case ID_ShowLogging:
             event.Check(m_mgr.GetPane(wxT("Logging Window")).IsShown());
             break;
@@ -784,6 +793,7 @@ void MyFrame::OnShowWindow(wxCommandEvent& evt)
     {
         case ID_ShowProperties: paneName = wxT("Properties"); break;
         case ID_ShowMeshes:     paneName = wxT("Meshes"); break;
+        case ID_ShowMaterials:  paneName = wxT("Materials"); break;
         case ID_ShowLogging:    paneName = wxT("Logging Window"); break;
         case ID_ShowExplorer:   paneName = wxT("Explorer"); break;
         default: return;
@@ -1047,6 +1057,59 @@ void MyFrame::UpdatePropertiesGrid()
         }
 
         m_hierarchyMeshes->Expand(root);
+    }
+
+    if (m_hierarchyMaterials)
+    {
+        m_hierarchyMaterials->DeleteAllItems();
+        wxTreeItemId root = m_hierarchyMaterials->AddRoot(wxT("Materials"), 0);
+
+        for (auto& mesh : pObject->GetMeshes())
+        {
+            if (mesh->m_nMaterials > 0)
+            {
+                wxTreeItemId meshItem = m_hierarchyMaterials->AppendItem(root, wxString(mesh->m_name), 0);
+                for (unsigned int i = 0; i < mesh->m_nMaterials; i++)
+                {
+                    Material* mat = mesh->GetMaterial(i);
+                    if (mat)
+                    {
+                        wxString matName = mat->GetName().empty() ? wxString::Format("Material %u", i) : wxString(mat->GetName());
+                        wxTreeItemId matItem = m_hierarchyMaterials->AppendItem(meshItem, matName, 1);
+                        
+                        // Add some details based on type
+                        switch (mat->GetType())
+                        {
+                        case MATERIAL_COLOR:
+                        {
+                            MaterialColor* mc = dynamic_cast<MaterialColor*>(mat);
+                            if (mc)
+                            {
+                                m_hierarchyMaterials->AppendItem(matItem, wxString::Format("Color: RGB(%.2f, %.2f, %.2f)", mc->GetFloatRed(), mc->GetFloatGreen(), mc->GetFloatBlue()), 1);
+                            }
+                            break;
+                        }
+                        case MATERIAL_TEXTURE:
+                        {
+                            MaterialTexture* mt = dynamic_cast<MaterialTexture*>(mat);
+                            if (mt)
+                            {
+                                m_hierarchyMaterials->AppendItem(matItem, wxString::Format("Texture: %s", mt->GetFilename()), 1);
+                            }
+                            break;
+                        }
+                        case MATERIAL_COLOR_ADV:
+                            m_hierarchyMaterials->AppendItem(matItem, "Type: Advanced Color", 1);
+                            break;
+                        default:
+                            break;
+                        }
+                    }
+                }
+                m_hierarchyMaterials->Expand(meshItem);
+            }
+        }
+        m_hierarchyMaterials->Expand(root);
     }
 }
 
@@ -1352,6 +1415,20 @@ wxGrid* MyFrame::CreateGrid()
 }
 
 wxTreeCtrl* MyFrame::CreateHierarchyMeshesTreeCtrl()
+{
+    wxTreeCtrl* tree = new wxTreeCtrl(this, wxID_ANY,
+                                      wxPoint(0,0), wxSize(160,250),
+                                      wxTR_DEFAULT_STYLE | wxNO_BORDER);
+
+    wxImageList* imglist = new wxImageList(16, 16, true, 2);
+    imglist->Add(wxArtProvider::GetBitmap(wxART_FOLDER, wxART_OTHER, wxSize(16,16)));
+    imglist->Add(wxArtProvider::GetBitmap(wxART_NORMAL_FILE, wxART_OTHER, wxSize(16,16)));
+    tree->AssignImageList(imglist);
+
+    return tree;
+}
+
+wxTreeCtrl* MyFrame::CreateHierarchyMaterialsTreeCtrl()
 {
     wxTreeCtrl* tree = new wxTreeCtrl(this, wxID_ANY,
                                       wxPoint(0,0), wxSize(160,250),

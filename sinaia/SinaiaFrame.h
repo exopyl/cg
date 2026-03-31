@@ -107,6 +107,7 @@ class MyFrame : public wxFrame
 
 	ID_ShowProperties,
 	ID_ShowMeshes,
+	ID_ShowMaterials,
 	ID_ShowLogging,
 	ID_ShowExplorer,
 
@@ -241,6 +242,9 @@ private:
 
     wxTreeCtrl* CreateHierarchyMeshesTreeCtrl();
     wxTreeCtrl* m_hierarchyMeshes = nullptr;
+
+    wxTreeCtrl* CreateHierarchyMaterialsTreeCtrl();
+    wxTreeCtrl* m_hierarchyMaterials = nullptr;
 
     DECLARE_EVENT_TABLE()
 };
