@@ -19,6 +19,7 @@ enum CG_rendering_method {	CG_RENDERING_DEFAULT = 0,
 typedef struct rendering_properties
 {
 	int light;
+	int smooth;
 	int display_points;
 	int display_vertex_normals;
 	int display_face_normals;

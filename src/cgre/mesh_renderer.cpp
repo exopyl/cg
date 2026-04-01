@@ -10,6 +10,7 @@
 void rendering_properties_init (rendering_properties_s &prop)
 {
 	prop.light = 1;
+	prop.smooth = 1;
 	prop.display_points = 0;
 	prop.display_vertex_normals = 0;
 	prop.display_face_normals = 0;
@@ -132,8 +133,11 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 
 				glBegin (GL_TRIANGLES);
 
+				// Face Normal (always used for FLAT shading or as base)
 				glNormal3f (mesh->m_pFaceNormals[3*i], mesh->m_pFaceNormals[3*i+1], mesh->m_pFaceNormals[3*i+2]);
-				if (mesh->m_pVertexColors && !prop.light)
+
+				// Vertex A
+				if (mesh->m_pVertexColors && !prop.light && i_current_material == -1)
 					glColor3f (mesh->m_pVertexColors[3*a], mesh->m_pVertexColors[3*a+1], mesh->m_pVertexColors[3*a+2]);
 				if (pFace->m_bUseTextureCoordinates && pFace->m_pTextureCoordinatesIndices)
 				{
@@ -142,10 +146,12 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 					float v = 1.-mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[0]+1];
 					glTexCoord2f(u, v);
 				}
-				glNormal3f (mesh->m_pVertexNormals[3*a], mesh->m_pVertexNormals[3*a+1], mesh->m_pVertexNormals[3*a+2]);
+				if (prop.smooth)
+					glNormal3f (mesh->m_pVertexNormals[3*a], mesh->m_pVertexNormals[3*a+1], mesh->m_pVertexNormals[3*a+2]);
 				glVertex3f (mesh->m_pVertices[3*a], mesh->m_pVertices[3*a+1], mesh->m_pVertices[3*a+2]);
 				
-				if (mesh->m_pVertexColors)
+				// Vertex B
+				if (mesh->m_pVertexColors && !prop.light && i_current_material == -1)
 					glColor3f (mesh->m_pVertexColors[3*b], mesh->m_pVertexColors[3*b+1], mesh->m_pVertexColors[3*b+2]);
 				if (pFace->m_bUseTextureCoordinates && pFace->m_pTextureCoordinatesIndices)
 				{
@@ -154,10 +160,12 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 					float v = 1.-mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[1]+1];
 					glTexCoord2f(u, v);
 				}
-				glNormal3f (mesh->m_pVertexNormals[3*b], mesh->m_pVertexNormals[3*b+1], mesh->m_pVertexNormals[3*b+2]);
+				if (prop.smooth)
+					glNormal3f (mesh->m_pVertexNormals[3*b], mesh->m_pVertexNormals[3*b+1], mesh->m_pVertexNormals[3*b+2]);
 				glVertex3f (mesh->m_pVertices[3*b], mesh->m_pVertices[3*b+1], mesh->m_pVertices[3*b+2]);
 				
-				if (mesh->m_pVertexColors)
+				// Vertex C
+				if (mesh->m_pVertexColors && !prop.light && i_current_material == -1)
 					glColor3f (mesh->m_pVertexColors[3*c], mesh->m_pVertexColors[3*c+1], mesh->m_pVertexColors[3*c+2]);
 				if (pFace->m_bUseTextureCoordinates && pFace->m_pTextureCoordinatesIndices)
 				{
@@ -166,8 +174,8 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 					float v = 1.-mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[2]+1];
 					glTexCoord2f(u, v);
 				}
-
-				glNormal3f (mesh->m_pVertexNormals[3*c], mesh->m_pVertexNormals[3*c+1], mesh->m_pVertexNormals[3*c+2]);
+				if (prop.smooth)
+					glNormal3f (mesh->m_pVertexNormals[3*c], mesh->m_pVertexNormals[3*c+1], mesh->m_pVertexNormals[3*c+2]);
 				glVertex3f (mesh->m_pVertices[3*c], mesh->m_pVertices[3*c+1], mesh->m_pVertices[3*c+2]);
 
 				glEnd ();

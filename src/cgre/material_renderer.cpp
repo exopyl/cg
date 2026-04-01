@@ -65,11 +65,15 @@ void MaterialRenderer::ActivateMaterial (unsigned int id)
 		MaterialColorExt *pMatColExt = dynamic_cast<MaterialColorExt*>(pMaterial);
 		if (pMatColExt)
 		{
+			// For when lighting is ON
 			glMaterialfv (GL_FRONT, GL_AMBIENT, pMatColExt->m_fAmbient);
 			glMaterialfv (GL_FRONT, GL_DIFFUSE, pMatColExt->m_fDiffuse);
 			glMaterialfv (GL_FRONT, GL_SPECULAR, pMatColExt->m_fSpecular);
 			glMaterialf (GL_FRONT, GL_SHININESS, 128. * pMatColExt->m_fShininess[0]);
 			glMaterialfv (GL_FRONT, GL_EMISSION, pMatColExt->m_fEmission);
+
+			// For when lighting is OFF
+			glColor4fv(pMatColExt->m_fDiffuse);
 		}
 	}
 	else if (pMaterial->GetType() == MATERIAL_COLOR)

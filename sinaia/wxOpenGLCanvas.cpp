@@ -233,6 +233,7 @@ void MyGLCanvas::DrawGL()
 		glShadeModel (GL_SMOOTH);
 	else
 		glShadeModel (GL_FLAT);
+	prop.smooth = m_bSmooth;
 
 	repere_draw ();
 	for (const auto& mesh : m_pVMeshes->GetMeshes())
