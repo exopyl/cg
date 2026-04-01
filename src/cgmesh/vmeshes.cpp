@@ -1,5 +1,7 @@
 #include "vmeshes.h"
 
+#include <map>
+
 #include "mesh_io_rply.h"
 #include "mesh_io_3ds.h"
 
@@ -57,6 +59,9 @@ bool VMeshes::save (char *filename)
 
 void VMeshes::clean (void)
 {
+	for (auto pMesh : m_Meshes)
+		delete pMesh;
+	m_Meshes.clear();
 }
 
 bool VMeshes::load(char* filename)
@@ -99,26 +104,17 @@ bool VMeshes::export_ply(char* filename)
 bool VMeshes::import_3ds(char* filename)
 {
 	t3DSModel* p = Load3DSFile(filename, nullptr);
+	if (!p) return false;
 
 	for (auto& object : p->pObject)
 	{
 		auto pMesh = new Mesh();
-
-		/*mat3 rot;
-		mat3_init(rot,
-			object.LocalCoordinateSystem[0][0], object.LocalCoordinateSystem[0][1], object.LocalCoordinateSystem[0][2],
-			object.LocalCoordinateSystem[1][0], object.LocalCoordinateSystem[1][1], object.LocalCoordinateSystem[1][2],
-			object.LocalCoordinateSystem[2][0], object.LocalCoordinateSystem[2][1], object.LocalCoordinateSystem[2][2]
-		);
-		mat3_transpose(rot);
-		mat3_inverse(rot);*/
 
 		Matrix3f rot2(
 			object.LocalCoordinateSystem[0][0], object.LocalCoordinateSystem[0][1], object.LocalCoordinateSystem[0][2],
 			object.LocalCoordinateSystem[1][0], object.LocalCoordinateSystem[1][1], object.LocalCoordinateSystem[1][2],
 			object.LocalCoordinateSystem[2][0], object.LocalCoordinateSystem[2][1], object.LocalCoordinateSystem[2][2]
 		);
-		//rot2.Transpose();
 		rot2.Inverse();
 
 		unsigned int nVertices = object.numOfVerts;
@@ -127,14 +123,20 @@ bool VMeshes::import_3ds(char* filename)
 
 		for (unsigned int i = 0; i < nVertices; i++)
 		{
-			Vector3f pt(
-				object.pVerts[i].fX,// - object.LocalCoordinateSystem[3][0],
-				object.pVerts[i].fY,// - object.LocalCoordinateSystem[3][1],
-				object.pVerts[i].fZ);// -object.LocalCoordinateSystem[3][2]);
-			//rot2.TransformPoint(pt);
-			pMesh->m_pVertices[3 * i] = pt.x;// +object.LocalCoordinateSystem[3][0];
-			pMesh->m_pVertices[3 * i + 1] = pt.y;// +object.LocalCoordinateSystem[3][1];
-			pMesh->m_pVertices[3 * i + 2] = pt.z;// +object.LocalCoordinateSystem[3][2];
+			pMesh->m_pVertices[3 * i] = object.pVerts[i].fX;
+			pMesh->m_pVertices[3 * i + 1] = object.pVerts[i].fY;
+			pMesh->m_pVertices[3 * i + 2] = object.pVerts[i].fZ;
+		}
+
+		// Load normals if present
+		if (object.pNormals)
+		{
+			for (unsigned int i = 0; i < nVertices; i++)
+			{
+				pMesh->m_pVertexNormals[3 * i] = object.pNormals[i].fX;
+				pMesh->m_pVertexNormals[3 * i + 1] = object.pNormals[i].fY;
+				pMesh->m_pVertexNormals[3 * i + 2] = object.pNormals[i].fZ;
+			}
 		}
 
 		for (unsigned int i = 0; i < nFaces; i++)
@@ -148,58 +150,57 @@ bool VMeshes::import_3ds(char* filename)
 
 		pMesh->m_name = std::string(object.strName);
 
-		// Materials
-		std::vector<int> materialMapping;
-		for (int i = 0; i < p->numOfMaterials; i++)
+		// Materials: only import those used by this object
+		std::map<int, int> materialMapping; // 3dsMatIdx -> meshMatIdx
+		for (auto& matList : object.pFacesMaterialList)
 		{
-			auto& mat3ds = p->pMaterials[i];
-			Material* pMaterial = nullptr;
+			int mat3dsIdx = matList.materialID;
+			if (mat3dsIdx >= 0 && mat3dsIdx < p->numOfMaterials && materialMapping.find(mat3dsIdx) == materialMapping.end())
+			{
+				auto& mat3ds = p->pMaterials[mat3dsIdx];
+				Material* pMaterial = nullptr;
 
-			if (strlen(mat3ds.strFile) > 0)
-			{
-				pMaterial = new MaterialTexture(mat3ds.strFile);
-			}
-			else
-			{
-				auto pMatExt = new MaterialColorExt();
-				pMatExt->SetAmbient(mat3ds.sMaterial.Ambient.r / 255.f, mat3ds.sMaterial.Ambient.g / 255.f, mat3ds.sMaterial.Ambient.b / 255.f, mat3ds.sMaterial.Ambient.a / 255.f);
-				pMatExt->SetDiffuse(mat3ds.sMaterial.Diffuse.r / 255.f, mat3ds.sMaterial.Diffuse.g / 255.f, mat3ds.sMaterial.Diffuse.b / 255.f, mat3ds.sMaterial.Diffuse.a / 255.f);
-				pMatExt->SetSpecular(mat3ds.sMaterial.Specular.r / 255.f, mat3ds.sMaterial.Specular.g / 255.f, mat3ds.sMaterial.Specular.b / 255.f, mat3ds.sMaterial.Specular.a / 255.f);
-				pMatExt->SetEmission(mat3ds.sMaterial.Emissive.r / 255.f, mat3ds.sMaterial.Emissive.g / 255.f, mat3ds.sMaterial.Emissive.b / 255.f, mat3ds.sMaterial.Emissive.a / 255.f);
-				pMatExt->SetShininess(mat3ds.sMaterial.Power / 100.f);
-				pMaterial = pMatExt;
-			}
+				if (strlen(mat3ds.strFile) > 0)
+				{
+					pMaterial = new MaterialColor(mat3ds.sMaterial.Diffuse.r, mat3ds.sMaterial.Diffuse.g, mat3ds.sMaterial.Diffuse.b);
+				}
+				else
+				{
+					auto pMatExt = new MaterialColorExt();
+					pMatExt->SetAmbient(mat3ds.sMaterial.Ambient.r / 255.f, mat3ds.sMaterial.Ambient.g / 255.f, mat3ds.sMaterial.Ambient.b / 255.f, mat3ds.sMaterial.Ambient.a / 255.f);
+					pMatExt->SetDiffuse(mat3ds.sMaterial.Diffuse.r / 255.f, mat3ds.sMaterial.Diffuse.g / 255.f, mat3ds.sMaterial.Diffuse.b / 255.f, mat3ds.sMaterial.Diffuse.a / 255.f);
+					pMatExt->SetSpecular(mat3ds.sMaterial.Specular.r / 255.f, mat3ds.sMaterial.Specular.g / 255.f, mat3ds.sMaterial.Specular.b / 255.f, mat3ds.sMaterial.Specular.a / 255.f);
+					pMatExt->SetEmission(mat3ds.sMaterial.Emissive.r / 255.f, mat3ds.sMaterial.Emissive.g / 255.f, mat3ds.sMaterial.Emissive.b / 255.f, mat3ds.sMaterial.Emissive.a / 255.f);
+					pMatExt->SetShininess(mat3ds.sMaterial.Power / 100.f);
+					pMaterial = pMatExt;
+				}
 
-			if (pMaterial)
-			{
-				pMaterial->SetName(mat3ds.strName);
-				materialMapping.push_back(pMesh->Material_Add(pMaterial));
-			}
-			else
-			{
-				materialMapping.push_back(-1);
+				if (pMaterial)
+				{
+					pMaterial->SetName(mat3ds.strName);
+					int meshMatId = pMesh->Material_Add(pMaterial);
+					materialMapping[mat3dsIdx] = meshMatId;
+				}
 			}
 		}
 
 		// Assign materials to faces
 		for (auto& matList : object.pFacesMaterialList)
 		{
-			if (matList.materialID >= 0 && matList.materialID < (int)materialMapping.size())
+			if (materialMapping.count(matList.materialID))
 			{
 				int meshMatId = materialMapping[matList.materialID];
-				if (meshMatId != -1)
+				for (int i = 0; i < matList.numOfFaces; i++)
 				{
-					for (int i = 0; i < matList.numOfFaces; i++)
-					{
-						unsigned int faceIdx = matList.pFacesMaterialsList[i];
-						if (faceIdx < nFaces)
-						{
-							pMesh->m_pFaces[faceIdx]->SetMaterialId(meshMatId);
-						}
-					}
+					unsigned int faceIdx = matList.pFacesMaterialsList[i];
+					if (faceIdx < nFaces)
+						pMesh->m_pFaces[faceIdx]->SetMaterialId(meshMatId);
 				}
 			}
 		}
+
+		if (!object.pNormals)
+			pMesh->ComputeNormals();
 
 		m_Meshes.push_back(pMesh);
 	}

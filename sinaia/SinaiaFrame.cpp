@@ -1099,8 +1099,16 @@ void MyFrame::UpdatePropertiesGrid()
                             break;
                         }
                         case MATERIAL_COLOR_ADV:
-                            m_hierarchyMaterials->AppendItem(matItem, "Type: Advanced Color", 1);
+                        {
+                            MaterialColorExt* mce = dynamic_cast<MaterialColorExt*>(mat);
+                            if (mce)
+                            {
+                                m_hierarchyMaterials->AppendItem(matItem, wxString::Format("Type: Advanced Color"), 1);
+                                m_hierarchyMaterials->AppendItem(matItem, wxString::Format("  Diffuse: RGB(%.2f, %.2f, %.2f)", mce->m_fDiffuse[0], mce->m_fDiffuse[1], mce->m_fDiffuse[2]), 1);
+                                m_hierarchyMaterials->AppendItem(matItem, wxString::Format("  Ambient: RGB(%.2f, %.2f, %.2f)", mce->m_fAmbient[0], mce->m_fAmbient[1], mce->m_fAmbient[2]), 1);
+                            }
                             break;
+                        }
                         default:
                             break;
                         }

@@ -126,6 +126,16 @@ TEST(TEST_cgmesh_io, 3ds_sink)
     // expectations
     auto& meshes = pVMeshes->GetMeshes();
     ASSERT_EQ(meshes.size(), 4);
+    
+    // Check materials are loaded (sink.3ds has materials)
+    bool foundMaterial = false;
+    for (auto pMesh : meshes) {
+        if (pMesh->m_nMaterials > 0) {
+            foundMaterial = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(foundMaterial);
 }
 
 TEST(TEST_cgmesh_io, 3ds_display)
@@ -139,6 +149,19 @@ TEST(TEST_cgmesh_io, 3ds_display)
     // expectations
     auto& meshes = pVMeshes->GetMeshes();
     ASSERT_EQ(meshes.size(), 3);
+
+    // Check materials are assigned to faces
+    bool foundFaceWithMaterial = false;
+    for (auto pMesh : meshes) {
+        for (unsigned int i = 0; i < pMesh->m_nFaces; i++) {
+            if (pMesh->m_pFaces[i]->GetMaterialId() != MATERIAL_NONE) {
+                foundFaceWithMaterial = true;
+                break;
+            }
+        }
+        if (foundFaceWithMaterial) break;
+    }
+    EXPECT_TRUE(foundFaceWithMaterial);
 }
 
 TEST(TEST_cgmesh_io, 3ds_floppy)
@@ -152,4 +175,7 @@ TEST(TEST_cgmesh_io, 3ds_floppy)
     // expectations
     auto& meshes = pVMeshes->GetMeshes();
     ASSERT_EQ(meshes.size(), 1);
+    
+    // Floppy also has materials
+    EXPECT_GT(meshes[0]->m_nMaterials, 0u);
 }

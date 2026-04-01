@@ -21,8 +21,8 @@ private:
 	static MaterialRenderer *m_pInstance;
 	
 	unsigned int m_nMaterials;
-	Material *m_pMaterials[8];
-	GLuint m_pTexturesId[8];
+	Material *m_pMaterials[256];
+	GLuint m_pTexturesId[256];
 };
 
 extern GLuint LoadTexture(char *TexName);

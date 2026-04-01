@@ -13,8 +13,18 @@ MaterialRenderer::~MaterialRenderer()
 
 int MaterialRenderer::AddMaterial (Material *pMaterial)
 {
-	if (m_nMaterials == 8)
+	if (!pMaterial) return -1;
+
+	// Search if already added
+	for (unsigned int i = 0; i < m_nMaterials; i++)
+	{
+		if (m_pMaterials[i] == pMaterial)
+			return (int)i;
+	}
+
+	if (m_nMaterials >= 256)
 		return - 1;
+
 	m_pMaterials[m_nMaterials] = pMaterial;
 
 	if (pMaterial->GetType () == MATERIAL_TEXTURE)
@@ -51,6 +61,7 @@ void MaterialRenderer::ActivateMaterial (unsigned int id)
 	else if (pMaterial->GetType () == MATERIAL_COLOR_ADV)
 	{
 		glDisable(GL_TEXTURE_2D);
+		glDisable(GL_COLOR_MATERIAL);
 		MaterialColorExt *pMatColExt = dynamic_cast<MaterialColorExt*>(pMaterial);
 		if (pMatColExt)
 		{
@@ -64,6 +75,8 @@ void MaterialRenderer::ActivateMaterial (unsigned int id)
 	else if (pMaterial->GetType() == MATERIAL_COLOR)
 	{
 		glDisable(GL_TEXTURE_2D);
+		glEnable(GL_COLOR_MATERIAL);
+		glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 		MaterialColor* pMatCol = dynamic_cast<MaterialColor*>(pMaterial);
 		if (pMatCol)
 		{

@@ -133,7 +133,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 				glBegin (GL_TRIANGLES);
 
 				glNormal3f (mesh->m_pFaceNormals[3*i], mesh->m_pFaceNormals[3*i+1], mesh->m_pFaceNormals[3*i+2]);
-				if (mesh->m_pVertexColors)
+				if (mesh->m_pVertexColors && !prop.light)
 					glColor3f (mesh->m_pVertexColors[3*a], mesh->m_pVertexColors[3*a+1], mesh->m_pVertexColors[3*a+2]);
 				if (pFace->m_bUseTextureCoordinates && pFace->m_pTextureCoordinatesIndices)
 				{

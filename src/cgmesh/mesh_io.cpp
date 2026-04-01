@@ -1647,6 +1647,17 @@ int Mesh::import_3ds (const char *filename)
 			m_pVertices[3 * i + 2] = object.pVerts[i].fZ;
 		}
 
+		// Load normals if present
+		if (object.pNormals)
+		{
+			for (unsigned int i = 0; i < nVertices; i++)
+			{
+				m_pVertexNormals[3 * i] = object.pNormals[i].fX;
+				m_pVertexNormals[3 * i + 1] = object.pNormals[i].fY;
+				m_pVertexNormals[3 * i + 2] = object.pNormals[i].fZ;
+			}
+		}
+
 		for (unsigned int i = 0; i < nFaces; i++)
 		{
 			auto face = object.pFaces[i];
@@ -1709,6 +1720,9 @@ int Mesh::import_3ds (const char *filename)
 				}
 			}
 		}
+
+		if (!object.pNormals)
+			ComputeNormals();
 	}
 
 	Free3DSModel(p);

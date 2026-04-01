@@ -160,6 +160,9 @@ void MyGLCanvas::LoadModel(const wxString& filename)
 	auto meshes = new VMeshes();
 	meshes->load((char*) ((filename).mb_str(wxConvUTF8)).data() );
 
+	wxString msg = wxString::Format(wxT("%zu meshes imported"), meshes->GetNMeshes());
+	*m_CtrlLog << msg << _T("\n");
+
 	SetVMeshes(meshes);
 
 /*
@@ -235,8 +238,7 @@ void MyGLCanvas::DrawGL()
 	for (const auto& mesh : m_pVMeshes->GetMeshes())
 	{
 		// Use the centralized renderer
-		int id = MeshRenderer::getInstance()->GetMeshId(mesh, 
-			mesh->IsTriangleMesh() ? CG_RENDERING_VERTEX_ARRAY : CG_RENDERING_DEFAULT);
+		int id = MeshRenderer::getInstance()->GetMeshId(mesh, CG_RENDERING_DEFAULT);
 		
 		// Update rendering properties from the canvas prop
 		MeshRenderer::getInstance()->SetProperties(id, prop);

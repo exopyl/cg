@@ -281,6 +281,14 @@ void Mesh::InitVertices (unsigned int nVertices)
 		
 		m_pVertexNormals = new float[3*nVertices];
 		memset (m_pVertexNormals, 0, 3*nVertices*sizeof(float));
+
+		m_pVertexColors = new float[3 * nVertices];
+		for (unsigned int i = 0; i < nVertices; i++)
+		{
+			m_pVertexColors[3 * i] = 0.5f;
+			m_pVertexColors[3 * i + 1] = 0.5f;
+			m_pVertexColors[3 * i + 2] = 0.5f;
+		}
 	}
 }
 
@@ -364,7 +372,12 @@ Mesh::~Mesh ()
 	if (m_pVertexNormals)	delete m_pVertexNormals;
 	if (m_pVertexColors)	delete m_pVertexColors;
 	DeleteFaces ();
-	if (m_pMaterials) delete m_pMaterials;
+	if (m_pMaterials)
+	{
+		for (unsigned int i = 0; i < m_nMaterials; i++)
+			delete m_pMaterials[i];
+		delete[] m_pMaterials;
+	}
 	if (m_pOctree) delete m_pOctree;
 }
 
