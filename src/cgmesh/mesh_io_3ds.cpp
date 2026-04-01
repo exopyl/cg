@@ -10,7 +10,18 @@ bool trace_unknown_chunks = true;
 int gBuffer[50000] = {0};	// This is used to read past unwanted data
 
 // The file pointer
-FILE *g_File3DSPointer = NULL;
+FILE* g_File3DSPointer = NULL;
+
+// Helper to safely skip chunks
+void SkipChunk_3DS(t3DSChunk* pChunk)
+{
+	int remaining = pChunk->length - pChunk->bytesRead;
+	if (remaining > 0)
+	{
+		fseek(g_File3DSPointer, remaining, SEEK_CUR);
+		pChunk->bytesRead += remaining;
+	}
+}
 
 // Error description if an error occurs during the parsing of the file
 char *errorDesc = NULL;
@@ -289,7 +300,7 @@ void ProcessNextChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 				//ProcessNextKeyFrameChunk_3DS (pModel, &currentChunk);
 
 				// Read past this chunk and add the bytes read to the byte counter
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
@@ -307,7 +318,7 @@ void ProcessNextChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 				{
 					StoreUnknownChunk (pModel, pPreviousChunk->ID, currentChunk.ID);
 				}
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 		}
@@ -409,7 +420,7 @@ void ProcessNextObjectChunk_3DS(t3DSModel *pModel, char *strName, t3DSChunk *pPr
 					//printf ("0x%04x 0x%04x\n", pPreviousChunk->ID, currentChunk.ID);
 				}
 				// Read past the ignored or unknown chunks
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 		}
@@ -491,7 +502,7 @@ void ProcessNextTriMeshChunk_3DS (t3DSModel *pModel, t3DSObject *pObject, t3DSCh
 			case CHK3DS_4_MESH_MATRIX:
 			{
 				ReadLocalCoordinateSystem_3DS(pObject, &currentChunk);
-				//currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				//SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
@@ -500,7 +511,7 @@ void ProcessNextTriMeshChunk_3DS (t3DSModel *pModel, t3DSObject *pObject, t3DSCh
 				assert (false);
 				BYTE color;
 				ReadBYTE (&color, &currentChunk);
-				//currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				//SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
@@ -512,7 +523,7 @@ void ProcessNextTriMeshChunk_3DS (t3DSModel *pModel, t3DSObject *pObject, t3DSCh
 					StoreUnknownChunk (pModel, pPreviousChunk->ID, currentChunk.ID);
 					//printf ("0x%04x 0x%04x\n", pPreviousChunk->ID, currentChunk.ID);
 				}
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 		}
@@ -613,7 +624,7 @@ void ProcessNextLightChunk_3DS (t3DSModel *pModel, t3DSLight *pLight, t3DSChunk 
 /*
 			case CHK3DS_4_DL_SPOT_OVERSHOOT:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 */
@@ -626,7 +637,7 @@ void ProcessNextLightChunk_3DS (t3DSModel *pModel, t3DSLight *pLight, t3DSChunk 
 					StoreUnknownChunk (pModel, pPreviousChunk->ID, currentChunk.ID);
 					//printf ("0x%04x 0x%04x\n", pPreviousChunk->ID, currentChunk.ID);
 				}
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 		}
@@ -671,7 +682,7 @@ void ProcessNextCameraChunk_3DS (t3DSModel *pModel, t3DSCamera *pCamera, t3DSChu
 					StoreUnknownChunk (pModel, pPreviousChunk->ID, currentChunk.ID);
 					//printf ("0x%04x 0x%04x\n", pPreviousChunk->ID, currentChunk.ID);
 				}
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 		}
@@ -701,7 +712,7 @@ void ProcessNextKeyFrameChunk_3DS (t3DSModel* pModel, t3DSChunk *pPreviousChunk)
 		{
 			case CHK3DS_B_AMBIENT_NODE_TAG:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
@@ -720,37 +731,37 @@ void ProcessNextKeyFrameChunk_3DS (t3DSModel* pModel, t3DSChunk *pPreviousChunk)
 				// parse
 				ProcessKeyFrameChunk_3DS (pModel, &currentChunk);
 
-				//currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				//SkipChunk_3DS(&currentChunk);
 			}
 			break;
 /*
 			case CHK3DS_B_CAMERA_NODE_TAG:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_TARGET_NODE_TAG:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_LIGHT_NODE_TAG:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_L_TARGET_NODE_TAG:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_SPOTLIGHT_NODE_TAG:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 */
@@ -763,44 +774,44 @@ void ProcessNextKeyFrameChunk_3DS (t3DSModel* pModel, t3DSChunk *pPreviousChunk)
 				ReadINT32 (&start, &currentChunk);
 				ReadINT32 (&end, &currentChunk);
 				//cout << "   " << start << " - " << end << endl;
-				//currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				//SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 /*
 			case CHK3DS_B_KFCURTIME:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_KFHDR:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_INSTANCE_NAME:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_PRESCALE:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_BOUNDBOX:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_MORPH_SMOOTH:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
@@ -816,7 +827,7 @@ void ProcessNextKeyFrameChunk_3DS (t3DSModel* pModel, t3DSChunk *pPreviousChunk)
 					StoreUnknownChunk (pModel, pPreviousChunk->ID, currentChunk.ID);
 					//printf ("0x%04x 0x%04x\n", pPreviousChunk->ID, currentChunk.ID);
 				}
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 		}
@@ -857,7 +868,7 @@ void ProcessKeyFrameChunk_3DS (t3DSModel* pModel, t3DSChunk *pPreviousChunk)
 				ReadINT16 (&hierarchyFather, &currentChunk);
 				//cout << "    hierarchyFather : " << hierarchyFather << endl;
 				
-				//currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				//SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
@@ -946,43 +957,43 @@ void ProcessKeyFrameChunk_3DS (t3DSModel* pModel, t3DSChunk *pPreviousChunk)
 /*
 			case CHK3DS_B_FOV_TRACK_TAG:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_ROLL_TRACK_TAG:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_COL_TRACK_TAG:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_MORPH_TRACK_TAG:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_HOT_TRACK_TAG:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_FALL_TRACK_TAG:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
 			case CHK3DS_B_HIDE_TRACK_TAG:
 			{
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
@@ -990,7 +1001,7 @@ void ProcessKeyFrameChunk_3DS (t3DSModel* pModel, t3DSChunk *pPreviousChunk)
 			{
 				INT16 hierarchy;
 				ReadINT16 (&hierarchy, &currentChunk);
-				//currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				//SkipChunk_3DS(&currentChunk);
 			}
 			break;
 */
@@ -1002,7 +1013,7 @@ void ProcessKeyFrameChunk_3DS (t3DSModel* pModel, t3DSChunk *pPreviousChunk)
 					StoreUnknownChunk (pModel, pPreviousChunk->ID, currentChunk.ID);
 					//printf ("0x%04x 0x%04x\n", pPreviousChunk->ID, currentChunk.ID);
 				}
-				currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				SkipChunk_3DS(&currentChunk);
 			}
 			break;
 		}
@@ -1047,7 +1058,7 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 		{
 /*
 		case CHK3DS_0_INT_PERCENTAGE:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 			*/
 
@@ -1080,7 +1091,7 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 			break;
 /*
 		case CHK3DS_A_MAT_SHIN3PCT:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 */
 		case CHK3DS_A_MAT_TRANSPARENCY:	//Shininess percentage
@@ -1103,26 +1114,26 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 			break;
 
 		case CHK3DS_A_MAT_SELF_ILLUM:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_TWO_SIDE:	//
 			//&(pModel->pMaterials[pModel->numOfMaterials - 1]).f2Sided
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_DECAL:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_ADDITIVE:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_SELF_ILPCT:	//
 			{
 				ReadPercentageChunk_3DS (&(pModel->pMaterials[pModel->numOfMaterials - 1]).fSelfIllum, &currentChunk);
-				//currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				//SkipChunk_3DS(&currentChunk);
 			}
 			break;
 
@@ -1131,7 +1142,7 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 			break;
 
 		case CHK3DS_A_MAT_SUPERSMP:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_WIRESIZE:	//
@@ -1141,11 +1152,11 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 			break;
 
 		case CHK3DS_A_MAT_FACEMAP:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_XPFALLIN:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_PHONGSOFT:	//
@@ -1153,7 +1164,7 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 			break;
 
 		case CHK3DS_A_MAT_WIREABS:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_SHADING:	//
@@ -1174,31 +1185,31 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 			break;
 /*
 		case CHK3DS_A_MAT_SPECMAP:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_OPACMAP:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_REFLMAP:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_BUMPMAP:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_USE_XPFALL:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_USE_REFBLUR:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_BUMP_PERCENT:	//
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		//New for handling texture coordinates
@@ -1207,7 +1218,7 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 			break;
 
 		case CHK3DS_A_MAT_MAP_TEXBLUR_OLD :
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_MAP_TEXBLUR :	//float    map filtering blur ( 7% -> 0.07 )
@@ -1231,27 +1242,27 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 			break;
 /*
 		case CHK3DS_A_MAT_MAP_ANG :	//float    map rotation angle
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_MAP_COL1 :	//RGB      lum or alpha tint first color (default=00 00 00)
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_MAP_COL2 :	//RGB      lum or alpha tint secnd color (default=FF FF FF)
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_MAP_RCOL :	//RGB      RGB tint R channel color (default=FF 00 00)
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_MAP_GCOL :	//RGB      RGB tint G channel color (default=00 FF 00)
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_MAP_BCOL :	//RGB      RGB tint B channel color (default=00 00 FF)
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 */
 		default:  
@@ -1261,7 +1272,7 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 				StoreUnknownChunk (pModel, pPreviousChunk->ID, currentChunk.ID);
 				//printf ("0x%04x 0x%04x\n", pPreviousChunk->ID, currentChunk.ID);
 			}
-			currentChunk.bytesRead += fread(gBuffer, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			SkipChunk_3DS(&currentChunk);
 			break;
 		}
 
