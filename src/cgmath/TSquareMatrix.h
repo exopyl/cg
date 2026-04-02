@@ -144,31 +144,20 @@ public:
 
 	inline bool operator==(const TSquareMatrix<TValue> &right) const
 	{
-	int i,j;
-	bool bRet = true;
-		
-		for (i=0; i<4; i++) 
-			for (j=0; j<4; j++) 
-				if ( a[i][j] != right.a[i][j] )
-					bRet = false;
+		if (m_dimension != right.m_dimension)
+			return false;
 
-	return bRet;
+		for (int i=0; i<m_dimension; i++) 
+			for (int j=0; j<m_dimension; j++) 
+				if ( a[i][j] != right.a[i][j] )
+					return false;
+
+		return true;
 	}
 
 	inline bool operator!=(const TSquareMatrix<TValue> &right) const
 	{
-	int i,j;
-	bool bRet = true;
-		
-		for (i=0; i<4; i++) 
-			for (j=0; j<4; j++) 
-				if ( a[i][j] != right.a[i][j] )
-					bRet = false;
-
-		//Reverse the result
-		bRet = !bRet;
-
-	return bRet;
+		return !(*this == right);
 	}
 
 	inline TSquareMatrix<TValue>& operator*=(const TSquareMatrix<TValue>& right)
@@ -343,13 +332,11 @@ public:
 	TValue *GetTranspose(TValue *TransposeMatrix)
 	{
 		int i,j;
-		TMatrix4<TValue> TempMatrice(TransposeMatrix);
-			
-			for ( i=0; i<4; i++ ) 
-				for ( j=0; j<4; j++ ) 
-					TempMatrice.a[i][j]= a[j][i];
+		for ( i=0; i<m_dimension; i++ ) 
+			for ( j=0; j<m_dimension; j++ ) 
+				TransposeMatrix[m_dimension*i+j] = a[j][i];
 
-			return (TMatrix4<TValue>)(&TempMatrice.a[0][0]);
+		return TransposeMatrix;
 	}
 
 	/*!
