@@ -77,7 +77,6 @@ public:
 		m_vCenter[2] = 0.;
 		m_fRadius = 1.;
 		m_pAABox = new AABox (Vector3 (-1., -1., -1.), Vector3 (1., 1., 1.));
-		m_pAABox = NULL;
 	};
 	~Sphere () { if (m_pAABox) delete m_pAABox; };
 

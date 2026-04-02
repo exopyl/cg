@@ -188,7 +188,7 @@ Line::distance_with (Vector3f &pt)
 void
 Line::closest_point (Vector3f &pt, Vector3f &pt_on_line)
 {
-	m_lineImpl->closest_point (pt_on_line, pt);
+	m_lineImpl->closest_point (pt, pt_on_line);
 }
 
 void

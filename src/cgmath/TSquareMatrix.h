@@ -1,8 +1,9 @@
-#ifndef __TSQUAREMATRIX_H__
-#define __TSQUAREMATRIX_H__
+#pragma once
 
 #include <iostream>
 using namespace std;
+
+#include "common.h"
 
 // TSquareMatrix[n][m] addresses the following element :
 // n = row
@@ -858,5 +859,3 @@ public:
 typedef TSquareMatrix<float>  SquareMatrixf;
 typedef TSquareMatrix<double> SquareMatrixd;
 typedef TSquareMatrix<float>  SquareMatrix;
-
-#endif	// __TSQUAREMATRIX_H__
