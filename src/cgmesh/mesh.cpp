@@ -396,6 +396,16 @@ void Mesh::Dump ()
 		m_pMaterials[i]->Dump();
 }
 
+uint64_t Mesh::GetRevision() const
+{
+	return m_revision;
+}
+
+void Mesh::IncrementRevision()
+{ 
+	m_revision++;
+}
+
 unsigned int* Mesh::GetTriangles (void)
 {
 	unsigned int *pFaces = (unsigned int*)malloc(3*m_nFaces*sizeof(unsigned int));

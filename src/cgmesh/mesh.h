@@ -1,5 +1,4 @@
-#ifndef __MESH_H__
-#define __MESH_H__
+#pragma once
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -137,8 +136,8 @@ public:
 	void InitVertexColorsFromArray (float *array, char *defined = NULL);
 
 	// Revision
-	uint64_t GetRevision() const { return m_revision; }
-	void IncrementRevision() { m_revision++; }
+	uint64_t GetRevision() const;
+	void IncrementRevision();
 
 	// Getters / Setters
 	unsigned int* GetTriangles (void);
@@ -357,5 +356,3 @@ public:
 private:
 	uint64_t m_revision = 0;
 };
-
-#endif // __MESH_H__

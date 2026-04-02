@@ -1,5 +1,4 @@
-#ifndef __CGMESH_H__
-#define __CGMESH_H__
+#pragma once
 
 // algebra
 #include "../cgmath/cgmath.h"
@@ -94,5 +93,3 @@
 #include "regions_faces.h"
 
 #include "deformer_arap.h"
-
-#endif // __CGMESH_H__
