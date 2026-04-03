@@ -481,7 +481,7 @@ int Mesh::export_obj (const char *filename)
 				fprintf (fp, "Tr 1.000000\n");
 				fprintf (fp, "illum 2\n");
 				fprintf (fp, "Ns 0.000000\n");
-				fprintf (fp, "map_Kd %s\n", pMaterialTexture->GetFilename());
+				fprintf (fp, "map_Kd %s\n", pMaterialTexture->GetFilename().c_str());
 				fprintf (fp, "\n");
 			}
 			break;
