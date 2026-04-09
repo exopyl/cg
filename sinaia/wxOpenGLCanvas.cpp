@@ -15,6 +15,7 @@ BEGIN_EVENT_TABLE(MyGLCanvas, wxGLCanvas)
     EVT_PAINT(MyGLCanvas::OnPaint)
     EVT_ERASE_BACKGROUND(MyGLCanvas::OnEraseBackground)
     EVT_MOUSE_EVENTS(MyGLCanvas::OnMouse)
+    EVT_KEY_DOWN(MyGLCanvas::OnKeyDown)
 END_EVENT_TABLE()
 
 const int* MyGLCanvas::GetDefaultAttributes()
@@ -27,7 +28,7 @@ const int* MyGLCanvas::GetDefaultAttributes()
 //
 //
 MyGLCanvas::MyGLCanvas(wxWindow *parent, wxTextCtrl* pCtrlLog, int *args)
-	: wxGLCanvas(parent, wxID_ANY, args ? args : GetDefaultAttributes())
+	: wxGLCanvas(parent, wxID_ANY, args ? args : GetDefaultAttributes(), wxDefaultPosition, wxDefaultSize, wxWANTS_CHARS)
 {
 	m_CtrlLog = pCtrlLog;
 	m_context = new wxGLContext(this);
@@ -393,6 +394,9 @@ void MyGLCanvas::OnEraseBackground(wxEraseEvent& WXUNUSED(event))
 //
 void MyGLCanvas::OnMouse(wxMouseEvent& event)
 {
+	if (event.ButtonDown())
+		SetFocus();
+
 	if (event.LeftDown())
 	{
 		m_pTrackball->mouse_press (LEFT_BUTTON, PRESSED, event.GetX(), event.GetY());
@@ -424,6 +428,33 @@ void MyGLCanvas::OnMouse(wxMouseEvent& event)
 		
 		// orientation has changed, redraw mesh
 		Refresh(false);
+	}
+}
+
+void MyGLCanvas::OnKeyDown(wxKeyEvent& event)
+{
+	float step = 0.05f;
+	switch (event.GetKeyCode())
+	{
+	case WXK_UP:
+	case WXK_DOWN:
+		if (!prop.clipping_plane_active)
+		{
+			if (m_CtrlLog) *m_CtrlLog << _T("Warning: Clipping plane is not active. Check the box in Rendering panel.\n");
+			break;
+		}
+		if (event.GetKeyCode() == WXK_UP)
+			prop.clipping_plane_z += step;
+		else
+			prop.clipping_plane_z -= step;
+
+		if (m_CtrlLog) *m_CtrlLog << wxString::Format(wxT("Clipping Z: %.2f\n"), prop.clipping_plane_z);
+		Refresh(false);
+		Update();
+		break;
+	default:
+		event.Skip();
+		break;
 	}
 }
 

@@ -49,8 +49,11 @@ public:
 	void ChangePoint(void);
 	bool GetPoint(void);
 
-	void ChangeWarning(void);
-	bool GetWarning(void);
+	void SetClippingPlane(bool bActive) { prop.clipping_plane_active = bActive; Refresh(false); };
+	bool GetClippingPlane (void) { return prop.clipping_plane_active; };
+	void SetClippingPlaneZ(float z) { prop.clipping_plane_z = z; Refresh(false); };
+
+	void ChangeWarning(void);	bool GetWarning(void);
 
 	void ChangeBoundingBox (void);
 	bool GetBoundingBox (void);
@@ -77,6 +80,7 @@ protected:
 	void OnSize(wxSizeEvent& event);
 	void OnEraseBackground(wxEraseEvent& event);
 	void OnMouse(wxMouseEvent& event);
+	void OnKeyDown(wxKeyEvent& event);
 
 private:
 	void InitGL();

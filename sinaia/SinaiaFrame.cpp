@@ -83,6 +83,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_3D_POINT, MyFrame::On3DPoint)
     EVT_MENU(ID_3D_WARNING, MyFrame::On3DWarning)
     EVT_MENU(ID_3D_LIGHTING, MyFrame::On3DLighting)
+    EVT_MENU(ID_3D_CLIPPING, MyFrame::On3DClippingPlane)
 
     EVT_BUTTON(ID_BUTTON_RENDERING_BGCOLOR, MyFrame::OnBgColor)
 
@@ -334,6 +335,8 @@ MyFrame::MyFrame(wxWindow* parent,
     m_pToolBar2->AddSeparator();
     m_pToolBar2->AddTool(ID_3D_LIGHTING, wxT("Test"), wxBitmap (light_xpm));
     //m_pToolBar2->SetCustomOverflowItems(prepend_items, append_items);
+    m_pToolBar2->AddSeparator();
+    m_pToolBar2->AddTool(ID_3D_CLIPPING, wxT("Clipping"), wxBitmap(planar_cut));
     m_pToolBar2->Realize();
 
 /*
@@ -490,7 +493,6 @@ MyFrame::MyFrame(wxWindow* parent,
     pImageList->Add(wxBitmap(icon3ds).ConvertToImage().Rescale(16, 16, wxIMAGE_QUALITY_HIGH));
     m_filesCtrl->SetImageList(pImageList, wxIMAGE_LIST_SMALL);
     m_mgr.AddPane(m_filesCtrl, wxAuiPaneInfo().Name(wxT("Files")).Caption(wxT("Files")).Bottom());
-
     /*
     m_mgr.AddPane(CreateNotebookActions(), wxAuiPaneInfo().
         Name(wxT("test8")).Caption(wxT("Notebook Actions")).
@@ -948,6 +950,32 @@ void MyFrame::OnNotebookPageChanged(wxAuiNotebookEvent& event)
     {
         pGLCanvas->ResetProjectionMode();
         //pGLCanvas->DrawGL();
+
+        // Synchronize toolbar button states
+        wxAuiToolBarItem* p;
+
+        p = m_pToolBar2->FindTool(ID_3D_FILL);
+        if (p) p->SetSticky(pGLCanvas->GetFill());
+
+        p = m_pToolBar2->FindTool(ID_3D_WIREFRAME);
+        if (p) p->SetSticky(pGLCanvas->GetWireframe());
+
+        p = m_pToolBar2->FindTool(ID_3D_POINT);
+        if (p) p->SetSticky(pGLCanvas->GetPoint());
+
+        p = m_pToolBar2->FindTool(ID_3D_LIGHTING);
+        if (p) p->SetSticky(pGLCanvas->GetLighting());
+
+        p = m_pToolBar2->FindTool(ID_3D_SMOOTH);
+        if (p) p->SetSticky(pGLCanvas->GetSmooth());
+
+        p = m_pToolBar2->FindTool(ID_3D_FLAT);
+        if (p) p->SetSticky(!pGLCanvas->GetSmooth());
+
+        p = m_pToolBar2->FindTool(ID_3D_CLIPPING);
+        if (p) p->SetSticky(pGLCanvas->GetClippingPlane());
+
+        m_pToolBar2->Refresh();
     }
     UpdatePropertiesGrid();
 }
@@ -1019,6 +1047,10 @@ void MyFrame::OpenDocument(const wxString& strFilename)
 
     p = m_pToolBar2->FindTool(ID_3D_POINT);
     b = pGLCanvas->GetPoint();
+    p->SetSticky(b);
+
+    p = m_pToolBar2->FindTool(ID_3D_CLIPPING);
+    b = pGLCanvas->GetClippingPlane();
     p->SetSticky(b);
 
     m_pToolBar2->Refresh();
@@ -1228,6 +1260,25 @@ void MyFrame::On3DWarning(wxCommandEvent& WXUNUSED(event))
         wxAuiToolBarItem* p = m_pToolBar2->FindTool(ID_3D_WARNING);
         bool b = pGLCanvas->GetWarning();
         p->SetSticky(b);
+    }
+}
+
+void MyFrame::On3DClippingPlane(wxCommandEvent& WXUNUSED(event))
+{
+    *m_pWndLogging << _T("Clipping plane\n");
+    MyGLCanvas* pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+    if (pGLCanvas)
+    {
+        bool bActive = pGLCanvas->GetClippingPlane();
+        pGLCanvas->SetClippingPlane(!bActive);
+        pGLCanvas->Refresh();
+
+        wxAuiToolBarItem* p = m_pToolBar2->FindTool(ID_3D_CLIPPING);
+        bool b = pGLCanvas->GetClippingPlane();
+        p->SetSticky(b);
+
+        if (b)
+            pGLCanvas->SetFocus();
     }
 }
 

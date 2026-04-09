@@ -760,3 +760,28 @@ static const char *scaling_xpm[] = {
 "003000000000000000000003003000000000000000000003",
 "003003003003003003003003003003003003003003003003"
 };
+
+static const char *planar_cut[] = {
+"16 16 5 1",
+"  c None",
+". c black",
+"X c #C0C0C0", // Plane
+"o c #808080", // Cube side 1
+"+ c #404040", // Cube side 2
+"      .         ",
+"     .X.        ",
+"    .XXX.       ",
+"   .XXXXX.      ",
+"  .XXXXXXX.     ",
+" .XXXXXXXXX.    ",
+".XXXXXXXXXXX.   ",
+".oXXXXXXXXX+.   ",
+".ooXXXXXXX++.   ",
+".oooXXXXX+++.   ",
+" .oooXXX+++.    ",
+"  .oooX+++.     ",
+"   .oo+++.      ",
+"    .o++.       ",
+"     .+.        ",
+"      .         "
+};

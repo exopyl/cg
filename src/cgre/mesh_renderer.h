@@ -23,13 +23,15 @@ typedef struct rendering_properties
 	int display_points;
 	int display_vertex_normals;
 	int display_face_normals;
+	int display_wireframe;
 	int display_fill;
 	int display_warning;
 	int normalized;
 	float pointsize;
 	float linesize;
+	int clipping_plane_active;
+	float clipping_plane_z;
 
-	int display_wireframe;
 	map<Mesh*, vector<unsigned int>> nonManifoldEdges;
 	map<Mesh*, vector<unsigned int>> borders;
 

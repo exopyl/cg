@@ -20,6 +20,8 @@ void rendering_properties_init (rendering_properties_s &prop)
 	prop.pointsize = 1.;
 	prop.linesize = 1.;
 	prop.display_warning = 0;
+	prop.clipping_plane_active = 0;
+	prop.clipping_plane_z = 0.0f;
 }
 
 float pointsize = 1.;
@@ -33,6 +35,13 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 {
 	if (!mesh)
 		return;
+
+	if (prop.clipping_plane_active)
+	{
+		GLdouble plane[] = { 0.0, 0.0, -1.0, (GLdouble)prop.clipping_plane_z };
+		glClipPlane(GL_CLIP_PLANE0, plane);
+		glEnable(GL_CLIP_PLANE0);
+	}
 
 	// normalize the model
 	if (prop.normalized)
@@ -313,6 +322,11 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 	{
 		glPopMatrix ();
 		glDisable(GL_NORMALIZE);
+	}
+
+	if (prop.clipping_plane_active)
+	{
+		glDisable(GL_CLIP_PLANE0);
 	}
 }
 

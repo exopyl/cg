@@ -71,7 +71,7 @@ class MyFrame : public wxFrame
 		ID_3D_SMOOTH,
 		ID_3D_FLAT,
 		ID_3D_LIGHTING,
-
+        ID_3D_CLIPPING,
         ID_3D_WARNING,
 
 	ID_BUTTON_RENDERING_BGCOLOR,
@@ -173,10 +173,10 @@ private:
 	void On3DFlat(wxCommandEvent& evt);
 	void On3DLighting(wxCommandEvent& evt);
 
-    void On3DWarning(wxCommandEvent& evt);
+	void On3DWarning(wxCommandEvent& evt);
+	void On3DClippingPlane(wxCommandEvent& evt);
 
 	void OnBgColor(wxCommandEvent& evt);
-
 	void UpdateGeometry (void);
 	void OnSelectGeometrySpinEvent (wxSpinEvent & ev);
 	void OnSelectGeometry(wxCommandEvent& evt);
@@ -215,6 +215,7 @@ private:
 	wxRadioButton **m_pRadioGeometries;
 	wxSpinCtrl *m_pGeometrySphereLat, *m_pGeometrySphereLng;
 	wxSpinCtrl *m_pGeometryKleinBottleTheta, *m_pGeometryKleinBottlePhi;
+    wxCheckBox* m_pClippingPlane;
 
 	wxAuiToolBar* m_pToolBar2;
 
