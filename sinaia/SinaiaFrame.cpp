@@ -74,6 +74,11 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(wxID_OPEN, MyFrame::OnOpen)
     EVT_MENU(wxID_SAVE, MyFrame::OnSave)
     EVT_MENU(wxID_SAVEAS, MyFrame::OnSaveAs)
+    EVT_MENU(ID_GEOMETRY_NEW_CUBE, MyFrame::OnNewGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_SPHERE, MyFrame::OnNewGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_CYLINDER, MyFrame::OnNewGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_TEAPOT, MyFrame::OnNewGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_KLEIN_BOTTLE, MyFrame::OnNewGeometry)
     EVT_MENU(wxID_EXIT, MyFrame::OnExit)
     EVT_MENU(wxID_ABOUT, MyFrame::OnAbout)
     EVT_MENU(ID_3D_FILL, MyFrame::On3DFill)
@@ -84,6 +89,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_3D_WARNING, MyFrame::On3DWarning)
     EVT_MENU(ID_3D_LIGHTING, MyFrame::On3DLighting)
     EVT_MENU(ID_3D_CLIPPING, MyFrame::On3DClippingPlane)
+    EVT_MENU(ID_BUTTON_RENDERING_BGCOLOR, MyFrame::OnBgColor)
 
     EVT_BUTTON(ID_BUTTON_RENDERING_BGCOLOR, MyFrame::OnBgColor)
 
@@ -126,6 +132,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_TREATMENT_MERGE_VERTICES, MyFrame::OnTreatmentMergeVertices)
     EVT_MENU(ID_TREATMENT_SMOOTHING_TAUBIN, MyFrame::OnTreatmentSmoothingTaubin)
     EVT_MENU(ID_TREATMENT_SMOOTHING_LAPLACIAN, MyFrame::OnTreatmentSmoothingLaplacian)
+    EVT_MENU(ID_TREATMENT_CURVATURES_TAUBIN, MyFrame::OnTreatmentCurvaturesTaubin)
     EVT_MENU(ID_TREATMENT_CURVATURES_DESBRUN, MyFrame::OnTreatmentCurvaturesDesbrun)
     EVT_MENU(ID_TREATMENT_CURVATURES_HAMANN, MyFrame::OnTreatmentCurvaturesHamann)
     EVT_MENU(ID_ShowProperties, MyFrame::OnShowWindow)
@@ -224,8 +231,11 @@ MyFrame::MyFrame(wxWindow* parent,
 
 
     wxMenu* new_geometry_menu = new wxMenu;
-    new_geometry_menu->Append(wxID_ANY, wxT("Cube"));
-    new_geometry_menu->Append(wxID_ANY, wxT("Sphere"));
+    new_geometry_menu->Append(ID_GEOMETRY_NEW_CUBE, wxT("Cube"));
+    new_geometry_menu->Append(ID_GEOMETRY_NEW_SPHERE, wxT("Sphere"));
+    new_geometry_menu->Append(ID_GEOMETRY_NEW_CYLINDER, wxT("Cylinder"));
+    new_geometry_menu->Append(ID_GEOMETRY_NEW_TEAPOT, wxT("Teapot"));
+    new_geometry_menu->Append(ID_GEOMETRY_NEW_KLEIN_BOTTLE, wxT("Klein bottle"));
 
     wxMenu* geometry_menu = new wxMenu;
     geometry_menu->AppendSubMenu(new_geometry_menu, wxT("New"));
@@ -250,6 +260,8 @@ MyFrame::MyFrame(wxWindow* parent,
     panel_menu->AppendCheckItem(ID_NotebookScrollButtons, _("Scroll Buttons Visible"));
     panel_menu->AppendCheckItem(ID_NotebookWindowList, _("Window List Button Visible"));
     panel_menu->AppendCheckItem(ID_NotebookTabFixedWidth, _("Fixed-width Tabs"));
+    panel_menu->AppendSeparator();
+    panel_menu->Append(ID_BUTTON_RENDERING_BGCOLOR, _("Background"));
 
     options_menu->AppendSubMenu(panel_menu, wxT("3D Panel"));
 
@@ -273,6 +285,7 @@ MyFrame::MyFrame(wxWindow* parent,
     treatments_menu->AppendSubMenu(smoothing_menu, _("Smoothing"));
 
     wxMenu* curvatures_menu = new wxMenu;
+    curvatures_menu->Append(ID_TREATMENT_CURVATURES_TAUBIN, _("Taubin"));
     curvatures_menu->Append(ID_TREATMENT_CURVATURES_DESBRUN, _("Desbrun"));
     curvatures_menu->Append(ID_TREATMENT_CURVATURES_HAMANN, _("Hamann"));
     treatments_menu->AppendSubMenu(curvatures_menu, _("Curvatures"));
@@ -493,18 +506,6 @@ MyFrame::MyFrame(wxWindow* parent,
     pImageList->Add(wxBitmap(icon3ds).ConvertToImage().Rescale(16, 16, wxIMAGE_QUALITY_HIGH));
     m_filesCtrl->SetImageList(pImageList, wxIMAGE_LIST_SMALL);
     m_mgr.AddPane(m_filesCtrl, wxAuiPaneInfo().Name(wxT("Files")).Caption(wxT("Files")).Bottom());
-    /*
-    m_mgr.AddPane(CreateNotebookActions(), wxAuiPaneInfo().
-        Name(wxT("test8")).Caption(wxT("Notebook Actions")).
-        Bottom().Layer(1).Position(1).
-        CloseButton(true).MaximizeButton(true));
- 
-    m_mgr.AddPane(CreateSizeReportCtrl(), wxAuiPaneInfo().
-                  Name(wxT("test9")).Caption(wxT("Min Size 200x100")).
-                  BestSize(wxSize(200,100)).MinSize(wxSize(200,100)).
-                  Bottom().Layer(1).Position(1).
-                  CloseButton(true).MaximizeButton(true));
-    */
 
     m_pWndLogging = CreateTextCtrl(wxT("Logging...\n"));
     m_mgr.AddPane(m_pWndLogging, wxAuiPaneInfo().Name(wxT("Logging Window")).Caption(wxT("Logging Window")).Bottom());
@@ -1191,6 +1192,54 @@ void MyFrame::OnAbout(wxCommandEvent& WXUNUSED(event))
 	wxMessageBox(_("Sinaia\nAn interface for computational geometry\n(c) Copyright 2023, lsd"), _("About Sinaia"), wxOK, this);
 }
 
+void MyFrame::OnNewGeometry(wxCommandEvent& event)
+{
+	Mesh* pMesh = nullptr;
+	wxString title;
+
+	switch (event.GetId())
+	{
+	case ID_GEOMETRY_NEW_CUBE:
+		pMesh = CreateCube();
+		title = wxT("cube");
+		break;
+
+	case ID_GEOMETRY_NEW_SPHERE:
+		pMesh = new ParametricSphere(20, 20);
+		title = wxT("sphere");
+		break;
+
+	case ID_GEOMETRY_NEW_CYLINDER:
+		pMesh = CreateCylinder(2.f, 1.f, 32, true);
+		title = wxT("cylinder");
+		break;
+
+	case ID_GEOMETRY_NEW_TEAPOT:
+		pMesh = CreateTeapot();
+		title = wxT("teapot");
+		break;
+
+	case ID_GEOMETRY_NEW_KLEIN_BOTTLE:
+		pMesh = CreateKleinBottle(20, 20);
+		title = wxT("klein bottle");
+		break;
+
+	default:
+		return;
+	}
+
+	if (!pMesh)
+		return;
+
+	MyGLCanvas* pGLCanvas = new MyGLCanvas(m_pCtrl, m_pWndLogging, (int*)MyGLCanvas::GetDefaultAttributes());
+	auto pVMeshes = new VMeshes();
+	pVMeshes->AddMesh(pMesh);
+	pGLCanvas->SetVMeshes(pVMeshes);
+	m_pCtrl->AddPage(pGLCanvas, title, true);
+
+	UpdatePropertiesGrid();
+}
+
 //
 //
 //
@@ -1379,7 +1428,10 @@ void MyFrame::OnBgColor(wxCommandEvent& WXUNUSED(event))
 	wxColour colInit (r, g, b);
 	wxColour colNew = ::wxGetColourFromUser (this, colInit);
 	if (colNew.IsOk ())
+	{
 		pGLCanvas->SetBackgroundColor (colNew.Red(), colNew.Green(), colNew.Blue());
+		pGLCanvas->Refresh();
+	}
 }
 
 //
@@ -1521,146 +1573,6 @@ wxHtmlWindow* MyFrame::CreateHTMLCtrl(wxWindow* parent)
     return ctrl;
 }
 
-//
-// Notebook Actions
-//
-wxAuiNotebook* MyFrame::CreateNotebookActions(void)
-{
-   // create the notebook off-window to avoid flicker
-   wxSize client_size = GetClientSize();
-
-   m_pNotebookActions = new wxAuiNotebook(this, wxID_ANY,
-					  wxPoint(client_size.x, client_size.y),
-					  wxSize(430,200),
-					  m_notebook_style	);
-
-   wxBitmap page_bmp = wxArtProvider::GetBitmap(wxART_NORMAL_FILE, wxART_OTHER, wxSize(16,16));
-   
-   //m_pNotebookActions->AddPage(CreateHTMLCtrl(m_pNotebookActions), wxT("Welcome to wxAUI") , false, page_bmp);
-
-   // Rendering
-   wxPanel *panelRendering = new wxPanel( m_pNotebookActions, wxID_ANY );
-
-   new wxStaticText( panelRendering, -1, wxT("Background color"));
-   new wxButton( panelRendering, ID_BUTTON_RENDERING_BGCOLOR, wxT("Background color"),  wxPoint(20, 20));
-
-   m_pNotebookActions->AddPage( panelRendering, wxT("Rendering"), false, page_bmp );
-
-   // Geometry
-   wxPanel *panelGeometry = new wxPanel( m_pNotebookActions, wxID_ANY );
-
-   m_nRadioGeometries = 4;
-   m_pRadioGeometries = (wxRadioButton**)malloc(m_nRadioGeometries*sizeof(wxRadioButton*));
-   m_pRadioGeometries[0] = new wxRadioButton(panelGeometry,ID_GEOMETRY_CUBE,wxT("Cube"), wxPoint(5,5), wxSize(100,30), wxRB_GROUP);
-   m_pRadioGeometries[1] = new wxRadioButton(panelGeometry,ID_GEOMETRY_SPHERE,wxT("Sphere"), wxPoint(5,5+30), wxSize(100,30));
-   m_pGeometrySphereLat = new wxSpinCtrl( panelGeometry, ID_GEOMETRY_SPHERE_LAT, wxT("5"), wxPoint(5,5+60), wxSize(50,30) );
-   m_pGeometrySphereLng = new wxSpinCtrl( panelGeometry, ID_GEOMETRY_SPHERE_LNG, wxT("5"), wxPoint(105,5+60), wxSize(50,30) );
-   m_pRadioGeometries[2] = new wxRadioButton(panelGeometry,ID_GEOMETRY_CYLINDER,wxT("Cylinder"), wxPoint(5,5+90), wxSize(100,30));
-   m_pRadioGeometries[3] = new wxRadioButton(panelGeometry,ID_GEOMETRY_KLEIN_BOTTLE,wxT("Klein bottle"), wxPoint(5,5+120), wxSize(100,30));
-   m_pGeometryKleinBottleTheta = new wxSpinCtrl( panelGeometry, ID_GEOMETRY_KLEIN_BOTTLE_THETA, wxT("5"), wxPoint(5,5+150), wxSize(50,30) );
-   m_pGeometryKleinBottlePhi = new wxSpinCtrl( panelGeometry, ID_GEOMETRY_KLEIN_BOTTLE_PHI, wxT("5"), wxPoint(105,5+150), wxSize(50,30) );
-
-
-   m_pNotebookActions->AddPage( panelGeometry, wxT("Geometry"), false, page_bmp );
-
-
-   // Smoothing
-   wxPanel *panelSmoothing = new wxPanel( m_pNotebookActions, wxID_ANY );
-
-   wxFlexGridSizer *flexSmoothing = new wxFlexGridSizer( 2 );
-   flexSmoothing->AddGrowableRow( 0 );
-   flexSmoothing->AddGrowableRow( 3 );
-   flexSmoothing->AddGrowableCol( 1 );
-   flexSmoothing->Add( 5,5 );
-   flexSmoothing->Add( 5,5 );
-
-   flexSmoothing->Add( new wxStaticText( panelSmoothing, -1, wxT("Taubin") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-   flexSmoothing->Add( new wxButton( panelSmoothing, ID_BUTTON_SMOOTHING_TAUBIN, wxT("Taubin") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-
-   flexSmoothing->Add( new wxStaticText( panelSmoothing, -1, wxT("Laplacian") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-   flexSmoothing->Add( new wxButton( panelSmoothing, ID_BUTTON_SMOOTHING_LAPLACIAN, wxT("Laplacian") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-
-   flexSmoothing->Add( new wxStaticText( panelSmoothing, -1, wxT("wxTextCtrl:") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-   flexSmoothing->Add( new wxTextCtrl( panelSmoothing, -1, wxT(""), wxDefaultPosition, wxSize(100,-1)), 1, wxALL|wxALIGN_CENTRE, 5 );
-
-   flexSmoothing->Add( new wxStaticText( panelSmoothing, -1, wxT("wxSpinCtrl:") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-   flexSmoothing->Add( new wxSpinCtrl( panelSmoothing, -1, wxT("5"), wxDefaultPosition, wxSize(100,-1), wxSP_ARROW_KEYS, 5, 50, 5 ), 0, wxALL|wxALIGN_CENTRE, 5 );
-
-   flexSmoothing->Add( 5,5 );   flexSmoothing->Add( 5,5 );
-   panelSmoothing->SetSizer( flexSmoothing );
-   m_pNotebookActions->AddPage( panelSmoothing, wxT("Smoothing"), false, page_bmp );
-
-
-   // Curvatures
-   wxPanel *panelCurvatures = new wxPanel( m_pNotebookActions, wxID_ANY );
-
-   //wxDrawingArea* m_pDrawingAreaCurvatureHistogram = new wxDrawingArea (panelCurvatures);
-   //m_pDrawingAreaCurvatureHistogram->SetSize (300, 200);
-	
-   wxFlexGridSizer *flexCurvatures = new wxFlexGridSizer( 2 );
-   flexCurvatures->AddGrowableRow( 0 );
-   flexCurvatures->AddGrowableRow( 3 );
-   flexCurvatures->AddGrowableCol( 1 );
-   flexCurvatures->Add( 5,5 );   flexCurvatures->Add( 5,5 );
-
-   flexCurvatures->Add( new wxStaticText( panelCurvatures, -1, wxT("Desbrun") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-   flexCurvatures->Add( new wxButton( panelCurvatures, ID_BUTTON_CURVATURES_DESBRUN, wxT("Desbrun") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-
-   flexCurvatures->Add( new wxStaticText( panelCurvatures, -1, wxT("Taubin") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-   flexCurvatures->Add( new wxButton( panelCurvatures, ID_BUTTON_CURVATURES_TAUBIN, wxT("Taubin") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-
-   flexCurvatures->Add( 5,5 );   flexCurvatures->Add( 5,5 );
-   panelCurvatures->SetSizer( flexCurvatures );
-   m_pNotebookActions->AddPage( panelCurvatures, wxT("Curvatures"), false, page_bmp );
-
-   // NPR
-/*
-   wxPanel *panelNPR = new wxPanel( m_pNotebookActions, wxID_ANY );
-
-   wxFlexGridSizer *flexNPR = new wxFlexGridSizer( 2 );
-   flexNPR->AddGrowableRow( 0 );
-   flexNPR->AddGrowableRow( 3 );
-   flexNPR->AddGrowableCol( 1 );
-   flexNPR->Add( 5,5 );   flexNPR->Add( 5,5 );
-
-   flexNPR->Add( new wxStaticText( panelNPR, -1, wxT("ALl") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-   flexNPR->Add( new wxButton( panelNPR, ID_BUTTON_NPR_COMPUTE, wxT("Compute") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-
-   flexNPR->Add( new wxStaticText( panelNPR, -1, wxT("Angle ") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-   m_pNPRSliderMinimalAngle = new wxSlider(panelNPR, SliderPage_Slider,
-                            0, 0, 100,
-                            wxDefaultPosition, wxDefaultSize);
-   flexNPR->Add( m_pNPRSliderMinimalAngle, 0, wxALL|wxALIGN_CENTRE, 5 );
-
-   flexNPR->Add( new wxStaticText( panelNPR, -1, wxT("Export") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-   flexNPR->Add( new wxButton( panelNPR, ID_BUTTON_NPR_EXPORT, wxT("Export") ), 0, wxALL|wxALIGN_CENTRE, 5 );
-
-   flexNPR->Add( 5,5 );   flexNPR->Add( 5,5 );
-   panelNPR->SetSizer( flexNPR );
-   m_pNotebookActions->AddPage( panelNPR, wxT("NPR"), false, page_bmp );
-*/
-
-
-/*
-   m_pNotebookActions->AddPage( new wxTextCtrl( m_pNotebookActions, wxID_ANY, wxT("Some text"),
-                wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE|wxNO_BORDER) , wxT("wxTextCtrl 1"), false, page_bmp );
-
-   m_pNotebookActions->AddPage( new wxTextCtrl( m_pNotebookActions, wxID_ANY, wxT("Some more text"),
-                wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE|wxNO_BORDER) , wxT("wxTextCtrl 2") );
-
-   m_pNotebookActions->AddPage( new wxTextCtrl( m_pNotebookActions, wxID_ANY, wxT("Some more text"),
-                wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE|wxNO_BORDER) , wxT("wxTextCtrl 7 (longer title)") );
-*/
-   //m_pNotebookActions->AddPage(CreateHTMLCtrl(m_pNotebookActions), wxT("Welcome to wxAUI") , false, page_bmp);
-//   m_pNotebookActions->AddPage( new wxTextCtrl( m_pNotebookActions, wxID_ANY, wxT("Some text"),
-//                wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE|wxNO_BORDER) , wxT("wxTextCtrl 1"), false, page_bmp );
-
-   return m_pNotebookActions;
-}
-
-//
-//
-//
 wxAuiNotebook* MyFrame::CreateNotebook(void)
 {
    // create the notebook off-window to avoid flicker
@@ -1993,6 +1905,34 @@ void MyFrame::OnTreatmentCurvaturesDesbrun(wxCommandEvent& WXUNUSED(event))
 
 	pGLCanvas->Refresh();
 	*m_pWndLogging << _T("Curvatures Desbrun (mean) applied\n");
+}
+
+void MyFrame::OnTreatmentCurvaturesTaubin(wxCommandEvent& WXUNUSED(event))
+{
+	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+	if (!pGLCanvas)
+		return;
+
+    VMeshes*pVMeshes = pGLCanvas->GetVMeshes();
+	if (!pVMeshes)
+		return;
+
+	for (auto& pMesh : pVMeshes->GetMeshes())
+	{
+		Mesh_half_edge *pMeshHE = MeshDataManager::GetInstance().GetHalfEdge(pMesh);
+
+		MeshAlgoTensorEvaluator algo;
+		algo.Init(pMeshHE);
+		algo.Evaluate(TENSOR_TAUBIN);
+		algo.EvaluateColors(CURVATURE_MEAN);
+
+		// Copy colors back to original mesh
+		pMesh->InitVertexColors();
+		memcpy(pMesh->m_pVertexColors, pMeshHE->m_pMesh->m_pVertexColors, 3 * pMesh->m_nVertices * sizeof(float));
+	}
+
+	pGLCanvas->Refresh();
+	*m_pWndLogging << _T("Curvatures Taubin (mean) applied\n");
 }
 
 void MyFrame::OnTreatmentCurvaturesHamann(wxCommandEvent& WXUNUSED(event))

@@ -79,8 +79,13 @@ class MyFrame : public wxFrame
     ID_NOTEBOOK_MAIN,
     ID_PROPERTIESCTRL,
     ID_DIRCTRL,
-    ID_FILESCTRL,
+	ID_FILESCTRL,
 
+	ID_GEOMETRY_NEW_CUBE,
+	ID_GEOMETRY_NEW_SPHERE,
+	ID_GEOMETRY_NEW_CYLINDER,
+	ID_GEOMETRY_NEW_TEAPOT,
+	ID_GEOMETRY_NEW_KLEIN_BOTTLE,
 	ID_GEOMETRY_CUBE,
 	ID_GEOMETRY_SPHERE,
 	ID_GEOMETRY_SPHERE_LAT,
@@ -102,6 +107,7 @@ class MyFrame : public wxFrame
 	ID_TREATMENT_MERGE_VERTICES,
 	ID_TREATMENT_SMOOTHING_TAUBIN,
 	ID_TREATMENT_SMOOTHING_LAPLACIAN,
+	ID_TREATMENT_CURVATURES_TAUBIN,
 	ID_TREATMENT_CURVATURES_DESBRUN,
 	ID_TREATMENT_CURVATURES_HAMANN,
 
@@ -134,7 +140,6 @@ private:
     wxPoint GetStartPosition();
     wxHtmlWindow* CreateHTMLCtrl(wxWindow* parent = NULL);
 
-	wxAuiNotebook* CreateNotebookActions(void);
 	wxAuiNotebook* CreateNotebook(void);
 
     wxString GetIntroText();
@@ -157,6 +162,7 @@ private:
     void OnOpen(wxCommandEvent& evt);
     void OnSave(wxCommandEvent& evt);
     void OnSaveAs(wxCommandEvent& evt);
+    void OnNewGeometry(wxCommandEvent& evt);
     void OnExit(wxCommandEvent& evt);
     void OnAbout(wxCommandEvent& evt);
     void OnTabAlignment(wxCommandEvent &evt);
@@ -194,6 +200,7 @@ private:
 	void OnTreatmentMergeVertices(wxCommandEvent& evt);
 	void OnTreatmentSmoothingTaubin(wxCommandEvent& evt);
 	void OnTreatmentSmoothingLaplacian(wxCommandEvent& evt);
+	void OnTreatmentCurvaturesTaubin(wxCommandEvent& evt);
 	void OnTreatmentCurvaturesDesbrun(wxCommandEvent& evt);
 	void OnTreatmentCurvaturesHamann(wxCommandEvent& evt);
 
@@ -228,8 +235,6 @@ private:
 	MyGLCanvas* m_pGLCanvas;
 
 	wxAuiNotebook* m_pCtrl;
-	wxAuiNotebook* m_pNotebookActions;
-
 	// NPR
 	//wxSlider *m_pNPRSliderMinimalAngle;
 
