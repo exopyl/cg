@@ -3,10 +3,10 @@
 #include <assert.h>
 #include <string.h>
 #include <math.h>
+#include <vector>
 
 #include "slicer.h"
 #include "clipper.h"
-#include "garray.h"
 
 Cmodel3d_half_edge_sliced::Cmodel3d_half_edge_sliced (Mesh_half_edge *_mesh, int dir=ALONGOZ, float _step_slice=1.0)
 {
@@ -31,10 +31,7 @@ Cmodel3d_half_edge_sliced::scan_model_along_Oz (void)
 	float *vertices = model->m_pMesh->m_pVertices;
 	int n_vertices  = model->m_pMesh->m_nVertices;
 	int i,j,k;
-	
-	Cgarray *x;
-	Cgarray *y;
-	
+
 	/* look for the extremities in the Oz direction */
 	float z_min = vertices[2];
 	float z_max = vertices[2];
@@ -79,30 +76,15 @@ Cmodel3d_half_edge_sliced::scan_model_along_Oz (void)
 			n_contours[k] = n_intersections;
 			for (i=0; i<n_intersections; i++) /* for each contour in the current slice */
 			{
-				x = new Cgarray ();
-				y = new Cgarray ();
+				std::vector<float> xx(n_vertices[i]);
+				std::vector<float> yy(n_vertices[i]);
 				for (j=0; j<n_vertices[i]; j++)
 				{
-					float *x_walk = &intersections[i][3*j];
-					float *y_walk = &intersections[i][3*j+1];
-					x->add ((void*)x_walk);
-					y->add ((void*)y_walk);
-				}
-				float *xx = (float*)malloc(n_vertices[i]*sizeof(float));
-				float *yy = (float*)malloc(n_vertices[i]*sizeof(float));
-				for (j=0; j<n_vertices[i]; j++)
-				{
-					float *x_tmp = (float*)x->get_data (j);
-					float *y_tmp = (float*)y->get_data (j);
-					xx[j] = *x_tmp;
-					yy[j] = *y_tmp;
+					xx[j] = intersections[i][3*j];
+					yy[j] = intersections[i][3*j+1];
 				}
 				slices[k][i] = new Polygon2 ();
-				slices[k][i]->input (xx, yy, n_vertices[i]);
-				free (xx);
-				free (yy);
-				delete x;
-				delete y;
+				slices[k][i]->input (xx.data(), yy.data(), n_vertices[i]);
 			}
 		}
 		else
@@ -122,10 +104,7 @@ Cmodel3d_half_edge_sliced::scan_model_along_Ox (void)
 	float *vertices = model->m_pMesh->m_pVertices;
 	int n_vertices  = model->m_pMesh->m_nVertices;
 	int i,j,k;
-	
-	Cgarray *y;
-	Cgarray *z;
-	
+
 	/* look for the extremities in the Oz direction */
 	float x_min = vertices[0];
 	float x_max = vertices[0];
@@ -170,30 +149,15 @@ Cmodel3d_half_edge_sliced::scan_model_along_Ox (void)
 			n_contours[k] = n_intersections;
 			for (i=0; i<n_intersections; i++) /* for each contour in the current slice */
 			{
-				y = new Cgarray ();
-				z = new Cgarray ();
+				std::vector<float> yy(n_vertices[i]);
+				std::vector<float> zz(n_vertices[i]);
 				for (j=0; j<n_vertices[i]; j++)
 				{
-					float *y_walk = &intersections[i][3*j+1];
-					float *z_walk = &intersections[i][3*j+2];
-					y->add ((void*)y_walk);
-					z->add ((void*)z_walk);
-				}
-				float *yy = (float*)malloc(n_vertices[i]*sizeof(float));
-				float *zz = (float*)malloc(n_vertices[i]*sizeof(float));
-				for (j=0; j<n_vertices[i]; j++)
-				{
-					float *y_tmp = (float*)y->get_data (j);
-					float *z_tmp = (float*)z->get_data (j);
-					yy[j] = *y_tmp;
-					zz[j] = *z_tmp;
+					yy[j] = intersections[i][3*j+1];
+					zz[j] = intersections[i][3*j+2];
 				}
 				slices[k][i] = new Polygon2 ();
-				slices[k][i]->input (yy, zz, n_vertices[i]);
-				free (yy);
-				free (zz);
-				delete y;
-				delete z;
+				slices[k][i]->input (yy.data(), zz.data(), n_vertices[i]);
 			}
 		}
 		else

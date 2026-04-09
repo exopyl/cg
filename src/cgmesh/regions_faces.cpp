@@ -4,10 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <cstdint>
+#include <vector>
 
 #include "regions_faces.h"
 #include "regions_vertices.h"
-#include "garray.h"
 
 //class Cregions_vertices;
 
@@ -162,7 +162,6 @@ Cregions_faces::init_segmentation (float epsilon)
 {
 	int i, j;
 	int count;
-	Cgarray *neighborhood;
 	int current_region;
 	int n_faces = size;
 
@@ -185,21 +184,22 @@ Cregions_faces::init_segmentation (float epsilon)
 				count = 1;
 				Vector3d n (fn[3*i], fn[3*i+1], fn[3*i+2]);
 				fprintf (ptr, "face %d / %d : %f %f %f\n", i, n_faces, n.x, n.y, n.z);
-				neighborhood = new Cgarray ();
+				std::vector<uintptr_t> neighborhood;
 
 				int e = chePtr->m_edges_face[i];
 				if (e < 0) continue;
 				int e_walk = e;
 				do
 				{
-					if (chePtr->edge(e_walk).m_pair >= 0) neighborhood->add ((void*)(uintptr_t)chePtr->edge(chePtr->edge(e_walk).m_pair).m_face);
+					if (chePtr->edge(e_walk).m_pair >= 0)
+						neighborhood.push_back((uintptr_t)chePtr->edge(chePtr->edge(e_walk).m_pair).m_face);
 					else			    break;
 					e_walk = chePtr->edge(e_walk).m_he_next;
 				} while (e_walk >= 0 && e_walk != e);
 
-				for (j=0; j<neighborhood->get_size (); j++)
+				for (j=0; j<(int)neighborhood.size (); j++)
 				{
-					uintptr_t index_walk = (uintptr_t)(neighborhood->get_data (j));
+					uintptr_t index_walk = neighborhood[j];
 					if (regions[index_walk] == -1)
 					{
 						Vector3d ntmp (fn[3*index_walk], fn[3*index_walk+1], fn[3*index_walk+2]);
@@ -215,7 +215,8 @@ Cregions_faces::init_segmentation (float epsilon)
 							int e_walk = e;
 							do
 							{
-								if (chePtr->edge(e_walk).m_pair >= 0) neighborhood->add ((void*)(uintptr_t)chePtr->edge(chePtr->edge(e_walk).m_pair).m_face);
+								if (chePtr->edge(e_walk).m_pair >= 0)
+									neighborhood.push_back((uintptr_t)chePtr->edge(chePtr->edge(e_walk).m_pair).m_face);
 								else				break;
 								e_walk = chePtr->edge(e_walk).m_he_next;
 							} while (e_walk >= 0 && e_walk != e);
@@ -224,7 +225,6 @@ Cregions_faces::init_segmentation (float epsilon)
 					}
 				}
 				current_region++;
-				delete neighborhood;
 			}
 		}
 		fclose (ptr);

@@ -5,7 +5,6 @@
 #include <math.h>
 
 #include "regions_vertices.h"
-#include "garray.h"
 //#include "fitting.h"
 
 /**

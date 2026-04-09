@@ -57,7 +57,6 @@
 
 // structures
 #include "bintree.h"
-#include "pair.h"
 
 #include "half_edge.h"
 #include "mesh_half_edge.h"
