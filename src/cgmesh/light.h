@@ -1,6 +1,4 @@
-#ifndef __LIGHT_H__
-#define __LIGHT_H__
-
+#pragma once
 typedef enum _CG_LIGHT_TYPE {
     CG_LIGHT_TYPE_POINT          = 1,
     CG_LIGHT_TYPE_SPOT           = 2,
@@ -59,5 +57,3 @@ public:
 	bool bEnable;
 	bool bDisplay;
 };
-
-#endif	// __LIGHT_H__

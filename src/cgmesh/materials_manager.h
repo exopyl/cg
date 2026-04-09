@@ -1,6 +1,4 @@
-#ifndef __MATERIALS_MANAGER_H__
-#define __MATERIALS_MANAGER_H__
-
+#pragma once
 #include "material.h"
 
 class MaterialsManager
@@ -28,5 +26,3 @@ public:
 	int m_nMaterials;
 	Material* m_pMaterials[8];
 };
-
-#endif // __MATERIALS_MANAGER_H__

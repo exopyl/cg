@@ -1,6 +1,4 @@
-#ifndef __EXTRACTED_LINE_H__
-#define __EXTRACTED_LINE_H__
-
+#pragma once
 #include "../cgmath/cgmath.h"
 
 class Cextracted_line
@@ -78,5 +76,3 @@ private:
   // visu
   float r, g, b;
 };
-
-#endif // __EXTRACTED_LINE_H__

@@ -1,6 +1,4 @@
-#ifndef __EXAMINATOR_GROUND_H__
-#define __EXAMINATOR_GROUND_H__
-
+#pragma once
 #include "examinator.h"
 
 class Cexaminator_ground : public Cexaminator
@@ -21,5 +19,3 @@ class Cexaminator_ground : public Cexaminator
   float lx, ly, lz;
   float angle;
 };
-
-#endif // __EXAMINATOR_GROUND_H__

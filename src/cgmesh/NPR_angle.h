@@ -1,6 +1,4 @@
-#ifndef __NPR_CONTOUR_H__
-#define __NPR_CONTOUR_H__
-
+#pragma once
 #include "NPRStructures.h"
 #include "mesh_half_edge.h"
 #include "vmeshes.h"
@@ -25,5 +23,3 @@ private:
 	VMeshes* m_pVMeshes;
 	ListNPRSegments m_listSegments;
 };
-
-#endif //  __NPR_EDGE_H__

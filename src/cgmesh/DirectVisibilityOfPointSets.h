@@ -1,7 +1,4 @@
-#ifndef __DIRECT_VISIBILITY_OF_POINT_SETS_H__
-#define __DIRECT_VISIBILITY_OF_POINT_SETS_H__
-
-//
+#pragma once
 // Reference :
 // Direct Visibility of Point Sets, 
 // Sagi Katz, Ayellet Tal, and Ronen Basri. 
@@ -35,5 +32,3 @@ public:
 	int   m_nPointsVisible;
 	float *m_pointsVisible;
 };
-
-#endif // __DIRECT_VISIBILITY_OF_POINT_SETS_H__

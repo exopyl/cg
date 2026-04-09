@@ -1,6 +1,4 @@
-#ifndef __NPR_SILHOUETTE_H__
-#define __NPR_SILHOUETTE_H__
-
+#pragma once
 #include "NPRStructures.h"
 #include "mesh_half_edge.h"
 #include "vmeshes.h"
@@ -27,5 +25,3 @@ private:
 	Vector3f m_vCameraPosition;
 	ListNPRSegments m_listSegments;
 };
-
-#endif //  __NPR_SILHOUETTE_H__

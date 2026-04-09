@@ -1,6 +1,4 @@
-#ifndef __PERLIN_NOISE_H__
-#define __PERLIN_NOISE_H__
-
+#pragma once
 #ifdef __H__
 extern double noise1(double arg);
 extern float noise2(float vec[2]);
@@ -31,5 +29,3 @@ private:
 	float g2[B+B+2][2];
 	float g1[B+B+2];  
 };
-
-#endif // __PERLIN_NOISE_H__

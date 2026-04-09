@@ -1,6 +1,4 @@
-#ifndef __LIGHTS_MANAGER_H__
-#define __LIGHTS_MANAGER_H__
-
+#pragma once
 #include "light.h"
 
 class LightsManager
@@ -28,5 +26,3 @@ public:
 	int m_nLights;
 	Light* m_pLights[8];
 };
-
-#endif // __LIGHTS_MANAGER_H__

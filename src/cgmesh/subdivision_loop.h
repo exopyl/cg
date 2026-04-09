@@ -1,6 +1,4 @@
-#ifndef __SUBDIVISION_LOOP_H__
-#define __SUBDIVISION_LOOP_H__
-
+#pragma once
 #include "mesh_half_edge.h"
 
 //
@@ -16,5 +14,3 @@ public:
 
 private:
 };
-
-#endif // __SUBDIVISION_LOOP_H__

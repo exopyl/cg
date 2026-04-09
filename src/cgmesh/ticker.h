@@ -1,6 +1,4 @@
-#ifndef __TICKER_H__
-#define __TICKER_H__
-
+#pragma once
 #ifdef linux
 #include <sys/time.h>
 #include <time.h>
@@ -43,5 +41,3 @@ private:
 };
 
 #endif // WIN32
-
-#endif // __TICKER_H__

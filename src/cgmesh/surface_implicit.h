@@ -1,6 +1,4 @@
-#ifndef __SURFACE_IMPLICIT_H__
-#define __SURFACE_IMPLICIT_H__
-
+#pragma once
 #include <stdlib.h>
 
 struct vec3f { float fX, fY, fZ; };
@@ -92,5 +90,3 @@ private:
 	int *fIndicesCached;
 	int iCurrentVertex;
 };
-
-#endif // __SURFACE_IMPLICIT_H__

@@ -1,6 +1,4 @@
-#ifndef __POLYGON3_H__
-#define __POLYGON3_H__
-
+#pragma once
 #include "../cgmath/cgmath.h"
 
 class Polygon3
@@ -27,5 +25,3 @@ private:
 	unsigned int *m_nPoints;
 	float **m_pPoints;
 };
-
-#endif // __POLYGON3_H__

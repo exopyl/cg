@@ -1,6 +1,4 @@
-#ifndef __EXAMINATOR_GLULOOKAT_H__
-#define __EXAMINATOR_GLULOOKAT_H__
-
+#pragma once
 #include "examinator.h"
 
 class Cexaminator_glulookat : public Cexaminator
@@ -23,5 +21,3 @@ class Cexaminator_glulookat : public Cexaminator
   float x_center, y_center, z_center;
   float x_up, y_up, z_up;
 };
-
-#endif // __EXAMINATOR_GLULOOKAT_H__

@@ -1,6 +1,4 @@
-#ifndef __MESH_ORIENTATION_MOMENTS_H__
-#define __MESH_ORIENTATION_MOMENTS_H__
-
+#pragma once
 #include "orientation.h"
 
 /*
@@ -24,5 +22,3 @@ class Cmesh_orientation_moments : public Cmesh_orientation
  private:
   double density, mass;
 };
-
-#endif /* __MESH_ORIENTATION_MOMENTS_H__ */

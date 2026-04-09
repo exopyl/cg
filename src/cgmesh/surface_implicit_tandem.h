@@ -1,6 +1,4 @@
-#ifndef __SURFACE_IMPLICIT_TANDEM_H__
-#define __SURFACE_IMPLICIT_TANDEM_H__
-
+#pragma once
 #include "surface_implicit.h"
 
 //
@@ -20,5 +18,3 @@ private:
 	virtual void get_triangulation_pre (void);
 	virtual void get_triangulation_post (int *nvertices, float **vertices, int *nfaces, unsigned int **faces);
 };
-
-#endif // __SURFACE_IMPLICIT_TANDEM_H__

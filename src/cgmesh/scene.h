@@ -1,6 +1,4 @@
-#ifndef __SCENE_H__
-#define __SCENE_H__
-
+#pragma once
 #include "../cgmesh/cgmesh.h"
 
 class Scene
@@ -24,5 +22,3 @@ public:
 	int m_i_GetIntersectionBboxWithRay_count;
 	int m_i_GetIntersectionWithRay_count;
 };
-
-#endif // __SCENE_H__

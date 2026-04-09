@@ -1,6 +1,4 @@
-#ifndef __LSYSTEM_INIT_H__
-#define __LSYSTEM_INIT_H__
-
+#pragma once
 #include "lsystem.h"
 
 #include <map>
@@ -56,5 +54,3 @@ typedef struct LSystemData
 } LSystemData;
 
 extern void InitLSystems (std::map<int,LSystemData*>& mapLSystems);
-
-#endif // __LSYSTEM_INIT_H__

@@ -1,6 +1,4 @@
-#ifndef __ORIENATION_CURVATURES_H__
-#define __ORIENATION_CURVATURES_H__
-
+#pragma once
 #include "orientation.h"
 
 //
@@ -40,5 +38,3 @@ class Cmesh_orientation_curvatures : public Cmesh_orientation
   float phi, theta;
   int iphi_max, itheta_max;
 };
-
-#endif // __ORIENATION_CURVATURES_H__

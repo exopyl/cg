@@ -1,6 +1,4 @@
-#ifndef __HALF_EDGE_H__
-#define __HALF_EDGE_H__
-
+#pragma once
 #include <map>
 #include <vector>
 
@@ -140,5 +138,3 @@ private:
 	int *m_n_connections_max;
 	int m_nv;
 };
-
-#endif // __HALF_EDGE_H__

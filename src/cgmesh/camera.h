@@ -1,7 +1,4 @@
-#ifndef __CAMERA_H__
-#define __CAMERA_H__
-
-//#include "projection.h"
+#pragma once
 
 class Camera
 {
@@ -19,6 +16,3 @@ public:
 	float m_vDirection[3];
 	float m_vUp[3];
 };
-
-#endif // __CAMERA_H__
-

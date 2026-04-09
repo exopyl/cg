@@ -1,6 +1,4 @@
-#ifndef __POINTS_STRANGE_ATTRACTOR_QUADRATICMAPS3D_H__
-#define __POINTS_STRANGE_ATTRACTOR_QUADRATICMAPS3D_H__
-
+#pragma once
 #include "points_strange_attractor.h"
 
 class StrangeAttractor_QuadraticMaps3D : public StrangeAttractor
@@ -22,5 +20,3 @@ private:
 	char   s[18];
 	double a[18];
 };
-
-#endif // __POINTS_STRANGE_ATTRACTOR_QUADRATICMAPS3D_H__

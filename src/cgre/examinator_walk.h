@@ -1,6 +1,4 @@
-#ifndef __EXAMINATOR_WALK_H__
-#define __EXAMINATOR_WALK_H__
-
+#pragma once
 #include "gl_wrapper.h"
 
 class Cexaminator_walk
@@ -42,5 +40,3 @@ class Cexaminator_walk
   int       tb_button;
   int       lastX, lastY;
 };
-
-#endif // __EXAMINATOR_WALK_H__

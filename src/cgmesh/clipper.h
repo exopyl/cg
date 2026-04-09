@@ -1,6 +1,4 @@
-#ifndef __CLIPPER_H__
-#define __CLIPPER_H__
-
+#pragma once
 #include "cgmesh.h"
 
 class Cmodel3d_half_edge_clipper
@@ -25,6 +23,3 @@ class Cmodel3d_half_edge_clipper
   // distances between the vertices and the plane
   float *distances;
 };
-
-
-#endif // __CLIPPER_H__

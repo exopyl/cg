@@ -1,6 +1,4 @@
-#ifndef __RANDOM_GENERATOR_H__
-#define __RANDOM_GENERATOR_H__
-
+#pragma once
 /*
  * Code and details in "Numerical recipes in C"
  * http://www.ulib.org/webRoot/Books/Numerical_Recipes/bookc.html
@@ -19,5 +17,3 @@ extern float gasdev (long *idum);                   /* Normal (gaussian) deviate
 extern float gamdev (int ia, long *idum);           /* Gamma distribution         */
 extern float poidev (float xm, long *idum);         /* Poisson deviates           */
 extern float bnldev (float pp, int n, long *idum);  /* Binomial deviates          */
-
-#endif /* __RANDOM_GENERATOR_H__ */

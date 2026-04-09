@@ -1,7 +1,4 @@
-#ifndef _FILEFORMAT_3DS_HEADER_
-#define _FILEFORMAT_3DS_HEADER_
-
-//-----------------------------------------------------------------------------
+#pragma once
 //Specific to the 3DS file format
 //-------
 #include "mesh_io_3ds_defines.h"
@@ -114,5 +111,3 @@
 
 	UINT32 WriteChunkHeader				(UINT16 id_header, fpos_t *position);
 	void   WriteChunkFooter				(fpos_t position, UINT32 chunkSize);
-
-#endif	//_FILEFORMAT_3DS_HEADER_

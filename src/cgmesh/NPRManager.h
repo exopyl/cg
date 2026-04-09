@@ -1,6 +1,4 @@
-#ifndef __NPR_MANAGER_H__
-#define __NPR_MANAGER_H__
-
+#pragma once
 #include "NPR_angle.h"
 #include "NPR_border.h"
 #include "NPR_silhouette.h"
@@ -26,6 +24,3 @@ private:
 	NPR_Silhouette* m_pNPRSilhouette;
 	Mesh_half_edge *m_pMesh;
 };
-
-
-#endif // __NPR_MANAGER_H__

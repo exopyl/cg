@@ -1,6 +1,4 @@
-#ifndef __RAYTRACER_H__
-#define __RAYTRACER_H__
-
+#pragma once
 #include "../cgimg/cgimg.h"
 #include "../cgmesh/cgmesh.h"
 #include "scene.h"
@@ -45,5 +43,3 @@ private:
 	double m_time_GetColorWithRay;
 	double m_time_GetIntersectionWithRay;
 };
-
-#endif // __RAYTRACER_H__

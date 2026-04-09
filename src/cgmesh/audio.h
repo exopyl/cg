@@ -1,6 +1,4 @@
-#ifndef __AUDIO_H__
-#define __AUDIO_H__
-
+#pragma once
 class Audio
 {
 public:
@@ -24,6 +22,3 @@ public:
 	unsigned int channels;
 	float *data;
 };
-
-#endif // __AUDIO_H__
-

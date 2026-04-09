@@ -6,10 +6,7 @@
 //
 /*****************************************************************************/
 
-#ifndef _DEFINES_3DS_HEADER_
-#define _DEFINES_3DS_HEADER_
-
-//-----------------------------------------------------------------------------
+#pragma once
 // 0xxxH Group
 //-------
 #define	CHK3DS_0_NULL_CHUNK			0x0000 	 
@@ -654,6 +651,4 @@
 #define	CHK3DS_F_MSH_MAT_GROUP_ENTRY	0xf130 	 
 #define	CHK3DS_F_TEX_VERTS_ENTRY		0xf140 	 
 #define	CHK3DS_F_SMOOTH_GROUP_ENTRY		0xf150 	 
-#define	CHK3DS_F_DUMMY					0xffff 	 
-
-#endif	//_DEFINES_3DS_HEADER_
+#define	CHK3DS_F_DUMMY					0xffff

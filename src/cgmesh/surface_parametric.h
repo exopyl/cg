@@ -1,6 +1,4 @@
-#ifndef __SURFACE_PARAMETRIC_H__
-#define __SURFACE_PARAMETRIC_H__
-
+#pragma once
 #include "mesh.h"
 #include "tensor.h"
 
@@ -246,5 +244,3 @@ public:
 	~Guimard () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
-
-#endif // __SURFACE_PARAMETRIC_H__

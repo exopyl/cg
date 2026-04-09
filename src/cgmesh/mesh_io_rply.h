@@ -1,5 +1,4 @@
-#ifndef PLY_H
-#define PLY_H
+#pragma once
 /* ----------------------------------------------------------------------
  * RPly library, read/write PLY files
  * Diego Nehab, IMPA
@@ -349,9 +348,6 @@ int ply_close(p_ply ply);
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* RPLY_H */
-
 /* ----------------------------------------------------------------------
  * Copyright (C) 2003-2011 Diego Nehab. All rights reserved.
  *

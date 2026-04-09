@@ -1,6 +1,4 @@
-#ifndef __QUADRIC_H__
-#define __QUADRIC_H__
-
+#pragma once
 #include "algebra_vector3.h"
 #include "algebra_vector4.h"
 
@@ -16,5 +14,3 @@ int quadric_minimize(quadric_t q, vec3 vnew, float *error);
 double quadric_eval(quadric_t q, vec3 v);
 int quadric_minimize_edge(quadric_t q, vec3 vnew, float *error, vec3 v0, vec3 v1);
 int quadric_minimize2(quadric_t q, vec3 vnew, float *error, vec3 v0, vec3 v1);
-
-#endif // __QUADRIC_H__

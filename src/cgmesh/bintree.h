@@ -1,6 +1,4 @@
-#ifndef __BINTREE_H__
-#define __BINTREE_H__
-
+#pragma once
 #define GEN_T template <class T>
 #define BINTREE bintree<T>
 
@@ -96,5 +94,3 @@ GEN_T BINTREE& BINTREE::operator= (const bintree& src)
 
 #undef GEN_T
 #undef BINTREE
-
-#endif // __BINTREE_H__

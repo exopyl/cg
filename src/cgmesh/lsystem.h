@@ -1,6 +1,4 @@
-#ifndef __LSYSTEM_H__
-#define __LSYSTEM_H__
-
+#pragma once
 #include "lsrule.h"
 
 //
@@ -70,5 +68,3 @@ public:
 };
 
 extern LSystem* InitLSystem (void);
-
-#endif // __LSYSTEM_H__

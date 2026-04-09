@@ -1,6 +1,4 @@
-#ifndef __DIFFERENTIAL_PARAMETERS_DISTRIBUTION_H__
-#define __DIFFERENTIAL_PARAMETERS_DISTRIBUTION_H__
-
+#pragma once
 #include "mesh_half_edge.h"
 
 //
@@ -24,5 +22,3 @@ class Cdifferential_parameters_distribution
   float *histogram;
   int n_bins;
 };
-
-#endif // __DIFFERENTIAL_PARAMETERS_DISTRIBUTION_H__

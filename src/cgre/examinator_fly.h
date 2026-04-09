@@ -1,6 +1,4 @@
-#ifndef __EXAMINATOR_FLY_H__
-#define __EXAMINATOR_FLY_H__
-
+#pragma once
 #include "examinator.h"
 
 class Cfly : public Cexaminator
@@ -21,5 +19,3 @@ class Cfly : public Cexaminator
   float lx, ly, lz;
   float angle_a, angle_b;
 };
-
-#endif // __EXAMINATOR_FLY_H__

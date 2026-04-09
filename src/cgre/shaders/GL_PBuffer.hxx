@@ -1,6 +1,4 @@
-#ifndef GL_PBUFFER_HXX
-#define GL_PBUFFER_HXX
-
+#pragma once
 #include	<Win32_GL_utils/GL.hxx>
 #include	"Win32_GL_utils/GL_RC_Util.hxx"
 
@@ -45,5 +43,3 @@ public:
 	virtual int	GetPixelFormat() const override;
 	virtual ChaineInc GetType() const override;
 };
-
-#endif // GL_PBUFFER_HXX

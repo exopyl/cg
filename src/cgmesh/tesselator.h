@@ -1,7 +1,5 @@
 // adapted from http://flipcode.com/archives/Polygon_Tessellation_In_OpenGL.shtml
-#ifndef __TESSELATOR_H__
-#define __TESSELATOR_H__
-
+#pragma once
 #ifdef WIN32
 
 #define WIN32_LEAN_AND_MEAN
@@ -111,4 +109,3 @@ private:
 };
 
 #endif // WIN32
-#endif // __TESSELATOR_H__

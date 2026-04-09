@@ -1,6 +1,4 @@
-#ifndef __CONSOLE_H__
-#define __CONSOLE_H__
-
+#pragma once
 #include "gl_wrapper.h"
 
 extern void font_init (void);
@@ -38,5 +36,3 @@ class Console
   
   unsigned int width, height;
 };
-
-#endif // __CONSOLE_H__

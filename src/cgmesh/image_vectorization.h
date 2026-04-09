@@ -1,6 +1,4 @@
-#ifndef __IMAGE_VECTORIZATION_H__
-#define __IMAGE_VECTORIZATION_H__
-
+#pragma once
 #include <stdlib.h>
 #include <map>
 #include <list>
@@ -86,5 +84,3 @@ private:
 	list<TPath*>	m_layerOrder;
 	map<TPath*,int> m_pathColor;
 };
-
-#endif // __IMAGE_VECTORIZATION_H__

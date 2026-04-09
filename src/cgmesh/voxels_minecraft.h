@@ -1,6 +1,4 @@
-#ifndef __VOXELS_MINECRAFT_H__
-#define __VOXELS_MINECRAFT_H__
-
+#pragma once
 #define BLOCK_STONE  1
 #define BLOCK_GRASS  2
 #define BLOCK_DIRT   3
@@ -28,6 +26,3 @@ static unsigned int block_to_texture_id[14*3] = // top / side / bottom
 	18, 18, 18,
 	19, 19, 19
 };
-
-
-#endif // __VOXELS_MINECRAFT_H__

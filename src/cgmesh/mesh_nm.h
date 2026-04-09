@@ -1,6 +1,4 @@
-#ifndef __MESH_NM_H__
-#define __MESH_NM_H__
-
+#pragma once
 #include "mesh.h"
 
 class Mesh_nm :	public Mesh
@@ -21,5 +19,3 @@ private:
 
 	Material *texture;
 };
-
-#endif //  __MESH_NM_H__

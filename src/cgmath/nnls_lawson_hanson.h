@@ -1,8 +1,4 @@
-#ifndef __NNLS_LAWSON_HANSON_H__
-#define __NNLS_LAWSON_HANSON_H__
-
-
-//
+#pragma once
 // References :
 // original code : http://hesperia.gsfc.nasa.gov/~schmahl/nnls/nnls.c
 // modifications :
@@ -59,6 +55,3 @@ extern int nnls_c(
 	// 3 : Iteration count exceeded (more than 3*N iterations)
 	int* mode
 	);
-
-
-#endif // __NNLS_LAWSON_HANSON_H__

@@ -1,6 +1,4 @@
-#ifndef __TVECTOR4_H__
-#define __TVECTOR4_H__
-
+#pragma once
 #include <iostream>
 using namespace std;
 
@@ -230,5 +228,3 @@ typedef TVector4<int   > Vector4i;
 typedef TVector4<float > Vector4f;
 typedef TVector4<double> Vector4d;
 typedef TVector4<float > Vector4;
-
-#endif	// __TVECTOR4_H__

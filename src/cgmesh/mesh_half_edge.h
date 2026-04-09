@@ -1,6 +1,4 @@
-#ifndef __MESH_HALF_EDGE_H__
-#define __MESH_HALF_EDGE_H__
-
+#pragma once
 #include "mesh.h"
 #include "half_edge.h"
 #include <memory>
@@ -88,5 +86,3 @@ private:
 	void check_border (void); // check_topology should be called before
 	std::vector<char> m_border;
 };
-
-#endif // __MESH_HALF_EDGE_H__

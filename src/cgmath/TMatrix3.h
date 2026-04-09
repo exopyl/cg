@@ -1,6 +1,4 @@
-#ifndef __TMATRIX3_H__
-#define __TMATRIX3_H__
-
+#pragma once
 #include "TVector3.h"
 #include "common.h"
 
@@ -772,5 +770,3 @@ typedef TMatrix3<int>    Matrix3i;
 typedef TMatrix3<float>  Matrix3f;
 typedef TMatrix3<double> Matrix3d;
 typedef TMatrix3<float>  Matrix3;
-
-#endif	// __TMATRIX3_H__

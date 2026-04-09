@@ -1,6 +1,4 @@
-#ifndef __MESH_ORIENTATION_PCA_H__
-#define __MESH_ORIENTATION_PCA_H__
-
+#pragma once
 #include "orientation.h"
 
 class Cmesh_orientation_pca : public Cmesh_orientation
@@ -23,5 +21,3 @@ class Cmesh_orientation_pca : public Cmesh_orientation
   void compute_pca_barycenter        (void);
   void compute_pca_continuous        (void);
 };
-
-#endif // __MESH_ORIENTATION_PCA_H__

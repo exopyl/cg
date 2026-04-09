@@ -1,6 +1,4 @@
-#ifndef __SLICER_H__
-#define __SLICER_H__
-
+#pragma once
 #include "cgmesh.h"
 
 #define ALONGOX 0
@@ -44,5 +42,3 @@ class Cmodel3d_half_edge_sliced
   int *n_contours;
   float step_slice; // distance between two consecutive slices
 };
-
-#endif // __SLICER_H__

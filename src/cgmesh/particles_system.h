@@ -1,7 +1,4 @@
-#ifndef __PARTICLES_SYSTEM_H__
-#define __PARTICLES_SYSTEM_H__
-
-/****************/
+#pragma once
 /*** Particle ***/
 /****************/
 class CParticle
@@ -74,5 +71,3 @@ private:
 	int m_col;        // current color selection
 	int m_delay;      // rainbow effect delay
 };
-
-#endif // __PARTICLES_SYSTEM_H__

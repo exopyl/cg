@@ -1,6 +1,4 @@
-#ifndef __POINTS_STRANGE_ATTRACTOR_CUBICMAPS_H__
-#define __POINTS_STRANGE_ATTRACTOR_CUBICMAPS_H__
-
+#pragma once
 #include "points_strange_attractor.h"
 
 class StrangeAttractor_CubicMaps : public StrangeAttractor
@@ -16,5 +14,3 @@ public:
 private:
 	double a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20;
 };
-
-#endif // __POINTS_STRANGE_ATTRACTOR_CUBICMAPS_H__

@@ -1,6 +1,4 @@
-#ifndef __MESH_ORIENTATION_EDGES2_H__
-#define __MESH_ORIENTATION_EDGES2_H__
-
+#pragma once
 #include "orientation.h"
 
 class Cmesh_orientation_edges2 : public Cmesh_orientation
@@ -48,5 +46,3 @@ class Cmesh_orientation_edges2 : public Cmesh_orientation
   float phi, theta;
   int iphi_max, itheta_max;
 };
-
-#endif /* __MESH_ORIENTATION_EDGES2_H__ */

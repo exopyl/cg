@@ -1,7 +1,4 @@
-#ifndef __POLYNOMIAL_H__
-#define __POLYNOMIAL_H__
-
-// quadric ax^2 + bx + c = 0
+#pragma once
 // cubic ax^3 + bx^2 + cx + d = 0
 // quartic ax^4 + bx^3 + cx^2 + dx + e = 0
 
@@ -17,7 +14,3 @@ extern int quartic (double a,double b,double c,double d,double rts[4],double rte
 extern int SolveQuadric (double c[3], double s[2]);
 extern int SolveCubic   (double c[4], double s[3]);
 extern int SolveQuartic (double c[5], double s[4]);
-
-
-#endif // __POLYNOMIAL_H__
-

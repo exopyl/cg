@@ -1,6 +1,4 @@
-#ifndef __SUBDIVISION_KARBACHER_H__
-#define __SUBDIVISION_KARBACHER_H__
-
+#pragma once
 #include "cgmesh.h"
 
 class MeshAlgoSubdivisionKarbacher
@@ -19,5 +17,3 @@ private:
 
 	Mesh_half_edge *m_pModel;
 };
-
-#endif // __SUBDIVISION_KARBACHER_H__

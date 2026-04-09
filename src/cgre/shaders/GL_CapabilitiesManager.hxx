@@ -1,7 +1,4 @@
-#ifndef GL_CAPABILITIESMANAGER_H
-#define GL_CAPABILITIESMANAGER_H
-
-//
+#pragma once
 // CapabilitiesManager is defined as a singleton
 //
 class GL_CapabilitiesManager
@@ -57,5 +54,3 @@ protected :
 	char* m_renderer;
 	char* m_extensions;
 };
-
-#endif // GL_CAPABILITIESMANAGER_H

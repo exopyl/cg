@@ -1,6 +1,4 @@
-#ifndef __POINTS_RANDOM_H__
-#define __POINTS_RANDOM_H__
-
+#pragma once
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
@@ -53,5 +51,3 @@ public:
 	void reset (void) {m_nPoints = 0; if (m_points) free (m_points); m_points = NULL; };
 private:
 };
-
-#endif // __POINTS_RANDOM_H__

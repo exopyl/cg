@@ -1,6 +1,4 @@
-#ifndef __QUATERNION_H__
-#define __QUATERNION_H__
-
+#pragma once
 #include "common.h"
 #include "TVector3.h"
 
@@ -380,5 +378,3 @@ class TQuaternion
 typedef TQuaternion<float>		Quaternionf;
 typedef TQuaternion<double>		Quaterniond;
 typedef TQuaternion<float>		Quaternion;
-
-#endif /* __QUATERNION_H__ */

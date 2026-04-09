@@ -1,6 +1,4 @@
-#ifndef __SURFACE_ARCHITECTURE_H__
-#define __SURFACE_ARCHITECTURE_H__
-
+#pragma once
 #include "mesh.h"
 #include "polygon2.h"
 
@@ -44,5 +42,3 @@ private:
 	float m_fAltitude, m_fWidth, m_fHeight;
 	float m_fAltitude2, m_fWidth2, m_fHeight2;
 };
-
-#endif // __SURFACE_ARCHITECTURE_H__

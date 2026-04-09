@@ -1,6 +1,4 @@
-#ifndef ENDIANNESS_H
-#define ENDIANNESS_H
-
+#pragma once
 #include <stdint.h>
 
 #define L_ENDIAN 0
@@ -33,5 +31,3 @@ inline void swap_endian_4 (void *val)
 		((*ival <<  8) & 0x00ff0000) |
 		((*ival << 24) & 0xff000000);
 }
-
-#endif

@@ -1,6 +1,4 @@
-#ifndef __WAV_H__
-#define __WAV_H__
-
+#pragma once
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -12,5 +10,3 @@ audio_t *import_wav(const char *filename, int verbose);
 #ifdef __cplusplus
 }
 #endif
-
-#endif // __WAV_H__

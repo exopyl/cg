@@ -1,7 +1,5 @@
-#ifndef __SURFACE_IMPLICIT_DEF_H__
-#define __SURFACE_IMPLICIT_DEF_H__
-
 // These tables are used so that everything can be done in little loops that you can look at all at once
+#pragma once
 // rather than in pages and pages of unrolled code.
 
 // a2fVertexOffset lists the positions, relative to vertex0, of each of the 8 vertices of a cube
@@ -374,5 +372,3 @@ int a2iTriangleConnectionTable[256][16] =
         {0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
         {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 };
-
-#endif // __SURFACE_IMPLICIT_DEF_H__

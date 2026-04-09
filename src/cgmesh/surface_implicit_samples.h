@@ -1,6 +1,4 @@
-#ifndef __SURFACE_IMPLICIT_SAMPLES_H__
-#define __SURFACE_IMPLICIT_SAMPLES_H__
-
+#pragma once
 #include "surface_implicit.h"
 
 extern void update_time (float fnewTime);
@@ -23,8 +21,3 @@ static float (*scalar_functions[nSamples]) (float, float, float) = {fSample0,
 								    fSample5,
 								    fSample6,
 								    fSample7};
-
-
-
-#endif // __SURFACE_IMPLICIT_SAMPLES_H__
-

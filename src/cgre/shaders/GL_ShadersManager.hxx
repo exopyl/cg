@@ -1,6 +1,4 @@
-#ifndef GL_SHADERSMANAGER_HXX
-#define GL_SHADERSMANAGER_HXX
-
+#pragma once
 #include	<ViewVP/GL_Shader.h>
 
 //
@@ -69,5 +67,3 @@ public:
 	bool IsAOSupported() const;
 	bool IsSMSupported() const;
 };
-
-#endif // GL_SHADERSMANAGER_HXX

@@ -1,6 +1,4 @@
-#ifndef __NPR_STRUCTURES_H__
-#define __NPR_STRUCTURES_H__
-
+#pragma once
 #include <list>
 using namespace std;
 
@@ -23,5 +21,3 @@ public:
 };
 typedef list<NPRSegment> ListNPRSegments;
 typedef list<NPRSegment>::iterator ListNPRSegmentsIt;
-
-#endif // __NPR_STRUCTURES_H__

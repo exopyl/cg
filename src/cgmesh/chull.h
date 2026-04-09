@@ -36,9 +36,7 @@
  * for visualization.
  *
  ********************************************************************/
-#ifndef __CHULL3D_H__
-#define __CHULL3D_H__
-
+#pragma once
 class Chull3D_vertex;
 class Chull3D_edge;
 class Chull3D_face;
@@ -149,6 +147,3 @@ class Chull3D_face
   int            visible;
   Chull3D_face   *prev, *next;
 };
-
-#endif /* __CHULL3D_H__ */
-

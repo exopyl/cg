@@ -1,6 +1,4 @@
-#ifndef __TTRANSFORMATION_H__
-#define __TTRANSFORMATION_H__
-
+#pragma once
 #include "TVector4.h"
 
 #include <iostream>
@@ -202,5 +200,3 @@ public:
 typedef TTransformation<float>  Transformationf;
 typedef TTransformation<double> Transformationd;
 typedef TTransformation<float>  Transformation;
-
-#endif // __TTRANSFORMATION_H__

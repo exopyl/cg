@@ -1,6 +1,4 @@
-#ifndef __TEAPOT_DATA_H__
-#define __TEAPOT_DATA_H__
-
+#pragma once
 /*
  *  The following variables define the 3D mesh.
  *  The number of elements for vertices can be calculated
@@ -2661,5 +2659,3 @@ static int TeapotData_Face[] = {0,7,8,
 1176,1038,1039,
 1039,1177,1176
 };
-
-#endif // __TEAPOT_DATA_H__

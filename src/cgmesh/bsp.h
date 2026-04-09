@@ -1,7 +1,4 @@
-#ifndef __BSP_H__
-#define __BSP_H__
-
-//
+#pragma once
 // ftp://ftp.sgi.com/other/bspfaq/faq/bspfaq.html
 //
 
@@ -33,5 +30,3 @@ private:
 	BSP *m_pFront;
 	BSP *m_pBack;
 };
-
-#endif // __BSP_H__

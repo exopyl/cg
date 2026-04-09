@@ -1,6 +1,4 @@
-#ifndef __TVECTOR2_H__
-#define __TVECTOR2_H__
-
+#pragma once
 #include <iostream>
 using namespace std;
 
@@ -212,5 +210,3 @@ typedef TVector2<int> Vector2i;
 typedef TVector2<float> Vector2f;
 typedef TVector2<double> Vector2d;
 typedef TVector2<float> Vector2;
-
-#endif	// __TVECTOR2_H__

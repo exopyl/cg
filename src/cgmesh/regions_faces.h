@@ -1,6 +1,4 @@
-#ifndef __REGIONS_FACES_H__
-#define __REGIONS_FACES_H__
-
+#pragma once
 #include "mesh_half_edge.h"
 #include "geometric_primitives.h"
 
@@ -79,5 +77,3 @@ class Cregions_faces
   float r_selected_region, g_selected_region, b_selected_region;
   float r_common_face, g_common_face, b_common_face;
 };
-
-#endif // __REGIOND_FACES_H__

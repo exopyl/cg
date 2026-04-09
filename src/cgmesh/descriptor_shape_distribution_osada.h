@@ -1,6 +1,4 @@
-#ifndef __SHAPE_DISTRIBUTION_OSADA_H__
-#define __SHAPE_DISTRIBUTION_OSADA_H__
-
+#pragma once
 #include "mesh_half_edge.h"
 
 //
@@ -10,7 +8,7 @@
 // Proceedings of the International Conference on Shape Modeling & Applications, 2001
 //
 //
-// Choix des paramètres:
+// Choix des paramtres:
 // A3 :
 // n selected points -> 3*factorielle(n)/(6*factorielle(n-3)) samples
 // D1 :
@@ -73,5 +71,3 @@ class Cshape_distribution_osada
   float *histogram;
   int n_bins;
 };
-
-#endif /* __SHAPE_DISTRIBUTION_OSADA_H__ */

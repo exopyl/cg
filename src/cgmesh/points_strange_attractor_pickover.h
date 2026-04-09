@@ -1,6 +1,4 @@
-#ifndef __POINTS_STRANGE_ATTRACTOR_PICKOVER_H__
-#define __POINTS_STRANGE_ATTRACTOR_PICKOVER_H__
-
+#pragma once
 #include "points_strange_attractor.h"
 
 class StrangeAttractor_Pickover : public StrangeAttractor
@@ -13,5 +11,3 @@ public:
 private:
 	double a, b, c, d;
 };
-
-#endif // __POINTS_STRANGE_ATTRACTOR_PICKOVER_H__

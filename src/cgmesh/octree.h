@@ -1,6 +1,4 @@
-#ifndef __OCTREE_H__
-#define __OCTREE_H__
-
+#pragma once
 #include "../cgmath/cgmath.h"
 
 class Octree
@@ -118,5 +116,3 @@ private:
 	Octree *m_pCurrentOctree;
 };
 */
-
-#endif // __OCTREE_H__

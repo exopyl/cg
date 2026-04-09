@@ -1,6 +1,4 @@
-#ifndef __AMBIENT_OCCLUSION_H__
-#define __AMBIENT_OCCLUSION_H__
-
+#pragma once
 #include "mesh_half_edge.h"
 
 //
@@ -45,5 +43,3 @@ private:
 	float compute_occlusion (int index_receiver, int index_emitter);
 	static float clampOcclusion (float);
 };
-
-#endif // __AMBIENT_OCCLUSION_H__

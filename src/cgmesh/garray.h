@@ -1,6 +1,4 @@
-#ifndef __GARRAY2_H__
-#define __GARRAY2_H__
-
+#pragma once
 class Cgarray
 {
  public:
@@ -21,5 +19,3 @@ class Cgarray
   int   size_max;
   void  **data;
 };
-
-#endif // __GARRAY_H__

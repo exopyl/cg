@@ -1,6 +1,4 @@
-#ifndef __NORMALS_H__
-#define __NORMALS_H__
-
+#pragma once
 #include "mesh_half_edge.h"
 
 //
@@ -33,5 +31,3 @@ enum MethodId {
 
 private:
 };
-
-#endif // __NORMALS

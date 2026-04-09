@@ -1,6 +1,4 @@
-#ifndef __TOPOLOGY_H__
-#define __TOPOLOGY_H__
-
+#pragma once
 #include "../cgmath/cgmath.h"
 
 extern void create_indexation(vec3 *pTriangles, unsigned int nPoints,
@@ -9,5 +7,3 @@ extern void create_indexation(vec3 *pTriangles, unsigned int nPoints,
 			      const vec3 *pNormal, double dNormalEpsilon);
 
 extern void remove_unused_vertices (vec3 **pVertices, unsigned int *nVerticesNew, unsigned int **pIndexation, unsigned int nFaces);
-
-#endif //  __TOPOLOGY_H__

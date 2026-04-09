@@ -1,6 +1,4 @@
-#ifndef __SMOOTHING_LAPLACIAN_H__
-#define __SMOOTHING_LAPLACIAN_H__
-
+#pragma once
 #include "mesh_half_edge.h"
 
 //
@@ -14,5 +12,3 @@ public:
 
 	bool Apply (Mesh_half_edge *model);
 };
-
-#endif // __SMOOTHING_LAPLACIAN_H__

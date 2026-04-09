@@ -1,6 +1,2 @@
-#ifndef __NPR_H__
-#define __NPR_H__
-
+#pragma once
 #include "NPRManager.h"
-
-#endif // __NPR_H__

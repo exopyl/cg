@@ -1,6 +1,4 @@
-#ifndef __RAY_H__
-#define __RAY_H__
-
+#pragma once
 #include "TVector3.h"
 
 class Ray {
@@ -40,5 +38,3 @@ public:
 	Vector3 inv_direction;
 	int sign[3];
 };
-
-#endif // __RAY_H__

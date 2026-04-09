@@ -1,6 +1,4 @@
-#ifndef __SMOOTHING_TAUBIN_H__
-#define __SMOOTHING_TAUBIN_H__
-
+#pragma once
 #include "mesh_half_edge.h"
 
 //
@@ -17,5 +15,3 @@ public:
 private:
 	bool ApplyCoefficient (Mesh_half_edge *model, float coeff);
 };
-
-#endif // __SMOOTHING_TAUBIN_H__

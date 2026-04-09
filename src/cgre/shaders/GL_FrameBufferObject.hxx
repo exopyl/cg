@@ -1,6 +1,4 @@
-#ifndef GL_FRAME_BUFFER_OBJECT_HXX
-#define GL_FRAME_BUFFER_OBJECT_HXX
-
+#pragma once
 #include <Win32_GL_utils/GL.hxx>
 #include <Win32_GL_utils/GL_PBuffer.hxx>
 #include <utils/ChaineInc.hxx>
@@ -57,5 +55,3 @@ private:
 
 friend class GL_FrameBufferObjectTest;
 };
-
-#endif // GL_FRAME_BUFFER_OBJECT_HXX

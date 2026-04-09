@@ -1,6 +1,4 @@
-#ifndef __T_PROJECTION_MATRIX4_H__
-#define __T_PROJECTION_MATRIX4_H__
-
+#pragma once
 #include "TMatrix4.h"
 #include "TVector4.h"
 
@@ -310,5 +308,3 @@ public:
 
 	TMatrix4<TValue> m_Mat;
 }
-
-#endif // __T_PROJECTION_MATRIX4_H__

@@ -1,7 +1,4 @@
-#ifndef __DEFORMER_ARAP_H__
-#define __DEFORMER_ARAP_H__
-
-//
+#pragma once
 // "As-Rigid-As-Possible Surface Modeling"
 // Olga Sorkine, Marc Alexa, SGP 2007
 // http://sites.fas.harvard.edu/~cs277/papers/sorkine_asrigid.pdf
@@ -70,5 +67,3 @@ private:
 };
 
 #endif// USE_EIGEN
-
-#endif // __DEFORMER_ARAP_H__

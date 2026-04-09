@@ -11,9 +11,7 @@
 * -----------------------------------------------------------------------------
 */
 
-#ifndef NBT_H
-#define NBT_H
-
+#pragma once
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -185,4 +183,3 @@ int nbt_new_compound(nbt_tag **d, const char *name);
 
 #endif
 #endif // WIN32
-#endif // ZLIB

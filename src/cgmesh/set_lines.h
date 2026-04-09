@@ -1,6 +1,4 @@
-#ifndef __SET_LINES_H__
-#define __SET_LINES_H__
-
+#pragma once
 #include "mesh_half_edge.h"
 #include "extracted_line.h"
 
@@ -70,5 +68,3 @@ class Cset_lines
   Cextracted_line **extracted_lines;
   float *colors;
 };
-
-#endif /* __SET_LINES_H__ */

@@ -1,5 +1,4 @@
-#ifndef __PAIR_H__
-#define __PAIR_H__
+#pragma once
 /*
 #define GEN_T template <class T>
 #define PAIR pair<T>
@@ -49,4 +48,3 @@ GEN_T PAIR::secondt (void) const
 #undef GEN_T
 #undef PAIR
 */
-#endif // __PAIR_H__

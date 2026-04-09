@@ -1,6 +1,4 @@
-#ifndef __BACKGROUND_MANAGER_H__
-#define __BACKGROUND_MANAGER_H__
-
+#pragma once
 #include "skybox.h"
 
 class BackgroundManager
@@ -30,5 +28,3 @@ private:
 	void DrawGradient (float rtop, float gtop, float btop, float rbottom, float gbottom, float bbottom);
 	void DrawSkybox (void);
 };
-
-#endif // __BACKGROUND_MANAGER_H__

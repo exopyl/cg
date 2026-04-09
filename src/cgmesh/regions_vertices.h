@@ -1,6 +1,4 @@
-#ifndef __REGIONS_VERTICES_H__
-#define __REGIONS_VERTICES_H__
-
+#pragma once
 #include "mesh_half_edge.h"
 
 #define ACCESSIBILITY_RIDGES  1
@@ -176,5 +174,3 @@ class Cregions_vertices
   float r_selected_region, g_selected_region, b_selected_region;
   float r_common_vertex, g_common_vertex, b_common_vertex;
 };
-
-#endif // __REGIONS_VERTICES_H__

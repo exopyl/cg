@@ -1,6 +1,4 @@
-#ifndef __VOXELS_H__
-#define __VOXELS_H__
-
+#pragma once
 #include "../cgimg/cgimg.h"
 
 //
@@ -81,5 +79,3 @@ protected:
 	unsigned int m_nx, m_ny, m_nz;
 	Palette *m_pPalette;
 };
-
-#endif // __VOXELS_H__

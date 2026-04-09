@@ -1,6 +1,4 @@
-#ifndef __DIFF_PARAM_EVALUATOR_H__
-#define __DIFF_PARAM_EVALUATOR_H__
-
+#pragma once
 #include "mesh_half_edge.h"
 
 //
@@ -74,5 +72,3 @@ private:
 	int m_nDiffParams;
 	Tensor **m_pDiffParams;
 };
-
-#endif // __DIFF_PARAM_EVALUATOR_H__

@@ -1,6 +1,4 @@
-#ifndef __STRANGE_ATTRACTOR_H__
-#define __STRANGE_ATTRACTOR_H__
-
+#pragma once
 #include <stdio.h>
 
 class StrangeAttractor
@@ -27,5 +25,3 @@ protected:
 
 	double x, y, z;
 };
-
-#endif // __STRANGE_ATTRACTOR_H__

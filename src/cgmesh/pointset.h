@@ -1,6 +1,4 @@
-#ifndef __POINTSET_H__
-#define __POINTSET_H__
-
+#pragma once
 /**
 * PointSet
 */
@@ -25,6 +23,3 @@ protected:
 	float* m_pNormals;
 	float* m_pColors;
 };
-
-#endif // __POINTSET_H__
-

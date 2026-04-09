@@ -1,6 +1,4 @@
-#ifndef __POLYGON2_H__
-#define __POLYGON2_H__
-
+#pragma once
 #define SIGNATURE_DEVIATION 0
 #define SIGNATURE_CURVATURE 1
 #define SIGNATURE_BOUTIN    2
@@ -105,6 +103,3 @@ public:
 	unsigned int *m_nPoints;
 	float **m_pPoints;
 };
-
-
-#endif // __POLYGON2_H__

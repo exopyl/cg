@@ -6,9 +6,7 @@
 //
 /*****************************************************************************/
 
-#ifndef _STRUCTURES_3DS_HEADER_
-#define _STRUCTURES_3DS_HEADER_
-
+#pragma once
 #include <vector>
 using namespace std;
 
@@ -323,5 +321,3 @@ typedef struct _t3DSModel_
 
 // dump the content of the 3DS structure
 extern void Dump3DSFile (t3DSModel *pModel, char* pFilename);
-
-#endif	// _STRUCTURES_3DS_HEADER_

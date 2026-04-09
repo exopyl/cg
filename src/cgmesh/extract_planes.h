@@ -1,6 +1,4 @@
-#ifndef __EXTRACT_PLANES_H__
-#define __EXTRACT_PLANES_H__
-
+#pragma once
 #include "../cgmath/cgmath.h"
 #include "mesh_half_edge.h"
 #include "geometric_primitives.h"
@@ -22,5 +20,3 @@ private:
 	int n_planes;
 	VectorizedPlane **planes;
 };
-
-#endif // __EXTRACT_PLANES_H__

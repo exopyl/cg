@@ -1,6 +1,4 @@
-#ifndef __MESH_ORIENTATION_H__
-#define __MESH_ORIENTATION_H__
-
+#pragma once
 #include "mesh_half_edge.h"
 
 class Cmesh_orientation
@@ -24,5 +22,3 @@ class Cmesh_orientation
   float center[3];
   float mrot[9];
 };
-
-#endif // __MESH_ORIENTATION_H__

@@ -1,7 +1,4 @@
-#ifndef __QUEUE_H__
-#define __QUEUE_H__
-
-// Queue class -- array implementation
+#pragma once
 //
 // CONSTRUCTION: with or without a capacity; default is 10
 //
@@ -34,5 +31,3 @@ class Queue
     int  front;
     int  back;
 };
-
-#endif /* __QUEUE_H__ */

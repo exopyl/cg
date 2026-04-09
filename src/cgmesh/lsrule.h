@@ -1,7 +1,4 @@
-#ifndef __LSRULE_H__
-#define __LSRULE_H__
-
-//
+#pragma once
 // Rule
 //
 class LSRule
@@ -17,6 +14,3 @@ public:
 	char *m_antecedent;
 	char *m_image;
 };
-
-
-#endif // __LSRULE_H__
