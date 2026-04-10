@@ -41,7 +41,7 @@ class Cset_lines
   /* merge close lines */
   void merge_close_lines            (float cos_angle_max, float d_max);
   void merge_close_lines_mean_shift (float hd, float hp, Vector3 ***pos_histo, Vector3 ***dir_histo, int *n_ite);
-  void merge_close_lines_pluecker   (float cos_angle_max, float d_max);
+  //void merge_close_lines_pluecker   (float cos_angle_max, float d_max);
 
   /* adjust begin and end to fit on the concerned vertices */
   void compute_extremities (void);

@@ -64,7 +64,8 @@ Polygon2::~Polygon2 ()
 	if (m_pPoints)
 	{
 		for (int i=0; i<m_nContours; i++)
-			free (m_pPoints[i]);
+			if (m_pPoints[i])
+				free (m_pPoints[i]);
 		free (m_pPoints);
 	}
 	if (m_nPoints)
@@ -105,6 +106,7 @@ void Polygon2::input (Polygon2 *p, int interpolation_type, int _n)
 	int   nPoints  = p->m_nPoints[0];
 	float *pPoints = p->m_pPoints[0];
 	m_nContours = nContours;
+	m_nPoints = (unsigned int*)malloc(m_nContours * sizeof(unsigned int));
 	m_pPoints = (float**) malloc (m_nContours*sizeof(float*));
 	m_pPoints[0] = (float*)malloc(2*nPoints*sizeof(float));
 	float l = p->length (interpolation_type);
@@ -142,6 +144,7 @@ void Polygon2::input (Polygon2 *p, int interpolation_type, int _n)
 			}
 			lr += ls - n_pts*lm;
 		}
+		m_nPoints[0] = i;
 	}
 	break;
 	default:

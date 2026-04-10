@@ -222,16 +222,6 @@ TEST(TEST_cgmesh_shapes, append)
 	res->save ("./shapes_append.obj");
 }
 
-TEST(TEST_cgmesh_shapes, fractal_surface)
-{
-	printf ("------------------\n");
-	printf ("Surfaces : fractal\n");
-	printf ("------------------\n");
-	Mesh *menger = CreateMengerSponge (2);
-	menger->save ((char*)"./shapes_menger.obj");
-	delete menger;
-}
-
 TEST(TEST_cgmesh_shapes, strange_attractors)
 {
 	printf ("---------------------------\n");

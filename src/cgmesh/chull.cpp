@@ -104,7 +104,7 @@ Chull3D::get_convex_hull (float **v, int *nv, int **f, int *nf)
     {
       v = NULL; f = NULL;
       *nv = *nf = 0;
-      return 0;
+      return 1;
     }
   
   /* vertices */
@@ -132,7 +132,7 @@ Chull3D::get_convex_hull (float **v, int *nv, int **f, int *nf)
   *v = cv_vertices;
   *f = cv_faces;
 
-  return 1;
+  return 0;
 }
 
 int Chull3D::get_convex_hull_indices (int **v, int *nv)
@@ -143,7 +143,7 @@ int Chull3D::get_convex_hull_indices (int **v, int *nv)
   int *cv_vertices = (int*)malloc(3*(*nv)*sizeof(int));
   if (!cv_vertices)
     {
-      return 0;
+      return 1;
     }
   
   // vertices
@@ -155,6 +155,8 @@ int Chull3D::get_convex_hull_indices (int **v, int *nv)
     i++;
   } while (v_walk != vertices);
   *v = cv_vertices;
+
+  return 0;
 }
 
 void

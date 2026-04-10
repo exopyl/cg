@@ -9,6 +9,8 @@
 #include "mesh_nm.h"
 #include "vmeshes.h"
 
+#include "glutess/glutess.h"
+
 // polygon
 #include "polygon2.h"
 
@@ -21,11 +23,7 @@
 #include "surface_implicit.h"
 #include "surface_implicit_tandem.h"
 #include "surface_implicit_samples.h"
-#include "surface_fractal.h"
 #include "surface_architecture.h"
-
-// tesselator
-#include "tesselator.h"
 
 // convex hull
 #include "chull.h"
@@ -40,7 +38,6 @@
 #include "nbt.h"
 
 // images
-#include "../cgimg/cgimg.h"
 #include "image_vectorization.h"
 
 // audio

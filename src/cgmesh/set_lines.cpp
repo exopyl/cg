@@ -335,7 +335,7 @@ Cset_lines::merge_close_lines_mean_shift (float hd, float hp,
   delete[] directions;
 }
 
-#ifdef AAA
+#if 0
 void
 Cset_lines::merge_close_lines_pluecker (float cos_angle_max, float d_max)
 {
