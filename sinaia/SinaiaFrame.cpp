@@ -82,6 +82,28 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_GEOMETRY_NEW_TEAPOT, MyFrame::OnNewGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_KLEIN_BOTTLE, MyFrame::OnNewGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_CUBE, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_SPHERE, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_CYLINDER, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_CONE, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_CAPSULE, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_TORUS, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_KLEIN_BOTTLE, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_HELICOID, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_SEASHELL, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_SEASHELL_VON_SEGGERN, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_CORKSCREW, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_MOBIUS_STRIP, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_RADIAL_WAVE, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_BREATHER, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_HYPERBOLIC_PARABOLOID, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_MONKEY_SADDLE, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_BLOBS, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_DROP, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_GUIMARD, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_TORUS_KNOT, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_CINQUEFOIL_KNOT, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_TREFOIL_KNOT, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_BORROMEAN_RINGS, MyFrame::OnNewParameterizedGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE, MyFrame::OnNewParameterizedGeometry)
     EVT_MENU(wxID_EXIT, MyFrame::OnExit)
     EVT_MENU(wxID_ABOUT, MyFrame::OnAbout)
@@ -244,12 +266,40 @@ MyFrame::MyFrame(wxWindow* parent,
     // Parameterized shapes -- live-edited via the Parameters panel
     wxMenu* basic_shapes_menu = new wxMenu;
     basic_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_CUBE, wxT("Cube..."));
+    basic_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_SPHERE, wxT("Sphere..."));
+    basic_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_CYLINDER, wxT("Cylinder..."));
+    basic_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_CONE, wxT("Cone..."));
+    basic_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_CAPSULE, wxT("Capsule..."));
+    basic_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_TORUS, wxT("Torus..."));
+
+    wxMenu* parametric_surfaces_menu = new wxMenu;
+    parametric_surfaces_menu->Append(ID_GEOMETRY_NEW_PARAM_KLEIN_BOTTLE, wxT("Klein Bottle..."));
+    parametric_surfaces_menu->Append(ID_GEOMETRY_NEW_PARAM_HELICOID, wxT("Helicoid..."));
+    parametric_surfaces_menu->Append(ID_GEOMETRY_NEW_PARAM_SEASHELL, wxT("Seashell..."));
+    parametric_surfaces_menu->Append(ID_GEOMETRY_NEW_PARAM_SEASHELL_VON_SEGGERN, wxT("Seashell (von Seggern)..."));
+    parametric_surfaces_menu->Append(ID_GEOMETRY_NEW_PARAM_CORKSCREW, wxT("Corkscrew..."));
+    parametric_surfaces_menu->Append(ID_GEOMETRY_NEW_PARAM_MOBIUS_STRIP, wxT("Mobius Strip..."));
+    parametric_surfaces_menu->Append(ID_GEOMETRY_NEW_PARAM_RADIAL_WAVE, wxT("Radial Wave..."));
+    parametric_surfaces_menu->Append(ID_GEOMETRY_NEW_PARAM_BREATHER, wxT("Breather..."));
+    parametric_surfaces_menu->Append(ID_GEOMETRY_NEW_PARAM_HYPERBOLIC_PARABOLOID, wxT("Hyperbolic Paraboloid..."));
+    parametric_surfaces_menu->Append(ID_GEOMETRY_NEW_PARAM_MONKEY_SADDLE, wxT("Monkey Saddle..."));
+    parametric_surfaces_menu->Append(ID_GEOMETRY_NEW_PARAM_BLOBS, wxT("Blobs..."));
+    parametric_surfaces_menu->Append(ID_GEOMETRY_NEW_PARAM_DROP, wxT("Drop..."));
+    parametric_surfaces_menu->Append(ID_GEOMETRY_NEW_PARAM_GUIMARD, wxT("Guimard..."));
+
+    wxMenu* knots_menu = new wxMenu;
+    knots_menu->Append(ID_GEOMETRY_NEW_PARAM_TORUS_KNOT, wxT("Torus Knot..."));
+    knots_menu->Append(ID_GEOMETRY_NEW_PARAM_CINQUEFOIL_KNOT, wxT("Cinquefoil Knot..."));
+    knots_menu->Append(ID_GEOMETRY_NEW_PARAM_TREFOIL_KNOT, wxT("Trefoil Knot..."));
+    knots_menu->Append(ID_GEOMETRY_NEW_PARAM_BORROMEAN_RINGS, wxT("Borromean Rings..."));
 
     wxMenu* fractal_shapes_menu = new wxMenu;
     fractal_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE, wxT("Menger Sponge..."));
 
     wxMenu* create_menu = new wxMenu;
     create_menu->AppendSubMenu(basic_shapes_menu, wxT("Basic Shapes"));
+    create_menu->AppendSubMenu(parametric_surfaces_menu, wxT("Parametric Surfaces"));
+    create_menu->AppendSubMenu(knots_menu, wxT("Knots"));
     create_menu->AppendSubMenu(fractal_shapes_menu, wxT("Fractal Shapes"));
 
     wxMenu* geometry_menu = new wxMenu;
@@ -1279,21 +1329,40 @@ void MyFrame::OnNewParameterizedGeometry(wxCommandEvent& event)
 	std::unique_ptr<IParameterized> pParam;
 	wxString title;
 
+	#define CASE(ID, ClassName, Label) \
+		case ID: pParam = std::make_unique<ClassName>(); title = wxT(Label); break
+
 	switch (event.GetId())
 	{
-	case ID_GEOMETRY_NEW_PARAM_CUBE:
-		pParam = std::make_unique<ParameterizedCube>();
-		title = wxT("cube (parametric)");
-		break;
-
-	case ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE:
-		pParam = std::make_unique<ParameterizedMengerSponge>();
-		title = wxT("menger sponge (parametric)");
-		break;
-
+	CASE(ID_GEOMETRY_NEW_PARAM_CUBE,                  ParameterizedCube,                  "cube");
+	CASE(ID_GEOMETRY_NEW_PARAM_SPHERE,                ParameterizedSphere,                "sphere");
+	CASE(ID_GEOMETRY_NEW_PARAM_CYLINDER,              ParameterizedCylinder,              "cylinder");
+	CASE(ID_GEOMETRY_NEW_PARAM_CONE,                  ParameterizedCone,                  "cone");
+	CASE(ID_GEOMETRY_NEW_PARAM_CAPSULE,               ParameterizedCapsule,               "capsule");
+	CASE(ID_GEOMETRY_NEW_PARAM_TORUS,                 ParameterizedTorus,                 "torus");
+	CASE(ID_GEOMETRY_NEW_PARAM_KLEIN_BOTTLE,          ParameterizedKleinBottle,           "klein bottle");
+	CASE(ID_GEOMETRY_NEW_PARAM_HELICOID,              ParameterizedHelicoid,              "helicoid");
+	CASE(ID_GEOMETRY_NEW_PARAM_SEASHELL,              ParameterizedSeashell,              "seashell");
+	CASE(ID_GEOMETRY_NEW_PARAM_SEASHELL_VON_SEGGERN,  ParameterizedSeashellVonSeggern,    "seashell (von Seggern)");
+	CASE(ID_GEOMETRY_NEW_PARAM_CORKSCREW,             ParameterizedCorkscrew,             "corkscrew");
+	CASE(ID_GEOMETRY_NEW_PARAM_MOBIUS_STRIP,          ParameterizedMobiusStrip,           "mobius strip");
+	CASE(ID_GEOMETRY_NEW_PARAM_RADIAL_WAVE,           ParameterizedRadialWave,            "radial wave");
+	CASE(ID_GEOMETRY_NEW_PARAM_BREATHER,              ParameterizedBreather,              "breather");
+	CASE(ID_GEOMETRY_NEW_PARAM_HYPERBOLIC_PARABOLOID, ParameterizedHyperbolicParaboloid,  "hyperbolic paraboloid");
+	CASE(ID_GEOMETRY_NEW_PARAM_MONKEY_SADDLE,         ParameterizedMonkeySaddle,          "monkey saddle");
+	CASE(ID_GEOMETRY_NEW_PARAM_BLOBS,                 ParameterizedBlobs,                 "blobs");
+	CASE(ID_GEOMETRY_NEW_PARAM_DROP,                  ParameterizedDrop,                  "drop");
+	CASE(ID_GEOMETRY_NEW_PARAM_GUIMARD,               ParameterizedGuimard,               "guimard");
+	CASE(ID_GEOMETRY_NEW_PARAM_TORUS_KNOT,            ParameterizedTorusKnot,             "torus knot");
+	CASE(ID_GEOMETRY_NEW_PARAM_CINQUEFOIL_KNOT,       ParameterizedCinquefoilKnot,        "cinquefoil knot");
+	CASE(ID_GEOMETRY_NEW_PARAM_TREFOIL_KNOT,          ParameterizedTrefoilKnot,           "trefoil knot");
+	CASE(ID_GEOMETRY_NEW_PARAM_BORROMEAN_RINGS,       ParameterizedBorromeanRings,        "borromean rings");
+	CASE(ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE,         ParameterizedMengerSponge,          "menger sponge");
 	default:
 		return;
 	}
+
+	#undef CASE
 
 	// Build the render tab: take the initial mesh (if the object produces
 	// one) and install it in a fresh VMeshes on a new GL canvas.
