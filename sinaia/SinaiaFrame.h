@@ -8,9 +8,14 @@
 #include "wx/spinctrl.h"
 #include "wx/listbase.h"
 
+#include <memory>
+#include <unordered_map>
+
 class wxPropertyGrid;
 class wxGenericDirCtrl;
 class wxListCtrl;
+class PropertyPanel;
+class IParameterized;
 
 //
 //
@@ -86,6 +91,8 @@ class MyFrame : public wxFrame
 	ID_GEOMETRY_NEW_CYLINDER,
 	ID_GEOMETRY_NEW_TEAPOT,
 	ID_GEOMETRY_NEW_KLEIN_BOTTLE,
+	ID_GEOMETRY_NEW_PARAM_CUBE,
+	ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE,
 	ID_GEOMETRY_CUBE,
 	ID_GEOMETRY_SPHERE,
 	ID_GEOMETRY_SPHERE_LAT,
@@ -163,6 +170,8 @@ private:
     void OnSave(wxCommandEvent& evt);
     void OnSaveAs(wxCommandEvent& evt);
     void OnNewGeometry(wxCommandEvent& evt);
+    void OnNewParameterizedGeometry(wxCommandEvent& evt);
+    void OnParameterChanged();
     void OnExit(wxCommandEvent& evt);
     void OnAbout(wxCommandEvent& evt);
     void OnTabAlignment(wxCommandEvent &evt);
@@ -240,6 +249,11 @@ private:
 
     long m_notebook_style;
     long m_notebook_theme;
+
+    // Parameterized geometry: the panel shows the params of the object
+    // associated with the currently active tab. One entry per tab.
+    PropertyPanel* m_pParamPanel = nullptr;
+    std::unordered_map<MyGLCanvas*, std::unique_ptr<IParameterized>> m_paramByCanvas;
 
     //
     wxPropertyGrid* m_propertiesGrid = nullptr;

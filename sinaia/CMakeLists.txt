@@ -15,6 +15,7 @@ include_directories(../src/cgre)
 set(srcs
         DrawingArea.cpp
         Managers.cpp
+        PropertyPanel.cpp
         SettingsPanel.cpp
         SinaiaApp.cpp
         SinaiaFrame.cpp

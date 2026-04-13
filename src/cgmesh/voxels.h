@@ -1,6 +1,8 @@
 #pragma once
 #include "../cgimg/cgimg.h"
 
+class Mesh;
+
 //
 //
 //
@@ -70,6 +72,12 @@ public:
 	int export_slice_YZ (char *filename, unsigned int islice);
 	int export_slice_XZ (char *filename, unsigned int islice);
 	int triangulate (char *filename);
+
+	// Triangulate the activated voxels into a newly-allocated Mesh.
+	// Caller takes ownership of the returned pointer.
+	// Pure geometry (no textures / materials) -- see triangulate(filename)
+	// for the OBJ export with textures and materials.
+	Mesh* ToMesh (void);
 	
 	int export_cubes (char *filename);
 	int export_palette_to_mtl (char *mtlfile);

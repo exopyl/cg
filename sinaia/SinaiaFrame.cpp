@@ -22,11 +22,13 @@
 #include "wxOpenGLCanvas.h"
 //#include "DrawingArea.h"
 #include "SettingsPanel.h"
+#include "PropertyPanel.h"
 
 #include "../src/cgmesh/smoothing_taubin.h"
 #include "../src/cgmesh/smoothing_laplacian.h"
 #include "../src/cgmesh/DiffParamEvaluator.h"
 #include "../src/cgmesh/mesh_data_manager.h"
+#include "../src/cgmesh/parameterized_shapes.h"
 
 // control ids
 enum
@@ -79,6 +81,8 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_GEOMETRY_NEW_CYLINDER, MyFrame::OnNewGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_TEAPOT, MyFrame::OnNewGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_KLEIN_BOTTLE, MyFrame::OnNewGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_CUBE, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE, MyFrame::OnNewParameterizedGeometry)
     EVT_MENU(wxID_EXIT, MyFrame::OnExit)
     EVT_MENU(wxID_ABOUT, MyFrame::OnAbout)
     EVT_MENU(ID_3D_FILL, MyFrame::On3DFill)
@@ -237,8 +241,20 @@ MyFrame::MyFrame(wxWindow* parent,
     new_geometry_menu->Append(ID_GEOMETRY_NEW_TEAPOT, wxT("Teapot"));
     new_geometry_menu->Append(ID_GEOMETRY_NEW_KLEIN_BOTTLE, wxT("Klein bottle"));
 
+    // Parameterized shapes -- live-edited via the Parameters panel
+    wxMenu* basic_shapes_menu = new wxMenu;
+    basic_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_CUBE, wxT("Cube..."));
+
+    wxMenu* fractal_shapes_menu = new wxMenu;
+    fractal_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE, wxT("Menger Sponge..."));
+
+    wxMenu* create_menu = new wxMenu;
+    create_menu->AppendSubMenu(basic_shapes_menu, wxT("Basic Shapes"));
+    create_menu->AppendSubMenu(fractal_shapes_menu, wxT("Fractal Shapes"));
+
     wxMenu* geometry_menu = new wxMenu;
     geometry_menu->AppendSubMenu(new_geometry_menu, wxT("New"));
+    geometry_menu->AppendSubMenu(create_menu, wxT("Create"));
 
     wxMenu* options_menu = new wxMenu;
 
@@ -467,6 +483,11 @@ MyFrame::MyFrame(wxWindow* parent,
     }
 
     m_mgr.AddPane(m_propertiesGrid, wxAuiPaneInfo().Name(wxT("Properties")).Caption(wxT("Properties")).Right().BestSize(250, -1).MinSize(200, -1));
+
+    // Parameters panel: live-edits the active parameterized geometry
+    m_pParamPanel = new PropertyPanel(this);
+    m_pParamPanel->SetOnChanged([this]() { this->OnParameterChanged(); });
+    m_mgr.AddPane(m_pParamPanel, wxAuiPaneInfo().Name(wxT("Parameters")).Caption(wxT("Parameters")).Right().BestSize(250, -1).MinSize(200, -1));
 
 
     m_hierarchyMeshes = CreateHierarchyMeshesTreeCtrl();
@@ -977,6 +998,14 @@ void MyFrame::OnNotebookPageChanged(wxAuiNotebookEvent& event)
         if (p) p->SetSticky(pGLCanvas->GetClippingPlane());
 
         m_pToolBar2->Refresh();
+
+        // Re-bind the Parameters panel to the parameterized object
+        // associated with the newly active tab, if any.
+        if (m_pParamPanel)
+        {
+            auto it = m_paramByCanvas.find(pGLCanvas);
+            m_pParamPanel->Bind(it != m_paramByCanvas.end() ? it->second.get() : nullptr);
+        }
     }
     UpdatePropertiesGrid();
 }
@@ -1238,6 +1267,83 @@ void MyFrame::OnNewGeometry(wxCommandEvent& event)
 	m_pCtrl->AddPage(pGLCanvas, title, true);
 
 	UpdatePropertiesGrid();
+}
+
+//
+// Create a parameterized geometry: bind it to the Parameters panel and
+// render it in a new tab. Editing a parameter in the panel triggers
+// Regenerate() and refreshes the view.
+//
+void MyFrame::OnNewParameterizedGeometry(wxCommandEvent& event)
+{
+	std::unique_ptr<IParameterized> pParam;
+	wxString title;
+
+	switch (event.GetId())
+	{
+	case ID_GEOMETRY_NEW_PARAM_CUBE:
+		pParam = std::make_unique<ParameterizedCube>();
+		title = wxT("cube (parametric)");
+		break;
+
+	case ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE:
+		pParam = std::make_unique<ParameterizedMengerSponge>();
+		title = wxT("menger sponge (parametric)");
+		break;
+
+	default:
+		return;
+	}
+
+	// Build the render tab: take the initial mesh (if the object produces
+	// one) and install it in a fresh VMeshes on a new GL canvas.
+	Mesh *pMesh = pParam->TakeMesh();
+
+	MyGLCanvas *pCanvas = new MyGLCanvas(m_pCtrl, m_pWndLogging,
+	                                     (int*)MyGLCanvas::GetDefaultAttributes());
+	auto *pVMeshes = new VMeshes();
+	if (pMesh)
+		pVMeshes->AddMesh(pMesh);
+	pCanvas->SetVMeshes(pVMeshes);
+	m_pCtrl->AddPage(pCanvas, title, true);
+
+	// Register the canvas -> param association and bind the panel.
+	// Page-changed events fired by AddPage will also call Bind, but we
+	// re-bind explicitly to cover the case of adding into an empty notebook.
+	IParameterized *pRaw = pParam.get();
+	m_paramByCanvas[pCanvas] = std::move(pParam);
+	m_pParamPanel->Bind(pRaw);
+
+	UpdatePropertiesGrid();
+}
+
+//
+// Called by PropertyPanel after a parameter edit has triggered
+// IParameterized::Regenerate(). Builds a fresh VMeshes around the newly
+// generated mesh and installs it on the active canvas. SetVMeshes()
+// deletes the previous VMeshes, normalizes the new mesh (bbox, translate,
+// scale) and refreshes the GL view.
+//
+void MyFrame::OnParameterChanged()
+{
+	int sel = m_pCtrl->GetSelection();
+	if (sel < 0)
+		return;
+	MyGLCanvas *pCanvas = (MyGLCanvas*)m_pCtrl->GetPage(sel);
+	if (!pCanvas)
+		return;
+
+	auto it = m_paramByCanvas.find(pCanvas);
+	if (it == m_paramByCanvas.end())
+		return;
+
+	Mesh *pNewMesh = it->second->TakeMesh();
+	if (!pNewMesh)
+		return;  // param object does not produce a mesh (e.g. Menger sponge)
+
+	auto *pNewVMeshes = new VMeshes();
+	pNewVMeshes->AddMesh(pNewMesh);
+	pCanvas->SetVMeshes(pNewVMeshes);  // deletes old VMeshes, normalizes, refreshes
 }
 
 //

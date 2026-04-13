@@ -6,6 +6,7 @@
 #include <math.h>
 
 #include "../cgimg/cgimg.h"
+#include "mesh.h"
 #include "voxels_minecraft.h"
 
 //
@@ -1119,8 +1120,147 @@ int Voxels::triangulate (char *filename)
 	return 0;
 }
 
+//
+// Triangulate the activated voxels into an in-memory Mesh.
+// For each activated voxel, emit 2 triangles per face that borders an
+// inactive voxel or the grid boundary. Unused vertices are compacted out.
+//
+// This is the pure-geometry counterpart of triangulate(filename), which
+// additionally emits texture coordinates and materials to an OBJ file.
+//
+Mesh* Voxels::ToMesh (void)
+{
+	unsigned int nx = m_nx;
+	unsigned int ny = m_ny;
+	unsigned int nz = m_nz;
+	if (nx == 0 || ny == 0 || nz == 0)
+		return NULL;
 
+	float xmin = 0.f, xmax = (float)nx;
+	float ymin = 0.f, ymax = (float)ny;
+	float zmin = 0.f, zmax = (float)nz;
 
+	// grid of (nx+1)*(ny+1)*(nz+1) vertex positions
+	unsigned int nv = (nx + 1) * (ny + 1) * (nz + 1);
+	float *v = (float*)malloc(3 * nv * sizeof(float));
+	for (unsigned int i = 0; i <= nx; i++)
+	for (unsigned int j = 0; j <= ny; j++)
+	for (unsigned int k = 0; k <= nz; k++)
+	{
+		unsigned int idx = (nx + 1) * (ny + 1) * k + (ny + 1) * j + i;
+		v[3 * idx]     = xmin + i * (xmax - xmin) / nx;
+		v[3 * idx + 1] = ymin + j * (ymax - ymin) / ny;
+		v[3 * idx + 2] = zmin + k * (zmax - zmin) / nz;
+	}
+
+	// upper bound on triangle count: 6 faces per voxel * 2 triangles
+	unsigned int maxFaces = 12 * nx * ny * nz;
+	int *f = (int*)malloc(3 * maxFaces * sizeof(int));
+	unsigned int nf = 0;
+
+	// helper: emit two triangles from a quad (i1,i2,i3,i4), with
+	// `flipped` controlling winding orientation
+	auto emitQuad = [&](unsigned int i1, unsigned int i2, unsigned int i3, unsigned int i4, bool flipped) {
+		if (!flipped)
+		{
+			f[3*nf]     = (int)i1; f[3*nf+1] = (int)i3; f[3*nf+2] = (int)i2;
+			f[3*(nf+1)] = (int)i2; f[3*(nf+1)+1] = (int)i3; f[3*(nf+1)+2] = (int)i4;
+		}
+		else
+		{
+			f[3*nf]     = (int)i1; f[3*nf+1] = (int)i2; f[3*nf+2] = (int)i3;
+			f[3*(nf+1)] = (int)i3; f[3*(nf+1)+1] = (int)i2; f[3*(nf+1)+2] = (int)i4;
+		}
+		nf += 2;
+	};
+
+	auto vIndex = [nx, ny](unsigned int i, unsigned int j, unsigned int k) {
+		return (nx + 1) * (ny + 1) * k + (ny + 1) * j + i;
+	};
+
+	for (unsigned int i = 0; i < nx; i++)
+	for (unsigned int j = 0; j < ny; j++)
+	for (unsigned int k = 0; k < nz; k++)
+	{
+		if (!m_pVoxels[i][j][k].m_bActivated)
+			continue;
+
+		// -X face
+		if (i == 0 || !m_pVoxels[i-1][j][k].m_bActivated)
+			emitQuad(vIndex(i, j, k),     vIndex(i, j+1, k),
+			         vIndex(i, j, k+1),   vIndex(i, j+1, k+1), false);
+
+		// +X face
+		if (i == nx-1 || !m_pVoxels[i+1][j][k].m_bActivated)
+			emitQuad(vIndex(i+1, j, k),   vIndex(i+1, j+1, k),
+			         vIndex(i+1, j, k+1), vIndex(i+1, j+1, k+1), true);
+
+		// -Y face
+		if (j == 0 || !m_pVoxels[i][j-1][k].m_bActivated)
+			emitQuad(vIndex(i, j, k),     vIndex(i+1, j, k),
+			         vIndex(i, j, k+1),   vIndex(i+1, j, k+1), true);
+
+		// +Y face
+		if (j == ny-1 || !m_pVoxels[i][j+1][k].m_bActivated)
+			emitQuad(vIndex(i, j+1, k),   vIndex(i+1, j+1, k),
+			         vIndex(i, j+1, k+1), vIndex(i+1, j+1, k+1), false);
+
+		// -Z face
+		if (k == 0 || !m_pVoxels[i][j][k-1].m_bActivated)
+			emitQuad(vIndex(i, j, k),     vIndex(i+1, j, k),
+			         vIndex(i, j+1, k),   vIndex(i+1, j+1, k), false);
+
+		// +Z face
+		if (k == nz-1 || !m_pVoxels[i][j][k+1].m_bActivated)
+			emitQuad(vIndex(i, j, k+1),   vIndex(i+1, j, k+1),
+			         vIndex(i, j+1, k+1), vIndex(i+1, j+1, k+1), true);
+	}
+
+	// compact: drop unused vertices and re-index faces
+	char *v_used = (char*)calloc(nv, sizeof(char));
+	for (unsigned int i = 0; i < 3 * nf; i++)
+		v_used[f[i]] = 1;
+
+	int *new_indices = (int*)malloc(nv * sizeof(int));
+	int iwalk = 0;
+	for (unsigned int i = 0; i < nv; i++)
+		if (v_used[i])
+			new_indices[i] = iwalk++;
+	unsigned int nv2 = (unsigned int)iwalk;
+
+	float *v2 = (float*)malloc(3 * nv2 * sizeof(float));
+	iwalk = 0;
+	for (unsigned int i = 0; i < nv; i++)
+		if (v_used[i])
+		{
+			v2[3*iwalk]   = v[3*i];
+			v2[3*iwalk+1] = v[3*i+1];
+			v2[3*iwalk+2] = v[3*i+2];
+			iwalk++;
+		}
+
+	int *f2 = (int*)malloc(3 * nf * sizeof(int));
+	for (unsigned int i = 0; i < 3 * nf; i++)
+		f2[i] = new_indices[f[i]];
+
+	// build the Mesh
+	Mesh *mesh = new Mesh(nv2, nf);
+	mesh->SetVertices(nv2, v2);
+	for (unsigned int i = 0; i < nf; i++)
+	{
+		mesh->m_pFaces[i] = new Face();
+		mesh->m_pFaces[i]->SetTriangle(f2[3*i], f2[3*i+1], f2[3*i+2]);
+	}
+
+	free(v);
+	free(f);
+	free(v_used);
+	free(new_indices);
+	free(v2);
+	free(f2);
+
+	return mesh;
+}
 
 
 
