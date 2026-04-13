@@ -1,7 +1,6 @@
 #pragma once
 
 #include <list>
-using namespace std;
 
 typedef struct point2D
 {
@@ -39,8 +38,8 @@ public:
 	void WriteGroupBegin (char *strId = NULL);
 	void WriteGroupEnd (void);
 
-	void WritePath (list<point2D> listPoints, PathStyle *pathStyle = NULL);
-	void WritePath (list<list<point2D> > listsPoints, PathStyle *pathStyle = NULL);
+	void WritePath (const std::list<point2D>& listPoints, PathStyle *pathStyle = NULL);
+	void WritePath (const std::list<std::list<point2D> >& listsPoints, PathStyle *pathStyle = NULL);
 
 	static inline void PathStyle_init (PathStyle *pathStyle)
 		{

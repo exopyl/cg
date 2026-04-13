@@ -3,6 +3,8 @@
 
 #include "writer_svg.h"
 
+using namespace std;
+
 //
 //
 //
@@ -115,9 +117,9 @@ void WriterSVG::WriteGroupEnd (void)
 </g>
 </g>
 */
-void WriterSVG::WritePath (list<point2D> listPoints, PathStyle *pathStyle)
+void WriterSVG::WritePath (const list<point2D>& listPoints, PathStyle *pathStyle)
 {
-	if (!m_pFile)
+	if (!m_pFile || listPoints.empty())
 		return;
 
 	fprintf (m_pFile, "<path");
@@ -141,7 +143,7 @@ void WriterSVG::WritePath (list<point2D> listPoints, PathStyle *pathStyle)
 #endif
 		fprintf (m_pFile, " stroke=\"%s\"", hexcol);
 	}
-	list<point2D>::iterator it=listPoints.begin();
+	list<point2D>::const_iterator it=listPoints.begin();
 	point2D pt = (*it);
 	fprintf (m_pFile, " d=\"M%f,%f ", pt.x, pt.y);
 	for (it++; it!=listPoints.end(); it++)
@@ -154,9 +156,9 @@ void WriterSVG::WritePath (list<point2D> listPoints, PathStyle *pathStyle)
 	fprintf (m_pFile, "\"/>\n");
 }
 
-void WriterSVG::WritePath (list<list<point2D> > listsPoints, PathStyle *pathStyle)
+void WriterSVG::WritePath (const list<list<point2D> >& listsPoints, PathStyle *pathStyle)
 {
-	if (!m_pFile)
+	if (!m_pFile || listsPoints.empty())
 		return;
 
 	fprintf (m_pFile, "<path");
@@ -182,11 +184,14 @@ void WriterSVG::WritePath (list<list<point2D> > listsPoints, PathStyle *pathStyl
 	}
 
 	fprintf (m_pFile, " d=\"");
-	list<list<point2D> >::iterator itList;
+	list<list<point2D> >::const_iterator itList;
 	for (itList = listsPoints.begin(); itList != listsPoints.end(); itList++)
 	{
-		list<point2D> listPoints = *itList;
-		list<point2D>::iterator it=listPoints.begin();
+		const list<point2D>& listPoints = *itList;
+		if (listPoints.empty())
+			continue;
+
+		list<point2D>::const_iterator it=listPoints.begin();
 		point2D pt = (*it);
 		fprintf (m_pFile, "M%f,%f ", pt.x, pt.y);
 		for (it++; it!=listPoints.end(); it++)

@@ -9,12 +9,8 @@
 // constructor
 LSystem::LSystem ()
 {
-	m_strName = NULL;
-
-	//
-	m_string = NULL;
-	m_iNumberRules = 0;
-	m_oRules = (LSRule**)malloc(2*sizeof(LSRule*));;
+	m_strName = "";
+	m_string = "";
 
 	// graphical representation
 	m_iDimension = 0;
@@ -27,42 +23,32 @@ LSystem::LSystem ()
 	m_fLength = 1.;
 
 	m_iNumberMaxPoints = 100000;
-	m_walk = (float*)malloc(m_iNumberMaxPoints*2*sizeof(float));
-	m_walk[0] = m_walk[1] = 0.0;
-	m_walk[2] = 0.0;
+	m_walk.resize(m_iNumberMaxPoints * 3, 0.0f);
 	m_iNumberPoints = 1;
 
-	m_fStackPosition = NULL;
-	m_fStackAngle = NULL;
-	m_bDrawable = NULL;
+	m_iStackIndex = 0;
 }
 
 // destructor
 LSystem::~LSystem ()
 {
-	if (m_strName) free (m_strName);
-	if (m_string) free (m_string);
-	if (m_walk) free (m_walk);
-	if (m_bDrawable) free (m_bDrawable);
-	for (int i=0; i<m_iNumberRules; i++)
+	for (size_t i=0; i<m_oRules.size(); i++)
 	{
 		delete m_oRules[i];
 	}
-	free (m_oRules);
+	m_oRules.clear();
 }
 
 //
-void LSystem::SetName (char *strName)
+void LSystem::SetName (const char *strName)
 {
-	if (m_strName)
-		free (m_strName);
-	m_strName = strdup (strName);
+	m_strName = strName;
 }
 
 //
-char* LSystem::GetName (void)
+const char* LSystem::GetName (void)
 {
-	return m_strName;
+	return m_strName.c_str();
 }
 
 
@@ -79,50 +65,55 @@ void LSystem::SetLength (float fLength)
 }
 
 // add a rule
-void LSystem::AddRule (char *antecedent, char *image)
+void LSystem::AddRule (const char *antecedent, const char *image)
 {
 	LSRule *rule = new LSRule ();
-	rule->Init (antecedent, image);
+	rule->Init ((char*)antecedent, (char*)image);
 	if (rule)
 	{
-		m_oRules[m_iNumberRules] = rule;
-		m_iNumberRules++;
+		m_oRules.push_back(rule);
 	}
 }
 
 // initiazes the LSystem
-void LSystem::Init (char *basis)
+void LSystem::Init (const char *basis)
 {
-	m_string = (char*)malloc(strlen(basis)+1);
-	m_string = (char*)memcpy (m_string, basis, strlen (basis));
-	m_string[strlen (basis)] = '\0';
+	m_string = basis;
 }
 
 // computes the next iteration
+#include <string>
+
 void LSystem::Next()
 {
-	char *newString = (char*)malloc(70000*sizeof(char*));
-	int LengthNewString = 0;
-	int LengthString = strlen (m_string);
-	for (int i=0; i<LengthString; i++)
+	if (m_string.empty()) return;
+
+	std::string newString = "";
+	newString.reserve(m_string.length() * 2);
+
+	for (size_t i=0; i<m_string.length(); )
 	{
 		bool rewritten = false;
-		for (int j=0; j<m_iNumberRules; j++)
+		for (size_t j=0; j<m_oRules.size(); j++)
 		{
 			if (m_oRules[j]->IsApplicable (&m_string[i]))
 			{
-				memcpy (&newString[LengthNewString], m_oRules[j]->m_image, strlen(m_oRules[j]->m_image));
-				LengthNewString += strlen(m_oRules[j]->m_image);
+				newString += m_oRules[j]->m_image;
+				i += strlen(m_oRules[j]->m_antecedent);
 				rewritten = true;
+				break;
 			}
 		}
 		if (!rewritten)
 		{
-			newString[LengthNewString++] = m_string[i];
+			newString += m_string[i];
+			i++;
 		}
+		
+		if (newString.length() > 300000)
+			break;
 	}
-	newString[LengthNewString] = '\0';
-	//free (m_string);
+	
 	m_string = newString;
 }
 
@@ -131,16 +122,20 @@ void LSystem::ComputeGraphicalInterpretation2D (void)
 {
 	m_iDimension = 2;
 
-	int n = strlen (m_string);
+	size_t n = m_string.length();
 	
 	m_iNumberPoints = 1;
 	m_iStackIndex = 0;
-	m_fStackPosition = (float*)malloc(m_iNumberMaxPoints*2*sizeof(float));
-	m_fStackAngle = (float*)malloc(m_iNumberMaxPoints*sizeof(float));
-	m_bDrawable = (bool*)malloc(m_iNumberMaxPoints*sizeof(bool));
+	
+	m_fStackPosition.assign(m_iNumberMaxPoints * 2, 0.0f);
+	m_fStackAngle.assign(m_iNumberMaxPoints, 0.0f);
+	m_bDrawable.assign(m_iNumberMaxPoints, false);
 
-	for (int i=0; i<n; i++)
+	for (size_t i=0; i<n; i++)
 	{
+		if (m_iNumberPoints >= m_iNumberMaxPoints)
+			break;
+
 		switch (m_string[i])
 		{
 		case 'X':
@@ -169,26 +164,29 @@ void LSystem::ComputeGraphicalInterpretation2D (void)
 			m_fCurrentLength *= m_fLength;
 			break;
 		case '[':
-			m_fStackPosition[2*m_iStackIndex] = m_walk[2*(m_iNumberPoints-1)];
-			m_fStackPosition[2*m_iStackIndex+1] = m_walk[2*(m_iNumberPoints-1)+1];
-			m_fStackAngle[m_iStackIndex] = m_fCurrentAngle;
-			m_iStackIndex++;
-			if (m_iStackIndex >= m_iNumberMaxPoints) return;
+			if (m_iStackIndex < m_iNumberMaxPoints)
+			{
+				m_fStackPosition[2*m_iStackIndex] = m_walk[2*(m_iNumberPoints-1)];
+				m_fStackPosition[2*m_iStackIndex+1] = m_walk[2*(m_iNumberPoints-1)+1];
+				m_fStackAngle[m_iStackIndex] = m_fCurrentAngle;
+				m_iStackIndex++;
+			}
 			break;
 		case ']':
-			m_walk[2*m_iNumberPoints] = m_fStackPosition[2*(m_iStackIndex-1)];
-			m_walk[2*m_iNumberPoints+1] = m_fStackPosition[2*(m_iStackIndex-1)+1];
-			m_fCurrentAngle = m_fStackAngle[m_iStackIndex-1];
-			m_bDrawable[m_iNumberPoints-1] = false;
-			m_iNumberPoints++;
-			m_iStackIndex--;
+			if (m_iStackIndex > 0)
+			{
+				m_walk[2*m_iNumberPoints] = m_fStackPosition[2*(m_iStackIndex-1)];
+				m_walk[2*m_iNumberPoints+1] = m_fStackPosition[2*(m_iStackIndex-1)+1];
+				m_fCurrentAngle = m_fStackAngle[m_iStackIndex-1];
+				m_bDrawable[m_iNumberPoints-1] = false;
+				m_iNumberPoints++;
+				m_iStackIndex--;
+			}
 			break;
 		default:
 			break;
 		}
 	}
-	if (m_fStackPosition) free (m_fStackPosition);
-	if (m_fStackAngle) free (m_fStackAngle);
 
 	UpdateBoundingBox ();
 	Centerize ();
@@ -199,12 +197,14 @@ void LSystem::ComputeGraphicalInterpretation3D (void)
 {
 	m_iDimension = 3;
 
-	int n = strlen (m_string);
+	size_t n = m_string.length();
 
+	m_iNumberPoints = 1;
 	m_iStackIndex = 0;
-	m_fStackPosition = (float*)malloc(m_iNumberMaxPoints*3*sizeof(float));
-	float *fStackDirection = (float*)malloc(m_iNumberMaxPoints*3*sizeof(float));
-	m_bDrawable = (bool*)malloc(m_iNumberMaxPoints*sizeof(bool));
+
+	m_fStackPosition.assign(m_iNumberMaxPoints * 3, 0.0f);
+	std::vector<float> fStackDirection(m_iNumberMaxPoints * 3, 0.0f);
+	m_bDrawable.assign(m_iNumberMaxPoints, false);
 
 	float m_direction[3];
 	m_direction[0] = 1.0;
@@ -215,17 +215,15 @@ void LSystem::ComputeGraphicalInterpretation3D (void)
 	m_vecUp[0] = 0.0;
 	m_vecUp[1] = 0.0;
 	m_vecUp[2] = 1.0;
-	float fAngle;
 
-	for (int i=0; i<n; i++)
+	for (size_t i=0; i<n; i++)
 	{
+		if (m_iNumberPoints >= m_iNumberMaxPoints)
+			break;
+
 		float xtmp = m_direction[0];
 		float ytmp = m_direction[1];
 		float ztmp = m_direction[2];
-
-		float upx = m_vecUp[0];
-		float upy = m_vecUp[1];
-		float upz = m_vecUp[2];
 
 		switch (m_string[i])
 		{
@@ -245,10 +243,6 @@ void LSystem::ComputeGraphicalInterpretation3D (void)
 			break;
 		case '+':
 			{
-				//m_direction[0] = xtmp * cos(m_fAngle) + ytmp * sin(m_fAngle);
-				//m_direction[1] = -xtmp * sin(m_fAngle) + ytmp * cos(m_fAngle);
-				//m_direction[2] = ztmp;
-
 				Vector3f axis (m_vecUp[0], m_vecUp[1], m_vecUp[2]);
 				Quaternionf q (axis, m_fAngle);
 				q.Normalize ();
@@ -264,10 +258,6 @@ void LSystem::ComputeGraphicalInterpretation3D (void)
 			break;
 		case '-':
 			{
-				//m_direction[0] = xtmp * cos(-m_fAngle) + ytmp * sin(-m_fAngle);
-				//m_direction[1] = -xtmp * sin(-m_fAngle) + ytmp * cos(-m_fAngle);
-				//m_direction[2] = ztmp;
-
 				Vector3f axis (m_vecUp[0], m_vecUp[1], m_vecUp[2]);
 				Quaternionf q (axis,-m_fAngle);
 				Vector3f orig (m_direction[0], m_direction[1], m_direction[2]);
@@ -303,15 +293,6 @@ void LSystem::ComputeGraphicalInterpretation3D (void)
 				m_vecUp[1] = NewUp[1];
 				m_vecUp[2] = NewUp[2];
 			}
-			/*
-			m_direction[0] = xtmp * cos(m_fAngle) - ztmp * sin(m_fAngle);
-			m_direction[1] = ytmp;
-			m_direction[2] = xtmp * sin(m_fAngle) + ztmp * cos(m_fAngle);
-
-			m_vecUp[0] = upx * cos(m_fAngle) - upz * sin(m_fAngle);
-			m_vecUp[1] = upy;
-			m_vecUp[2] = upx * sin(m_fAngle) + upz * cos(m_fAngle);
-			*/
 			break;
 		case '^':
 			{
@@ -336,15 +317,6 @@ void LSystem::ComputeGraphicalInterpretation3D (void)
 				m_vecUp[1] = NewUp[1];
 				m_vecUp[2] = NewUp[2];
 			}
-			/*
-			m_direction[0] = xtmp * cos(-m_fAngle) - ztmp * sin(-m_fAngle);
-			m_direction[1] = ytmp;
-			m_direction[2] = xtmp * sin(-m_fAngle) + ztmp * cos(-m_fAngle);
-			
-			m_vecUp[0] = upx * cos(-m_fAngle) - upz * sin(-m_fAngle);
-			m_vecUp[1] = upy;
-			m_vecUp[2] = upx * sin(-m_fAngle) + upz * cos(-m_fAngle);
-			*/
 			break;
 		case '\\':
 			{
@@ -377,15 +349,6 @@ void LSystem::ComputeGraphicalInterpretation3D (void)
 				m_vecUp[1] = NewUp[1];
 				m_vecUp[2] = NewUp[2];
 			}
-			/*
-			m_direction[0] = xtmp;
-			m_direction[1] = ytmp * cos(-m_fAngle) - ztmp * sin(-m_fAngle);
-			m_direction[2] = ytmp * sin(-m_fAngle) + ztmp * cos(-m_fAngle);
-
-			m_vecUp[0] = upx;
-			m_vecUp[1] = upy * cos(-m_fAngle) - upz * sin(-m_fAngle);
-			m_vecUp[2] = upy * sin(-m_fAngle) + upz * cos(-m_fAngle);
-			*/
 			break;
 		case '|':
 			{
@@ -401,47 +364,41 @@ void LSystem::ComputeGraphicalInterpretation3D (void)
 				m_direction[1] = dest[1];
 				m_direction[2] = dest[2];
 			}
-			/*
-			m_direction[0] = xtmp * cos(3.14159) + ytmp * sin(3.14159);
-			m_direction[1] = -xtmp * sin(3.14159) + ytmp * cos(3.14159);
-			m_direction[2] = ztmp;
-			*/
-
-			//m_vecUp[0] = upx * cos(3.14159) + upy * sin(3.14159);
-			//m_vecUp[1] = -upx * sin(3.14159) + upy * cos(3.14159);
-			//m_vecUp[2] = upz;
 			break;
 		case '[':
-			m_fStackPosition[3*m_iStackIndex]   = m_walk[3*(m_iNumberPoints-1)];
-			m_fStackPosition[3*m_iStackIndex+1] = m_walk[3*(m_iNumberPoints-1)+1];
-			m_fStackPosition[3*m_iStackIndex+2] = m_walk[3*(m_iNumberPoints-1)+2];
-			
-			fStackDirection[3*m_iStackIndex]   = m_direction[0];
-			fStackDirection[3*m_iStackIndex+1] = m_direction[1];
-			fStackDirection[3*m_iStackIndex+2] = m_direction[2];
-			
-			m_iStackIndex++;
-			if (m_iStackIndex >= m_iNumberMaxPoints) return;
+			if (m_iStackIndex < m_iNumberMaxPoints)
+			{
+				m_fStackPosition[3*m_iStackIndex]   = m_walk[3*(m_iNumberPoints-1)];
+				m_fStackPosition[3*m_iStackIndex+1] = m_walk[3*(m_iNumberPoints-1)+1];
+				m_fStackPosition[3*m_iStackIndex+2] = m_walk[3*(m_iNumberPoints-1)+2];
+				
+				fStackDirection[3*m_iStackIndex]   = m_direction[0];
+				fStackDirection[3*m_iStackIndex+1] = m_direction[1];
+				fStackDirection[3*m_iStackIndex+2] = m_direction[2];
+				
+				m_iStackIndex++;
+			}
 			break;
 		case ']':
-			m_walk[3*m_iNumberPoints]   = m_fStackPosition[3*(m_iStackIndex-1)];
-			m_walk[3*m_iNumberPoints+1] = m_fStackPosition[3*(m_iStackIndex-1)+1];
-			m_walk[3*m_iNumberPoints+2] = m_fStackPosition[3*(m_iStackIndex-1)+2];
-			
-			m_direction[0] = fStackDirection[3*(m_iStackIndex-1)];
-			m_direction[1] = fStackDirection[3*(m_iStackIndex-1)+1];
-			m_direction[2] = fStackDirection[3*(m_iStackIndex-1)+2];
+			if (m_iStackIndex > 0)
+			{
+				m_walk[3*m_iNumberPoints]   = m_fStackPosition[3*(m_iStackIndex-1)];
+				m_walk[3*m_iNumberPoints+1] = m_fStackPosition[3*(m_iStackIndex-1)+1];
+				m_walk[3*m_iNumberPoints+2] = m_fStackPosition[3*(m_iStackIndex-1)+2];
+				
+				m_direction[0] = fStackDirection[3*(m_iStackIndex-1)];
+				m_direction[1] = fStackDirection[3*(m_iStackIndex-1)+1];
+				m_direction[2] = fStackDirection[3*(m_iStackIndex-1)+2];
 
-			m_bDrawable[m_iNumberPoints-1] = false;
-			m_iNumberPoints++;
-			m_iStackIndex--;
+				m_bDrawable[m_iNumberPoints-1] = false;
+				m_iNumberPoints++;
+				m_iStackIndex--;
+			}
 			break;
 		default:
 			break;
 		}
 	}
-	if (m_fStackPosition) free (m_fStackPosition);
-	if (fStackDirection) free (fStackDirection);
 
 	UpdateBoundingBox ();
 	//Centerize ();
@@ -639,6 +596,9 @@ void LSystem::MirrorAroundX (float fHeight)
 
 void LSystem::FittIn (float fWidth, float fHeight, float fMargin)
 {
+	if (m_iDimension != 2)
+		return;
+
 	UpdateBoundingBox ();
 	Centerize ();
 	Normalize ();

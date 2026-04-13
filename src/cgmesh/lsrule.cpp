@@ -26,7 +26,9 @@ void LSRule::Init (char *antecedent, char *image)
 }
 
 //
-bool LSRule::IsApplicable (char *str, int length)
+bool LSRule::IsApplicable (char *str)
 {
+	if (!m_antecedent) return false;
+	int length = strlen(m_antecedent);
 	return (memcmp (m_antecedent, str, length) == 0)? true : false;
 }

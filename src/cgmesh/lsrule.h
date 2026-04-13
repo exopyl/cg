@@ -8,7 +8,7 @@ public:
 	~LSRule ();
 
 	void Init (char *antecedent, char *image);
-	bool IsApplicable (char *str, int length=1);
+	bool IsApplicable (char *str);
 
 public:
 	char *m_antecedent;

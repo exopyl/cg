@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 
-static void LoadFile (char *strFilename, LSystem *pLSystem)
+static void LoadFile (const char *strFilename, LSystem *pLSystem)
 {
 	if (strFilename == NULL)
 		return;
@@ -14,25 +14,28 @@ static void LoadFile (char *strFilename, LSystem *pLSystem)
 	char pBuffer[256];
 
 	// Init
-	fscanf (pIn, "%256s\n", &pBuffer);
-	pLSystem->Init (pBuffer);
+	if (fscanf (pIn, "%255s\n", pBuffer) == 1)
+		pLSystem->Init (pBuffer);
 
 	// Angle
 	float fAngle = 0.;
-	fscanf (pIn, "%f\n", &fAngle);
-	pLSystem->SetAngle (fAngle*3.14159/180.0);
+	if (fscanf (pIn, "%f\n", &fAngle) == 1)
+		pLSystem->SetAngle (fAngle*3.14159/180.0);
 
 	// Number of iterations
 	unsigned int nIterations = 0;
-	fscanf (pIn, "%d\n", &nIterations);
+	if (fscanf (pIn, "%d\n", &nIterations) == 1)
+	{
+		// ...
+	}
 
 	// Rules
-	do
+	while (fscanf (pIn, "%255s\n", pBuffer) == 1)
 	{
-		fscanf (pIn, "%256s\n", &pBuffer);
 		pBuffer[1]='\0';
 		pLSystem->AddRule (pBuffer, pBuffer+2);
-	} while (!feof (pIn));
+		if (feof(pIn)) break;
+	}
 
 	fclose (pIn);
 }
@@ -60,8 +63,7 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	pLSystemData->nNberIterations = 4;
 	pLSystemData->pLSystem = t;
 	mapLSystems[LSYSTEM_KOCH_CURVE] = pLSystemData;
-	return;
-	/*
+
 	// quadratic Koch island a (LSYSTEM_QUADRATIC_KOCH_ISLAND_A)
 	t = new LSystem ();
 	t->SetName ("Quadratic Koch island A");
@@ -109,11 +111,7 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	pLSystemData->nNberIterations = 7;
 	pLSystemData->pLSystem = t;
 	mapLSystems[LSYSTEM_VAN_KOCH_SNOWFLAKE] = pLSystemData;
-*/
 
-
-
-/*
 	// Dragon curve (LSYSTEM_DRAGON_CURVE)
 	t = new LSystem ();
 	t->SetName ("Dragon curve");
@@ -203,13 +201,8 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	pLSystemData->nNberIterations = 11;
 	pLSystemData->pLSystem = t;
 	mapLSystems[LSYSTEM_SIERPINSKI_ARROWHEAD] = pLSystemData;
-*/
 
 
-
-
-
-/*
 	// Triangle (LSYSTEM_TRIANGLE)
 	t = new LSystem ();
 	t->SetName ("Triangle");
@@ -221,12 +214,7 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	pLSystemData->nNberIterations = 10;
 	pLSystemData->pLSystem = t;
 	mapLSystems[LSYSTEM_TRIANGLE] = pLSystemData;
-*/
 
-
-
-
-/*
 	// Board (LSYSTEM_BOARD)
 	t = new LSystem ();
 	t->SetName ("Board");
@@ -274,7 +262,6 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	pLSystemData->nNberIterations = 5;
 	pLSystemData->pLSystem = t;
 	mapLSystems[LSYSTEM_RINGS] = pLSystemData;
-*/
 
 	//
 	// branching structures
@@ -293,7 +280,7 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	t->AddRule ("y", "b");
 	pLSystemData = new LSystemData;
 	pLSystemData->bClosed = false;
-	pLSystemData->nNberIterations = 19;
+	pLSystemData->nNberIterations = 10;
 	pLSystemData->pLSystem = t;
 	mapLSystems[LSYSTEM_LEAF] = pLSystemData;
 
@@ -405,120 +392,107 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	//
 	// 3D
 	//
-	if (0)
-	{
-		// LSYSTEM_3D
-		t = new LSystem ();
-		t->SetName ("Hilbert curve 3D");
-		t->SetAngle (90.0*3.14159/180.0);
-		t->Init ("A");
-		t->AddRule ("A", "B-F+CFC+F-D&F^D-F+&&CFC+F+B//");
-		t->AddRule ("B", "A&F^CFB^F^D^^-F-D^|F^B|FC^F^A//");
-		t->AddRule ("C", "|D^|F^B-F+C^F^A&&FA&F^C+F+B^F^D//");
-		t->AddRule ("D", "|CFB-F+B|FA&F^A&&FB-F+B|FC//");
-		pLSystemData = new LSystemData;
-		pLSystemData->bClosed = false;
-		pLSystemData->nNberIterations = 5;
-		pLSystemData->pLSystem = t;
-		mapLSystems[LSYSTEM_HILBERT_CURVE_3D] = pLSystemData;
-		for (int j=0; j<3; j++)
-			t->Next ();
+	// LSYSTEM_3D
+	t = new LSystem ();
+	t->SetName ("Hilbert curve 3D");
+	t->SetAngle (90.0*3.14159/180.0);
+	t->Init ("A");
+	t->AddRule ("A", "B-F+CFC+F-D&F^D-F+&&CFC+F+B//");
+	t->AddRule ("B", "A&F^CFB^F^D^^-F-D^|F^B|FC^F^A//");
+	t->AddRule ("C", "|D^|F^B-F+C^F^A&&FA&F^C+F+B^F^D//");
+	t->AddRule ("D", "|CFB-F+B|FA&F^A&&FB-F+B|FC//");
+	pLSystemData = new LSystemData;
+	pLSystemData->bClosed = false;
+	pLSystemData->nNberIterations = 5;
+	pLSystemData->pLSystem = t;
+	mapLSystems[LSYSTEM_HILBERT_CURVE_3D] = pLSystemData;
+	for (int j=0; j<3; j++)
+		t->Next ();
 
-		t->ComputeGraphicalInterpretation3D ();
-		t->Normalize ();
-		//t->Scaling (2.0);
-		//return t;
-	}
+	t->ComputeGraphicalInterpretation3D ();
+	t->Normalize ();
+	//t->Scaling (2.0);
+	//return t;
 
-	if (0)
-	{
-		// LSYSTEM_3D
-		t = new LSystem ();
-		t->SetName ("Plant1");
-		t->SetAngle (25.*3.14159/180.0);
-		t->Init ("F");
-		t->AddRule ("F", "[+F+F+F+F][-F-F-F-F][^F^F^F^F][&F&F&F&F]");
-		pLSystemData = new LSystemData;
-		pLSystemData->bClosed = false;
-		pLSystemData->nNberIterations = 5;
-		pLSystemData->pLSystem = t;
-		mapLSystems[LSYSTEM_PLANT1] = pLSystemData;
-		for (int j=0; j<1; j++)
-			t->Next ();
+	// LSYSTEM_3D
+	t = new LSystem ();
+	t->SetName ("Plant1");
+	t->SetAngle (25.*3.14159/180.0);
+	t->Init ("F");
+	t->AddRule ("F", "[+F+F+F+F][-F-F-F-F][^F^F^F^F][&F&F&F&F]");
+	pLSystemData = new LSystemData;
+	pLSystemData->bClosed = false;
+	pLSystemData->nNberIterations = 5;
+	pLSystemData->pLSystem = t;
+	mapLSystems[LSYSTEM_PLANT1] = pLSystemData;
+	for (int j=0; j<1; j++)
+		t->Next ();
 
-		t->ComputeGraphicalInterpretation3D ();
-		t->Normalize ();
-		//t->Scaling (2.0);
-		//return t;
-	}
+	t->ComputeGraphicalInterpretation3D ();
+	t->Normalize ();
+	//t->Scaling (2.0);
+	//return t;
 
-	if (0)
-	{
-		// LSYSTEM_3D
-		t = new LSystem ();
-		t->SetName ("Plant2");
-		t->SetAngle (15.*3.14159/180.0);
-		t->Init ("X");
-		t->AddRule ("X", "F&[+F+F+F+F][-F-F-F-F][^F^F^F^F][&F&F&F&F]FX");
-		pLSystemData = new LSystemData;
-		pLSystemData->bClosed = false;
-		pLSystemData->nNberIterations = 5;
-		pLSystemData->pLSystem = t;
-		mapLSystems[LSYSTEM_PLANT2] = pLSystemData;
-		for (int j=0; j<4; j++)
-			t->Next ();
+	// LSYSTEM_3D
+	t = new LSystem ();
+	t->SetName ("Plant2");
+	t->SetAngle (15.*3.14159/180.0);
+	t->Init ("X");
+	t->AddRule ("X", "F&[+F+F+F+F][-F-F-F-F][^F^F^F^F][&F&F&F&F]FX");
+	pLSystemData = new LSystemData;
+	pLSystemData->bClosed = false;
+	pLSystemData->nNberIterations = 5;
+	pLSystemData->pLSystem = t;
+	mapLSystems[LSYSTEM_PLANT2] = pLSystemData;
+	for (int j=0; j<4; j++)
+		t->Next ();
 
-		t->ComputeGraphicalInterpretation3D ();
-		t->Normalize ();
-		//t->Scaling (2.0);
-		//return t;
-	}
+	t->ComputeGraphicalInterpretation3D ();
+	t->Normalize ();
+	//t->Scaling (2.0);
+	//return t;
 
-	if (0)
-	{
-		// LSYSTEM_3D
-		t = new LSystem ();
-		t->SetName ("Plant3");
-		t->SetAngle (15.*3.14159/180.0);
-		t->Init ("Y");
-		t->AddRule ("Y", "YFA[+Y][-Y][^Y][&Y]");
-		t->AddRule ("A", "A[^FF][&FF][-FF][+FF]FA");
-		pLSystemData = new LSystemData;
-		pLSystemData->bClosed = false;
-		pLSystemData->nNberIterations = 5;
-		pLSystemData->pLSystem = t;
-		mapLSystems[LSYSTEM_PLANT3] = pLSystemData;
-		for (int j=0; j<3; j++)
-			t->Next ();
 
-		t->ComputeGraphicalInterpretation3D ();
-		t->Normalize ();
-		//t->Scaling (2.0);
-		//return t;
-	}
+	// LSYSTEM_3D
+	t = new LSystem ();
+	t->SetName ("Plant3");
+	t->SetAngle (15.*3.14159/180.0);
+	t->Init ("Y");
+	t->AddRule ("Y", "YFA[+Y][-Y][^Y][&Y]");
+	t->AddRule ("A", "A[^FF][&FF][-FF][+FF]FA");
+	pLSystemData = new LSystemData;
+	pLSystemData->bClosed = false;
+	pLSystemData->nNberIterations = 5;
+	pLSystemData->pLSystem = t;
+	mapLSystems[LSYSTEM_PLANT3] = pLSystemData;
+	for (int j=0; j<3; j++)
+		t->Next ();
 
-	if (0)
-	{
-		t = new LSystem ();
-		t->Init ("A");
-		t->SetAngle (22.5*3.14159/180.0);
-		t->AddRule ("A", "[&FL!A]/////'[&FL!A]///////'[&FL!A]");
-		t->AddRule ("F", "S/////F");
-		t->AddRule ("S", "FL");
-		pLSystemData = new LSystemData;
-		pLSystemData->bClosed = false;
-		pLSystemData->nNberIterations = 26;
-		pLSystemData->pLSystem = t;
-		//mapLSystems[LSYSTEM_3D] = pLSystemData;
-		t->AddRule ("L", "['''^^{-f+f+f-|-f+f+f}]");
-		for (int j=0; j<5; j++)
-			t->Next ();
+	t->ComputeGraphicalInterpretation3D ();
+	t->Normalize ();
+	//t->Scaling (2.0);
+	//return t;
 
-		t->ComputeGraphicalInterpretation3D ();
-		//t->Normalize ();
-		t->Scaling (5.0);
-		//return t;
-	}
+
+	t = new LSystem ();
+	t->Init ("A");
+	t->SetAngle (22.5*3.14159/180.0);
+	t->AddRule ("A", "[&FL!A]/////'[&FL!A]///////'[&FL!A]");
+	t->AddRule ("F", "S/////F");
+	t->AddRule ("S", "FL");
+	pLSystemData = new LSystemData;
+	pLSystemData->bClosed = false;
+	pLSystemData->nNberIterations = 26;
+	pLSystemData->pLSystem = t;
+	//mapLSystems[LSYSTEM_3D] = pLSystemData;
+	t->AddRule ("L", "['''^^{-f+f+f-|-f+f+f}]");
+	for (int j=0; j<5; j++)
+		t->Next ();
+
+	t->ComputeGraphicalInterpretation3D ();
+	//t->Normalize ();
+	t->Scaling (5.0);
+	//return t;
 
 /*
 		for (int j=0; j<3; j++)

@@ -1,4 +1,6 @@
 #pragma once
+#include <string>
+#include <vector>
 #include "lsrule.h"
 
 //
@@ -10,13 +12,13 @@ public:
 	LSystem ();
 	~LSystem ();
 
-	void SetName (char *strName);
-	char* GetName (void);
+	void SetName (const char *strName);
+	const char* GetName (void);
 
 	void SetAngle (float fAngle);
 	void SetLength (float fLength);
-	void AddRule (char *antecedent, char *image);
-	void Init (char *basis);
+	void AddRule (const char *antecedent, const char *image);
+	void Init (const char *basis);
 	void Next();
 	void ComputeGraphicalInterpretation2D (void);
 	void ComputeGraphicalInterpretation3D (void);
@@ -34,27 +36,26 @@ public:
 
 
 public:
-	char* m_strName;
+	std::string m_strName;
 
 	// LSystem
-	char *m_string; // 
-	int m_iNumberRules;
-	LSRule **m_oRules;
+	std::string m_string; // 
+	std::vector<LSRule*> m_oRules;
 
 	// graphical representation
 	int m_iNumberMaxPoints; // maximal number of points in the path
 	int m_iNumberPoints; // number of points in the path
-	float *m_walk; // path
-	bool *m_bDrawable; // is the path drawable ?
+	std::vector<float> m_walk; // path
+	std::vector<bool> m_bDrawable; // is the path drawable ?
 
 	// to compute the graphical representation
 	float m_fX, m_fY, m_fZ; // current position
-	float *m_fStackPosition;
+	std::vector<float> m_fStackPosition;
 
 	float m_fCurrentAngle, m_fAngle;
 	float m_fCurrentLength, m_fLength;
 	int m_iStackIndex;
-	float *m_fStackAngle;
+	std::vector<float> m_fStackAngle;
 
 	// additional information about graphical representation
 	float XMinBBox;
