@@ -35,7 +35,7 @@ _isCommand (char c)
 
 static int _ParseParameters (char *str, int pos, float **parameters, int *nParameters)
 {
-	*parameters = NULL;
+	*parameters = nullptr;
 	*nParameters = 0;
 
 	int i = pos, n = strlen (str);
@@ -49,7 +49,7 @@ static int _ParseParameters (char *str, int pos, float **parameters, int *nParam
 		if (i == n)
 		{
 			assert (0);
-			*parameters = NULL;
+			*parameters = nullptr;
 			*nParameters = 0;
 			free (buffer);
 			return -1;
@@ -98,7 +98,7 @@ static float Yfirst = 0.0;
 static float Zfirst = 0.0;
 
 // polygon
-static Polygon2 *_polygon = NULL;
+static Polygon2 *_polygon = nullptr;
 static unsigned int _iCurrentContour = 0;
 static unsigned int _iCurrentPoint = 0;
 static int _bCountVertices = 0;
@@ -127,7 +127,7 @@ static void _CloseCurrentContour (void)
 static void _ResetPolygon (void)
 {
 	delete _polygon;
-	_polygon = NULL;
+	_polygon = nullptr;
 	_iCurrentContour = 0;
 	_iCurrentPoint = 0;
 }
@@ -352,7 +352,7 @@ static void _TreatCommand (char command, float *parameters, unsigned int nParame
 		curve->addControlPoint (parameters[4], parameters[5], 0.);
 		
 		unsigned nPts = NPTS_CUBIC;
-		vec3 *pts = NULL;
+		vec3 *pts = nullptr;
 		unsigned int res = curve->computeInterpolation (nPts, &pts);
 		if (res && pts)
 		{
@@ -378,7 +378,7 @@ static void _TreatCommand (char command, float *parameters, unsigned int nParame
 		curve->addControlPoint (Xcurrent+parameters[4], Ycurrent+parameters[5], 0.);
 		
 		unsigned nPts = NPTS_CUBIC;
-		vec3 *pts = NULL;
+		vec3 *pts = nullptr;
 		unsigned int res = curve->computeInterpolation (nPts, &pts);
 		if (res && pts)
 		{
@@ -407,7 +407,7 @@ static void _TreatCommand (char command, float *parameters, unsigned int nParame
 		curve->addControlPoint (parameters[2], parameters[3], 0.);
 		
 		unsigned nPts = NPTS_CUBIC;
-		vec3 *pts = NULL;
+		vec3 *pts = nullptr;
 		unsigned int res = curve->computeInterpolation (nPts, &pts);
 		if (res && pts)
 		{
@@ -436,7 +436,7 @@ static void _TreatCommand (char command, float *parameters, unsigned int nParame
 		curve->addControlPoint (Xcurrent+parameters[2], Ycurrent+parameters[3], 0.);
 		
 		unsigned nPts = NPTS_CUBIC;
-		vec3 *pts = NULL;
+		vec3 *pts = nullptr;
 		unsigned int res = curve->computeInterpolation (nPts, &pts);
 		if (res && pts)
 		{
@@ -626,7 +626,7 @@ void Polygon2::input_from_svg_path (char *filename)
 
 	// convert a path (defined as in the svg specifications) to a polygon
 	// ref : http://www.w3.org/TR/SVG/paths.html
-	if (path == NULL || strlen (path) == 0)
+	if (path == nullptr || strlen (path) == 0)
 		return;
 
 	int i=0;
@@ -647,7 +647,7 @@ void Polygon2::input_from_svg_path (char *filename)
 		if ( _isCommand (path[i]) )
 		{
 			char command = path[i];
-			float *parameters = NULL;
+			float *parameters = nullptr;
 			int nParameters;
 			i = _ParseParameters (path, i+1, &parameters, &nParameters);
 			//printf ("new command : %c %d\n", command, nParameters);
@@ -663,7 +663,7 @@ void Polygon2::input_from_svg_path (char *filename)
 	for (unsigned int i=0; i<_polygon->m_nContours; i++)
 	{
 		printf ("contour %d : %d points\n", i, _polygon->get_n_points (i));
-		_polygon->add_contour (i, _polygon->get_n_points (i), NULL);
+		_polygon->add_contour (i, _polygon->get_n_points (i), nullptr);
 	}
 	
 	// re initialize the number of vertices in each contour
@@ -680,7 +680,7 @@ void Polygon2::input_from_svg_path (char *filename)
 		if ( _isCommand (path[i]) )
 		{
 			char command = path[i];
-			float *parameters = NULL;
+			float *parameters = nullptr;
 			int nParameters;
 			i = _ParseParameters (path, i+1, &parameters, &nParameters);
 			//printf ("new command : %c %d\n", command, nParameters);

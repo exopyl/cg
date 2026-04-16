@@ -375,7 +375,7 @@ TEST(TEST_cgimg_img, vectorization)
 	img->init_test_grayscale2(50);
 	
 	// colors in the image
-	Palette *pPalette = NULL;
+	Palette *pPalette = nullptr;
 	
 	if (1)
 		pPalette = img->get_palette ();
@@ -404,7 +404,7 @@ TEST(TEST_cgimg_img, vectorization)
 	if (bOk)
 	{
 		pRasterToVector->WriteFile(.1);
-		//pRasterToVector->WriteFilePolygonWithHole(true,false,true,NULL,.1,Color(0,0,0),false);
+		//pRasterToVector->WriteFilePolygonWithHole(true,false,true,nullptr,.1,Color(0,0,0),false);
 		pRasterToVector->WriteFilePolygonWithHole(.1);
 		pRasterToVector->WriteFile(.1);
 	}
@@ -689,7 +689,7 @@ TEST(TEST_cgimg_img, histogram_equalization_bezier)
     img.convert_to_grayscale();
 
     // Action
-    img.histogram_equalization_bezier(NULL);
+    img.histogram_equalization_bezier(nullptr);
 
     // Expectations
     EXPECT_EQ(img.width(), 10);

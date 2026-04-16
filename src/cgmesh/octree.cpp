@@ -6,15 +6,15 @@
 
 Octree::Octree ()
 {
-	m_pFather = NULL;
+	m_pFather = nullptr;
 	for (int i=0; i<8; i++)
-		m_pChildren[i] = NULL;
+		m_pChildren[i] = nullptr;
 	m_nPoints = 0;
-	m_pPoints = NULL;
+	m_pPoints = nullptr;
 	m_nIndices = 0;
-	m_pIndices = NULL;
+	m_pIndices = nullptr;
 	m_nTriangles = 0;
-	m_pTriangles = NULL;
+	m_pTriangles = nullptr;
 }
 
 Octree::~Octree ()
@@ -105,7 +105,7 @@ int Octree::Build (float *pPoints, int nPoints,
 		// no points for this child
         if (!childPointCounts[i])
 		{
-			m_pChildren[i] = NULL;
+			m_pChildren[i] = nullptr;
 			continue;
 		}
 
@@ -160,7 +160,7 @@ int Octree::BuildWithIndices (float *pPoints, int nPoints,
 		return -1;
 
 	// initialization
-	if (currentDepth == 0 && pIndices == NULL)
+	if (currentDepth == 0 && pIndices == nullptr)
 	{
 		nIndices = nPoints;
 		pIndices = (unsigned int*)malloc(nIndices*sizeof(unsigned int));
@@ -211,7 +211,7 @@ int Octree::BuildWithIndices (float *pPoints, int nPoints,
 		// no points for this child
 		if (!childPointCounts[i])
 		{
-			m_pChildren[i] = NULL;
+			m_pChildren[i] = nullptr;
 			continue;
 		}
 
@@ -339,7 +339,7 @@ int Octree::BuildForTriangles (float *pPoints, int nPoints,
 		// no triangle for this child
 		if (!childTriangleCounts[i])
 		{
-			m_pChildren[i] = NULL;
+			m_pChildren[i] = nullptr;
 			continue;
 		}
 
@@ -588,7 +588,7 @@ Octree* OctreeIt::First ()
 		if (m_pOctree->GetChildren()[i])
 			return m_pOctree->GetChildren()[i])->First ();
 
-	return NULL;
+	return nullptr;
 }
 
 Octree* OctreeIt::Next ()

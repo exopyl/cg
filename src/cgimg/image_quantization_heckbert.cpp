@@ -12,7 +12,7 @@
 */
 #define  FAST_REMAP
 #include <stdio.h>
-#include <stddef.h>              /* for NULL                   */
+#include <stddef.h>              /* for nullptr                   */
 #include <stdlib.h>              /* for "qsort"                */
 #include <float.h>               /* for FLT_MAX, FLT_MIN       */
 #define MAXCOLORS 256            /* maximum # of output colors */

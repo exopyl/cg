@@ -35,10 +35,10 @@ VectorizedPlane::VectorizedPlane (unsigned int *pElements, unsigned int nElement
 Cgeometric_primitives::Cgeometric_primitives (Mesh_half_edge *_model, char *filename)
 {
 	FILE *ptr = fopen (filename, "r");
-	if (ptr == NULL) return;
+	if (ptr == nullptr) return;
 
 	ngp = 0;
-	gp = NULL;
+	gp = nullptr;
 
 	model = _model;
 
@@ -70,7 +70,7 @@ printf ("igp = %d / %d\n", igp, ngp);
 	
 	  // create the geometric primitive
 	  VectorizedPoint *geometric_primitive =
-	    new VectorizedPoint (NULL,
+	    new VectorizedPoint (nullptr,
 					      0,
 					      VectorizedElement::GEOMETRIC_PRIMITIVE_POINT);
 	  geometric_primitive->m_position.Set (x, y, z);
@@ -319,7 +319,7 @@ int Cgeometric_primitives::get_n_geometric_primitives (void)
 
 VectorizedElement* Cgeometric_primitives::get_geometric_primitive (int index)
 {
-  return (index>=0 && index<ngp)? gp[index] : NULL;
+  return (index>=0 && index<ngp)? gp[index] : nullptr;
 }
 
 void Cgeometric_primitives::dump (void)

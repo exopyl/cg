@@ -9,7 +9,7 @@
 CurveDiscrete::CurveDiscrete ()
 {
 	m_nPoints = 0;
-	m_pPoints = NULL;
+	m_pPoints = nullptr;
 }
 
 CurveDiscrete::~CurveDiscrete ()

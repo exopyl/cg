@@ -85,7 +85,7 @@ Cregions_faces::export_selected_region_cloud_points (char *filename)
 	assert (ptr);
 
 	int n_vertices;
-	float *vertices = NULL;
+	float *vertices = nullptr;
 	Face **faces;
 	float *normales;
 
@@ -295,8 +295,8 @@ void
 Cregions_faces::refresh_colors (void)
 {
 	int i, j, nv, nf;
-	float *vc = NULL;
-	Face **f = NULL;
+	float *vc = nullptr;
+	Face **f = nullptr;
 
 	// get the array for the colors
 	if (mesh_half_edge)

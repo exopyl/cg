@@ -172,7 +172,7 @@ void MeshAlgoTensorEvaluator::ApplySteinerAux (int index, float radius, int *_n_
 	if (radius == 0.0)
     {
 		*_n_edges = 0;
-		*_edges = NULL;
+		*_edges = nullptr;
     }
 	else
     {
@@ -259,7 +259,7 @@ bool MeshAlgoTensorEvaluator::ApplySteiner (void)
     {
 		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
-			m_pDiffParams[i] = NULL;
+			m_pDiffParams[i] = nullptr;
 			continue;
 		}
 		
@@ -341,7 +341,7 @@ bool MeshAlgoTensorEvaluator::ApplySteiner (void)
 		
 		if (!relevant)
 		{
-			m_pDiffParams[i] = NULL;
+			m_pDiffParams[i] = nullptr;
 			continue;
 		}
 		

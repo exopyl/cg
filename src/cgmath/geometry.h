@@ -57,7 +57,7 @@ public:
 	virtual int GetIntersectionWithRay (vec3 o, vec3 d, float *_t, vec3 i, vec3 n);
 	virtual int GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n);
 
-	virtual void* GetMaterial (void) { return NULL; };
+	virtual void* GetMaterial (void) { return nullptr; };
 
 private:
 	// equation of a plane : ax + by + cz + d = 0
@@ -110,7 +110,7 @@ public:
 	virtual int GetIntersectionWithRay (vec3 o, vec3 d, float *_t, vec3 i, vec3 n);
 	virtual int GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n);
 
-	virtual void* GetMaterial (void) { return NULL; };
+	virtual void* GetMaterial (void) { return nullptr; };
 
 private:
 	float m_vCenter[3];
@@ -125,12 +125,12 @@ class Torus : public Geometry
 public:
 	Torus () {
 		R = 1.; r = 0.2;
-		m_pAABox = NULL;
+		m_pAABox = nullptr;
 	};
 	Torus (float _R, float _r) {
 		R = _R;
 		r = _r;
-		m_pAABox = NULL;
+		m_pAABox = nullptr;
 	};
 	~Torus () { if (m_pAABox) delete m_pAABox; };
 
@@ -138,7 +138,7 @@ public:
 	virtual int GetIntersectionWithRay (vec3 o, vec3 d, float *_t, vec3 i, vec3 n);
 	virtual int GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n);
 
-	virtual void* GetMaterial (void) { return NULL; };
+	virtual void* GetMaterial (void) { return nullptr; };
 
 public:
 	float R, r;
@@ -153,7 +153,7 @@ public:
 	Triangle () {
 		for (int i=0; i<3; i++)
 			vec3_init (m_v[i], 0., 0., 0.);
-		m_pAABox = NULL;
+		m_pAABox = nullptr;
 	};
 	~Triangle () { if (m_pAABox) delete m_pAABox; };
 
@@ -183,7 +183,7 @@ public:
 	virtual int GetIntersectionWithRay (vec3 o, vec3 d, float *_t, vec3 i, vec3 n);
 	virtual int GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n);
 
-	virtual void* GetMaterial (void) { return NULL; };
+	virtual void* GetMaterial (void) { return nullptr; };
 
 public:
 	vec3 m_v[3];

@@ -18,7 +18,7 @@
 
 #define DELETE( head, p ) if ( head )  { \
 				if ( head == head->next ) \
-					head = NULL;  \
+					head = nullptr;  \
 				else if ( p == head ) \
 					head = head->next; \
 				p->next->prev = p->prev;  \
@@ -32,15 +32,15 @@ Chull3D::Chull3D (float *v, int n)
   assert (v);
   
   /* init vertices */
-  vertices = NULL;
+  vertices = nullptr;
   for (i=0; i<n; i++)
   {
 	Chull3D_vertex *newvertex = new Chull3D_vertex (v[3*i], v[3*i+1], v[3*i+2]);
 	newvertex->index = i;
 	add_vertex (newvertex);
   }
-  edges = NULL;
-  faces = NULL;
+  edges = nullptr;
+  faces = nullptr;
 }
 
 void Chull3D::add_vertex    (Chull3D_vertex *v) { ADD (vertices, v); }
@@ -102,7 +102,7 @@ Chull3D::get_convex_hull (float **v, int *nv, int **f, int *nf)
   int   *cv_faces    = (int*)malloc(3*(*nf)*sizeof(int));
   if (!cv_vertices || !cv_faces)
     {
-      v = NULL; f = NULL;
+      v = nullptr; f = nullptr;
       *nv = *nf = 0;
       return 1;
     }
@@ -220,7 +220,7 @@ Chull3D::double_triangle (void)
   v2->processed = 1;
 
   /* create the two "twins" faces */
-  Chull3D_face *f0, *f1 = NULL;
+  Chull3D_face *f0, *f1 = nullptr;
   f0 = new Chull3D_face (this, v0, v1, v2, f1);
   f1 = new Chull3D_face (this, v2, v1, v0, f0);
 
@@ -257,7 +257,7 @@ Chull3D::double_triangle (void)
 int
 Chull3D::construct_hull (void)
 {
-  Chull3D_vertex *v = NULL, *vnext = NULL;
+  Chull3D_vertex *v = nullptr, *vnext = nullptr;
 
   v = vertices;
   do {
@@ -377,7 +377,7 @@ Chull3D::add_one (Chull3D_vertex *v)
 
 /*
  * goes through each data structure list and clears all flags
- * and NULLs out some pointers.
+ * and nullptrs out some pointers.
  */
 void
 Chull3D::clean_up (Chull3D_vertex *vnext)
@@ -390,7 +390,7 @@ Chull3D::clean_up (Chull3D_vertex *vnext)
 /*
  * runs through the edge list and cleans up the structure.
  * If there is a newface then it will put that face in place
- * of the visible face and NULL out newface. It also deletes
+ * of the visible face and nullptr out newface. It also deletes
  * so marked edges.
  */
 void
@@ -406,7 +406,7 @@ Chull3D::clean_edges (void)
 	{
 	  if (e->adj_faces[0]->visible) e->adj_faces[0] = e->new_face;
 	  else                          e->adj_faces[1] = e->new_face;
-	  e->new_face = NULL;
+	  e->new_face = nullptr;
 	}
       e = e->next;
   } while (e != edges);
@@ -466,8 +466,8 @@ Chull3D::clean_faces (void)
 void
 Chull3D::clean_vertices (Chull3D_vertex *vnext)
 {
-  Chull3D_edge *e = NULL;
-  Chull3D_vertex *v = NULL, *t = NULL;
+  Chull3D_edge *e = nullptr;
+  Chull3D_vertex *v = nullptr, *t = nullptr;
 
   /* mark all vertices incident to some undeleted edge as
      on the hull */
@@ -502,7 +502,7 @@ Chull3D::clean_vertices (Chull3D_vertex *vnext)
   /* reset flags */
   v = vertices;
   do {
-      v->duplicate = NULL;
+      v->duplicate = nullptr;
       v->on_hull = 0;
       v = v->next;
   } while (v != vertices);
@@ -514,7 +514,7 @@ Chull3D::clean_vertices (Chull3D_vertex *vnext)
 Chull3D_vertex::Chull3D_vertex (float x, float y, float z)
 {
   pt[0] = x;  pt[1] = y;  pt[2] = z;
-  duplicate = NULL;
+  duplicate = nullptr;
   on_hull   = 0;
   processed = 0;
 }
@@ -524,8 +524,8 @@ Chull3D_vertex::Chull3D_vertex (float x, float y, float z)
 /********************/
 Chull3D_edge::Chull3D_edge (Chull3D *hull3D)
 {
-  adj_faces[0]  = adj_faces[1]  = new_face = NULL;
-  end_points[0] = end_points[1] = NULL;
+  adj_faces[0]  = adj_faces[1]  = new_face = nullptr;
+  end_points[0] = end_points[1] = nullptr;
   to_delete = 0;
   hull3D->add_edge (this);
 }
@@ -535,8 +535,8 @@ Chull3D_edge::Chull3D_edge (Chull3D *hull3D)
 /********************/
 Chull3D_face::Chull3D_face (Chull3D *hull3D)
 {
-  edges[0] = edges[1] = edges[2] = NULL;
-  vertices[0] = vertices[1] = vertices[2] = NULL;
+  edges[0] = edges[1] = edges[2] = nullptr;
+  vertices[0] = vertices[1] = vertices[2] = nullptr;
   visible = 0;
   hull3D->add_face (this);
 }
@@ -587,7 +587,7 @@ Chull3D_face::Chull3D_face (Chull3D *hull3D, Chull3D_edge *e, Chull3D_vertex *v)
     /* if the edge exists, copy it into new_edges */
     if (!(new_edges[i] = e->end_points[i]->duplicate))
       {
-	/* otherwise (duplicate is NULL) */
+	/* otherwise (duplicate is nullptr) */
 	new_edges[i] = new Chull3D_edge (hull3D);
 	new_edges[i]->end_points[0] = e->end_points[i];
 	new_edges[i]->end_points[1] = v;
@@ -604,7 +604,7 @@ Chull3D_face::Chull3D_face (Chull3D *hull3D, Chull3D_edge *e, Chull3D_vertex *v)
   /* set the adjacent face pointers */
   for (i=0; i<2; ++i)
     for (j=0; j<2; ++j)
-      /* only the NULL link should be set to this face */
+      /* only the nullptr link should be set to this face */
       if (!new_edges[i]->adj_faces[j])
       {
 	new_edges[i]->adj_faces[j] = this;

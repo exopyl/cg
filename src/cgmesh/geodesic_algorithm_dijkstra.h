@@ -25,7 +25,7 @@ public:
 	void clear()
 	{
 		m_distance = GEODESIC_INF;
-		m_previous = NULL;
+		m_previous = nullptr;
 	}
 
 	bool operator()(node_pointer const s1, node_pointer const s2) const

@@ -12,14 +12,14 @@
 /* AUX_RGBImageRec*
 AUX_RGBImageRec *LoadBMP(char *Filename)
 {
-	if (!Filename) return NULL;
+	if (!Filename) return nullptr;
 	FILE *File=fopen(Filename,"r");
 	if (File)
 	{
 		fclose(File);
 		return auxDIBImageLoad(Filename);
 	}
-	return NULL;
+	return nullptr;
 }
 */
 int Img::import_bmp (const char *filename)
@@ -29,7 +29,7 @@ int Img::import_bmp (const char *filename)
 	BITMAPINFOHEADER bitmapInfoHeader;
 	
 	filePtr = fopen(filename,"rb");
-	if (filePtr == NULL)
+	if (filePtr == nullptr)
 		return -1;
 
 	//read the bitmap file header

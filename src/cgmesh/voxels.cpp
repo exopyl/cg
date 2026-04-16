@@ -16,7 +16,7 @@
 Voxel::Voxel ()
 {
 	m_bActivated = false;
-	//m_pData = NULL;
+	//m_pData = nullptr;
 }
 
 Voxel::~Voxel ()
@@ -30,7 +30,7 @@ Voxel::~Voxel ()
 Voxels::Voxels (unsigned int _nx, unsigned int _ny, unsigned int _nz)
 {
 	init (_nx, _ny, _nz);
-	m_pPalette = NULL;
+	m_pPalette = nullptr;
 }
 
 Voxels::~Voxels ()
@@ -152,7 +152,7 @@ int Voxels::input_vxl (char *filename)
 
 int Voxels::input_img (Img *img)
 {
-	if (img == NULL)
+	if (img == nullptr)
 			return -1;
 	init (img->width(), img->height(), 1);
 
@@ -186,7 +186,7 @@ int Voxels::input_img (Img *img)
 
 int Voxels::input_imgs (Img **imgs, unsigned int nImgs)
 {
-	if (imgs == NULL)
+	if (imgs == nullptr)
 			return -1;
 	init (imgs[0]->width(), imgs[0]->height(), nImgs);
 
@@ -704,7 +704,7 @@ int Voxels::triangulate (char *filename)
 	float *v = (float*)malloc(3*nv*sizeof(float));
 	unsigned int nf = 5*nv;
 	int *f = (int*)malloc(4*nf*sizeof(int)); // indices vertices
-	float *t = NULL;
+	float *t = nullptr;
 	if (eTextureMode == 0)
 		t = (float*)malloc(4*nf*sizeof(float)); // texture coordinates
 	else if (eTextureMode == 1)
@@ -1134,7 +1134,7 @@ Mesh* Voxels::ToMesh (void)
 	unsigned int ny = m_ny;
 	unsigned int nz = m_nz;
 	if (nx == 0 || ny == 0 || nz == 0)
-		return NULL;
+		return nullptr;
 
 	float xmin = 0.f, xmax = (float)nx;
 	float ymin = 0.f, ymax = (float)ny;

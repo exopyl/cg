@@ -45,7 +45,7 @@ float* DirectVisibilityOfPointSets::ComputeVisiblePoints (void)
 
 	delete ch;
 
-	return NULL;
+	return nullptr;
 }
 
 void DirectVisibilityOfPointSets::SetPoints (int nPoints, float *points)

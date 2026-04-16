@@ -47,7 +47,7 @@ Face::Face (const Face &f)
 		memcpy (m_pTextureCoordinates, f.m_pTextureCoordinates, 2*m_nVertices*sizeof(float));
 	}
 	else
-		m_pTextureCoordinates = NULL;
+		m_pTextureCoordinates = nullptr;
 
 	m_iMaterialId = f.m_iMaterialId;
 }
@@ -116,17 +116,17 @@ void Mesh::Init ()
 	m_name = std::string("#NoName#");
 	m_nVertices = 0;
 	m_nFaces = 0;
-	m_pVertices = NULL;
-	m_pVertexNormals = NULL;
-	m_pVertexColors = NULL;
-	m_pFaces = NULL;
-	m_pFaceNormals = NULL;
+	m_pVertices = nullptr;
+	m_pVertexNormals = nullptr;
+	m_pVertexColors = nullptr;
+	m_pFaces = nullptr;
+	m_pFaceNormals = nullptr;
 	m_nMaterials = 0;
-	m_pMaterials = NULL;
+	m_pMaterials = nullptr;
 	m_nTextureCoordinates = 0;
-	m_pTextureCoordinates = NULL;
-	m_pTensors = NULL;
-	m_pOctree = NULL;
+	m_pTextureCoordinates = nullptr;
+	m_pTensors = nullptr;
+	m_pOctree = nullptr;
 	m_revision = 0;
 }
 
@@ -134,7 +134,7 @@ void Mesh::InitVertexColors (float r, float g, float b)
 {
 	if (m_pVertexColors)
 		delete m_pVertexColors;
-	m_pVertexColors = NULL;
+	m_pVertexColors = nullptr;
 
 	if (m_nVertices > 0)
 	{
@@ -202,7 +202,7 @@ void Mesh::InitVertexColorsFromArray (float *array, char *defined)
 
 	if (m_pVertexColors)
 		delete m_pVertexColors;
-	m_pVertexColors = NULL;
+	m_pVertexColors = nullptr;
 
 	if (m_nVertices > 0)
 	{
@@ -269,9 +269,9 @@ void Mesh::InitVertexColorsFromArray (float *array, char *defined)
 
 void Mesh::InitVertices (unsigned int nVertices)
 {
-	m_pVertices = NULL;
-	m_pVertexColors = NULL;
-	m_pVertexNormals = NULL;
+	m_pVertices = nullptr;
+	m_pVertexColors = nullptr;
+	m_pVertexNormals = nullptr;
 
 	m_nVertices = nVertices;
 	if (m_nVertices)
@@ -294,8 +294,8 @@ void Mesh::InitVertices (unsigned int nVertices)
 
 void Mesh::InitFaces (unsigned int nFaces)
 {
-	m_pFaces = NULL;
-	m_pFaceNormals = NULL;
+	m_pFaces = nullptr;
+	m_pFaceNormals = nullptr;
 
 	m_nFaces = nFaces;
 	if (m_nFaces)
@@ -311,7 +311,7 @@ void Mesh::InitFaces (unsigned int nFaces)
 
 void Mesh::InitTensors (void)
 {
-	m_pTensors = NULL;
+	m_pTensors = nullptr;
 	if (m_nVertices)
 	{
 		m_pTensors = new Tensor*[m_nVertices];
@@ -332,7 +332,7 @@ void Mesh::Init (unsigned int nVertices, unsigned int nFaces)
 	InitFaces (nFaces);
 
 	m_nMaterials = 0;
-	m_pMaterials = NULL;
+	m_pMaterials = nullptr;
 
 	IncrementRevision();
 }
@@ -362,7 +362,7 @@ void Mesh::DeleteFaces (void)
 		}
 		delete m_pFaces;
 	}
-	m_pFaces = NULL;
+	m_pFaces = nullptr;
 	m_nFaces = 0;
 }
 
@@ -587,7 +587,7 @@ int Mesh::stats_vertices_in_faces (int *verticesinfaces, int n)
 	for (int i=0; i<m_nFaces; i++)
 	{
 		Face *f = m_pFaces[i];
-		if (f == NULL)
+		if (f == nullptr)
 			continue;
 		if (f->GetNVertices() >= n)
 			(verticesinfaces[n-1])++;

@@ -26,7 +26,7 @@ Mesh_half_edge::check_topology (void)
 	m_topology_ok.resize(m_pMesh->m_nVertices, 1);
 	for (unsigned int i=0; i<m_pMesh->m_nVertices; i++)
 	{
-		int *visited_edges = NULL;
+		int *visited_edges = nullptr;
 		int n_visited_edges = 0;
 
 		int e = GetCheMesh()->m_edges_vertex[i];
@@ -327,9 +327,9 @@ void Mesh_half_edge::edge_contract (int ei)
 	int f2 = GetCheMesh()->edge(GetCheMesh()->edge(ei).m_pair).m_face;
 
 	delete m_pMesh->m_pFaces[f1];
-	m_pMesh->m_pFaces[f1] = NULL;
+	m_pMesh->m_pFaces[f1] = nullptr;
 	delete m_pMesh->m_pFaces[f2];
-	m_pMesh->m_pFaces[f2] = NULL;
+	m_pMesh->m_pFaces[f2] = nullptr;
 
 	// update the half edge mesh
 	GetCheMesh()->edge_contract (ei);

@@ -116,7 +116,7 @@ Che_edge::Che_edge ()
 	m_he_next = -1;
 	m_visited = false;
 	m_valid = 1;
-	m_data = NULL;
+	m_data = nullptr;
 }
 
 void Che_edge::dump (int index)

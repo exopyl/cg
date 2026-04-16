@@ -24,9 +24,9 @@ private:
 
 GEN_T BINTREE::bintree (const T& data)
 {
-	*m_data = NULL;
-	m_left = NULL;
-	m_right = NULL;
+	*m_data = nullptr;
+	m_left = nullptr;
+	m_right = nullptr;
 }
 
 GEN_T BINTREE::bintree (const T& data, const BINTREE& left, const BINTREE& right)
@@ -41,8 +41,8 @@ GEN_T BINTREE::bintree (const BINTREE& src)
 	*m_data = src.data;
 	if (src.is_leaf())
 	{
-		m_left = NULL;
-		m_right = NULL;
+		m_left = nullptr;
+		m_right = nullptr;
 	}
 	else
 	{
@@ -63,7 +63,7 @@ GEN_T BINTREE::~bintree ()
 
 GEN_T bool BINTREE::is_leaf (void) const
 {
-	return (bool)((m_left == NULL) && (m_right == NULL));
+	return (bool)((m_left == nullptr) && (m_right == nullptr));
 }
 
 GEN_T T BINTREE::get_data (void) const

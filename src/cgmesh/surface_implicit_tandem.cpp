@@ -228,8 +228,8 @@ static int tandem_update_edge_quadric (mc_triangulation_t *pTri, int he_idx, flo
 			error = INFINITY;
 	}
 	
-	edge_data_t *edata = NULL;
-	if (he.m_data == NULL)
+	edge_data_t *edata = nullptr;
+	if (he.m_data == nullptr)
 	{
 		he.m_data = (edge_data_t*)malloc(sizeof(edge_data_t));
 	}
@@ -492,5 +492,5 @@ void ImplicitSurfaceTandem::get_triangulation_post (int *nvertices, float **vert
 	*faces = tri->faces;
 
 	free (tri);
-	data = NULL;
+	data = nullptr;
 }

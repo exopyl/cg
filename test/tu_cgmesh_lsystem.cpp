@@ -16,7 +16,7 @@ TEST(TEST_cgmesh_lsystem, cube)
 		LSystem* pLSystem = pLSystemData->pLSystem;
 
 		//LSystem *pLSystem = mapLSystem[LSYSTEM_SQUARE_SIERPINSKI];
-		if (pLSystem == NULL)
+		if (pLSystem == nullptr)
 			continue;
 
 		//for (int j=0; j<pLSystemData->nNberIterations; j++,	pLSystem->Next ())
@@ -148,7 +148,7 @@ TEST(TEST_cgmesh_lsystem, regression_strings)
 		LSystemData* pLSystemData = (*itLSystem).second;
 		LSystem* pLSystem = pLSystemData->pLSystem;
 
-		if (pLSystem == NULL)
+		if (pLSystem == nullptr)
 			continue;
 
 		std::string name = pLSystem->GetName();

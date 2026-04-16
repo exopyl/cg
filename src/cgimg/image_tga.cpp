@@ -3,7 +3,7 @@
 
 TGAImg::TGAImg()
  { 
-  pImage=pPalette=pData=NULL;
+  pImage=pPalette=pData=nullptr;
   iWidth=iHeight=iBPP=bEnc=0;
   lImageSize=0;
  }
@@ -14,19 +14,19 @@ TGAImg::~TGAImg()
   if(pImage)
    {
     delete [] pImage;
-    pImage=NULL;
+    pImage=nullptr;
    }
 
   if(pPalette)
    {
     delete [] pPalette;
-    pPalette=NULL;
+    pPalette=nullptr;
    }
 
   if(pData)
    {
     delete [] pData;
-    pData=NULL;
+    pData=nullptr;
    }
  }
 
@@ -42,19 +42,19 @@ int TGAImg::Load(char* szFilename)
    if(pImage)
     {
      delete [] pImage;
-     pImage=NULL;
+     pImage=nullptr;
     }
 
    if(pPalette)
     {
      delete [] pPalette;
-     pPalette=NULL;
+     pPalette=nullptr;
     }
 
   // Open the specified file
   fIn.open(szFilename,ios::binary);
     
-   //if(fIn==NULL)
+   //if(fIn==nullptr)
    // return IMG_ERR_NO_FILE;
 
   // Get file size
@@ -69,7 +69,7 @@ int TGAImg::Load(char* szFilename)
 
   pData=new unsigned char[ulSize];
 
-   if(pData==NULL)
+   if(pData==nullptr)
     {
      fIn.close();
      return IMG_ERR_MEM_FAIL;
@@ -174,7 +174,7 @@ int TGAImg::Load(char* szFilename)
 
   // Release file memory
   delete [] pData;
-  pData=NULL;
+  pData=nullptr;
 
   return IMG_OK;
  }
@@ -185,7 +185,7 @@ int TGAImg::ReadHeader() // Examine the header and populate our class attributes
   short ColMapStart,ColMapLen;
   short x1,y1,x2,y2;
 
-   if(pData==NULL)
+   if(pData==nullptr)
     return IMG_ERR_NO_FILE;
 
    if(pData[1]>1)    // 0 (RGB) and 1 (Indexed) are the only types we know about
@@ -249,7 +249,7 @@ int TGAImg::LoadRawData() // Load uncompressed image data
 
   pImage=new unsigned char[lImageSize];
 
-   if(pImage==NULL)
+   if(pImage==nullptr)
     return IMG_ERR_MEM_FAIL;
 
   iOffset=pData[0]+18; // Add header to ident field size
@@ -284,12 +284,12 @@ int TGAImg::LoadTgaRLEData() // Load RLE compressed image data
   pCur=&pData[iOffset];
 
   // Allocate space for the image data
-   if(pImage!=NULL)
+   if(pImage!=nullptr)
     delete [] pImage;
 
   pImage=new unsigned char[lImageSize];
 
-   if(pImage==NULL)
+   if(pImage==nullptr)
     return IMG_ERR_MEM_FAIL;
 
   // Decode
@@ -330,13 +330,13 @@ int TGAImg::LoadTgaPalette() // Load a 256 color palette
    if(pPalette)
     {
      delete [] pPalette;
-     pPalette=NULL;
+     pPalette=nullptr;
     }
 
   // Create space for new palette
   pPalette=new unsigned char[768];
 
-   if(pPalette==NULL)
+   if(pPalette==nullptr)
     return IMG_ERR_MEM_FAIL;
 
   // VGA palette is the 768 bytes following the header

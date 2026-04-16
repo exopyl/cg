@@ -16,7 +16,7 @@ CurveNURBS::CurveNURBS ()
 	m_weights = (float*)malloc(m_nMaxControlPoints*sizeof(float));
 
 	m_nKnots = 0;
-	m_knots = NULL;
+	m_knots = nullptr;
 	m_nControlPoints = 0;
 }
 
@@ -69,9 +69,9 @@ CurveNURBS::addControlPoint (float x, float y, float z, float weight)
 	{
 		m_nMaxControlPoints *= 2;
 		m_controlPoints = (vec3*)realloc((void*)m_controlPoints, m_nMaxControlPoints*sizeof(vec3));
-		if (m_controlPoints == NULL) return 0;
+		if (m_controlPoints == nullptr) return 0;
 		m_weights = (float*)realloc((void*)m_weights, m_nMaxControlPoints*sizeof(vec3));
-		if (m_weights == NULL) return 0;
+		if (m_weights == nullptr) return 0;
 	}
 	m_controlPoints[m_nControlPoints][0] = x;
 	m_controlPoints[m_nControlPoints][1] = y;
@@ -173,13 +173,13 @@ CurveNURBS::computeInterpolation (int _nPoints, vec3 **_points)
 {
 	if (_nPoints < 0)
 	{
-		_points = NULL;
+		_points = nullptr;
 		return 0;
 	}
 	vec3 *points = (vec3*)malloc(_nPoints*sizeof(vec3));
 	if (!points)
 	{
-		_points = NULL;
+		_points = nullptr;
 		return 0;
 	}
 	float t = 0.0;

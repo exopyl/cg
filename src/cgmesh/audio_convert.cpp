@@ -3,7 +3,7 @@
 Img* audio_2_image (Audio *pAudio)
 {
 	if (!pAudio)
-		return NULL;
+		return nullptr;
 	
 	unsigned int length = pAudio->get_length ();
 	unsigned int w = 1024;
@@ -45,7 +45,7 @@ Img* audio_2_image (Audio *pAudio)
 
 Img* audio_fft_2_image (Audio *pAudio)
 {
-	return NULL;
+	return nullptr;
 }
 
 

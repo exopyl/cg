@@ -28,11 +28,11 @@ void create_indexation(vec3 *pTriangles, unsigned int nPoints,
 	unsigned int i, j, index;
 
 	PointInfo *pPoints = new PointInfo[nPoints];
-	if(pPoints == NULL)
+	if(pPoints == nullptr)
 		return;
 
 	bool *pOk = new bool[nPoints];
-	if(pOk == NULL)
+	if(pOk == nullptr)
 		return;
 
 	for(i=0 ; i<nPoints ; i++)
@@ -116,7 +116,7 @@ void remove_unused_vertices (vec3 **pVertices, unsigned int *nVerticesNew, unsig
 	unsigned int nVertices = 3*nFaces;
 
 	int *pNewIndices = (int*)malloc(nVertices*sizeof(int));
-	if (pNewIndices == NULL)
+	if (pNewIndices == nullptr)
 		return;
 
 	// init

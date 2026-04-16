@@ -38,7 +38,7 @@ int Img::import_png (const char *filename)
 	}
 
         /* initialize stuff */
-        png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+        png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
 
         if (!png_ptr)
 	{
@@ -92,7 +92,7 @@ int Img::import_png (const char *filename)
                 png_byte* row = row_pointers[y];
                 for (x=0; x<width; x++)
 		{
-			png_byte* ptr = NULL;
+			png_byte* ptr = nullptr;
                         if (png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGBA)
 			{
 				ptr = &(row[x*4]);
@@ -122,9 +122,9 @@ int Img::export_png (const char *filename)
 	png_byte color_type = PNG_COLOR_TYPE_RGBA;
 	png_byte bit_depth = 8;
 	
-	png_structp png_ptr = NULL;
-	png_infop info_ptr = NULL;
-	png_bytep * row_pointers = NULL;
+	png_structp png_ptr = nullptr;
+	png_infop info_ptr = nullptr;
+	png_bytep * row_pointers = nullptr;
 
         // create file
         FILE *fp = fopen(filename, "wb");
@@ -136,7 +136,7 @@ int Img::export_png (const char *filename)
 
 
         // initialize stuff
-        png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+        png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
         if (!png_ptr)
 	{
                 printf ("[write_png_file] png_create_write_struct failed\n");
@@ -201,7 +201,7 @@ int Img::export_png (const char *filename)
 		printf ("[write_png_file] Error during end of write\n");
 		return -1;
 	}
-        png_write_end(png_ptr, NULL);
+        png_write_end(png_ptr, nullptr);
 
         // cleanup heap allocation
         for (int y=0; y<m_iHeight; y++)

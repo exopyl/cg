@@ -14,9 +14,9 @@ Coffscreen_rendering::Coffscreen_rendering (Mesh *_model)
 {
   assert (_model);
   model = _model;
-  buffer           = NULL;
-  zbuffer          = NULL;
-  floating_zbuffer = NULL;
+  buffer           = nullptr;
+  zbuffer          = nullptr;
+  floating_zbuffer = nullptr;
   zoom = 1.0;
 
   /* temporaire */
@@ -191,7 +191,7 @@ Coffscreen_rendering::rendering (char *output)
   printf ("offscreen MESA\n");
 
   /* create a RGBA-mode context */
-  OSMesaContext ctx = OSMesaCreateContext (GL_RGBA, NULL);
+  OSMesaContext ctx = OSMesaCreateContext (GL_RGBA, nullptr);
   /* Allocate the image buffer */
   GLubyte *buffer = (GLubyte*)malloc (width*height*4*sizeof(GLubyte));
   /* Bind the buffer to the context and make it current */
@@ -203,7 +203,7 @@ Coffscreen_rendering::rendering (char *output)
   int i;
   FILE *ptr;
   ptr = fopen ("screenshot_mesa.ppm", "w");
-  if (ptr == NULL) return;
+  if (ptr == nullptr) return;
   fprintf (ptr, "P6\n%d %d\n255\n", width, height);
   for (i=height-1; i>=0; i--)
     fwrite (&buffer[3*width*i], sizeof(GLubyte), 3*width, ptr);
@@ -242,7 +242,7 @@ Coffscreen_rendering::rendering (char *output)
 
   Display *dpy;
   dpy = XOpenDisplay (0); /* open a X display connection */
-  if (dpy == NULL)
+  if (dpy == nullptr)
     {
       printf ("couldn't open the display\n");
       return;
@@ -251,7 +251,7 @@ Coffscreen_rendering::rendering (char *output)
   /* select a X visual */
   int screen = DefaultScreen (dpy);
   XVisualInfo *vis = glXChooseVisual (dpy, screen, attributesList);
-  if (vis == NULL)
+  if (vis == nullptr)
     {
       printf ("couldn't open the visual\n");
       return;
@@ -259,7 +259,7 @@ Coffscreen_rendering::rendering (char *output)
 
   /* get a context */
   GLXContext context = glXCreateContext (dpy, vis, 0, GL_FALSE);
-  if (context == NULL)
+  if (context == nullptr)
     {
       printf ("couldn't create a rendering context\n");
       return;
@@ -302,7 +302,7 @@ Coffscreen_rendering::rendering (char *output)
   HGLRC m_hOldRC = ::wglGetCurrentContext(); 
   
   /* create a new device context */
-  HDC mHDC = CreateCompatibleDC (NULL);
+  HDC mHDC = CreateCompatibleDC (nullptr);
   
   /* create a BITMAPINFOHEADER structure */
   BITMAPINFOHEADER *mBIH = new BITMAPINFOHEADER;
@@ -317,7 +317,7 @@ Coffscreen_rendering::rendering (char *output)
   mBIH->biClrUsed     = 0;
   
   /* create the DIB section */
-  HBITMAP mHBmp = CreateDIBSection (mHDC, (BITMAPINFO*)mBIH, DIB_RGB_COLORS, (void**)&bits, NULL, 0);
+  HBITMAP mHBmp = CreateDIBSection (mHDC, (BITMAPINFO*)mBIH, DIB_RGB_COLORS, (void**)&bits, nullptr, 0);
   if (mHBmp)
     HBITMAP nHBmpOld = (HBITMAP)::SelectObject (mHDC, mHBmp);
   
@@ -419,7 +419,7 @@ Coffscreen_rendering::save_render (char *filename)
 {
   FILE *ptr;
   ptr = fopen (filename, "wb");
-  if (ptr == NULL) return;
+  if (ptr == nullptr) return;
 //#ifdef linux
   fprintf (ptr, "P6\n%d %d\n255\n", width, height);
   for (int i=height-1; i>=0; i--)
@@ -445,7 +445,7 @@ Coffscreen_rendering::save_render_zbuffer (char *filename)
   int i,j;
   FILE *ptr;
   ptr = fopen (filename, "w");
-  if (ptr == NULL) return;
+  if (ptr == nullptr) return;
 //#ifdef linux
   fprintf (ptr, "P5\n%d %d\n255\n", width, height);
   for (i=height-1; i>=0; i--)
@@ -468,7 +468,7 @@ Coffscreen_rendering::save_render_floating_zbuffer (char *filename)
   int i,j;
   FILE *ptr;
   ptr = fopen (filename, "w");
-  if (ptr == NULL) return;
+  if (ptr == nullptr) return;
 
   /*
   fprintf (ptr, "%d %d\n", width, height);

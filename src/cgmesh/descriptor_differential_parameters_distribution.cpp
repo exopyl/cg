@@ -10,7 +10,7 @@ Cdifferential_parameters_distribution::Cdifferential_parameters_distribution (Me
   assert (_model);
   model = _model;
 
-  histogram = NULL;
+  histogram = nullptr;
 }
 
 Cdifferential_parameters_distribution::~Cdifferential_parameters_distribution ()

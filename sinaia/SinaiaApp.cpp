@@ -7,7 +7,7 @@
 
 bool MyApp::OnInit()
 {
-    wxFrame* frame = new MyFrame(NULL,
+    wxFrame* frame = new MyFrame(nullptr,
                                  wxID_ANY,
                                  wxT("Sinaia"),
                                  wxDefaultPosition,

@@ -46,7 +46,7 @@ bool
 StrangeAttractor_QuadraticMaps3D::get_signature (char **signature, int *length)
 {
 	char *_signature = (char*)malloc(19*sizeof(char));
-	if (_signature == NULL)
+	if (_signature == nullptr)
 		return false;
 
 	int i=0;

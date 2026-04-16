@@ -14,9 +14,9 @@ Cshape_distribution_osada::Cshape_distribution_osada (int _nv, float *_v, int _n
   v  = _v;
   f  = _f;
 
-  cumulative_areas = NULL;
-  selected_points  = NULL;
-  histogram        = NULL;
+  cumulative_areas = nullptr;
+  selected_points  = nullptr;
+  histogram        = nullptr;
 
   compute_cumulative_areas ();
 }

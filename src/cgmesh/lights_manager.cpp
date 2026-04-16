@@ -17,7 +17,7 @@ void LightsManager::Initialize (void)
 {
 	m_nLights = 0;
 	for (int i=0; i<8; i++)
-		m_pLights[i] = NULL;
+		m_pLights[i] = nullptr;
 }
 
 int LightsManager::AddLight (Light* light)
@@ -49,7 +49,7 @@ void LightsManager::dump (void)
 	{
 		printf ("%d / 8 :\n", i);
 		Light *light = m_pLights[i];
-		if (light != NULL)
+		if (light != nullptr)
 			light->Dump ();
 		else
 			printf (" no light stored\n");

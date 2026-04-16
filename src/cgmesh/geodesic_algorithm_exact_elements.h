@@ -135,7 +135,7 @@ public:
 	unsigned& source_index(){return m_source_index;};
 
 	void initialize(edge_pointer edge, 
-					SurfacePoint* point = NULL, 
+					SurfacePoint* point = nullptr, 
 					unsigned source_index = 0);
 
 protected:
@@ -162,18 +162,18 @@ protected:
 class IntervalList						//list of the of intervals of the given edge
 {
 public:
-	IntervalList(){m_first = NULL;};	
+	IntervalList(){m_first = nullptr;};	
 	~IntervalList(){};
 
 	void clear()
 	{
-		m_first = NULL;
+		m_first = nullptr;
 	};
 
 	void initialize(edge_pointer e)
 	{
 		m_edge = e;
-		m_first = NULL;
+		m_first = nullptr;
 	};
 
 	interval_pointer covering_interval(double offset)			//returns the interval that covers the offset
@@ -186,7 +186,7 @@ public:
 			p = p->next();
 		}
 
-		return p;// && p->start() <= offset ? p : NULL;
+		return p;// && p->start() <= offset ? p : nullptr;
 	};
 
 	void find_closest_point(SurfacePoint* point, 
@@ -196,7 +196,7 @@ public:
 	{
 		interval_pointer p = m_first; 
 		distance = GEODESIC_INF;
-		interval = NULL;
+		interval = nullptr;
 
 		double x,y;
 		m_edge->local_coordinates(point, x, y);
@@ -394,8 +394,8 @@ inline void Interval::initialize(edge_pointer edge,
 								 SurfacePoint* source,		
 								 unsigned source_index)
 {
-	m_next = NULL;
-	//m_geodesic_previous = NULL;	
+	m_next = nullptr;
+	//m_geodesic_previous = nullptr;	
 	m_direction = UNDEFINED_DIRECTION;
 	m_edge = edge;
 	m_source_index = source_index;

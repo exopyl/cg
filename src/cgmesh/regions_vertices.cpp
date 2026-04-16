@@ -174,8 +174,8 @@ Cregions_vertices::export_selected_region_cloud_points (char *filename)
   FILE *ptr = fopen (filename,"wt");
   assert (ptr);
 
-  float *v = NULL;
-  float *vn = NULL;
+  float *v = nullptr;
+  float *vn = nullptr;
 
   // get the mesh
   if (mesh_half_edge)
@@ -218,7 +218,7 @@ void
 Cregions_vertices::init_from_max_curvatures (void)
 {
 	/*
-  if (mesh_topology->tensor == NULL) return;
+  if (mesh_topology->tensor == nullptr) return;
   for (int i=0; i<size; i++)
     datas[i] = mesh_topology->tensor[i]->get_kappa_max ();
 	*/
@@ -231,7 +231,7 @@ void
 Cregions_vertices::init_from_min_curvatures (void)
 {
 	/*
-  if (mesh_topology->tensor == NULL) return;
+  if (mesh_topology->tensor == nullptr) return;
   for (int i=0; i<size; i++)
     datas[i] = mesh_topology->tensor[i]->get_kappa_min ();
 	*/
@@ -247,7 +247,7 @@ Cregions_vertices::init_from_closest_to_zero_curvatures (void)
   if (mesh_half_edge)
     {
       Ctensor **tensor = mesh_half_edge->m_tensor;
-      if (tensor == NULL) return;
+      if (tensor == nullptr) return;
       for (int i=0; i<size; i++)
 	{
 	  if (tensor[i])
@@ -274,7 +274,7 @@ Cregions_vertices::init_from_highest_absolute_curvatures (void)
   if (mesh_half_edge)
   {
     Ctensor **tensor = mesh_half_edge->m_tensor;
-    if (tensor == NULL) return;
+    if (tensor == nullptr) return;
     for (int i=0; i<size; i++)
       {
 	if (tensor[i])

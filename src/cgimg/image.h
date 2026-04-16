@@ -24,7 +24,7 @@ public:
 	Img (const Img &img);
 	~Img ();
 
-	int load (char const *filename, char const *path = NULL);
+	int load (char const *filename, char const *path = nullptr);
 	int save (char const *filename);
 
 	// getters / setters
@@ -67,7 +67,7 @@ public:
 	void get_histogram (float histogram[256], int normalized = 1);
 	Img* get_histogram_img (unsigned int height);
 	void histogram_equalization (void);
-	void histogram_equalization_bezier (CurveBezier *bezier = NULL);
+	void histogram_equalization_bezier (CurveBezier *bezier = nullptr);
 	void invert (void);
 	void contrast (float k);
 

@@ -32,14 +32,14 @@ public:
 	void WriteHeader (float fWidth, float fHeight);
 	void WriteFooter (void);
 
-	void WriteStyleBegin (char* pStroke = NULL, float fStrokeWidth = 1.0, char * pColorFill = NULL);
+	void WriteStyleBegin (char* pStroke = nullptr, float fStrokeWidth = 1.0, char * pColorFill = nullptr);
 	void WriteStyleEnd ();
 
-	void WriteGroupBegin (char *strId = NULL);
+	void WriteGroupBegin (char *strId = nullptr);
 	void WriteGroupEnd (void);
 
-	void WritePath (const std::list<point2D>& listPoints, PathStyle *pathStyle = NULL);
-	void WritePath (const std::list<std::list<point2D> >& listsPoints, PathStyle *pathStyle = NULL);
+	void WritePath (const std::list<point2D>& listPoints, PathStyle *pathStyle = nullptr);
+	void WritePath (const std::list<std::list<point2D> >& listsPoints, PathStyle *pathStyle = nullptr);
 
 	static inline void PathStyle_init (PathStyle *pathStyle)
 		{

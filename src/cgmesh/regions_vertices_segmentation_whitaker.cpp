@@ -11,8 +11,8 @@ public:
   {
     curvature = _curvature;
     label     = _label;
-    previous  = NULL;
-    next      = NULL;
+    previous  = nullptr;
+    next      = nullptr;
   };
   
   float    curvature;
@@ -153,7 +153,7 @@ Cregions_vertices::init_from_whitaker (void)
 	      region_walk = region_walk->next;
 	    }
 	    label_current = region_walk->label;
-	    while (region_walk != NULL)
+	    while (region_walk != nullptr)
 	      {
 		region_walk->label = label_current;
 		region_walk = region_walk->previous;

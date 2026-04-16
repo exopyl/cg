@@ -34,7 +34,7 @@ int Img::export_jpg (const char *filename)
 	jpeg_create_compress(&cinfo);
 
 	// Step 2: specify data destination (eg, a file)
-	if ((outfile = fopen(filename, "wb")) == NULL)
+	if ((outfile = fopen(filename, "wb")) == nullptr)
 	{
 		fprintf(stderr, "can't open %s\n", filename);
 		return -1;
@@ -119,7 +119,7 @@ int Img::import_jpg (const char *filename)
 	JSAMPARRAY buffer;
 	int row_stride;
 	
-	if ((infile = fopen(filename, "rb")) == NULL) {
+	if ((infile = fopen(filename, "rb")) == nullptr) {
 		fprintf(stderr, "can't open %s\n", filename);
 		return 0;
 	}

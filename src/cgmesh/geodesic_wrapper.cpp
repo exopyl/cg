@@ -6,7 +6,7 @@
 
 GeodesicWrapper::GeodesicWrapper ()
 {
-	m_algorithm = NULL;
+	m_algorithm = nullptr;
 }
 
 GeodesicWrapper::~GeodesicWrapper ()

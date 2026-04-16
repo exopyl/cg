@@ -25,7 +25,7 @@ public:
 	void clear()
 	{
 		m_distance = GEODESIC_INF;
-		m_previous = NULL;
+		m_previous = nullptr;
 	}
 
 	bool operator()(node_pointer const s1, node_pointer const s2) const
@@ -48,7 +48,7 @@ public:
 	typedef DijkstraNode1 Node;
 	typedef Node* node_pointer;
 
-	GeodesicAlgorithmDijkstraAlternative(geodesic::Mesh* mesh = NULL):
+	GeodesicAlgorithmDijkstraAlternative(geodesic::Mesh* mesh = nullptr):
 		GeodesicAlgorithmBase(mesh),
 		m_nodes(mesh->vertices().size())
 	{
@@ -63,7 +63,7 @@ public:
 
 	virtual void propagate(std::vector<SurfacePoint>& sources,
    						   double max_propagation_distance  = GEODESIC_INF,			//propagation algorithm stops after reaching the certain distance from the source
-						   std::vector<SurfacePoint>* stop_points = NULL); //or after ensuring that all the stop_points are covered
+						   std::vector<SurfacePoint>* stop_points = nullptr); //or after ensuring that all the stop_points are covered
 
 	virtual void trace_back(SurfacePoint& destination,		//trace back piecewise-linear path
 							std::vector<SurfacePoint>& path);
@@ -103,7 +103,7 @@ inline unsigned GeodesicAlgorithmDijkstraAlternative::best_source(SurfacePoint& 
 		m_mesh->closest_vertices(&point, &possible_vertices);
 
 		best_source_distance = GEODESIC_INF;
-		vertex_pointer min_vertex = NULL;
+		vertex_pointer min_vertex = nullptr;
 		for(unsigned i=0; i<possible_vertices.size(); ++i)
 		{
 			vertex_pointer v = possible_vertices[i];
@@ -134,7 +134,7 @@ inline void GeodesicAlgorithmDijkstraAlternative::trace_back(SurfacePoint& desti
 		m_mesh->closest_vertices(&destination, &possible_vertices);
 
 		double min_distance = GEODESIC_INF;
-		vertex_pointer min_vertex = NULL;
+		vertex_pointer min_vertex = nullptr;
 		for(unsigned i=0; i<possible_vertices.size(); ++i)
 		{
 			vertex_pointer v = possible_vertices[i];
@@ -196,7 +196,7 @@ inline void GeodesicAlgorithmDijkstraAlternative::propagate(std::vector<SurfaceP
 			{
 				node->distance_from_source() = distance;
 				node->source_index() = i;
-				node->previous() = NULL;
+				node->previous() = nullptr;
 			}
 		}
 		visible_vertices.clear();

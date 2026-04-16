@@ -5,8 +5,8 @@
 //
 NPR_Border::NPR_Border ()
 {
-	m_pMesh = NULL;
-	m_pVMeshes = NULL;
+	m_pMesh = nullptr;
+	m_pVMeshes = nullptr;
 }
 
 //

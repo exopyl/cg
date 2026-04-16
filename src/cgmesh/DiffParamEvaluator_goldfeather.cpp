@@ -15,7 +15,7 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
     {
 		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
-			m_pDiffParams[i] = NULL;
+			m_pDiffParams[i] = nullptr;
 			continue;
 		}
 
@@ -126,7 +126,7 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 		
 		if (iwalk != n_neighbours)
 		{
-			m_pDiffParams[i] = NULL;
+			m_pDiffParams[i] = nullptr;
 			if (A) free (A);
 			if (B) free (B);
 			continue;
@@ -177,7 +177,7 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 				tensor_walk->SetDirectionMax (b1.x, b1.y, b1.z);
 				tensor_walk->SetDirectionMin (b2.x, b2.y, b2.z);
 				*/
-				m_pDiffParams[i] = NULL;
+				m_pDiffParams[i] = nullptr;
 				continue;
 			}
 			
@@ -277,7 +277,7 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 			m_pDiffParams[i] = pDiffParam_walk;
 			
 			if (kappa1 > 1.0)
-				m_pDiffParams[i] = NULL;
+				m_pDiffParams[i] = nullptr;
     }
 
 	return true;

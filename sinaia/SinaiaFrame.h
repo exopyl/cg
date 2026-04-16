@@ -167,7 +167,7 @@ private:
     wxGrid* CreateGrid();
     wxSizeReportCtrl* CreateSizeReportCtrl(int width = 80, int height = 80);
     wxPoint GetStartPosition();
-    wxHtmlWindow* CreateHTMLCtrl(wxWindow* parent = NULL);
+    wxHtmlWindow* CreateHTMLCtrl(wxWindow* parent = nullptr);
 
 	wxAuiNotebook* CreateNotebook(void);
 

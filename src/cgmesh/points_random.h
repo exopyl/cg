@@ -24,7 +24,7 @@ public:
 class PointSetRandom : public PointSetGenerator
 {
 public:
-	PointSetRandom () { m_nPoints = 0; m_points = NULL; };
+	PointSetRandom () { m_nPoints = 0; m_points = nullptr; };
 	~PointSetRandom () { if (m_points) free (m_points); };
 	void generate (int nPoints)
 	{
@@ -48,6 +48,6 @@ public:
 			m_points[3*i+2] = 2.0*(float)rand()/RAND_MAX - 1.0;
 		}
 	};
-	void reset (void) {m_nPoints = 0; if (m_points) free (m_points); m_points = NULL; };
+	void reset (void) {m_nPoints = 0; if (m_points) free (m_points); m_points = nullptr; };
 private:
 };

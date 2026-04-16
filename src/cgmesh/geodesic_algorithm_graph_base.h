@@ -23,7 +23,7 @@ public:
 
 	void propagate(std::vector<SurfacePoint>& sources,
    				   double max_propagation_distance = GEODESIC_INF,			//propagation algorithm stops after reaching the certain distance from the source
-				   std::vector<SurfacePoint>* stop_points = NULL); //or after ensuring that all the stop_points are covered
+				   std::vector<SurfacePoint>* stop_points = nullptr); //or after ensuring that all the stop_points are covered
 
 	void trace_back(SurfacePoint& destination,		//trace back piecewise-linear path
 		std::vector<SurfacePoint>& path);
@@ -52,7 +52,7 @@ protected:
 
 	node_pointer best_first_node(SurfacePoint& point, double& best_total_distance)
 	{
-		node_pointer best_node = NULL;	
+		node_pointer best_node = nullptr;	
 		if(point.type() == VERTEX)		
 		{
 			vertex_pointer v = (vertex_pointer)point.base_element();
@@ -83,7 +83,7 @@ protected:
 		if(best_total_distance > m_propagation_distance_stopped)		//result is unreliable
 		{
 			best_total_distance = GEODESIC_INF;
-			return NULL;
+			return nullptr;
 		}
 		else
 		{
@@ -141,7 +141,7 @@ void GeodesicAlgorithmGraphBase<Node>::propagate(std::vector<SurfacePoint>& sour
 			{
 				node->distance_from_source() = distance;
 				node->source_index() = i;
-				node->previous() = NULL;
+				node->previous() = nullptr;
 			}
 		}
 		visible_nodes.clear();

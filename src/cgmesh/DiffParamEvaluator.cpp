@@ -6,8 +6,8 @@
 MeshAlgoTensorEvaluator::MeshAlgoTensorEvaluator ()
 {
 	m_nDiffParams = 0;
-	m_pDiffParams = NULL;
-	m_pModel = NULL;
+	m_pDiffParams = nullptr;
+	m_pModel = nullptr;
 }
 
 //
@@ -30,14 +30,14 @@ void MeshAlgoTensorEvaluator::Reset (void)
 			if (m_pDiffParams[i])
 			{
 				delete m_pDiffParams[i];
-				m_pDiffParams[i] = NULL;
+				m_pDiffParams[i] = nullptr;
 			}
 		}
 		delete (m_pDiffParams);
-		m_pDiffParams = NULL;
+		m_pDiffParams = nullptr;
 	}
 	m_nDiffParams = 0;
-	m_pModel = NULL;
+	m_pModel = nullptr;
 }
 
 //
@@ -45,14 +45,14 @@ void MeshAlgoTensorEvaluator::Reset (void)
 //
 bool MeshAlgoTensorEvaluator::Init (Mesh_half_edge *mesh)
 {
-	if (mesh == NULL)
+	if (mesh == nullptr)
 		return false;
 
 	Reset ();
 	m_pModel = mesh;
 	m_nDiffParams = mesh->m_pMesh->m_nVertices;
 	m_pDiffParams = (Tensor**)malloc(m_nDiffParams*sizeof(Tensor*));
-	if (m_pDiffParams == NULL)
+	if (m_pDiffParams == nullptr)
 	{
 		Reset ();
 		return false;
@@ -73,7 +73,7 @@ Tensor* MeshAlgoTensorEvaluator::GetDiffParam (int index)
 	{
 		return m_pDiffParams[index];
 	}
-	return NULL;
+	return nullptr;
 }
 
 ///////////////////////////////////
@@ -88,7 +88,7 @@ Tensor* MeshAlgoTensorEvaluator::GetDiffParam (int index)
 //
 bool MeshAlgoTensorEvaluator::GetExtremalCurvature (CurvatureId id, int extremal, float *_curvature)
 {
-	if (m_pDiffParams == NULL) return false;
+	if (m_pDiffParams == nullptr) return false;
 
 	int i=0;
 	float fCurvature=0.0;
@@ -121,7 +121,7 @@ bool MeshAlgoTensorEvaluator::GetExtremalCurvature (CurvatureId id, int extremal
 	//
 	for (i; i<m_nDiffParams; i++)
 	{
-		if (m_pDiffParams[i] == NULL) continue;
+		if (m_pDiffParams[i] == nullptr) continue;
 		float fCurvatureTemp;
 
 		switch (id)
@@ -165,17 +165,17 @@ bool MeshAlgoTensorEvaluator::GetExtremalCurvature (CurvatureId id, int extremal
 //
 bool MeshAlgoTensorEvaluator::GetCurvatures (CurvatureId id, int *_nCurvatures, float **_pCurvatures)
 {
-	if (m_pDiffParams == NULL) return false;
+	if (m_pDiffParams == nullptr) return false;
 
 	// init
 	float *curvatures = (float*)malloc(m_nDiffParams*sizeof(float));
-	if (curvatures == NULL) return false;
+	if (curvatures == nullptr) return false;
 	int nCurvatures = 0;
 
 	//
 	for (int i=0; i<m_nDiffParams; i++)
 	{
-		if (m_pDiffParams[i] != NULL)
+		if (m_pDiffParams[i] != nullptr)
 		{
 			switch (id)
 			{
@@ -211,7 +211,7 @@ bool MeshAlgoTensorEvaluator::GetCurvaturesHistogram (CurvatureId id, int nbins,
 {
 	float min, max;
 	int nCurvatures;
-	float *curvatures = NULL;
+	float *curvatures = nullptr;
 
 	switch (id)
 	{
@@ -241,7 +241,7 @@ bool MeshAlgoTensorEvaluator::GetCurvaturesHistogram (CurvatureId id, int nbins,
 
 	// init
 	float *histogram = (float*)malloc(nCurvatures*sizeof(float));
-	if (histogram == NULL) return false;
+	if (histogram == nullptr) return false;
 	memset (histogram, 0, nbins*sizeof(float));
 
 	// fill

@@ -2,23 +2,23 @@
 
 DisparityEvaluator::DisparityEvaluator ()
 {
-	m_pLeft = NULL;
-	m_pRight = NULL;
-	m_pDisparity = NULL;
+	m_pLeft = nullptr;
+	m_pRight = nullptr;
+	m_pDisparity = nullptr;
 }
 
 DisparityEvaluator::~DisparityEvaluator ()
 {
-	m_pLeft = NULL;
-	m_pRight = NULL;
+	m_pLeft = nullptr;
+	m_pRight = nullptr;
 	if (m_pDisparity)
 		delete m_pDisparity;
 }
 
 int DisparityEvaluator::SetStereoPair (Img *pLeft, Img *pRight)
 {
-	m_pLeft = NULL;
-	m_pRight = NULL;
+	m_pLeft = nullptr;
+	m_pRight = nullptr;
 
 	if (pLeft->width() != pRight->width() ||
 	    pLeft->height() != pRight->height())
@@ -38,7 +38,7 @@ int DisparityEvaluator::Compute (void)
 	if (m_pDisparity)
 	{
 		delete m_pDisparity;
-		m_pDisparity = NULL;
+		m_pDisparity = nullptr;
 	}
 	
 	return Compute_Block ();

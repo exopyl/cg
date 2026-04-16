@@ -6,7 +6,7 @@
 
 Geometry::Geometry()
 {
-	m_pAABox = NULL;
+	m_pAABox = nullptr;
 }
 
 //

@@ -3,7 +3,7 @@
 Cmesh_orientation::Cmesh_orientation (Mesh *_model)
 {
   mesh = _model;
-  model3d_half_edge = NULL;
+  model3d_half_edge = nullptr;
   center[0] = center[1] = center[2] = 0.0;
   mrot[0] = mrot[4] = mrot[8] = 1.0;
   mrot[1] = mrot[2] = mrot[3] = mrot[5] = mrot[6] = mrot[7] = 0.0;
@@ -11,7 +11,7 @@ Cmesh_orientation::Cmesh_orientation (Mesh *_model)
 
 Cmesh_orientation::Cmesh_orientation (Mesh_half_edge *_model)
 {
-  mesh = NULL;
+  mesh = nullptr;
   model3d_half_edge = _model;
   center[0] = center[1] = center[2] = 0.0;
   mrot[0] = mrot[4] = mrot[8] = 1.0;

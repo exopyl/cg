@@ -152,7 +152,7 @@ void MyGLCanvas::LoadModel(const wxString& filename)
 {
 #ifdef LINUX
 	locale_t loc;
-	loc = newlocale(LC_NUMERIC, "C", NULL);
+	loc = newlocale(LC_NUMERIC, "C", nullptr);
 	uselocale(loc);
 #endif // LINUX
 
@@ -188,7 +188,7 @@ void MyGLCanvas::SaveModel(const wxString& filename)
 {
 #ifdef LINUX
 	locale_t loc;
-	loc = newlocale(LC_NUMERIC, "C", NULL);
+	loc = newlocale(LC_NUMERIC, "C", nullptr);
 	uselocale(loc);
 #endif // LINUX
 
@@ -694,7 +694,7 @@ void MyGLCanvas::NPRCompute (void)
 		delete m_pNPRManager;
 
 	m_pNPRManager = new NPRManager ();
-	if (m_pNPRManager == NULL)
+	if (m_pNPRManager == nullptr)
 		return;
 
 	//m_pNPRManager->SetMesh (m_pMesh);

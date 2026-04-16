@@ -10,7 +10,7 @@ bool trace_unknown_chunks = true;
 int gBuffer[50000] = {0};	// This is used to read past unwanted data
 
 // The file pointer
-FILE* g_File3DSPointer = NULL;
+FILE* g_File3DSPointer = nullptr;
 
 // Helper to safely skip chunks
 void SkipChunk_3DS(t3DSChunk* pChunk)
@@ -24,17 +24,17 @@ void SkipChunk_3DS(t3DSChunk* pChunk)
 }
 
 // Error description if an error occurs during the parsing of the file
-char *errorDesc = NULL;
+char *errorDesc = nullptr;
 
 //*****************************************************************************
 // Allocate memory for a 3D model
-// @return t3DSModel* - A pointer to the newly allocated model, NULL otherwise
+// @return t3DSModel* - A pointer to the newly allocated model, nullptr otherwise
 //*****************************************************************************
 t3DSModel *Allocate3DSModel()
 {
 	t3DSModel *pModel = new t3DSModel();
-	if (pModel == NULL)
-		return NULL;
+	if (pModel == nullptr)
+		return nullptr;
 
 return pModel;
 }
@@ -48,7 +48,7 @@ int Free3DSModel(t3DSModel *pModel)
 {
 int hr = 0;
 
-	if (pModel == NULL)
+	if (pModel == nullptr)
 		return 0;
 
 	// When we are done, we need to free all the model data
@@ -112,10 +112,10 @@ t3DSModel *Load3DSFile (const char *szFile, void *ExtraParameters)
 {
 t3DSChunk currentChunk;
 
-	if (szFile == NULL)
+	if (szFile == nullptr)
 	{
 		printf("no file!", szFile);
-		return NULL;
+		return nullptr;
 	}
 
 	memset( &currentChunk, 0, sizeof(t3DSChunk));
@@ -127,7 +127,7 @@ t3DSChunk currentChunk;
 	if(!g_File3DSPointer) 
 	{
 		printf("Unable to find the file: %s!", szFile);
-		return NULL;
+		return nullptr;
 	}
 
 	// Once we have the file open, we need to read the very first data chunk
@@ -141,15 +141,15 @@ t3DSChunk currentChunk;
 	if (currentChunk.ID != CHK3DS_4_M3DMAGIC)
 	{
 		printf("Unable to load PRIMARY chuck from file: %s!", szFile);
-		return NULL;
+		return nullptr;
 	}
 
 	// Now we actually start reading in the data.  ProcessNextChunk() is recursive
 
 	//Create a 3D Model object
 	t3DSModel *pModel = Allocate3DSModel();
-	if (pModel == NULL)
-		return NULL;
+	if (pModel == nullptr)
+		return nullptr;
 
 	// Begin loading objects, by calling this recursive function
 	ProcessNextChunk_3DS(pModel, &currentChunk);
@@ -178,7 +178,7 @@ void CleanUp_3DS()
 	if (g_File3DSPointer)
 	{
 		fclose(g_File3DSPointer);					// Close the current file pointer
-		g_File3DSPointer = NULL;
+		g_File3DSPointer = nullptr;
 	}
 }
 
@@ -1306,14 +1306,14 @@ int GetString(char *pBuffer)
 	// Read 1 byte of data which is the first letter of the string
 	fread(pBuffer, 1, 1, g_File3DSPointer);
 
-	// Loop until we get NULL
+	// Loop until we get nullptr
 	while (*(pBuffer + index++) != 0) {
 
-		// Read in a character at a time until we hit NULL.
+		// Read in a character at a time until we hit nullptr.
 		fread(pBuffer + index, 1, 1, g_File3DSPointer);
 	}
 
-	// Return the string length, which is how many bytes we read in (including the NULL)
+	// Return the string length, which is how many bytes we read in (including the nullptr)
 	return strlen(pBuffer) + 1;
 }
 
@@ -1690,9 +1690,9 @@ int Write3DSFile (t3DSModel *pModel, const char *szFile, void *ExtraParameters )
 	int hr = 0;
 
 	// Check the file to save the 3DS structure :
-	// if the given filename is not equal to NULL,
+	// if the given filename is not equal to nullptr,
 	// we consider the path stored in the 3DS structure
-	if (szFile == NULL)
+	if (szFile == nullptr)
 	{
 		szFile = pModel->strPathToModel;
 	}

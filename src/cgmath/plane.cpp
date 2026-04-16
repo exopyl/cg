@@ -12,14 +12,14 @@ Plane::Plane ()
 {
 	normale.Set(0., 0., 1.);
 	distance = 0.;
-	m_pAABox = NULL;
+	m_pAABox = nullptr;
 }
 
 Plane::Plane (Vector3f _normale, float _distance)
 {
   normale.Set (_normale.x, _normale.y, _normale.z);
   distance = _distance;
-  m_pAABox = NULL;
+  m_pAABox = nullptr;
 }
 
 Plane::Plane (Vector3f v1, Vector3f v2, Vector3f v3)
@@ -30,7 +30,7 @@ Plane::Plane (Vector3f v1, Vector3f v2, Vector3f v3)
   normale.Normalize ();
   
   distance = -normale.x*v1.x - normale.y*v1.y - normale.z*v1.z;
-  m_pAABox = NULL;
+  m_pAABox = nullptr;
 }
 
 Plane::Plane (Vector3f _pt, Vector3f _normale)
@@ -38,7 +38,7 @@ Plane::Plane (Vector3f _pt, Vector3f _normale)
   normale = _normale;
   normale.Normalize ();
   distance = - (normale * _pt);
-  m_pAABox = NULL;
+  m_pAABox = nullptr;
 }
 
 // distance between the plane and a point

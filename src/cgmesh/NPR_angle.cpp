@@ -7,8 +7,8 @@
 //
 NPR_Angle::NPR_Angle ()
 {
-	m_pMesh = NULL;
-	m_pVMeshes = NULL;
+	m_pMesh = nullptr;
+	m_pVMeshes = nullptr;
 }
 
 //

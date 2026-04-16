@@ -11,7 +11,7 @@ Cset_lines::Cset_lines (Mesh_half_edge *_model)
 {
   model = _model;
   n_extracted_lines = 0;
-  extracted_lines = NULL;
+  extracted_lines = nullptr;
   colors = (float*)malloc(3*model->m_pMesh->m_nVertices*sizeof(float));
 }
 
@@ -29,7 +29,7 @@ Cset_lines::reinit (void)
   for (int i=0; i<n_extracted_lines; i++)
     delete extracted_lines[i];
   free (extracted_lines);
-  extracted_lines = NULL;
+  extracted_lines = nullptr;
   n_extracted_lines = 0;
 }
 

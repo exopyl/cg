@@ -63,7 +63,7 @@ long int i;
 		
 	for(i=0; i<256; ++i) table[i]=i*i;
 	Qadd = (unsigned short int *)malloc(sizeof(unsigned short int)*size);
-	if (Qadd==NULL) {printf("Not enough space\n"); exit(1);}
+	if (Qadd==nullptr) {printf("Not enough space\n"); exit(1);}
 	for(i=0; i<size; ++i){
 	    r = Ir[i]; g = Ig[i]; b = Ib[i];
 	    inr=(r>>3)+1; 
@@ -446,7 +446,7 @@ int MedianCut_Wu(unsigned char *pPixels, int iSize, int ncolors)
 	/* the space for array m2 can be freed now */
 
 	tag = (unsigned char *)malloc(33*33*33);
-	if (tag==NULL) {printf("Not enough space\n"); exit(1);}
+	if (tag==nullptr) {printf("Not enough space\n"); exit(1);}
 	for(k=0; k<K; ++k){
 	    Mark(&cube[k], k, tag);
 	    weight = Vol(&cube[k], wt);

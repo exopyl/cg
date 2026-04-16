@@ -9,7 +9,7 @@ MaterialsManager::MaterialsManager()
 {
 	m_nMaterials = 0;
 	for (int i=0; i<8; i++)
-		m_pMaterials[i] = NULL;
+		m_pMaterials[i] = nullptr;
 }
 
 MaterialsManager::~MaterialsManager()
@@ -49,7 +49,7 @@ void MaterialsManager::dump (void)
 	{
 		printf ("%d / 8 :\n", i);
 		Material *pMaterial = m_pMaterials[i];
-		if (pMaterial != NULL)
+		if (pMaterial != nullptr)
 			pMaterial->Dump ();
 		else
 			printf (" no material stored\n");

@@ -115,7 +115,7 @@ int Img::import_ppm (FILE *ptr, unsigned int levels, int binary)
 int Img::import_pnm (const char *filename)
 {
 	FILE *ptr = fopen (filename, "r");
-	if (ptr == NULL)
+	if (ptr == nullptr)
 		return -1;
 	
 	char header[2];
@@ -179,7 +179,7 @@ int Img::export_ppm (const char *filename, int binary)
 	if (binary)
 	{
 		FILE *ptr = fopen (filename, "w+b");
-		if (ptr == NULL)
+		if (ptr == nullptr)
 			return -1;
 		
 		fprintf (ptr, "P6\n%d %d\n%d\n", w, h, 255);
@@ -195,7 +195,7 @@ int Img::export_ppm (const char *filename, int binary)
 	else
 	{
 		FILE *ptr = fopen (filename, "w");
-		if (ptr == NULL)
+		if (ptr == nullptr)
 			return -1;
 		
 		fprintf (ptr, "P3\n%d %d\n%d\n", w, h, 255);

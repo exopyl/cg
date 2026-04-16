@@ -67,7 +67,7 @@ printf ("length diagonal bbox : %f\n", model->get_length_bounding_box_diagonal()
 			delete extracted_lines[i];
 		free (extracted_lines);
 	}
-	extracted_lines = NULL;
+	extracted_lines = nullptr;
 
   extracted_lines = (Cextracted_line**)malloc(n_extracted_lines*sizeof(Cextracted_line*));
   for (i=0; i<n_selected_vertices; i++)
@@ -240,7 +240,7 @@ Cset_lines::merge_oriented_vertices2 (float tolerance_angle, float tolerance_dis
 
 	/* new extracted lines */
 	int n_extracted_lines_new = 0;
-    Cextracted_line **extracted_lines_new = NULL;
+    Cextracted_line **extracted_lines_new = nullptr;
 
 	Vector3f v1, v2, dir;
 	Vector3f pos1, pos2, dir1, dir2;

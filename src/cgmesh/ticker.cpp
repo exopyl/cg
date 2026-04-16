@@ -7,7 +7,7 @@
 
 Ticker::Ticker ()
 {
-	gettimeofday (&s, NULL);
+	gettimeofday (&s, nullptr);
 }
 
 Ticker::~Ticker ()
@@ -17,13 +17,13 @@ Ticker::~Ticker ()
 void
 Ticker::start (void)
 {
-	gettimeofday (&s, NULL);
+	gettimeofday (&s, nullptr);
 }
 
 double
 Ticker::stop (void)
 {
-	gettimeofday (&e, NULL);
+	gettimeofday (&e, nullptr);
 	return ((e.tv_sec - s.tv_sec)*1000000.0 + e.tv_usec - s.tv_usec)*0.000001;
 }
 
@@ -32,11 +32,11 @@ void Ticker::evaluate_gettimeofday (void)
 	if (1)
 	{
 		int count = 1 * 1000 * 1000 * 1;
-		gettimeofday (&s, NULL);
+		gettimeofday (&s, nullptr);
 		struct timeval tv_tmp;
 		for (int i = 0; i < count; i++)
-			gettimeofday(&tv_tmp, NULL);
-		gettimeofday (&e, NULL);
+			gettimeofday(&tv_tmp, nullptr);
+		gettimeofday (&e, nullptr);
 		float diff = ((e.tv_sec - s.tv_sec)*1000000.0 + e.tv_usec - s.tv_usec)*0.000001;
 		printf("%d calls in %f s = %f s/call\n", count, diff, (double)diff / (double)count);
 	}
@@ -55,7 +55,7 @@ void Ticker::evaluate_gettimeofday (void)
 		
 		clock_gettime(clockid, &tv_start);
 		for (int i = 0; i < count; i++)
-			gettimeofday(&tv_tmp, NULL);
+			gettimeofday(&tv_tmp, nullptr);
 		clock_gettime(clockid, &tv_end);
 		
 		long long diff = (long long)(tv_end.tv_sec - tv_start.tv_sec)*(1*1000*1000*1000);

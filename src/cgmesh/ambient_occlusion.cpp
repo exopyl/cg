@@ -6,7 +6,7 @@
 //
 MeshAlgoAmbientOcclusion::MeshAlgoAmbientOcclusion ()
 {
-	m_pMesh = NULL;
+	m_pMesh = nullptr;
 }
 
 MeshAlgoAmbientOcclusion::~MeshAlgoAmbientOcclusion ()
@@ -142,7 +142,7 @@ float MeshAlgoAmbientOcclusion::compute_occlusion (int index_receiver, int index
 float* MeshAlgoAmbientOcclusion::Evaluate (int nPasses)
 {
 	if (!m_pMesh)
-		return NULL;
+		return nullptr;
 
 	m_pMesh->ComputeNormals();
 	unsigned int nVertices = m_pMesh->m_nVertices;
@@ -239,7 +239,7 @@ float* MeshAlgoAmbientOcclusion::Evaluate (int nPasses)
 	// cleaning
 	delete pOctree;
 	delete[] m_pPatches;
-	m_pPatches = NULL;
+	m_pPatches = nullptr;
 
 	return pOcclusions;
 }

@@ -13,8 +13,8 @@ Cmodel3d_half_edge_sliced::Cmodel3d_half_edge_sliced (Mesh_half_edge *_mesh, int
 	assert (_mesh);
 	model      = _mesh;
 	n_slices   = 0;
-	slices     = NULL;
-	n_contours = NULL;
+	slices     = nullptr;
+	n_contours = nullptr;
 	step_slice = _step_slice;
 	direction  = dir;
 	
@@ -90,7 +90,7 @@ Cmodel3d_half_edge_sliced::scan_model_along_Oz (void)
 		else
 		{
 			n_contours[k] = 0;
-			slices[k] = NULL;
+			slices[k] = nullptr;
 		}
 		
 		z_walk += step_slice; /* step */
@@ -163,7 +163,7 @@ Cmodel3d_half_edge_sliced::scan_model_along_Ox (void)
 		else
 		{
 			n_contours[k] = 0;
-			slices[k] = NULL;
+			slices[k] = nullptr;
 		}
 		
 		x_walk += step_slice; /* step */
@@ -230,7 +230,7 @@ Cmodel3d_half_edge_sliced::get_slice (int index, Polygon2 ***slice, int *nc)
 	else
     {
 		*nc = 0;
-		*slice = NULL;
+		*slice = nullptr;
     }
 }
 

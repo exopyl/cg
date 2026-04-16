@@ -227,8 +227,8 @@ TEST(TEST_cgmesh_shapes, strange_attractors)
 	printf ("---------------------------\n");
 	printf ("Points : strange attractors\n");
 	printf ("---------------------------\n");
-	StrangeAttractor_QuadraticMaps3D* sa1 = NULL;
-	StrangeAttractor_Pickover*        sa2 = NULL;
+	StrangeAttractor_QuadraticMaps3D* sa1 = nullptr;
+	StrangeAttractor_Pickover*        sa2 = nullptr;
 	/*
 	const int size = 10000;
 	static int index_start = 0;

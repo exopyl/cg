@@ -49,7 +49,7 @@ int MaterialRenderer::AddMaterial (Material *pMaterial)
 
 void MaterialRenderer::ActivateMaterial (unsigned int id)
 {
-	if (id >= m_nMaterials || m_pMaterials[id] == NULL)
+	if (id >= m_nMaterials || m_pMaterials[id] == nullptr)
 		return;
 
 	Material *pMaterial = m_pMaterials[id];

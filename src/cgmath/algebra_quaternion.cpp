@@ -2,7 +2,7 @@
 
 void quaternion_init (quaternion q, float w, float x, float y, float z)
 {
-	if (q == NULL)
+	if (q == nullptr)
 		return;
 
 	q[0] = x;
@@ -13,7 +13,7 @@ void quaternion_init (quaternion q, float w, float x, float y, float z)
 
 void quaternion_init_axis_angle (quaternion q, vec3 axis, float angle)
 {
-	if (q == NULL)
+	if (q == nullptr)
 		return;
 
 	float sin_a = sin (angle / 2.);
@@ -137,7 +137,7 @@ void quaternion_copy (quaternion copy, quaternion source)
 
 float quaternion_norm (quaternion q)
 {
-	if (q == NULL)
+	if (q == nullptr)
 		return -1.;
 
 	return sqrt(q[0]*q[0] + q[1] *q[1] + q[2]*q[2] + q[3]*q[3]);
@@ -145,7 +145,7 @@ float quaternion_norm (quaternion q)
 
 int quaternion_normalize (quaternion q)
 {
-	if (q == NULL)
+	if (q == nullptr)
 		return -1;
 
 	float norm = quaternion_norm (q);

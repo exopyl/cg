@@ -5,8 +5,8 @@
 //
 NPR_Silhouette::NPR_Silhouette ()
 {
-	m_pMesh = NULL;
-	m_pVMeshes = NULL;
+	m_pMesh = nullptr;
+	m_pVMeshes = nullptr;
 }
 
 //

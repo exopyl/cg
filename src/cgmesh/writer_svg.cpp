@@ -10,7 +10,7 @@ using namespace std;
 //
 WriterSVG::WriterSVG(void)
 {
-	m_pFile = NULL;
+	m_pFile = nullptr;
 }
 
 //
@@ -29,10 +29,10 @@ bool WriterSVG::InitFile (char* pFilename)
 {
 	if (m_pFile)
 		fclose (m_pFile);
-	m_pFile = NULL;
+	m_pFile = nullptr;
 
 	m_pFile = fopen (pFilename, "w");
-	return (m_pFile != NULL);
+	return (m_pFile != nullptr);
 }
 
 //
@@ -88,7 +88,7 @@ void WriterSVG::WriteGroupBegin (char *strId)
 	if (!m_pFile)
 		return;
 
-	if (strId == NULL)
+	if (strId == nullptr)
 		fprintf (m_pFile, "<g>\n");
 	else
 		fprintf (m_pFile, "<g id=\"%s\">\n", strId);

@@ -134,7 +134,7 @@ public:
 	void Init (unsigned int nVertices, unsigned int nFaces);
 	void InitVertexColors (float r = 0., float g = 0., float b = 0.);
 	void InitVertexColorsFromCurvatures (Tensor::eCurvature curvature);
-	void InitVertexColorsFromArray (float *array, char *defined = NULL);
+	void InitVertexColorsFromArray (float *array, char *defined = nullptr);
 
 	// Revision
 	uint64_t GetRevision() const;
@@ -174,7 +174,7 @@ public:
 	int SetVertices(unsigned int nVertices, float* pVertices);
 	int SetVertexNormals(unsigned int nVerticesNormals, float* pVerticesNormals);
 	int SetFaces (unsigned int nFaces, unsigned int nVerticesPerFace,
-		      unsigned int *pFaces, unsigned int *pTextureCoordinates=NULL);
+		      unsigned int *pFaces, unsigned int *pTextureCoordinates=nullptr);
 	//int SetTextureCoordinates (unsigned int nTextureCoordinates, float *pTextureCoordinates);
 
 	int SetVertex (unsigned int i, float x, float y, float z);
@@ -272,7 +272,7 @@ public:
 		{
 			if (id < m_nMaterials)
 				return m_pMaterials[id];
-			return NULL;
+			return nullptr;
 		}
 	int GetMaterialId (const std::string & material_name)
 		{
@@ -283,7 +283,7 @@ public:
 		}
 	void SetMaterial (unsigned int id, Material *pMaterial)
 	{
-		if (m_pMaterials == NULL)
+		if (m_pMaterials == nullptr)
 		{
 			m_pMaterials = new Material*[id+1];
 			m_nMaterials = id+1;
@@ -300,7 +300,7 @@ public:
 	unsigned int Material_Add (Material *pMaterial)
 	{
 		Material **pMaterials = new Material*[m_nMaterials+1];
-		if (pMaterials == NULL)
+		if (pMaterials == nullptr)
 			return 0;
 		
 		for (unsigned int i=0; i<m_nMaterials; i++)

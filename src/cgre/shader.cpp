@@ -6,54 +6,54 @@
 
 #include <fstream>
 
-static PFNGLCREATEPROGRAMPROC   glCreateProgram = NULL;
-static PFNGLCREATESHADERPROC    glCreateShader = NULL;
-static PFNGLSHADERSOURCEPROC	glShaderSource = NULL;
-static PFNGLCOMPILESHADERPROC	glCompileShader = NULL;
-static PFNGLGETSHADERIVPROC		glGetShaderiv = NULL;
-static PFNGLATTACHSHADERPROC	glAttachShader = NULL;
-static PFNGLDETACHSHADERPROC	glDetachShader = NULL;
-static PFNGLDELETEPROGRAMPROC   glDeleteProgram = NULL;
-static PFNGLLINKPROGRAMPROC		glLinkProgram = NULL;
-static PFNGLUSEPROGRAMPROC		glUseProgram = NULL;
-static PFNGLDELETESHADERPROC	glDeleteShader = NULL;
-static PFNGLGETPROGRAMIVPROC    glGetProgramiv = NULL;
-static PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog = NULL;
-static PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog = NULL;
-static PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation = NULL;
-static PFNGLUNIFORM1IPROC glUniform1i = NULL;
-static PFNGLUNIFORM1UIPROC glUniform1ui = NULL;
-static PFNGLGETATTRIBLOCATIONPROC glGetAttribLocation = NULL;
-static PFNGLUNIFORMMATRIX4FVPROC glUniformMatrix4fv = NULL;
-static PFNGLUNIFORM1FPROC glUniform1f = NULL;
-static PFNGLUNIFORM3FPROC glUniform3f = NULL;
-static PFNGLGENBUFFERSPROC glGenBuffers = NULL;
-static PFNGLBINDBUFFERPROC glBindBuffer = NULL;
-static PFNGLBUFFERDATAPROC glBufferData = NULL;
-static PFNGLBINDVERTEXARRAYPROC glBindVertexArray = NULL;
-static PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer = NULL;
-static PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray = NULL;
-static PFNGLDISABLEVERTEXATTRIBARRAYPROC glDisableVertexAttribArray = NULL;
-static PFNGLUNIFORM4FVPROC glUniform4fv = NULL;
-static PFNGLUNIFORM3FVPROC glUniform3fv = NULL;
-static PFNGLUNIFORM2FVPROC glUniform2fv = NULL;
-static PFNGLACTIVETEXTUREPROC glActiveTexture = NULL;
-static PFNGLMEMORYBARRIERPROC glMemoryBarrier = NULL;
-static PFNGLBINDIMAGETEXTUREPROC glBindImageTexture = NULL;
-static PFNGLPATCHPARAMETERIPROC glPatchParameteri = NULL;
-static PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers = NULL;
-static PFNGLDELETEFRAMEBUFFERSPROC glDeleteFramebuffers = NULL;
-static PFNGLBINDFRAMEBUFFERPROC glBindFramebuffer = NULL;
-static PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D = NULL;
-static PFNGLBLENDEQUATIONPROC glBlendEquation = NULL;
-static PFNGLFRAMEBUFFERTEXTUREPROC glFramebufferTexture = NULL;
-static PFNGLCHECKFRAMEBUFFERSTATUSPROC glCheckFramebufferStatus = NULL;
-static PFNGLGENVERTEXARRAYSPROC glGenVertexArrays = NULL;
-static PFNGLGENERATEMIPMAPPROC glGenerateMipmap = NULL;
-static PFNGLGENRENDERBUFFERSPROC glGenRenderbuffers = NULL;
-static PFNGLBINDRENDERBUFFERPROC glBindRenderbuffer = NULL;
-static PFNGLRENDERBUFFERSTORAGEPROC glRenderbufferStorage = NULL;
-static PFNGLFRAMEBUFFERRENDERBUFFERPROC glFramebufferRenderbuffer = NULL;
+static PFNGLCREATEPROGRAMPROC   glCreateProgram = nullptr;
+static PFNGLCREATESHADERPROC    glCreateShader = nullptr;
+static PFNGLSHADERSOURCEPROC	glShaderSource = nullptr;
+static PFNGLCOMPILESHADERPROC	glCompileShader = nullptr;
+static PFNGLGETSHADERIVPROC		glGetShaderiv = nullptr;
+static PFNGLATTACHSHADERPROC	glAttachShader = nullptr;
+static PFNGLDETACHSHADERPROC	glDetachShader = nullptr;
+static PFNGLDELETEPROGRAMPROC   glDeleteProgram = nullptr;
+static PFNGLLINKPROGRAMPROC		glLinkProgram = nullptr;
+static PFNGLUSEPROGRAMPROC		glUseProgram = nullptr;
+static PFNGLDELETESHADERPROC	glDeleteShader = nullptr;
+static PFNGLGETPROGRAMIVPROC    glGetProgramiv = nullptr;
+static PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog = nullptr;
+static PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog = nullptr;
+static PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation = nullptr;
+static PFNGLUNIFORM1IPROC glUniform1i = nullptr;
+static PFNGLUNIFORM1UIPROC glUniform1ui = nullptr;
+static PFNGLGETATTRIBLOCATIONPROC glGetAttribLocation = nullptr;
+static PFNGLUNIFORMMATRIX4FVPROC glUniformMatrix4fv = nullptr;
+static PFNGLUNIFORM1FPROC glUniform1f = nullptr;
+static PFNGLUNIFORM3FPROC glUniform3f = nullptr;
+static PFNGLGENBUFFERSPROC glGenBuffers = nullptr;
+static PFNGLBINDBUFFERPROC glBindBuffer = nullptr;
+static PFNGLBUFFERDATAPROC glBufferData = nullptr;
+static PFNGLBINDVERTEXARRAYPROC glBindVertexArray = nullptr;
+static PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer = nullptr;
+static PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray = nullptr;
+static PFNGLDISABLEVERTEXATTRIBARRAYPROC glDisableVertexAttribArray = nullptr;
+static PFNGLUNIFORM4FVPROC glUniform4fv = nullptr;
+static PFNGLUNIFORM3FVPROC glUniform3fv = nullptr;
+static PFNGLUNIFORM2FVPROC glUniform2fv = nullptr;
+static PFNGLACTIVETEXTUREPROC glActiveTexture = nullptr;
+static PFNGLMEMORYBARRIERPROC glMemoryBarrier = nullptr;
+static PFNGLBINDIMAGETEXTUREPROC glBindImageTexture = nullptr;
+static PFNGLPATCHPARAMETERIPROC glPatchParameteri = nullptr;
+static PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers = nullptr;
+static PFNGLDELETEFRAMEBUFFERSPROC glDeleteFramebuffers = nullptr;
+static PFNGLBINDFRAMEBUFFERPROC glBindFramebuffer = nullptr;
+static PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D = nullptr;
+static PFNGLBLENDEQUATIONPROC glBlendEquation = nullptr;
+static PFNGLFRAMEBUFFERTEXTUREPROC glFramebufferTexture = nullptr;
+static PFNGLCHECKFRAMEBUFFERSTATUSPROC glCheckFramebufferStatus = nullptr;
+static PFNGLGENVERTEXARRAYSPROC glGenVertexArrays = nullptr;
+static PFNGLGENERATEMIPMAPPROC glGenerateMipmap = nullptr;
+static PFNGLGENRENDERBUFFERSPROC glGenRenderbuffers = nullptr;
+static PFNGLBINDRENDERBUFFERPROC glBindRenderbuffer = nullptr;
+static PFNGLRENDERBUFFERSTORAGEPROC glRenderbufferStorage = nullptr;
+static PFNGLFRAMEBUFFERRENDERBUFFERPROC glFramebufferRenderbuffer = nullptr;
 
 
 static bool verbose = false;
@@ -118,7 +118,7 @@ static void DefineProc()
 }
 
 
-HGLRC GL_Shader::m_curContext = NULL;
+HGLRC GL_Shader::m_curContext = nullptr;
 
 bool GL_Shader::GetGLProcs()
 {
@@ -250,7 +250,7 @@ void GL_Shader::PrintShaderInfoLog(GLuint shaderID) const
 	if (infoLen > 1)
 	{
 		char* infoLog = (char*)malloc(sizeof(char) * infoLen);
-		glGetShaderInfoLog(shaderID, infoLen, NULL, infoLog);
+		glGetShaderInfoLog(shaderID, infoLen, nullptr, infoLog);
 		printf("\n[SHADER] shader compilation log : ");
 		printf("%d : \n", m_shaderType);
 		printf("%s \n\n", infoLog);
@@ -265,7 +265,7 @@ void GL_Shader::PrintProgramInfoLog() const
 	if (infoLen > 1)
 	{
 		char* infoLog = (char*)malloc(sizeof(char) * infoLen);
-		glGetProgramInfoLog(m_shaderID, infoLen, NULL, infoLog);
+		glGetProgramInfoLog(m_shaderID, infoLen, nullptr, infoLog);
 		std::cerr << "[Shader] Error linking program " << m_shaderType << ": " << infoLog << std::endl;
 		free(infoLog);
 	}

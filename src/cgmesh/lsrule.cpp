@@ -7,8 +7,8 @@
 // Constructor
 LSRule::LSRule ()
 {
-	m_antecedent = NULL;
-	m_image = NULL;
+	m_antecedent = nullptr;
+	m_image = nullptr;
 }
 
 // Destructor

@@ -94,7 +94,7 @@ int Mesh::save (const char *filename)
 
 int Mesh::import_mtl (const char *filename, const char *path)
 {
-	FILE *ptr = NULL;
+	FILE *ptr = nullptr;
 	char filename_full[BUFFER_SIZE];
 	if (path)
 	{
@@ -113,9 +113,9 @@ int Mesh::import_mtl (const char *filename, const char *path)
 	float r, g, b, a;
 	unsigned int dummy;
 	unsigned int mi = MATERIAL_NONE;
-	MaterialColorExt *mat = NULL;
+	MaterialColorExt *mat = nullptr;
 
-	while (fgets(line, sizeof(line), ptr) != NULL)
+	while (fgets(line, sizeof(line), ptr) != nullptr)
 	{
 		line_count++;
 
@@ -143,7 +143,7 @@ int Mesh::import_mtl (const char *filename, const char *path)
 			MaterialTexture *tex = new MaterialTexture (name, path);
 			tex->SetName (mat->GetName());
 			delete mat;
-			mat = NULL;
+			mat = nullptr;
 			SetMaterial (mi, tex);
 		}
 		else if (strcmp(line, "map_Ka ") == 0) {} // ambient texture
@@ -161,14 +161,14 @@ int Mesh::import_mtl (const char *filename, const char *path)
 
 int Mesh::import_obj (const char *filename)
 {
-	if (filename == NULL)
-		return NULL;
+	if (filename == nullptr)
+		return nullptr;
 
 	char buffer[BUFFER_SIZE];
 	char prefix[BUFFER_SIZE];
 
 	FILE *file = fopen (filename, "r");
-	if (file == NULL)
+	if (file == nullptr)
 	{
 		printf ("Unable to open %s", filename);
 		return -1;
@@ -339,7 +339,7 @@ int Mesh::export_obj (const char *filename)
 	unsigned int i;
 
 	fp = fopen(filename,"w");
-	if (fp == NULL)
+	if (fp == nullptr)
 		return -1;
 
 	// some comments
@@ -350,14 +350,14 @@ int Mesh::export_obj (const char *filename)
 	fprintf (fp, "\n");
 
 	// materials
-	char *filematname = NULL;
+	char *filematname = nullptr;
 	if (m_nMaterials > 0)
 	{
 		filematname = strdup (filename);
 		sprintf (filematname+strlen (filematname)-3, "%s", "mtl");
 
 		char *s = strrchr(filematname, '/');
-		fprintf (fp, "mtllib %s\n\n", (s != NULL)? &s[1]:filematname);
+		fprintf (fp, "mtllib %s\n\n", (s != nullptr)? &s[1]:filematname);
 	}
 
 	//
@@ -443,7 +443,7 @@ int Mesh::export_obj (const char *filename)
 	if (m_nMaterials > 0)
 	{
 		fp = fopen(filematname,"w");
-		if (fp == NULL)
+		if (fp == nullptr)
 			return -1;
 		
 		fprintf (fp, "\n");
@@ -503,11 +503,11 @@ int Mesh::export_obj (const char *filename)
 //
 int Mesh::import_asc (const char *filename)
 {
-	if (filename == NULL)
+	if (filename == nullptr)
 		return -1;
 
 	FILE *file = fopen (filename, "r");
-	if (file == NULL)
+	if (file == nullptr)
 	{
 		printf ("[3DViewer] Unable to open %s", filename);
 		return -1;
@@ -586,11 +586,11 @@ int Mesh::export_asc (const char *filename)
 //
 int Mesh::import_pset (const char *filename)
 {
-	if (filename == NULL)
+	if (filename == nullptr)
 		return -1;
 
 	FILE *file = fopen (filename, "r");
-	if (file == NULL)
+	if (file == nullptr)
 	{
 		printf ("[3DViewer] Unable to open %s", filename);
 		return -1;
@@ -906,7 +906,7 @@ int Mesh::export_gts (const char *filename)
 int Mesh::import_ifs (const char *filename)
 {
 	FILE *ptr = fopen (filename, "rb");
-	if (ptr == NULL)
+	if (ptr == nullptr)
 	{
 		printf ("unable to open %s\n", filename);
 		return false;
@@ -1255,7 +1255,7 @@ int Mesh::import_pgm (const char *filename)
 {
   int width, height, levels;
   //int level_walk;
-  unsigned char *data = NULL;
+  unsigned char *data = nullptr;
   char id[2];
   FILE *ptr;
   int i,j;
@@ -1361,7 +1361,7 @@ int Mesh::import_pts (const char *filename)
     }
 
   char *buffer = (char*)malloc(512*sizeof(char));
-  if (buffer == NULL)
+  if (buffer == nullptr)
   {
 	  return -1;
   }
@@ -1375,7 +1375,7 @@ int Mesh::import_pts (const char *filename)
   }
   Init (m_nVertices, 0);
   m_pVertexColors = (float*)malloc(3*m_nVertices*sizeof(float));
-  if (m_pVertexColors == NULL)
+  if (m_pVertexColors == nullptr)
   {
 	  free (buffer);
 	  return false;
@@ -1416,7 +1416,7 @@ int Mesh::export_pts (const char *filename)
 	  return false;
 	}
 
-  if (m_pVertices != NULL && m_pVertexColors != NULL)
+  if (m_pVertices != nullptr && m_pVertexColors != nullptr)
   {
 	  for (int i=0; i<m_nVertices; i++)
 	  {
@@ -1478,12 +1478,12 @@ static int vertex_cb_colors(p_ply_argument argument) {
 
 static int face_cb(p_ply_argument argument) {
     void *pMesh;
-    ply_get_argument_user_data(argument, &pMesh, NULL);
+    ply_get_argument_user_data(argument, &pMesh, nullptr);
     Mesh *mesh = (Mesh*)pMesh;
 
 
    long length, value_index;
-    ply_get_argument_property(argument, NULL, &length, &value_index);
+    ply_get_argument_property(argument, nullptr, &length, &value_index);
 
     if (value_index == -1) // new face
     {
@@ -1502,7 +1502,7 @@ int Mesh::import_ply (const char *filename)
 {
 	int i;
 	long nvertices, ntriangles;
-	p_ply ply = ply_open(filename, NULL, 0, NULL);
+	p_ply ply = ply_open(filename, nullptr, 0, nullptr);
 	if (!ply)
 	{
 		printf ("unable to open %s\n", filename);
@@ -1546,7 +1546,7 @@ int Mesh::import_ply (const char *filename)
 int Mesh::export_ply (const char *filename)
 {
     const char *value;
-    p_ply oply = ply_create(filename, PLY_LITTLE_ENDIAN, NULL, 0, NULL);
+    p_ply oply = ply_create(filename, PLY_LITTLE_ENDIAN, nullptr, 0, nullptr);
     if (!oply)
 	    return -1;
 
@@ -1629,7 +1629,7 @@ int Mesh::export_stl (const char *filename)
 
 int Mesh::import_3ds (const char *filename)
 {
-	t3DSModel *p = Load3DSFile(filename, NULL);
+	t3DSModel *p = Load3DSFile(filename, nullptr);
 	if (!p) return -1;
 
 	if (p->numOfObjects > 0)
@@ -1732,7 +1732,7 @@ int Mesh::import_3ds (const char *filename)
 int Mesh::export_3ds (const char *filename)
 {
 	t3DSModel *p = Allocate3DSModel();
-	Write3DSFile(p, filename, NULL);
+	Write3DSFile(p, filename, nullptr);
 	Free3DSModel(p);
 	return 0;
 }

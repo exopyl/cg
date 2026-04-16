@@ -6,7 +6,7 @@
 TEST(TEST_cgmesh_tensor, bunny)
 {
 	Mesh_half_edge* model = new Mesh_half_edge("./test/data/BunnyLowPoly.stl");
-	if (model == NULL)
+	if (model == nullptr)
 		return;
 
 	model->m_pMesh->ComputeNormals();

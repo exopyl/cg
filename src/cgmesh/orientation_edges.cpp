@@ -10,9 +10,9 @@ Cmesh_orientation_edges::Cmesh_orientation_edges (Mesh_half_edge *_mesh, int _w,
 {
   w = _w;
   h = _h;
-  accumulator     = NULL;
-  accumulator_int = NULL;
-  mesh = NULL;
+  accumulator     = nullptr;
+  accumulator_int = nullptr;
+  mesh = nullptr;
   model3d_half_edge = _mesh;
 }
 
@@ -21,10 +21,10 @@ Cmesh_orientation_edges::Cmesh_orientation_edges (Mesh *_mesh, int _w, int _h)
 {
   w = _w;
   h = _h;
-  accumulator     = NULL;
-  accumulator_int = NULL;
+  accumulator     = nullptr;
+  accumulator_int = nullptr;
   mesh = _mesh;
-  model3d_half_edge = NULL;
+  model3d_half_edge = nullptr;
 }
 
 void

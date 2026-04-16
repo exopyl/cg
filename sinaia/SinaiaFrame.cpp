@@ -231,7 +231,7 @@ MyFrame::MyFrame(wxWindow* parent,
 {
     // drag & drop management
     DragAcceptFiles(true);
-    Connect(wxEVT_DROP_FILES, wxDropFilesEventHandler(MyFrame::OnDropFiles), NULL, this);
+    Connect(wxEVT_DROP_FILES, wxDropFilesEventHandler(MyFrame::OnDropFiles), nullptr, this);
 
 
     // tell wxAuiManager to manage this frame
@@ -393,8 +393,8 @@ MyFrame::MyFrame(wxWindow* parent,
     m_pToolBar2->SetToolBitmapSize(wxSize(16,16));
 
     wxBitmap tb2_bmp1 = wxArtProvider::GetBitmap(wxART_QUESTION, wxART_OTHER, wxSize(16,16));
-    //tb2->AddTool(wxID_OPEN, wxBitmap(open_xpm), wxNullBitmap, false, -1, -1, (wxObject *) NULL, _("Open"));
-    //tb2->AddTool(wxID_SAVEAS, wxBitmap(save_xpm), wxNullBitmap, false, -1, -1, (wxObject *) NULL, _("Save"));
+    //tb2->AddTool(wxID_OPEN, wxBitmap(open_xpm), wxNullBitmap, false, -1, -1, (wxObject *) nullptr, _("Open"));
+    //tb2->AddTool(wxID_SAVEAS, wxBitmap(save_xpm), wxNullBitmap, false, -1, -1, (wxObject *) nullptr, _("Save"));
     //tb2->AddTool(ID_SampleItem+3, wxT("Test"), wxBitmap (open_xpm));
     //tb2->AddTool(ID_SampleItem+4, wxT("Test"), wxBitmap (save_xpm));
     wxBitmap tb2_open = wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_OTHER, wxSize(16,16));
@@ -1619,7 +1619,7 @@ void MyFrame::UpdateGeometry (void)
 		return;
 
 	// get the geometry
-	Mesh *geometry = NULL;
+	Mesh *geometry = nullptr;
 	for (int i=0; i<m_nRadioGeometries; i++)
 		if (m_pRadioGeometries[i]->GetValue())
 		{
@@ -1640,7 +1640,7 @@ void MyFrame::UpdateGeometry (void)
 				break;
 			case 2:
 				*m_pWndLogging << _T("Cylinder\n");
-				geometry = NULL;
+				geometry = nullptr;
 				break;
 			case 3:
 				*m_pWndLogging << _T("Klein bottle\n");
@@ -1882,7 +1882,7 @@ void MyFrame::OnButtonCurvaturesTaubin (wxCommandEvent& WXUNUSED(event))
    algo.EvaluateColors (CURVATURE_GAUSSIAN);
 
 
-   float *pHistogram = NULL;
+   float *pHistogram = nullptr;
    algo.GetCurvaturesHistogram (CURVATURE_MAX, 64, &pHistogram);
    for (int i=0; i<64; i++)
 		*m_pWndLogging << pHistogram[i] << " ";

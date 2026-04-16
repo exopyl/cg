@@ -184,9 +184,9 @@ static char* convertInternalFormatToString(GLenum format)
 static bool hasExtension(const char* extensionName)
 {
 	const char* extensionsList = (const char*)glGetString(GL_EXTENSIONS);
-	const char* extensionMatch = NULL;
+	const char* extensionMatch = nullptr;
 
-	while ( (extensionMatch = strstr(extensionsList, extensionName)) != NULL )
+	while ( (extensionMatch = strstr(extensionsList, extensionName)) != nullptr )
 	{
 		if ( strncmp(extensionMatch,extensionName,strlen(extensionName)) == 0 )
 			if ( extensionMatch[strlen(extensionName)] == ' ')

@@ -4,11 +4,11 @@
 
 static void LoadFile (const char *strFilename, LSystem *pLSystem)
 {
-	if (strFilename == NULL)
+	if (strFilename == nullptr)
 		return;
 
 	FILE *pIn = fopen (strFilename, "r");
-	if (pIn == NULL)
+	if (pIn == nullptr)
 		return;
 
 	char pBuffer[256];
@@ -43,8 +43,8 @@ static void LoadFile (const char *strFilename, LSystem *pLSystem)
 //
 void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 {
-	LSystem *t = NULL;
-	LSystemData *pLSystemData = NULL;
+	LSystem *t = nullptr;
+	LSystemData *pLSystemData = nullptr;
 
 	//t = new LSystem();
 	//pLSystemData = new LSystemData;

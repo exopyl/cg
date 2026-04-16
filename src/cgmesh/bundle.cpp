@@ -6,7 +6,7 @@
 Bundle::Bundle ()
 {
 	cameras_n = 0;
-	cameras = NULL;
+	cameras = nullptr;
 }
 
 Bundle::~Bundle ()
@@ -177,7 +177,7 @@ int Bundle::Load2 (char *bundlefilename, char *imageslistfilename, char *rootpat
 		{
 			printf ("Skip invalid camera\n");
 			delete camera;
-			camera = NULL;
+			camera = nullptr;
 			cmap[i] = -1;
 		}
 		else
@@ -209,27 +209,27 @@ int Bundle::Load2 (char *bundlefilename, char *imageslistfilename, char *rootpat
 
 		unsigned int j=0;
 		char *pch = strtok (buffer," ");
-		pch = strtok (NULL, " ");
+		pch = strtok (nullptr, " ");
 		for (unsigned int j=0; j<n_pt_visible_from_cameras[i]; j++)
 		{
 			int ci = cmap[atoi (pch)];
 			pt_visible_from_cameras[i][j] = ci;
 
 			int b = atoi (pch);
-			pch = strtok (NULL, " ");
+			pch = strtok (nullptr, " ");
 
 			//camera_t *camera = cameras[ci];
 			//fmat4_transform (pt, camera->R, pt);
 			//fvec3_addition (pt, pt, camera->T);
 
 			int a = atoi (pch);
-			pch = strtok (NULL, " ");
+			pch = strtok (nullptr, " ");
 
 			float imgx = atof (pch);
-			pch = strtok (NULL, " ");
+			pch = strtok (nullptr, " ");
 
 			float imgy = atof (pch);
-			pch = strtok (NULL, " ");
+			pch = strtok (nullptr, " ");
 		}
 	}
 	cameras_n = nEffectiveCameras;

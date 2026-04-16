@@ -23,15 +23,15 @@ ImplicitSurface::ImplicitSurface ()
 	set_value (48.);
 	bBoundary = 0;
 
-	eval_func = NULL;
-	color_func = NULL;
-	vertex_func = NULL;
-	normal_func = NULL;
-	face_completed_func = NULL;
-	layer_completed_func = NULL;
-	data = NULL;
-	fValueCached = NULL;
-	fIndicesCached = NULL;
+	eval_func = nullptr;
+	color_func = nullptr;
+	vertex_func = nullptr;
+	normal_func = nullptr;
+	face_completed_func = nullptr;
+	layer_completed_func = nullptr;
+	data = nullptr;
+	fValueCached = nullptr;
+	fIndicesCached = nullptr;
 	iCurrentVertex = -1;
 };
 
@@ -137,7 +137,7 @@ void ImplicitSurface::get_triangulation_post (int *nvertices, float **vertices, 
 	*faces = tri->faces;
 
 	free (data);
-	data = NULL;
+	data = nullptr;
 }
 
 void ImplicitSurface::get_triangulation (int *nvertices, float **vertices, int *nfaces, unsigned int **faces)
@@ -453,12 +453,12 @@ void ImplicitSurface::compute (int bUsecache)
 	if (bUseIndexedFaces)
 	{
 		free (fIndicesCached);
-		fIndicesCached = NULL;
+		fIndicesCached = nullptr;
 	}
 	if (bUsecache)
 	{
 		free (fValueCached);
-		fValueCached = NULL;
+		fValueCached = nullptr;
 	}
 
 	// restore

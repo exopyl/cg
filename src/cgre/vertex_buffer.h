@@ -7,7 +7,7 @@ class VertexBuffer
 public:
 	VertexBuffer ()
 	{
-		m_pMesh = NULL;
+		m_pMesh = nullptr;
 	};
 	~VertexBuffer ();
 

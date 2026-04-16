@@ -162,34 +162,34 @@ int ply_read(p_ply ply);
 
 /* ----------------------------------------------------------------------
  * Iterates over all elements by returning the next element.
- * Call with NULL to return handle to first element.
+ * Call with nullptr to return handle to first element.
  *
  * ply: handle returned by ply_open
- * last: handle of last element returned (NULL for first element)
+ * last: handle of last element returned (nullptr for first element)
  *
- * Returns element if successfull or NULL if no more elements
+ * Returns element if successfull or nullptr if no more elements
  * ---------------------------------------------------------------------- */
 p_ply_element ply_get_next_element(p_ply ply, p_ply_element last);
 
 /* ----------------------------------------------------------------------
  * Iterates over all comments by returning the next comment.
- * Call with NULL to return pointer to first comment.
+ * Call with nullptr to return pointer to first comment.
  *
  * ply: handle returned by ply_open
- * last: pointer to last comment returned (NULL for first comment)
+ * last: pointer to last comment returned (nullptr for first comment)
  *
- * Returns comment if successfull or NULL if no more comments
+ * Returns comment if successfull or nullptr if no more comments
  * ---------------------------------------------------------------------- */
 const char *ply_get_next_comment(p_ply ply, const char *last);
 
 /* ----------------------------------------------------------------------
  * Iterates over all obj_infos by returning the next obj_info.
- * Call with NULL to return pointer to first obj_info.
+ * Call with nullptr to return pointer to first obj_info.
  *
  * ply: handle returned by ply_open
- * last: pointer to last obj_info returned (NULL for first obj_info)
+ * last: pointer to last obj_info returned (nullptr for first obj_info)
  *
- * Returns obj_info if successfull or NULL if no more obj_infos
+ * Returns obj_info if successfull or nullptr if no more obj_infos
  * ---------------------------------------------------------------------- */
 const char *ply_get_next_obj_info(p_ply ply, const char *last);
 
@@ -207,12 +207,12 @@ int ply_get_element_info(p_ply_element element, const char** name,
 
 /* ----------------------------------------------------------------------
  * Iterates over all properties by returning the next property.
- * Call with NULL to return handle to first property.
+ * Call with nullptr to return handle to first property.
  *
  * element: handle of element with the properties of interest
- * last: handle of last property returned (NULL for first property)
+ * last: handle of last property returned (nullptr for first property)
  *
- * Returns element if successfull or NULL if no more properties
+ * Returns element if successfull or nullptr if no more properties
  * ---------------------------------------------------------------------- */
 p_ply_property ply_get_next_property(p_ply_element element, 
         p_ply_property last);
@@ -239,7 +239,7 @@ int ply_get_property_info(p_ply_property property, const char** name,
  * name: file name
  * storage_mode: file format mode
  *
- * Returns handle to PLY file if successfull, NULL otherwise
+ * Returns handle to PLY file if successfull, nullptr otherwise
  * ---------------------------------------------------------------------- */
 p_ply ply_create(const char *name, e_ply_storage_mode storage_mode, 
         p_ply_error_cb error_cb, long idata, void *pdata);

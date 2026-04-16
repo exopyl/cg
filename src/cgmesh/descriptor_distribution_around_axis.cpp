@@ -12,10 +12,10 @@ Cdistribution_around_axis::Cdistribution_around_axis (Mesh_half_edge *_model)
   assert (_model);
   model = _model;
 
-  histogram1k  = NULL;
-  histogram2k1 = NULL;
-  histogram2k2 = NULL;
-  histogram3k  = NULL;
+  histogram1k  = nullptr;
+  histogram2k1 = nullptr;
+  histogram2k2 = nullptr;
+  histogram3k  = nullptr;
 
   nv = model->m_pMesh->m_nVertices;
   nf = model->m_pMesh->m_nFaces;

@@ -16,7 +16,7 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
     {
 		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
-			m_pDiffParams[i] = NULL;
+			m_pDiffParams[i] = nullptr;
 			continue;
 		}
 
@@ -25,7 +25,7 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 		/*
 		if (!e) // isolated vertex
 		{
-		tensor[i] = NULL;
+		tensor[i] = nullptr;
 		continue;
 		}
 		
@@ -38,7 +38,7 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 		  } while (e_walk && e_walk != e);
 		  if (!e_walk) // is on border
 		  {
-		  tensor[i] = NULL;
+		  tensor[i] = nullptr;
 		  continue;
 		  }
 		*/
@@ -105,7 +105,7 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 		/*
 		if (n_neighbour <= 4)
 		{
-		tensor[i] = NULL;
+		tensor[i] = nullptr;
 		continue;
 		}
 		*/

@@ -10,8 +10,8 @@
 Polygon3::Polygon3 ()
 {
 	m_nContours = 0;
-	m_nPoints = NULL;
-	m_pPoints = NULL;
+	m_nPoints = nullptr;
+	m_pPoints = nullptr;
 }
 
 // destructor

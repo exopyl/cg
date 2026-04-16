@@ -25,7 +25,7 @@ Cregions_vertices::init_from_cylinders (void)
 {
 	/*
   int i, j;
-  int *indices = NULL;
+  int *indices = nullptr;
   int nv = size;
   float *v  = mesh_half_edge->get_vertices ();
   float *vn = mesh_half_edge->get_vertices_normales ();

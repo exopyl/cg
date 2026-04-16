@@ -44,14 +44,14 @@ static int reward = 5 * 2;
 
 
 DisparityBirchfield::DisparityBirchfield():
-m_pImgLeft(NULL), m_pImgRight(NULL), m_pDisparity1(NULL), m_pDisparity2(NULL), m_pDiscontinuities1(NULL), m_pDiscontinuities2(NULL)
+m_pImgLeft(nullptr), m_pImgRight(nullptr), m_pDisparity1(nullptr), m_pDisparity2(nullptr), m_pDiscontinuities1(nullptr), m_pDiscontinuities2(nullptr)
 {
 }
 
 DisparityBirchfield::~DisparityBirchfield()
 {
-	m_pImgLeft = NULL;
-	m_pImgRight = NULL;
+	m_pImgLeft = nullptr;
+	m_pImgRight = nullptr;
 	if (m_pDisparity1)
 		delete m_pDisparity1;
 	if (m_pDisparity2)
@@ -907,7 +907,7 @@ void readIGXFiles(char *ptr_ig,
                   int q_no_igL[ROWS][COLS+SLOP],
                   int q_no_igR[ROWS][COLS+SLOP])
 {   
-   if (strstr(ptr_ig, "%c")==NULL)
+   if (strstr(ptr_ig, "%c")==nullptr)
       printf("IG File '%s' is invalid.  Must contain '%%c'.\n", ptr_ig);
 
    _readIGXFileHelper(ptr_ig, q_no_igL, 'L');
@@ -951,9 +951,9 @@ void DisparityBirchfield::Process(void)
 	int phi_best, pie_y_best, pie_d_best;
 
 	//printf("Parameters:  occ=%d, rew=%d, ptr_ig='%s'\n", 
-	//	getOcclusionPenalty(), getReward(), ptr_ig ? ptr_ig : "NULL");
+	//	getOcclusionPenalty(), getReward(), ptr_ig ? ptr_ig : "nullptr");
 
-	//if (ptr_ig != NULL) {
+	//if (ptr_ig != nullptr) {
 	//	readIGXFiles(ptr_ig, q_no_igL, q_no_igR);
 	//}
 
@@ -961,7 +961,7 @@ void DisparityBirchfield::Process(void)
 	{
 		// Fill tables
 		fillDissimilarityTable(m_pImgLeft, m_pImgRight, dis, scanline);
-		//if (ptr_ig == NULL)
+		//if (ptr_ig == nullptr)
 			computeIntensityGradientsX(m_pImgLeft, m_pImgLeft, scanline, no_igL, no_igR);
 		//else
 		//{

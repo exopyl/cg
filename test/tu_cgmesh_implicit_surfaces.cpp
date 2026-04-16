@@ -33,7 +33,7 @@ static float eval(float x, float y, float z)
 	return sqrt(x * x + y * y + z * z);
 }
 
-static Img* img = NULL;
+static Img* img = nullptr;
 static float eval_image(float x, float y, float z)
 {
 	unsigned char r = img->get_r((int)x, (int)y);
@@ -52,9 +52,9 @@ TEST(TEST_cgmesh_implicit_surface, ok)
 	mc->set_resolution_per_unit(20);
 	mc->set_boundary(1);
 	mc->set_orientation(1);
-	mc->set_color_func(NULL);
-	mc->set_vertex_func(NULL);
-	mc->set_normal_func(NULL);
+	mc->set_color_func(nullptr);
+	mc->set_vertex_func(nullptr);
+	mc->set_normal_func(nullptr);
 	//mc->set_eval_func (eval);
 	mc->set_eval_func(fSample2);
 	mc->set_value(.5);
@@ -74,9 +74,9 @@ TEST(TEST_cgmesh_implicit_surface, image)
 	mc->set_resolution_per_unit(1);
 	mc->set_boundary(1);
 	mc->set_orientation(1);
-	mc->set_color_func(NULL);
-	mc->set_vertex_func(NULL);
-	mc->set_normal_func(NULL);
+	mc->set_color_func(nullptr);
+	mc->set_vertex_func(nullptr);
+	mc->set_normal_func(nullptr);
 	//mc->set_eval_func (eval);
 	mc->set_eval_func(eval_image);
 	mc->set_value(0.);

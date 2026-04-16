@@ -668,7 +668,7 @@ Polygon2* Rosace::Generate (void)
 {
 	unsigned int resolution = 20;
 	Polygon2 *pol = new Polygon2 ();
-	float *p = pol->add_contour (0, m_nFoils*resolution, NULL);
+	float *p = pol->add_contour (0, m_nFoils*resolution, nullptr);
 
 	float alpha = 2.*M_PI/m_nFoils;
 	float halpha = M_PI/m_nFoils;
@@ -720,13 +720,13 @@ Polygon2* ArcBrise::Generate (void)
 	if (m_fWidth2 > m_fWidth/2.)
 	{
 		printf ("!!! m_fWidth2 > m_fWidth/2.");
-		return NULL;
+		return nullptr;
 	}
 
 	// principal arc
 	create_arc_brise (m_fWidth/2., m_fHeight, npts, &p, &t, 0.);
 	Polygon2 *pol = new Polygon2 ();
-	pol->add_contour (0, 3*npts, NULL);
+	pol->add_contour (0, 3*npts, nullptr);
 	for (int i=0; i<npts; i++)
 		pol->set_point (0, i, p[2*i], m_fAltitude + p[2*i+1]);
 
@@ -818,7 +818,7 @@ Polygon2* ArcBrise::Generate (void)
 	pImg->save ("toto.png");
 */
 
-	pol->add_contour (1, npts, NULL);
+	pol->add_contour (1, npts, nullptr);
 	float c[2] = {0., rosace_y};
 	float angles[2] = {0., 2.*3.14159};
 	create_arc_circle (c, rosace_radius, angles, npts, &p, &t);

@@ -19,7 +19,7 @@ bool MeshAlgoTensorEvaluator::ApplyHybrid (void)
 		Vector3 n;
 		if (!m_pDiffParams[i])
 		{
-			hybrid[i] = NULL;
+			hybrid[i] = nullptr;
 			continue;
 		}
 		
@@ -37,7 +37,7 @@ bool MeshAlgoTensorEvaluator::ApplyHybrid (void)
 		
 		if (!m_pDiffParams[i])
 		{
-			hybrid[i] = NULL;
+			hybrid[i] = nullptr;
 			continue;
 		}
 		
@@ -53,7 +53,7 @@ bool MeshAlgoTensorEvaluator::ApplyHybrid (void)
     {
 		if (!m_pDiffParams[i])
 		{
-			hybrid[i] = NULL;
+			hybrid[i] = nullptr;
 			continue;
 		}
 		

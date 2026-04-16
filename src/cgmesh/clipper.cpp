@@ -65,8 +65,8 @@ Cmodel3d_half_edge_clipper::get_intersections (int *n_intersections, int **n_ver
   if (negative == 0 || positive == 0)
     {
       *n_intersections = 0;
-      n_vertices = NULL;
-      intersections = NULL;
+      n_vertices = nullptr;
+      intersections = nullptr;
       return;
     }
 

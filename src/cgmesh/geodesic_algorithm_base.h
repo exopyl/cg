@@ -31,7 +31,7 @@ public:
 
 	virtual void propagate(std::vector<SurfacePoint>& sources,
    						   double max_propagation_distance = GEODESIC_INF,			//propagation algorithm stops after reaching the certain distance from the source
-						   std::vector<SurfacePoint>* stop_points = NULL) = 0; //or after ensuring that all the stop_points are covered
+						   std::vector<SurfacePoint>* stop_points = nullptr) = 0; //or after ensuring that all the stop_points are covered
 
 	virtual void trace_back(SurfacePoint& destination,		//trace back piecewise-linear path
 							std::vector<SurfacePoint>& path) = 0;
@@ -168,7 +168,7 @@ inline void GeodesicAlgorithmBase::set_stop_conditions(std::vector<SurfacePoint>
 		possible_vertices.clear();
 		m_mesh->closest_vertices(point, &possible_vertices);
 		
-		vertex_pointer closest_vertex = NULL;
+		vertex_pointer closest_vertex = nullptr;
 		double min_distance = 1e100;
 		for(unsigned j = 0; j < possible_vertices.size(); ++j)
 		{

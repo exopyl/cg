@@ -95,7 +95,7 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
     {
 		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
-			m_pDiffParams[i] = NULL;
+			m_pDiffParams[i] = nullptr;
 			continue;
 		}
 

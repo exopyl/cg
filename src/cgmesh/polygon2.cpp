@@ -29,20 +29,20 @@ int Polygon2::alloc_contours (int nContours)
 Polygon2::Polygon2 ()
 {
 	m_nContours = 0;
-	m_nPoints = NULL;
-	m_pPoints = NULL;
+	m_nPoints = nullptr;
+	m_pPoints = nullptr;
 }
 
 Polygon2::Polygon2 (const Polygon2 &pol)
 {
 	m_nContours = 0;
-	m_nPoints = NULL;
-	m_pPoints = NULL;
+	m_nPoints = nullptr;
+	m_pPoints = nullptr;
 	printf ("--> %d\n", pol.m_nContours);
 	alloc_contours (pol.m_nContours);
 	for (int i=0; i<m_nContours; i++)
 	{
-		m_pPoints[i] = NULL;
+		m_pPoints[i] = nullptr;
 		add_contour (i, pol.m_nPoints[i], pol.m_pPoints[i]);
 	}
 }
@@ -52,7 +52,7 @@ Polygon2 &Polygon2::operator=(const Polygon2 &pol)
 	alloc_contours (pol.m_nContours);
 	for (int i=0; i<m_nContours; i++)
 	{
-		m_pPoints[i] = NULL;
+		m_pPoints[i] = nullptr;
 		add_contour (i, pol.m_nPoints[i], pol.m_pPoints[i]);
 	}
 	return *this;
@@ -190,7 +190,7 @@ int Polygon2::add_polygon2d (Polygon2 *pol)
 	m_pPoints = (float**) realloc (m_pPoints, (m_nContours+pol->m_nContours)*sizeof(float*));
 	for (int i=0; i<pol->m_nContours; i++)
 	{
-		m_pPoints[m_nContours] = NULL;
+		m_pPoints[m_nContours] = nullptr;
 		add_contour (m_nContours, pol->m_nPoints[i], pol->m_pPoints[i]);
 	}
 
@@ -546,7 +546,7 @@ int Polygon2::generalized_barycentric_coordinates (float pt[2], float *coords)
 	if (m_nContours != 1)
 		return -1;
 
-	if (coords == NULL)
+	if (coords == nullptr)
 		coords = (float*)malloc(m_nPoints[0]*sizeof(float));
 
 	float weightSum = 0.;
@@ -608,7 +608,7 @@ void Polygon2::extrude (float fHeight, char *filename)
 
 void Polygon2::thicken (Polygon2* polygon, float ithickness, float othickness, int bOpen)
 {
-     if (polygon == NULL)
+     if (polygon == nullptr)
 	  return;
      
      m_nContours = polygon->m_nContours;
@@ -739,7 +739,7 @@ void Polygon2::thicken (Polygon2* polygon, float ithickness, float othickness, i
 
 void Polygon2::dilate (Polygon2* polygon, float d)
 {
-     if (polygon == NULL)
+     if (polygon == nullptr)
 	  return;
      
      m_nContours = polygon->m_nContours;

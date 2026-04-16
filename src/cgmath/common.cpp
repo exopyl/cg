@@ -158,12 +158,12 @@ quicksort_indices (float *array, int size)
 {
   int i;
   int *indices = (int*)malloc(size*sizeof(int));
-  if (!indices) return NULL;
+  if (!indices) return nullptr;
   for (i=0; i<size; i++)
     indices[i] = i;
 
   float *array_copy = (float*)malloc(size*sizeof(float));
-  if (!array_copy) return NULL;
+  if (!array_copy) return nullptr;
   for (i=0; i<size; i++)
     array_copy[i] = array[i];
   /*

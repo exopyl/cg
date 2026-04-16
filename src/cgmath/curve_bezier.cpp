@@ -55,7 +55,7 @@ int CurveBezier::addControlPoint (float x, float y, float z)
 	{
 		m_nMaxControlPoints *= 2;
 		m_controlPoints = (vec3*)realloc((void*)m_controlPoints, m_nMaxControlPoints*sizeof(vec3));
-		if (m_controlPoints == NULL) return 0;
+		if (m_controlPoints == nullptr) return 0;
 	}
 	m_controlPoints[m_nControlPoints][0] = x;
 	m_controlPoints[m_nControlPoints][1] = y;
@@ -113,13 +113,13 @@ CurveBezier::computeInterpolation (int par_nPoints, vec3 **par_points)
 {
 	if (par_nPoints < 0)
 	{
-		par_points = NULL;
+		par_points = nullptr;
 		return 0;
 	}
 	vec3 *points = (vec3*)malloc(par_nPoints*sizeof(vec3));
 	if (!points)
 	{
-		par_points = NULL;
+		par_points = nullptr;
 		return 0;
 	}
 	float t = 0.0;
@@ -147,13 +147,13 @@ CurveBezier::computeInterpolation3 (int par_nPoints, vec3 **par_points)
 {
 	if (getDegree () != 2)
 	{
-		par_points = NULL;
+		par_points = nullptr;
 		return 0;
 	}
 	vec3 *points = (vec3*)malloc(par_nPoints*sizeof(vec3));
 	if (!points)
 	{
-		par_points = NULL;
+		par_points = nullptr;
 		return 0;
 	}
 	float t = 0.0;
@@ -181,13 +181,13 @@ CurveBezier::computeInterpolation4 (int par_nPoints, vec3 **par_points)
 {
 	if (getDegree () != 3)
 	{
-		par_points = NULL;
+		par_points = nullptr;
 		return 0;
 	}
 	vec3 *points = (vec3*)malloc(par_nPoints*sizeof(vec3));
 	if (!points)
 	{
-		par_points = NULL;
+		par_points = nullptr;
 		return 0;
 	}
 	float t = 0.0;
@@ -280,7 +280,7 @@ CurveBezier::computeInterpolationRecursive3 (int par_level, int &par_nPoints, ve
 	vec3 *points = (vec3*)malloc(par_nPoints*sizeof(vec3));
 	if (!points)
 	{
-		par_points = NULL;
+		par_points = nullptr;
 		return 0;
 	}
 
@@ -375,7 +375,7 @@ CurveBezier::computeInterpolationRecursiveFlatness3 (float tolerance, int &par_n
 		if (!points)
 		{
 			par_nPoints = 0;
-			par_points = NULL;
+			par_points = nullptr;
 			return 0;
 		}
 		int i,j;
@@ -404,7 +404,7 @@ CurveBezier::computeInterpolationRecursiveFlatness3 (float tolerance, int &par_n
 		if (!points)
 		{
 			par_nPoints = 0;
-			par_points = NULL;
+			par_points = nullptr;
 			return 0;
 		}
 		points[0][0] = m_controlPoints[0][0];

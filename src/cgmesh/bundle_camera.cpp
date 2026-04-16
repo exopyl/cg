@@ -4,7 +4,7 @@
 
 BundleCamera::BundleCamera ()
 {
-	filename = NULL;
+	filename = nullptr;
 	w = 0;
 	h = 0;
 

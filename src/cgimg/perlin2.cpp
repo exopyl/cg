@@ -49,7 +49,7 @@ Cperlin2::Cperlin2 ()
     }
   FILE *ptr;
   ptr = fopen ("output.ppm", "w");
-  if (ptr == NULL) return;
+  if (ptr == nullptr) return;
   fprintf (ptr, "P6\n%d %d\n255\n", w, h);
   for (i=h-1; i>=0; i--)
     fwrite (&image[3*w*i], sizeof(unsigned char), 3*w, ptr);

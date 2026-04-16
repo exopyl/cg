@@ -6,7 +6,7 @@
 // Half edge structure
 //
 // m_pair and m_he_next are indices into the Che_mesh::m_edges vector.
-// -1 means "no edge" (replaces NULL pointers).
+// -1 means "no edge" (replaces nullptr pointers).
 //
 class Che_edge
 {

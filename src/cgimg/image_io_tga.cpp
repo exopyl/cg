@@ -179,7 +179,7 @@ int Img::import_tga (const char *filename)
 	int i,j;
 	unsigned char *color_map;
 
-	if ((ptr = fopen (filename, "rb")) == NULL)
+	if ((ptr = fopen (filename, "rb")) == nullptr)
 	{
 		printf ("unable to open %s\n", filename);
 		return -1;
@@ -751,7 +751,7 @@ int Img::export_tga (const char *filename)
       fwrite (&image_type, sizeof(unsigned char), 1, ptr);
       
       // color map specifications
-      unsigned char *colormap=NULL;
+      unsigned char *colormap=nullptr;
       unsigned short colormap_length;
       compute_colormap (&colormap, &colormap_length);
       

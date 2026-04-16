@@ -42,7 +42,7 @@ public:
 	std::vector<Edge>& edges(){return m_edges;};
 	std::vector<Face>& faces(){return m_faces;};
 
-	unsigned closest_vertices(SurfacePoint* p, std::vector<vertex_pointer>* storage = NULL);		//list vertices closest to the point
+	unsigned closest_vertices(SurfacePoint* p, std::vector<vertex_pointer>* storage = nullptr);		//list vertices closest to the point
 
 private:
 

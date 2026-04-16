@@ -28,9 +28,9 @@ CFrameRate::CFrameRate (void)
 int CFrameRate::CalculateFrameRate()
 {
 	if (nFrames == 0)
-		last_time = time (NULL);
+		last_time = time (nullptr);
 	nFrames++;
-	current_time = time (NULL);
+	current_time = time (nullptr);
 	double diff = difftime (current_time, last_time);
 	int fps = 0;
 	if (diff >= 1)

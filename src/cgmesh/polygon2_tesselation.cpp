@@ -35,7 +35,7 @@ static void glutess_begin(int type, void *user_data)
 	state->vc = 0;
 	//
 	// we only get triangles here because we set
-	// GLU_TESS_EDGE_FLAG callback to non-NULL
+	// GLU_TESS_EDGE_FLAG callback to non-nullptr
 	//
 	(void) type;
 }
@@ -152,7 +152,7 @@ int Polygon2::tesselate (float **_pVertices, unsigned int *_nVertices,
 	// compute the number of vertices
 	nVertices = get_n_points();
 	coords = (double*)malloc(3*sizeof(double)*nVertices);
-	if (coords == NULL)
+	if (coords == nullptr)
 		return 0;
 
 	// allocate memory for the result. 

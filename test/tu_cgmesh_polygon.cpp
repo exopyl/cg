@@ -320,7 +320,7 @@ TEST(TEST_cgmesh_polygon, AddContour_AddNew)
 }
 
 // ---------------------------------------------------------------------------
-// TEST: add_contour -- with NULL pPoints (allocates but does not copy)
+// TEST: add_contour -- with nullptr pPoints (allocates but does not copy)
 // ---------------------------------------------------------------------------
 TEST(TEST_cgmesh_polygon, AddContour_NullPoints)
 {
@@ -329,7 +329,7 @@ TEST(TEST_cgmesh_polygon, AddContour_NullPoints)
 	pol.alloc_contours(1);
 
 	// action
-	float *ret = pol.add_contour(0, 5, NULL);
+	float *ret = pol.add_contour(0, 5, nullptr);
 
 	// expectations
 	EXPECT_NE(ret, nullptr);
@@ -366,7 +366,7 @@ TEST(TEST_cgmesh_polygon, AddPolygon2d_NullPointer)
 	make_unit_square(base);
 
 	// action
-	int ret = base.add_polygon2d(NULL);
+	int ret = base.add_polygon2d(nullptr);
 
 	// expectations
 	EXPECT_EQ(ret, 0);
@@ -1351,7 +1351,7 @@ TEST(TEST_cgmesh_polygon, GeneralizedBarycentricCoordinates_MultiContour_Returns
 	float pt[2] = { 0.5f, 0.5f };
 
 	// action
-	int ret = pol.generalized_barycentric_coordinates(pt, NULL);
+	int ret = pol.generalized_barycentric_coordinates(pt, nullptr);
 
 	// expectations
 	EXPECT_EQ(ret, -1);

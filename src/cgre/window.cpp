@@ -12,7 +12,7 @@ Window::Window ()
 	if (m_fbo && !m_fbo->isOK ())
 	{
 		delete m_fbo;
-		m_fbo = NULL;
+		m_fbo = nullptr;
 		return;
 	}
 

@@ -19,14 +19,14 @@ public:
 	template <class Pointer>
 	SubdivisionNode(Pointer p):
 		SurfacePoint(p),
-		m_previous(NULL),
+		m_previous(nullptr),
 		m_distance(0.0)
 	{};
 
 	template <class Pointer, class Parameter>
 	SubdivisionNode(Pointer p, Parameter param):
 		SurfacePoint(p, param),
-		m_previous(NULL),
+		m_previous(nullptr),
 		m_distance(0.0)
 	{};
 
@@ -39,7 +39,7 @@ public:
 	void clear()
 	{
 		m_distance = GEODESIC_INF;
-		m_previous = NULL;
+		m_previous = nullptr;
 	}
 
 	bool operator()(node_pointer const s1, node_pointer const s2) const
@@ -89,7 +89,7 @@ class GeodesicAlgorithmSubdivision: public GeodesicAlgorithmGraphBase<Subdivisio
 {
 	typedef SubdivisionNode Node;
 public:
-	GeodesicAlgorithmSubdivision(geodesic::Mesh* mesh = NULL, 
+	GeodesicAlgorithmSubdivision(geodesic::Mesh* mesh = nullptr, 
 								 unsigned subdivision_level = 0):
 		GeodesicAlgorithmGraphBase<Node>(mesh)
 	{

@@ -136,7 +136,7 @@ int Raytracer::GetColorWithRay (vec3 vOrig, vec3 vDirection, float color[3])
 			//Geometry *pObject2 = GetScene()->GetIntersectionWithSegment (vIntersectionOffset, m_pLights[i]->m_vPosition,
 			//							     vIntersection2, vNormal2);
 			t.start ();
-			Geometry *pObject2 = NULL;//GetScene()->GetIntersectionWithRay (vIntersectionOffset, vL, vIntersection2, vNormal2);
+			Geometry *pObject2 = nullptr;//GetScene()->GetIntersectionWithRay (vIntersectionOffset, vL, vIntersection2, vNormal2);
 			m_time_GetIntersectionWithRay += t.stop ();
 			if (pObject2)
 			{

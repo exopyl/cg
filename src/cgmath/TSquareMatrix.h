@@ -25,13 +25,13 @@ class TSquareMatrix
 {
 public:
 
-	void initNULL ()
+	void initnullptr ()
 	{
-		a = NULL;
+		a = nullptr;
 		m_dimension = 0;
 
-		d = NULL;
-		v = NULL;
+		d = nullptr;
+		v = nullptr;
 		nrot = 0;
 	}
 
@@ -62,25 +62,25 @@ public:
 			for (int i=0; i<m_dimension; i++)
 			{
 				free (a[i]);
-				a[i] = NULL;
+				a[i] = nullptr;
 			}
 			free (a);
-			a = NULL;
+			a = nullptr;
 		}
 		if (d)
 		{
 			free (d);
-			d = NULL;
+			d = nullptr;
 		}
 		if (v)
 		{
 			for (int i=0; i<m_dimension; i++)
 			{
 				free (v[i]);
-				v[i] = NULL;
+				v[i] = nullptr;
 			}
 			free (v);
-			v = NULL;
+			v = nullptr;
 		}
 	}
 
@@ -91,12 +91,12 @@ public:
 
 	TSquareMatrix<TValue>()
 	{
-		initNULL ();
+		initnullptr ();
 	}
 
 	TSquareMatrix<TValue>(int n)
 	{
-		initNULL ();
+		initnullptr ();
 
 		alloc (n);
 		SetIdentity ();
@@ -105,7 +105,7 @@ public:
 
 	TSquareMatrix<TValue>(int n, TValue *mat)
 	{
-		initNULL ();
+		initnullptr ();
 
 		alloc (n);
 

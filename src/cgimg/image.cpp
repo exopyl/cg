@@ -47,7 +47,7 @@ int Img::resize_memory (unsigned int width, unsigned int height, bool use_palett
 	{
 		m_pPixels = (unsigned char*)malloc(4*m_iWidth*m_iHeight*sizeof(unsigned char));
 		bUsePalette = false;
-		m_pPalette = NULL;
+		m_pPalette = nullptr;
 	}
 	
 	return (m_pPixels)? 0 : -1;
@@ -57,9 +57,9 @@ Img::Img (unsigned int w, unsigned int h, bool use_palette)
 {
 	m_iWidth = 0;
 	m_iHeight = 0;
-	m_pPixels = NULL;
+	m_pPixels = nullptr;
 	bUsePalette = use_palette;
-	m_pPalette = NULL;
+	m_pPalette = nullptr;
 	resize_memory (w,h, use_palette);
 }
 
@@ -67,7 +67,7 @@ Img::Img (const Img &img)
 {
 	m_iWidth = 0;
 	m_iHeight = 0;
-	m_pPixels = NULL;
+	m_pPixels = nullptr;
 	resize_memory (img.m_iWidth, img.m_iHeight, false);
 	if (!img.bUsePalette)
 		memcpy (m_pPixels, img.m_pPixels, 4*m_iWidth*m_iHeight*sizeof(unsigned char));
@@ -83,7 +83,7 @@ Img::Img (const Img &img)
 	}
 
 	bUsePalette = 0;
-	m_pPalette = NULL;
+	m_pPalette = nullptr;
 }
 
 Img::~Img ()
@@ -416,7 +416,7 @@ void Img::histogram_equalization (void)
 
 void Img::histogram_equalization_bezier (CurveBezier *bezier)
 {
-	if (bezier == NULL)
+	if (bezier == nullptr)
 		bezier = new CurveBezier();
 	vec3 v0, v1, v2, v3;
 	vec3_init (v0, 0., 255., 0.);
@@ -567,7 +567,7 @@ int Img::resize (unsigned int width, unsigned int height, int mode)
 		return 0;
 	
 	unsigned char *pPixels = (unsigned char*)malloc(4*width*height*sizeof(unsigned char));
-	if (pPixels == NULL)
+	if (pPixels == nullptr)
 		return -1;
 	unsigned char r, g, b, a;
 	unsigned int index;
@@ -718,7 +718,7 @@ int Img::resize (unsigned int width, unsigned int height, int mode)
 int Img::resize_pixel (unsigned int n)
 {
 	unsigned char *pPixels = (unsigned char*)malloc(4*n*m_iWidth*n*m_iHeight*sizeof(unsigned char));
-	if (pPixels == NULL)
+	if (pPixels == nullptr)
 		return -1;
 
 	unsigned int iWidth = m_iWidth * n;

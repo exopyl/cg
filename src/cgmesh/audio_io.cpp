@@ -87,13 +87,13 @@ int Audio::import_wav (char const *filename, int verbose)
 		if (fseek(f, hdr.Subchunk2Size, SEEK_CUR) == -1) {
 			printf("could not read %s\n", filename);
 			fclose(f);
-			return NULL;
+			return nullptr;
 		}
 
 		if (fread(&hdr.Subchunk2ID, sizeof(hdr.Subchunk2ID) + sizeof(hdr.Subchunk2Size), 1, f) != 1) {
 			printf("could not read %s\n", filename);
 			fclose(f);
-			return NULL;
+			return nullptr;
 		}
 	}
 */

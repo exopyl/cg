@@ -4,13 +4,13 @@
 
 DeformerARAP::DeformerARAP()
 {
-	m_pMesh = NULL;
+	m_pMesh = nullptr;
 	isSolverReady = false;
 }
 
 DeformerARAP::~DeformerARAP()
 {
-	m_pMesh = NULL;
+	m_pMesh = nullptr;
 }
 
 void DeformerARAP::SetMesh(Mesh_half_edge *pMesh)

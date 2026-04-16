@@ -26,7 +26,7 @@ void Scene::AddObject (Geometry *pObject)
 Geometry* Scene::GetIntersectionWithRay (vec3 vOrig, vec3 vDirection, vec3 vIntersection, vec3 vNormal)
 {
 	float fT = 0.;
-	Geometry *pIntersectedObject = NULL;
+	Geometry *pIntersectedObject = nullptr;
 	for (unsigned int i=0; i<m_nObjects; i++)
 	{
 		float fTCurrent = 0.;
@@ -68,7 +68,7 @@ Geometry* Scene::GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, vec3 vInter
 	vDirection[0] = vEnd[0] - vStart[0];
 	vDirection[1] = vEnd[1] - vStart[1];
 	vDirection[2] = vEnd[2] - vStart[2];
-	Geometry *pIntersectedObject = NULL;
+	Geometry *pIntersectedObject = nullptr;
 	for (unsigned int i=0; i<m_nObjects; i++)
 	{
 		float fTCurrent = 0.;

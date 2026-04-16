@@ -9,7 +9,7 @@ Cextract_planes::Cextract_planes (Mesh_half_edge *_model)
 	assert (_model);
 	model = _model;
 	n_planes = 0;
-	planes = NULL;
+	planes = nullptr;
 }
 
 void
@@ -52,13 +52,13 @@ void Cextract_planes::compute (float threshold, float percentage)
 		  printf ("%f\n", area = area);
 		  model3d_regions->select_faces_by_id_region (iregion);
           Plane *plane = model3d_regions->plane_fitting ();
-		  VectorizedPlane *vPlane = new VectorizedPlane(NULL, 0, plane);
+		  VectorizedPlane *vPlane = new VectorizedPlane(nullptr, 0, plane);
 		  vPlane->set_area (area);
 
 		  int *selected_region = model3d_regions->get_selected_region ();
 
 		  // identify the faces selected
-		  int *ftmp = NULL, nftmp = 0;
+		  int *ftmp = nullptr, nftmp = 0;
 		  for (i=0; i<nf; i++)
 			  if (selected_region[i] == 1)
 				  nftmp++;

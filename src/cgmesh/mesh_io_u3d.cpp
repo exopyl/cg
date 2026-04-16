@@ -5,7 +5,7 @@
 
 int Mesh::import_u3d (const char *filename)
 {
-	if (filename == NULL)
+	if (filename == nullptr)
 		return -1;
 #if 0
 	U3DModel *pU3DModel = LoadU3DFile(filename);
@@ -19,12 +19,12 @@ int Mesh::import_u3d (const char *filename)
 int Mesh::export_u3d (const char *filename)
 {
 	/*
-	if (filename == NULL)
+	if (filename == nullptr)
 		return -1;
 
-	IFXWriteManager* pWriteManager = NULL;
-	IFXWriteBuffer* pWriteBuffer = NULL;
-	IFXStdio* pStdio = NULL;
+	IFXWriteManager* pWriteManager = nullptr;
+	IFXWriteBuffer* pWriteBuffer = nullptr;
+	IFXStdio* pStdio = nullptr;
 
 	// Create Write Manager component
 	if (IFXSUCCESS(result))

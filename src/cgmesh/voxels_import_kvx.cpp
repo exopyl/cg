@@ -27,7 +27,7 @@ Voxels* loadkvx (char *filename)
 	if (!(fil = fopen(filename,"rb")))
 	{
 		printf ("can't open %s\n", filename);
-		return NULL;
+		return nullptr;
 	}
 
 	//Load KVX file data into memory

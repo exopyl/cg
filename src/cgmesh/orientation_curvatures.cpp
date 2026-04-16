@@ -12,8 +12,8 @@ Cmesh_orientation_curvatures::Cmesh_orientation_curvatures (Mesh_half_edge *mesh
 {
   w = _w;
   h = _h;
-  accumulator     = NULL;
-  accumulator_int = NULL;
+  accumulator     = nullptr;
+  accumulator_int = nullptr;
 
   /*
   // get the tensor
@@ -44,7 +44,7 @@ void
 Cmesh_orientation_curvatures::compute_orientation (float t1, float t2)
 {
   int i,n;
-  if (model3d_half_edge == NULL) return;
+  if (model3d_half_edge == nullptr) return;
 
   printf ("t1 = %f\t t2 = %f\n", t1, t2);
   

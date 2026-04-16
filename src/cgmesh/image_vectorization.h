@@ -43,7 +43,7 @@ public:
 	bool Vectorize (Img* pInput,
 			Color colorMask,
 			bool bUseMask,
-			Palette *pPalette = NULL); // if NULL, a palette is calculated
+			Palette *pPalette = nullptr); // if nullptr, a palette is calculated
 
 	void WriteFile (float fLineWidth) const;
 	void WriteFilePolygonWithHole (/*bool bBottomTop,

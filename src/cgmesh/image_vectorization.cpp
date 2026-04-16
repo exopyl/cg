@@ -8,7 +8,7 @@
 
 CLitRasterToVector::CLitRasterToVector(void)
 {
-	m_palette = NULL;
+	m_palette = nullptr;
 }
 
 CLitRasterToVector::~CLitRasterToVector(void)

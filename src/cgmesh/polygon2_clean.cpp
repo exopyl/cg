@@ -101,7 +101,7 @@ static void glutess_combine(double coords[3],
 int Polygon2::clean (Polygon2* polygon)
 {
 #ifdef USE_GLUTESS
-	if (polygon == NULL || polygon->m_nContours == 0)
+	if (polygon == nullptr || polygon->m_nContours == 0)
 		return -1;
 
 	// polygon merged
@@ -111,7 +111,7 @@ int Polygon2::clean (Polygon2* polygon)
 
 	for (unsigned int i=0; i<polygon->m_nContours; i++)
 	{
-		m_pPoints[i] = NULL;
+		m_pPoints[i] = nullptr;
 		m_nPoints[i] = 0;
 	}
 
@@ -121,8 +121,8 @@ int Polygon2::clean (Polygon2* polygon)
 		nVertices += polygon->m_nPoints[i];
 
 	double *coords = (double*) malloc(2 * sizeof(double) * nVertices);
-	if (coords == NULL)
-		return NULL;
+	if (coords == nullptr)
+		return nullptr;
 
 	struct glutess_state state;
 	state.polygon = this;//polygon_merged;

@@ -4,9 +4,9 @@
 
 BSP::BSP ()
 {
-	m_pPlane = NULL;
-	m_pFront = NULL;
-	m_pBack = NULL;
+	m_pPlane = nullptr;
+	m_pFront = nullptr;
+	m_pBack = nullptr;
 }
 
 BSP::~BSP ()

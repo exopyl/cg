@@ -6,7 +6,7 @@
 
 Audio::Audio ()
 {
-     data = NULL;
+     data = nullptr;
 }
 
 Audio::~Audio()
@@ -23,7 +23,7 @@ int Audio::init (unsigned int _length, unsigned int _channels, unsigned int _rat
      if (length * channels)
 	  data = (float *) calloc(length * channels, sizeof(float));
      else
-	  data = NULL;
+	  data = nullptr;
      
      return 0;
 }

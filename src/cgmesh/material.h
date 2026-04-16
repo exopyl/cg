@@ -175,7 +175,7 @@ public:
 class MaterialTexture : public Material
 {
 public:
-	MaterialTexture (char const *filename, char const *path = NULL);
+	MaterialTexture (char const *filename, char const *path = nullptr);
 	MaterialTexture (unsigned int nWidth, unsigned int nHeight);
 	MaterialTexture (const MaterialTexture &m); // constructor of copy
 	virtual ~MaterialTexture ();

@@ -92,9 +92,9 @@
 #define SWAP(a, b) do { __typeof__(a) __tmp = a; a = b; b = __tmp; } while(0)
 #endif
 
-#define SAFE_DELETE(pointer)       if ((pointer) != NULL) { delete (pointer);    (pointer) = NULL; }
-#define SAFE_ARRAY_DELETE(pointer) if ((pointer) != NULL) { delete [] (pointer); (pointer) = NULL; }
-#define SAFE_FREE(pointer)         if ((pointer) != NULL) { free (pointer);      (pointer) = NULL; }
+#define SAFE_DELETE(pointer)       if ((pointer) != nullptr) { delete (pointer);    (pointer) = nullptr; }
+#define SAFE_ARRAY_DELETE(pointer) if ((pointer) != nullptr) { delete [] (pointer); (pointer) = nullptr; }
+#define SAFE_FREE(pointer)         if ((pointer) != nullptr) { free (pointer);      (pointer) = nullptr; }
 
 
 #ifdef _DEBUG

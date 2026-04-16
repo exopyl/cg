@@ -7,7 +7,7 @@ int Img::load (char const *filename, char const *path)
 {
 	m_iWidth = 0;
 	m_iHeight = 0;
-	m_pPixels = NULL;
+	m_pPixels = nullptr;
 
 	if (!filename)
 		return -1;

@@ -19,7 +19,7 @@
 
 ShadersManager *ShadersManager::m_pInstance = new ShadersManager;
 
-#define BUFFER_OFFSET(bytes) ((GLubyte*) NULL + (bytes))
+#define BUFFER_OFFSET(bytes) ((GLubyte*) nullptr + (bytes))
 
 //
 // print_shader_info_log
@@ -115,7 +115,7 @@ GLuint ShadersManager::AddShader (	const std::string &vertex_filename,
       GLuint handle = glCreateShader (GL_VERTEX_SHADER); PRINT_OPENGL_ERROR ();
       source = get_file_content (vertex_filename);
       cstring = source.c_str ();
-      glShaderSource (handle, 1, &cstring, NULL);   PRINT_OPENGL_ERROR ();
+      glShaderSource (handle, 1, &cstring, nullptr);   PRINT_OPENGL_ERROR ();
 
       // Compile the vertex shader, and print out the compiler log file
       glCompileShader (handle); PRINT_OPENGL_ERROR ();
@@ -131,7 +131,7 @@ GLuint ShadersManager::AddShader (	const std::string &vertex_filename,
       GLuint handle = glCreateShader (GL_FRAGMENT_SHADER); PRINT_OPENGL_ERROR ();
       source = get_file_content (fragment_filename);
       cstring = source.c_str ();
-      glShaderSource (handle, 1, &cstring, NULL); PRINT_OPENGL_ERROR ();
+      glShaderSource (handle, 1, &cstring, nullptr); PRINT_OPENGL_ERROR ();
       
 	  // Compile the fragment shader, and print out the compiler log file
       glCompileShader (handle); PRINT_OPENGL_ERROR ();
@@ -147,7 +147,7 @@ GLuint ShadersManager::AddShader (	const std::string &vertex_filename,
       GLuint handle = glCreateShader (GL_GEOMETRY_SHADER); PRINT_OPENGL_ERROR ();
       source = get_file_content (geometry_filename);
       cstring = source.c_str ();
-      glShaderSource (handle, 1, &cstring, NULL); PRINT_OPENGL_ERROR ();
+      glShaderSource (handle, 1, &cstring, nullptr); PRINT_OPENGL_ERROR ();
       
 	  // Compile the geometry shader, and print out the compiler log file
       glCompileShader (handle); PRINT_OPENGL_ERROR ();
@@ -229,6 +229,6 @@ void ShadersManager::report_opengl_error (const char *file, int line)
 
 #include <stdlib.h>
 #include "shaders_manager.h"
-ShadersManager *ShadersManager::m_pInstance = NULL;
+ShadersManager *ShadersManager::m_pInstance = nullptr;
 
 #endif

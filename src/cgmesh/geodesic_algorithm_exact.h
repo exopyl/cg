@@ -33,7 +33,7 @@ public:
 
 	void propagate(std::vector<SurfacePoint>& sources,
    				   double max_propagation_distance = GEODESIC_INF,			//propagation algorithm stops after reaching the certain distance from the source
-				   std::vector<SurfacePoint>* stop_points = NULL); //or after ensuring that all the stop_points are covered
+				   std::vector<SurfacePoint>* stop_points = nullptr); //or after ensuring that all the stop_points are covered
 
 	void trace_back(SurfacePoint& destination,		//trace back piecewise-linear path
 					std::vector<SurfacePoint>& path);
@@ -567,7 +567,7 @@ inline void GeodesicAlgorithmExact::propagate(std::vector<SurfacePoint>& sources
 
 		bool const first_interval = min_interval->start() == 0.0;
 		//bool const last_interval = min_interval->stop() == edge->length();
-		bool const last_interval = min_interval->next() == NULL;
+		bool const last_interval = min_interval->next() == nullptr;
 
 		bool const turn_left = edge->v0()->saddle_or_boundary();
 		bool const turn_right = edge->v1()->saddle_or_boundary();
@@ -711,11 +711,11 @@ inline void GeodesicAlgorithmExact::update_list_and_queue(list_pointer list,
 												unsigned num_candidates)
 {
 	assert(num_candidates <= 2);
-	//assert(list->first() != NULL);
+	//assert(list->first() != nullptr);
 	edge_pointer edge = list->edge();
 	double const local_epsilon = SMALLEST_INTERVAL_RATIO * edge->length(); 
 
-	if(list->first() == NULL) 
+	if(list->first() == nullptr) 
 	{
 		interval_pointer* p = &list->first();
 		IntervalWithStop* first;
@@ -773,7 +773,7 @@ inline void GeodesicAlgorithmExact::update_list_and_queue(list_pointer list,
 		}
 		else
 		{
-			(*p)->next() = NULL;
+			(*p)->next() = nullptr;
 		}
 		return;
 	}
@@ -784,17 +784,17 @@ inline void GeodesicAlgorithmExact::update_list_and_queue(list_pointer list,
 	{
 		IntervalWithStop* q = &candidates[i];
 	
-		interval_pointer previous = NULL;
+		interval_pointer previous = nullptr;
 
 		interval_pointer p = list->first();
 		assert(p->start() == 0.0);
 
-		while(p != NULL && p->stop() - local_epsilon < q->start())
+		while(p != nullptr && p->stop() - local_epsilon < q->start())
 		{
 			p = p->next(); 
 		}
 
-		while(p != NULL && p->start() < q->stop() - local_epsilon)			//go through all old intervals
+		while(p != nullptr && p->start() < q->stop() - local_epsilon)			//go through all old intervals
 		{
 			unsigned const N = intersect_intervals(p, q);								//interset two intervals
 
@@ -807,7 +807,7 @@ inline void GeodesicAlgorithmExact::update_list_and_queue(list_pointer list,
 						previous->next() = p;
 						previous->compute_min_distance(p->start());
 						m_queue.insert(previous);
-						previous = NULL;
+						previous = nullptr;
 					}
 
 					p = p->next(); 
@@ -854,7 +854,7 @@ inline void GeodesicAlgorithmExact::update_list_and_queue(list_pointer list,
 					previous->next() = p;
 					previous->compute_min_distance(previous->stop());
 					m_queue.insert(previous);
-					previous = NULL;
+					previous = nullptr;
 				}
 				i_new[0] = p;
 				p->next() = i_new[1];
@@ -865,7 +865,7 @@ inline void GeodesicAlgorithmExact::update_list_and_queue(list_pointer list,
 				i_new[0] = previous;
 				previous->next() = i_new[1]; 
 				m_memory_allocator.deallocate(p);
-				previous = NULL;
+				previous = nullptr;
 			}
 			else				//p becomes "previous"
 			{
@@ -929,7 +929,7 @@ inline void GeodesicAlgorithmExact::update_list_and_queue(list_pointer list,
 		{
 			previous->compute_min_distance(previous->stop());
 			m_queue.insert(previous);
-			previous = NULL;
+			previous = nullptr;
 		}
 	}
 }
@@ -1132,7 +1132,7 @@ inline void GeodesicAlgorithmExact::construct_propagated_intervals(bool invert,
 		{
 			IntervalWithStop* p = candidates + i;
 
-			p->next() = (i == num_candidates - 1) ? NULL : candidates + i + 1;
+			p->next() = (i == num_candidates - 1) ? nullptr : candidates + i + 1;
 			p->edge() = edge;
 			p->direction() = direction;
 			p->source_index() = source_interval->source_index();
@@ -1148,7 +1148,7 @@ inline void GeodesicAlgorithmExact::construct_propagated_intervals(bool invert,
 		{
 			IntervalWithStop* p = candidates + i;
 
-			p->next() = (i == 0) ? NULL : candidates + i - 1;
+			p->next() = (i == 0) ? nullptr : candidates + i - 1;
 			p->edge() = edge;
 			p->direction() = direction;
 			p->source_index() = source_interval->source_index();
@@ -1191,7 +1191,7 @@ inline interval_pointer GeodesicAlgorithmExact::best_first_interval(SurfacePoint
 {
 	assert(point.type() != UNDEFINED_POINT);
 
-	interval_pointer best_interval = NULL;	
+	interval_pointer best_interval = nullptr;	
 	best_total_distance = GEODESIC_INF;
 
 	if(point.type() == EDGE)		
@@ -1242,7 +1242,7 @@ inline interval_pointer GeodesicAlgorithmExact::best_first_interval(SurfacePoint
 			double distance = point.distance(source);
 			if(distance < best_total_distance)
 			{
-				best_interval = NULL;
+				best_interval = nullptr;
 				best_total_distance = distance;
 				best_interval_position = 0.0;
 				best_source_index = source->index();
@@ -1277,7 +1277,7 @@ inline interval_pointer GeodesicAlgorithmExact::best_first_interval(SurfacePoint
 	if(best_total_distance > m_propagation_distance_stopped)		//result is unreliable
 	{
 		best_total_distance = GEODESIC_INF;
-		return NULL;
+		return nullptr;
 	}
 	else
 	{
