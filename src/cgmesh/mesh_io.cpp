@@ -162,7 +162,7 @@ int Mesh::import_mtl (const char *filename, const char *path)
 int Mesh::import_obj (const char *filename)
 {
 	if (filename == nullptr)
-		return nullptr;
+		return 0;
 
 	char buffer[BUFFER_SIZE];
 	char prefix[BUFFER_SIZE];
