@@ -222,11 +222,11 @@ Tensor* ParametricSurface::EvaluateTensor (diff_s diff)
 	_m = diff.second_fundamental_form[1];
 	_n = diff.second_fundamental_form[2];
 
-	if (_e*_g-_f*_f == 0.)
+	if (_e*_g-_f*_f == 0.0f)
 		return nullptr;
 
 	// mean curvature
-	kappa_mean = 0.5 * (_e*_n-2*_f*_m+_g*_l) / (_e*_g-_f*_f);
+	kappa_mean = 0.5f * (_e*_n-2.0f*_f*_m+_g*_l) / (_e*_g-_f*_f);
 
 	// gaussian curvature
 	kappa_gaussian = (_l*_n-_m*_m) / (_e*_g-_f*_f);
@@ -237,12 +237,12 @@ Tensor* ParametricSurface::EvaluateTensor (diff_s diff)
 	{
 		temp = 0.f;
 	}
-	if (temp < 0.0)
+	if (temp < 0.0f)
 	{
 		printf ("!!! Problem : kappa_mean * kappa_mean - kappa_gaussian = %f < 0\n", temp);
-		temp = 0.0;
+		temp = 0.0f;
 	}
-	temp = sqrt (temp);
+	temp = sqrtf (temp);
 	kappa1 = kappa_mean + temp;
 	kappa2 = kappa_mean - temp;
 
@@ -274,8 +274,8 @@ Tensor* ParametricSurface::EvaluateTensor (diff_s diff)
 	tensor->SetKappaMin (kappa2);
 
 	// principal directions
-	Vector3d d1 (ev1[0], ev1[1], 0.);
-	Vector3d d2 (ev2[0], ev2[1], 0.);
+	Vector3d d1 (ev1[0], ev1[1], 0.0f);
+	Vector3d d2 (ev2[0], ev2[1], 0.0f);
 	d1.Normalize ();
 	d2.Normalize ();
 
@@ -309,17 +309,17 @@ Tensor* ParametricSurface::EvaluateTensor (diff_s diff)
 
 int ParametricSphere::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
-	float fu = 2 * M_PI * fU;
-	float fv = M_PI * fV;
-	float sinu = sin (fu);
-	float cosu = cos (fu);
-	float sinv = sin (fv);
-	float cosv = cos (fv);
+	float fu = 2.0f * (float)M_PI * fU;
+	float fv = (float)M_PI * fV;
+	float sinu = sinf (fu);
+	float cosu = cosf (fu);
+	float sinv = sinf (fv);
+	float cosv = cosf (fv);
 
 	float fx = cosu * sinv;
 	float fy = sinu * sinv;
@@ -330,12 +330,12 @@ int ParametricSphere::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, - sinu * sinv, cosu * sinv, 0.);
+	vec3_init (dfdu, - sinu * sinv, cosu * sinv, 0.0f);
 	vec3_init (dfdv, cosu * cosv, sinu * cosv, - sinv);
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, - cosu * sinv, - sinu * sinv, 0.);
-	vec3_init (dfdudv, - sinu * cosv, cosu * cosv, 0.);
+	vec3_init (dfdudu, - cosu * sinv, - sinu * sinv, 0.0f);
+	vec3_init (dfdudv, - sinu * cosv, cosu * cosv, 0.0f);
 	vec3_init (dfdvdv, - cosu * sinv, - sinu * sinv, - cosv);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
@@ -362,19 +362,19 @@ ParametricSphere::ParametricSphere (unsigned int nu, unsigned int nv)
 //
 int EllipticHelicoid::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float a = fParams[0];
 	float b = fParams[1];
 	float c = fParams[2];
 
-	float fu = 2 * M_PI * fU;
+	float fu = 2.0f * (float)M_PI * fU;
 	float fv = fV;
-	float sinu = sin (fu);
-	float cosu = cos (fu);
+	float sinu = sinf (fu);
+	float cosu = cosf (fu);
 
 	float fx = a * fv * cosu;
 	float fy = b * fv * sinu;
@@ -386,12 +386,12 @@ int EllipticHelicoid::EvaluatePosition (float fU, float fV, diff_s *diff)
 	// partial derivates
 	vec3 dfdu, dfdv;
 	vec3_init (dfdu, - a * fv * sinu, b * fv * cosu, c);
-	vec3_init (dfdv, a * cosu, b * sinu, 0.);
+	vec3_init (dfdv, a * cosu, b * sinu, 0.0f);
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, - a * fv * cosu, - b * fv * sinu, 0.);
-	vec3_init (dfdudv, - a * sinu, b * cosu, 0.);
-	vec3_init (dfdvdv, 0., 0., 0.);
+	vec3_init (dfdudu, - a * fv * cosu, - b * fv * sinu, 0.0f);
+	vec3_init (dfdudv, - a * sinu, b * cosu, 0.0f);
+	vec3_init (dfdvdv, 0.0f, 0.0f, 0.0f);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -419,30 +419,30 @@ EllipticHelicoid::EllipticHelicoid (unsigned int nu, unsigned int nv, float a, f
 //
 int SeaShell::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
-	float fu = 6*M_PI * fU;
-	float fv = 2*M_PI * fV;
-	float tmp = cos (fv/2.0f) * cos (fv/2.0f);
-	float fx = 2 * (1-exp (fu/(6*M_PI))) * cos (fu) * tmp;
-	float fy = 2 * (-1+exp (fu/(6*M_PI))) * sin (fu) * tmp;
-	float fz = 1 - exp (fu/(3*M_PI)) - sin(fv) + exp (fu/(6*M_PI)) * sin (fv);
+	float fu = 6.0f*(float)M_PI * fU;
+	float fv = 2.0f*(float)M_PI * fV;
+	float tmp = cosf (fv/2.0f) * cosf (fv/2.0f);
+	float fx = 2.0f * (1.0f-expf (fu/(6.0f*(float)M_PI))) * cosf (fu) * tmp;
+	float fy = 2.0f * (-1.0f+expf (fu/(6.0f*(float)M_PI))) * sinf (fu) * tmp;
+	float fz = 1.0f - expf (fu/(3.0f*(float)M_PI)) - sinf(fv) + expf (fu/(6.0f*(float)M_PI)) * sinf (fv);
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 0., 0., 0.);
-	vec3_init (dfdv, 0., 0., 0.);
+	vec3_init (dfdu, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdv, 0.0f, 0.0f, 0.0f);
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0., 0., 0.);
-	vec3_init (dfdudv, 0., 0., 0.);
-	vec3_init (dfdvdv, 0., 0., 0.);
+	vec3_init (dfdudu, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdudv, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdvdv, 0.0f, 0.0f, 0.0f);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -467,9 +467,9 @@ SeaShell::SeaShell (unsigned int nu, unsigned int nv)
 //
 int SeaShellVonSeggern::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float a = fParams[0];
@@ -477,25 +477,25 @@ int SeaShellVonSeggern::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float c = fParams[2];
 	float n = fParams[3];
 
-	float fu = 2*M_PI * fU;
-	float fv = 2*M_PI * fV;
+	float fu = 2.0f*(float)M_PI * fU;
+	float fv = 2.0f*(float)M_PI * fV;
 
-	float fx = ((1-fv/(2*M_PI)) * (1+cos(fu)) + c) * cos (n * fv);
-	float fy = ((1-fv/(2*M_PI)) * (1+cos(fu)) + c) * sin (n * fv);
-	float fz = (b * fv) / (2 * M_PI) + a * sin (fu) * (1 - fv / (2*M_PI));
+	float fx = ((1.0f-fv/(2.0f*(float)M_PI)) * (1.0f+cosf(fu)) + c) * cosf (n * fv);
+	float fy = ((1.0f-fv/(2.0f*(float)M_PI)) * (1.0f+cosf(fu)) + c) * sinf (n * fv);
+	float fz = (b * fv) / (2.0f * (float)M_PI) + a * sinf (fu) * (1.0f - fv / (2.0f*(float)M_PI));
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 0., 0., 0.);
-	vec3_init (dfdv, 0., 0., 0.);
+	vec3_init (dfdu, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdv, 0.0f, 0.0f, 0.0f);
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0., 0., 0.);
-	vec3_init (dfdudv, 0., 0., 0.);
-	vec3_init (dfdvdv, 0., 0., 0.);
+	vec3_init (dfdudu, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdudv, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdvdv, 0.0f, 0.0f, 0.0f);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -541,33 +541,33 @@ CorkscrewSurface::CorkscrewSurface (unsigned int nu, unsigned int nv, float a, f
 
 int CorkscrewSurface::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float a = fParams[0];
 	float b = fParams[1];
 
-	float fu = 2 * M_PI * fU;
-	float fv = 2 * M_PI * fV;
+	float fu = 2.0f * (float)M_PI * fU;
+	float fv = 2.0f * (float)M_PI * fV;
 
-	float fx = a * cos (fu) * cos (fv);
-	float fy = a * sin (fu) * cos (fv);
-	float fz = a * sin (fv) + b * fu;
+	float fx = a * cosf (fu) * cosf (fv);
+	float fy = a * sinf (fu) * cosf (fv);
+	float fz = a * sinf (fv) + b * fu;
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 0., 0., 0.);
-	vec3_init (dfdv, 0., 0., 0.);
+	vec3_init (dfdu, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdv, 0.0f, 0.0f, 0.0f);
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0., 0., 0.);
-	vec3_init (dfdudv, 0., 0., 0.);
-	vec3_init (dfdvdv, 0., 0., 0.);
+	vec3_init (dfdudu, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdudv, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdvdv, 0.0f, 0.0f, 0.0f);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -579,33 +579,33 @@ int CorkscrewSurface::EvaluatePosition (float fU, float fV, diff_s *diff)
 //
 int MobiusStrip::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float w = fParams[0]; // 0.1
 	float r = fParams[1]; // 0.5
 
-	float fu = 2 * w * fU - w;
-	float fv = 2 * M_PI * fV;
+	float fu = 2.0f * w * fU - w;
+	float fv = 2.0f * (float)M_PI * fV;
 
-	float fx = (r + fu * cos (fv/2.)) * cos (fv);
-	float fy = (r + fu * cos (fv/2.)) * sin (fv);
-	float fz = fu * sin (fv/2.);
+	float fx = (r + fu * cosf (fv/2.0f)) * cosf (fv);
+	float fy = (r + fu * cosf (fv/2.0f)) * sinf (fv);
+	float fz = fu * sinf (fv/2.0f);
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 0., 0., 0.);
-	vec3_init (dfdv, 0., 0., 0.);
+	vec3_init (dfdu, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdv, 0.0f, 0.0f, 0.0f);
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0., 0., 0.);
-	vec3_init (dfdudv, 0., 0., 0.);
-	vec3_init (dfdvdv, 0., 0., 0.);
+	vec3_init (dfdudu, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdudv, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdvdv, 0.0f, 0.0f, 0.0f);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -632,34 +632,34 @@ MobiusStrip::MobiusStrip (unsigned int nu, unsigned int nv, float w, float r)
 //
 int RadialWave::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float r = fParams[0]; // 10.0
 	float h = fParams[1]; // 20.0
 	float f = fParams[2]; // 0.6
 
-	float fu = (fU-0.5)*2.0;
-	float fv = (fV-0.5)*2.0;
+	float fu = (fU-0.5f)*2.0f;
+	float fv = (fV-0.5f)*2.0f;
 
 	float fx = r * fu;
 	float fy = r * fv;
-	float fz = h * cos(f*sqrt((fu*fu)+(fv*fv)));
+	float fz = h * cosf(f*sqrtf((fu*fu)+(fv*fv)));
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 0., 0., 0.);
-	vec3_init (dfdv, 0., 0., 0.);
+	vec3_init (dfdu, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdv, 0.0f, 0.0f, 0.0f);
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0., 0., 0.);
-	vec3_init (dfdudv, 0., 0., 0.);
-	vec3_init (dfdvdv, 0., 0., 0.);
+	vec3_init (dfdudu, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdudv, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdvdv, 0.0f, 0.0f, 0.0f);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -687,21 +687,21 @@ RadialWave::RadialWave (unsigned int nu, unsigned int nv, float radius, float he
 //
 int ParametricTorus::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float r1 = fParams[0]; // 10.0
 	float r2 = fParams[1]; // 20.0
 
-	float fu = - 2 * M_PI * fU;
-	float fv = 2 * M_PI * fV;
+	float fu = - 2.0f * (float)M_PI * fU;
+	float fv = 2.0f * (float)M_PI * fV;
 
-	float cosu = cos(fu);
-	float sinu = sin(fu);
-	float cosv = cos(fv);
-	float sinv = sin(fv);
+	float cosu = cosf(fu);
+	float sinu = sinf(fu);
+	float cosv = cosf(fv);
+	float sinv = sinf(fv);
 
 	float fx = (r1 + r2 * cosv) * cosu;
 	float fy = (r1 + r2 * cosv) * sinu;
@@ -712,12 +712,12 @@ int ParametricTorus::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, -(r1 + r2 * cosv) * sinu, (r1 + r2 * cosv) * cosu, 0.);
+	vec3_init (dfdu, -(r1 + r2 * cosv) * sinu, (r1 + r2 * cosv) * cosu, 0.0f);
 	vec3_init (dfdv, - r2 * sinv * cosu, - r2 * sinv * sinu, r2 * cosv);
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, -(r1 + r2 * cosv) * cosu, - (r1 + r2 * cosv) * sinu, 0.);
-	vec3_init (dfdudv, r2 * sinv * sinu, - r2 * sinv * cosu, 0.);
+	vec3_init (dfdudu, -(r1 + r2 * cosv) * cosu, - (r1 + r2 * cosv) * sinu, 0.0f);
+	vec3_init (dfdudv, r2 * sinv * sinu, - r2 * sinv * cosu, 0.0f);
 	vec3_init (dfdvdv, - r2 * cosv * cosu, - r2 * cosv * sinu, - r2 * sinv);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
@@ -745,17 +745,17 @@ ParametricTorus::ParametricTorus (unsigned int nu, unsigned int nv, float radius
 //
 int TrefoilKnot1::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
-	float fu = -4 * M_PI * (fU-0.5);
-	float fv = 2 * M_PI * (fV-0.5);
+	float fu = -4.0f * (float)M_PI * (fU-0.5f);
+	float fv = 2.0f * (float)M_PI * (fV-0.5f);
 
-	float fx = cos(fu) * cos(fv) + 3 * cos (fu) * (1.5 + sin(1.5*fu)/2.0);
-	float fy = sin(fu) * cos(fv) + 3 * sin (fu) * (1.5 + sin(1.5*fu)/2.0);
-	float fz = sin(fv) + 2*cos(1.5*fu);
+	float fx = cosf(fu) * cosf(fv) + 3.0f * cosf (fu) * (1.5f + sinf(1.5f*fu)/2.0f);
+	float fy = sinf(fu) * cosf(fv) + 3.0f * sinf (fu) * (1.5f + sinf(1.5f*fu)/2.0f);
+	float fz = sinf(fv) + 2.0f*cosf(1.5f*fu);
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
@@ -782,19 +782,19 @@ TrefoilKnot1::TrefoilKnot1 (unsigned int nu, unsigned int nv)
 //
 int TrefoilKnot2::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 //[-3*pi:3*pi][-pi:pi]
 	
-	float fu = - 6 * M_PI * (fU-0.5);
-	float fv = 2 * M_PI * (fV-0.5);
+	float fu = - 6.0f * (float)M_PI * (fU-0.5f);
+	float fv = 2.0f * (float)M_PI * (fV-0.5f);
 
-	float fx = cos(fu) * cos (fv) + 3 * cos (fu) * (1.5 + sin (fu*5/3)/2.0); // cos(u)*cos(v)+3*cos(u)*(1.5+sin(u*5/3)/2)
-	float fy = sin(fu) * cos (fv) + 3 * sin (fu) * (1.5 + sin (fu*5/3)/2.0); // sin(u)*cos(v)+3*sin(u)*(1.5+sin(u*5/3)/2)
-	float fz = sin (fv) + 2. * cos (fu*5/3); // sin(v)+2*cos(u*5/3)
+	float fx = cosf(fu) * cosf (fv) + 3.0f * cosf (fu) * (1.5f + sinf (fu*5.0f/3.0f)/2.0f); // cos(u)*cos(v)+3*cos(u)*(1.5+sin(u*5/3)/2)
+	float fy = sinf(fu) * cosf (fv) + 3.0f * sinf (fu) * (1.5f + sinf (fu*5.0f/3.0f)/2.0f); // sin(u)*cos(v)+3*sin(u)*(1.5+sin(u*5/3)/2)
+	float fz = sinf (fv) + 2.0f * cosf (fu*5.0f/3.0f); // sin(v)+2*cos(u*5/3)
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
@@ -994,33 +994,33 @@ mesh_t *mesh_generate_parametric_surface_helix (unsigned int nu, unsigned int nv
 //
 int BorromeanRing::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
-	float fu = 2 * M_PI * (fU);
-	float fv = 2 * M_PI * (1.0 - fV); // tube
+	float fu = 2.0f * (float)M_PI * (fU);
+	float fv = 2.0f * (float)M_PI * (1.0f - fV); // tube
 
 	float param1 = fParams[0];
 	float param2 = fParams[1];
 	float r = fParams[2]; // sqrt(3)/3
 
-	float rtube = 0.2;
+	float rtube = 0.2f;
 
 	// point of the curve
-	float cx = cos(fu) + param1;
-	float cy = sin(fu) + param2*r;
-	float cz = cos(3.*fu) / 3.;
+	float cx = cosf(fu) + param1;
+	float cy = sinf(fu) + param2*r;
+	float cz = cosf(3.0f*fu) / 3.0f;
 
 	// tangent
 	vec3 t;
-	vec3_init (t, -sin(fu), cos(fu), -sin(3.*fu));
+	vec3_init (t, -sinf(fu), cosf(fu), -sinf(3.0f*fu));
 	vec3_normalize (t);
 
 	// normal
 	vec3 n;
-	vec3_init (n, -cos(fu), -sin(fu), -cos(3.*fu));
+	vec3_init (n, -cosf(fu), -sinf(fu), -cosf(3.0f*fu));
 	vec3_normalize (n);
 
 	// binormal (= T ^ N)
@@ -1028,9 +1028,9 @@ int BorromeanRing::EvaluatePosition (float fU, float fV, diff_s *diff)
 	vec3_cross_product (b, t, n);
 	vec3_normalize (b);
 
-	float fx = cx + rtube*(-n[0]*cos(fv) + b[0]*sin(fv));
-	float fy = cy + rtube*(-n[1]*cos(fv) + b[1]*sin(fv));
-	float fz = cz + rtube*(-n[2]*cos(fv) + b[2]*sin(fv));
+	float fx = cx + rtube*(-n[0]*cosf(fv) + b[0]*sinf(fv));
+	float fy = cy + rtube*(-n[1]*cosf(fv) + b[1]*sinf(fv));
+	float fz = cz + rtube*(-n[2]*cosf(fv) + b[2]*sinf(fv));
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
@@ -1058,15 +1058,15 @@ BorromeanRing::BorromeanRing (unsigned int nu, unsigned int nv, float param1, fl
 
 BorromeanRings::BorromeanRings (unsigned int nu, unsigned int nv)
 {
-	BorromeanRing *r1 = new BorromeanRing (nu, nv, 0., 1., sqrt(3.)/3.);
+	BorromeanRing *r1 = new BorromeanRing (nu, nv, 0.0f, 1.0f, sqrtf(3.0f)/3.0f);
 	MaterialColor *r = new MaterialColor (255, 0, 0, 255);
 	r1->ApplyMaterial (r1->Material_Add (r));
 
-	BorromeanRing *r2 = new BorromeanRing (nu, nv, 0.5, -0.5, sqrt(3.)/3.);
+	BorromeanRing *r2 = new BorromeanRing (nu, nv, 0.5f, -0.5f, sqrtf(3.0f)/3.0f);
 	MaterialColor *g = new MaterialColor (0, 255, 0, 255);
 	r2->ApplyMaterial (r2->Material_Add (g));
 
-	BorromeanRing *r3 = new BorromeanRing (nu, nv, -0.5, -0.5, sqrt(3.)/3.);
+	BorromeanRing *r3 = new BorromeanRing (nu, nv, -0.5f, -0.5f, sqrtf(3.0f)/3.0f);
 	MaterialColor *b = new MaterialColor (0, 0, 255, 255);
 	r3->ApplyMaterial (r3->Material_Add (b));
 
@@ -1273,42 +1273,42 @@ mesh_t *mesh_generate_parametric_surface_borromean_elliptical_rings (unsigned in
 //
 int TorusKnot::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
-	float fu = 2 * M_PI * (fU);
-	float fv = 2 * M_PI * (1.0 - fV); // tube
+	float fu = 2.0f * (float)M_PI * (fU);
+	float fv = 2.0f * (float)M_PI * (1.0f - fV); // tube
 
-	float rtube = 0.8;
+	float rtube = 0.8f;
 
-	float aa = 9.;
-	float bb = 3.;
-	float cc = 4.;
+	float aa = 9.0f;
+	float bb = 3.0f;
+	float cc = 4.0f;
 
 	float dd = fParams[0];
 	float ee = fParams[1];
 
 	// point of the curve
-	float cx = (aa + bb*cos(dd * fu)) * cos(ee * fu);
-	float cy = (aa + bb*cos(dd * fu)) * sin(ee * fu);
-	float cz = cc*sin(dd * fu);
+	float cx = (aa + bb*cosf(dd * fu)) * cosf(ee * fu);
+	float cy = (aa + bb*cosf(dd * fu)) * sinf(ee * fu);
+	float cz = cc*sinf(dd * fu);
 
 	// tangent
 	vec3 t;
 	vec3_init (t,
-		   -(bb*dd*sin(dd*fu))*cos(ee*fu) - (aa+bb*cos(dd*fu))*ee*sin(ee*fu),
-		   -(bb*dd*sin(dd*fu))*sin(ee*fu) + (aa+bb*cos(dd*fu))*ee*cos(ee*fu),
-		   cc*dd*cos(dd*fu));
+		   -(bb*dd*sinf(dd*fu))*cosf(ee*fu) - (aa+bb*cosf(dd*fu))*ee*sinf(ee*fu),
+		   -(bb*dd*sinf(dd*fu))*sinf(ee*fu) + (aa+bb*cosf(dd*fu))*ee*cosf(ee*fu),
+		   cc*dd*cosf(dd*fu));
 	vec3_normalize (t);
 
 	// normal
 	vec3 n;
 	vec3_init (n,
-		   -bb*dd*dd*cos(dd*fu)*cos(ee*fu) + (bb*dd*sin(dd*fu))*ee*sin(ee*fu) - (-bb*dd*sin(dd*fu)*ee*sin(ee*fu) + (aa+bb*cos(dd*fu))*ee*ee*cos(ee*fu)),
-		   -bb*dd*dd*cos(dd*fu)*sin(ee*fu) - (bb*dd*sin(dd*fu))*ee*cos(ee*fu) + (-bb*dd*sin(dd*fu)*ee*cos(ee*fu) - (aa+bb*cos(dd*fu))*ee*ee*sin(ee*fu)),
-		   -cc*dd*dd*sin(dd*fu));
+		   -bb*dd*dd*cosf(dd*fu)*cosf(ee*fu) + (bb*dd*sinf(dd*fu))*ee*sinf(ee*fu) - (-bb*dd*sinf(dd*fu)*ee*sinf(ee*fu) + (aa+bb*cosf(dd*fu))*ee*ee*cosf(ee*fu)),
+		   -bb*dd*dd*cosf(dd*fu)*sinf(ee*fu) - (bb*dd*sinf(dd*fu))*ee*cosf(ee*fu) + (-bb*dd*sinf(dd*fu)*ee*cosf(ee*fu) - (aa+bb*cosf(dd*fu))*ee*ee*sinf(ee*fu)),
+		   -cc*dd*dd*sinf(dd*fu));
 	vec3_normalize (n);
 
 	// binormal (= T ^ N)
@@ -1316,9 +1316,9 @@ int TorusKnot::EvaluatePosition (float fU, float fV, diff_s *diff)
 	vec3_cross_product (b, t, n);
 	vec3_normalize (b);
 
-	float fx = cx + rtube*(-n[0]*cos(fv) + b[0]*sin(fv));
-	float fy = cy + rtube*(-n[1]*cos(fv) + b[1]*sin(fv));
-	float fz = cz + rtube*(-n[2]*cos(fv) + b[2]*sin(fv));
+	float fx = cx + rtube*(-n[0]*cosf(fv) + b[0]*sinf(fv));
+	float fy = cy + rtube*(-n[1]*cosf(fv) + b[1]*sinf(fv));
+	float fz = cz + rtube*(-n[2]*cosf(fv) + b[2]*sinf(fv));
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
@@ -1337,8 +1337,8 @@ TorusKnot::TorusKnot (unsigned int nu, unsigned int nv, unsigned int a, unsigned
 	bInverseCloseU = 0;
 	bInverseCloseV = 0;
 
-	fParams[0] = a;
-	fParams[1] = b;
+	fParams[0] = (float)a;
+	fParams[1] = (float)b;
 
 	Generate ();
 }
@@ -1350,37 +1350,37 @@ TorusKnot::TorusKnot (unsigned int nu, unsigned int nv, unsigned int a, unsigned
 //
 int CinquefoilKnot::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float k = fParams[0];
 
-	float fu = (4*k+2) * M_PI * (fU);
-	float fv = 2 * M_PI * (1.0 - fV); // tube
+	float fu = (4.0f*k+2.0f) * (float)M_PI * (fU);
+	float fv = 2.0f * (float)M_PI * (1.0f - fV); // tube
 
-	float rtube = 0.1;
+	float rtube = 0.1f;
 
 	// point of the curve
-	float cx = cos(fu) * (2 - cos(2*fu/(2*k + 1)));
-	float cy = sin(fu) * (2 - cos(2*fu/(2*k + 1)));
-	float cz = -sin(2*fu/(2*k + 1));
+	float cx = cosf(fu) * (2.0f - cosf(2.0f*fu/(2.0f*k + 1.0f)));
+	float cy = sinf(fu) * (2.0f - cosf(2.0f*fu/(2.0f*k + 1.0f)));
+	float cz = -sinf(2.0f*fu/(2.0f*k + 1.0f));
 
 	// tangent
 	vec3 t;
 	vec3_init (t,
-		   -sin(fu)*(2-cos(2*fu/(2*k+1))) + cos(fu)*sin(2*fu/(2*k+1))*2/(2*k+1),
-		   cos(fu)*(2-cos(2*fu/(2*k+1))) + sin(fu)*sin(2*fu/(2*k+1))*2/(2*k+1),
-		   -cos(2*fu/(2*k+1))*2/(2*k+1) );
+		   -sinf(fu)*(2.0f-cosf(2.0f*fu/(2.0f*k+1.0f))) + cosf(fu)*sinf(2.0f*fu/(2.0f*k+1.0f))*2.0f/(2.0f*k+1.0f),
+		   cosf(fu)*(2.0f-cosf(2.0f*fu/(2.0f*k+1.0f))) + sinf(fu)*sinf(2.0f*fu/(2.0f*k+1.0f))*2.0f/(2.0f*k+1.0f),
+		   -cosf(2.0f*fu/(2.0f*k+1.0f))*2.0f/(2.0f*k+1.0f) );
 	vec3_normalize (t);
 
 	// normal
 	vec3 n;
 	vec3_init (n,
-		   -cos(fu)*(2-cos(2*fu/(2*k+1)))-sin(fu)*sin(2*fu/(2*k+1))*2/(2*k+1) - sin(fu)*sin(2*fu/(2*k+1))*2/(2*k+1)+cos(fu)*cos(2*fu/(2*k+1))*4/((2*k+1)*(2*k+1)),
-		   -sin(fu)*(2-cos(2*fu/(2*k+1)))+cos(fu)*sin(2*fu/(2*k+1))*2/(2*k+1) + cos(fu)*sin(2*fu/(2*k+1))*2/(2*k+1)+sin(fu)*cos(2*fu/(2*k+1))*4/((2*k+1)*(2*k+1)),
-		   -sin(2*fu/(2*k+1))*4/((2*k+1)*(2*k+1)) );
+		   -cosf(fu)*(2.0f-cosf(2.0f*fu/(2.0f*k+1.0f)))-sinf(fu)*sinf(2.0f*fu/(2.0f*k+1.0f))*2.0f/(2.0f*k+1.0f) - sinf(fu)*sinf(2.0f*fu/(2.0f*k+1.0f))*2.0f/(2.0f*k+1.0f)+cosf(fu)*cosf(2.0f*fu/(2.0f*k+1.0f))*4.0f/((2.0f*k+1.0f)*(2.0f*k+1.0f)),
+		   -sinf(fu)*(2.0f-cosf(2.0f*fu/(2.0f*k+1.0f)))+cosf(fu)*sinf(2.0f*fu/(2.0f*k+1.0f))*2.0f/(2.0f*k+1.0f) + cosf(fu)*sinf(2.0f*fu/(2.0f*k+1.0f))*2.0f/(2.0f*k+1.0f)+sinf(fu)*cosf(2.0f*fu/(2.0f*k+1.0f))*4.0f/((2.0f*k+1.0f)*(2.0f*k+1.0f)),
+		   -sinf(2.0f*fu/(2.0f*k+1.0f))*4.0f/((2.0f*k+1.0f)*(2.0f*k+1.0f)) );
 	vec3_normalize (n);
 	
 	// binormal (= T ^ N)
@@ -1388,9 +1388,9 @@ int CinquefoilKnot::EvaluatePosition (float fU, float fV, diff_s *diff)
 	vec3_cross_product (b, t, n);
 	vec3_normalize (b);
 
-	float fx = cx + rtube*(-n[0]*cos(fv) + b[0]*sin(fv));
-	float fy = cy + rtube*(-n[1]*cos(fv) + b[1]*sin(fv));
-	float fz = cz + rtube*(-n[2]*cos(fv) + b[2]*sin(fv));
+	float fx = cx + rtube*(-n[0]*cosf(fv) + b[0]*sinf(fv));
+	float fy = cy + rtube*(-n[1]*cosf(fv) + b[1]*sinf(fv));
+	float fz = cz + rtube*(-n[2]*cosf(fv) + b[2]*sinf(fv));
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
@@ -1433,22 +1433,22 @@ Breather::Breather (unsigned int nu, unsigned int nv)
 
 int Breather::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
-	float fu = 2*14*(fU-0.5);
-	float fv = 2*37.4*(fV-0.5);
+	float fu = 2.0f*14.0f*(fU-0.5f);
+	float fv = 2.0f*37.4f*(fV-0.5f);
 	
-	float aa = 2./5.;
-	float wsqr = 1. - aa * aa;
-        float w = sqrt(wsqr);
-	float denom = aa * (w * cosh(aa * fu)* cosh(aa * fu) + aa * aa * sin(w * fv)* sin(w * fv));
+	float aa = 2.0f/5.0f;
+	float wsqr = 1.0f - aa * aa;
+        float w = sqrtf(wsqr);
+	float denom = aa * (w * coshf(aa * fu)* coshf(aa * fu) + aa * aa * sinf(w * fv)* sinf(w * fv));
 
-	float fx = -fu/1.2 + (2 * wsqr * cosh(aa * fu) * sinh(aa * fu) / denom);
-	float fy = 2 * w * cosh(aa * fu) * (-(w * cos(fv) * cos(w * fv)) - (sin(fv) * sin(w * fv))) / denom;
-	float fz = 2 * w * cosh(aa * fu) * (-(w * sin(fv) * cos(w * fv)) + (cos(fv) * sin(w * fv))) / denom;
+	float fx = -fu/1.2f + (2.0f * wsqr * coshf(aa * fu) * sinhf(aa * fu) / denom);
+	float fy = 2.0f * w * coshf(aa * fu) * (-(w * cosf(fv) * cosf(w * fv)) - (sinf(fv) * sinf(w * fv))) / denom;
+	float fz = 2.0f * w * coshf(aa * fu) * (-(w * sinf(fv) * cosf(w * fv)) + (cosf(fv) * sinf(w * fv))) / denom;
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
@@ -1479,16 +1479,16 @@ HyperbolicParaboloid::HyperbolicParaboloid (unsigned int nu, unsigned int nv, fl
 
 int HyperbolicParaboloid::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float xmin = fParams[0];
 	float xmax = fParams[1];
 	float ymin = fParams[2];
 	float ymax = fParams[3];
-	float amplitude = 0.2;
+	float amplitude = 0.2f;
 
 	float fx = fParams[0]+fU*(fParams[1]-fParams[0]);
 	float fy = fParams[2]+fV*(fParams[3]-fParams[2]);
@@ -1499,13 +1499,13 @@ int HyperbolicParaboloid::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 1., 0., 2*amplitude*fx);
-	vec3_init (dfdv, 0., 1., -2*amplitude*fy);
+	vec3_init (dfdu, 1.0f, 0.0f, 2.0f*amplitude*fx);
+	vec3_init (dfdv, 0.0f, 1.0f, -2.0f*amplitude*fy);
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0., 0., 2*amplitude);
-	vec3_init (dfdudv, 0., 0., 0.);
-	vec3_init (dfdvdv, 0., 0., -2*amplitude);
+	vec3_init (dfdudu, 0.0f, 0.0f, 2.0f*amplitude);
+	vec3_init (dfdudv, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdvdv, 0.0f, 0.0f, -2.0f*amplitude);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -1534,33 +1534,33 @@ MonkeySaddle::MonkeySaddle(unsigned int nu, unsigned int nv, float xmin, float x
 
 int MonkeySaddle::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float xmin = fParams[0];
 	float xmax = fParams[1];
 	float ymin = fParams[2];
 	float ymax = fParams[3];
-	float amplitude = 0.01;
+	float amplitude = 0.01f;
 
 	float fx = fParams[0]+fU*(fParams[1]-fParams[0]);
 	float fy = fParams[2]+fV*(fParams[3]-fParams[2]);
-	float fz = amplitude*fx*(fx*fx - 3*fy*fy);
+	float fz = amplitude*fx*(fx*fx - 3.0f*fy*fy);
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 1., 0., 3*amplitude*fx*fx - 3*amplitude*fy*fy);
-	vec3_init (dfdv, 0., 1., -6*amplitude*fx*fy);
+	vec3_init (dfdu, 1.0f, 0.0f, 3.0f*amplitude*fx*fx - 3.0f*amplitude*fy*fy);
+	vec3_init (dfdv, 0.0f, 1.0f, -6.0f*amplitude*fx*fy);
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0., 0., 6*amplitude*fx);
-	vec3_init (dfdudv, 0., 0., -6*amplitude*fy);
-	vec3_init (dfdvdv, 0., 0., -6*amplitude*fx);
+	vec3_init (dfdudu, 0.0f, 0.0f, 6.0f*amplitude*fx);
+	vec3_init (dfdudv, 0.0f, 0.0f, -6.0f*amplitude*fy);
+	vec3_init (dfdvdv, 0.0f, 0.0f, -6.0f*amplitude*fx);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -1589,33 +1589,33 @@ Blobs::Blobs(unsigned int nu, unsigned int nv, float xmin, float xmax, float ymi
 
 int Blobs::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float xmin = fParams[0];
 	float xmax = fParams[1];
 	float ymin = fParams[2];
 	float ymax = fParams[3];
-	float amplitude = 1.;
+	float amplitude = 1.0f;
 
 	float fx = fParams[0]+fU*(fParams[1]-fParams[0]);
 	float fy = fParams[2]+fV*(fParams[3]-fParams[2]);
-	float fz = amplitude * sin (fy) * cos (fx);
+	float fz = amplitude * sinf (fy) * cosf (fx);
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 1., 0., -amplitude*sin(fy)*sin(fx));
-	vec3_init (dfdv, 0., 1., amplitude*cos(fy)*cos(fx));
+	vec3_init (dfdu, 1.0f, 0.0f, -amplitude*sinf(fy)*sinf(fx));
+	vec3_init (dfdv, 0.0f, 1.0f, amplitude*cosf(fy)*cosf(fx));
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0., 0., -amplitude*sin(fy)*cos(fx));
-	vec3_init (dfdudv, 0., 0., -amplitude*cos(fy)*sin(fx));
-	vec3_init (dfdvdv, 0., 0., -amplitude*sin(fy)*cos(fx));
+	vec3_init (dfdudu, 0.0f, 0.0f, -amplitude*sinf(fy)*cosf(fx));
+	vec3_init (dfdudv, 0.0f, 0.0f, -amplitude*cosf(fy)*sinf(fx));
+	vec3_init (dfdvdv, 0.0f, 0.0f, -amplitude*sinf(fy)*cosf(fx));
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -1644,41 +1644,41 @@ Drop::Drop(unsigned int nu, unsigned int nv, float xmin, float xmax, float ymin,
 
 int Drop::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float xmin = fParams[0];
 	float xmax = fParams[1];
 	float ymin = fParams[2];
 	float ymax = fParams[3];
-	float amplitude = 1.;
-	float w = 7.0; // frequency
+	float amplitude = 1.0f;
+	float w = 7.0f; // frequency
 
 	float fx = fParams[0]+fU*(fParams[1]-fParams[0]);
 	float fy = fParams[2]+fV*(fParams[3]-fParams[2]);
-	float fz = amplitude * sin (w * sqrt (1 + fx*fx + fy*fy));
+	float fz = amplitude * sinf (w * sqrtf (1.0f + fx*fx + fy*fy));
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 1., 0., amplitude*w*fx*cos(w*sqrt(1+fx*fx+fy*fy)) / (sqrt(1+fx*fx+fy*fy)));
-	vec3_init (dfdv, 0., 1., amplitude*w*fy*cos(w*sqrt(1+fx*fx+fy*fy)) / (sqrt(1+fx*fx+fy*fy)));
+	vec3_init (dfdu, 1.0f, 0.0f, amplitude*w*fx*cosf(w*sqrtf(1.0f+fx*fx+fy*fy)) / (sqrtf(1.0f+fx*fx+fy*fy)));
+	vec3_init (dfdv, 0.0f, 1.0f, amplitude*w*fy*cosf(w*sqrtf(1.0f+fx*fx+fy*fy)) / (sqrtf(1.0f+fx*fx+fy*fy)));
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0., 0., amplitude*w*(1+fx*fx+fy*fy-fx*fx*cos(w*sqrt(1+fx*fx+fy*fy))/((1+fx*fx+fy*fy)*sqrt(1+fx*fx+fy*fy))
+	vec3_init (dfdudu, 0.0f, 0.0f, amplitude*w*(1.0f+fx*fx+fy*fy-fx*fx*cosf(w*sqrtf(1.0f+fx*fx+fy*fy))/((1.0f+fx*fx+fy*fy)*sqrtf(1.0f+fx*fx+fy*fy))
 						-			      
-						amplitude*w*fx*fx*sin(w*sqrt(1+fx*fx+fy*fy))/(1+fx*fx+fy*fy)));
-	vec3_init (dfdudv, 0., 0., -(amplitude*w*w*fx*fy*sin(w*sqrt(1+fx*fx+fy*fy))*sqrt(1+fx*fx+fy*fy)
+						amplitude*w*fx*fx*sinf(w*sqrtf(1.0f+fx*fx+fy*fy))/(1.0f+fx*fx+fy*fy)));
+	vec3_init (dfdudv, 0.0f, 0.0f, -(amplitude*w*w*fx*fy*sinf(w*sqrtf(1.0f+fx*fx+fy*fy))*sqrtf(1.0f+fx*fx+fy*fy)
 				     +
-				     amplitude*w*fx*fy*cos(w*sqrt(1+fx*fx+fy*fy)))
-		   / (1+fx*fx+fy*fy));
-	vec3_init (dfdvdv, 0., 0., amplitude*w*(1+fx*fx+fy*fy-fy*fy*cos(w*sqrt(1+fx*fx+fy*fy))/((1+fx*fx+fy*fy)*sqrt(1+fx*fx+fy*fy))
+				     amplitude*w*fx*fy*cosf(w*sqrtf(1.0f+fx*fx+fy*fy)))
+		   / (1.0f+fx*fx+fy*fy));
+	vec3_init (dfdvdv, 0.0f, 0.0f, amplitude*w*(1.0f+fx*fx+fy*fy-fy*fy*cosf(w*sqrtf(1.0f+fx*fx+fy*fy))/((1.0f+fx*fx+fy*fy)*sqrtf(1.0f+fx*fx+fy*fy))
 						-			      
-						amplitude*w*fy*fy*sin(w*sqrt(1+fx*fx+fy*fy))/(1+fx*fx+fy*fy)));
+						amplitude*w*fy*fy*sinf(w*sqrtf(1.0f+fx*fx+fy*fy))/(1.0f+fx*fx+fy*fy)));
 	
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -1707,33 +1707,33 @@ Wave1::Wave1(unsigned int nu, unsigned int nv, float xmin, float xmax, float ymi
 
 int Wave1::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float xmin = fParams[0];
 	float xmax = fParams[1];
 	float ymin = fParams[2];
 	float ymax = fParams[3];
-	float amplitude = 1.;
+	float amplitude = 1.0f;
 
 	float fx = fParams[0]+fU*(fParams[1]-fParams[0]);
 	float fy = fParams[2]+fV*(fParams[3]-fParams[2]);
-	float fz = amplitude * sin (fy*3);
+	float fz = amplitude * sinf (fy*3.0f);
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 1., 0., 0.);
-	vec3_init (dfdv, 0., 1., 3*amplitude*cos(3*fy));
+	vec3_init (dfdu, 1.0f, 0.0f, 0.0f);
+	vec3_init (dfdv, 0.0f, 1.0f, 3.0f*amplitude*cosf(3.0f*fy));
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0., 0., 0.);
-	vec3_init (dfdudv, 0., 0., 0.);
-	vec3_init (dfdvdv, 0., 0., -9*amplitude*sin(3*fy));
+	vec3_init (dfdudu, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdudv, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdvdv, 0.0f, 0.0f, -9.0f*amplitude*sinf(3.0f*fy));
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -1762,33 +1762,33 @@ Wave2::Wave2(unsigned int nu, unsigned int nv, float xmin, float xmax, float ymi
 
 int Wave2::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float xmin = fParams[0];
 	float xmax = fParams[1];
 	float ymin = fParams[2];
 	float ymax = fParams[3];
-	float amplitude = 1.;
+	float amplitude = 1.0f;
 
 	float fx = fParams[0]+fU*(fParams[1]-fParams[0]);
 	float fy = fParams[2]+fV*(fParams[3]-fParams[2]);
-	float fz = amplitude*sin (2*(fx+fy));
+	float fz = amplitude*sinf (2.0f*(fx+fy));
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 1., 0., 2*amplitude*cos(2*(fx+fy)));
-	vec3_init (dfdv, 0., 1., 2*amplitude*cos(2*(fx+fy)));
+	vec3_init (dfdu, 1.0f, 0.0f, 2.0f*amplitude*cosf(2.0f*(fx+fy)));
+	vec3_init (dfdv, 0.0f, 1.0f, 2.0f*amplitude*cosf(2.0f*(fx+fy)));
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0., 0., -4*amplitude*sin(2*(fx+fy)));
-	vec3_init (dfdudv, 0., 0., -4*amplitude*sin(2*(fx+fy)));
-	vec3_init (dfdvdv, 0., 0., -4*amplitude*sin(2*(fx+fy)));
+	vec3_init (dfdudu, 0.0f, 0.0f, -4.0f*amplitude*sinf(2.0f*(fx+fy)));
+	vec3_init (dfdudv, 0.0f, 0.0f, -4.0f*amplitude*sinf(2.0f*(fx+fy)));
+	vec3_init (dfdvdv, 0.0f, 0.0f, -4.0f*amplitude*sinf(2.0f*(fx+fy)));
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -1817,33 +1817,33 @@ Weight::Weight(unsigned int nu, unsigned int nv, float xmin, float xmax, float y
 
 int Weight::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float xmin = fParams[0];
 	float xmax = fParams[1];
 	float ymin = fParams[2];
 	float ymax = fParams[3];
-	float amplitude = 1.;
+	float amplitude = 1.0f;
 
 	float fx = fParams[0]+fU*(fParams[1]-fParams[0]);
 	float fy = fParams[2]+fV*(fParams[3]-fParams[2]);
-	float fz = amplitude * sqrt (1+fx*fx+fy*fy);
+	float fz = amplitude * sqrtf (1.0f+fx*fx+fy*fy);
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 1., 0., amplitude*fx/sqrt(1+fx*fx+fy*fy));
-	vec3_init (dfdv, 0., 1., amplitude*fy/sqrt(1+fx*fx+fy*fy));
+	vec3_init (dfdu, 1.0f, 0.0f, amplitude*fx/sqrtf(1.0f+fx*fx+fy*fy));
+	vec3_init (dfdv, 0.0f, 1.0f, amplitude*fy/sqrtf(1.0f+fx*fx+fy*fy));
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0., 0., amplitude*(1+fy*fy)/((1+fx*fx+fy*fy)*sqrt(1+fx*fx+fy*fy)));
-	vec3_init (dfdudv, 0., 0., -amplitude*fx*fy/(1+fx*fx+fy*fy));
-	vec3_init (dfdvdv, 0., 0., amplitude*(1+fx*fx)/((1+fx*fx+fy*fy)*sqrt(1+fx*fx+fy*fy)));
+	vec3_init (dfdudu, 0.0f, 0.0f, amplitude*(1.0f+fy*fy)/((1.0f+fx*fx+fy*fy)*sqrtf(1.0f+fx*fx+fy*fy)));
+	vec3_init (dfdudv, 0.0f, 0.0f, -amplitude*fx*fy/(1.0f+fx*fx+fy*fy));
+	vec3_init (dfdvdv, 0.0f, 0.0f, amplitude*(1.0f+fx*fx)/((1.0f+fx*fx+fy*fy)*sqrtf(1.0f+fx*fx+fy*fy)));
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -1871,33 +1871,33 @@ Guimard::Guimard(unsigned int nu, unsigned int nv, float a, float b, float c)
 
 int Guimard::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
-	if (fU<0 || fU > 1)
+	if (fU<0.0f || fU > 1.0f)
 		return 1;
-	if (fV<0 || fV > 1)
+	if (fV<0.0f || fV > 1.0f)
 		return 1;
 
 	float a = fParams[0];
 	float b = fParams[1];
 	float c = fParams[2];
 
-	fV *= 2. * M_PI;
+	fV *= 2.0f * (float)M_PI;
 
-	float fx = (a*(1.-fU) + b*fU) * cos(fV);
-	float fy = b * fU * sin(fV);
-	float fz = c * fU * sin(fV) * sin(fV);
+	float fx = (a*(1.0f-fU) + b*fU) * cosf(fV);
+	float fy = b * fU * sinf(fV);
+	float fz = c * fU * sinf(fV) * sinf(fV);
 
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
 	// partial derivates
 	vec3 dfdu, dfdv;
-	vec3_init (dfdu, (b-a) * cos(fV), b * sin(fV), c * sin(fV) * sin(fV));
-	vec3_init (dfdv, -(a*(1.-fU) + b*fU) * sin(fV), -b * fU * cos(fV), 2. * c * fU * cos(fV) * sin(fV));
+	vec3_init (dfdu, (b-a) * cosf(fV), b * sinf(fV), c * sinf(fV) * sinf(fV));
+	vec3_init (dfdv, -(a*(1.0f-fU) + b*fU) * sinf(fV), -b * fU * cosf(fV), 2.0f * c * fU * cosf(fV) * sinf(fV));
 
 	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0., 0., 0.);
-	vec3_init (dfdudv, -(b-a) * sin(fV), b * cos(fV), 2. * c * cos(fV) * sin(fV));
-	vec3_init (dfdvdv, -(a*(1.-fU) + b*fU) * cos(fV), b * fU * sin(fV), 0.);
+	vec3_init (dfdudu, 0.0f, 0.0f, 0.0f);
+	vec3_init (dfdudv, -(b-a) * sinf(fV), b * cosf(fV), 2.0f * c * cosf(fV) * sinf(fV));
+	vec3_init (dfdvdv, -(a*(1.0f-fU) + b*fU) * cosf(fV), b * fU * sinf(fV), 0.0f);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 

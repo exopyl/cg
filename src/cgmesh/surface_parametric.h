@@ -51,7 +51,7 @@ public:
 class EllipticHelicoid : public ParametricSurface
 {
 public:
-	EllipticHelicoid (unsigned int nu=20, unsigned int nv=20, float a=1., float b=1., float c=0.2);
+	EllipticHelicoid (unsigned int nu=20, unsigned int nv=20, float a=1.0f, float b=1.0f, float c=0.2f);
 	~EllipticHelicoid () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
@@ -69,7 +69,7 @@ public:
 class SeaShellVonSeggern : public ParametricSurface
 {
 public:
-	SeaShellVonSeggern (unsigned int nu=20, unsigned int nv=20, float a=.2, float b=1., float c=.1, float n=2.);
+	SeaShellVonSeggern (unsigned int nu=20, unsigned int nv=20, float a=0.2f, float b=1.0f, float c=0.1f, float n=2.0f);
 	~SeaShellVonSeggern () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
@@ -77,7 +77,7 @@ public:
 class CorkscrewSurface : public ParametricSurface
 {
 public:
-	CorkscrewSurface (unsigned int nu=20, unsigned int nv=20, float a=1., float b=.5);
+	CorkscrewSurface (unsigned int nu=20, unsigned int nv=20, float a=1.0f, float b=0.5f);
 	~CorkscrewSurface () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
@@ -86,7 +86,7 @@ public:
 class MobiusStrip : public ParametricSurface
 {
 public:
-	MobiusStrip (unsigned int nu=20, unsigned int nv=20, float w=.1, float r=.5);
+	MobiusStrip (unsigned int nu=20, unsigned int nv=20, float w=0.1f, float r=0.5f);
 	~MobiusStrip () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
@@ -95,7 +95,7 @@ public:
 class RadialWave : public ParametricSurface
 {
 public:
-	RadialWave (unsigned int nu=20, unsigned int nv=20, float radius=10., float height=20., float frequency=.6);
+	RadialWave (unsigned int nu=20, unsigned int nv=20, float radius=10.0f, float height=20.0f, float frequency=0.6f);
 	~RadialWave () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
@@ -104,10 +104,11 @@ public:
 class ParametricTorus : public ParametricSurface
 {
 public:
-	ParametricTorus (unsigned int nu=20, unsigned int nv=20, float radius1=5., float radius2=2.);
+	ParametricTorus (unsigned int nu=20, unsigned int nv=20, float radius1=5.0f, float radius2=2.0f);
 	~ParametricTorus () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
+
 
 /*
 Mesh* mesh_generate_parametric_surface_trumpet (unsigned int nu, unsigned int nv,
@@ -133,7 +134,7 @@ class BorromeanRing : public ParametricSurface
 {
 	friend class BorromeanRings;
 public:
-	BorromeanRing (unsigned int nu=20, unsigned int nv=20, float param1=2., float param2=1., float r=.2);
+	BorromeanRing (unsigned int nu=20, unsigned int nv=20, float param1=2.0f, float param2=1.0f, float r=0.2f);
 	~BorromeanRing () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
@@ -189,7 +190,7 @@ public:
 class HyperbolicParaboloid : public ParametricSurface
 {
 public:
-	HyperbolicParaboloid (unsigned int nu=20, unsigned int nv=20, float xmin=-5., float xmax=5., float ymin=-5., float ymax=5.);
+	HyperbolicParaboloid (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
 	~HyperbolicParaboloid () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
@@ -197,7 +198,7 @@ public:
 class MonkeySaddle : public ParametricSurface
 {
 public:
-	MonkeySaddle (unsigned int nu=20, unsigned int nv=20, float xmin=-5., float xmax=5., float ymin=-5., float ymax=5.);
+	MonkeySaddle (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
 	~MonkeySaddle () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
@@ -205,7 +206,7 @@ public:
 class Blobs : public ParametricSurface
 {
 public:
-	Blobs (unsigned int nu=20, unsigned int nv=20, float xmin=-5., float xmax=5., float ymin=-5., float ymax=5.);
+	Blobs (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
 	~Blobs () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
@@ -213,7 +214,7 @@ public:
 class Drop : public ParametricSurface
 {
 public:
-	Drop (unsigned int nu=20, unsigned int nv=20, float xmin=-5., float xmax=5., float ymin=-5., float ymax=5.);
+	Drop (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
 	~Drop () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
@@ -221,7 +222,7 @@ public:
 class Wave1 : public ParametricSurface
 {
 public:
-	Wave1 (unsigned int nu=20, unsigned int nv=20, float xmin=-5., float xmax=5., float ymin=-5., float ymax=5.);
+	Wave1 (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
 	~Wave1 () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
@@ -229,7 +230,7 @@ public:
 class Wave2 : public ParametricSurface
 {
 public:
-	Wave2 (unsigned int nu=20, unsigned int nv=20, float xmin=-5., float xmax=5., float ymin=-5., float ymax=5.);
+	Wave2 (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
 	~Wave2 () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
@@ -237,7 +238,7 @@ public:
 class Weight : public ParametricSurface
 {
 public:
-	Weight (unsigned int nu=20, unsigned int nv=20, float xmin=-5., float xmax=5., float ymin=-5., float ymax=5.);
+	Weight (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
 	~Weight () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
@@ -245,7 +246,8 @@ public:
 class Guimard : public ParametricSurface
 {
 public:
-	Guimard (unsigned int nu=20, unsigned int nv=20, float a=2., float b=3., float c=1.);
+	Guimard (unsigned int nu=20, unsigned int nv=20, float a=2.0f, float b=3.0f, float c=1.0f);
 	~Guimard () {};
 	int EvaluatePosition (float u, float v, diff_s *diff);
 };
+
