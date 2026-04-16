@@ -14,7 +14,7 @@ class ParametricSurface : public Mesh
 {
 public:
 	ParametricSurface () {};
-	~ParametricSurface () {};
+	virtual ~ParametricSurface () {};
 
 public:
 	virtual int EvaluatePosition (float u, float v, diff_s *diff) = 0;
@@ -24,13 +24,18 @@ public:
 	
 	unsigned int iNU;
 	unsigned int iNV;
-	int bCloseU; // do we close the u border ?
-	int bCloseV; // do we close the v border ?
-	int bIndependentCloseU; // do we close independently the extremities u=0 and u=1 ?
-	int bIndependentCloseV; // do we close independently the extremities v=0 and v=1 ?
-	int bInverseCloseU;
-	int bInverseCloseV;
+	bool bCloseU = false; // do we close the u border ?
+	bool bCloseV = false; // do we close the v border ?
+	bool bIndependentCloseU = false; // do we close independently the extremities u=0 and u=1 ?
+	bool bIndependentCloseV = false; // do we close independently the extremities v=0 and v=1 ?
+	bool bInverseCloseU = false;
+	bool bInverseCloseV = false;
 	float fParams[4];
+
+private:
+	void AddFace (unsigned int& fi,
+		      unsigned int v1, unsigned int v2, unsigned int v3,
+		      float u1, float v_1, float u2, float v_2, float u3, float v_3);
 };
 
 //

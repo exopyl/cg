@@ -55,11 +55,11 @@ Face::Face (const Face &f)
 Face::~Face ()
 {
 	if (m_pVertices)
-		delete m_pVertices;
+		delete[] m_pVertices;
 	if (m_pTextureCoordinatesIndices)
-		delete m_pTextureCoordinatesIndices;
+		delete[] m_pTextureCoordinatesIndices;
 	if (m_pTextureCoordinates)
-		delete m_pTextureCoordinates;
+		delete[] m_pTextureCoordinates;
 };
 
 int Face::SetNVertices (unsigned int n)
@@ -69,15 +69,15 @@ int Face::SetNVertices (unsigned int n)
 
 	m_nVertices = n;
 	if (m_pVertices)
-		delete m_pVertices;
+		delete[] m_pVertices;
 	m_pVertices = new unsigned int[m_nVertices];
 
 	if (m_pTextureCoordinatesIndices)
-		delete m_pTextureCoordinatesIndices;
+		delete[] m_pTextureCoordinatesIndices;
 	m_pTextureCoordinatesIndices = new unsigned int[2*m_nVertices];
 
 	if (m_pTextureCoordinates)
-		delete m_pTextureCoordinates;
+		delete[] m_pTextureCoordinates;
 	m_pTextureCoordinates = new float[2*m_nVertices];
 
 	return 0;
@@ -368,9 +368,9 @@ void Mesh::DeleteFaces (void)
 
 Mesh::~Mesh ()
 {
-	if (m_pVertices)	delete m_pVertices;
-	if (m_pVertexNormals)	delete m_pVertexNormals;
-	if (m_pVertexColors)	delete m_pVertexColors;
+	if (m_pVertices)	delete[] m_pVertices;
+	if (m_pVertexNormals)	delete[] m_pVertexNormals;
+	if (m_pVertexColors)	delete[] m_pVertexColors;
 	DeleteFaces ();
 	if (m_pMaterials)
 	{
@@ -392,7 +392,7 @@ void Mesh::Dump ()
 	printf ("pTextureCoordinates : %p\n", (void*)m_pTextureCoordinates);
 	printf ("nMaterials : %d\n", m_nMaterials);
 	printf ("pMaterials : %p\n", (void*)m_pMaterials);
-	for (int i=0; i<m_nMaterials; i++)
+	for (unsigned int i=0; i<m_nMaterials; i++)
 		m_pMaterials[i]->Dump();
 }
 
@@ -422,7 +422,8 @@ int Mesh::SetVertices (unsigned int nVertices, float *pVertices)
 {
 	if (!m_pVertices || (m_pVertices && nVertices != m_nVertices))
 	{
-		delete m_pVertices;
+		if (m_pVertices)
+			delete[] m_pVertices;
 		m_pVertices = new float[3*nVertices];
 	}
 	m_nVertices = nVertices;

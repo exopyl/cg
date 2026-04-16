@@ -17,6 +17,31 @@
 //
 ///////////////////////
 
+void ParametricSurface::AddFace(unsigned int& fi,
+                                 unsigned int v1, unsigned int v2, unsigned int v3,
+                                 float u1, float v_1, float u2, float v_2, float u3, float v_3)
+{
+	Face* pFace = new Face();
+	pFace->m_bUseTextureCoordinates = true;
+	if (!pFace->m_pTextureCoordinates)
+		pFace->m_pTextureCoordinates = new float[6];
+	pFace->SetMaterialId(MATERIAL_NONE);
+
+	pFace->m_pVertices[0] = v1;
+	pFace->m_pTextureCoordinates[0] = u1;
+	pFace->m_pTextureCoordinates[1] = v_1;
+
+	pFace->m_pVertices[1] = v2;
+	pFace->m_pTextureCoordinates[2] = u2;
+	pFace->m_pTextureCoordinates[3] = v_2;
+
+	pFace->m_pVertices[2] = v3;
+	pFace->m_pTextureCoordinates[4] = u3;
+	pFace->m_pTextureCoordinates[5] = v_3;
+
+	m_pFaces[fi++] = pFace;
+}
+
 // shared function to generate a parametric surface
 int ParametricSurface::Generate(void)
 {
@@ -25,320 +50,130 @@ int ParametricSurface::Generate(void)
 
 	if (nu < 1 || nv < 1)
 		return 0;
-	
-	unsigned int vn = nu*nv;
-	unsigned int fn = (nu-1)*(nv-1)*2;
+
+	unsigned int vn = nu * nv;
+	unsigned int fn = (nu - 1) * (nv - 1) * 2;
 	if (bCloseU)
-		fn += (nv-1)*2;
+		fn += (nv - 1) * 2;
 	if (bCloseV)
 	{
 		if (bIndependentCloseV)
 		{
-			fn += 2*(nu-2);
+			fn += 2 * (nu - 2);
 		}
 		else
 		{
-			fn += (nu-1)*2;
+			fn += (nu - 1) * 2;
 		}
 	}
-	if (bCloseU && bCloseV && !bIndependentCloseU  && !bIndependentCloseV)
+	if (bCloseU && bCloseV && !bIndependentCloseU && !bIndependentCloseV)
 		fn += 2;
-	
-	Init (vn, fn);
-	InitTensors ();
+
+	Init(vn, fn);
+	InitTensors();
 
 	// create vertices
 	unsigned int index = 0;
-	for (unsigned int v=0; v<nv; v++)
-		for (unsigned int u=0; u<nu; u++)
+	for (unsigned int v = 0; v < nv; v++)
+		for (unsigned int u = 0; u < nu; u++)
 		{
-			float fU = u / (float) (nu-1+bCloseU*!bIndependentCloseU);
-			float fV = v / (float) (nv-1+bCloseV*!bIndependentCloseV);
+			float fU = u / (float)(nu - 1 + bCloseU * !bIndependentCloseU);
+			float fV = v / (float)(nv - 1 + bCloseV * !bIndependentCloseV);
 
 			diff_s diff;
 
 			// position
-			int retval = EvaluatePosition (fU, fV, &diff);
-			m_pVertices[3*index]   = diff.position[0];
-			m_pVertices[3*index+1] = diff.position[1];
-			m_pVertices[3*index+2] = diff.position[2];
+			EvaluatePosition(fU, fV, &diff);
+			m_pVertices[3 * index] = diff.position[0];
+			m_pVertices[3 * index + 1] = diff.position[1];
+			m_pVertices[3 * index + 2] = diff.position[2];
 
 			// tensor
-			m_pTensors[index] = EvaluateTensor (diff);
+			m_pTensors[index] = EvaluateTensor(diff);
 
 			index++;
 		}
 
 	// create faces
-	unsigned int a, b, c;
 	unsigned int fi = 0;
-	Face *pFace = NULL;
-	for (unsigned int v=0; v<nv-1; v++)
-		for (unsigned int u=0; u<nu-1; u++)
+	for (unsigned int v = 0; v < nv - 1; v++)
+	{
+		for (unsigned int u = 0; u < nu - 1; u++)
 		{
-			// triangle 1
-			pFace = new Face ();
-			pFace->m_bUseTextureCoordinates = true;
-			if (!pFace->m_pTextureCoordinates)
-				pFace->m_pTextureCoordinates = new float[6];
-			pFace->SetMaterialId (MATERIAL_NONE);
+			float u1 = (float)(u) / (float)(nu - 1 + bCloseU);
+			float u2 = (float)(u + 1) / (float)(nu - 1 + bCloseU);
+			float v1_coord = 1.0f - (float)(v) / (float)(nv - 1);
+			float v2_coord = 1.0f - (float)(v + 1) / (float)(nv - 1);
 
-			pFace->m_pVertices[0] = v * nu + u; // ( u , v )
-			pFace->m_pTextureCoordinates[0] = (float)(u)/(float)(nu-1+bCloseU);
-			pFace->m_pTextureCoordinates[1] = 1.-(float)(v)/(float)(nv-1);
-			
-			pFace->m_pVertices[1] = (v+1) * nu + u; // ( u , v+1 )
-			pFace->m_pTextureCoordinates[2] = (float)(u)/(float)(nu-1+bCloseU);
-			pFace->m_pTextureCoordinates[3] = 1.-(float)(v+1)/(float)(nv-1);
-			
-			pFace->m_pVertices[2] = v * nu + u + 1; // ( u+1 , v )
-			pFace->m_pTextureCoordinates[4] = (float)(u+1)/(float)(nu-1+bCloseU);
-			pFace->m_pTextureCoordinates[5] = 1.-(float)(v)/(float)(nv-1);
-			//f++;
-			m_pFaces[fi++] = pFace;
+			// triangle 1: (u, v), (u, v+1), (u+1, v)
+			AddFace(fi, v * nu + u, (v + 1) * nu + u, v * nu + u + 1,
+			        u1, v1_coord, u1, v2_coord, u2, v1_coord);
 
-			// triangle 2
-			pFace = new Face ();
-			pFace->m_bUseTextureCoordinates = true;
-			if (!pFace->m_pTextureCoordinates)
-				pFace->m_pTextureCoordinates = new float[6];
-			pFace->SetMaterialId (MATERIAL_NONE);
-
-			pFace->m_pVertices[0] = v * nu + u + 1; // ( u+1 , v )
-			pFace->m_pTextureCoordinates[0] = (float)(u+1)/(float)(nu-1+bCloseU);
-			pFace->m_pTextureCoordinates[1] = 1.-(float)(v)/(float)(nv-1);
-			
-			pFace->m_pVertices[1] = (v+1) * nu + u; // ( u , v+1 )
-			pFace->m_pTextureCoordinates[2] = (float)(u)/(float)(nu-1+bCloseU);
-			pFace->m_pTextureCoordinates[3] = 1.-(float)(v+1)/(float)(nv-1);
-			
-			pFace->m_pVertices[2] = (v+1) * nu + u + 1; // ( u+1 , v+1 ) 
-			pFace->m_pTextureCoordinates[4] = (float)(u+1)/(float)(nu-1+bCloseU);
-			pFace->m_pTextureCoordinates[5] = 1.-(float)(v+1)/(float)(nv-1);
-			//f++;
-			m_pFaces[fi++] = pFace;
+			// triangle 2: (u+1, v), (u, v+1), (u+1, v+1)
+			AddFace(fi, v * nu + u + 1, (v + 1) * nu + u, (v + 1) * nu + u + 1,
+			        u2, v1_coord, u1, v2_coord, u2, v2_coord);
 		}
+	}
 
 	if (bCloseU)
 	{
-		for (unsigned int v=0; v<nv-1; v++)
+		for (unsigned int v = 0; v < nv - 1; v++)
 		{
-			// triangle 1
-			pFace = new Face ();
-			pFace->m_bUseTextureCoordinates = true;
-			if (!pFace->m_pTextureCoordinates)
-				pFace->m_pTextureCoordinates = new float[6];
-			pFace->SetMaterialId (MATERIAL_NONE);
+			float u1 = (float)(nu - 1) / (float)(nu);
+			float v1_coord = 1.0f - (float)(v) / (float)(nv - 1);
+			float v2_coord = 1.0f - (float)(v + 1) / (float)(nv - 1);
 
-			pFace->m_pVertices[0] = v * nu + nu-1; // ( nu-1 , v )
-			pFace->m_pTextureCoordinates[0] = (float)(nu-1)/(float)(nu);
-			pFace->m_pTextureCoordinates[1] = 1.-(float)(v)/(float)(nv-1);
-			
-			pFace->m_pVertices[1] = (v+1) * nu + nu-1; // ( nu-1 , v+1 )
-			pFace->m_pTextureCoordinates[2] = (float)(nu-1)/(float)(nu);
-			pFace->m_pTextureCoordinates[3] = 1.-(float)(v+1)/(float)(nv-1);
-			
-			pFace->m_pVertices[2] = v * nu; // ( 0 , v )
-			pFace->m_pTextureCoordinates[4] = 1.;
-			pFace->m_pTextureCoordinates[5] = 1.-(float)(v)/(float)(nv-1);
-			//f++;
-			m_pFaces[fi++] = pFace;
+			// triangle 1
+			AddFace(fi, v * nu + nu - 1, (v + 1) * nu + nu - 1, v * nu,
+			        u1, v1_coord, u1, v2_coord, 1.0f, v1_coord);
 
 			// triangle 2
-			pFace = new Face ();
-			pFace->m_bUseTextureCoordinates = true;
-			if (!pFace->m_pTextureCoordinates)
-				pFace->m_pTextureCoordinates = new float[6];
-			pFace->SetMaterialId (MATERIAL_NONE);
-
-			pFace->m_pVertices[0] = v * nu; // ( 0 , v )
-			pFace->m_pTextureCoordinates[0] = 1.;
-			pFace->m_pTextureCoordinates[1] = 1.-(float)(v)/(float)(nv-1);
-			
-			pFace->m_pVertices[1] = (v+1) * nu + nu-1; // ( nu-1 , v+1 )
-			pFace->m_pTextureCoordinates[2] = (float)(nu-1)/(float)(nu);
-			pFace->m_pTextureCoordinates[3] = 1.-(float)(v+1)/(float)(nv-1);
-			
-			pFace->m_pVertices[2] = (v+1) * nu; // ( 0 , v+1 ) 
-			pFace->m_pTextureCoordinates[4] = 1.;
-			pFace->m_pTextureCoordinates[5] = 1.-(float)(v+1)/(float)(nv-1);
-			//f++;
-			m_pFaces[fi++] = pFace;
+			AddFace(fi, v * nu, (v + 1) * nu + nu - 1, (v + 1) * nu,
+			        1.0f, v1_coord, u1, v2_coord, 1.0f, v2_coord);
 		}
 	}
+
 	if (bCloseV)
 	{
 		if (bIndependentCloseV)
 		{
 			// link with the vertex v=0;
-			for (unsigned int u=1; u<nu-1; u++)
+			for (unsigned int u = 1; u < nu - 1; u++)
 			{
-				pFace = new Face ();
-				pFace->m_bUseTextureCoordinates = true;
-				pFace->SetMaterialId (MATERIAL_NONE);
-
-				pFace->m_pVertices[0] = u;
-				pFace->m_pTextureCoordinates[0] = 0;
-				pFace->m_pTextureCoordinates[1] = 0;
-				
-				pFace->m_pVertices[1] = 0;
-				pFace->m_pTextureCoordinates[2] = 0;
-				pFace->m_pTextureCoordinates[3] = 1;
-				
-				pFace->m_pVertices[2] = (u+1)%nu;
-				pFace->m_pTextureCoordinates[4] = 1;
-				pFace->m_pTextureCoordinates[5] = 1;
-
-				m_pFaces[fi++] = pFace;
+				AddFace(fi, u, 0, (u + 1) % nu, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f);
 			}
 
-			// link with the vertex v=1;
-			for (unsigned int u=1; u<nu-1; u++)
+			// link with the vertex v=nv-1;
+			for (unsigned int u = 1; u < nu - 1; u++)
 			{
-				pFace = new Face ();
-				//mesh_face_mi(mesh, f) = MATERIAL_NONE;
-				//mesh->f[f].mat.u.texture = ((unsigned int)-1);
-				//mesh->f[f].flags |= FACE_FLAG_TEXCOORD;
-				pFace->m_pVertices[0] = (nv-1) * nu + u;
-				//mesh_face_tex(mesh, f, 0)[0] = 0;
-				//mesh_face_tex(mesh, f, 0)[1] = 0;
-				
-				pFace->m_pVertices[1] = (nv-1) * nu;
-				//mesh_face_tex(mesh, f, 1)[0] = 0;
-				//mesh_face_tex(mesh, f, 1)[1] = 1;
-				
-				pFace->m_pVertices[2] = (nv-1) * nu + (u+1)%nu;
-				//mesh_face_tex(mesh, f, 2)[0] = 1;
-				//mesh_face_tex(mesh, f, 2)[1] = 1;
-
-				m_pFaces[fi++] = pFace;
+				AddFace(fi, (nv - 1) * nu + u, (nv - 1) * nu, (nv - 1) * nu + (u + 1) % nu, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f);
 			}
 		}
 		else
 		{
 			if (!bInverseCloseV)
-				for (unsigned int u=0; u<nu-1; u++)
+			{
+				for (unsigned int u = 0; u < nu - 1; u++)
 				{
-					// triangle 1
-					pFace = new Face ();
-					//mesh_face_mi(mesh, f) = MATERIAL_NONE;
-					//mesh->f[f].mat.u.texture = ((unsigned int)-1);
-					//mesh->f[f].flags |= FACE_FLAG_TEXCOORD;
-					pFace->m_pVertices[0] = (nv-1) * nu + u; // ( u , nv-1 )
-					//mesh_face_tex(mesh, f, 0)[0] = 0;
-					//mesh_face_tex(mesh, f, 0)[1] = 0;
-					
-					pFace->m_pVertices[1] = u; // ( u , 0 )
-					//mesh_face_tex(mesh, f, 1)[0] = 1;
-					//mesh_face_tex(mesh, f, 1)[1] = 1;
-					
-					pFace->m_pVertices[2] = (nv-1) * nu + u + 1; // ( u+1 , nv-1 )
-					//mesh_face_tex(mesh, f, 2)[0] = 0;
-					//mesh_face_tex(mesh, f, 2)[1] = 1;
-					//f++;
-					m_pFaces[fi++] = pFace;
-			
-					// triangle 2
-					pFace = new Face ();
-					//mesh_face_mi(mesh, f) = MATERIAL_NONE;
-					//mesh->f[f].mat.u.texture = ((unsigned int)-1);
-					//mesh->f[f].flags |= FACE_FLAG_TEXCOORD;
-					pFace->m_pVertices[0] = (nv-1) * nu + u + 1; // ( u+1 , nv-1 )
-					//mesh_face_tex(mesh, f, 0)[0] = 0;
-					//mesh_face_tex(mesh, f, 0)[1] = 0;
-					
-					pFace->m_pVertices[1] = u; // ( u , 0 )
-					//mesh_face_tex(mesh, f, 1)[0] = 1;
-					//mesh_face_tex(mesh, f, 1)[1] = 1;
-					
-					pFace->m_pVertices[2] = (u + 1); // ( u+1 , 0 ) 
-					//mesh_face_tex(mesh, f, 2)[0] = 0;
-					//mesh_face_tex(mesh, f, 2)[1] = 1;
-					//f++;
-					m_pFaces[fi++] = pFace;
+					AddFace(fi, (nv - 1) * nu + u, u, (nv - 1) * nu + u + 1, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
+					AddFace(fi, (nv - 1) * nu + u + 1, u, u + 1, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
+				}
 			}
 			else
-				for (unsigned int u=0; u<nu-1; u++)
+			{
+				for (unsigned int u = 0; u < nu - 1; u++)
 				{
-					// triangle 1
-					pFace = new Face ();
-					//mesh_face_mi(mesh, f) = MATERIAL_NONE;
-					//mesh->f[f].mat.u.texture = ((unsigned int)-1);
-					//mesh->f[f].flags |= FACE_FLAG_TEXCOORD;
-					pFace->m_pVertices[0] = (nv-1) * nu + u; // ( u , nv-1 )
-					//mesh_face_tex(mesh, f, 0)[0] = 0;
-					//mesh_face_tex(mesh, f, 0)[1] = 0;
-					
-					pFace->m_pVertices[1] = (nu-1) - u; // ( u , 0 )
-					//mesh_face_tex(mesh, f, 1)[0] = 1;
-					//mesh_face_tex(mesh, f, 1)[1] = 1;
-					
-					pFace->m_pVertices[2] = (nv-1) * nu + u + 1; // ( u+1 , nv-1 )
-					//mesh_face_tex(mesh, f, 2)[0] = 0;
-					//mesh_face_tex(mesh, f, 2)[1] = 1;
-					//f++;
-					m_pFaces[fi++] = pFace;
-					
-					// triangle 2
-					pFace = new Face ();
-					//mesh_face_mi(mesh, f) = MATERIAL_NONE;
-					//mesh->f[f].mat.u.texture = ((unsigned int)-1);
-					//mesh->f[f].flags |= FACE_FLAG_TEXCOORD;
-					pFace->m_pVertices[0] = (nv-1) * nu + u + 1; // ( u+1 , nv-1 )
-					//mesh_face_tex(mesh, f, 0)[0] = 0;
-					//mesh_face_tex(mesh, f, 0)[1] = 0;
-					
-					pFace->m_pVertices[1] = (nu-1) - u; // ( u , 0 )
-					//mesh_face_tex(mesh, f, 1)[0] = 1;
-					//mesh_face_tex(mesh, f, 1)[1] = 1;
-					
-					pFace->m_pVertices[2] = (nu-1) - (u + 1); // ( u+1 , 0 ) 
-					//mesh_face_tex(mesh, f, 2)[0] = 0;
-					//mesh_face_tex(mesh, f, 2)[1] = 1;
-					//f++;
-					m_pFaces[fi++] = pFace;
+					AddFace(fi, (nv - 1) * nu + u, (nu - 1) - u, (nv - 1) * nu + u + 1, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
+					AddFace(fi, (nv - 1) * nu + u + 1, (nu - 1) - u, (nu - 1) - (u + 1), 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
 				}
+			}
 		}
 	}
+
 	if (bCloseU && bCloseV && !bIndependentCloseU && !bIndependentCloseV)
 	{
-		// triangle 1
-		pFace = new Face ();
-		//mesh_face_mi(mesh, f) = MATERIAL_NONE;
-		//mesh->f[f].mat.u.texture = ((unsigned int)-1);
-		//mesh->f[f].flags |= FACE_FLAG_TEXCOORD;
-		pFace->m_pVertices[0] = (nv-1) * nu + nu-1; // ( nu-1 , nv-1 )
-		//mesh_face_tex(mesh, f, 0)[0] = 0;
-		//mesh_face_tex(mesh, f, 0)[1] = 0;
-		
-		pFace->m_pVertices[1] = nu-1; // ( nu-1 , 0 )
-		//mesh_face_tex(mesh, f, 1)[0] = 1;
-		//mesh_face_tex(mesh, f, 1)[1] = 1;
-		
-		pFace->m_pVertices[2] = (nv-1) * nu; // ( 0 , nv-1 )
-		//mesh_face_tex(mesh, f, 2)[0] = 0;
-		//mesh_face_tex(mesh, f, 2)[1] = 1;
-		//f++;
-		m_pFaces[fi++] = pFace;
-		
-		// triangle 2
-		pFace = new Face ();
-		//mesh_face_mi(mesh, f) = MATERIAL_NONE;
-		//mesh->f[f].mat.u.texture = ((unsigned int)-1);
-		//mesh->f[f].flags |= FACE_FLAG_TEXCOORD;
-		pFace->m_pVertices[0] = (nv-1) * nu; // ( 0 , nv-1 )
-		//mesh_face_tex(mesh, f, 0)[0] = 0;
-		//mesh_face_tex(mesh, f, 0)[1] = 0;
-		
-		pFace->m_pVertices[1] = nu-1; // ( nu-1 , 0 )
-		//mesh_face_tex(mesh, f, 1)[0] = 1;
-		//mesh_face_tex(mesh, f, 1)[1] = 1;
-		
-		pFace->m_pVertices[2] = 0; // (  , 0 ) 
-		//mesh_face_tex(mesh, f, 2)[0] = 0;
-		//mesh_face_tex(mesh, f, 2)[1] = 1;
-		//f++;
-		m_pFaces[fi++] = pFace;
+		AddFace(fi, (nv - 1) * nu + nu - 1, nu - 1, (nv - 1) * nu, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
+		AddFace(fi, (nv - 1) * nu, nu - 1, 0, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
 	}
 
 	return 1;
@@ -388,7 +223,7 @@ Tensor* ParametricSurface::EvaluateTensor (diff_s diff)
 	_n = diff.second_fundamental_form[2];
 
 	if (_e*_g-_f*_f == 0.)
-		return NULL;
+		return nullptr;
 
 	// mean curvature
 	kappa_mean = 0.5 * (_e*_n-2*_f*_m+_g*_l) / (_e*_g-_f*_f);

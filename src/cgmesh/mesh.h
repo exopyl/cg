@@ -32,7 +32,7 @@ public:
 	inline int ActivateTextureCoordinatesIndices ()
 		{
 			if (m_pTextureCoordinatesIndices)
-				delete m_pTextureCoordinatesIndices;
+				delete[] m_pTextureCoordinatesIndices;
 			m_pTextureCoordinatesIndices = new unsigned int[2*m_nVertices];
 			return 1;
 		}
@@ -40,7 +40,7 @@ public:
 	inline int ActivateTextureCoordinates ()
 		{
 			if (m_pTextureCoordinates)
-				delete m_pTextureCoordinates;
+				delete[] m_pTextureCoordinates;
 			m_pTextureCoordinates = new float[2*m_nVertices];
 
 			return 1;
