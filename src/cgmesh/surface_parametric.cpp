@@ -43,13 +43,13 @@ void ParametricSurface::AddFace(unsigned int& fi,
 }
 
 // shared function to generate a parametric surface
-int ParametricSurface::Generate(void)
+bool ParametricSurface::Generate(void)
 {
 	unsigned int nu = iNU;
 	unsigned int nv = iNV;
 
 	if (nu < 1 || nv < 1)
-		return 0;
+		return false;
 
 	unsigned int vn = nu * nv;
 	unsigned int fn = (nu - 1) * (nv - 1) * 2;
@@ -176,10 +176,10 @@ int ParametricSurface::Generate(void)
 		AddFace(fi, (nv - 1) * nu, nu - 1, 0, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
 	}
 
-	return 1;
+	return true;
 }
 
-int ParametricSurface::EvaluateFundamentalForms (diff_s *diff, vec3 dfdu, vec3 dfdv, vec3 dfdudu, vec3 dfdudv, vec3 dfdvdv)
+bool ParametricSurface::EvaluateFundamentalForms (diff_s *diff, vec3 dfdu, vec3 dfdv, vec3 dfdudu, vec3 dfdudv, vec3 dfdvdv)
 {
 	// first fundamental form
 	float e = vec3_dot_product (dfdu, dfdu);
@@ -197,7 +197,7 @@ int ParametricSurface::EvaluateFundamentalForms (diff_s *diff, vec3 dfdu, vec3 d
 	float n = vec3_dot_product (dfdvdv, diff->normal);
 	vec3_init (diff->second_fundamental_form, l, m, n);
 
-	return 0;
+	return true;
 }
 
 Tensor* ParametricSurface::EvaluateTensor (diff_s diff)
@@ -307,12 +307,12 @@ Tensor* ParametricSurface::EvaluateTensor (diff_s diff)
 //  (x,y,z) : 3D coordinates of the point onto the surface
 //
 
-int ParametricSphere::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool ParametricSphere::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float fu = 2.0f * (float)M_PI * fU;
 	float fv = (float)M_PI * fV;
@@ -340,19 +340,19 @@ int ParametricSphere::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 ParametricSphere::ParametricSphere (unsigned int nu, unsigned int nv)
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 1;
-	bCloseV = 1;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 1;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = true;
+	bCloseV = true;
+	bIndependentCloseU = false;
+	bIndependentCloseV = true;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	Generate ();
 }
 
@@ -360,12 +360,12 @@ ParametricSphere::ParametricSphere (unsigned int nu, unsigned int nv)
 //
 // elliptic helicoid (ref : http://mathworld.wolfram.com/EllipticHelicoid.html)
 //
-int EllipticHelicoid::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool EllipticHelicoid::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float a = fParams[0];
 	float b = fParams[1];
@@ -395,19 +395,19 @@ int EllipticHelicoid::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 EllipticHelicoid::EllipticHelicoid (unsigned int nu, unsigned int nv, float a, float b, float c)
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 0;
-	bCloseV = 0;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = false;
+	bCloseV = false;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	fParams[0] = a; // 1
 	fParams[1] = b; // 1
 	fParams[2] = c; // 0.2
@@ -417,12 +417,12 @@ EllipticHelicoid::EllipticHelicoid (unsigned int nu, unsigned int nv, float a, f
 //
 // seashell (ref : http://mathworld.wolfram.com/Seashell.html)
 //
-int SeaShell::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool SeaShell::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float fu = 6.0f*(float)M_PI * fU;
 	float fv = 2.0f*(float)M_PI * fV;
@@ -446,31 +446,31 @@ int SeaShell::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 SeaShell::SeaShell (unsigned int nu, unsigned int nv)
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 0;
-	bCloseV = 1;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = false;
+	bCloseV = true;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	Generate ();
 }
 
 //
 // seashell with parameterization by von Seggern (ref : http://mathworld.wolfram.com/Seashell.html)
 //
-int SeaShellVonSeggern::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool SeaShellVonSeggern::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float a = fParams[0];
 	float b = fParams[1];
@@ -499,19 +499,19 @@ int SeaShellVonSeggern::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 SeaShellVonSeggern::SeaShellVonSeggern (unsigned int nu, unsigned int nv, float a, float b, float c, float n)
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 1;
-	bCloseV = 0;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = true;
+	bCloseV = false;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	fParams[0] = a; // 0.2;
 	fParams[1] = b; // 1
 	fParams[2] = c; // 0.1;
@@ -526,12 +526,12 @@ CorkscrewSurface::CorkscrewSurface (unsigned int nu, unsigned int nv, float a, f
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 0;
-	bCloseV = 1;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = false;
+	bCloseV = true;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 
 	fParams[0] = a; // 1.0
 	fParams[1] = b; // 0.5
@@ -539,12 +539,12 @@ CorkscrewSurface::CorkscrewSurface (unsigned int nu, unsigned int nv, float a, f
 	Generate ();
 }
 
-int CorkscrewSurface::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool CorkscrewSurface::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float a = fParams[0];
 	float b = fParams[1];
@@ -571,18 +571,18 @@ int CorkscrewSurface::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 //
 // Mobius strip (ref : http://mathworld.wolfram.com/MoebiusStrip.html)
 //
-int MobiusStrip::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool MobiusStrip::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float w = fParams[0]; // 0.1
 	float r = fParams[1]; // 0.5
@@ -609,19 +609,19 @@ int MobiusStrip::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 MobiusStrip::MobiusStrip (unsigned int nu, unsigned int nv, float w, float r)
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 0;
-	bCloseV = 1;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 1;
+	bCloseU = false;
+	bCloseV = true;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = true;
 	fParams[0] = w; //
 	fParams[1] = r; //
 	Generate ();
@@ -630,12 +630,12 @@ MobiusStrip::MobiusStrip (unsigned int nu, unsigned int nv, float w, float r)
 //
 // radial wave
 //
-int RadialWave::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool RadialWave::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float r = fParams[0]; // 10.0
 	float h = fParams[1]; // 20.0
@@ -663,19 +663,19 @@ int RadialWave::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 RadialWave::RadialWave (unsigned int nu, unsigned int nv, float radius, float height, float frequency)
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 0;
-	bCloseV = 0;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = false;
+	bCloseV = false;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	fParams[0] = radius; //
 	fParams[1] = height; //
 	fParams[2] = frequency; //
@@ -685,12 +685,12 @@ RadialWave::RadialWave (unsigned int nu, unsigned int nv, float radius, float he
 //
 // torus
 //
-int ParametricTorus::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool ParametricTorus::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float r1 = fParams[0]; // 10.0
 	float r2 = fParams[1]; // 20.0
@@ -722,19 +722,19 @@ int ParametricTorus::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 ParametricTorus::ParametricTorus (unsigned int nu, unsigned int nv, float radius1, float radius2)
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 1;
-	bCloseV = 1;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = true;
+	bCloseV = true;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	fParams[0] = radius1; // 5
 	fParams[1] = radius2; // 2
 	Generate ();
@@ -743,12 +743,12 @@ ParametricTorus::ParametricTorus (unsigned int nu, unsigned int nv, float radius
 //
 // treifol knot 1
 //
-int TrefoilKnot1::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool TrefoilKnot1::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float fu = -4.0f * (float)M_PI * (fU-0.5f);
 	float fv = 2.0f * (float)M_PI * (fV-0.5f);
@@ -760,19 +760,19 @@ int TrefoilKnot1::EvaluatePosition (float fU, float fV, diff_s *diff)
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
-	return 0;
+	return true;
 }
 
 TrefoilKnot1::TrefoilKnot1 (unsigned int nu, unsigned int nv)
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 1;
-	bCloseV = 1;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = true;
+	bCloseV = true;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 
 	Generate ();
 }
@@ -780,12 +780,12 @@ TrefoilKnot1::TrefoilKnot1 (unsigned int nu, unsigned int nv)
 //
 // treifol knot 2
 //
-int TrefoilKnot2::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool TrefoilKnot2::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 //[-3*pi:3*pi][-pi:pi]
 	
@@ -799,19 +799,19 @@ int TrefoilKnot2::EvaluatePosition (float fU, float fV, diff_s *diff)
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
-	return 0;
+	return true;
 }
 
 TrefoilKnot2::TrefoilKnot2 (unsigned int nu, unsigned int nv)
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 1;
-	bCloseV = 1;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = true;
+	bCloseV = true;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 
 	Generate ();
 }
@@ -853,12 +853,12 @@ mesh_t *mesh_generate_parametric_surface_trumpet (unsigned int nu, unsigned int 
 	data.evaluate = &parametric_surface_get_trumpet;
 	data.iNU = nu;
 	data.iNV = nv;
-	data.bCloseU = 1;
-	data.bCloseV = 0;
-	data.bIndependentCloseU = 0;
-	data.bIndependentCloseV = 0;
-	data.bInverseCloseU = 0;
-	data.bInverseCloseV = 0;
+	data.bCloseU = true;
+	data.bCloseV = false;
+	data.bIndependentCloseU = false;
+	data.bIndependentCloseV = false;
+	data.bInverseCloseU = false;
+	data.bInverseCloseV = false;
 	data.fParams[0] = s; // 5
 	data.fParams[1] = t; // 2
 	return mesh_generate_parametric_surface(data);
@@ -900,12 +900,12 @@ mesh_t *mesh_generate_parametric_surface_cylinder (unsigned int nu, unsigned int
 	data.evaluate = &parametric_surface_get_cylinder;
 	data.iNU = nu;
 	data.iNV = nv;
-	data.bCloseU = 1;
-	data.bCloseV = 1;
-	data.bIndependentCloseU = 0;
-	data.bIndependentCloseV = 1;
-	data.bInverseCloseU = 0;
-	data.bInverseCloseV = 0;
+	data.bCloseU = true;
+	data.bCloseV = true;
+	data.bIndependentCloseU = false;
+	data.bIndependentCloseV = true;
+	data.bInverseCloseU = false;
+	data.bInverseCloseV = false;
 	data.fParams[0] = r;
 	data.fParams[1] = h;
 	return mesh_generate_parametric_surface(data);
@@ -975,12 +975,12 @@ mesh_t *mesh_generate_parametric_surface_helix (unsigned int nu, unsigned int nv
 	data.evaluate = &parametric_surface_get_helix;
 	data.iNU = nu;
 	data.iNV = nv;
-	data.bCloseU = 0;
-	data.bCloseV = 1;
-	data.bIndependentCloseU = 0;
-	data.bIndependentCloseV = 0;
-	data.bInverseCloseU = 0;
-	data.bInverseCloseV = 0;
+	data.bCloseU = false;
+	data.bCloseV = true;
+	data.bIndependentCloseU = false;
+	data.bIndependentCloseV = false;
+	data.bInverseCloseU = false;
+	data.bInverseCloseV = false;
 	return mesh_generate_parametric_surface(data);
 }
 */
@@ -992,12 +992,12 @@ mesh_t *mesh_generate_parametric_surface_helix (unsigned int nu, unsigned int nv
 // (cos(u) + 0.5 , sin(u) - r/2 , cos(3u) / 3)
 // (cos(u) - 0.5 , sin(u) - r/2 , cos(3u) / 3)
 //
-int BorromeanRing::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool BorromeanRing::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float fu = 2.0f * (float)M_PI * (fU);
 	float fv = 2.0f * (float)M_PI * (1.0f - fV); // tube
@@ -1035,19 +1035,19 @@ int BorromeanRing::EvaluatePosition (float fU, float fV, diff_s *diff)
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
-	return 0;
+	return true;
 }
 
 BorromeanRing::BorromeanRing (unsigned int nu, unsigned int nv, float param1, float param2, float r)
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 1;
-	bCloseV = 1;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = true;
+	bCloseV = true;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	
 	fParams[0] = param1;
 	fParams[1] = param2;
@@ -1235,12 +1235,12 @@ mesh_t *mesh_generate_parametric_surface_borromean_elliptical_rings (unsigned in
 	parametric_surface_data_s data;
 	data.iNU = nu;
 	data.iNV = nv;
-	data.bCloseU = 1;
-	data.bCloseV = 1;
-	data.bIndependentCloseU = 0;
-	data.bIndependentCloseV = 0;
-	data.bInverseCloseU = 0;
-	data.bInverseCloseV = 0;
+	data.bCloseU = true;
+	data.bCloseV = true;
+	data.bIndependentCloseU = false;
+	data.bIndependentCloseV = false;
+	data.bInverseCloseU = false;
+	data.bInverseCloseV = false;
 
 	data.fParams[0] = 2.;
 	data.fParams[1] = 1.;
@@ -1271,12 +1271,12 @@ mesh_t *mesh_generate_parametric_surface_borromean_elliptical_rings (unsigned in
 // torus knot (http://vmm.math.uci.edu/3D-XplorMath/index.html)
 // http://virtualmathmuseum.org/SpaceCurves/torus_knot/torus_knot.html
 //
-int TorusKnot::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool TorusKnot::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float fu = 2.0f * (float)M_PI * (fU);
 	float fv = 2.0f * (float)M_PI * (1.0f - fV); // tube
@@ -1323,19 +1323,19 @@ int TorusKnot::EvaluatePosition (float fU, float fV, diff_s *diff)
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
-	return 0;
+	return true;
 }
 
 TorusKnot::TorusKnot (unsigned int nu, unsigned int nv, unsigned int a, unsigned int b)
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 1;
-	bCloseV = 1;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = true;
+	bCloseV = true;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 
 	fParams[0] = (float)a;
 	fParams[1] = (float)b;
@@ -1348,12 +1348,12 @@ TorusKnot::TorusKnot (unsigned int nu, unsigned int nv, unsigned int a, unsigned
 //
 // ref : http://local.wasp.uwa.edu.au/~pbourke/geometry/cinquefoil/
 //
-int CinquefoilKnot::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool CinquefoilKnot::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float k = fParams[0];
 
@@ -1395,19 +1395,19 @@ int CinquefoilKnot::EvaluatePosition (float fU, float fV, diff_s *diff)
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
-	return 0;
+	return true;
 }
 
 CinquefoilKnot::CinquefoilKnot (unsigned int nu, unsigned int nv, unsigned int a)
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 1;
-	bCloseV = 1;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = true;
+	bCloseV = true;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 
 	fParams[0] = a;
 
@@ -1422,21 +1422,21 @@ Breather::Breather (unsigned int nu, unsigned int nv)
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 1;
-	bCloseV = 1;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = true;
+	bCloseV = true;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	Generate ();
 }
 
-int Breather::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool Breather::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float fu = 2.0f*14.0f*(fU-0.5f);
 	float fv = 2.0f*37.4f*(fV-0.5f);
@@ -1453,7 +1453,7 @@ int Breather::EvaluatePosition (float fU, float fV, diff_s *diff)
 	// position
 	vec3_init (diff->position, fx, fy, fz);
 
-	return 0;
+	return true;
 }
 
 //
@@ -1464,12 +1464,12 @@ HyperbolicParaboloid::HyperbolicParaboloid (unsigned int nu, unsigned int nv, fl
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 0;
-	bCloseV = 0;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = false;
+	bCloseV = false;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	fParams[0] = xmin;
 	fParams[1] = xmax;
 	fParams[2] = ymin;
@@ -1477,12 +1477,12 @@ HyperbolicParaboloid::HyperbolicParaboloid (unsigned int nu, unsigned int nv, fl
 	Generate ();
 }
 
-int HyperbolicParaboloid::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool HyperbolicParaboloid::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float xmin = fParams[0];
 	float xmax = fParams[1];
@@ -1509,7 +1509,7 @@ int HyperbolicParaboloid::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 //
@@ -1519,12 +1519,12 @@ MonkeySaddle::MonkeySaddle(unsigned int nu, unsigned int nv, float xmin, float x
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 0;
-	bCloseV = 0;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = false;
+	bCloseV = false;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	fParams[0] = xmin;
 	fParams[1] = xmax;
 	fParams[2] = ymin;
@@ -1532,12 +1532,12 @@ MonkeySaddle::MonkeySaddle(unsigned int nu, unsigned int nv, float xmin, float x
 	Generate ();
 }
 
-int MonkeySaddle::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool MonkeySaddle::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float xmin = fParams[0];
 	float xmax = fParams[1];
@@ -1564,7 +1564,7 @@ int MonkeySaddle::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 //
@@ -1574,12 +1574,12 @@ Blobs::Blobs(unsigned int nu, unsigned int nv, float xmin, float xmax, float ymi
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 0;
-	bCloseV = 0;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = false;
+	bCloseV = false;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	fParams[0] = xmin;
 	fParams[1] = xmax;
 	fParams[2] = ymin;
@@ -1587,12 +1587,12 @@ Blobs::Blobs(unsigned int nu, unsigned int nv, float xmin, float xmax, float ymi
 	Generate ();
 }
 
-int Blobs::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool Blobs::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float xmin = fParams[0];
 	float xmax = fParams[1];
@@ -1619,7 +1619,7 @@ int Blobs::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 //
@@ -1629,12 +1629,12 @@ Drop::Drop(unsigned int nu, unsigned int nv, float xmin, float xmax, float ymin,
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 0;
-	bCloseV = 0;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = false;
+	bCloseV = false;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	fParams[0] = xmin;
 	fParams[1] = xmax;
 	fParams[2] = ymin;
@@ -1642,12 +1642,12 @@ Drop::Drop(unsigned int nu, unsigned int nv, float xmin, float xmax, float ymin,
 	Generate ();
 }
 
-int Drop::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool Drop::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float xmin = fParams[0];
 	float xmax = fParams[1];
@@ -1682,7 +1682,7 @@ int Drop::EvaluatePosition (float fU, float fV, diff_s *diff)
 	
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 //
@@ -1692,12 +1692,12 @@ Wave1::Wave1(unsigned int nu, unsigned int nv, float xmin, float xmax, float ymi
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 0;
-	bCloseV = 0;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = false;
+	bCloseV = false;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	fParams[0] = xmin;
 	fParams[1] = xmax;
 	fParams[2] = ymin;
@@ -1705,12 +1705,12 @@ Wave1::Wave1(unsigned int nu, unsigned int nv, float xmin, float xmax, float ymi
 	Generate ();
 }
 
-int Wave1::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool Wave1::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float xmin = fParams[0];
 	float xmax = fParams[1];
@@ -1737,7 +1737,7 @@ int Wave1::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 //
@@ -1747,12 +1747,12 @@ Wave2::Wave2(unsigned int nu, unsigned int nv, float xmin, float xmax, float ymi
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 0;
-	bCloseV = 0;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = false;
+	bCloseV = false;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	fParams[0] = xmin;
 	fParams[1] = xmax;
 	fParams[2] = ymin;
@@ -1760,12 +1760,12 @@ Wave2::Wave2(unsigned int nu, unsigned int nv, float xmin, float xmax, float ymi
 	Generate ();
 }
 
-int Wave2::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool Wave2::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float xmin = fParams[0];
 	float xmax = fParams[1];
@@ -1792,7 +1792,7 @@ int Wave2::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 //
@@ -1802,12 +1802,12 @@ Weight::Weight(unsigned int nu, unsigned int nv, float xmin, float xmax, float y
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 0;
-	bCloseV = 0;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = false;
+	bCloseV = false;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	fParams[0] = xmin;
 	fParams[1] = xmax;
 	fParams[2] = ymin;
@@ -1815,12 +1815,12 @@ Weight::Weight(unsigned int nu, unsigned int nv, float xmin, float xmax, float y
 	Generate ();
 }
 
-int Weight::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool Weight::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float xmin = fParams[0];
 	float xmax = fParams[1];
@@ -1847,7 +1847,7 @@ int Weight::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }
 
 //
@@ -1857,24 +1857,24 @@ Guimard::Guimard(unsigned int nu, unsigned int nv, float a, float b, float c)
 {
 	iNU = nu;
 	iNV = nv;
-	bCloseU = 0;
-	bCloseV = 0;
-	bIndependentCloseU = 0;
-	bIndependentCloseV = 0;
-	bInverseCloseU = 0;
-	bInverseCloseV = 0;
+	bCloseU = false;
+	bCloseV = false;
+	bIndependentCloseU = false;
+	bIndependentCloseV = false;
+	bInverseCloseU = false;
+	bInverseCloseV = false;
 	fParams[0] = a;
 	fParams[1] = b;
 	fParams[2] = c;
 	Generate ();
 }
 
-int Guimard::EvaluatePosition (float fU, float fV, diff_s *diff)
+bool Guimard::EvaluatePosition (float fU, float fV, diff_s *diff)
 {
 	if (fU<0.0f || fU > 1.0f)
-		return 1;
+		return false;
 	if (fV<0.0f || fV > 1.0f)
-		return 1;
+		return false;
 
 	float a = fParams[0];
 	float b = fParams[1];
@@ -1901,5 +1901,5 @@ int Guimard::EvaluatePosition (float fU, float fV, diff_s *diff)
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
-	return 0;
+	return true;
 }

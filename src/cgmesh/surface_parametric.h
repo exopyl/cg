@@ -17,9 +17,9 @@ public:
 	virtual ~ParametricSurface () {};
 
 public:
-	virtual int EvaluatePosition (float u, float v, diff_s *diff) = 0;
-	int Generate (void);
-	int EvaluateFundamentalForms (diff_s *diff, vec3 dfdu, vec3 dfdv, vec3 dfdudu, vec3 dfdudv, vec3 dfdvdv);
+	virtual bool EvaluatePosition (float u, float v, diff_s *diff) = 0;
+	bool Generate (void);
+	bool EvaluateFundamentalForms (diff_s *diff, vec3 dfdu, vec3 dfdv, vec3 dfdudu, vec3 dfdudv, vec3 dfdvdv);
 	Tensor* EvaluateTensor (diff_s diff);
 	
 	unsigned int iNU;
@@ -44,7 +44,7 @@ class ParametricSphere : public ParametricSurface
 public:
 	ParametricSphere (unsigned int nu=20, unsigned int nv=20);
 	~ParametricSphere () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 // 
@@ -53,7 +53,7 @@ class EllipticHelicoid : public ParametricSurface
 public:
 	EllipticHelicoid (unsigned int nu=20, unsigned int nv=20, float a=1.0f, float b=1.0f, float c=0.2f);
 	~EllipticHelicoid () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 // 
@@ -62,7 +62,7 @@ class SeaShell : public ParametricSurface
 public:
 	SeaShell (unsigned int nu=20, unsigned int nv=20);
 	~SeaShell () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 // 
@@ -71,7 +71,7 @@ class SeaShellVonSeggern : public ParametricSurface
 public:
 	SeaShellVonSeggern (unsigned int nu=20, unsigned int nv=20, float a=0.2f, float b=1.0f, float c=0.1f, float n=2.0f);
 	~SeaShellVonSeggern () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 class CorkscrewSurface : public ParametricSurface
@@ -79,7 +79,7 @@ class CorkscrewSurface : public ParametricSurface
 public:
 	CorkscrewSurface (unsigned int nu=20, unsigned int nv=20, float a=1.0f, float b=0.5f);
 	~CorkscrewSurface () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 // 
@@ -88,7 +88,7 @@ class MobiusStrip : public ParametricSurface
 public:
 	MobiusStrip (unsigned int nu=20, unsigned int nv=20, float w=0.1f, float r=0.5f);
 	~MobiusStrip () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 // 
@@ -97,7 +97,7 @@ class RadialWave : public ParametricSurface
 public:
 	RadialWave (unsigned int nu=20, unsigned int nv=20, float radius=10.0f, float height=20.0f, float frequency=0.6f);
 	~RadialWave () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 //
@@ -106,7 +106,7 @@ class ParametricTorus : public ParametricSurface
 public:
 	ParametricTorus (unsigned int nu=20, unsigned int nv=20, float radius1=5.0f, float radius2=2.0f);
 	~ParametricTorus () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 
@@ -121,7 +121,7 @@ class Breather : public ParametricSurface
 public:
 	Breather (unsigned int nu=20, unsigned int nv=20);
 	~Breather () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 /*
@@ -136,7 +136,7 @@ class BorromeanRing : public ParametricSurface
 public:
 	BorromeanRing (unsigned int nu=20, unsigned int nv=20, float param1=2.0f, float param2=1.0f, float r=0.2f);
 	~BorromeanRing () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 class BorromeanRings : public Mesh
@@ -144,7 +144,7 @@ class BorromeanRings : public Mesh
 public:
 	BorromeanRings (unsigned int nu=20, unsigned int nv=20);
 	~BorromeanRings () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 /*
 Mesh* mesh_generate_parametric_surface_borromean_elliptical_rings (unsigned int nu, unsigned int nv);
@@ -155,7 +155,7 @@ class TorusKnot : public ParametricSurface
 public:
 	TorusKnot (unsigned int nu=20, unsigned int nv=20, unsigned int a=3, unsigned int b=4);
 	~TorusKnot () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 class CinquefoilKnot : public ParametricSurface
@@ -163,7 +163,7 @@ class CinquefoilKnot : public ParametricSurface
 public:
 	CinquefoilKnot (unsigned int nu=20, unsigned int nv=20, unsigned int a=3);
 	~CinquefoilKnot () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 //
@@ -172,7 +172,7 @@ class TrefoilKnot1 : public ParametricSurface
 public:
 	TrefoilKnot1 (unsigned int nu=20, unsigned int nv=20);
 	~TrefoilKnot1 () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 //
@@ -181,7 +181,7 @@ class TrefoilKnot2 : public ParametricSurface
 public:
 	TrefoilKnot2 (unsigned int nu=20, unsigned int nv=20);
 	~TrefoilKnot2 () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 
@@ -192,7 +192,7 @@ class HyperbolicParaboloid : public ParametricSurface
 public:
 	HyperbolicParaboloid (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
 	~HyperbolicParaboloid () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 class MonkeySaddle : public ParametricSurface
@@ -200,7 +200,7 @@ class MonkeySaddle : public ParametricSurface
 public:
 	MonkeySaddle (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
 	~MonkeySaddle () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 class Blobs : public ParametricSurface
@@ -208,7 +208,7 @@ class Blobs : public ParametricSurface
 public:
 	Blobs (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
 	~Blobs () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 class Drop : public ParametricSurface
@@ -216,7 +216,7 @@ class Drop : public ParametricSurface
 public:
 	Drop (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
 	~Drop () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 class Wave1 : public ParametricSurface
@@ -224,7 +224,7 @@ class Wave1 : public ParametricSurface
 public:
 	Wave1 (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
 	~Wave1 () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 class Wave2 : public ParametricSurface
@@ -232,7 +232,7 @@ class Wave2 : public ParametricSurface
 public:
 	Wave2 (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
 	~Wave2 () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 class Weight : public ParametricSurface
@@ -240,7 +240,7 @@ class Weight : public ParametricSurface
 public:
 	Weight (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
 	~Weight () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
 class Guimard : public ParametricSurface
@@ -248,6 +248,6 @@ class Guimard : public ParametricSurface
 public:
 	Guimard (unsigned int nu=20, unsigned int nv=20, float a=2.0f, float b=3.0f, float c=1.0f);
 	~Guimard () {};
-	int EvaluatePosition (float u, float v, diff_s *diff);
+	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 
