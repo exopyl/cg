@@ -236,7 +236,8 @@ void MyGLCanvas::DrawGL()
 		glShadeModel (GL_FLAT);
 	prop.smooth = m_bSmooth;
 
-	repere_draw ();
+	if (prop.display_repere)
+		repere_draw ();
 	for (const auto& mesh : m_pVMeshes->GetMeshes())
 	{
 		// Use the centralized renderer
@@ -637,6 +638,17 @@ void MyGLCanvas::ChangeWarning(void)
 bool MyGLCanvas::GetPoint(void)
 {
 	return prop.display_points;
+}
+
+void MyGLCanvas::ChangeRepere(void)
+{
+	prop.display_repere = !prop.display_repere;
+	Refresh(false);
+}
+
+bool MyGLCanvas::GetRepere(void)
+{
+	return prop.display_repere;
 }
 
 void MyGLCanvas::ChangeBoundingBox (void)

@@ -107,6 +107,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE, MyFrame::OnNewParameterizedGeometry)
     EVT_MENU(wxID_EXIT, MyFrame::OnExit)
     EVT_MENU(wxID_ABOUT, MyFrame::OnAbout)
+    EVT_MENU(ID_3D_FRAME, MyFrame::On3DFrame)
     EVT_MENU(ID_3D_FILL, MyFrame::On3DFill)
     EVT_MENU(ID_3D_WIREFRAME, MyFrame::On3DWireframe)
     EVT_MENU(ID_3D_SMOOTH, MyFrame::On3DSmooth)
@@ -403,6 +404,7 @@ MyFrame::MyFrame(wxWindow* parent,
     m_pToolBar2->AddTool(wxID_OPEN, wxT("Test"), tb2_open);
     //m_pToolBar2->AddTool(wxID_SAVE, wxT("Test"), tb2_save);
     m_pToolBar2->AddTool(wxID_SAVEAS, wxT("Test"), tb2_saveas);
+    m_pToolBar2->AddTool(ID_3D_FRAME, wxT("Repere"), wxBitmap(repere_xpm));
     m_pToolBar2->AddTool(ID_3D_FILL, wxT("Test"), wxBitmap (fill_xpm));
     m_pToolBar2->AddTool(ID_3D_WIREFRAME, wxT("Test"), wxBitmap (wireframe_xpm));
     m_pToolBar2->AddTool(ID_3D_POINT, wxT("Test"), wxBitmap (cloud_xpm));
@@ -1026,6 +1028,9 @@ void MyFrame::OnNotebookPageChanged(wxAuiNotebookEvent& event)
         // Synchronize toolbar button states
         wxAuiToolBarItem* p;
 
+        p = m_pToolBar2->FindTool(ID_3D_FRAME);
+        if (p) p->SetSticky(pGLCanvas->GetRepere());
+
         p = m_pToolBar2->FindTool(ID_3D_FILL);
         if (p) p->SetSticky(pGLCanvas->GetFill());
 
@@ -1116,6 +1121,10 @@ void MyFrame::OpenDocument(const wxString& strFilename)
 
     wxAuiToolBarItem* p;
     bool b;
+
+    p = m_pToolBar2->FindTool(ID_3D_FRAME);
+    b = pGLCanvas->GetRepere();
+    p->SetSticky(b);
 
     p = m_pToolBar2->FindTool(ID_3D_FILL);
     b = pGLCanvas->GetFill();
@@ -1413,6 +1422,24 @@ void MyFrame::OnParameterChanged()
 	auto *pNewVMeshes = new VMeshes();
 	pNewVMeshes->AddMesh(pNewMesh);
 	pCanvas->SetVMeshes(pNewVMeshes);  // deletes old VMeshes, normalizes, refreshes
+}
+
+//
+//
+//
+void MyFrame::On3DFrame(wxCommandEvent& WXUNUSED(event))
+{
+	*m_pWndLogging << _T("Frame\n");
+	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection ());
+	if (pGLCanvas)
+	{
+		pGLCanvas->ChangeRepere ();
+		pGLCanvas->Refresh ();
+
+		wxAuiToolBarItem *p = m_pToolBar2->FindTool(ID_3D_FRAME);
+		bool b = pGLCanvas->GetRepere ();
+		p->SetSticky (b);
+	}
 }
 
 //

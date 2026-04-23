@@ -49,6 +49,9 @@ public:
 	void ChangePoint(void);
 	bool GetPoint(void);
 
+	void ChangeRepere(void);
+	bool GetRepere(void);
+
 	void SetClippingPlane(bool bActive) { prop.clipping_plane_active = bActive; Refresh(false); };
 	bool GetClippingPlane (void) { return prop.clipping_plane_active; };
 	void SetClippingPlaneZ(float z) { prop.clipping_plane_z = z; Refresh(false); };

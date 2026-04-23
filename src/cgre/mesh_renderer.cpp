@@ -16,6 +16,7 @@ void rendering_properties_init (rendering_properties_s &prop)
 	prop.display_face_normals = 0;
 	prop.display_wireframe = 0;
 	prop.display_fill = 1;
+	prop.display_repere = 1;
 	prop.normalized = 0;
 	prop.pointsize = 1.;
 	prop.linesize = 1.;

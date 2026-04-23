@@ -70,9 +70,9 @@ class MyFrame : public wxFrame
         
         ID_SampleItem,
 
-		ID_3D_FILL,
-		ID_3D_WIREFRAME,
-		ID_3D_POINT,
+        ID_3D_FRAME,
+        ID_3D_FILL,
+        ID_3D_WIREFRAME,		ID_3D_POINT,
 		ID_3D_SMOOTH,
 		ID_3D_FLAT,
 		ID_3D_LIGHTING,
@@ -203,8 +203,8 @@ private:
 
     void OnNotebookPageChanged(wxAuiNotebookEvent& event);
 
-	void On3DFill(wxCommandEvent& evt);
-	void On3DWireframe(wxCommandEvent& evt);
+    void On3DFrame(wxCommandEvent& evt);
+    void On3DFill(wxCommandEvent& evt);	void On3DWireframe(wxCommandEvent& evt);
 	void On3DPoint(wxCommandEvent& evt);
 	void On3DSmooth(wxCommandEvent& evt);
 	void On3DFlat(wxCommandEvent& evt);
