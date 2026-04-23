@@ -86,6 +86,8 @@ class MyFrame : public wxFrame
     ID_DIRCTRL,
 	ID_FILESCTRL,
 
+    ID_FILE_EXPORT_IMAGE,
+
 	ID_GEOMETRY_NEW_CUBE,
 	ID_GEOMETRY_NEW_SPHERE,
 	ID_GEOMETRY_NEW_CYLINDER,
@@ -191,6 +193,7 @@ private:
     void OnOpen(wxCommandEvent& evt);
     void OnSave(wxCommandEvent& evt);
     void OnSaveAs(wxCommandEvent& evt);
+    void OnExportImage(wxCommandEvent& evt);
     void OnNewGeometry(wxCommandEvent& evt);
     void OnNewParameterizedGeometry(wxCommandEvent& evt);
     void OnParameterChanged();

@@ -7,6 +7,7 @@
 #include "wx/mimetype.h"
 #include <wx/propgrid/propgrid.h>
 #include <wx/busyinfo.h>
+#include <vector>
 
 #include "sample.xpm"
 
@@ -76,6 +77,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(wxID_OPEN, MyFrame::OnOpen)
     EVT_MENU(wxID_SAVE, MyFrame::OnSave)
     EVT_MENU(wxID_SAVEAS, MyFrame::OnSaveAs)
+    EVT_MENU(ID_FILE_EXPORT_IMAGE, MyFrame::OnExportImage)
     EVT_MENU(ID_GEOMETRY_NEW_CUBE, MyFrame::OnNewGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_SPHERE, MyFrame::OnNewGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_CYLINDER, MyFrame::OnNewGeometry)
@@ -253,6 +255,8 @@ MyFrame::MyFrame(wxWindow* parent,
     file_menu->Append(wxID_OPEN, _T("&Open\tCtrl+O"), _T("Open a file"));
     file_menu->Append(wxID_SAVE, _T("&Save\tCtrl+S"), _T("Save a file"));
     file_menu->Append(wxID_SAVEAS, _T("&Save As...\tF12"), _T("Save to a new file"));
+    file_menu->AppendSeparator();
+    file_menu->Append(ID_FILE_EXPORT_IMAGE, _T("&Export image as..."), _T("Export current view to a BMP image"));
     file_menu->AppendSeparator();
     file_menu->Append(wxID_EXIT, _("Exit"));
 
@@ -1266,6 +1270,66 @@ void MyFrame::OnSaveAs(wxCommandEvent& WXUNUSED(event))
 	    *m_pWndLogging << _T("Saving as ") << strFilename << _T("\n");
 	    
 	    pGLCanvas->SaveModel(strFilename);
+    }
+}
+
+void MyFrame::OnExportImage(wxCommandEvent& WXUNUSED(event))
+{
+    int sel = m_pCtrl->GetSelection();
+    if (sel < 0)
+        return;
+
+    MyGLCanvas* pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(sel);
+    if (!pGLCanvas)
+        return;
+
+    wxFileDialog fd(this, _("Export image as..."), wxEmptyString, wxEmptyString,
+        _("PNG files (*.png)|*.png|BMP files (*.bmp)|*.bmp"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+
+    if (fd.ShowModal() == wxID_OK)
+    {
+        wxString strFilename = fd.GetPath();
+        *m_pWndLogging << _T("Exporting image as ") << strFilename << _T("\n");
+
+        // Capture OpenGL buffer
+        int w, h;
+        pGLCanvas->GetClientSize(&w, &h);
+
+        if (w <= 0 || h <= 0)
+            return;
+
+        pGLCanvas->SetCurrent(*pGLCanvas->m_context);
+        pGLCanvas->Refresh();
+        pGLCanvas->Update();
+
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
+        std::vector<unsigned char> pixels(3 * w * h);
+        glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+
+        // Flip image vertically (OpenGL starts at bottom-left)
+        // wxImage(int, int, unsigned char*, bool) takes ownership of the pointer 
+        // and will call free() on it, so we must use malloc.
+        unsigned char* flipped_pixels = (unsigned char*)malloc(3 * w * h);
+        if (!flipped_pixels) {
+            return;
+        }
+
+        for (int y = 0; y < h; y++)
+        {
+            memcpy(flipped_pixels + 3 * w * y, pixels.data() + 3 * w * (h - 1 - y), 3 * w);
+        }
+
+        wxImage img(w, h, flipped_pixels, false); 
+        if (img.SaveFile(strFilename))
+        {
+            *m_pWndLogging << _T("Successfully exported image to ") << strFilename << _T("\n");
+        }
+        else
+        {
+            wxMessageBox(_("Failed to save the image."), _("Error"), wxOK | wxICON_ERROR, this);
+            *m_pWndLogging << _T("Error: Failed to export image to ") << strFilename << _T("\n");
+        }
     }
 }
 

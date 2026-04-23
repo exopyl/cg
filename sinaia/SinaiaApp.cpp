@@ -7,6 +7,7 @@
 
 bool MyApp::OnInit()
 {
+    wxInitAllImageHandlers();
     wxFrame* frame = new MyFrame(nullptr,
                                  wxID_ANY,
                                  wxT("Sinaia"),
