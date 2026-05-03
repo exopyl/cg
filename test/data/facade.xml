@@ -1,0 +1,39 @@
+<?xml version="1.0" standalone="no">
+
+<library>
+<window id="window0" width="1." height="1.5" />
+<floor id="floor0" height="3.">
+  <space width="2." />
+  <window width="1." subheight="1." height="1.5" />
+  <space width="2." />
+  <window width="1.5" subheight="1." height="1.5" />
+  <space width="2." />
+  <window width="1." subheight="1." height="1.5" />
+  <space width="2." />
+</floor>
+</library>
+
+<facade floors="3" width="11.5" height="12.">
+  
+    <floor height="3.">
+      <space width="2." />
+      <window width="1." subheight="1." height="1.5" />
+      <space width="2." />
+      <door width="1.5" subheight="1." height="2."/>
+      <space width="2." />
+      <window width="1." subheight="1." height="1.5" />
+      <space width="2." />
+    </floor>
+    <floor height="3.">
+      <space width="2." />
+      <window width="1." subheight="1." height="1.5" />
+      <space width="2." />
+      <window width="1.5" subheight="1." height="1.5" />
+      <space width="2." />
+      <window width="1." subheight="1." height="1.5" />
+      <space width="2." />
+    </floor>
+    <floor id="floor0" />
+    <floor id="floor0" />
+
+</facade>
