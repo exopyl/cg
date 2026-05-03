@@ -51,6 +51,31 @@ void BoundingBox::AddBoundingBox(const BoundingBox& bbox)
 	}
 }
 
+float BoundingBox::GetMinX() const
+{
+	return m_min[0];
+}
+float BoundingBox::GetMinY() const
+{
+	return m_min[1];
+}
+float BoundingBox::GetMinZ() const
+{
+	return m_min[2];
+}
+float BoundingBox::GetMaxX() const
+{
+	return m_max[0];
+}
+float BoundingBox::GetMaxY() const
+{
+	return m_max[1];
+}
+float BoundingBox::GetMaxZ() const
+{
+	return m_max[2];
+}
+
 bool BoundingBox::GetMinMax(float min[3], float max[3]) const
 {
 	if (m_bEmpty)
