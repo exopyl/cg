@@ -1,0 +1,561 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gothic-tracery/schema/v1/window.schema.json",
+  "title": "Gothic Window Tracery",
+  "description": "Schéma JSON pour la description paramétrique d'un remplage gothique. Basé sur Havemann & Fellner, VAST 2004, et la thèse Generative Mesh Modeling, TU Braunschweig, 2005.",
+  "type": "object",
+  "required": ["window"],
+  "additionalProperties": false,
+
+  "$defs": {
+
+    "point2d": {
+      "title": "Point 2D",
+      "description": "Coordonnées en espace local fenêtre (origine = milieu du seuil).",
+      "type": "object",
+      "required": ["x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+
+    "foilType": {
+      "title": "Type de foil",
+      "description": "round = foils circulaires (Fig.9). pointed = foils en arc brisé par déplacement des centres m' m'' (Fig.10).",
+      "type": "string",
+      "enum": ["round", "pointed"]
+    },
+
+    "foilOrientation": {
+      "title": "Orientation de la rosette",
+      "description": "standing = un foil pointe vers le haut (phi0=0). lying = rosette tournée de π/n (Fig.8).",
+      "type": "string",
+      "enum": ["standing", "lying"]
+    },
+
+    "trefoilParams": {
+      "title": "Paramètres d'arc trèfle",
+      "description": "Section 2.6 thèse, Fig.12. L'arc est coupé à splitParameter ; la partie basse est remplacée par deux petits arcs tangents de rayon foilRadiusFactor × r.",
+      "type": "object",
+      "required": ["enabled"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "splitParameter": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1,
+          "default": 0.45,
+          "description": "Position angulaire normalisée de la coupure sur chaque arc. 0 = pied, 1 = apex. Valeur typique : 0.40–0.50."
+        },
+        "foilRadiusFactor": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.5,
+          "default": 0.30,
+          "description": "Rayon des petits arcs = foilRadiusFactor × r_principal. Valeur typique : 0.28–0.35."
+        },
+        "continuity": {
+          "type": "string",
+          "enum": ["tangent"],
+          "default": "tangent",
+          "description": "Les petits arcs sont C1-continus avec le grand arc au point de coupure."
+        }
+      }
+    },
+
+    "foilsParams": {
+      "title": "Paramètres de foils (rosette ou lancette)",
+      "description": "Décrit un anneau de n foils inscrits dans un cercle de rayon R. Formule rayon (Fig.9) : fr = sin(π/n)/(1+sin(π/n)) × R.",
+      "type": "object",
+      "required": ["count", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 24,
+          "description": "Nombre de foils. Minimum 3 (trèfle), maximum pratique 24."
+        },
+        "type": { "$ref": "#/$defs/foilType" },
+        "pointedness": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "default": 0,
+          "description": "Degré de pointure des foils (Fig.10). 0 = rond. >0 = déplacement de m' et m'' de pointedness × fr depuis m. Actif uniquement si type=pointed."
+        },
+        "phi0": {
+          "type": "number",
+          "default": 0,
+          "description": "Angle de rotation initiale de la rosette en radians. 0 = premier foil à 12h (−π/2 en coords canvas)."
+        },
+        "orientation": {
+          "$ref": "#/$defs/foilOrientation",
+          "default": "standing"
+        }
+      },
+      "if": { "properties": { "type": { "const": "round" } } },
+      "then": {
+        "properties": {
+          "pointedness": { "const": 0 }
+        }
+      }
+    },
+
+    "offsetParams": {
+      "title": "Paramètres d'offset",
+      "description": "Section 2.4 thèse. L'offset d'un arc pointé garde mL et mR fixes et modifie r de ±δ, préservant la continuité tangentielle.",
+      "type": "object",
+      "required": ["outer", "inner"],
+      "additionalProperties": false,
+      "properties": {
+        "outer": {
+          "type": "number",
+          "minimum": 0,
+          "description": "δ_out : épaisseur de pierre extérieure. r_out = r + outer."
+        },
+        "inner": {
+          "type": "number",
+          "minimum": 0,
+          "description": "δ_in : épaisseur de pierre intérieure. r_in = r − inner. Doit être < r pour rester valide."
+        },
+        "method": {
+          "type": "string",
+          "enum": ["fixed-centers"],
+          "default": "fixed-centers",
+          "description": "Méthode exacte de la thèse : centres mL, mR fixes, seul r varie."
+        }
+      }
+    },
+
+    "profileSegment": {
+      "title": "Segment de profil de moulure",
+      "description": "Un point du profil 2D balayé le long des courbes d'offset (section 2.7). Coordonnées normalisées : u ∈ [0,1] = profondeur dans le mur, v ∈ [0,1] = distance à l'arc (0=pierre, 1=vide).",
+      "type": "object",
+      "required": ["type", "u", "v"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["line", "arc"],
+          "description": "line = segment droit. arc = arc de cercle (nécessite un champ radius)."
+        },
+        "u": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "v": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "radius": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Rayon de courbure normalisé, requis si type=arc."
+        }
+      },
+      "if": { "properties": { "type": { "const": "arc" } } },
+      "then": { "required": ["radius"] }
+    },
+
+    "profileParams": {
+      "title": "Profil de moulure",
+      "description": "Section 2.7 thèse. Profil 2D balayé (swept) le long des courbes d'offset pour produire les moulures 3D (Fig.13, 18).",
+      "type": "object",
+      "required": ["type", "depth", "segments"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["chamfer", "ogee", "cavetto", "bolection", "bead", "custom"],
+          "description": "Type nommé de moulure gothique. custom = segments définis manuellement."
+        },
+        "depth": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Profondeur totale de la moulure dans l'épaisseur du mur. Contrainte : depth ≤ wall.thickness / 2."
+        },
+        "segments": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/profileSegment" },
+          "description": "Points du profil, du bord extérieur (u=0) vers le bord intérieur (u=1)."
+        }
+      }
+    },
+
+    "subdivisionSurfaceParams": {
+      "title": "Paramètres de surface de subdivision",
+      "description": "Section 2.7 thèse. Les régions planes peuvent être remplacées par des surfaces de subdivision pour obtenir des bords arrondis et un maillage plus réaliste.",
+      "type": "object",
+      "required": ["enabled"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "scheme": {
+          "type": "string",
+          "enum": ["catmull-clark", "loop", "sqrt3"],
+          "default": "catmull-clark"
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 2,
+          "description": "Nombre de niveaux de subdivision. depth=2 est typique."
+        },
+        "sharpEdges": {
+          "type": "boolean",
+          "default": true,
+          "description": "Si true, les arêtes de frontière sont marquées sharp et ne sont pas arrondies."
+        }
+      }
+    },
+
+    "recursiveStyleParams": {
+      "title": "Style récursif",
+      "description": "Section 3.6 thèse, Fig.20 g-h. Le style est appliqué récursivement aux sous-fenêtres avec un facteur d'échelle.",
+      "type": "object",
+      "required": ["enabled"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "scaleFactor": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1,
+          "default": 0.55,
+          "description": "Facteur d'échelle appliqué à chaque niveau de récursion."
+        },
+        "maxDepth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4,
+          "default": 2
+        }
+      }
+    }
+
+  },
+
+  "properties": {
+
+    "wall": {
+      "title": "Pan de mur",
+      "description": "Contexte global. La fenêtre s'inscrit dans un pan de mur (section 3.5 thèse, Fig.16).",
+      "type": "object",
+      "required": ["width", "height", "thickness"],
+      "additionalProperties": false,
+      "properties": {
+        "width":     { "type": "number", "exclusiveMinimum": 0 },
+        "height":    { "type": "number", "exclusiveMinimum": 0 },
+        "thickness": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Épaisseur du mur. Contrainte : arch.profile.depth ≤ thickness / 2."
+        },
+        "tessellation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "respectsOpenings": { "type": "boolean", "default": true },
+            "subdivisionDepth": { "type": "integer", "minimum": 0, "maximum": 4, "default": 2 }
+          }
+        }
+      }
+    },
+
+    "window": {
+      "title": "Fenêtre gothique",
+      "type": "object",
+      "required": ["basis", "arch", "subwindows", "rosette", "style"],
+      "additionalProperties": false,
+      "properties": {
+
+        "id":            { "type": "string" },
+        "label":         { "type": "string" },
+        "period":        { "type": "string" },
+        "cathedral_ref": { "type": "string" },
+
+        "basis": {
+          "title": "Base géométrique",
+          "description": "Section 2.1 thèse. Définit pL et pR — les centres des deux cercles de l'arc — en coordonnées locales (origine = milieu du seuil).",
+          "type": "object",
+          "required": ["archRise", "pL", "pR"],
+          "additionalProperties": false,
+          "properties": {
+            "origin":   { "$ref": "#/$defs/point2d", "default": { "x": 0, "y": 0 } },
+            "archRise": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Hauteur des jambages droits avant le départ de l'arc. pL.y = pR.y = archRise."
+            },
+            "pL": { "$ref": "#/$defs/point2d", "description": "Point de base gauche. mL = pL." },
+            "pR": { "$ref": "#/$defs/point2d", "description": "Point de base droit. mR = pR." }
+          }
+        },
+
+        "arch": {
+          "title": "Arc principal",
+          "description": "Section 2 thèse. Arc brisé paramétrique : deux cercles de centres mL=pL, mR=pR, rayon r = excess × dist(pL,pR). Apex = intersection supérieure.",
+          "type": "object",
+          "required": ["width", "excess", "offset", "profile"],
+          "additionalProperties": false,
+          "properties": {
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Largeur intérieure de la baie = dist(pL, pR)."
+            },
+            "excess": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 2.0,
+              "description": "Paramètre central (section 2, Fig.2). excess = r/dist(pL,pR). 0.5 = plein cintre, 1.0 = équilatéral, >1 = lancéolé. Minimum strict : 0.5 (les cercles se touchent)."
+            },
+            "offset":  { "$ref": "#/$defs/offsetParams" },
+            "profile": { "$ref": "#/$defs/profileParams" },
+            "trefoil": { "$ref": "#/$defs/trefoilParams" }
+          }
+        },
+
+        "subwindows": {
+          "title": "Sous-fenêtres (lancettes)",
+          "description": "Section 2.2 thèse. La baie est subdivisée en count lancettes séparées par des menaux.",
+          "type": "object",
+          "required": ["count", "excess", "gap", "foils"],
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 6,
+              "description": "Nombre de lancettes."
+            },
+            "drop": {
+              "type": "number",
+              "minimum": 0,
+              "default": 0,
+              "description": "Section 2.2, Fig.5b. Descente verticale des bases des sous-arcs par rapport à pL/pR. Crée la zone de remplage supérieure."
+            },
+            "excess": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 2.0,
+              "description": "Excess des sous-arcs. Indépendant de arch.excess."
+            },
+            "gap": {
+              "title": "Menaux",
+              "type": "object",
+              "required": ["mode"],
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": ["fraction", "absolute"],
+                  "description": "fraction : gap = gapFraction × arch.width. absolute : largeur fixe en unités."
+                },
+                "gapFraction": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 0.3,
+                  "description": "Actif si mode=fraction."
+                },
+                "absoluteWidth": {
+                  "type": ["number", "null"],
+                  "exclusiveMinimum": 0,
+                  "description": "Actif si mode=absolute."
+                }
+              },
+              "if":   { "properties": { "mode": { "const": "fraction" } } },
+              "then": { "required": ["gapFraction"] },
+              "else": { "required": ["absoluteWidth"] }
+            },
+            "trefoil": { "$ref": "#/$defs/trefoilParams" },
+            "foils":   { "$ref": "#/$defs/foilsParams" }
+          }
+        },
+
+        "rosette": {
+          "title": "Rosette de couronnement",
+          "description": "Section 2.3 thèse. Centre mC contraint par l'intersection d'une ellipse (foci=mR, mLR; somme=r_big+r_sub) avec l'axe de symétrie. Garantit la tangence avec l'arc extérieur et les sous-arcs.",
+          "type": "object",
+          "required": ["construction", "foils"],
+          "additionalProperties": false,
+          "properties": {
+            "construction": {
+              "type": "string",
+              "enum": ["ellipse-intersection"],
+              "description": "Méthode de construction du centre. Seule 'ellipse-intersection' est conforme à la thèse."
+            },
+            "foils": { "$ref": "#/$defs/foilsParams" },
+            "hub": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "radiusFactor": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 0.3,
+                  "default": 0.12,
+                  "description": "Rayon du moyeu central = radiusFactor × R_rosette."
+                }
+              }
+            }
+          }
+        },
+
+        "fillets": {
+          "title": "Régions de remplage (fillets)",
+          "description": "Section 3.1 thèse. Les 4 régions triangulaires courbes entre arc extérieur, sous-arcs et rosette.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled":          { "type": "boolean", "default": true },
+            "subdivide":        { "type": "boolean", "default": false,
+              "description": "Si true : chaque fillet est subdivisé récursivement (style récursif, Fig.20 g-h)." },
+            "subdivisionDepth": { "type": "integer", "minimum": 1, "maximum": 3, "default": 1 },
+            "stoneBandWidth":   { "type": "number", "exclusiveMinimum": 0,
+              "description": "Largeur de la bande de pierre bordant chaque arc du fillet." }
+          }
+        },
+
+        "mouchettes": {
+          "title": "Mouchettes",
+          "description": "Section 3.6 thèse, Fig.20 e-f. Formes en amande ou en soufflet caractéristiques du style flamboyant.",
+          "type": "object",
+          "required": ["enabled"],
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "type": {
+              "type": "string",
+              "enum": ["vesica", "teardrop", "soufflet"],
+              "description": "Forme de la mouchette."
+            },
+            "radiusFactor": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 0.5,
+              "default": 0.18,
+              "description": "Rayon principal = radiusFactor × largeur de sous-fenêtre."
+            },
+            "rotation": {
+              "type": "number",
+              "default": 0,
+              "description": "Rotation en radians."
+            }
+          }
+        },
+
+        "style": {
+          "title": "Style",
+          "description": "Section 3.6 thèse. Séparation stricte forme / apparence.",
+          "type": "object",
+          "required": ["glass", "stone"],
+          "additionalProperties": false,
+          "properties": {
+            "windowStyle": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name":               { "type": "string" },
+                "heightToWidthRatio": { "type": "number", "exclusiveMinimum": 0 }
+              }
+            },
+            "archStyle": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name":    { "type": "string" },
+                "molding": { "type": "string", "enum": ["chamfer", "ogee", "cavetto", "bolection", "bead"] }
+              }
+            },
+            "glass": {
+              "type": "object",
+              "required": ["color"],
+              "additionalProperties": false,
+              "properties": {
+                "color":        { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+                "opacity":      { "type": "number", "minimum": 0, "maximum": 1, "default": 0.6 },
+                "leadlineWidth":{ "type": "number", "minimum": 0, "default": 1.5 }
+              }
+            },
+            "stone": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "color":          { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+                "highlightColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+                "shadowColor":    { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+                "textureType":    { "type": "string", "enum": ["limestone", "sandstone", "granite"] }
+              }
+            },
+            "subdivisionSurface": { "$ref": "#/$defs/subdivisionSurfaceParams" },
+            "recursive":          { "$ref": "#/$defs/recursiveStyleParams" }
+          }
+        },
+
+        "tessellation": {
+          "title": "Tessellation",
+          "description": "Section 3.5 thèse. Paramètres de discrétisation du maillage final.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "targetEdgeLength": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Longueur cible des arêtes en unités locales."
+            },
+            "angularResolution": {
+              "type": "integer",
+              "minimum": 12,
+              "maximum": 360,
+              "default": 72,
+              "description": "Segments pour un arc complet (360°). Un arc de θ rad → round(angularResolution × θ/2π) segments."
+            },
+            "adaptiveSubdivision": {
+              "type": "boolean",
+              "default": true,
+              "description": "Si true : arcs de grand rayon = moins de segments (préserve la qualité)."
+            },
+            "manifold": {
+              "type": "boolean",
+              "default": true,
+              "description": "Garantie thèse : le maillage produit est un 2-manifold connexe."
+            }
+          }
+        }
+      }
+    },
+
+    "variants": {
+      "title": "Variantes",
+      "description": "Liste de variantes paramétriques. Chaque variante surcharge des champs de window via un patch dot-notation.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "patch"],
+        "additionalProperties": false,
+        "properties": {
+          "id":     { "type": "string" },
+          "label":  { "type": "string" },
+          "period": { "type": "string" },
+          "patch": {
+            "type": "object",
+            "description": "Clés en dot-notation (ex: window.arch.excess) → valeurs de remplacement.",
+            "additionalProperties": true
+          }
+        }
+      }
+    }
+  }
+}
