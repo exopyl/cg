@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18.4)
 include(GoogleTest)
 
-project(tu_cgmath)
+project(TU)
 
 # Options
 if ( ENABLE_COVERAGE )

@@ -17,7 +17,7 @@ echo "Cleaning old possible data ... "
 rm -f *profraw *gcov *profdata
 echo "=> DONE"
 
-CXX_EXECUTABLE=$PWD/${BUILD_DIR}/test/tu_cgmath
+CXX_EXECUTABLE=$PWD/${BUILD_DIR}/test/TU
 echo ${CXX_EXECUTABLE}
 ls -l $PWD/${BUILD_DIR}
 ls -l $PWD/${BUILD_DIR}/test
