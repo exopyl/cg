@@ -13,6 +13,11 @@ file(GLOB HEADER_FILES ${PROJECT_SOURCE_DIR}/*.h)
 
 add_executable(${PROJECT_NAME} ${HEADER_FILES} ${SRC_FILES})
 
+# Pour Visual Studio : generer les fichiers de sortie dans le repertoire de build avec suffixe de config
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+)
+
 # Copier test/data dans le repertoire de l'executable de test apres build
 if(EXISTS "${CMAKE_SOURCE_DIR}/test/data")
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

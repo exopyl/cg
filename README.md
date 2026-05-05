@@ -59,3 +59,16 @@ Note : `vecna` requiert un compilateur compatible C++20.
 | `ENABLE_COVERAGE` | Active l'instrumentation pour la couverture de code | `OFF` |
 | `EXTERN_GOOGLETEST` | Chemin vers GoogleTest | (Variable d'environnement ou cache) |
 | `EXTERN_WXWIDGETS` | Chemin vers wxWidgets (pour Sinaia) | (Variable d'environnement ou cache) |
+
+## Génération de la solution Visual Studio (.sln)
+
+Pour obtenir une solution `.sln` classique permettant de basculer entre **Debug** et **Release** directement dans l'IDE Visual Studio :
+
+1.  **Générer la solution** (dans le répertoire `build_msvc`) :
+    ```bash
+    cmake -B build_msvc -S . -G "Visual Studio 17 2022" -A x64 -DEXTERN_GOOGLETEST="C:/home/dev/extern/googletest-1.15.2"
+    ```
+2.  **Ouvrir la solution** :
+    Ouvrez le fichier `build_msvc/cg.sln` avec Visual Studio.
+3.  **Utilisation** :
+    Utilisez la liste déroulante des configurations dans la barre d'outils de Visual Studio pour choisir entre `Debug` et `Release`.
