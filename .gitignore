@@ -37,7 +37,7 @@
 *.user
 *.sln.docstates
 
-build_vs/
+build*/
 
 # Visual Studio Code
 .vscode/
