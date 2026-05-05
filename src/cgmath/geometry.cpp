@@ -2,6 +2,7 @@
 
 #include "geometry.h"
 #include "algebra_vector3.h"
+#include "common.h"
 #include "polynomial.h"
 
 Geometry::Geometry()
@@ -21,6 +22,392 @@ bool Geometry::GetIntersectionBboxWithRay (vec3 o, vec3 d)
 	else
 		return true;
 };
+
+
+//
+// Circle (2D)
+//
+
+Circle::Circle ()
+	: center(0.0, 0.0), radius(0.0)
+{
+}
+
+Circle::Circle (Vector2d _center, double _radius)
+	: center(_center), radius(_radius)
+{
+}
+
+Vector2d Circle::pointAt (double theta) const
+{
+	return Vector2d (center.x + radius * cos(theta),
+	                 center.y + radius * sin(theta));
+}
+
+double Circle::angleAt (Vector2d p) const
+{
+	return atan2(p.y - center.y, p.x - center.x);
+}
+
+bool Circle::contains (Vector2d p, double eps) const
+{
+	double dx = p.x - center.x;
+	double dy = p.y - center.y;
+	double d  = sqrt(dx * dx + dy * dy);
+	return fabs(d - radius) < eps;
+}
+
+Circle::IntersectionResult Circle::intersection (const Circle &other) const
+{
+	IntersectionResult res;
+	res.count = 0;
+
+	Vector2d delta = other.center - center;
+	double d2 = delta.x * delta.x + delta.y * delta.y;
+	double d  = sqrt(d2);
+
+	// Concentric (or coincident) : no well-defined intersection.
+	if (d < 1e-12)
+		return res;
+
+	double rsum = radius + other.radius;
+	double rdif = radius - other.radius;
+
+	// Disjoint or one strictly inside the other.
+	if (d > rsum || d < fabs(rdif))
+		return res;
+
+	double a  = (radius * radius - other.radius * other.radius + d2) / (2.0 * d);
+	double h2 = radius * radius - a * a;
+
+	// Tangent case : a single intersection point.
+	if (h2 <= 0.0)
+	{
+		res.count = 1;
+		res.pts[0] = Vector2d (center.x + a * delta.x / d,
+		                       center.y + a * delta.y / d);
+		return res;
+	}
+
+	double h = sqrt(h2);
+
+	double px = center.x + a * delta.x / d;
+	double py = center.y + a * delta.y / d;
+
+	// perp(delta / d) = (-delta.y / d, delta.x / d)
+	double nx = -delta.y / d;
+	double ny =  delta.x / d;
+
+	Vector2d p1 (px + h * nx, py + h * ny);
+	Vector2d p2 (px - h * nx, py - h * ny);
+
+	// pts[0] = upper (max y), pts[1] = lower.
+	if (p1.y >= p2.y)
+	{
+		res.pts[0] = p1;
+		res.pts[1] = p2;
+	}
+	else
+	{
+		res.pts[0] = p2;
+		res.pts[1] = p1;
+	}
+	res.count = 2;
+	return res;
+}
+
+Circle::IntersectionResult Circle::segmentIntersection (Vector2d a, Vector2d b) const
+{
+	IntersectionResult res;
+	res.count = 0;
+
+	// P(t) = a + t * d, with d = b - a, t in [0, 1].
+	// |P(t) - center|^2 = r^2  becomes  A t^2 + 2 B t + C = 0  with
+	//   A = d.d, B = w.d, C = w.w - r^2  where w = a - center.
+	double dx = b.x - a.x;
+	double dy = b.y - a.y;
+	double wx = a.x - center.x;
+	double wy = a.y - center.y;
+
+	double A = dx * dx + dy * dy;
+	if (A < 1e-24)
+	{
+		// Degenerate segment (a == b). It lies on the circle iff |w| == r.
+		if (fabs(sqrt(wx * wx + wy * wy) - radius) < 1e-12)
+		{
+			res.count = 1;
+			res.pts[0] = a;
+		}
+		return res;
+	}
+
+	double B = wx * dx + wy * dy;
+	double C = wx * wx + wy * wy - radius * radius;
+
+	double disc = B * B - A * C;
+	if (disc < 0.0)
+		return res;
+
+	if (disc < 1e-24)
+	{
+		// Tangent line. Single root.
+		double t = -B / A;
+		if (t >= -1e-12 && t <= 1.0 + 1e-12)
+		{
+			res.count = 1;
+			res.pts[0] = Vector2d (a.x + t * dx, a.y + t * dy);
+		}
+		return res;
+	}
+
+	double sq = sqrt(disc);
+	double t1 = (-B - sq) / A;   // smaller root
+	double t2 = (-B + sq) / A;   // larger  root
+
+	bool t1Valid = (t1 >= -1e-12 && t1 <= 1.0 + 1e-12);
+	bool t2Valid = (t2 >= -1e-12 && t2 <= 1.0 + 1e-12);
+
+	if (t1Valid && t2Valid)
+	{
+		res.count = 2;
+		res.pts[0] = Vector2d (a.x + t1 * dx, a.y + t1 * dy);
+		res.pts[1] = Vector2d (a.x + t2 * dx, a.y + t2 * dy);
+	}
+	else if (t1Valid)
+	{
+		res.count = 1;
+		res.pts[0] = Vector2d (a.x + t1 * dx, a.y + t1 * dy);
+	}
+	else if (t2Valid)
+	{
+		res.count = 1;
+		res.pts[0] = Vector2d (a.x + t2 * dx, a.y + t2 * dy);
+	}
+	return res;
+}
+
+
+//
+// Ellipse (2D, two-foci form)
+//
+
+Ellipse::Ellipse ()
+	: f1(0.0, 0.0), f2(0.0, 0.0), sumDist(0.0)
+{
+}
+
+Ellipse::Ellipse (Vector2d _f1, Vector2d _f2, double _sumDist)
+	: f1(_f1), f2(_f2), sumDist(_sumDist)
+{
+}
+
+Vector2d Ellipse::center () const
+{
+	return Vector2d ((f1.x + f2.x) / 2.0, (f1.y + f2.y) / 2.0);
+}
+
+double Ellipse::semiMajor () const
+{
+	return sumDist / 2.0;
+}
+
+double Ellipse::semiMinor () const
+{
+	double dx = f2.x - f1.x;
+	double dy = f2.y - f1.y;
+	double cf = sqrt(dx * dx + dy * dy) / 2.0;   // half inter-focal distance
+	double a  = sumDist / 2.0;
+	if (a < cf)
+		return 0.0;
+	return sqrt(a * a - cf * cf);
+}
+
+double Ellipse::angle () const
+{
+	return atan2(f2.y - f1.y, f2.x - f1.x);
+}
+
+bool Ellipse::valid () const
+{
+	double dx = f2.x - f1.x;
+	double dy = f2.y - f1.y;
+	double cf = sqrt(dx * dx + dy * dy) / 2.0;
+	return sumDist / 2.0 >= cf;
+}
+
+Vector2d Ellipse::pointAt (double t) const
+{
+	Vector2d ec = center();
+	double a   = semiMajor();
+	double b   = semiMinor();
+	double ang = angle();
+	double cosA = cos(ang);
+	double sinA = sin(ang);
+	double ct = cos(t);
+	double st = sin(t);
+	return Vector2d (ec.x + a * ct * cosA - b * st * sinA,
+	                 ec.y + a * ct * sinA + b * st * cosA);
+}
+
+bool Ellipse::contains (Vector2d p, double eps) const
+{
+	double d1x = p.x - f1.x;
+	double d1y = p.y - f1.y;
+	double d2x = p.x - f2.x;
+	double d2y = p.y - f2.y;
+	double d1 = sqrt(d1x * d1x + d1y * d1y);
+	double d2 = sqrt(d2x * d2x + d2y * d2y);
+	return fabs(d1 + d2 - sumDist) < eps;
+}
+
+Ellipse::IntersectionResult Ellipse::verticalIntersection (double vx) const
+{
+	IntersectionResult res;
+	res.count = 0;
+
+	if (!valid())
+		return res;
+
+	Vector2d ec = center();
+	double a   = semiMajor();
+	double b   = semiMinor();
+	double ang = angle();
+	double cosA = cos(ang);
+	double sinA = sin(ang);
+
+	// P(t).x = ec.x + a*cos(t)*cosA - b*sin(t)*sinA = vx
+	// Rewrite as R*cos(t + phi) = rhs.
+	double R   = sqrt(a * a * cosA * cosA + b * b * sinA * sinA);
+	double rhs = vx - ec.x;
+
+	if (R < 1e-12)
+		return res;
+
+	double rOverR = rhs / R;
+	if (rOverR > 1.0 + 1e-12 || rOverR < -1.0 - 1e-12)
+		return res;
+
+	// Clamp for safety against rounding noise.
+	if (rOverR >  1.0) rOverR =  1.0;
+	if (rOverR < -1.0) rOverR = -1.0;
+
+	double phi   = atan2(b * sinA, a * cosA);
+	double base  = -phi;
+	double delta = acos(rOverR);
+
+	if (delta < 1e-12)
+	{
+		// Tangent line.
+		Vector2d p = pointAt(base);
+		res.count = 1;
+		res.pts[0] = p;
+		return res;
+	}
+
+	Vector2d p1 = pointAt(base + delta);
+	Vector2d p2 = pointAt(base - delta);
+
+	if (p1.y >= p2.y)
+	{
+		res.pts[0] = p1;
+		res.pts[1] = p2;
+	}
+	else
+	{
+		res.pts[0] = p2;
+		res.pts[1] = p1;
+	}
+	res.count = 2;
+	return res;
+}
+
+
+//
+// Arc (2D oriented arc of a circle)
+//
+
+Arc::Arc ()
+	: circle(), angleStart(0.0), angleEnd(0.0), ccw(true)
+{
+}
+
+Arc::Arc (Circle _circle, double _angleStart, double _angleEnd, bool _ccw)
+	: circle(_circle), angleStart(_angleStart), angleEnd(_angleEnd), ccw(_ccw)
+{
+}
+
+Arc::Arc (Circle _circle, Vector2d from, Vector2d to, bool _ccw)
+	: circle(_circle),
+	  angleStart(_circle.angleAt(from)),
+	  angleEnd  (_circle.angleAt(to)),
+	  ccw(_ccw)
+{
+}
+
+double Arc::spanAngle () const
+{
+	const double TWO_PI = 2.0 * M_PI;
+	double delta = angleEnd - angleStart;
+	// We do *not* normalize modulo 2*PI : the caller may legitimately pass
+	// angleEnd = angleStart +/- 2*PI to express a full circle. We only flip
+	// across one full turn when the raw delta has the wrong sign for the
+	// requested direction.
+	if (ccw && delta < 0.0)
+		delta += TWO_PI;
+	else if (!ccw && delta > 0.0)
+		delta -= TWO_PI;
+	return delta;
+}
+
+double Arc::length () const
+{
+	return fabs(spanAngle()) * circle.radius;
+}
+
+Vector2d Arc::pointAt (double t) const
+{
+	double theta = angleStart + t * spanAngle();
+	return circle.pointAt(theta);
+}
+
+Vector2d Arc::tangentAt (double t) const
+{
+	double theta = angleStart + t * spanAngle();
+	double s = ccw ? 1.0 : -1.0;
+	return Vector2d (-s * sin(theta), s * cos(theta));
+}
+
+Vector2d Arc::normalAt (double t) const
+{
+	// Inward normal : (center - point) / radius = -(cos theta, sin theta).
+	double theta = angleStart + t * spanAngle();
+	return Vector2d (-cos(theta), -sin(theta));
+}
+
+std::vector<Vector2d> Arc::tessellate (int n) const
+{
+	if (n < 1) n = 1;
+	std::vector<Vector2d> pts;
+	pts.reserve(n + 1);
+	double span = spanAngle();
+	for (int i = 0; i <= n; ++i)
+	{
+		double t = (double)i / (double)n;
+		double theta = angleStart + t * span;
+		pts.push_back(circle.pointAt(theta));
+	}
+	return pts;
+}
+
+std::vector<Vector2d> Arc::tessellateAdaptive (double maxAngleRad) const
+{
+	if (maxAngleRad <= 0.0)
+		return tessellate(1);
+	double span = fabs(spanAngle());
+	int n = (int)ceil(span / maxAngleRad);
+	if (n < 1) n = 1;
+	return tessellate(n);
+}
 
 
 //

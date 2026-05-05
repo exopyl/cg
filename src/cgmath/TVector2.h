@@ -182,9 +182,53 @@ public:
 	}
 	
 	template <class S>
-	inline const TValue getAngle(const TVector2<S> &v2)  const 
-	{             
+	inline const TValue getAngle(const TVector2<S> &v2)  const
+	{
 		return acos( DotProduct(v2) / (getLength() * v2.getLength()));
+	}
+
+	// Z component of the 2D cross product (scalar). Positive when this->v2 is CCW.
+	template <class S>
+	inline const TValue CrossProduct(const TVector2<S> &v2) const
+	{
+		return x * (TValue)v2.y - y * (TValue)v2.x;
+	}
+
+	// Rotation by +90 degrees: (x, y) -> (-y, x)
+	inline TVector2<TValue> Perp() const
+	{
+		return TVector2<TValue>(-y, x);
+	}
+
+	// Linear interpolation between a and b at t in [0, 1]
+	static inline TVector2<TValue> Lerp(const TVector2<TValue> &a,
+	                                     const TVector2<TValue> &b,
+	                                     TValue t)
+	{
+		return TVector2<TValue>(a.x + t * (b.x - a.x),
+		                        a.y + t * (b.y - a.y));
+	}
+
+	// Static distance between two points
+	template <class S>
+	static inline TValue Distance(const TVector2<TValue> &a,
+	                               const TVector2<S> &b)
+	{
+		TValue dx = (TValue)b.x - a.x;
+		TValue dy = (TValue)b.y - a.y;
+		return sqrt(dx * dx + dy * dy);
+	}
+
+	// Signed angle from `from` to `to` via atan2, in [-pi, pi].
+	// Positive when `to` is CCW relative to `from`.
+	template <class S>
+	static inline TValue SignedAngle(const TVector2<TValue> &from,
+	                                  const TVector2<S> &to)
+	{
+		TValue tox = (TValue)to.x;
+		TValue toy = (TValue)to.y;
+		return atan2(from.x * toy - from.y * tox,
+		             from.x * tox + from.y * toy);
 	}
 
 	//
