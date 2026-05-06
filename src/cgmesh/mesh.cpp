@@ -360,7 +360,7 @@ void Mesh::DeleteFaces (void)
 			Face *pFace = m_pFaces[i];
 			delete pFace;
 		}
-		delete m_pFaces;
+		delete[] m_pFaces;
 	}
 	m_pFaces = nullptr;
 	m_nFaces = 0;
@@ -624,13 +624,15 @@ bool Mesh::IsTriangleMesh() const
 //
 void Mesh::ComputeNormals (void)
 {
-	if (!m_pVertexNormals)
-		m_pVertexNormals = new float[3*m_nVertices];
+	if (m_pVertexNormals)
+		delete[] m_pVertexNormals;
+	m_pVertexNormals = new float[3*m_nVertices];
 	memset (m_pVertexNormals, 0, 3*m_nVertices*sizeof(float));
 
 	//
-	if (!m_pFaceNormals)
-		m_pFaceNormals = new float[3*m_nFaces];
+	if (m_pFaceNormals)
+		delete[] m_pFaceNormals;
+	m_pFaceNormals = new float[3*m_nFaces];
 	memset (m_pFaceNormals, 0, 3*m_nFaces*sizeof(float));
 	
 

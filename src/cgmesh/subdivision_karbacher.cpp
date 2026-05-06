@@ -15,13 +15,13 @@ bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 
 	// vertices
 	int nv_new = nv+nf;
-	float *v_new = (float*) malloc (3*nv_new*sizeof(float));
-	v_new = (float*) memcpy ((void*)v_new, (const void*)v, 3*nv*sizeof(float));
+	float *v_new = new float[3*nv_new];
+	memcpy (v_new, v, 3*nv*sizeof(float));
 	int nv_new_walk = nv;
 
 	// faces
 	int nf_new = 3*nf;
-	Face **f_new = (Face**) malloc (3*nf_new*sizeof(Face*));
+	Face **f_new = new Face*[nf_new];
 
 	// edges: copy existing edges and grow the vector for new ones
 	m_ne = 3*nf;
@@ -136,6 +136,15 @@ bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 		chePtr->m_edges_vertex[iv2] = e2;
 		chePtr->m_edges_vertex[iv3] = e3;
 		chePtr->m_edges_vertex[iv4] = ie41_idx;
+	}
+
+	// Clean up old data to prevent leaks
+	if (model->m_pMesh->m_pVertices) delete[] model->m_pMesh->m_pVertices;
+	if (model->m_pMesh->m_pFaces)
+	{
+		for (unsigned int k = 0; k < nf; ++k)
+			delete model->m_pMesh->m_pFaces[k];
+		delete[] model->m_pMesh->m_pFaces;
 	}
 
 	model->m_pMesh->m_nFaces = nf_new;
