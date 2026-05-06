@@ -114,9 +114,38 @@ void sweepProfileAlongArc (const Arc &arc,
                             Mesh &out,
                             double maxAngleRad = 3.14159265358979323846 / 180.0);
 
+// Sweep a closed 2D profile along multiple arcs (concatenated tube sections).
+// Each arc produces its own tube section ; sections are merged into `out`
+// with a single Mesh::SetVertices / SetFaces call. Junctions between arcs are
+// "open" (sharp corners), no smoothing.
+void sweepProfileAlongArcs (const std::vector<Arc> &arcs,
+                             const std::vector<Vector2d> &profile,
+                             double scale_u,
+                             double scale_v,
+                             Mesh &out,
+                             double maxAngleRad = 3.14159265358979323846 / 180.0);
+
+// Append `src` mesh's vertices and faces to `dest`. `src`'s face indices are
+// shifted by `dest`'s current vertex count. Used to merge separately-built
+// meshes (e.g. bay tessellation + sweep moldings) into a single Mesh.
+void appendMesh (Mesh &dest, const Mesh &src);
+
+//
+// Profile factories : closed cross-sections in (u, v) coords, CCW from
+// path-tangent perspective.
+//
+
 // Convenience : a closed unit-square profile in (u, v) coords.
 // Useful to demonstrate B2 with a rectangular cross-section.
 std::vector<Vector2d> rectangularProfile ();
+
+// Chamfered profile : the outside-bottom corner of the unit square is replaced
+// by a 45-deg bevel of `depth` (in normalized [0, 1] coords). Returns 5 points.
+std::vector<Vector2d> chamferProfile (double depth = 0.3);
+
+// Cavetto profile : concave quarter-circle replacing the outside-bottom corner.
+// Returns `nCurveSegments + 4` points (the quarter-arc samples + 3 corners).
+std::vector<Vector2d> cavettoProfile (double depth = 0.3, int nCurveSegments = 6);
 
 // One-shot helper : build polygon, tessellate, save (file-extension dispatched
 // by Mesh::save : .obj, .stl, .ply, .off, .dae, ...).

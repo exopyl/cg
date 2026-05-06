@@ -220,6 +220,101 @@ std::vector<Vector2d> rectangularProfile ()
 	         Vector2d(1.0, 1.0), Vector2d(0.0, 1.0) };
 }
 
+std::vector<Vector2d> chamferProfile (double depth)
+{
+	// 5-point profile : the outside-bottom corner of a unit square is replaced
+	// by a 45-deg bevel of size `depth` (in normalized [0,1] coords).
+	return {
+		Vector2d(0.0,   depth),    // outside, just above chamfer
+		Vector2d(depth, 0.0),      // bottom, at end of chamfer
+		Vector2d(1.0,   0.0),      // inner-bottom corner
+		Vector2d(1.0,   1.0),      // inner-top corner
+		Vector2d(0.0,   1.0)       // outside-top corner
+	};
+}
+
+std::vector<Vector2d> cavettoProfile (double depth, int nCurveSegments)
+{
+	// Concave quarter-circle replacing the outside-bottom corner. The curve is
+	// centered at (depth, depth) with radius `depth`, sampled CCW from angle pi
+	// (point (0, depth)) to angle 3*pi/2 (point (depth, 0)).
+	if (nCurveSegments < 2) nCurveSegments = 2;
+	std::vector<Vector2d> profile;
+	profile.reserve(nCurveSegments + 4);
+	const double PI = 3.14159265358979323846;
+	for (int i = 0; i <= nCurveSegments; ++i)
+	{
+		double t = static_cast<double>(i) / nCurveSegments;
+		double angle = PI + t * (PI / 2.0);
+		double x = depth + depth * std::cos(angle);
+		double y = depth + depth * std::sin(angle);
+		profile.push_back(Vector2d(x, y));
+	}
+	profile.push_back(Vector2d(1.0, 0.0));
+	profile.push_back(Vector2d(1.0, 1.0));
+	profile.push_back(Vector2d(0.0, 1.0));
+	return profile;
+}
+
+namespace
+{
+	// Build the (vertices, faces) buffers of one tube section for `arc`.
+	// Vertex layout : index = i * M + j with i = path sample, j = profile point.
+	void sweepArcBuffers (const Arc &arc,
+	                       const std::vector<Vector2d> &profile,
+	                       double scale_u,
+	                       double scale_v,
+	                       double maxAngleRad,
+	                       std::vector<float> &verts,
+	                       std::vector<unsigned int> &faces)
+	{
+		std::vector<Vector2d> pathPos = arc.tessellateAdaptive(maxAngleRad);
+		const int N = static_cast<int>(pathPos.size());
+		const int M = static_cast<int>(profile.size());
+
+		verts.resize(static_cast<size_t>(3) * N * M);
+		for (int i = 0; i < N; ++i)
+		{
+			const Vector2d &P = pathPos[i];
+			const double t = (N == 1) ? 0.0 : static_cast<double>(i) / (N - 1);
+			Vector2d T = arc.tangentAt(t);
+			const double Nx =  T.y;
+			const double Ny = -T.x;
+
+			for (int j = 0; j < M; ++j)
+			{
+				const double u = profile[j].x;
+				const double v = profile[j].y;
+				const int idx = i * M + j;
+				verts[3*idx + 0] = static_cast<float>(P.x + v * scale_v * Nx);
+				verts[3*idx + 1] = static_cast<float>(P.y + v * scale_v * Ny);
+				verts[3*idx + 2] = static_cast<float>(u * scale_u);
+			}
+		}
+
+		faces.reserve(faces.size() + static_cast<size_t>(3) * 2 * (N - 1) * M);
+		for (int i = 0; i < N - 1; ++i)
+		{
+			for (int j = 0; j < M; ++j)
+			{
+				const int j1 = (j + 1) % M;
+				const unsigned int v00 = i       * M + j;
+				const unsigned int v10 = (i + 1) * M + j;
+				const unsigned int v11 = (i + 1) * M + j1;
+				const unsigned int v01 = i       * M + j1;
+
+				faces.push_back(v00);
+				faces.push_back(v10);
+				faces.push_back(v11);
+
+				faces.push_back(v00);
+				faces.push_back(v11);
+				faces.push_back(v01);
+			}
+		}
+	}
+}
+
 void sweepProfileAlongArc (const Arc &arc,
                             const std::vector<Vector2d> &profile,
                             double scale_u,
@@ -232,64 +327,94 @@ void sweepProfileAlongArc (const Arc &arc,
 	if (arc.length() <= 0.0)
 		throw std::invalid_argument("sweepProfileAlongArc: arc has non-positive length");
 
-	// Sample the arc into path positions.
-	std::vector<Vector2d> pathPos = arc.tessellateAdaptive(maxAngleRad);
-	const int N = static_cast<int>(pathPos.size());
-	if (N < 2)
-		throw std::invalid_argument("sweepProfileAlongArc: arc tessellation produced fewer than 2 points");
-
-	const int M = static_cast<int>(profile.size());
-
-	// Vertex layout : index = i * M + j, with i = path sample, j = profile point.
-	std::vector<float> verts(static_cast<size_t>(3) * N * M);
-	for (int i = 0; i < N; ++i)
-	{
-		const Vector2d &P = pathPos[i];
-		// Tangent at parameter t = i / (N-1).
-		const double t = (N == 1) ? 0.0 : static_cast<double>(i) / (N - 1);
-		Vector2d T = arc.tangentAt(t);
-		// In-plane "outward" normal : right of CCW walk = (T.y, -T.x).
-		const double Nx = T.y;
-		const double Ny = -T.x;
-
-		for (int j = 0; j < M; ++j)
-		{
-			const double u = profile[j].x;
-			const double v = profile[j].y;
-			const int idx = i * M + j;
-			verts[3*idx + 0] = static_cast<float>(P.x + v * scale_v * Nx);
-			verts[3*idx + 1] = static_cast<float>(P.y + v * scale_v * Ny);
-			verts[3*idx + 2] = static_cast<float>(u * scale_u);
-		}
-	}
-
-	// Faces : (N - 1) path strips, each producing M quads (= 2 triangles each)
-	// since the profile is closed.
+	std::vector<float> verts;
 	std::vector<unsigned int> faces;
-	faces.reserve(static_cast<size_t>(3) * 2 * (N - 1) * M);
-	for (int i = 0; i < N - 1; ++i)
+	sweepArcBuffers(arc, profile, scale_u, scale_v, maxAngleRad, verts, faces);
+
+	if (verts.empty() || faces.empty())
+		throw std::invalid_argument("sweepProfileAlongArc: arc tessellation produced empty mesh");
+
+	out.SetVertices(static_cast<unsigned int>(verts.size() / 3), verts.data());
+	out.SetFaces(static_cast<unsigned int>(faces.size() / 3), 3, faces.data());
+}
+
+void sweepProfileAlongArcs (const std::vector<Arc> &arcs,
+                             const std::vector<Vector2d> &profile,
+                             double scale_u,
+                             double scale_v,
+                             Mesh &out,
+                             double maxAngleRad)
+{
+	if (arcs.empty())
+		throw std::invalid_argument("sweepProfileAlongArcs: arcs must not be empty");
+	if (profile.size() < 3)
+		throw std::invalid_argument("sweepProfileAlongArcs: profile must have at least 3 points");
+
+	std::vector<float> totalVerts;
+	std::vector<unsigned int> totalFaces;
+
+	for (const Arc &arc : arcs)
 	{
-		for (int j = 0; j < M; ++j)
-		{
-			const int j1 = (j + 1) % M;
-			const unsigned int v00 = i       * M + j;
-			const unsigned int v10 = (i + 1) * M + j;
-			const unsigned int v11 = (i + 1) * M + j1;
-			const unsigned int v01 = i       * M + j1;
+		if (arc.length() <= 0.0)
+			continue;     // skip degenerate arcs silently
 
-			// CCW from outside the tube (computed with profile in CCW order).
-			faces.push_back(v00);
-			faces.push_back(v10);
-			faces.push_back(v11);
+		std::vector<float> sectionVerts;
+		std::vector<unsigned int> sectionFaces;
+		sweepArcBuffers(arc, profile, scale_u, scale_v, maxAngleRad,
+		                sectionVerts, sectionFaces);
 
-			faces.push_back(v00);
-			faces.push_back(v11);
-			faces.push_back(v01);
-		}
+		const unsigned int offset = static_cast<unsigned int>(totalVerts.size() / 3);
+		totalVerts.insert(totalVerts.end(), sectionVerts.begin(), sectionVerts.end());
+		for (unsigned int idx : sectionFaces)
+			totalFaces.push_back(idx + offset);
 	}
 
-	out.SetVertices(static_cast<unsigned int>(N) * M, verts.data());
-	out.SetFaces(static_cast<unsigned int>(faces.size() / 3), 3, faces.data());
+	if (totalVerts.empty() || totalFaces.empty())
+		throw std::invalid_argument("sweepProfileAlongArcs: all arcs were degenerate");
+
+	out.SetVertices(static_cast<unsigned int>(totalVerts.size() / 3), totalVerts.data());
+	out.SetFaces(static_cast<unsigned int>(totalFaces.size() / 3), 3, totalFaces.data());
+}
+
+void appendMesh (Mesh &dest, const Mesh &src)
+{
+	// Read dest's current vertex/face count.
+	Mesh &destNc = const_cast<Mesh &>(dest);  // GetNVertices / GetVertex are non-const
+	Mesh &srcNc  = const_cast<Mesh &>(src);
+
+	const unsigned int destNV = destNc.GetNVertices();
+	const unsigned int destNF = destNc.GetNFaces();
+	const unsigned int srcNV  = srcNc.GetNVertices();
+	const unsigned int srcNF  = srcNc.GetNFaces();
+
+	// Build a combined vertex array.
+	std::vector<float> verts;
+	verts.reserve(3 * (destNV + srcNV));
+	for (unsigned int i = 0; i < destNV; ++i)
+	{
+		float v[3];
+		destNc.GetVertex(i, v);
+		verts.push_back(v[0]); verts.push_back(v[1]); verts.push_back(v[2]);
+	}
+	for (unsigned int i = 0; i < srcNV; ++i)
+	{
+		float v[3];
+		srcNc.GetVertex(i, v);
+		verts.push_back(v[0]); verts.push_back(v[1]); verts.push_back(v[2]);
+	}
+
+	// Build a combined face array, shifting src's indices by destNV.
+	std::vector<unsigned int> faces;
+	faces.reserve(3 * (destNF + srcNF));
+	for (unsigned int i = 0; i < destNF; ++i)
+		for (unsigned int j = 0; j < 3; ++j)
+			faces.push_back(static_cast<unsigned int>(destNc.GetFaceVertex(i, j)));
+	for (unsigned int i = 0; i < srcNF; ++i)
+		for (unsigned int j = 0; j < 3; ++j)
+			faces.push_back(static_cast<unsigned int>(srcNc.GetFaceVertex(i, j)) + destNV);
+
+	dest.SetVertices(destNV + srcNV, verts.data());
+	dest.SetFaces(destNF + srcNF, 3, faces.data());
 }
 
 void extrudeToMesh (Polygon2 &polygon, Mesh &out, double zBottom, double zTop)

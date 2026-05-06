@@ -564,3 +564,126 @@ TEST(TEST_cgmesh_architecture_gothic, SweepProducesObjFile)
     EXPECT_GE(rc, 0);
     EXPECT_TRUE(std::filesystem::exists(outFile));
 }
+
+//
+// Multi-arc sweep
+//
+
+TEST(TEST_cgmesh_architecture_gothic, SweepMultiArcsConcatTubes)
+{
+    WindowGeometry g = buildTypicalGeom();
+    Mesh single;
+    sweepProfileAlongArc(g.mainOffset.inner.arcLeft, rectangularProfile(),
+                          8.0, 12.0, single);
+
+    Mesh multi;
+    sweepProfileAlongArcs({ g.mainOffset.inner.arcLeft, g.mainOffset.inner.arcRight },
+                          rectangularProfile(), 8.0, 12.0, multi);
+
+    // Multi-arc tube has roughly twice as many vertices/faces as single-arc.
+    EXPECT_GT(multi.GetNVertices(), single.GetNVertices());
+    EXPECT_GT(multi.GetNFaces(),    single.GetNFaces());
+}
+
+TEST(TEST_cgmesh_architecture_gothic, SweepMultiArcsEmptyThrows)
+{
+    Mesh m;
+    EXPECT_THROW(sweepProfileAlongArcs({}, rectangularProfile(), 8.0, 12.0, m),
+                 std::invalid_argument);
+}
+
+TEST(TEST_cgmesh_architecture_gothic, SweepMultiArcsProfileTooSmallThrows)
+{
+    WindowGeometry g = buildTypicalGeom();
+    std::vector<Vector2d> tiny = { {0, 0}, {1, 0} };
+    Mesh m;
+    EXPECT_THROW(sweepProfileAlongArcs({ g.mainOffset.inner.arcLeft }, tiny, 8.0, 12.0, m),
+                 std::invalid_argument);
+}
+
+//
+// Classical profile factories
+//
+
+TEST(TEST_cgmesh_architecture_gothic, ChamferProfileHasFivePoints)
+{
+    auto p = chamferProfile();
+    EXPECT_EQ(p.size(), 5u);
+    // First point on outside face, just above chamfer.
+    EXPECT_DOUBLE_EQ(p[0].x, 0.0);
+    EXPECT_DOUBLE_EQ(p[0].y, 0.3);
+    // Second point on bottom face, at end of chamfer.
+    EXPECT_DOUBLE_EQ(p[1].x, 0.3);
+    EXPECT_DOUBLE_EQ(p[1].y, 0.0);
+}
+
+TEST(TEST_cgmesh_architecture_gothic, CavettoProfileHasExpectedPointCount)
+{
+    auto p = cavettoProfile(0.3, 6);
+    // 6 curve segments produce 7 curve samples + 3 corners = 10.
+    EXPECT_EQ(p.size(), 10u);
+}
+
+TEST(TEST_cgmesh_architecture_gothic, ChamferProfileSweepsSuccessfully)
+{
+    WindowGeometry g = buildTypicalGeom();
+    Mesh m;
+    EXPECT_NO_THROW(sweepProfileAlongArc(g.mainOffset.inner.arcLeft,
+                                          chamferProfile(), 8.0, 12.0, m));
+    EXPECT_GT(m.GetNVertices(), 0u);
+}
+
+//
+// appendMesh helper
+//
+
+TEST(TEST_cgmesh_architecture_gothic, AppendMeshIncreasesCounts)
+{
+    WindowGeometry g = buildTypicalGeom();
+    Mesh m1, m2;
+    sweepProfileAlongArc(g.mainOffset.inner.arcLeft, rectangularProfile(), 8.0, 12.0, m1);
+    sweepProfileAlongArc(g.mainOffset.inner.arcRight, rectangularProfile(), 8.0, 12.0, m2);
+
+    unsigned int origNV = m1.GetNVertices();
+    unsigned int origNF = m1.GetNFaces();
+    unsigned int srcNV  = m2.GetNVertices();
+    unsigned int srcNF  = m2.GetNFaces();
+
+    appendMesh(m1, m2);
+
+    EXPECT_EQ(m1.GetNVertices(), origNV + srcNV);
+    EXPECT_EQ(m1.GetNFaces(),    origNF + srcNF);
+}
+
+//
+// End-to-end : unified mesh = bay extrusion + sweep moldings
+//
+
+TEST(TEST_cgmesh_architecture_gothic, WriteUnifiedBayPlusMoldingObj)
+{
+    WindowGeometry g = buildRichGeom();
+
+    // 1. Bay : flat tessellation (no extrusion for cleaner visualization).
+    GothicMeshParams params;
+    params.zHeight = 0.0;
+    Polygon2 poly = buildBayStonePolygon(g, params);
+    Mesh combined;
+    tessellateToMesh(poly, combined, 0.0);
+
+    // 2. Sweep : chamfer profile along main inner offset arcs.
+    Mesh moldings;
+    sweepProfileAlongArcs({ g.mainOffset.inner.arcLeft, g.mainOffset.inner.arcRight },
+                          chamferProfile(0.4), /*scale_u=*/8.0, /*scale_v=*/10.0, moldings);
+
+    // 3. Merge bay + moldings.
+    appendMesh(combined, moldings);
+
+    std::filesystem::path root    = findProjectRoot();
+    std::filesystem::path outFile = root / "tmp" / "high-gothic-bay-unified.obj";
+    if (std::filesystem::exists(outFile))
+        std::filesystem::remove(outFile);
+
+    int rc = combined.save(outFile.string().c_str());
+    EXPECT_GE(rc, 0);
+    EXPECT_TRUE(std::filesystem::exists(outFile));
+}
