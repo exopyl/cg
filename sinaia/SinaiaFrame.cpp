@@ -27,6 +27,7 @@
 
 #include "../src/cgmesh/smoothing_taubin.h"
 #include "../src/cgmesh/smoothing_laplacian.h"
+#include "../src/cgmesh/subdivision.h"
 #include "../src/cgmesh/DiffParamEvaluator.h"
 #include "../src/cgmesh/mesh_data_manager.h"
 #include "../src/cgmesh/parameterized_shapes.h"
@@ -161,6 +162,9 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_TREATMENT_MERGE_VERTICES, MyFrame::OnTreatmentMergeVertices)
     EVT_MENU(ID_TREATMENT_SMOOTHING_TAUBIN, MyFrame::OnTreatmentSmoothingTaubin)
     EVT_MENU(ID_TREATMENT_SMOOTHING_LAPLACIAN, MyFrame::OnTreatmentSmoothingLaplacian)
+    EVT_MENU(ID_TREATMENT_SUBDIVISION_LOOP, MyFrame::OnTreatmentSubdivisionLoop)
+    EVT_MENU(ID_TREATMENT_SUBDIVISION_KARBACHER, MyFrame::OnTreatmentSubdivisionKarbacher)
+    EVT_MENU(ID_TREATMENT_SUBDIVISION_SQRT3, MyFrame::OnTreatmentSubdivisionSqrt3)
     EVT_MENU(ID_TREATMENT_CURVATURES_TAUBIN, MyFrame::OnTreatmentCurvaturesTaubin)
     EVT_MENU(ID_TREATMENT_CURVATURES_DESBRUN, MyFrame::OnTreatmentCurvaturesDesbrun)
     EVT_MENU(ID_TREATMENT_CURVATURES_HAMANN, MyFrame::OnTreatmentCurvaturesHamann)
@@ -354,6 +358,12 @@ MyFrame::MyFrame(wxWindow* parent,
     smoothing_menu->Append(ID_TREATMENT_SMOOTHING_TAUBIN, _("Taubin"));
     smoothing_menu->Append(ID_TREATMENT_SMOOTHING_LAPLACIAN, _("Laplacian"));
     treatments_menu->AppendSubMenu(smoothing_menu, _("Smoothing"));
+
+    wxMenu* subdivision_menu = new wxMenu;
+    subdivision_menu->Append(ID_TREATMENT_SUBDIVISION_LOOP, _("Loop"));
+    subdivision_menu->Append(ID_TREATMENT_SUBDIVISION_KARBACHER, _("Karbacher"));
+    subdivision_menu->Append(ID_TREATMENT_SUBDIVISION_SQRT3, _("Sqrt(3)"));
+    treatments_menu->AppendSubMenu(subdivision_menu, _("Subdivision"));
 
     wxMenu* curvatures_menu = new wxMenu;
     curvatures_menu->Append(ID_TREATMENT_CURVATURES_TAUBIN, _("Taubin"));
@@ -2143,6 +2153,111 @@ void MyFrame::OnTreatmentSmoothingLaplacian(wxCommandEvent& WXUNUSED(event))
 
 	pGLCanvas->Refresh();
 	*m_pWndLogging << _T("Smoothing Laplacian applied\n");
+}
+
+//
+// Replace pMesh's vertices and faces with the subdivided result stored in pNewMesh.
+// Used by the three subdivision handlers below : after the algorithm runs on the
+// half-edge mesh, we must copy back BOTH vertices and faces (subdivision changes
+// counts and topology) and recompute normals so that the renderer picks up the
+// new geometry on the next IncrementRevision().
+//
+static void ReplaceMeshGeometry (Mesh *pMesh, Mesh *pNewMesh)
+{
+	// Build flat triangle index list from the new mesh's Face** array.
+	std::vector<unsigned int> faces (3 * pNewMesh->m_nFaces);
+	for (unsigned int f = 0; f < pNewMesh->m_nFaces; ++f)
+	{
+		faces[3*f+0] = (unsigned int)pNewMesh->m_pFaces[f]->GetVertex(0);
+		faces[3*f+1] = (unsigned int)pNewMesh->m_pFaces[f]->GetVertex(1);
+		faces[3*f+2] = (unsigned int)pNewMesh->m_pFaces[f]->GetVertex(2);
+	}
+
+	// Delete the existing per-Face objects on the destination ; SetFaces frees
+	// the outer pointer array but leaks the inner Face* without this cleanup.
+	if (pMesh->m_pFaces)
+	{
+		for (unsigned int i = 0; i < pMesh->m_nFaces; ++i)
+			delete pMesh->m_pFaces[i];
+	}
+
+	pMesh->SetVertices (pNewMesh->m_nVertices, pNewMesh->m_pVertices.data());
+	pMesh->SetFaces (pNewMesh->m_nFaces, 3, faces.data());
+	pMesh->ComputeNormals ();
+	pMesh->IncrementRevision ();
+}
+
+void MyFrame::OnTreatmentSubdivisionLoop(wxCommandEvent& WXUNUSED(event))
+{
+	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+	if (!pGLCanvas)
+		return;
+
+	VMeshes* pVMeshes = pGLCanvas->GetVMeshes();
+	if (!pVMeshes)
+		return;
+
+	MeshAlgoSubdivisionLoop algo;
+	algo.SetUseWarrenMask (true);
+	for (auto& pMesh : pVMeshes->GetMeshes())
+	{
+		Mesh_half_edge *pMeshHE = MeshDataManager::GetInstance().GetHalfEdge(pMesh);
+		algo.Apply(pMeshHE);
+		ReplaceMeshGeometry (pMesh, pMeshHE->m_pMesh);
+	}
+
+	pGLCanvas->Refresh();
+	*m_pWndLogging << _T("Subdivision Loop (Warren) applied\n");
+}
+
+void MyFrame::OnTreatmentSubdivisionKarbacher(wxCommandEvent& WXUNUSED(event))
+{
+	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+	if (!pGLCanvas)
+		return;
+
+	VMeshes* pVMeshes = pGLCanvas->GetVMeshes();
+	if (!pVMeshes)
+		return;
+
+	MeshAlgoSubdivisionKarbacher algo;
+	for (auto& pMesh : pVMeshes->GetMeshes())
+	{
+		// Karbacher reads vertex normals — make sure they are up-to-date and
+		// invalidate the cached half-edge so it picks up the fresh normals.
+		pMesh->ComputeNormals ();
+		pMesh->IncrementRevision ();
+
+		Mesh_half_edge *pMeshHE = MeshDataManager::GetInstance().GetHalfEdge(pMesh);
+		algo.Apply(pMeshHE);
+		ReplaceMeshGeometry (pMesh, pMeshHE->m_pMesh);
+	}
+
+	pGLCanvas->Refresh();
+	*m_pWndLogging << _T("Subdivision Karbacher applied\n");
+}
+
+void MyFrame::OnTreatmentSubdivisionSqrt3(wxCommandEvent& WXUNUSED(event))
+{
+	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+	if (!pGLCanvas)
+		return;
+
+	VMeshes* pVMeshes = pGLCanvas->GetVMeshes();
+	if (!pVMeshes)
+		return;
+
+	MeshAlgoSubdivisionSqrt3 algo;
+	algo.SetSmoothOriginal (true);
+	for (auto& pMesh : pVMeshes->GetMeshes())
+	{
+		Mesh_half_edge *pMeshHE = MeshDataManager::GetInstance().GetHalfEdge(pMesh);
+		algo.Apply(pMeshHE);
+		ReplaceMeshGeometry (pMesh, pMeshHE->m_pMesh);
+	}
+
+	pGLCanvas->Refresh();
+	*m_pWndLogging << _T("Subdivision Sqrt(3) applied\n");
 }
 
 void MyFrame::OnTreatmentCurvaturesDesbrun(wxCommandEvent& WXUNUSED(event))
