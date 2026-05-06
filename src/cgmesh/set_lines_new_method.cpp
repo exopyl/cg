@@ -42,7 +42,7 @@ Cset_lines::extract_ridges_and_valleys (float kappa_epsilon)
   //hemodel->extract_straight_ridges_ravines_belyaev2000 (kappa_epsilon, kappa_threshold, &n_selected_vertices, &iselected_vertices, &directions);
 
   // get the vertices from the model
-  float *v = model->m_pMesh->m_pVertices;
+  float *v = model->m_pMesh->m_pVertices.data();
   int   nv = model->m_pMesh->m_nVertices;
 
 #ifdef FUR

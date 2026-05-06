@@ -92,9 +92,9 @@ Cregions_faces::export_selected_region_cloud_points (char *filename)
 	if (mesh_half_edge)
     {
 		n_vertices = mesh_half_edge->m_pMesh->m_nVertices;
-		vertices   = mesh_half_edge->m_pMesh->m_pVertices;
+		vertices   = mesh_half_edge->m_pMesh->m_pVertices.data();
 		faces      = mesh_half_edge->m_pMesh->m_pFaces;
-		normales   = mesh_half_edge->m_pMesh->m_pVertexNormals;
+		normales   = mesh_half_edge->m_pMesh->m_pVertexNormals.data();
 	}
 	if (!vertices) return;
 
@@ -175,7 +175,7 @@ Cregions_faces::init_segmentation (float epsilon)
 		Che_mesh *chePtr = mesh_half_edge->GetCheMesh();
 		FILE* ptr = fopen ("output.txt", "w");
 
-		float *fn = mesh_half_edge->m_pMesh->m_pFaceNormals;
+		float *fn = mesh_half_edge->m_pMesh->m_pFaceNormals.data();
 		for (i=0; i<n_faces; i++)
 		{
 			if (regions[i] == -1)
@@ -304,7 +304,7 @@ Cregions_faces::refresh_colors (void)
 		nv = mesh_half_edge->m_pMesh->m_nVertices;
 		nf = mesh_half_edge->m_pMesh->m_nFaces;
 		f  = mesh_half_edge->m_pMesh->m_pFaces;
-		vc = mesh_half_edge->m_pMesh->m_pVertexColors;
+		vc = mesh_half_edge->m_pMesh->m_pVertexColors.data();
 	}
 	assert (vc && f);
 	if (!vc || !f) return;
@@ -703,9 +703,9 @@ Plane* Cregions_faces::plane_fitting  (void)
 
 	if (mesh_half_edge)
 	{
-		v  = mesh_half_edge->m_pMesh->m_pVertices;
+		v  = mesh_half_edge->m_pMesh->m_pVertices.data();
 		f  = mesh_half_edge->m_pMesh->GetTriangles ();
-		fn = mesh_half_edge->m_pMesh->m_pFaceNormals;
+		fn = mesh_half_edge->m_pMesh->m_pFaceNormals.data();
 	}
 
 	for (i=0; i<size; i++)

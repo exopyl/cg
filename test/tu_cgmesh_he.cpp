@@ -269,7 +269,7 @@ static void evaluate_shape_descriptors (Mesh_half_edge *model)
 	
 #ifdef HISTOGRAM_OSADA
 	Cshape_distribution_osada *osada;
-	osada = new Cshape_distribution_osada (model->m_pMesh->m_nVertices, model->m_pMesh->m_pVertices,
+	osada = new Cshape_distribution_osada (model->m_pMesh->m_nVertices, model->m_pMesh->m_pVertices.data(),
 					       model->m_pMesh->m_nFaces, model->m_pMesh->GetTriangles ());
 #endif /* HISTOGRAM_OSADA */
 	
@@ -400,7 +400,7 @@ static void evaluate_shape_descriptors (Mesh_half_edge *model)
 static void evaluate_shape_distribution_osada (Mesh_half_edge *model, int nPoints, int nBins)
 {
 	Cshape_distribution_osada *osada = new Cshape_distribution_osada (model->m_pMesh->m_nVertices,
-									  model->m_pMesh->m_pVertices,
+									  model->m_pMesh->m_pVertices.data(),
 									  model->m_pMesh->m_nFaces,
 									  model->m_pMesh->GetTriangles ());
 	

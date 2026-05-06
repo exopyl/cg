@@ -358,8 +358,8 @@ static get_jet_color (float index, float *r, float *g, float *b)
 void MeshAlgoTensorEvaluator::EvaluateColors (CurvatureId type)
 {
 	int nv = m_pModel->m_pMesh->m_nVertices;
-	float *v = m_pModel->m_pMesh->m_pVertices;
-	float *vn = m_pModel->m_pMesh->m_pVertexNormals;
+	float *v = m_pModel->m_pMesh->m_pVertices.data();
+	float *vn = m_pModel->m_pMesh->m_pVertexNormals.data();
 	// m_edges_vertex is no longer used here (index-based half-edge)
 
 	int i;

@@ -26,8 +26,8 @@ Cdifferential_parameters_distribution::compute_distribution (shape_function_type
 
   int nv = model->m_pMesh->m_nVertices;
   int nf = model->m_pMesh->m_nFaces;
-  float *v = model->m_pMesh->m_pVertices;
-  float *fn = model->m_pMesh->m_pFaceNormals;
+  float *v = model->m_pMesh->m_pVertices.data();
+  float *fn = model->m_pMesh->m_pFaceNormals.data();
 
   // get the tensor
   MeshAlgoTensorEvaluator *pTensorEvaluator = new MeshAlgoTensorEvaluator();

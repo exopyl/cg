@@ -44,7 +44,7 @@ bool MeshAlgoSubdivisionLoop::Apply (Mesh_half_edge *model)
 
 	const int nv = (int)model->m_pMesh->m_nVertices;
 	const int nf = (int)model->m_pMesh->m_nFaces;
-	const float *v_old = model->m_pMesh->m_pVertices;
+	const float *v_old = model->m_pMesh->m_pVertices.data();
 	if (nv <= 0 || nf <= 0 || !v_old) return false;
 
 	const int ne = che->m_ne;

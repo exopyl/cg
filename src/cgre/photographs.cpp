@@ -12,7 +12,7 @@ take_photographs (Mesh *model, char *filefront, char *fileside, char *fileup)
 	float near_plane, far_plane;
 	
 	int nv = model->m_nVertices;
-	float *v = model->m_pVertices;
+	float *v = model->m_pVertices.data();
 	int nf = model->m_nFaces;
 	const BoundingBox& bbox= model->bbox ();
 	float min[3], max[3];

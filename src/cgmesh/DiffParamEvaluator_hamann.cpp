@@ -6,8 +6,8 @@
 bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 {
 	int nv = m_pModel->m_pMesh->m_nVertices;
-	float *v = m_pModel->m_pMesh->m_pVertices;
-	float *vn = m_pModel->m_pMesh->m_pVertexNormals;
+	float *v = m_pModel->m_pMesh->m_pVertices.data();
+	float *vn = m_pModel->m_pMesh->m_pVertexNormals.data();
 	int i;
 	float mat[9];
 	vec3 right, solution;

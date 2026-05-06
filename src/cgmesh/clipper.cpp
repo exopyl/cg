@@ -35,7 +35,7 @@ Cmodel3d_half_edge_clipper::get_intersections (int *n_intersections, int **n_ver
 {
   int i, iwalk, nv = model->m_pMesh->m_nVertices, nf = model->m_pMesh->m_nFaces;
   Face **f = model->m_pMesh->m_pFaces;
-  float *v = model->m_pMesh->m_pVertices;
+  float *v = model->m_pMesh->m_pVertices.data();
 
   int n_intersections_max = 100;
   int n_vertices_max = 2048;
@@ -155,7 +155,7 @@ Cmodel3d_half_edge_clipper::get_intersections (int *n_intersections, int **n_ver
 void
 Cmodel3d_half_edge_clipper::get_vertex_intersection (int i, int j, Vector3d &inter)
 {
-  float *v = model->m_pMesh->m_pVertices;
+  float *v = model->m_pMesh->m_pVertices.data();
   float t = distances[i] / (distances[i] - distances[j]);
   inter.Set ((1.0 - t) * v[3*i]   + t * v[3*j],
 	      (1.0 - t) * v[3*i+1] + t * v[3*j+1],

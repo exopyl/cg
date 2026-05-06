@@ -11,10 +11,10 @@ void VertexBuffer::Draw (bool bColor)
 	if (!m_pMesh)
 		return;
 
-	if (m_pMesh->m_pVertexColors && bColor)
+	if (!m_pMesh->m_pVertexColors.empty() && bColor)
 	{
 		glEnableClientState (GL_COLOR_ARRAY);
-		glColorPointer  (3, GL_FLOAT, 0, m_pMesh->m_pVertexColors);
+		glColorPointer  (3, GL_FLOAT, 0, m_pMesh->m_pVertexColors.data());
 
 #if 0
 		if (Material *pMaterial = m_pMesh->GetMaterial ())
@@ -32,19 +32,19 @@ void VertexBuffer::Draw (bool bColor)
 	{
 		glDisableClientState (GL_COLOR_ARRAY);
 	}
-	if (m_pMesh->m_pVertexNormals)
+	if (!m_pMesh->m_pVertexNormals.empty())
 	{
 		glEnableClientState (GL_NORMAL_ARRAY);
-		glNormalPointer (GL_FLOAT, 0, m_pMesh->m_pVertexNormals);
+		glNormalPointer (GL_FLOAT, 0, m_pMesh->m_pVertexNormals.data());
 	}
 	else
 	{
 		glDisableClientState (GL_NORMAL_ARRAY);
 	}
-	if (m_pMesh->m_pVertices)
+	if (!m_pMesh->m_pVertices.empty())
 	{
 		glEnableClientState (GL_VERTEX_ARRAY);
-		glVertexPointer (3, GL_FLOAT, 0, m_pMesh->m_pVertices);
+		glVertexPointer (3, GL_FLOAT, 0, m_pMesh->m_pVertices.data());
 	}
 	
 	// TODO : convert array of faces to array of indices

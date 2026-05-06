@@ -138,8 +138,8 @@ Mesh_half_edge::Mesh_half_edge (Mesh *pMesh)
 		return;
 	}
 
-	m_pMesh->SetVertices (pMesh->m_nVertices, pMesh->m_pVertices);
-	m_pMesh->SetVertexNormals(pMesh->m_nVertices, pMesh->m_pVertexNormals);
+	m_pMesh->SetVertices (pMesh->m_nVertices, pMesh->m_pVertices.data());
+	m_pMesh->SetVertexNormals(pMesh->m_nVertices, pMesh->m_pVertexNormals.data());
 	m_pMesh->SetFaces (pMesh->m_nFaces, 3, pMesh->GetTriangles());
 	m_pMesh->InitVertexColors();
 }

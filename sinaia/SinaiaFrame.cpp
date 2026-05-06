@@ -2166,7 +2166,7 @@ void MyFrame::OnTreatmentCurvaturesDesbrun(wxCommandEvent& WXUNUSED(event))
 
 		// Copy colors back to original mesh
 		pMesh->InitVertexColors();
-		memcpy(pMesh->m_pVertexColors, pMeshHE->m_pMesh->m_pVertexColors, 3 * pMesh->m_nVertices * sizeof(float));
+		memcpy(pMesh->m_pVertexColors.data(), pMeshHE->m_pMesh->m_pVertexColors.data(), 3 * pMesh->m_nVertices * sizeof(float));
 	}
 
 	pGLCanvas->Refresh();
@@ -2194,7 +2194,7 @@ void MyFrame::OnTreatmentCurvaturesTaubin(wxCommandEvent& WXUNUSED(event))
 
 		// Copy colors back to original mesh
 		pMesh->InitVertexColors();
-		memcpy(pMesh->m_pVertexColors, pMeshHE->m_pMesh->m_pVertexColors, 3 * pMesh->m_nVertices * sizeof(float));
+		memcpy(pMesh->m_pVertexColors.data(), pMeshHE->m_pMesh->m_pVertexColors.data(), 3 * pMesh->m_nVertices * sizeof(float));
 	}
 
 	pGLCanvas->Refresh();
@@ -2222,7 +2222,7 @@ void MyFrame::OnTreatmentCurvaturesHamann(wxCommandEvent& WXUNUSED(event))
 
 		// Copy colors back to original mesh
 		pMesh->InitVertexColors();
-		memcpy(pMesh->m_pVertexColors, pMeshHE->m_pMesh->m_pVertexColors, 3 * pMesh->m_nVertices * sizeof(float));
+		memcpy(pMesh->m_pVertexColors.data(), pMeshHE->m_pMesh->m_pVertexColors.data(), 3 * pMesh->m_nVertices * sizeof(float));
 	}
 
 	pGLCanvas->Refresh();

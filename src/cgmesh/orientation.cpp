@@ -44,12 +44,12 @@ Cmesh_orientation::normalize (void)
   if (mesh)
   {
 	  nv = mesh->m_nVertices;
-	  v = mesh->m_pVertices;
+	  v = mesh->m_pVertices.data();
   }
   if (model3d_half_edge)
   {
 	  nv = model3d_half_edge->m_pMesh->m_nVertices;
-	  v = model3d_half_edge->m_pMesh->m_pVertices;
+	  v = model3d_half_edge->m_pMesh->m_pVertices.data();
   }
   if (nv < 1 || !v)
 	  return;

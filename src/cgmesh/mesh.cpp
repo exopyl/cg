@@ -116,15 +116,15 @@ void Mesh::Init ()
 	m_name = std::string("#NoName#");
 	m_nVertices = 0;
 	m_nFaces = 0;
-	m_pVertices = nullptr;
-	m_pVertexNormals = nullptr;
-	m_pVertexColors = nullptr;
+	m_pVertices.clear();
+	m_pVertexNormals.clear();
+	m_pVertexColors.clear();
 	m_pFaces = nullptr;
-	m_pFaceNormals = nullptr;
+	m_pFaceNormals.clear();
 	m_nMaterials = 0;
 	m_pMaterials = nullptr;
 	m_nTextureCoordinates = 0;
-	m_pTextureCoordinates = nullptr;
+	m_pTextureCoordinates.clear();
 	m_pTensors = nullptr;
 	m_pOctree = nullptr;
 	m_revision = 0;
@@ -132,20 +132,17 @@ void Mesh::Init ()
 
 void Mesh::InitVertexColors (float r, float g, float b)
 {
-	if (m_pVertexColors)
-		delete m_pVertexColors;
-	m_pVertexColors = nullptr;
+	m_pVertexColors.clear();
 
 	if (m_nVertices > 0)
 	{
-		m_pVertexColors = new float[3*m_nVertices];
+		m_pVertexColors.resize(3*m_nVertices);
 		for (int i=0; i<m_nVertices; i++)
 		{
 			m_pVertexColors[3*i]   = r;
 			m_pVertexColors[3*i+1] = g;
 			m_pVertexColors[3*i+2] = b;
 		}
-		//memset (m_pVertexColors, 0, 3*m_nVertices*sizeof(float));
 	}
 }
 
@@ -200,13 +197,11 @@ void Mesh::InitVertexColorsFromArray (float *array, char *defined)
 	if (!array)
 		return;
 
-	if (m_pVertexColors)
-		delete m_pVertexColors;
-	m_pVertexColors = nullptr;
+	m_pVertexColors.clear();
 
 	if (m_nVertices > 0)
 	{
-		m_pVertexColors = new float[3*m_nVertices];
+		m_pVertexColors.resize(3*m_nVertices);
 
 		float min = array[0];
 		float max = array[0];
@@ -238,7 +233,7 @@ void Mesh::InitVertexColorsFromArray (float *array, char *defined)
 		else
 		{
 			m_nTextureCoordinates = m_nVertices;
-			m_pTextureCoordinates = new float[2 * m_nTextureCoordinates];
+			m_pTextureCoordinates.assign(2 * m_nTextureCoordinates, 0.0f);
 
 			float invdenom = 1./(max-min);
 			for (int i=0; i<m_nVertices; i++)
@@ -269,43 +264,31 @@ void Mesh::InitVertexColorsFromArray (float *array, char *defined)
 
 void Mesh::InitVertices (unsigned int nVertices)
 {
-	m_pVertices = nullptr;
-	m_pVertexColors = nullptr;
-	m_pVertexNormals = nullptr;
+	m_pVertices.clear();
+	m_pVertexColors.clear();
+	m_pVertexNormals.clear();
 
 	m_nVertices = nVertices;
 	if (m_nVertices)
 	{
-		m_pVertices = new float[3*nVertices];
-		memset (m_pVertices, 0, 3*nVertices*sizeof(float));
-		
-		m_pVertexNormals = new float[3*nVertices];
-		memset (m_pVertexNormals, 0, 3*nVertices*sizeof(float));
-
-		m_pVertexColors = new float[3 * nVertices];
-		for (unsigned int i = 0; i < nVertices; i++)
-		{
-			m_pVertexColors[3 * i] = 0.5f;
-			m_pVertexColors[3 * i + 1] = 0.5f;
-			m_pVertexColors[3 * i + 2] = 0.5f;
-		}
+		m_pVertices.assign(3*nVertices, 0.0f);
+		m_pVertexNormals.assign(3*nVertices, 0.0f);
+		m_pVertexColors.assign(3*nVertices, 0.5f);
 	}
 }
 
 void Mesh::InitFaces (unsigned int nFaces)
 {
 	m_pFaces = nullptr;
-	m_pFaceNormals = nullptr;
+	m_pFaceNormals.clear();
 
 	m_nFaces = nFaces;
 	if (m_nFaces)
 	{
 		m_pFaces = new Face*[m_nFaces];
-		//memset (m_pFaces, 0, nFaces*sizeof(Face*));
 		for (int  i=0; i<m_nFaces; i++)
 			m_pFaces[i] = new Face ();
-		m_pFaceNormals = new float[3*m_nFaces];
-		memset (m_pFaceNormals, 0, 3*m_nFaces*sizeof(float));
+		m_pFaceNormals.assign(3*m_nFaces, 0.0f);
 	}
 }
 
@@ -368,9 +351,7 @@ void Mesh::DeleteFaces (void)
 
 Mesh::~Mesh ()
 {
-	if (m_pVertices)	delete[] m_pVertices;
-	if (m_pVertexNormals)	delete[] m_pVertexNormals;
-	if (m_pVertexColors)	delete[] m_pVertexColors;
+	// vector members destruct themselves
 	DeleteFaces ();
 	if (m_pMaterials)
 	{
@@ -384,12 +365,12 @@ Mesh::~Mesh ()
 void Mesh::Dump ()
 {
 	printf ("nVertices : %d\n", m_nVertices);
-	printf("pVertices : %p\n", (void*)m_pVertices);
-	printf ("pVertexNormals : %p\n", (void*)m_pVertexNormals);
-	printf("pVertexColors : %p\n", (void*)m_pVertexColors);
+	printf("pVertices : %p\n", (void*)m_pVertices.data());
+	printf ("pVertexNormals : %p\n", (void*)m_pVertexNormals.data());
+	printf("pVertexColors : %p\n", (void*)m_pVertexColors.data());
 	printf ("nFace : %d\n", m_nFaces);
 	printf ("pFaces : %p\n", (void*)m_pFaces);
-	printf ("pTextureCoordinates : %p\n", (void*)m_pTextureCoordinates);
+	printf ("pTextureCoordinates : %p\n", (void*)m_pTextureCoordinates.data());
 	printf ("nMaterials : %d\n", m_nMaterials);
 	printf ("pMaterials : %p\n", (void*)m_pMaterials);
 	for (unsigned int i=0; i<m_nMaterials; i++)
@@ -420,15 +401,8 @@ unsigned int* Mesh::GetTriangles (void)
 
 int Mesh::SetVertices (unsigned int nVertices, float *pVertices)
 {
-	if (!m_pVertices || (m_pVertices && nVertices != m_nVertices))
-	{
-		if (m_pVertices)
-			delete[] m_pVertices;
-		m_pVertices = new float[3*nVertices];
-	}
 	m_nVertices = nVertices;
-	memcpy (m_pVertices, pVertices, 3*nVertices*sizeof(float));
-
+	m_pVertices.assign(pVertices, pVertices + 3*nVertices);
 	return 0;
 }
 
@@ -439,13 +413,7 @@ int Mesh::SetVertexNormals(unsigned int nVertexNormals, float* pVertexNormals)
 		return -1;
 	}
 
-	if (!m_pVertexNormals || (m_pVertexNormals && nVertexNormals != m_nVertices))
-	{
-		delete m_pVertexNormals;
-		m_pVertexNormals = new float[3 * nVertexNormals];
-	}
-
-	memcpy(m_pVertexNormals, pVertexNormals, 3 * nVertexNormals * sizeof(float));
+	m_pVertexNormals.assign(pVertexNormals, pVertexNormals + 3*nVertexNormals);
 
 	return 0;
 
@@ -470,9 +438,9 @@ int Mesh::SetFaces (unsigned int nFaces, unsigned int nVerticesPerFace, unsigned
 
 int Mesh::SetVertex (unsigned int i, float x, float y, float z)
 {
-	if (!m_pVertices || i>=m_nVertices)
+	if (m_pVertices.empty() || i>=m_nVertices)
 		return -1;
-	
+
 	m_pVertices[3*i+0] = x;
 	m_pVertices[3*i+1] = y;
 	m_pVertices[3*i+2] = z;
@@ -624,16 +592,8 @@ bool Mesh::IsTriangleMesh() const
 //
 void Mesh::ComputeNormals (void)
 {
-	if (m_pVertexNormals)
-		delete[] m_pVertexNormals;
-	m_pVertexNormals = new float[3*m_nVertices];
-	memset (m_pVertexNormals, 0, 3*m_nVertices*sizeof(float));
-
-	//
-	if (m_pFaceNormals)
-		delete[] m_pFaceNormals;
-	m_pFaceNormals = new float[3*m_nFaces];
-	memset (m_pFaceNormals, 0, 3*m_nFaces*sizeof(float));
+	m_pVertexNormals.assign(3*m_nVertices, 0.0f);
+	m_pFaceNormals.assign(3*m_nFaces, 0.0f);
 	
 
 	//
@@ -708,15 +668,9 @@ int Mesh::Append (Mesh *m)
 
 	// vertices
 	unsigned int res_nv = m_nVertices + m->m_nVertices;
-	float *res_v = new float[3*res_nv];
-
-	for (unsigned int i=0; i<3*m_nVertices; i++)
-		res_v[i] = m_pVertices[i];
-
-	for (unsigned int i=0; i<3*m->m_nVertices; i++)
-		res_v[3*m_nVertices+i] = m->m_pVertices[i];
-
-	delete m_pVertices;
+	m_pVertices.insert(m_pVertices.end(),
+	                   m->m_pVertices.begin(),
+	                   m->m_pVertices.begin() + 3 * m->m_nVertices);
 
 	// faces
 	unsigned int res_nf = m_nFaces + m->m_nFaces;
@@ -740,7 +694,6 @@ int Mesh::Append (Mesh *m)
 
 
 	m_nVertices = res_nv;
-	m_pVertices = res_v;
 
 	m_nFaces = res_nf;
 	m_pFaces = res_f;
@@ -770,7 +723,7 @@ int Mesh::DeleteVertices (funcptr_v func)
 			m_pVertexNormals[3*nVertices]   = m_pVertexNormals[3*i];
 			m_pVertexNormals[3*nVertices+1] = m_pVertexNormals[3*i+1];
 			m_pVertexNormals[3*nVertices+2] = m_pVertexNormals[3*i+2];
-			if (m_pVertexColors)
+			if (!m_pVertexColors.empty())
 			{
 				m_pVertexColors[3*nVertices]   = m_pVertexColors[3*i];
 				m_pVertexColors[3*nVertices+1] = m_pVertexColors[3*i+1];
@@ -807,8 +760,8 @@ bool Mesh::ColorizeVerticesDensity_Traverse (Octree &o, void *_data)
 // Treatments on vertices
 int Mesh::ColorizeVerticesDensity (float k)
 {
-	if (!m_pVertexColors)
-		InitVertexColors (m_nVertices);	
+	if (m_pVertexColors.empty())
+		InitVertexColors (m_nVertices);
 
 	unsigned int *neighbours = (unsigned int*)malloc(m_nVertices*sizeof(unsigned int));
 	//unsigned int neighbours[m_nVertices];
@@ -829,7 +782,7 @@ int Mesh::ColorizeVerticesDensity (float k)
 */
 
 	Octree *pOctree = new Octree ();
-	pOctree->Build (m_pVertices, m_nVertices, 200, 20);
+	pOctree->Build (m_pVertices.data(), m_nVertices, 200, 20);
 	vec3 pt;
 	for (int i=0; i<m_nVertices; i++)
 	{
@@ -1037,7 +990,7 @@ int Mesh::GetIntersectionWithRay (vec3 vOrig, vec3 vDirection, float *_t, vec3 v
 	if (1 && !m_pOctree)
 	{
 		m_pOctree = new Octree ();
-		m_pOctree->BuildForTriangles (m_pVertices, m_nVertices,
+		m_pOctree->BuildForTriangles (m_pVertices.data(), m_nVertices,
 									  100, // maxTriangles
 									  5,  // maxDepth
 								      GetTriangles (), m_nFaces);
@@ -1145,24 +1098,19 @@ int Mesh::MergeVertices (float tolerance)
 	}
 
 	// Replace vertex array
-	delete[] m_pVertices;
-	m_pVertices = new float[3 * nNewVertices];
-	memcpy(m_pVertices, newVertices, 3 * nNewVertices * sizeof(float));
+	m_pVertices.assign(newVertices, newVertices + 3 * nNewVertices);
 	delete[] newVertices;
 
 	// Rebuild vertex normals
-	if (m_pVertexNormals)
+	if (!m_pVertexNormals.empty())
 	{
-		delete[] m_pVertexNormals;
-		m_pVertexNormals = new float[3 * nNewVertices];
-		memset(m_pVertexNormals, 0, 3 * nNewVertices * sizeof(float));
+		m_pVertexNormals.assign(3 * nNewVertices, 0.0f);
 	}
 
 	// Rebuild vertex colors
-	if (m_pVertexColors)
+	if (!m_pVertexColors.empty())
 	{
-		float *newColors = new float[3 * nNewVertices];
-		memset(newColors, 0, 3 * nNewVertices * sizeof(float));
+		std::vector<float> newColors(3 * nNewVertices, 0.0f);
 		// Copy color from first occurrence
 		for (unsigned int i = 0; i < m_nVertices; i++)
 		{
@@ -1171,8 +1119,7 @@ int Mesh::MergeVertices (float tolerance)
 			newColors[3 * ni + 1] = m_pVertexColors[3 * i + 1];
 			newColors[3 * ni + 2] = m_pVertexColors[3 * i + 2];
 		}
-		delete[] m_pVertexColors;
-		m_pVertexColors = newColors;
+		m_pVertexColors = std::move(newColors);
 	}
 
 	unsigned int nOldVertices = m_nVertices;

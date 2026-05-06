@@ -21,9 +21,9 @@ public:
 		//glPolygonMode (GL_FRONT_AND_BACK, GL_POINT);
 		//glLineWidth (2.0);
 
-		float *vertices = mesh->m_pVertices;
-		float *verticesNormals = mesh->m_pVertexNormals;
-		float *verticesColors = mesh->m_pVertexColors;
+		float *vertices = mesh->m_pVertices.data();
+		float *verticesNormals = mesh->m_pVertexNormals.data();
+		float *verticesColors = mesh->m_pVertexColors.data();
 		int nFaces = mesh->m_nFaces;
 		Face **faces = mesh->m_pFaces;
 		int a, b, c;

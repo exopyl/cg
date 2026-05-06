@@ -497,7 +497,7 @@ void Application::loadModel(const std::filesystem::path& path) {
                  ", camera distance: " + std::to_string(cameraDistance) + ")");
 
     // Compute normals if not present
-    if (mesh.m_pVertexNormals == nullptr) {
+    if (mesh.m_pVertexNormals.empty()) {
         mesh.ComputeNormals();
     }
 
@@ -513,11 +513,11 @@ void Application::loadModel(const std::filesystem::path& path) {
         v.position[1] = mesh.m_pVertices[3 * i + 1];
         v.position[2] = mesh.m_pVertices[3 * i + 2];
 
-        if (mesh.m_pVertexNormals) {
+        if (!mesh.m_pVertexNormals.empty()) {
             v.normal[0] = mesh.m_pVertexNormals[3 * i];
             v.normal[1] = mesh.m_pVertexNormals[3 * i + 1];
             v.normal[2] = mesh.m_pVertexNormals[3 * i + 2];
-        } else if (mesh.m_pFaceNormals) {
+        } else if (!mesh.m_pFaceNormals.empty()) {
             // Fallback: will be overwritten per-face below
             v.normal[0] = 0.0f;
             v.normal[1] = 1.0f;

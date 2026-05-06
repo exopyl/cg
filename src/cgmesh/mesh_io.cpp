@@ -206,7 +206,7 @@ int Mesh::import_obj (const char *filename)
 	if (nTexCoords)
 	{
 		m_nTextureCoordinates = nTexCoords;
-		m_pTextureCoordinates = new float[2*nTexCoords];
+		m_pTextureCoordinates.assign(2*nTexCoords, 0.0f);
 	}
 	int ipoint = 0, itexcoord = 0, iface = 0;
 	int usemtl = -1;
@@ -366,7 +366,7 @@ int Mesh::export_obj (const char *filename)
 	for (i = 0; i < m_nVertices; i++)
 		fprintf (fp, "v %f %f %f\n",
 			 m_pVertices[3*i], m_pVertices[3*i+1], m_pVertices[3*i+2]);
-	if (0 && m_pVertexNormals)
+	if (0 && !m_pVertexNormals.empty())
 	{
 		for (i=0; i<m_nVertices; i++)
 		{
@@ -377,7 +377,7 @@ int Mesh::export_obj (const char *filename)
 		}
 	}
 	
-	if (m_pTextureCoordinates)
+	if (!m_pTextureCoordinates.empty())
 	{
 		for (i=0; i<m_nTextureCoordinates; i++)
 			fprintf (fp, "vt %f %f\n", m_pTextureCoordinates[2*i], m_pTextureCoordinates[2*i+1]);
@@ -423,7 +423,7 @@ int Mesh::export_obj (const char *filename)
 				fprintf (fp, "/%d", 1+m_pFaces[i]->m_pTextureCoordinatesIndices[j]);//m_pFaces[i]->m_nVertices);
 
 			// normal
-			if (0 && m_pVertexNormals)
+			if (0 && !m_pVertexNormals.empty())
 			{
 				if (!m_pFaces[i]->m_bUseTextureCoordinates)
 					fprintf (fp, "/");
@@ -550,7 +550,7 @@ int Mesh::export_asc (const char *filename)
 	FILE *ptr = fopen (filename, "w");
 	printf ("ASC : %d\n", m_nVertices);
 	unsigned char r=0, g=0, b=0;
-	if (m_pVertexColors)
+	if (!m_pVertexColors.empty())
 	{
 		for (unsigned int i=0; i<m_nVertices; i++)
 		{
@@ -853,7 +853,7 @@ int Mesh::export_cpp  (const char *filename)
 
   /* vertices normales */
   fprintf (ptr, "static float %s_vertices_normales[] = {", modelname);
-  float *vertices_normales = m_pVertexNormals;
+  float *vertices_normales = m_pVertexNormals.data();
   fprintf (ptr, "%f, %f, %f,\n", vertices_normales[0], vertices_normales[1], vertices_normales[2]);
   for (i=1; i<n_vertices-1; i++)
     fprintf (ptr, "\t\t%f, %f, %f,\n",
@@ -939,7 +939,7 @@ int Mesh::import_ifs (const char *filename)
   // vertices
   fread (&m_nVertices, sizeof(unsigned int), 1, ptr);
   InitVertices (m_nVertices);
-  fread (m_pVertices, sizeof(float), 3*m_nVertices, ptr);
+  fread (m_pVertices.data(), sizeof(float), 3*m_nVertices, ptr);
   
   // triangleheader "FACES"
   fread (&length, sizeof(unsigned int), 1, ptr);
@@ -1374,12 +1374,7 @@ int Mesh::import_pts (const char *filename)
     m_nVertices++;
   }
   Init (m_nVertices, 0);
-  m_pVertexColors = (float*)malloc(3*m_nVertices*sizeof(float));
-  if (m_pVertexColors == nullptr)
-  {
-	  free (buffer);
-	  return false;
-  }
+  m_pVertexColors.assign(3*m_nVertices, 0.0f);
 
   rewind (ptr);
   unsigned int vertex_walk=0;
@@ -1416,7 +1411,7 @@ int Mesh::export_pts (const char *filename)
 	  return false;
 	}
 
-  if (m_pVertices != nullptr && m_pVertexColors != nullptr)
+  if (!m_pVertices.empty() && !m_pVertexColors.empty())
   {
 	  for (int i=0; i<m_nVertices; i++)
 	  {
@@ -1554,7 +1549,7 @@ int Mesh::export_ply (const char *filename)
     ply_add_property(oply, "x", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
     ply_add_property(oply, "y", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
     ply_add_property(oply, "z", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
-    if (m_pVertexNormals)
+    if (!m_pVertexNormals.empty())
     {
 	    ply_add_property(oply, "nx", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
 	    ply_add_property(oply, "ny", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
@@ -1570,7 +1565,7 @@ int Mesh::export_ply (const char *filename)
 	    ply_write (oply, m_pVertices[3*i]);
 	    ply_write (oply, m_pVertices[3*i+1]);
 	    ply_write (oply, m_pVertices[3*i+2]);
-	    if (m_pVertexNormals)
+	    if (!m_pVertexNormals.empty())
 	    {
 		    ply_write (oply, m_pVertexNormals[3*i]);
 		    ply_write (oply, m_pVertexNormals[3*i+1]);
@@ -1605,7 +1600,7 @@ int Mesh::import_stl(const char* filename)
 	for (unsigned int iface = 0; iface < nTriangles; iface++)
 	{
 		fread((char*)coords, sizeof(float), 12, ptr);
-		memcpy(m_pVertices + 9*iface, coords + 3, 9 * sizeof(float));
+		memcpy(m_pVertices.data() + 9*iface, coords + 3, 9 * sizeof(float));
 
 		Face* pFace = m_pFaces[iface];
 		if (!pFace)

@@ -7,8 +7,8 @@
 bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 {
 	int nv = m_pModel->m_pMesh->m_nVertices;
-	float *v = m_pModel->m_pMesh->m_pVertices;
-	float *vn = m_pModel->m_pMesh->m_pVertexNormals;
+	float *v = m_pModel->m_pMesh->m_pVertices.data();
+	float *vn = m_pModel->m_pMesh->m_pVertexNormals.data();
 	int i,j,k,l;
 
 	for (i=0; i<nv; i++)

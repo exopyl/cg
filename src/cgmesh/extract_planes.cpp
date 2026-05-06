@@ -24,7 +24,7 @@ Cextract_planes::add_plane (VectorizedPlane *plane)
 void Cextract_planes::compute (float threshold, float percentage)
 {
   int i,j,k;
-  float *v = model->m_pMesh->m_pVertices;
+  float *v = model->m_pMesh->m_pVertices.data();
   int nv = model->m_pMesh->m_nVertices;
   //float *vc = model->get_vertices_colors ();
   unsigned int *f = model->m_pMesh->GetTriangles ();

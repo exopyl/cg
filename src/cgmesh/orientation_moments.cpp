@@ -21,9 +21,9 @@ void
 Cmesh_orientation_moments::compute_orientation (void)
 {
   int   nf      = model3d_half_edge->m_pMesh->m_nFaces;
-  float *v      = model3d_half_edge->m_pMesh->m_pVertices;
+  float *v      = model3d_half_edge->m_pMesh->m_pVertices.data();
   Face **f      = model3d_half_edge->m_pMesh->m_pFaces;
-  float *norm_f = model3d_half_edge->m_pMesh->m_pFaceNormals;
+  float *norm_f = model3d_half_edge->m_pMesh->m_pFaceNormals.data();
 
   int A;   /* alpha */
   int B;   /* beta */

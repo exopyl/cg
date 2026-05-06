@@ -53,8 +53,7 @@ int Mesh_nm::import_objnm (char *filename)
   }
   Init (m_nVertices, m_nFaces);
 
-  m_pVertexNormals = (float*)malloc(3*m_nVertices*sizeof(float));
-  assert (m_pVertexNormals);
+  m_pVertexNormals.assign(3*m_nVertices, 0.0f);
   vt = (float*)malloc(2*m_nVertices*sizeof(float));
   assert (vt);
 

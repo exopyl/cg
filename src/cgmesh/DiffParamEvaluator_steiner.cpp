@@ -164,9 +164,9 @@ void MeshAlgoTensorEvaluator::ApplySteinerAux (int index, float radius, int *_n_
 {
 	int nv = m_pModel->m_pMesh->m_nVertices;
 	int nf = m_pModel->m_pMesh->m_nFaces;
-	float *v = m_pModel->m_pMesh->m_pVertices;
+	float *v = m_pModel->m_pMesh->m_pVertices.data();
 	Face **f = m_pModel->m_pMesh->m_pFaces;
-	float *vn = m_pModel->m_pMesh->m_pVertexNormals;
+	float *vn = m_pModel->m_pMesh->m_pVertexNormals.data();
 
 	int j;
 	if (radius == 0.0)

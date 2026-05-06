@@ -339,13 +339,13 @@ public:
 	std::string m_name;
 	unsigned int m_nVertices;
 	unsigned int m_nFaces;
-	float *m_pVertices;
-	float *m_pVertexNormals;
-	float *m_pVertexColors;
+	std::vector<float> m_pVertices;
+	std::vector<float> m_pVertexNormals;
+	std::vector<float> m_pVertexColors;
 	Face **m_pFaces;
-	float *m_pFaceNormals;
+	std::vector<float> m_pFaceNormals;
 	unsigned int m_nTextureCoordinates;
-	float *m_pTextureCoordinates;
+	std::vector<float> m_pTextureCoordinates;
 	unsigned int m_nMaterials;
 	Material **m_pMaterials;
 	Tensor **m_pTensors;

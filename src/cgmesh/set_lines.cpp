@@ -47,7 +47,7 @@ Cextracted_line* Cset_lines::get_extracted_line (int index) { return extracted_l
 
 void Cset_lines::apply_gaussian_noise (float variance)
 {
-	float *v = model->m_pMesh->m_pVertices;
+	float *v = model->m_pMesh->m_pVertices.data();
 	int nv = model->m_pMesh->m_nVertices;
   for (int i=0; i<nv; i++)
     {

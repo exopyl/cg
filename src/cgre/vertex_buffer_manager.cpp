@@ -21,8 +21,8 @@ int VertexBufferManager::addMesh (Mesh *mesh)
 
 	int nVertices = mesh->m_nVertices;
 	int nTriangles = mesh->m_nFaces;
-	float* pVertices = mesh->m_pVertices;
-	float* pVertexNormals = mesh->m_pVertexNormals;
+	float* pVertices = mesh->m_pVertices.data();
+	float* pVertexNormals = mesh->m_pVertexNormals.data();
 
 	GLfloat* data = (GLfloat*)malloc(6*nVertices*sizeof(GLfloat));
 	for (int i=0; i<nVertices; i++)
@@ -111,10 +111,10 @@ void VertexArrayManager::Draw (int id)
 	if (triangles.empty())
 		return;
 
-	float* pVertices = mesh->m_pVertices;
+	float* pVertices = mesh->m_pVertices.data();
 
-	bool bHasNormals = (mesh->m_pVertexNormals)? true : false;
-	bool bHasColors = (mesh->m_pVertexColors)? true : false;
+	bool bHasNormals = (!mesh->m_pVertexNormals.empty())? true : false;
+	bool bHasColors = (!mesh->m_pVertexColors.empty())? true : false;
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 	if (bHasNormals)
@@ -122,11 +122,11 @@ void VertexArrayManager::Draw (int id)
 	if (bHasColors)
 		glEnableClientState(GL_COLOR_ARRAY);
 
-	glVertexPointer(3, GL_FLOAT, 0, mesh->m_pVertices);
+	glVertexPointer(3, GL_FLOAT, 0, mesh->m_pVertices.data());
 	if (bHasNormals)
-		glNormalPointer (GL_FLOAT, 0, mesh->m_pVertexNormals);
+		glNormalPointer (GL_FLOAT, 0, mesh->m_pVertexNormals.data());
 	if (bHasColors)
-		glColorPointer(3, GL_FLOAT, 0, mesh->m_pVertexColors);
+		glColorPointer(3, GL_FLOAT, 0, mesh->m_pVertexColors.data());
 
 	glEnable(GL_POLYGON_OFFSET_FILL);
 	glPolygonOffset(1.0, 1.0);
@@ -162,12 +162,12 @@ int VBOManager::addMesh (Mesh *mesh)
 	vboInfo info;
 
 	unsigned int* pIndices = mesh->GetTriangles();
-	float* pVertices = mesh->m_pVertices;
+	float* pVertices = mesh->m_pVertices.data();
 	if (!pIndices)
 		return -1;
 
-	bool bHasNormals = (mesh->m_pVertexNormals)? true : false;
-	bool bHasColors = (mesh->m_pVertexColors)? true : false;
+	bool bHasNormals = (!mesh->m_pVertexNormals.empty())? true : false;
+	bool bHasColors = (!mesh->m_pVertexColors.empty())? true : false;
 
 
 
@@ -176,7 +176,7 @@ int VBOManager::addMesh (Mesh *mesh)
 
 	// Buffer d'informations de vertex
 	glBindBuffer(GL_ARRAY_BUFFER, info.buffers[0]);
-	glBufferData(GL_ARRAY_BUFFER, 3*mesh->m_nVertices*sizeof(float), mesh->m_pVertices, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, 3*mesh->m_nVertices*sizeof(float), mesh->m_pVertices.data(), GL_STATIC_DRAW);
 
 	// indices
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info.buffers[1]);
@@ -184,13 +184,13 @@ int VBOManager::addMesh (Mesh *mesh)
 
 	// normals
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info.buffers[2]);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3*mesh->m_nVertices*sizeof(float), mesh->m_pVertexNormals, GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3*mesh->m_nVertices*sizeof(float), mesh->m_pVertexNormals.data(), GL_STATIC_DRAW);
 
 	// colors
-	if (0 && mesh->m_pVertexColors)
+	if (0 && !mesh->m_pVertexColors.empty())
 	{
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info.buffers[2]);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3*mesh->m_nVertices*sizeof(float), mesh->m_pVertexColors, GL_STATIC_DRAW);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3*mesh->m_nVertices*sizeof(float), mesh->m_pVertexColors.data(), GL_STATIC_DRAW);
 	}
 
 	

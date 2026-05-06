@@ -62,12 +62,12 @@ Cmesh_orientation_pca::compute_pca (void)
   if (mesh)
   {
 	  nv = mesh->m_nVertices;
-	  v = mesh->m_pVertices;
+	  v = mesh->m_pVertices.data();
   }
   if (model3d_half_edge)
   {
 	  nv = model3d_half_edge->m_pMesh->m_nVertices;
-	  v = model3d_half_edge->m_pMesh->m_pVertices;
+	  v = model3d_half_edge->m_pMesh->m_pVertices.data();
   }
 
   // center
@@ -225,7 +225,7 @@ Cmesh_orientation_pca::compute_pca_weighted_vertices (void)
   if (model3d_half_edge)
   {
 	  nv = model3d_half_edge->m_pMesh->m_nVertices;
-	  v  = model3d_half_edge->m_pMesh->m_pVertices;
+	  v  = model3d_half_edge->m_pMesh->m_pVertices.data();
 	  nf = model3d_half_edge->m_pMesh->m_nFaces;
 	  f  = model3d_half_edge->m_pMesh->m_pFaces;
   }
@@ -339,14 +339,14 @@ Cmesh_orientation_pca::compute_pca_barycenter (void)
   if (mesh)
   {
 	  nv = mesh->m_nVertices;
-	  v  = mesh->m_pVertices;
+	  v  = mesh->m_pVertices.data();
 	  nf = mesh->m_nFaces;
 	  f  = mesh->m_pFaces;
   }
   if (model3d_half_edge)
   {
 	  nv = model3d_half_edge->m_pMesh->m_nVertices;
-	  v  = model3d_half_edge->m_pMesh->m_pVertices;
+	  v  = model3d_half_edge->m_pMesh->m_pVertices.data();
 	  nf = model3d_half_edge->m_pMesh->m_nFaces;
 	  f  = model3d_half_edge->m_pMesh->m_pFaces;
   }
@@ -451,14 +451,14 @@ Cmesh_orientation_pca::compute_pca_continuous (void)
   if (mesh)
   {
 	  nv = mesh->m_nVertices;
-	  v  = mesh->m_pVertices;
+	  v  = mesh->m_pVertices.data();
 	  nf = mesh->m_nFaces;
 	  f  = mesh->m_pFaces;
   }
   if (model3d_half_edge)
   {
 	  nv = model3d_half_edge->m_pMesh->m_nVertices;
-	  v  = model3d_half_edge->m_pMesh->m_pVertices;
+	  v  = model3d_half_edge->m_pMesh->m_pVertices.data();
 	  nf = model3d_half_edge->m_pMesh->m_nFaces;
 	  f  = model3d_half_edge->m_pMesh->m_pFaces;
   }

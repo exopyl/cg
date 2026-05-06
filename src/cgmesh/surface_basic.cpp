@@ -263,7 +263,7 @@ Mesh* CreateDisk (unsigned int nVertices)
 {
 	Mesh *mesh = new Mesh (nVertices, 1);
 
-	float *pVertices = mesh->m_pVertices;
+	float *pVertices = mesh->m_pVertices.data();
 	for (unsigned int i=0; i<nVertices; i++)
 	{
 		float fAngle = i*2*M_PI/(nVertices);
@@ -290,7 +290,7 @@ Mesh* CreateCone (float fHeight, float fRadius, unsigned int nVertices, bool bCa
 	unsigned int nf = (bCap)? nVertices+1 : nVertices;
 	Mesh *mesh = new Mesh (nv, nf);
 
-	float *pVertices = mesh->m_pVertices;
+	float *pVertices = mesh->m_pVertices.data();
 	pVertices[0] = 0.;
 	pVertices[1] = 0.;
 	pVertices[2] = fHeight;
@@ -334,7 +334,7 @@ Mesh* CreateCylinder (float fHeight, float fRadius, unsigned int nVertices, bool
 		nf = (bCap)? 2*nVertices+2*(nVertices-2) : 2*nVertices;
 	Mesh *mesh = new Mesh (nv, nf);
 
-	float *pVertices = mesh->m_pVertices;
+	float *pVertices = mesh->m_pVertices.data();
 	for (unsigned int i=0; i<nVertices; i++)
 	{
 		float fAngle = i*2*M_PI/(nVertices);

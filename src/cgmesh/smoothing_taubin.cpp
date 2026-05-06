@@ -6,7 +6,7 @@
 bool MeshAlgoSmoothingTaubin::ApplyCoefficient (Mesh_half_edge *model, float coeff)
 {
 	int nv = model->m_pMesh->m_nVertices;
-	float *v = model->m_pMesh->m_pVertices;
+	float *v = model->m_pMesh->m_pVertices.data();
 
 	int i;
 	float x_translate, y_translate, z_translate;
@@ -46,8 +46,8 @@ bool MeshAlgoSmoothingTaubin::ApplyCoefficient (Mesh_half_edge *model, float coe
 		vnew[3*i+2] = v[3*i+2] + coeff * z_translate / n_neighbours;
     }
 
-	delete (model->m_pMesh->m_pVertices);
-	model->m_pMesh->m_pVertices = vnew;
+	model->m_pMesh->m_pVertices.assign(vnew, vnew + 3*nv);
+	delete[] vnew;
 
 	return true;
 }

@@ -1,158 +1,93 @@
+#include <vector>
+#include <cstring>
+
 #include "subdivision_karbacher.h"
 
+//
+// Karbacher 1->3 subdivision : insert one centroid per triangle, displaced
+// along the averaged normal direction. Original vertices keep their position.
+//
+//             v1
+//            *
+//           /|\
+//          / | \
+//         /  |  \
+//        /   * v4\
+//       /  /   \  \
+//      / /       \ \
+//     *-------------*
+//   v2               v3
+//
+// New vertex v4 = barycenter(v1,v2,v3) + normal-based displacement
+//                 (computed by InitializePosition).
+//
+// Each old face (v1, v2, v3) becomes 3 new faces :
+//   (v1, v2, v4), (v2, v3, v4), (v3, v1, v4)
+//
 bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 {
+	if (!model || !model->m_pMesh) return false;
+
 	m_pModel = model;
-	int nv = model->m_pMesh->m_nVertices;
-	int nf = model->m_pMesh->m_nFaces;
-	float *v = model->m_pMesh->m_pVertices;
+	const int nv = (int)model->m_pMesh->m_nVertices;
+	const int nf = (int)model->m_pMesh->m_nFaces;
+	const float *v  = model->m_pMesh->m_pVertices.data();
+	const float *vn = model->m_pMesh->m_pVertexNormals.data();
 	Face **f = model->m_pMesh->m_pFaces;
-	Che_mesh *chePtr = model->GetCheMesh();
-	int m_ne = chePtr->m_ne;
-	float *vn = model->m_pMesh->m_pVertexNormals;
+	if (nv <= 0 || nf <= 0 || !v || !vn || !f) return false;
 
-	int i;
+	const int nv_new = nv + nf;
+	const int nf_new = 3 * nf;
 
-	// vertices
-	int nv_new = nv+nf;
-	float *v_new = new float[3*nv_new];
-	memcpy (v_new, v, 3*nv*sizeof(float));
-	int nv_new_walk = nv;
+	// Build new vertex array : copy originals, then append nf centroids.
+	std::vector<float> v_new (3 * nv_new);
+	std::memcpy (v_new.data(), v, 3 * nv * sizeof(float));
 
-	// faces
-	int nf_new = 3*nf;
-	Face **f_new = new Face*[nf_new];
+	// Build new face index list (3 triangles per old face).
+	std::vector<unsigned int> faces (3 * nf_new);
 
-	// edges: copy existing edges and grow the vector for new ones
-	m_ne = 3*nf;
-	int ne_new = 3*nf_new;
-	// We'll work directly with the chePtr->m_edges vector.
-	// First, reserve space for the new edges.
-	chePtr->m_edges.reserve(ne_new);
-	int ne_new_walk = m_ne;
-
-	chePtr->m_edges_face.resize(nf_new, -1);
-	chePtr->m_edges_vertex.resize(nv_new, -1);
-
-
-	// create the new triangles and link the new edges
-	for (i=0; i<nf; i++)
+	for (int i = 0; i < nf; ++i)
 	{
-		//
-		//             v1
-		//            *
-		//           /|\
-		//          / | \
-		//         /  |  \
-		//     e1 /   |   \ e3
-		//       /    * v4 \
-		//      /   /   \   \
-		//     / /         \ \
-		//    *---------------*
-		//  v2       e2        v3
-		//
+		int iv1 = f[i]->GetVertex(0);
+		int iv2 = f[i]->GetVertex(1);
+		int iv3 = f[i]->GetVertex(2);
+		int iv4 = nv + i;   // new centroid vertex for face i
 
-		int e1 = chePtr->m_edges_face[i];
-		int e2 = chePtr->edge(e1).m_he_next;
-		int e3 = chePtr->edge(e2).m_he_next;
+		Vector3d V1 (v[3*iv1], v[3*iv1+1], v[3*iv1+2]);
+		Vector3d V2 (v[3*iv2], v[3*iv2+1], v[3*iv2+2]);
+		Vector3d V3 (v[3*iv3], v[3*iv3+1], v[3*iv3+2]);
 
-		// new half edges - push 6 new edges
-		int ie14_idx = ne_new_walk++;
-		int ie41_idx = ne_new_walk++;
-		int ie24_idx = ne_new_walk++;
-		int ie42_idx = ne_new_walk++;
-		int ie34_idx = ne_new_walk++;
-		int ie43_idx = ne_new_walk++;
+		Vector3d N1 (vn[3*iv1], vn[3*iv1+1], vn[3*iv1+2]);
+		Vector3d N2 (vn[3*iv2], vn[3*iv2+1], vn[3*iv2+2]);
+		Vector3d N3 (vn[3*iv3], vn[3*iv3+1], vn[3*iv3+2]);
 
-		chePtr->m_edges.resize(ne_new_walk);
+		Vector3d V4, NV4;
+		InitializePosition (V4, NV4, V1, V2, V3, N1, N2, N3);
 
-		// initialize the new vertex
-		int iv1 = f[chePtr->edge(e1).m_face]->GetVertex(0);
-		int iv2 = f[chePtr->edge(e1).m_face]->GetVertex(1);
-		int iv3 = f[chePtr->edge(e1).m_face]->GetVertex(2);
-		int iv4 = nv_new_walk;
-		Vector3d v1 (v[3*iv1], v[3*iv1+1], v[3*iv1+2]);
-		Vector3d v2 (v[3*iv2], v[3*iv2+1], v[3*iv2+2]);
-		Vector3d v3 (v[3*iv3], v[3*iv3+1], v[3*iv3+2]);
+		v_new[3*iv4]   = V4.x;
+		v_new[3*iv4+1] = V4.y;
+		v_new[3*iv4+2] = V4.z;
 
-		Vector3d n1 (vn[3*iv1], vn[3*iv1+1], vn[3*iv1+2]);
-		Vector3d n2 (vn[3*iv2], vn[3*iv2+1], vn[3*iv2+2]);
-		Vector3d n3 (vn[3*iv3], vn[3*iv3+1], vn[3*iv3+2]);
-
-		Vector3d v4, nv4;
-		InitializePosition (v4, nv4, v1, v2, v3, n1, n2, n3);
-
-		v_new[3*iv4]   = v4.x;
-		v_new[3*iv4+1] = v4.y;
-		v_new[3*iv4+2] = v4.z;
-		nv_new_walk++;
-
-		// update the links
-		chePtr->edge(e1).m_he_next  = ie24_idx;
-		chePtr->edge(ie24_idx).m_he_next = ie41_idx;
-		chePtr->edge(ie41_idx).m_he_next = e1;
-
-		chePtr->edge(e2).m_he_next  = ie34_idx;
-		chePtr->edge(ie34_idx).m_he_next = ie42_idx;
-		chePtr->edge(ie42_idx).m_he_next = e2;
-
-		chePtr->edge(e3).m_he_next  = ie14_idx;
-		chePtr->edge(ie14_idx).m_he_next = ie43_idx;
-		chePtr->edge(ie43_idx).m_he_next = e3;
-
-		chePtr->edge(ie14_idx).m_pair = ie41_idx;
-		chePtr->edge(ie41_idx).m_pair = ie14_idx;
-		chePtr->edge(ie24_idx).m_pair = ie42_idx;
-		chePtr->edge(ie42_idx).m_pair = ie24_idx;
-		chePtr->edge(ie34_idx).m_pair = ie43_idx;
-		chePtr->edge(ie43_idx).m_pair = ie34_idx;
-
-		chePtr->edge(ie14_idx).m_v_begin = iv1;	chePtr->edge(ie14_idx).m_v_end = iv4;
-		chePtr->edge(ie41_idx).m_v_begin = iv4;	chePtr->edge(ie41_idx).m_v_end = iv1;
-		chePtr->edge(ie24_idx).m_v_begin = iv2;	chePtr->edge(ie24_idx).m_v_end = iv4;
-		chePtr->edge(ie42_idx).m_v_begin = iv4;	chePtr->edge(ie42_idx).m_v_end = iv2;
-		chePtr->edge(ie34_idx).m_v_begin = iv3;	chePtr->edge(ie34_idx).m_v_end = iv4;
-		chePtr->edge(ie43_idx).m_v_begin = iv4;	chePtr->edge(ie43_idx).m_v_end = iv3;
-
-		// update the faces
-		f_new[3*i] = new Face ();
-		f_new[3*i]->SetTriangle (iv1, iv2, iv4);
-		f_new[3*i+1] = new Face ();
-		f_new[3*i+1]->SetTriangle (iv2, iv3, iv4);
-		f_new[3*i+2] = new Face ();
-		f_new[3*i+2]->SetTriangle (iv3, iv1, iv4);
-
-		chePtr->edge(e1).m_face = 3*i;
-		chePtr->edge(e2).m_face = 3*i+1;
-		chePtr->edge(e3).m_face = 3*i+2;
-
-		// edges_face
-		chePtr->m_edges_face[3*i]   = e1;
-		chePtr->m_edges_face[3*i+1] = e2;
-		chePtr->m_edges_face[3*i+2] = e3;
-
-		// edges vertex
-		chePtr->m_edges_vertex[iv1] = e1;
-		chePtr->m_edges_vertex[iv2] = e2;
-		chePtr->m_edges_vertex[iv3] = e3;
-		chePtr->m_edges_vertex[iv4] = ie41_idx;
+		unsigned int *p0 = faces.data() + 3 * (3 * i + 0);
+		unsigned int *p1 = faces.data() + 3 * (3 * i + 1);
+		unsigned int *p2 = faces.data() + 3 * (3 * i + 2);
+		p0[0] = (unsigned)iv1; p0[1] = (unsigned)iv2; p0[2] = (unsigned)iv4;
+		p1[0] = (unsigned)iv2; p1[1] = (unsigned)iv3; p1[2] = (unsigned)iv4;
+		p2[0] = (unsigned)iv3; p2[1] = (unsigned)iv1; p2[2] = (unsigned)iv4;
 	}
 
-	// Clean up old data to prevent leaks
-	if (model->m_pMesh->m_pVertices) delete[] model->m_pMesh->m_pVertices;
+	// Delete the existing per-Face objects ; SetFaces frees the outer array.
 	if (model->m_pMesh->m_pFaces)
 	{
-		for (unsigned int k = 0; k < nf; ++k)
-			delete model->m_pMesh->m_pFaces[k];
-		delete[] model->m_pMesh->m_pFaces;
+		for (unsigned int i = 0; i < model->m_pMesh->m_nFaces; ++i)
+			delete model->m_pMesh->m_pFaces[i];
 	}
 
-	model->m_pMesh->m_nFaces = nf_new;
-	model->m_pMesh->m_nVertices = nv_new;
-	model->m_pMesh->m_pVertices = v_new;
-	model->m_pMesh->m_pFaces = f_new;
+	model->m_pMesh->SetVertices ((unsigned)nv_new, v_new.data());
+	model->m_pMesh->SetFaces ((unsigned)nf_new, 3, faces.data());
 
-	//DeleteAngles ();
+	// Invalidate the cached half-edge structure.
+	model->create_half_edge ();
 
 	return true;
 }
@@ -196,25 +131,13 @@ void MeshAlgoSubdivisionKarbacher::InitializePosition (Vector3d &pos, Vector3d &
 void MeshAlgoSubdivisionKarbacher::DeleteAngles (void)
 {
 	int nf = m_pModel->m_pMesh->m_nFaces;
-	float *v = m_pModel->m_pMesh->m_pVertices;
+	float *v = m_pModel->m_pMesh->m_pVertices.data();
 	Che_mesh *chePtr = m_pModel->GetCheMesh();
 	int m_ne = chePtr->m_ne;
 
 	m_ne = 3*nf;
 	for (int i=0; i<m_ne; i++)
 	{
-		//
-		//  v1      v3
-		//  *-------*
-		//  |      /|
-		//  |     / |
-		//  |    /  |
-		//  |   /   |
-		//  |  /    |
-		//  | /     |
-		//  *-------*
-		//  v4      v2
-		//
 		int e = i;
 		if (chePtr->edge(e).m_pair < 0)
 			continue;
@@ -237,9 +160,6 @@ void MeshAlgoSubdivisionKarbacher::DeleteAngles (void)
 		Vector3d v23 = v3 - v2;
 		Vector3d v24 = v4 - v2;
 
-		//Vector3d n1, n2;
-		//n1.normale_triangle (v4, v3, v1);
-		//n2.normale_triangle (v2, v3, v4);
 		if (	v13 * v14 < 0.0
 			&&	v23 * v24 < 0.0	)
 		{

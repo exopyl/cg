@@ -277,7 +277,7 @@ Cmesh_orientation_curvatures::finalize_orientation (void)
    * rotate the vertices, project them and compute PCA for the final rotation
    */
   int n_vertices = model3d_half_edge->m_pMesh->m_nVertices;
-  float *v_orig = model3d_half_edge->m_pMesh->m_pVertices;
+  float *v_orig = model3d_half_edge->m_pMesh->m_pVertices.data();
   
   /* create a array with all the rotated and projected vertices */
   //float *v = (float*)malloc(2*n_vertices*sizeof(float));

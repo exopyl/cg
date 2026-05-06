@@ -92,7 +92,7 @@ Cmesh_orientation_edges2::compute_orientation2 (void)
 
   /* fill the accumulator */
   n = model->m_pMesh->m_nFaces;
-  float *vertices = model->m_pMesh->m_pVertices;
+  float *vertices = model->m_pMesh->m_pVertices.data();
   Face **faces = model->m_pMesh->m_pFaces;
 
   int indices[3];
@@ -313,12 +313,12 @@ Cmesh_orientation_edges2::finalize_orientation (void)
   if (model)
     {
       n_vertices = model->m_pMesh->m_nVertices;
-      v_orig = model->m_pMesh->m_pVertices;
+      v_orig = model->m_pMesh->m_pVertices.data();
     }
   if (model3d_half_edge)
     {
       n_vertices = model3d_half_edge->m_pMesh->m_nVertices;
-      v_orig = model3d_half_edge->m_pMesh->m_pVertices;
+      v_orig = model3d_half_edge->m_pMesh->m_pVertices.data();
     }
   
   /* create a array with all the rotated and projected vertices */

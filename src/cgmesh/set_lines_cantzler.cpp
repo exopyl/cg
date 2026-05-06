@@ -9,8 +9,8 @@
 
 void Cset_lines::cantzler_extract_edges (float threshold)
 {
-	float *fn = model->m_pMesh->m_pFaceNormals;
-	float *v = model->m_pMesh->m_pVertices;
+	float *fn = model->m_pMesh->m_pFaceNormals.data();
+	float *v = model->m_pMesh->m_pVertices.data();
 	int nv = model->m_pMesh->m_nVertices;
 	int ne = 3*model->m_pMesh->m_nFaces;
 	Che_mesh *cheMesh = model->GetCheMesh();

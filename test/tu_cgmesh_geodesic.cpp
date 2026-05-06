@@ -66,7 +66,7 @@ TEST(TEST_cgmesh_geodesic, geodesic_no_target)
 	pMesh->load("./test/data/rabbit.obj");
 
 	//bool success = geodesic->input (argv[1]);
-	bool success = geodesic->SetMesh(pMesh->m_nVertices, pMesh->m_pVertices, pMesh->m_nFaces, pMesh->GetTriangles());
+	bool success = geodesic->SetMesh(pMesh->m_nVertices, pMesh->m_pVertices.data(), pMesh->m_nFaces, pMesh->GetTriangles());
 	ASSERT_TRUE(success);
 
 	// set the algorithm
@@ -100,7 +100,7 @@ TEST(TEST_cgmesh_geodesic, geodesic_with_target)
 	pMesh->load("./test/data/rabbit.obj");
 
 	//bool success = geodesic->input (argv[1]);
-	bool success = geodesic->SetMesh(pMesh->m_nVertices, pMesh->m_pVertices, pMesh->m_nFaces, pMesh->GetTriangles());
+	bool success = geodesic->SetMesh(pMesh->m_nVertices, pMesh->m_pVertices.data(), pMesh->m_nFaces, pMesh->GetTriangles());
 	ASSERT_TRUE(success);
 
 	// set the algorithm

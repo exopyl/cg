@@ -146,8 +146,8 @@ float* MeshAlgoAmbientOcclusion::Evaluate (int nPasses)
 
 	m_pMesh->ComputeNormals();
 	unsigned int nVertices = m_pMesh->m_nVertices;
-	float *pVertices = m_pMesh->m_pVertices;
-	float *pVertexNormals =  m_pMesh->m_pVertexNormals;
+	float *pVertices = m_pMesh->m_pVertices.data();
+	float *pVertexNormals =  m_pMesh->m_pVertexNormals.data();
 	unsigned int nFaces = m_pMesh->m_nFaces;
 
 	//
@@ -183,7 +183,7 @@ float* MeshAlgoAmbientOcclusion::Evaluate (int nPasses)
 
 	// initialize an octree
 	Octree *pOctree = new Octree ();
-	pOctree->BuildWithIndices (m_pMesh->m_pVertices, m_pMesh->m_nVertices, 300 /* max elements per octree node */, 3 /* max depth */);
+	pOctree->BuildWithIndices (m_pMesh->m_pVertices.data(), m_pMesh->m_nVertices, 300 /* max elements per octree node */, 3 /* max depth */);
 	float fMaxDistance = m_pMesh->bbox_diagonal_length()/10.;
 	for (unsigned int iPass=0; iPass<nPasses; iPass++)
 	{
@@ -209,8 +209,8 @@ float* MeshAlgoAmbientOcclusion::Evaluate (int nPasses)
 				m_pMesh->GetVertex (i, tmp);
 				unsigned int *pClosestPoints = (unsigned int*)malloc(sizeof(unsigned int));
 				unsigned int nClosestPoints = 0;
-				//pOctree->GetClosestIndicesPoints (m_pMesh->m_pVertices, tmp, 10.*sqrt(m_pPatches[i].m_fArea), &pClosestPoints, &nClosestPoints);
-				pOctree->GetClosestIndicesPoints (m_pMesh->m_pVertices, tmp, fMaxDistance, &pClosestPoints, &nClosestPoints);
+				//pOctree->GetClosestIndicesPoints (m_pMesh->m_pVertices.data(), tmp, 10.*sqrt(m_pPatches[i].m_fArea), &pClosestPoints, &nClosestPoints);
+				pOctree->GetClosestIndicesPoints (m_pMesh->m_pVertices.data(), tmp, fMaxDistance, &pClosestPoints, &nClosestPoints);
 
 				m_pPatches[i].m_fOcclusion = 0.;
 				if (m_pPatches[i].m_fArea < 0.0000001) // for stability

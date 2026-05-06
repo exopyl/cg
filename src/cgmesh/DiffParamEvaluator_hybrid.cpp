@@ -6,8 +6,8 @@
 bool MeshAlgoTensorEvaluator::ApplyHybrid (void)
 {
 	int nv = m_pModel->m_pMesh->m_nVertices;
-	float *v = m_pModel->m_pMesh->m_pVertices;
-	float *vn = m_pModel->m_pMesh->m_pVertexNormals;
+	float *v = m_pModel->m_pMesh->m_pVertices.data();
+	float *vn = m_pModel->m_pMesh->m_pVertexNormals.data();
 	int i;
 	Tensor **hybrid = (Tensor**)malloc(nv*sizeof(Tensor*));
 	for (i=0; i<nv; i++) hybrid[i] = new Tensor ();

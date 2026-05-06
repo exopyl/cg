@@ -128,7 +128,7 @@ TEST(TEST_regions_vertices, refresh_colors_uses_selected_region_color)
     regions.select_all_regions();
     regions.refresh_colors();
 
-    float* colors = he->m_pMesh->m_pVertexColors;
+    float* colors = he->m_pMesh->m_pVertexColors.data();
     ASSERT_NE(colors, nullptr);
 
     EXPECT_FLOAT_EQ(colors[0], 0.5f);

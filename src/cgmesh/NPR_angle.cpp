@@ -47,7 +47,7 @@ ListNPRSegments& NPR_Angle::ComputeSegments (void)
 
 	if (m_pMesh)
 	{
-		float *pVertices = m_pMesh->m_pMesh->m_pVertices;
+		float *pVertices = m_pMesh->m_pMesh->m_pVertices.data();
 		int nNberEdges = 3 * m_pMesh->m_pMesh->m_nFaces;
 		Face **f = m_pMesh->m_pMesh->m_pFaces;
 		Che_mesh *cheMesh = m_pMesh->GetCheMesh();
@@ -84,7 +84,7 @@ ListNPRSegments& NPR_Angle::ComputeSegments (void)
 		{
 			Mesh* pMesh = (*itMesh);
 
-			float *pVertices = pMesh->m_pVertices;
+			float *pVertices = pMesh->m_pVertices.data();
 			int nNberEdges = 3 * pMesh->m_nFaces;
 			// ... (rest of the commented out code)
 		}

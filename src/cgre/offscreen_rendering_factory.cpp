@@ -146,9 +146,9 @@ Coffscreen_rendering::draw_object (void)
 
 
 /*
-  glNormalPointer (GL_FLOAT, 0, model->m_pVertexNormals);
+  glNormalPointer (GL_FLOAT, 0, model->m_pVertexNormals.data());
   //glColorPointer  (3, GL_FLOAT, 0, model->get_vertices_colors());
-  glVertexPointer (3, GL_FLOAT, 0, model->m_pVertices);
+  glVertexPointer (3, GL_FLOAT, 0, model->m_pVertices.data());
   glDrawElements (GL_TRIANGLES, 3*model->get_n_faces(), GL_UNSIGNED_INT, model->get_faces());
 */
 

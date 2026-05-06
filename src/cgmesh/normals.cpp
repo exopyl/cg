@@ -19,7 +19,7 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 	int nv = mesh->m_pMesh->m_nVertices;
 
 	// initialization
-	memset (mesh->m_pMesh->m_pVertexNormals, 0., 3*nv*sizeof(float));
+	memset (mesh->m_pMesh->m_pVertexNormals.data(), 0., 3*nv*sizeof(float));
 
 	switch (MethodId)
 	{
@@ -35,7 +35,7 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 			Citerator_half_edges_vertex he_ite (mesh->GetCheMesh(), i);
 			int he;
 			int a,b,c;
-			float *v = mesh->m_pMesh->m_pVertices;
+			float *v = mesh->m_pMesh->m_pVertices.data();
 			for (he = he_ite.first (); he >= 0 && !he_ite.isLast (); he = he_ite.next ())
 			{
 				Che_edge &e = mesh->GetCheMesh()->edge(he);
@@ -73,7 +73,7 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 			Citerator_half_edges_vertex he_ite (mesh->GetCheMesh(), i);
 			int he;
 			int a,b,c;
-			float *v = mesh->m_pMesh->m_pVertices;
+			float *v = mesh->m_pMesh->m_pVertices.data();
 			for (he = he_ite.first (); he >= 0 && !he_ite.isLast (); he = he_ite.next ())
 			{
 				Che_edge &e = mesh->GetCheMesh()->edge(he);
@@ -156,11 +156,11 @@ void Normals::invert_vertices_normales (Mesh_half_edge *mesh)
 */
 int EvalOnFaces (Mesh_half_edge *mesh)
 {
-	if (!mesh || !mesh->m_pMesh->m_pVertices)
+	if (!mesh || mesh->m_pMesh->m_pVertices.empty())
 		return -1;
 
 	int i, a, b, c;
-	float *v = mesh->m_pMesh->m_pVertices;
+	float *v = mesh->m_pMesh->m_pVertices.data();
 	for (i=0; i<(int)mesh->m_pMesh->m_nFaces; i++)
 	{
 		Face *f = mesh->m_pMesh->m_pFaces[i];
