@@ -25,31 +25,24 @@ Les tests unitaires sont compilés par défaut avec le projet principal.
   ```
 
 ### 2. Sinaia (Visualiseur OpenGL)
-Nécessite `wxWidgets`. Activer via l'option `ENABLE_SINAIA`.
-- **Debug** :
+Nécessite `wxWidgets`.
+- **Build dédié** (dans `build_sinaia`) :
   ```bash
-  cmake -B build/sinaia-debug -S . -DCMAKE_BUILD_TYPE=Debug -DENABLE_SINAIA=ON
-  cmake --build build/sinaia-debug --target sinaia
-  ```
-- **Release** :
-  ```bash
-  cmake -B build/sinaia-release -S . -DCMAKE_BUILD_TYPE=Release -DENABLE_SINAIA=ON
-  cmake --build build/sinaia-release --target sinaia
+  cmake -B build_sinaia -S . -DENABLE_SINAIA=ON -DCMAKE_BUILD_TYPE=Release
+  cmake --build build_sinaia --target sinaia --config Release
   ```
 
 ### 3. Vecna (Visualiseur Vulkan)
-Nécessite le SDK Vulkan. Activer via l'option `ENABLE_VECNA`.
-Note : `vecna` requiert un compilateur compatible C++20.
-- **Debug** :
+Nécessite le SDK Vulkan et un compilateur C++20.
+- **Localisation du SDK Vulkan** :
+  Si le SDK n'est pas dans le PATH, spécifiez sa racine (contenant `bin`, `include`, `lib`) via `Vulkan_ROOT`.
+- **Build dédié** (dans `build_vecna`) :
   ```bash
-  cmake -B build/vecna-debug -S . -DCMAKE_BUILD_TYPE=Debug -DENABLE_VECNA=ON
-  cmake --build build/vecna-debug --target vecna
+  # Recherche du SDK à la racine du projet ou dans C:/home/dev
+  cmake -B build_vecna -S . -DENABLE_VECNA=ON -DCMAKE_BUILD_TYPE=Release -DVulkan_ROOT="C:/home/dev/VulkanSDK/1.x.x.x"
+  cmake --build build_vecna --target vecna --config Release
   ```
-- **Release** :
-  ```bash
-  cmake -B build/vecna-release -S . -DCMAKE_BUILD_TYPE=Release -DENABLE_VECNA=ON
-  cmake --build build/vecna-release --target vecna
-  ```
+
 
 ### Résumé des options CMake
 | Option | Description | Par défaut |
