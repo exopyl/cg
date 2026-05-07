@@ -1,9 +1,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <cmath>
+#include <cstdint>
 #include <map>
 #include <set>
 #include <algorithm>
+#include <unordered_map>
+#include <vector>
 
 #include "mesh.h"
 #include "../cgmath/cgmath.h"
@@ -1055,44 +1059,92 @@ void* Mesh::GetMaterial (void)
 // Merge vertices that are closer than the given tolerance.
 // Face indices are remapped accordingly. Degenerate faces are removed.
 //
+// Implementation : spatial hash grid of cell size = tolerance. Each vertex is
+// checked only against vertices in the 3x3x3 = 27 neighbouring cells, giving
+// average-case O(N) time instead of the naive O(N^2).
+//
+// If tolerance <= 0, the function only merges exact duplicates (cell size set
+// to a tiny epsilon so each unique coord triple goes in its own cell).
+//
 int Mesh::MergeVertices (float tolerance)
 {
 	if (m_nVertices == 0)
 		return 0;
 
-	// Build a mapping: old vertex index -> new vertex index
 	unsigned int *remap = new unsigned int[m_nVertices];
 	float *newVertices = new float[3 * m_nVertices];
 	unsigned int nNewVertices = 0;
-	float tol2 = tolerance * tolerance;
+	const float tol  = std::fabs(tolerance);
+	const float tol2 = tol * tol;
+	// Cell size : tolerance (or a tiny epsilon when tolerance == 0 so we still
+	// catch exact duplicates without exploding the grid).
+	const float cell = (tol > 0.0f) ? tol : 1e-12f;
+	const float invCell = 1.0f / cell;
+
+	struct CellKey { int x, y, z; };
+	struct CellKeyHash {
+		size_t operator() (const CellKey &k) const noexcept {
+			// Mix 3 ints into a 64-bit hash. Splitmix-style.
+			uint64_t h = (uint64_t)(uint32_t)k.x;
+			h ^= ((uint64_t)(uint32_t)k.y + 0x9E3779B97F4A7C15ULL + (h<<6) + (h>>2));
+			h ^= ((uint64_t)(uint32_t)k.z + 0x9E3779B97F4A7C15ULL + (h<<6) + (h>>2));
+			return (size_t)h;
+		}
+	};
+	struct CellKeyEq {
+		bool operator() (const CellKey &a, const CellKey &b) const noexcept {
+			return a.x == b.x && a.y == b.y && a.z == b.z;
+		}
+	};
+	std::unordered_map<CellKey, std::vector<unsigned int>, CellKeyHash, CellKeyEq> grid;
+	grid.reserve(m_nVertices);
 
 	for (unsigned int i = 0; i < m_nVertices; i++)
 	{
-		float xi = m_pVertices[3 * i];
-		float yi = m_pVertices[3 * i + 1];
-		float zi = m_pVertices[3 * i + 2];
+		const float xi = m_pVertices[3 * i];
+		const float yi = m_pVertices[3 * i + 1];
+		const float zi = m_pVertices[3 * i + 2];
 
-		// Search for an existing vertex within tolerance
+		const int cx = (int)std::floor(xi * invCell);
+		const int cy = (int)std::floor(yi * invCell);
+		const int cz = (int)std::floor(zi * invCell);
+
+		// Probe the 3x3x3 neighbourhood. A vertex within tolerance can fall
+		// in an adjacent cell when sitting close to a cell boundary.
 		bool found = false;
-		for (unsigned int j = 0; j < nNewVertices; j++)
+		unsigned int hit = 0;
+		for (int dz = -1; dz <= 1 && !found; ++dz)
+		for (int dy = -1; dy <= 1 && !found; ++dy)
+		for (int dx = -1; dx <= 1 && !found; ++dx)
 		{
-			float dx = newVertices[3 * j]     - xi;
-			float dy = newVertices[3 * j + 1] - yi;
-			float dz = newVertices[3 * j + 2] - zi;
-			if (dx * dx + dy * dy + dz * dz <= tol2)
+			CellKey k { cx + dx, cy + dy, cz + dz };
+			auto it = grid.find(k);
+			if (it == grid.end()) continue;
+			for (unsigned int j : it->second)
 			{
-				remap[i] = j;
-				found = true;
-				break;
+				float ex = newVertices[3 * j]     - xi;
+				float ey = newVertices[3 * j + 1] - yi;
+				float ez = newVertices[3 * j + 2] - zi;
+				if (ex * ex + ey * ey + ez * ez <= tol2)
+				{
+					hit = j;
+					found = true;
+					break;
+				}
 			}
 		}
 
-		if (!found)
+		if (found)
+		{
+			remap[i] = hit;
+		}
+		else
 		{
 			newVertices[3 * nNewVertices]     = xi;
 			newVertices[3 * nNewVertices + 1] = yi;
 			newVertices[3 * nNewVertices + 2] = zi;
 			remap[i] = nNewVertices;
+			grid[CellKey{cx, cy, cz}].push_back(nNewVertices);
 			nNewVertices++;
 		}
 	}
