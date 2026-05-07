@@ -30,7 +30,8 @@ protected:
 	void clean (void);
 
 	bool export_obj(char* filename);
-	bool export_stl(char* filename);
+	bool export_stl(char* filename);          // ASCII STL : one solid block per Mesh
+	bool export_stl_binary(char* filename);   // Binary STL : single concatenated solid
 	bool export_ply(char* filename);
 
 	bool import_3ds(char* filename);

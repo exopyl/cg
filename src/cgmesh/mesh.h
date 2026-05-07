@@ -229,12 +229,13 @@ private:
 	int import_ply (const char *filename);
 	int export_ply (const char *filename);
 	int import_stl (const char *filename);
-	int export_stl (const char *filename);
+	int export_stl (const char *filename);          // ASCII STL (called by save() for .stl)
 	int import_u3d (const char *filename);
 	int export_u3d (const char *filename);
 public:
 	int load (const char *filename);
 	int save (const char *filename);
+	int export_stl_binary (const char *filename);   // Binary STL (caller chooses format)
 
 	// bbox
 	int computebbox (void);

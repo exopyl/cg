@@ -513,67 +513,6 @@ void extrudeToMesh (Polygon2 &polygon, Mesh &out, double zBottom, double zTop)
 	free(pF);
 }
 
-namespace
-{
-	bool endsWithCaseInsensitive (const std::string &s, const std::string &suffix)
-	{
-		if (s.size() < suffix.size()) return false;
-		for (size_t i = 0; i < suffix.size(); ++i)
-		{
-			char a = s[s.size() - suffix.size() + i];
-			char b = suffix[i];
-			if (a >= 'A' && a <= 'Z') a += 'a' - 'A';
-			if (b >= 'A' && b <= 'Z') b += 'a' - 'A';
-			if (a != b) return false;
-		}
-		return true;
-	}
-
-	// Minimal STL ASCII writer. cgmesh's Mesh::export_stl is currently a stub
-	// (returns -1), so we provide our own implementation.
-	void writeMeshAsStlAscii (Mesh &mesh, const std::string &filePath,
-	                           const std::string &solidName)
-	{
-		std::ofstream f(filePath);
-		if (!f.is_open())
-			throw std::runtime_error("writeMeshAsStlAscii: cannot open " + filePath);
-
-		f << "solid " << solidName << "\n";
-		unsigned int nF = mesh.GetNFaces();
-		for (unsigned int i = 0; i < nF; ++i)
-		{
-			int a = mesh.GetFaceVertex(i, 0);
-			int b = mesh.GetFaceVertex(i, 1);
-			int c = mesh.GetFaceVertex(i, 2);
-			if (a < 0 || b < 0 || c < 0) continue;
-
-			float va[3], vb[3], vc[3];
-			if (mesh.GetVertex((unsigned int) a, va) != 0) continue;
-			if (mesh.GetVertex((unsigned int) b, vb) != 0) continue;
-			if (mesh.GetVertex((unsigned int) c, vc) != 0) continue;
-
-			// Triangle normal = (b-a) x (c-a), normalized.
-			float ux = vb[0]-va[0], uy = vb[1]-va[1], uz = vb[2]-va[2];
-			float vx = vc[0]-va[0], vy = vc[1]-va[1], vz = vc[2]-va[2];
-			float nx = uy*vz - uz*vy;
-			float ny = uz*vx - ux*vz;
-			float nz = ux*vy - uy*vx;
-			float len = std::sqrt(nx*nx + ny*ny + nz*nz);
-			if (len > 1e-12f) { nx /= len; ny /= len; nz /= len; }
-			else { nx = 0.0f; ny = 0.0f; nz = 1.0f; }    // degenerate triangle, default normal
-
-			f << "facet normal " << nx << " " << ny << " " << nz << "\n";
-			f << "  outer loop\n";
-			f << "    vertex " << va[0] << " " << va[1] << " " << va[2] << "\n";
-			f << "    vertex " << vb[0] << " " << vb[1] << " " << vb[2] << "\n";
-			f << "    vertex " << vc[0] << " " << vc[1] << " " << vc[2] << "\n";
-			f << "  endloop\n";
-			f << "endfacet\n";
-		}
-		f << "endsolid " << solidName << "\n";
-	}
-}
-
 void writeBayMesh (const WindowGeometry &geom, const std::string &filePath,
                    const GothicMeshParams &params)
 {
@@ -584,13 +523,6 @@ void writeBayMesh (const WindowGeometry &geom, const std::string &filePath,
 		extrudeToMesh(poly, mesh, 0.0, params.zHeight);
 	else
 		tessellateToMesh(poly, mesh, 0.0);
-
-	// .stl needs a custom writer (cgmesh's export_stl is a stub returning -1).
-	if (endsWithCaseInsensitive(filePath, ".stl"))
-	{
-		writeMeshAsStlAscii(mesh, filePath, "gothic_window");
-		return;
-	}
 
 	int rc = mesh.save(filePath.c_str());
 	if (rc < 0)

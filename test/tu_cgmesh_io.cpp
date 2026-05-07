@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <filesystem>
 
 #include "../src/cgmesh/cgmesh.h"
 
@@ -51,10 +52,25 @@ TEST(TEST_cgmesh_io, stl)
     EXPECT_EQ(mesh->m_pMesh->GetNVertices(), 1986);
     EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 662);
 
-    // action
+    // action : save in ASCII STL via Mesh::save dispatch
     auto exported = mesh->m_pMesh->save("./exported_BunnyLowPoly.stl");
+    EXPECT_EQ(exported, 0);
+    EXPECT_TRUE(std::filesystem::exists("./exported_BunnyLowPoly.stl"));
 
-    EXPECT_EQ(exported, -1);
+    // action : save in binary STL via the dedicated entry point
+    auto exportedBin = mesh->m_pMesh->export_stl_binary("./exported_BunnyLowPoly.bin.stl");
+    EXPECT_EQ(exportedBin, 0);
+    EXPECT_TRUE(std::filesystem::exists("./exported_BunnyLowPoly.bin.stl"));
+
+    // round-trip the binary file : reload it and check counts. Binary STL stores
+    // 3 vertices per triangle (no shared indexing), so nVertices = 3 * nFaces.
+    Mesh_half_edge* roundTrip = new Mesh_half_edge();
+    roundTrip->m_pMesh->load("./exported_BunnyLowPoly.bin.stl");
+    EXPECT_EQ(roundTrip->m_pMesh->GetNFaces(), 662);
+    EXPECT_EQ(roundTrip->m_pMesh->GetNVertices(), 3u * 662);
+    delete roundTrip;
+
+    delete mesh;
 }
 
 TEST(TEST_cgmesh_io, ply)

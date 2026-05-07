@@ -1,7 +1,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <filesystem>
+#include <string>
 
 #include "mesh.h"
 #include "mesh_io_3ds.h"
@@ -1616,9 +1620,153 @@ int Mesh::import_stl(const char* filename)
 	return 0;
 }
 
+//
+// STL ASCII export. Format :
+//   solid <name>
+//     facet normal nx ny nz
+//       outer loop
+//         vertex x y z
+//         vertex x y z
+//         vertex x y z
+//       endloop
+//     endfacet
+//     ...
+//   endsolid <name>
+//
+// The solid name is derived from the filename stem.
+//
 int Mesh::export_stl (const char *filename)
 {
-	return -1;
+	if (!filename) return -1;
+
+	// Derive a solid name from the filename stem (strip directories and extension).
+	std::string solidName(filename);
+	size_t slash = solidName.find_last_of("/\\");
+	if (slash != std::string::npos) solidName = solidName.substr(slash + 1);
+	size_t dot = solidName.find_last_of('.');
+	if (dot != std::string::npos) solidName = solidName.substr(0, dot);
+	if (solidName.empty()) solidName = "mesh";
+
+	FILE *fp = fopen(filename, "w");
+	if (!fp) return -1;
+
+	fprintf(fp, "solid %s\n", solidName.c_str());
+
+	for (unsigned int i = 0; i < m_nFaces; ++i)
+	{
+		Face *pFace = m_pFaces[i];
+		if (!pFace || pFace->GetNVertices() != 3) continue;
+
+		int a = pFace->GetVertex(0);
+		int b = pFace->GetVertex(1);
+		int c = pFace->GetVertex(2);
+		if (a < 0 || b < 0 || c < 0) continue;
+		if ((unsigned)a >= m_nVertices || (unsigned)b >= m_nVertices || (unsigned)c >= m_nVertices) continue;
+
+		float ax = m_pVertices[3*a],   ay = m_pVertices[3*a+1], az = m_pVertices[3*a+2];
+		float bx = m_pVertices[3*b],   by = m_pVertices[3*b+1], bz = m_pVertices[3*b+2];
+		float cx = m_pVertices[3*c],   cy = m_pVertices[3*c+1], cz = m_pVertices[3*c+2];
+
+		// Triangle normal = (b - a) x (c - a), normalized.
+		float ux = bx - ax, uy = by - ay, uz = bz - az;
+		float vx = cx - ax, vy = cy - ay, vz = cz - az;
+		float nx = uy*vz - uz*vy;
+		float ny = uz*vx - ux*vz;
+		float nz = ux*vy - uy*vx;
+		float len = sqrtf(nx*nx + ny*ny + nz*nz);
+		if (len > 1e-12f) { nx /= len; ny /= len; nz /= len; }
+		else { nx = 0.0f; ny = 0.0f; nz = 1.0f; }
+
+		fprintf(fp, "facet normal %g %g %g\n", nx, ny, nz);
+		fprintf(fp, "  outer loop\n");
+		fprintf(fp, "    vertex %g %g %g\n", ax, ay, az);
+		fprintf(fp, "    vertex %g %g %g\n", bx, by, bz);
+		fprintf(fp, "    vertex %g %g %g\n", cx, cy, cz);
+		fprintf(fp, "  endloop\n");
+		fprintf(fp, "endfacet\n");
+	}
+
+	fprintf(fp, "endsolid %s\n", solidName.c_str());
+	fclose(fp);
+	return 0;
+}
+
+//
+// STL binary export. Format :
+//   80-byte header (text padded with NULs)
+//   uint32_t  triangle_count       (little-endian)
+//   For each triangle (50 bytes) :
+//     float    normal[3]
+//     float    vertex[3][3]
+//     uint16_t attributes           (set to 0)
+//
+// Symmetric with Mesh::import_stl which reads binary STL.
+//
+int Mesh::export_stl_binary (const char *filename)
+{
+	if (!filename) return -1;
+
+	FILE *fp = fopen(filename, "wb");
+	if (!fp) return -1;
+
+	// 80-byte header. Use the filename stem, NUL-padded.
+	char header[80] = {0};
+	{
+		std::string stem(filename);
+		size_t slash = stem.find_last_of("/\\");
+		if (slash != std::string::npos) stem = stem.substr(slash + 1);
+		size_t dot = stem.find_last_of('.');
+		if (dot != std::string::npos) stem = stem.substr(0, dot);
+		if (stem.empty()) stem = "mesh";
+		std::strncpy(header, stem.c_str(), sizeof(header));
+	}
+	fwrite(header, 1, 80, fp);
+
+	// Count valid triangles first (skip non-triangle faces / out-of-range indices).
+	uint32_t nTri = 0;
+	for (unsigned int i = 0; i < m_nFaces; ++i)
+	{
+		Face *pFace = m_pFaces[i];
+		if (!pFace || pFace->GetNVertices() != 3) continue;
+		int a = pFace->GetVertex(0), b = pFace->GetVertex(1), c = pFace->GetVertex(2);
+		if (a < 0 || b < 0 || c < 0) continue;
+		if ((unsigned)a >= m_nVertices || (unsigned)b >= m_nVertices || (unsigned)c >= m_nVertices) continue;
+		++nTri;
+	}
+	fwrite(&nTri, sizeof(uint32_t), 1, fp);
+
+	// Write each triangle.
+	for (unsigned int i = 0; i < m_nFaces; ++i)
+	{
+		Face *pFace = m_pFaces[i];
+		if (!pFace || pFace->GetNVertices() != 3) continue;
+		int a = pFace->GetVertex(0), b = pFace->GetVertex(1), c = pFace->GetVertex(2);
+		if (a < 0 || b < 0 || c < 0) continue;
+		if ((unsigned)a >= m_nVertices || (unsigned)b >= m_nVertices || (unsigned)c >= m_nVertices) continue;
+
+		float ax = m_pVertices[3*a],   ay = m_pVertices[3*a+1], az = m_pVertices[3*a+2];
+		float bx = m_pVertices[3*b],   by = m_pVertices[3*b+1], bz = m_pVertices[3*b+2];
+		float cx = m_pVertices[3*c],   cy = m_pVertices[3*c+1], cz = m_pVertices[3*c+2];
+
+		float ux = bx - ax, uy = by - ay, uz = bz - az;
+		float vx = cx - ax, vy = cy - ay, vz = cz - az;
+		float nx = uy*vz - uz*vy;
+		float ny = uz*vx - ux*vz;
+		float nz = ux*vy - uy*vx;
+		float len = sqrtf(nx*nx + ny*ny + nz*nz);
+		if (len > 1e-12f) { nx /= len; ny /= len; nz /= len; }
+		else { nx = 0.0f; ny = 0.0f; nz = 1.0f; }
+
+		float n[3] = { nx, ny, nz };
+		float v[9] = { ax, ay, az, bx, by, bz, cx, cy, cz };
+		uint16_t attr = 0;
+		fwrite(n,    sizeof(float), 3, fp);
+		fwrite(v,    sizeof(float), 9, fp);
+		fwrite(&attr, sizeof(uint16_t), 1, fp);
+	}
+
+	fclose(fp);
+	return 0;
 }
 
 
