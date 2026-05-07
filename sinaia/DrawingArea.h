@@ -1,8 +1,8 @@
 #pragma once
 
 #include <wx/control.h>
-#include <wx/effects.h>
 #include <wx/dcclient.h>
+#include <wx/event.h>
 
 //
 //

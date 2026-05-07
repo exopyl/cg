@@ -23,7 +23,6 @@ set(srcs
         wxSizeReportCtrl.cpp
         )
 
-
 add_executable(${APP_TARGET} WIN32 ${srcs})
 target_link_libraries(${APP_TARGET} cgimg cgmath cgmesh cgre)
 
@@ -39,6 +38,7 @@ if(wxWidgets_USE_FILE) # not defined in CONFIG mode
     include(${wxWidgets_USE_FILE})
 endif()
 target_link_libraries(${APP_TARGET} ${wxWidgets_LIBRARIES})
+target_include_directories(${APP_TARGET} PRIVATE ${wxWidgets_INCLUDE_DIRS})
 
 target_link_libraries(
         ${APP_TARGET}
@@ -47,17 +47,21 @@ target_link_libraries(
 
 # Copy wxWidgets DLLs next to the executable
 if(WIN32)
+    # Use the discovered library directory for DLLs.
+    # The names are constructed to include 'd' for Debug config if needed.
+    set(WX_DLL_INSTALL_DIR "${wxWidgets_LIB_DIR}") 
+
     set(WX_DLL_NAMES
-            wxmsw32ud_core_vc14x_x64
-            wxbase32ud_vc14x_x64
-            wxmsw32ud_aui_vc14x_x64
-            wxmsw32ud_html_vc14x_x64
-            wxmsw32ud_gl_vc14x_x64
-            wxmsw32ud_propgrid_vc14x_x64)
+            wxmsw332u$<IF:$<CONFIG:Debug>,d,>_core_vc14x_x64
+            wxbase332u$<IF:$<CONFIG:Debug>,d,>_vc14x_x64
+            wxmsw332u$<IF:$<CONFIG:Debug>,d,>_aui_vc14x_x64
+            wxmsw332u$<IF:$<CONFIG:Debug>,d,>_html_vc14x_x64
+            wxmsw332u$<IF:$<CONFIG:Debug>,d,>_gl_vc14x_x64
+            wxmsw332u$<IF:$<CONFIG:Debug>,d,>_propgrid_vc14x_x64)
     foreach(DLL_NAME ${WX_DLL_NAMES})
         add_custom_command(TARGET ${APP_TARGET} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${wxWidgets_LIB_DIR}/${DLL_NAME}.dll"
+                "${WX_DLL_INSTALL_DIR}/${DLL_NAME}.dll"
                 "$<TARGET_FILE_DIR:${APP_TARGET}>")
-    endforeach()
+        endforeach()
 endif()
