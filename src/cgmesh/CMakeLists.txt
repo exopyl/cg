@@ -4,8 +4,8 @@ project(libcgmesh)
 
 file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/*.cpp)
 file(GLOB HEADER_FILES ${PROJECT_SOURCE_DIR}/*.h)
-file(GLOB GLUTESS_SRC_FILES ${PROJECT_SOURCE_DIR}/glutess/*.c)
-file(GLOB GLUTESS_HEADER_FILES ${PROJECT_SOURCE_DIR}/glutess/*.h)
+file(GLOB GLUTESS_SRC_FILES ${CMAKE_SOURCE_DIR}/extern/glutess/*.c)
+file(GLOB GLUTESS_HEADER_FILES ${CMAKE_SOURCE_DIR}/extern/glutess/*.h)
 
 if (UNIX)
 	add_compile_options(-fpermissive)

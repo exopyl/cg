@@ -77,4 +77,5 @@ set(headers
 
 include_directories(.)
 add_library(cgre STATIC ${headers} ${sources})
+target_include_directories(cgre PUBLIC ${CMAKE_SOURCE_DIR}/extern)
 target_link_libraries(cgmesh cgimg)
