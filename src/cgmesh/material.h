@@ -176,6 +176,7 @@ class MaterialTexture : public Material
 {
 public:
 	MaterialTexture (char const *filename, char const *path = nullptr);
+	MaterialTexture (const std::string &name, unsigned int width, unsigned int height, const unsigned char *rgbaPixels);
 	MaterialTexture (unsigned int nWidth, unsigned int nHeight);
 	MaterialTexture (const MaterialTexture &m); // constructor of copy
 	virtual ~MaterialTexture ();

@@ -361,20 +361,118 @@ bool VMeshes::export_3ds(char* filename)
 #define TINYGLTF_NO_STB_IMAGE
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 #define TINYGLTF_NO_INCLUDE_JSON
+#define STB_IMAGE_IMPLEMENTATION
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
 
+#include <cstring>
+#include <map>
+#include <vector>
+
 #include <nlohmann/json.hpp>
+#include <stb/stb_image.h>
 #include <tinygltf/tiny_gltf.h>
 
 bool DummyLoadImageData(tinygltf::Image* image, const int image_idx, std::string* err,
     std::string* warn, int req_width, int req_height,
     const unsigned char* bytes, int size, void* user_data)
 {
+    (void)image_idx;
+    (void)warn;
+    (void)req_width;
+    (void)req_height;
+    (void)user_data;
+
+    int width = 0;
+    int height = 0;
+    int components = 0;
+    unsigned char* decoded = stbi_load_from_memory(bytes, size, &width, &height, &components, STBI_rgb_alpha);
+    if (!decoded)
+    {
+        if (err)
+            *err += "Failed to decode glTF image with stb_image\n";
+        return false;
+    }
+
+    image->width = width;
+    image->height = height;
+    image->component = 4;
+    image->bits = 8;
+    image->pixel_type = TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE;
+    image->image.assign(decoded, decoded + static_cast<size_t>(width) * static_cast<size_t>(height) * 4u);
+    stbi_image_free(decoded);
     return true;
+}
+
+namespace
+{
+template <typename T>
+const T* GetAccessorDataPtr(const tinygltf::Model& model, const tinygltf::Accessor& accessor)
+{
+    if (accessor.bufferView < 0)
+        return nullptr;
+
+    const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
+    const tinygltf::Buffer& buffer = model.buffers[view.buffer];
+    return reinterpret_cast<const T*>(&buffer.data[view.byteOffset + accessor.byteOffset]);
+}
+
+bool CopyFloatAccessorVec2(std::vector<float>& dst, const tinygltf::Model& model, const tinygltf::Accessor& accessor)
+{
+    if (accessor.type != TINYGLTF_TYPE_VEC2 || accessor.bufferView < 0)
+        return false;
+
+    const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
+    const tinygltf::Buffer& buffer = model.buffers[view.buffer];
+    const unsigned char* data = buffer.data.data() + view.byteOffset + accessor.byteOffset;
+    const int stride = accessor.ByteStride(view);
+    const int componentSize = tinygltf::GetComponentSizeInBytes(static_cast<uint32_t>(accessor.componentType));
+    if (componentSize <= 0 || stride < 2 * componentSize)
+        return false;
+
+    auto convertComponent = [&accessor](const unsigned char* componentData) -> float
+    {
+        switch (accessor.componentType)
+        {
+        case TINYGLTF_COMPONENT_TYPE_FLOAT:
+            return *reinterpret_cast<const float*>(componentData);
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+        {
+            const float value = static_cast<float>(*reinterpret_cast<const uint8_t*>(componentData));
+            return accessor.normalized ? value / 255.0f : value;
+        }
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+        {
+            const float value = static_cast<float>(*reinterpret_cast<const uint16_t*>(componentData));
+            return accessor.normalized ? value / 65535.0f : value;
+        }
+        case TINYGLTF_COMPONENT_TYPE_BYTE:
+        {
+            const float value = static_cast<float>(*reinterpret_cast<const int8_t*>(componentData));
+            return accessor.normalized ? (value < 0.0f ? value / 128.0f : value / 127.0f) : value;
+        }
+        case TINYGLTF_COMPONENT_TYPE_SHORT:
+        {
+            const float value = static_cast<float>(*reinterpret_cast<const int16_t*>(componentData));
+            return accessor.normalized ? (value < 0.0f ? value / 32768.0f : value / 32767.0f) : value;
+        }
+        default:
+            return 0.0f;
+        }
+    };
+
+    dst.resize(accessor.count * 2);
+    for (size_t i = 0; i < accessor.count; ++i)
+    {
+        const unsigned char* uv = data + i * stride;
+        dst[2 * i] = convertComponent(uv);
+        dst[2 * i + 1] = convertComponent(uv + componentSize);
+    }
+    return true;
+}
 }
 
 bool VMeshes::import_gltf(char* filename)
@@ -405,30 +503,83 @@ bool VMeshes::import_gltf(char* filename)
             // Positions
             if (primitive.attributes.find("POSITION") == primitive.attributes.end()) continue;
             const tinygltf::Accessor& posAccessor = model.accessors[primitive.attributes.at("POSITION")];
-            const tinygltf::BufferView& posView = model.bufferViews[posAccessor.bufferView];
-            const tinygltf::Buffer& posBuffer = model.buffers[posView.buffer];
-            const float* positions = reinterpret_cast<const float*>(&posBuffer.data[posView.byteOffset + posAccessor.byteOffset]);
+            const float* positions = GetAccessorDataPtr<float>(model, posAccessor);
+            if (!positions || posAccessor.type != TINYGLTF_TYPE_VEC3 || posAccessor.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT)
+            {
+                delete pMesh;
+                continue;
+            }
 
-            // Indices
-            if (primitive.indices < 0) continue;
-            const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
-            const tinygltf::BufferView& indexView = model.bufferViews[indexAccessor.bufferView];
-            const tinygltf::Buffer& indexBuffer = model.buffers[indexView.buffer];
+            bool hasIndices = primitive.indices >= 0;
+            const tinygltf::Accessor* indexAccessorPtr = nullptr;
+            const tinygltf::BufferView* indexViewPtr = nullptr;
+            const tinygltf::Buffer* indexBufferPtr = nullptr;
+            size_t triangleCount = 0;
 
-            pMesh->Init(posAccessor.count, indexAccessor.count / 3);
+            if (hasIndices)
+            {
+                indexAccessorPtr = &model.accessors[primitive.indices];
+                if (indexAccessorPtr->bufferView < 0)
+                {
+                    delete pMesh;
+                    continue;
+                }
+                indexViewPtr = &model.bufferViews[indexAccessorPtr->bufferView];
+                indexBufferPtr = &model.buffers[indexViewPtr->buffer];
+                triangleCount = indexAccessorPtr->count / 3;
+            }
+            else
+            {
+                if ((posAccessor.count % 3) != 0)
+                {
+                    delete pMesh;
+                    continue;
+                }
+                triangleCount = posAccessor.count / 3;
+            }
 
-            // Map glTF material to Mesh material (base color only)
+            pMesh->Init(posAccessor.count, static_cast<unsigned int>(triangleCount));
+
+            int texCoordSet = 0;
+
+            // Map glTF material to Mesh material
             if (primitive.material >= 0 && primitive.material < (int)model.materials.size()) {
                 const auto& gltfMat = model.materials[primitive.material];
-                auto pMatExt = new MaterialColorExt();
-                pMatExt->SetName(gltfMat.name);
+                Material* pMaterial = nullptr;
                 const auto& baseColor = gltfMat.pbrMetallicRoughness.baseColorFactor;
-                pMatExt->SetDiffuse(baseColor[0], baseColor[1], baseColor[2], baseColor[3]);
-                pMatExt->SetAmbient(0.2f, 0.2f, 0.2f, 1.0f);
-                pMatExt->SetSpecular(0.5f, 0.5f, 0.5f, 1.0f);
-                pMatExt->SetShininess(32.0f);
+                const auto& baseColorTexture = gltfMat.pbrMetallicRoughness.baseColorTexture;
 
-                int matId = pMesh->Material_Add(pMatExt);
+                if (baseColorTexture.index >= 0 && baseColorTexture.index < (int)model.textures.size())
+                {
+                    const tinygltf::Texture& gltfTexture = model.textures[baseColorTexture.index];
+                    if (gltfTexture.source >= 0 && gltfTexture.source < (int)model.images.size())
+                    {
+                        const tinygltf::Image& gltfImage = model.images[gltfTexture.source];
+                        if (!gltfImage.image.empty() && gltfImage.width > 0 && gltfImage.height > 0)
+                        {
+                            pMaterial = new MaterialTexture(
+                                gltfImage.name.empty() ? gltfMat.name : gltfImage.name,
+                                static_cast<unsigned int>(gltfImage.width),
+                                static_cast<unsigned int>(gltfImage.height),
+                                gltfImage.image.data());
+                            texCoordSet = baseColorTexture.texCoord;
+                        }
+                    }
+                }
+
+                if (!pMaterial)
+                {
+                    auto pMatExt = new MaterialColorExt();
+                    pMatExt->SetName(gltfMat.name);
+                    pMatExt->SetDiffuse(baseColor[0], baseColor[1], baseColor[2], baseColor[3]);
+                    pMatExt->SetAmbient(0.2f, 0.2f, 0.2f, 1.0f);
+                    pMatExt->SetSpecular(0.5f, 0.5f, 0.5f, 1.0f);
+                    pMatExt->SetShininess(32.0f);
+                    pMaterial = pMatExt;
+                }
+
+                pMaterial->SetName(gltfMat.name);
+                int matId = pMesh->Material_Add(pMaterial);
                 pMesh->ApplyMaterial(matId); // Set default material for all faces
             }
 
@@ -440,11 +591,12 @@ bool VMeshes::import_gltf(char* filename)
             bool hasNormals = false;
             if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
                 const tinygltf::Accessor& normAccessor = model.accessors[primitive.attributes.at("NORMAL")];
-                const tinygltf::BufferView& normView = model.bufferViews[normAccessor.bufferView];
-                const tinygltf::Buffer& normBuffer = model.buffers[normView.buffer];
-                const float* normals = reinterpret_cast<const float*>(&normBuffer.data[normView.byteOffset + normAccessor.byteOffset]);
+                const float* normals = GetAccessorDataPtr<float>(model, normAccessor);
 
-                if (normAccessor.count == posAccessor.count) {
+                if (normals &&
+                    normAccessor.count == posAccessor.count &&
+                    normAccessor.type == TINYGLTF_TYPE_VEC3 &&
+                    normAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT) {
                     for (size_t i = 0; i < normAccessor.count; i++) {
                         pMesh->m_pVertexNormals[i * 3] = normals[i * 3];
                         pMesh->m_pVertexNormals[i * 3 + 1] = normals[i * 3 + 1];
@@ -454,21 +606,73 @@ bool VMeshes::import_gltf(char* filename)
                 }
             }
 
-            if (indexAccessor.componentType == 5123) { // TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT = 5123
-                const uint16_t* indices = reinterpret_cast<const uint16_t*>(&indexBuffer.data[indexView.byteOffset + indexAccessor.byteOffset]);
-                for (size_t i = 0; i < indexAccessor.count / 3; i++) {
-                    pMesh->m_pFaces[i]->SetNVertices(3);
-                    pMesh->m_pFaces[i]->SetVertex(0, indices[i * 3]);
-                    pMesh->m_pFaces[i]->SetVertex(1, indices[i * 3 + 1]);
-                    pMesh->m_pFaces[i]->SetVertex(2, indices[i * 3 + 2]);
+            std::vector<float> textureCoordinates;
+            const std::string texCoordAttribute = "TEXCOORD_" + std::to_string(texCoordSet);
+            auto texCoordIt = primitive.attributes.find(texCoordAttribute);
+            if (texCoordIt != primitive.attributes.end())
+            {
+                const tinygltf::Accessor& texAccessor = model.accessors[texCoordIt->second];
+                if (CopyFloatAccessorVec2(textureCoordinates, model, texAccessor))
+                {
+                    pMesh->m_nTextureCoordinates = static_cast<unsigned int>(texAccessor.count);
+                    pMesh->m_pTextureCoordinates = textureCoordinates;
                 }
-            } else if (indexAccessor.componentType == 5125) { // TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT = 5125
-                const uint32_t* indices = reinterpret_cast<const uint32_t*>(&indexBuffer.data[indexView.byteOffset + indexAccessor.byteOffset]);
-                for (size_t i = 0; i < indexAccessor.count / 3; i++) {
+            }
+
+            if (!hasIndices)
+            {
+                for (size_t i = 0; i < triangleCount; i++) {
                     pMesh->m_pFaces[i]->SetNVertices(3);
-                    pMesh->m_pFaces[i]->SetVertex(0, indices[i * 3]);
-                    pMesh->m_pFaces[i]->SetVertex(1, indices[i * 3 + 1]);
-                    pMesh->m_pFaces[i]->SetVertex(2, indices[i * 3 + 2]);
+                    pMesh->m_pFaces[i]->SetVertex(0, static_cast<unsigned int>(i * 3));
+                    pMesh->m_pFaces[i]->SetVertex(1, static_cast<unsigned int>(i * 3 + 1));
+                    pMesh->m_pFaces[i]->SetVertex(2, static_cast<unsigned int>(i * 3 + 2));
+                    if (!pMesh->m_pTextureCoordinates.empty())
+                    {
+                        pMesh->m_pFaces[i]->m_bUseTextureCoordinates = true;
+                        pMesh->m_pFaces[i]->ActivateTextureCoordinatesIndices();
+                        pMesh->m_pFaces[i]->SetTexCoord(0, static_cast<unsigned int>(i * 3));
+                        pMesh->m_pFaces[i]->SetTexCoord(1, static_cast<unsigned int>(i * 3 + 1));
+                        pMesh->m_pFaces[i]->SetTexCoord(2, static_cast<unsigned int>(i * 3 + 2));
+                    }
+                }
+            }
+            else
+            {
+                const tinygltf::Accessor& indexAccessor = *indexAccessorPtr;
+                const tinygltf::BufferView& indexView = *indexViewPtr;
+                const tinygltf::Buffer& indexBuffer = *indexBufferPtr;
+                if (indexAccessor.componentType == 5123) { // TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT = 5123
+                    const uint16_t* indices = reinterpret_cast<const uint16_t*>(&indexBuffer.data[indexView.byteOffset + indexAccessor.byteOffset]);
+                    for (size_t i = 0; i < triangleCount; i++) {
+                        pMesh->m_pFaces[i]->SetNVertices(3);
+                        pMesh->m_pFaces[i]->SetVertex(0, indices[i * 3]);
+                        pMesh->m_pFaces[i]->SetVertex(1, indices[i * 3 + 1]);
+                        pMesh->m_pFaces[i]->SetVertex(2, indices[i * 3 + 2]);
+                        if (!pMesh->m_pTextureCoordinates.empty())
+                        {
+                            pMesh->m_pFaces[i]->m_bUseTextureCoordinates = true;
+                            pMesh->m_pFaces[i]->ActivateTextureCoordinatesIndices();
+                            pMesh->m_pFaces[i]->SetTexCoord(0, indices[i * 3]);
+                            pMesh->m_pFaces[i]->SetTexCoord(1, indices[i * 3 + 1]);
+                            pMesh->m_pFaces[i]->SetTexCoord(2, indices[i * 3 + 2]);
+                        }
+                    }
+                } else if (indexAccessor.componentType == 5125) { // TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT = 5125
+                    const uint32_t* indices = reinterpret_cast<const uint32_t*>(&indexBuffer.data[indexView.byteOffset + indexAccessor.byteOffset]);
+                    for (size_t i = 0; i < triangleCount; i++) {
+                        pMesh->m_pFaces[i]->SetNVertices(3);
+                        pMesh->m_pFaces[i]->SetVertex(0, indices[i * 3]);
+                        pMesh->m_pFaces[i]->SetVertex(1, indices[i * 3 + 1]);
+                        pMesh->m_pFaces[i]->SetVertex(2, indices[i * 3 + 2]);
+                        if (!pMesh->m_pTextureCoordinates.empty())
+                        {
+                            pMesh->m_pFaces[i]->m_bUseTextureCoordinates = true;
+                            pMesh->m_pFaces[i]->ActivateTextureCoordinatesIndices();
+                            pMesh->m_pFaces[i]->SetTexCoord(0, indices[i * 3]);
+                            pMesh->m_pFaces[i]->SetTexCoord(1, indices[i * 3 + 1]);
+                            pMesh->m_pFaces[i]->SetTexCoord(2, indices[i * 3 + 2]);
+                        }
+                    }
                 }
             }
 

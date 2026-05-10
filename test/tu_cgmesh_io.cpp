@@ -219,13 +219,46 @@ TEST(TEST_cgmesh_io, glb_duck)
     // Check materials
     auto& meshes = pVMeshes->GetMeshes();
     bool foundMaterial = false;
+    bool foundTexture = false;
+    bool foundTexCoords = false;
     for (auto pMesh : meshes) {
         if (pMesh->m_nMaterials > 0) {
             foundMaterial = true;
-            break;
+        }
+        if (pMesh->m_nTextureCoordinates > 0) {
+            foundTexCoords = true;
+        }
+        for (unsigned int i = 0; i < pMesh->m_nMaterials; ++i) {
+            MaterialTexture* mt = dynamic_cast<MaterialTexture*>(pMesh->GetMaterial(i));
+            if (mt && mt->GetImage()) {
+                foundTexture = true;
+            }
         }
     }
     EXPECT_TRUE(foundMaterial);
+    EXPECT_TRUE(foundTexture);
+    EXPECT_TRUE(foundTexCoords);
+
+    delete pVMeshes;
+}
+
+TEST(TEST_cgmesh_io, glb_fox_non_indexed)
+{
+    VMeshes* pVMeshes = new VMeshes();
+
+    bool res = pVMeshes->load("./test/data/Fox.glb");
+
+    ASSERT_TRUE(res);
+    ASSERT_EQ(pVMeshes->GetNMeshes(), 1u);
+
+    auto& meshes = pVMeshes->GetMeshes();
+    ASSERT_EQ(meshes.size(), 1u);
+
+    Mesh* pMesh = meshes[0];
+    EXPECT_EQ(pMesh->m_nVertices, 1728u);
+    EXPECT_EQ(pMesh->m_nFaces, 576u);
+    EXPECT_GT(pMesh->m_nTextureCoordinates, 0u);
+    EXPECT_GT(pMesh->m_nMaterials, 0u);
 
     delete pVMeshes;
 }

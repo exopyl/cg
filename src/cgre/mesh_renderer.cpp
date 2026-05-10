@@ -155,7 +155,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 				{
 					glColor3f (1., 1., 1.);
 					float u = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[0]];
-					float v = 1.-mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[0]+1];
+					float v = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[0]+1];
 					glTexCoord2f(u, v);
 				}
 				if (prop.smooth)
@@ -169,7 +169,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 				{
 					glColor3f (1., 1., 1.);
 					float u = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[1]];
-					float v = 1.-mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[1]+1];
+					float v = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[1]+1];
 					glTexCoord2f(u, v);
 				}
 				if (prop.smooth)
@@ -183,7 +183,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 				{
 					glColor3f (1., 1., 1.);
 					float u = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[2]];
-					float v = 1.-mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[2]+1];
+					float v = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[2]+1];
 					glTexCoord2f(u, v);
 				}
 				if (prop.smooth)
@@ -206,7 +206,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 				{
 					glColor3f (1., 1., 1.);
 					float u = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[0]];
-					float v = 1.-mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[0]+1];
+					float v = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[0]+1];
 					glTexCoord2f(u, v);
 				}
 				glVertex3f (mesh->m_pVertices[3*a], mesh->m_pVertices[3*a+1], mesh->m_pVertices[3*a+2]);
@@ -216,7 +216,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 				{
 					glColor3f (1., 1., 1.);
 					float u = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[1]];
-					float v = 1.-mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[1]+1];
+					float v = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[1]+1];
 					glTexCoord2f(u, v);
 				}
 				glVertex3f (mesh->m_pVertices[3*b], mesh->m_pVertices[3*b+1], mesh->m_pVertices[3*b+2]);
@@ -226,7 +226,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 				{
 					glColor3f (1., 1., 1.);
 					float u = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[2]];
-					float v = 1.-mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[2]+1];
+					float v = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[2]+1];
 					glTexCoord2f(u, v);
 				}
 				glVertex3f (mesh->m_pVertices[3*c], mesh->m_pVertices[3*c+1], mesh->m_pVertices[3*c+2]);
@@ -236,7 +236,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 				{
 					glColor3f (1., 1., 1.);
 					float u = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[3]];
-					float v = 1.-mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[3]+1];
+					float v = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[3]+1];
 					glTexCoord2f(u, v);
 				}
 				glVertex3f (mesh->m_pVertices[3*d], mesh->m_pVertices[3*d+1], mesh->m_pVertices[3*d+2]);

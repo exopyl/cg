@@ -81,11 +81,29 @@ void MaterialColorExt::Init_From_Library (MaterialColorExtType index)
 MaterialTexture::MaterialTexture (char const *filename, char const *path)
 {
 	m_filename = std::string (filename);
-	/*
 	m_pImage = new Img ();
-	m_pImage->load (m_pFilename, path);
-	*/
-	
+	if (m_pImage->load(filename, path) != 0)
+	{
+		delete m_pImage;
+		m_pImage = nullptr;
+	}
+}
+
+MaterialTexture::MaterialTexture (const std::string &name, unsigned int width, unsigned int height, const unsigned char *rgbaPixels)
+{
+	m_filename = name;
+	if (!rgbaPixels || width == 0 || height == 0)
+		return;
+
+	m_pImage = new Img(width, height, false);
+	if (!m_pImage || !m_pImage->m_pPixels)
+	{
+		delete m_pImage;
+		m_pImage = nullptr;
+		return;
+	}
+
+	memcpy(m_pImage->m_pPixels, rgbaPixels, 4 * width * height * sizeof(unsigned char));
 }
 
 MaterialTexture::MaterialTexture (unsigned int nWidth, unsigned int nHeight)
@@ -98,6 +116,8 @@ MaterialTexture::MaterialTexture (const MaterialTexture &m) // constructor of co
 
 MaterialTexture::~MaterialTexture ()
 {
+	if (m_pImage)
+		delete m_pImage;
 }
 
 MaterialType MaterialTexture::GetType (void)
