@@ -194,4 +194,38 @@ TEST(TEST_cgmesh_io, 3ds_floppy)
     
     // Floppy also has materials
     EXPECT_GT(meshes[0]->m_nMaterials, 0u);
+
+    delete pVMeshes;
+}
+
+TEST(TEST_cgmesh_io, glb_duck)
+{
+    // context
+    VMeshes* pVMeshes = new VMeshes();
+
+    // action
+    bool res = pVMeshes->load("./test/data/Duck.glb");
+
+    // expectations
+    ASSERT_TRUE(res);
+    
+    unsigned int nVertices = pVMeshes->GetNVertices();
+    unsigned int nFaces = pVMeshes->GetNFaces();
+    
+    // Standard Duck.glb values
+    EXPECT_EQ(nVertices, 2399);
+    EXPECT_EQ(nFaces, 4212);
+
+    // Check materials
+    auto& meshes = pVMeshes->GetMeshes();
+    bool foundMaterial = false;
+    for (auto pMesh : meshes) {
+        if (pMesh->m_nMaterials > 0) {
+            foundMaterial = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(foundMaterial);
+
+    delete pVMeshes;
 }

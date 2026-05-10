@@ -10,9 +10,13 @@
 #include <vector>
 using namespace std;
 
-typedef bool BOOL;
+typedef bool BOOL3DS;
+#ifndef TRUE
 #define TRUE true
+#endif
+#ifndef FALSE
 #define FALSE false
+#endif
 typedef unsigned char BYTE;
 typedef float			FLOAT32;
 typedef short			INT16;
@@ -103,10 +107,10 @@ typedef struct _t3DSMaterialInfo_
 	FLOAT32 f2Sided;
 	FLOAT32 fAddTrans;
 	FLOAT32 fSelfIllum;
-	BOOL	bWire;
+	BOOL3DS	bWire;
 	FLOAT32 fWireThickness;
 	FLOAT32 fInTranc;
-	BOOL	bSoften;
+	BOOL3DS	bSoften;
 
 } t3DSMaterialInfo;
 
@@ -135,7 +139,7 @@ typedef struct _t3DSObject_
 	INT32	numOfMaterials;								// The number of materials
 	vector<t3DSFacesMaterialList> pFacesMaterialList;	// the faces material list
 
-	BOOL    bHasTexture;								// This is TRUE if there is a texture map for this object
+	BOOL3DS    bHasTexture;								// This is TRUE if there is a texture map for this object
 
 	VECTOR3f	*pVerts;							// The object's vertices
 	VECTOR3f	*pNormals;							// The object's normals
@@ -155,19 +159,19 @@ typedef struct _t3DSLight_
 	FLOAT32 outerRange;
 	FLOAT32 innerRange;
 	FLOAT32 multiplier;
-	BOOL	isSpotLight;
+	BOOL3DS	isSpotLight;
 	FLOAT32 spotLight_target[3];
 	FLOAT32 spotLight_hotSpot;
 	FLOAT32 spotLight_fallOff;
 	
-	BOOL	isShadowed;
+	BOOL3DS	isShadowed;
 	FLOAT32	shadowBias;
 	FLOAT32	shadowFilter;
 	INT16	shadowSize;
 	
 	FLOAT32	roll;
 	FLOAT32 rayBias;
-	BOOL	attenuate;
+	BOOL3DS	attenuate;
 
 } t3DSLight;
 

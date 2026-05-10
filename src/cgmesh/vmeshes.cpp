@@ -1,3 +1,8 @@
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 #include "vmeshes.h"
 
 #include <cmath>
@@ -78,11 +83,25 @@ bool VMeshes::load(char* filename)
 {
 	bool res = false;
 
-	int size = strlen(filename);
+	std::string fileStr(filename);
+	std::string ext = "";
+	size_t dotPos = fileStr.find_last_of(".");
+	if (dotPos != std::string::npos) {
+		ext = fileStr.substr(dotPos + 1);
+		for (auto& c : ext) c = tolower(c);
+	}
 
-	// obj
-	if (filename[size - 3] == '3' && filename[size - 2] == 'd' && filename[size - 1] == 's')
+	// 3ds
+	if (ext == "3ds")
 		res = import_3ds(filename);
+
+	// gltf
+	if (ext == "gltf")
+		res = import_gltf(filename);
+
+	// glb
+	if (ext == "glb")
+		res = import_gltf(filename);
 
 	if (res)
 		return res;
@@ -337,4 +356,128 @@ bool VMeshes::import_3ds(char* filename)
 bool VMeshes::export_3ds(char* filename)
 {
 	return false;
+}
+#define TINYGLTF_IMPLEMENTATION
+#define TINYGLTF_NO_STB_IMAGE
+#define TINYGLTF_NO_STB_IMAGE_WRITE
+#define TINYGLTF_NO_INCLUDE_JSON
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
+#include <nlohmann/json.hpp>
+#include <tinygltf/tiny_gltf.h>
+
+bool DummyLoadImageData(tinygltf::Image* image, const int image_idx, std::string* err,
+    std::string* warn, int req_width, int req_height,
+    const unsigned char* bytes, int size, void* user_data)
+{
+    return true;
+}
+
+bool VMeshes::import_gltf(char* filename)
+{
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    loader.SetImageLoader(DummyLoadImageData, nullptr);
+    std::string err;
+    std::string warn;
+
+    int size = strlen(filename);
+    bool ret = false;
+    if (filename[size - 3] == 'g' && filename[size - 2] == 'l' && filename[size - 1] == 'b')
+        ret = loader.LoadBinaryFromFile(&model, &err, &warn, filename);
+    else
+        ret = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
+
+    if (!ret) {
+        return false;
+    }
+
+    for (const auto& gltfMesh : model.meshes) {
+        for (const auto& primitive : gltfMesh.primitives) {
+            if (primitive.mode != 4) continue; // TINYGLTF_MODE_TRIANGLES = 4
+
+            auto pMesh = new Mesh();
+            
+            // Positions
+            if (primitive.attributes.find("POSITION") == primitive.attributes.end()) continue;
+            const tinygltf::Accessor& posAccessor = model.accessors[primitive.attributes.at("POSITION")];
+            const tinygltf::BufferView& posView = model.bufferViews[posAccessor.bufferView];
+            const tinygltf::Buffer& posBuffer = model.buffers[posView.buffer];
+            const float* positions = reinterpret_cast<const float*>(&posBuffer.data[posView.byteOffset + posAccessor.byteOffset]);
+
+            // Indices
+            if (primitive.indices < 0) continue;
+            const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
+            const tinygltf::BufferView& indexView = model.bufferViews[indexAccessor.bufferView];
+            const tinygltf::Buffer& indexBuffer = model.buffers[indexView.buffer];
+
+            pMesh->Init(posAccessor.count, indexAccessor.count / 3);
+
+            // Map glTF material to Mesh material (base color only)
+            if (primitive.material >= 0 && primitive.material < (int)model.materials.size()) {
+                const auto& gltfMat = model.materials[primitive.material];
+                auto pMatExt = new MaterialColorExt();
+                pMatExt->SetName(gltfMat.name);
+                const auto& baseColor = gltfMat.pbrMetallicRoughness.baseColorFactor;
+                pMatExt->SetDiffuse(baseColor[0], baseColor[1], baseColor[2], baseColor[3]);
+                pMatExt->SetAmbient(0.2f, 0.2f, 0.2f, 1.0f);
+                pMatExt->SetSpecular(0.5f, 0.5f, 0.5f, 1.0f);
+                pMatExt->SetShininess(32.0f);
+
+                int matId = pMesh->Material_Add(pMatExt);
+                pMesh->ApplyMaterial(matId); // Set default material for all faces
+            }
+
+            for (size_t i = 0; i < posAccessor.count; i++) {
+                pMesh->SetVertex(i, positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+            }
+
+            // Normals
+            bool hasNormals = false;
+            if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
+                const tinygltf::Accessor& normAccessor = model.accessors[primitive.attributes.at("NORMAL")];
+                const tinygltf::BufferView& normView = model.bufferViews[normAccessor.bufferView];
+                const tinygltf::Buffer& normBuffer = model.buffers[normView.buffer];
+                const float* normals = reinterpret_cast<const float*>(&normBuffer.data[normView.byteOffset + normAccessor.byteOffset]);
+
+                if (normAccessor.count == posAccessor.count) {
+                    for (size_t i = 0; i < normAccessor.count; i++) {
+                        pMesh->m_pVertexNormals[i * 3] = normals[i * 3];
+                        pMesh->m_pVertexNormals[i * 3 + 1] = normals[i * 3 + 1];
+                        pMesh->m_pVertexNormals[i * 3 + 2] = normals[i * 3 + 2];
+                    }
+                    hasNormals = true;
+                }
+            }
+
+            if (indexAccessor.componentType == 5123) { // TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT = 5123
+                const uint16_t* indices = reinterpret_cast<const uint16_t*>(&indexBuffer.data[indexView.byteOffset + indexAccessor.byteOffset]);
+                for (size_t i = 0; i < indexAccessor.count / 3; i++) {
+                    pMesh->m_pFaces[i]->SetNVertices(3);
+                    pMesh->m_pFaces[i]->SetVertex(0, indices[i * 3]);
+                    pMesh->m_pFaces[i]->SetVertex(1, indices[i * 3 + 1]);
+                    pMesh->m_pFaces[i]->SetVertex(2, indices[i * 3 + 2]);
+                }
+            } else if (indexAccessor.componentType == 5125) { // TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT = 5125
+                const uint32_t* indices = reinterpret_cast<const uint32_t*>(&indexBuffer.data[indexView.byteOffset + indexAccessor.byteOffset]);
+                for (size_t i = 0; i < indexAccessor.count / 3; i++) {
+                    pMesh->m_pFaces[i]->SetNVertices(3);
+                    pMesh->m_pFaces[i]->SetVertex(0, indices[i * 3]);
+                    pMesh->m_pFaces[i]->SetVertex(1, indices[i * 3 + 1]);
+                    pMesh->m_pFaces[i]->SetVertex(2, indices[i * 3 + 2]);
+                }
+            }
+
+            pMesh->m_name = gltfMesh.name;
+            if (!hasNormals)
+                pMesh->ComputeNormals();
+            m_Meshes.push_back(pMesh);
+        }
+    }
+
+    return true;
 }

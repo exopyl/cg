@@ -159,7 +159,8 @@ void MyGLCanvas::LoadModel(const wxString& filename)
 	//cout << ((filename).mb_str(wxConvUTF8)) << endl;
 	//printf ("%s\n", (char*) ((filename).mb_str(wxConvUTF8)).data());
 	auto meshes = new VMeshes();
-	meshes->load((char*) ((filename).mb_str(wxConvUTF8)).data() );
+	std::string loaded_filename = filename.ToUTF8().data();
+	meshes->load(const_cast<char*>(loaded_filename.c_str()));
 
 	wxString msg = wxString::Format(wxT("%zu meshes imported"), meshes->GetNMeshes());
 	*m_CtrlLog << msg << _T("\n");

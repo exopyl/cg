@@ -1010,6 +1010,8 @@ void MyFrame::OnDirCtrlSelectionChanged(wxTreeEvent& WXUNUSED(event))
             m_filesCtrl->InsertItem(index++, filename.GetName() + _T(".") + filename.GetExt(), 1);
         else if (ext == _T("3ds"))
             m_filesCtrl->InsertItem(index++, filename.GetName() + _T(".") + filename.GetExt(), 2);
+        else if (ext == _T("gltf") || ext == _T("glb"))
+            m_filesCtrl->InsertItem(index++, filename.GetName() + _T(".") + filename.GetExt(), 2); // use 3ds icon for now
     }
 }
 
@@ -1104,7 +1106,14 @@ void MyFrame::OnTabAlignment(wxCommandEvent &evt)
 //
 void MyFrame::OnOpen(wxCommandEvent& WXUNUSED(event))
 {
-    wxFileDialog fd(this);
+    wxString wildcard = wxT("All supported formats|*.obj;*.stl;*.3ds;*.gltf;*.glb|")
+                        wxT("Wavefront OBJ (*.obj)|*.obj|")
+                        wxT("STL (*.stl)|*.stl|")
+                        wxT("3D Studio (*.3ds)|*.3ds|")
+                        wxT("glTF (*.gltf;*.glb)|*.gltf;*.glb|")
+                        wxT("All files (*.*)|*.*");
+
+    wxFileDialog fd(this, wxT("Open 3D Model"), wxEmptyString, wxEmptyString, wildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
     if(fd.ShowModal() == wxID_OK)
     {
