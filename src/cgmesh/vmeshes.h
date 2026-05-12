@@ -12,8 +12,8 @@ public:
 	VMeshes ();
 	~VMeshes ();
 
-	bool load(char* filename);
-	bool save(char *filename);
+	bool load(const char* filename);
+	bool save(const char *filename);
 
 	void AddMesh (Mesh *pMesh) { m_Meshes.push_back (pMesh); };
 
@@ -29,15 +29,15 @@ protected:
 	// import / export
 	void clean (void);
 
-	bool export_obj(char* filename);
-	bool export_stl(char* filename);          // ASCII STL : one solid block per Mesh
-	bool export_stl_binary(char* filename);   // Binary STL : single concatenated solid
-	bool export_ply(char* filename);
+	bool export_obj(const char* filename);
+	bool export_stl(const char* filename);          // ASCII STL : one solid block per Mesh
+	bool export_stl_binary(const char* filename);   // Binary STL : single concatenated solid
+	bool export_ply(const char* filename);
 
-	bool import_3ds(char* filename);
-	bool import_3dm(char* filename);
-	bool import_gltf(char* filename);
-	bool export_3ds(char* filename);
+	bool import_3ds(const char* filename);
+	bool import_3dm(const char* filename);
+	bool import_gltf(const char* filename);
+	bool export_3ds(const char* filename);
 
 private:
 	std::vector<Mesh*> m_Meshes;

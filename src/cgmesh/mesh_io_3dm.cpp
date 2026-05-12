@@ -633,7 +633,7 @@ void applyAppearance(Mesh& dst, const Appearance& app, const std::string& threeD
 
 } // namespace
 
-bool VMeshes::import_3dm(char* filename)
+bool VMeshes::import_3dm(const char* filename)
 {
     if (!filename)
         return false;
@@ -669,6 +669,6 @@ bool VMeshes::import_3dm(char* filename)
 
 #else // !CG_HAS_OPENNURBS
 
-bool VMeshes::import_3dm(char * /*filename*/)     { return false; }
+bool VMeshes::import_3dm(const char * /*filename*/)     { return false; }
 
 #endif

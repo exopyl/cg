@@ -54,7 +54,7 @@ bool VMeshes::IsTriangleMesh() const
 	return true;
 }
 
-bool VMeshes::save (char *filename)
+bool VMeshes::save (const char *filename)
 {
 	bool res = false;
 
@@ -79,7 +79,7 @@ void VMeshes::clean (void)
 	m_Meshes.clear();
 }
 
-bool VMeshes::load(char* filename)
+bool VMeshes::load(const char* filename)
 {
 	bool res = false;
 
@@ -119,7 +119,7 @@ bool VMeshes::load(char* filename)
 	return false;
 }
 
-bool VMeshes::export_obj(char* filename)
+bool VMeshes::export_obj(const char* filename)
 {
 	return false;
 }
@@ -185,7 +185,7 @@ namespace
 //
 // Export every Mesh's triangles as a single ASCII STL solid (concatenation).
 //
-bool VMeshes::export_stl(char* filename)
+bool VMeshes::export_stl(const char* filename)
 {
 	if (!filename) return false;
 	FILE *fp = fopen(filename, "w");
@@ -213,7 +213,7 @@ bool VMeshes::export_stl(char* filename)
 //
 // Export every Mesh's triangles as a single binary STL solid.
 //
-bool VMeshes::export_stl_binary(char* filename)
+bool VMeshes::export_stl_binary(const char* filename)
 {
 	if (!filename) return false;
 	FILE *fp = fopen(filename, "wb");
@@ -243,12 +243,12 @@ bool VMeshes::export_stl_binary(char* filename)
 	return true;
 }
 
-bool VMeshes::export_ply(char* filename)
+bool VMeshes::export_ply(const char* filename)
 {
 	return false;
 }
 
-bool VMeshes::import_3ds(char* filename)
+bool VMeshes::import_3ds(const char* filename)
 {
 	t3DSModel* p = Load3DSFile(filename, nullptr);
 	if (!p) return false;
@@ -357,7 +357,7 @@ bool VMeshes::import_3ds(char* filename)
 	return true;
 }
 
-bool VMeshes::export_3ds(char* filename)
+bool VMeshes::export_3ds(const char* filename)
 {
 	return false;
 }
@@ -479,7 +479,7 @@ bool CopyFloatAccessorVec2(std::vector<float>& dst, const tinygltf::Model& model
 }
 }
 
-bool VMeshes::import_gltf(char* filename)
+bool VMeshes::import_gltf(const char* filename)
 {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;

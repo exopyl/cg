@@ -35,7 +35,7 @@ class Cshape_distribution_osada
   void evaluate_distribution (shape_function_type type, int n_data, int n_bins);
   float *get_histogram (void) { return histogram; };
   void normalize_distribution (void);
-  void export_distribution (char *filename);
+  void export_distribution (const char *filename);
 
  private:
   void compute_distribution_a3 (int _n_bins);

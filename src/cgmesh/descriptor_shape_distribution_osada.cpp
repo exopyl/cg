@@ -573,8 +573,8 @@ Cshape_distribution_osada::normalize_distribution (void)
   for (i=0; i<n_bins; i++) histogram[i] /= sum;
 }
 
-void
-Cshape_distribution_osada::export_distribution (char *filename)
+void Cshape_distribution_osada::export_distribution (const char *filename)
+
 {
   FILE *ptr = fopen (filename, "w");
   for (int i=0; i<n_bins; i++)
