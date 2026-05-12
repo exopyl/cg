@@ -16,6 +16,7 @@ set(srcs
         DrawingArea.cpp
         Managers.cpp
         PropertyPanel.cpp
+        RemoteConsole.cpp
         SettingsPanel.cpp
         SinaiaApp.cpp
         SinaiaFrame.cpp
@@ -25,6 +26,10 @@ set(srcs
 
 add_executable(${APP_TARGET} WIN32 ${srcs})
 target_link_libraries(${APP_TARGET} cgimg cgmath cgmesh cgre)
+
+if (WIN32)
+    target_link_libraries(${APP_TARGET} ws2_32)
+endif()
 
 # opengl
 find_package(OpenGL REQUIRED)

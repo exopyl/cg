@@ -1715,6 +1715,14 @@ void MyFrame::OnToggleShowFps(wxCommandEvent& event)
 		pGLCanvas->Refresh(false);
 }
 
+MyGLCanvas* MyFrame::GetActiveCanvas()
+{
+	if (!m_pCtrl) return nullptr;
+	const int sel = m_pCtrl->GetSelection();
+	if (sel < 0) return nullptr;
+	return dynamic_cast<MyGLCanvas*>(m_pCtrl->GetPage(sel));
+}
+
 
 //
 // Rendering

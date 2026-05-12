@@ -170,6 +170,10 @@ public:
 
     bool IsShowFps() const { return m_bShowFps; }
 
+    // Active 3D canvas of the foreground notebook page, or nullptr if no
+    // model is open. Used by the remote console.
+    MyGLCanvas* GetActiveCanvas();
+
 private:
     wxTextCtrl* CreateTextCtrl(const wxString& text = wxEmptyString);
     wxGrid* CreateGrid();

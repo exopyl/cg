@@ -3,12 +3,13 @@
 
 #include "SinaiaApp.h"
 #include "SinaiaFrame.h"
+#include "RemoteConsole.h"
 
 
 bool MyApp::OnInit()
 {
     wxInitAllImageHandlers();
-    wxFrame* frame = new MyFrame(nullptr,
+    MyFrame* frame = new MyFrame(nullptr,
                                  wxID_ANY,
                                  wxT("Sinaia"),
                                  wxDefaultPosition,
@@ -18,5 +19,13 @@ bool MyApp::OnInit()
 
     frame->Show();
 
+    RemoteConsole::Get().Start(7777, frame);
+
     return true;
+}
+
+int MyApp::OnExit()
+{
+    RemoteConsole::Get().Stop();
+    return wxApp::OnExit();
 }

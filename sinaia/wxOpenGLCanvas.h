@@ -70,6 +70,10 @@ public:
 	void ResetProjectionMode();
 	void DrawGL();
 
+	// Save current GL framebuffer (front buffer) to a PNG. Must be called
+	// on the wx main thread (uses this canvas' GL context).
+	bool SaveScreenshot(const wxString& path);
+
 /*
 	Mesh_half_edge* GetMesh (void) { return m_pMesh; };
 

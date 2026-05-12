@@ -11,6 +11,8 @@
 #include "wxOpenGLCanvas.h"
 #include "SinaiaFrame.h"
 #include <wx/statusbr.h>
+#include <wx/image.h>
+#include <cstring>
 
 BEGIN_EVENT_TABLE(MyGLCanvas, wxGLCanvas)
     EVT_SIZE(MyGLCanvas::OnSize)
@@ -414,6 +416,36 @@ void MyGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event))
 			m_fpsLastUpdate = now;
 		}
 	}
+}
+
+bool MyGLCanvas::SaveScreenshot(const wxString& path)
+{
+	if (!m_context) return false;
+	wxGLCanvas::SetCurrent(*m_context);
+
+	int w = 0, h = 0;
+	GetClientSize(&w, &h);
+	if (w <= 0 || h <= 0) return false;
+
+	std::vector<unsigned char> pixels(static_cast<size_t>(w) * h * 3);
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
+	glReadBuffer(GL_FRONT);
+	glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+
+	// glReadPixels returns rows bottom-up; PNG wants top-down — flip Y.
+	std::vector<unsigned char> flipped(static_cast<size_t>(w) * h * 3);
+	for (int y = 0; y < h; ++y)
+	{
+		std::memcpy(&flipped[static_cast<size_t>(h - 1 - y) * w * 3],
+		            &pixels [static_cast<size_t>(y)         * w * 3],
+		            static_cast<size_t>(w) * 3);
+	}
+
+	// wxImage with static_data=true keeps ownership in our vector; SaveFile
+	// reads from it while the vector is still in scope. wxPNGHandler is
+	// registered by wxInitAllImageHandlers() in SinaiaApp::OnInit.
+	wxImage img(w, h, flipped.data(), true);
+	return img.SaveFile(path, wxBITMAP_TYPE_PNG);
 }
 
 void MyGLCanvas::OnSize(wxSizeEvent& event)
