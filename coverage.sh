@@ -6,7 +6,7 @@ export CXX=/usr/bin/clang++
 export BUILD_DIR=build_coverage
 
 echo "Configuration ... "
-cmake -B ${BUILD_DIR} -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=On
+cmake -B ${BUILD_DIR} -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=On -DENABLE_OPENNURBS=On
 echo "=> DONE"
 
 echo "Compilation ... "

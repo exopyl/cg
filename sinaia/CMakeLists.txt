@@ -77,3 +77,10 @@ if(WIN32)
                 "$<TARGET_FILE_DIR:${APP_TARGET}>")
     endif()
 endif()
+
+if (UNIX AND ENABLE_OPENNURBS)
+     add_custom_command(TARGET ${APP_TARGET} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${EXTERN_OPENNURBS}/lib/linux_x64/libOpenNURBS.so"
+            "$<TARGET_FILE_DIR:${APP_TARGET}>")
+endif()

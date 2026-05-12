@@ -262,3 +262,20 @@ TEST(TEST_cgmesh_io, glb_fox_non_indexed)
 
     delete pVMeshes;
 }
+
+#ifdef CG_HAS_OPENNURBS
+TEST(TEST_cgmesh_io, rhino_3dm)
+{
+    VMeshes* pVMeshes = new VMeshes();
+
+    // action
+    bool res = pVMeshes->load("./test/data/3dm/flying.3dm");
+
+    // expectations
+    ASSERT_TRUE(res);
+    EXPECT_GT(pVMeshes->GetNVertices(), 0u);
+    EXPECT_GT(pVMeshes->GetNFaces(), 0u);
+
+    delete pVMeshes;
+}
+#endif

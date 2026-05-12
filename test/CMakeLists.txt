@@ -28,16 +28,27 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/test/data")
     )
 endif()
 
-if (WIN32)
+if (UNIX AND ENABLE_OPENNURBS)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${EXTERN_OPENNURBS}/lib/linux_x64/libOpenNURBS.so"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        COMMENT "Copying libOpenNURBS.so to $<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    )
+endif()
+
+if (WIN32 AND EXTERN_GOOGLETEST)
     add_subdirectory(${EXTERN_GOOGLETEST} gtest)
     target_link_libraries(${PROJECT_NAME} GTest::gtest_main)
     target_link_libraries(${PROJECT_NAME} GTest::gmock_main)
-endif (WIN32)
+endif (WIN32 AND EXTERN_GOOGLETEST)
 
 gtest_discover_tests(${PROJECT_NAME})
 
 target_link_libraries(${PROJECT_NAME} cgmath cgimg cgmesh)
-target_link_libraries(${PROJECT_NAME} gtest)
+if (EXTERN_GOOGLETEST)
+    target_link_libraries(${PROJECT_NAME} gtest)
+endif()
 if ( ENABLE_COVERAGE )
     if ( UNIX )
         target_link_libraries(${PROJECT_NAME} pthread gcov)

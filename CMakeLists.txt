@@ -7,7 +7,8 @@ set(CMAKE_CXX_STANDARD 17)
 # Options
 set(ENABLE_COVERAGE Off CACHE BOOL "Enable coverage.")
 set(ENABLE_SINAIA Off CACHE BOOL "Enable sinaia.")
-set(ENABLE_OPENNURBS Off CACHE BOOL "Enable openNURBS (.3dm) import. Requires EXTERN_OPENNURBS.")
+set(ENABLE_OPENNURBS On CACHE BOOL "Enable openNURBS (.3dm) import.")
+set(EXTERN_OPENNURBS "${CMAKE_SOURCE_DIR}/extern/opennurbs-v8.27.26019.16021" CACHE PATH "Path to openNURBS directory.")
 
 if ( ENABLE_COVERAGE )
 	set(CMAKE_C_FLAGS "-g -O0 -fprofile-instr-generate -fcoverage-mapping")

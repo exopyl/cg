@@ -18,12 +18,21 @@ target_link_libraries(cgmesh cgimg)
 
 if (ENABLE_OPENNURBS)
     if (NOT EXTERN_OPENNURBS)
-        message(FATAL_ERROR "ENABLE_OPENNURBS is ON but EXTERN_OPENNURBS is not set.")
+        set(EXTERN_OPENNURBS "${CMAKE_SOURCE_DIR}/extern/opennurbs-v8.27.26019.16021")
     endif()
-    target_compile_definitions(cgmesh PRIVATE CG_HAS_OPENNURBS OPENNURBS_IMPORTS)
-    target_include_directories(cgmesh PRIVATE ${EXTERN_OPENNURBS}/include)
+    
+    if (NOT EXISTS "${EXTERN_OPENNURBS}/include")
+        message(FATAL_ERROR "ENABLE_OPENNURBS is ON but EXTERN_OPENNURBS/include does not exist at ${EXTERN_OPENNURBS}/include")
+    endif()
+
+    target_compile_definitions(cgmesh PUBLIC CG_HAS_OPENNURBS)
+    target_compile_definitions(cgmesh PRIVATE OPENNURBS_IMPORTS)
+    target_include_directories(cgmesh PUBLIC ${EXTERN_OPENNURBS}/include)
+
     if (WIN32)
         target_link_libraries(cgmesh ${EXTERN_OPENNURBS}/lib/vc14x_x64/OpenNURBS.lib)
+    elseif (UNIX)
+        target_link_libraries(cgmesh ${EXTERN_OPENNURBS}/lib/linux_x64/libOpenNURBS.so)
     endif()
 endif()
 
