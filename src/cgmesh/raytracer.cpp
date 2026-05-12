@@ -257,7 +257,7 @@ void Raytracer::Dump ()
 	printf ("GetIntersectionWithRay : %f\n", m_time_GetIntersectionWithRay);
 }
 
-void Raytracer::export_statistics (char *filename)
+void Raytracer::export_statistics (const char *filename)
 {
 	FILE *ptr = fopen (filename, "w");
 	if (!ptr)

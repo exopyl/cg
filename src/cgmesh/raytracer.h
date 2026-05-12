@@ -28,7 +28,7 @@ public:
 
 	// dump
 	void Dump (void);
-	void export_statistics (char *filename);
+	void export_statistics (const char *filename);
 
 private:
 	int GetColorWithRay (float vOrig[3], float vDirection[3], float color[3]);

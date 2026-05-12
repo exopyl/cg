@@ -126,7 +126,7 @@ extern float interpolation_cubic  (float a, float b, float c, float d, float x);
 extern float filter_raised_cosine_filter (float T, float alpha, float x);
 
 // output
-extern void output_1array (float *signal, int size, char *filename);
+extern void output_1array (float *signal, int size, const char *filename);
 extern void output_2array (float *signal1, float *signal2, int size, char *filename);
 
 // sort

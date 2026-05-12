@@ -448,7 +448,8 @@ void Img::histogram_equalization_bezier (CurveBezier *bezier)
 	     bezier->eval_on_x (i, pt);
 	     bezier_interpolated[i] = pt[1];
      }
-     output_1array (bezier_interpolated, 256, (char*)"output.dat");
+     output_1array (bezier_interpolated, 256, "output.dat");
+
      bezier->export_interpolated ((char*)"bezier.dat", 256);
 
      // image mapping

@@ -89,7 +89,7 @@ float filter_raised_cosine_filter (float T, float alpha, float x)
 }
 
 // output
-void output_1array (float *signal, int size, char *filename)
+void output_1array (float *signal, int size, const char *filename)
 {
   FILE *ptr = fopen (filename, "w");
   for (int i=0; i<size; i++)

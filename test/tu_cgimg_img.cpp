@@ -283,23 +283,23 @@ TEST(TEST_cgimg_img, histogram)
 	img->convert_to_grayscale ();
 	Img *imgc = new Img (*img);
 
-	imgc->save ((char*)"./img_histo_orig.ppm");
+	imgc->save ("./img_histo_orig.ppm");
 
 	float h[256];
 	imgc->get_histogram (h);
-	output_1array (h, 256, (char*)"histogram1.dat");
+	output_1array (h, 256, "histogram1.dat");
 	for (int i=1; i<256; i++)
 		h[i] += h[i-1];
-	output_1array (h, 256, (char*)"histogram11.dat");
+	output_1array (h, 256, "histogram11.dat");
 
 	Img *histo = imgc->get_histogram_img (200);
-	histo->save ((char*)"./img_histo_histo_orig.ppm");
+	histo->save ("./img_histo_histo_orig.ppm");
 	delete histo;
 
 	imgc->histogram_equalization ();
-	imgc->save ((char*)"./data_generated/img_histo_equalized.ppm");
+	imgc->save ("./data_generated/img_histo_equalized.ppm");
 	histo = imgc->get_histogram_img (200);
-	histo->save ((char*)"./data_generated/img_histo_histo_equalized.ppm");
+	histo->save ("./data_generated/img_histo_histo_equalized.ppm");
 	delete histo;
 
 	delete imgc;
@@ -310,10 +310,10 @@ TEST(TEST_cgimg_img, histogram)
 	img->contrast (0.);
 
 	img->get_histogram (h);
-	output_1array (h, 256, (char*)"histogram2.dat");
+	output_1array (h, 256, "histogram2.dat");
 	for (int i=1; i<256; i++)
 		h[i] += h[i-1];
-	output_1array (h, 256, (char*)"histogram22.dat");
+	output_1array (h, 256, "histogram22.dat");
 */
 }
 
