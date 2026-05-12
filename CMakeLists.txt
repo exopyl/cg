@@ -10,6 +10,15 @@ set(ENABLE_SINAIA Off CACHE BOOL "Enable sinaia.")
 set(ENABLE_OPENNURBS On CACHE BOOL "Enable openNURBS (.3dm) import.")
 set(EXTERN_OPENNURBS "${CMAKE_SOURCE_DIR}/extern/opennurbs-v8.27.26019.16021" CACHE PATH "Path to openNURBS directory.")
 
+if (ENABLE_OPENNURBS)
+    if (EXISTS "${EXTERN_OPENNURBS}/include")
+        include_directories("${EXTERN_OPENNURBS}/include")
+        # Some opennurbs headers expect android_uuid/uuid.h to be findable
+        # either via "android_uuid/uuid.h" or just "uuid.h" depending on config.
+        include_directories("${EXTERN_OPENNURBS}/include/android_uuid")
+    endif()
+endif()
+
 if ( ENABLE_COVERAGE )
 	set(CMAKE_C_FLAGS "-g -O0 -fprofile-instr-generate -fcoverage-mapping")
 	set(CMAKE_CXX_FLAGS "-g -O0 -Wall -W -Wshadow -Wunused-variable -Wunused-parameter -Wunused-function -Wunused -Wno-system-headers -Wno-deprecated -Woverloaded-virtual -Wwrite-strings -Wno-pointer-to-int-cast -fprofile-instr-generate -fcoverage-mapping")
