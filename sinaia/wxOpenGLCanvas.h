@@ -2,6 +2,7 @@
 
 #include "../src/cgre/gl_wrapper.h"
 #include "wx/glcanvas.h"
+#include <chrono>
 #include <list>
 #include "../src/cgre/cgre.h"
 
@@ -117,6 +118,10 @@ private:
 
 	//ListNPRSegments m_listSegments;
 	float m_fNPRAngleThreshold;
+
+	// FPS overlay
+	unsigned int m_fpsFrames = 0;
+	std::chrono::steady_clock::time_point m_fpsLastUpdate = std::chrono::steady_clock::now();
 
     DECLARE_EVENT_TABLE()
 };

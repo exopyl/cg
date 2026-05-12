@@ -119,6 +119,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_3D_WARNING, MyFrame::On3DWarning)
     EVT_MENU(ID_3D_LIGHTING, MyFrame::On3DLighting)
     EVT_MENU(ID_3D_CLIPPING, MyFrame::On3DClippingPlane)
+    EVT_MENU(ID_RENDER_SHOW_FPS, MyFrame::OnToggleShowFps)
     EVT_MENU(ID_BUTTON_RENDERING_BGCOLOR, MyFrame::OnBgColor)
 
     EVT_BUTTON(ID_BUTTON_RENDERING_BGCOLOR, MyFrame::OnBgColor)
@@ -337,6 +338,7 @@ MyFrame::MyFrame(wxWindow* parent,
     panel_menu->AppendCheckItem(ID_NotebookTabFixedWidth, _("Fixed-width Tabs"));
     panel_menu->AppendSeparator();
     panel_menu->Append(ID_BUTTON_RENDERING_BGCOLOR, _("Background"));
+    panel_menu->AppendCheckItem(ID_RENDER_SHOW_FPS, _("Show FPS"));
 
     options_menu->AppendSubMenu(panel_menu, wxT("3D Panel"));
 
@@ -379,7 +381,9 @@ MyFrame::MyFrame(wxWindow* parent,
 
     SetMenuBar(mb);
 
-    CreateStatusBar();
+    CreateStatusBar(2);
+    int statusWidths[2] = { -1, 100 };
+    GetStatusBar()->SetStatusWidths(2, statusWidths);
     GetStatusBar()->SetStatusText(_("Ready"));
 
 
@@ -1695,6 +1699,20 @@ void MyFrame::On3DLighting(wxCommandEvent& WXUNUSED(event))
 		bool b = pGLCanvas->GetLighting ();
 		p->SetSticky (b);
 	}
+}
+
+void MyFrame::OnToggleShowFps(wxCommandEvent& event)
+{
+	m_bShowFps = event.IsChecked();
+	wxStatusBar* sb = GetStatusBar();
+	if (sb)
+		sb->SetStatusText(m_bShowFps ? wxString(wxT("FPS: --")) : wxString(), 1);
+
+	// Force a repaint so the next OnPaint kicks the counter into motion (or
+	// clears any leftover text).
+	MyGLCanvas* pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+	if (pGLCanvas)
+		pGLCanvas->Refresh(false);
 }
 
 

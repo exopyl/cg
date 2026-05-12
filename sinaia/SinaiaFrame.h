@@ -78,6 +78,7 @@ class MyFrame : public wxFrame
 		ID_3D_LIGHTING,
         ID_3D_CLIPPING,
         ID_3D_WARNING,
+        ID_RENDER_SHOW_FPS,
 
 	ID_BUTTON_RENDERING_BGCOLOR,
 
@@ -167,6 +168,8 @@ public:
     wxAuiDockArt* GetDockArt();
     void DoUpdate();
 
+    bool IsShowFps() const { return m_bShowFps; }
+
 private:
     wxTextCtrl* CreateTextCtrl(const wxString& text = wxEmptyString);
     wxGrid* CreateGrid();
@@ -218,6 +221,8 @@ private:
 
 	void On3DWarning(wxCommandEvent& evt);
 	void On3DClippingPlane(wxCommandEvent& evt);
+
+	void OnToggleShowFps(wxCommandEvent& evt);
 
 	void OnBgColor(wxCommandEvent& evt);
 	void UpdateGeometry (void);
@@ -280,6 +285,8 @@ private:
 
     long m_notebook_style;
     long m_notebook_theme;
+
+    bool m_bShowFps = false;
 
     // Parameterized geometry: the panel shows the params of the object
     // associated with the currently active tab. One entry per tab.

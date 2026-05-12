@@ -113,20 +113,25 @@ void VertexArrayManager::Draw (int id)
 
 	float* pVertices = mesh->m_pVertices.data();
 
-	bool bHasNormals = (!mesh->m_pVertexNormals.empty())? true : false;
-	bool bHasColors = (!mesh->m_pVertexColors.empty())? true : false;
+	const bool bHasNormals   = !mesh->m_pVertexNormals.empty();
+	const bool bHasColors    = !mesh->m_pVertexColors.empty();
+	const bool bHasTexCoords = !mesh->m_pTextureCoordinates.empty();
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 	if (bHasNormals)
 		glEnableClientState(GL_NORMAL_ARRAY);
 	if (bHasColors)
 		glEnableClientState(GL_COLOR_ARRAY);
+	if (bHasTexCoords)
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
 	glVertexPointer(3, GL_FLOAT, 0, mesh->m_pVertices.data());
 	if (bHasNormals)
 		glNormalPointer (GL_FLOAT, 0, mesh->m_pVertexNormals.data());
 	if (bHasColors)
 		glColorPointer(3, GL_FLOAT, 0, mesh->m_pVertexColors.data());
+	if (bHasTexCoords)
+		glTexCoordPointer(2, GL_FLOAT, 0, mesh->m_pTextureCoordinates.data());
 
 	glEnable(GL_POLYGON_OFFSET_FILL);
 	glPolygonOffset(1.0, 1.0);
@@ -135,6 +140,8 @@ void VertexArrayManager::Draw (int id)
 
 	glDisable(GL_POLYGON_OFFSET_FILL);
 
+	if (bHasTexCoords)
+		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	if (bHasColors)
 		glDisableClientState(GL_COLOR_ARRAY);
 	if (bHasNormals)

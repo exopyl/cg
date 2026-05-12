@@ -410,6 +410,17 @@ void MeshRenderer::Draw (int id)
 	if (!el.pMesh)
 		return; // slot vacated by RemoveMesh
 
+	// For the fast paths (display list, vertex array, VBO), mesh_draw's per-face
+	// material activation loop is bypassed. Activate the mesh's first material
+	// here so the GL state is correct before the bulk draw call. This works
+	// because cgmesh's ApplyMaterial paints all faces of a mesh with one
+	// material id (true for our 3dm import path and most current importers).
+	auto activateMeshMaterial = [&]() {
+		const vector<int>& matIds = GetMaterialRendererIds(id);
+		if (!matIds.empty() && matIds[0] != -1)
+			MaterialRenderer::getInstance()->ActivateMaterial(matIds[0]);
+	};
+
 	switch (el.method)
 	{
 	case CG_RENDERING_DEFAULT:
@@ -417,8 +428,11 @@ void MeshRenderer::Draw (int id)
 		break;
 	case CG_RENDERING_VERTEX_ARRAY:
 		if (el.properties.display_fill)
+		{
+			activateMeshMaterial();
 			m_vertexArrayManager->Draw (el.id);
-		
+		}
+
 		// Always call mesh_draw for extras (wireframe, points, warnings)
 		{
 			rendering_properties_s extras = el.properties;
@@ -427,12 +441,15 @@ void MeshRenderer::Draw (int id)
 		}
 		break;
 	case CG_RENDERING_DISPLAY_LIST:
+		activateMeshMaterial();
 		m_displayListManager->Draw (el.id);
 		break;
 	case CG_RENDERING_VBO:
+		activateMeshMaterial();
 		m_vboManager->Draw (el.id);
 		break;
 	case CG_RENDERING_VERTEX_BUFFER:
+		activateMeshMaterial();
 		m_vertexBufferManager->Draw (el.id);
 		break;
 	default:

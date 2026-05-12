@@ -9,6 +9,8 @@
 #include "../src/cgmesh/mesh_data_manager.h"
 
 #include "wxOpenGLCanvas.h"
+#include "SinaiaFrame.h"
+#include <wx/statusbr.h>
 
 BEGIN_EVENT_TABLE(MyGLCanvas, wxGLCanvas)
     EVT_SIZE(MyGLCanvas::OnSize)
@@ -252,9 +254,13 @@ void MyGLCanvas::DrawGL()
 		repere_draw ();
 	for (const auto& mesh : m_pVMeshes->GetMeshes())
 	{
-		// Use the centralized renderer
-		int id = MeshRenderer::getInstance()->GetMeshId(mesh, CG_RENDERING_DEFAULT);
-		
+		// CG_RENDERING_VERTEX_ARRAY: one glDrawElements per mesh instead of
+		// glBegin/glVertex3f per face. Cuts the CPU->GPU call count from
+		// O(faces) to O(1) per mesh and gives a huge FPS win on heavy models.
+		// The extras (wireframe, vertex normals, points) are still drawn by
+		// mesh_draw inside MeshRenderer::Draw.
+		int id = MeshRenderer::getInstance()->GetMeshId(mesh, CG_RENDERING_VERTEX_ARRAY);
+
 		// Update rendering properties from the canvas prop
 		MeshRenderer::getInstance()->SetProperties(id, prop);
 
@@ -386,6 +392,28 @@ void MyGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event))
 
 	ResetProjectionMode();
 	DrawGL();
+
+	// FPS overlay: count frames on natural paint events (mouse drag, resize,
+	// programmatic Refresh, etc.) and push to the status bar every ~250 ms.
+	// We deliberately do NOT call Refresh() from here to avoid a self-feeding
+	// repaint loop that would starve modal dialogs and pump events forever.
+	// If you need a steady measurement, hold the left mouse button and drag.
+	MyFrame* frame = dynamic_cast<MyFrame*>(wxGetTopLevelParent(this));
+	if (frame && frame->IsShowFps())
+	{
+		++m_fpsFrames;
+		const auto now = std::chrono::steady_clock::now();
+		const long long elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+			now - m_fpsLastUpdate).count();
+		if (elapsedMs >= 250)
+		{
+			const double fps = (m_fpsFrames * 1000.0) / static_cast<double>(elapsedMs);
+			if (wxStatusBar* sb = frame->GetStatusBar())
+				sb->SetStatusText(wxString::Format(wxT("FPS: %.0f"), fps), 1);
+			m_fpsFrames = 0;
+			m_fpsLastUpdate = now;
+		}
+	}
 }
 
 void MyGLCanvas::OnSize(wxSizeEvent& event)
