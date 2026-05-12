@@ -339,7 +339,6 @@ MeshRenderer *MeshRenderer::m_pInstance = new MeshRenderer;
 
 MeshRenderer::MeshRenderer()
 {
-	m_nMeshes = 0;
 	m_displayListManager = new DisplayListManager ();
 	m_vertexArrayManager = new VertexArrayManager ();
 	m_vboManager = new VBOManager();
@@ -352,48 +351,64 @@ MeshRenderer::~MeshRenderer()
 
 int MeshRenderer::AddMesh (Mesh *pMesh, CG_rendering_method method)
 {
-	if (m_nMeshes >= 8)
-	{
-		printf("Error: MeshRenderer maximum capacity (8) reached!\n");
+	if (!pMesh)
 		return -1;
-	}
 
-	m_meshes[m_nMeshes].method = method;
-	m_meshes[m_nMeshes].pMesh = pMesh;
-	rendering_properties_init (m_meshes[m_nMeshes].properties);
+	rendering_element_s el;
+	el.method = method;
+	el.pMesh = pMesh;
+	el.id = -1;
+	rendering_properties_init (el.properties);
 
 	switch (method)
 	{
 	case CG_RENDERING_DEFAULT:
 		break;
 	case CG_RENDERING_DISPLAY_LIST:
-		m_meshes[m_nMeshes].id = m_displayListManager->addMesh (pMesh);
+		el.id = m_displayListManager->addMesh (pMesh);
 		break;
 	case CG_RENDERING_VERTEX_ARRAY:
-		m_meshes[m_nMeshes].id = m_vertexArrayManager->addMesh (pMesh);
+		el.id = m_vertexArrayManager->addMesh (pMesh);
 		break;
 	case CG_RENDERING_VBO:
-
-		m_meshes[m_nMeshes].id = m_vboManager->addMesh (pMesh);
+		el.id = m_vboManager->addMesh (pMesh);
 		break;
 	case CG_RENDERING_VERTEX_BUFFER:
-		m_meshes[m_nMeshes].id = m_vertexBufferManager->addMesh (pMesh);
+		el.id = m_vertexBufferManager->addMesh (pMesh);
 		break;
 	default:
 		break;
 	}
-	
-	m_meshToId[pMesh] = m_nMeshes;
-	m_nMeshes++;
-	return m_nMeshes-1;
+
+	m_meshes.push_back(el);
+	const int id = (int)m_meshes.size() - 1;
+	m_meshToId[pMesh] = id;
+	return id;
+}
+
+void MeshRenderer::RemoveMesh (Mesh *pMesh)
+{
+	auto it = m_meshToId.find(pMesh);
+	if (it == m_meshToId.end())
+		return;
+	const int id = it->second;
+	m_meshToId.erase(it);
+	if (id >= 0 && id < (int)m_meshes.size())
+	{
+		// Mark slot vacant so Draw() skips it; we keep the slot to preserve
+		// ids of other entries (other tabs / canvases) into m_meshes.
+		m_meshes[id].pMesh = nullptr;
+	}
 }
 
 void MeshRenderer::Draw (int id)
 {
-	if (id < 0 || id >= (int)m_nMeshes)
+	if (id < 0 || id >= (int)m_meshes.size())
 		return;
 
 	rendering_element_s& el = m_meshes[id];
+	if (!el.pMesh)
+		return; // slot vacated by RemoveMesh
 
 	switch (el.method)
 	{
@@ -436,7 +451,7 @@ int MeshRenderer::GetMeshId (Mesh *pMesh, CG_rendering_method method)
 
 void MeshRenderer::SetProperties(int id, const rendering_properties_s& prop)
 {
-	if (id >= 0 && id < (int)m_nMeshes)
+	if (id >= 0 && id < (int)m_meshes.size() && m_meshes[id].pMesh)
 	{
 		m_meshes[id].properties = prop;
 	}
@@ -444,7 +459,12 @@ void MeshRenderer::SetProperties(int id, const rendering_properties_s& prop)
 
 const vector<int>& MeshRenderer::GetMaterialRendererIds(int elementId)
 {
+	static const vector<int> empty;
+	if (elementId < 0 || elementId >= (int)m_meshes.size())
+		return empty;
 	rendering_element_s& el = m_meshes[elementId];
+	if (!el.pMesh)
+		return empty;
 	uint64_t currentRevision = el.pMesh->GetRevision();
 
 	if (el.materialCache.revision == currentRevision)

@@ -1106,10 +1106,11 @@ void MyFrame::OnTabAlignment(wxCommandEvent &evt)
 //
 void MyFrame::OnOpen(wxCommandEvent& WXUNUSED(event))
 {
-    wxString wildcard = wxT("All supported formats|*.obj;*.stl;*.3ds;*.gltf;*.glb|")
+    wxString wildcard = wxT("All supported formats|*.obj;*.stl;*.3ds;*.3dm;*.gltf;*.glb|")
                         wxT("Wavefront OBJ (*.obj)|*.obj|")
                         wxT("STL (*.stl)|*.stl|")
                         wxT("3D Studio (*.3ds)|*.3ds|")
+                        wxT("Rhino 3DM (*.3dm)|*.3dm|")
                         wxT("glTF (*.gltf;*.glb)|*.gltf;*.glb|")
                         wxT("All files (*.*)|*.*");
 

@@ -35,6 +35,7 @@ protected:
 	bool export_ply(char* filename);
 
 	bool import_3ds(char* filename);
+	bool import_3dm(char* filename);
 	bool import_gltf(char* filename);
 	bool export_3ds(char* filename);
 

@@ -95,6 +95,10 @@ bool VMeshes::load(char* filename)
 	if (ext == "3ds")
 		res = import_3ds(filename);
 
+	// 3dm
+	if (ext == "3dm")
+		res = import_3dm(filename);
+
 	// gltf
 	if (ext == "gltf")
 		res = import_gltf(filename);

@@ -75,9 +75,15 @@ MyGLCanvas::MyGLCanvas(wxWindow *parent, wxTextCtrl* pCtrlLog, int *args)
 //
 MyGLCanvas::~MyGLCanvas()
 {
+	if (m_pVMeshes)
+	{
+		for (auto* mesh : m_pVMeshes->GetMeshes())
+			if (mesh) MeshRenderer::getInstance()->RemoveMesh(mesh);
+	}
+
 	delete m_pMesh;
 	m_pMesh = nullptr;
-	
+
 	delete m_pVMeshes;
 	m_pVMeshes = nullptr;
 
@@ -117,6 +123,11 @@ VMeshes* MyGLCanvas::GetVMeshes(void)
 
 void MyGLCanvas::SetVMeshes(VMeshes* pObject)
 {
+	if (m_pVMeshes)
+	{
+		for (auto* mesh : m_pVMeshes->GetMeshes())
+			if (mesh) MeshRenderer::getInstance()->RemoveMesh(mesh);
+	}
 	delete m_pVMeshes;
 
 	m_pVMeshes = pObject;

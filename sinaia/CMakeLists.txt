@@ -64,4 +64,11 @@ if(WIN32)
                 "${WX_DLL_INSTALL_DIR}/${DLL_NAME}.dll"
                 "$<TARGET_FILE_DIR:${APP_TARGET}>")
         endforeach()
+
+    if (ENABLE_OPENNURBS)
+        add_custom_command(TARGET ${APP_TARGET} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${EXTERN_OPENNURBS}/lib/vc14x_x64/OpenNURBS.dll"
+                "$<TARGET_FILE_DIR:${APP_TARGET}>")
+    endif()
 endif()

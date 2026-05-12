@@ -72,6 +72,7 @@ public:
 
 	int AddMesh (Mesh *pMesh, CG_rendering_method method);
 	int GetMeshId (Mesh *pMesh, CG_rendering_method method);
+	void RemoveMesh (Mesh *pMesh);
 	void Draw (int id);
 
 	void SetProperties(int id, const rendering_properties_s& prop);
@@ -81,13 +82,12 @@ public:
 
 private:
 	static MeshRenderer *m_pInstance;
-	
+
 	DisplayListManager	*m_displayListManager;
 	VertexArrayManager *m_vertexArrayManager;
 	VBOManager *m_vboManager;
 	VertexBufferManager *m_vertexBufferManager;
 
-	unsigned int m_nMeshes;
-	rendering_element_s m_meshes[8];
+	std::vector<rendering_element_s> m_meshes;
 	map<Mesh*, int> m_meshToId; // New mapping
 };
