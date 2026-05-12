@@ -21,7 +21,7 @@ jobs:
     - name: Install clang & gtest
       run: |
         sudo apt-get update
-        sudo apt-get install clang clang-tools libgtest-dev
+        sudo apt-get install clang clang-tools libgtest-dev googletest
     - name: Configure clang
       run: |
         export CC=/usr/bin/clang
