@@ -1272,16 +1272,30 @@ int Mesh::import_pgm (const char *filename)
     }
 
   /* Get header information */
-  fscanf (ptr, "%c %c", &id[0], &id[1]);
+  if (fscanf (ptr, "%c %c", &id[0], &id[1]) != 2)
+  {
+      fclose(ptr);
+      return false;
+  }
+
   if (id[0]!='P' && id[1]!='2' && id[1]!='5')
     {
       printf ("\"%s\" is not a valid PGM file\n", filename);
+      fclose(ptr);
       return false;
     }
   _pgm_skip_spaces (ptr);
-  fscanf (ptr, "%d %d", &width, &height);
+  if (fscanf (ptr, "%d %d", &width, &height) != 2)
+  {
+      fclose(ptr);
+      return false;
+  }
   _pgm_skip_spaces (ptr);
-  fscanf (ptr, "%d", &levels);
+  if (fscanf (ptr, "%d", &levels) != 1)
+  {
+      fclose(ptr);
+      return false;
+  }
   _pgm_skip_spaces (ptr);
 
   /* Create the data */
@@ -1294,7 +1308,14 @@ int Mesh::import_pgm (const char *filename)
     for (j=0; j<height; j++)
       for (i=0; i<width; i++)
 	  {
-		fscanf (ptr, "%d", &data[j*width+i]);
+		int val;
+		if (fscanf (ptr, "%d", &val) != 1)
+		{
+			// handle error if needed, for now just break
+			fclose(ptr); // Close file handle before breaking/returning
+			return false;
+		}
+		data[j*width+i] = (unsigned char)val;
 	  }
   }
   if (id[1]=='5') /* raw mode */
