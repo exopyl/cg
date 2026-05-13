@@ -3,6 +3,7 @@
 #include "surface_basic.h"
 #include "surface_parametric.h"
 #include "voxels_menger_sponge.h"
+#include "import_svg.h"
 
 // ===========================================================================
 // Basic shapes
@@ -451,6 +452,36 @@ void ParameterizedMengerSponge::Regenerate()
 	delete m_pMesh;
 	MengerSponge sponge((unsigned int)m_level);
 	m_pMesh = sponge.ToMesh();
+	if (m_pMesh)
+		m_pMesh->ComputeNormals();
+}
+
+// ===========================================================================
+// SVG-based shapes
+// ===========================================================================
+
+// --- SVG extrusion ---------------------------------------------------------
+ParameterizedSvgExtrusion::ParameterizedSvgExtrusion(const std::string& filename)
+	: m_filename(filename)
+{
+	Regenerate();
+}
+std::vector<Parameter> ParameterizedSvgExtrusion::GetParameters()
+{
+	return {
+		Parameter::MakeFloat("Height",         &m_height,     0.001f, 10.f),
+		Parameter::MakeFloat("Flatten Tol",    &m_flattenTol, 0.05f,  10.f),
+	};
+}
+void ParameterizedSvgExtrusion::Regenerate()
+{
+	delete m_pMesh;
+	SvgExtrudeOptions opt;
+	opt.height       = m_height;
+	opt.flattenTol   = m_flattenTol;
+	opt.centerAndFit = true;
+	opt.invertY      = true;
+	m_pMesh = import_svg_extruded(m_filename, opt);
 	if (m_pMesh)
 		m_pMesh->ComputeNormals();
 }

@@ -108,6 +108,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_TREFOIL_KNOT, MyFrame::OnNewParameterizedGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_BORROMEAN_RINGS, MyFrame::OnNewParameterizedGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE, MyFrame::OnNewParameterizedGeometry)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_SVG,           MyFrame::OnNewParameterizedSvg)
     EVT_MENU(wxID_EXIT, MyFrame::OnExit)
     EVT_MENU(wxID_ABOUT, MyFrame::OnAbout)
     EVT_MENU(ID_3D_FRAME, MyFrame::On3DFrame)
@@ -308,11 +309,15 @@ MyFrame::MyFrame(wxWindow* parent,
     wxMenu* fractal_shapes_menu = new wxMenu;
     fractal_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE, wxT("Menger Sponge..."));
 
+    wxMenu* svg_shapes_menu = new wxMenu;
+    svg_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_SVG, wxT("SVG extrusion..."));
+
     wxMenu* create_menu = new wxMenu;
     create_menu->AppendSubMenu(basic_shapes_menu, wxT("Basic Shapes"));
     create_menu->AppendSubMenu(parametric_surfaces_menu, wxT("Parametric Surfaces"));
     create_menu->AppendSubMenu(knots_menu, wxT("Knots"));
     create_menu->AppendSubMenu(fractal_shapes_menu, wxT("Fractal Shapes"));
+    create_menu->AppendSubMenu(svg_shapes_menu, wxT("From SVG"));
 
     wxMenu* geometry_menu = new wxMenu;
     geometry_menu->AppendSubMenu(new_geometry_menu, wxT("New"));
@@ -1480,6 +1485,44 @@ void MyFrame::OnNewParameterizedGeometry(wxCommandEvent& event)
 	// Page-changed events fired by AddPage will also call Bind, but we
 	// re-bind explicitly to cover the case of adding into an empty notebook.
 	IParameterized *pRaw = pParam.get();
+	m_paramByCanvas[pCanvas] = std::move(pParam);
+	m_pParamPanel->Bind(pRaw);
+
+	UpdatePropertiesGrid();
+}
+
+//
+// SVG extrusion: open a file dialog, instantiate ParameterizedSvgExtrusion
+// with the chosen path, and bind it to the Properties panel exactly like
+// the other parameterized geometries.
+//
+void MyFrame::OnNewParameterizedSvg(wxCommandEvent& WXUNUSED(event))
+{
+	wxFileDialog dlg(this, _("Select an SVG file"), wxEmptyString, wxEmptyString,
+	                 wxT("SVG files (*.svg)|*.svg|All files (*.*)|*.*"),
+	                 wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+	if (dlg.ShowModal() != wxID_OK)
+		return;
+
+	const std::string path = std::string(dlg.GetPath().mb_str(wxConvUTF8));
+	auto pParam = std::make_unique<ParameterizedSvgExtrusion>(path);
+
+	Mesh* pMesh = pParam->TakeMesh();
+	if (!pMesh)
+	{
+		wxMessageBox(_("Failed to import SVG (file unreadable or no fillable shapes)."),
+		             _("SVG import error"), wxOK | wxICON_ERROR, this);
+		return;
+	}
+
+	MyGLCanvas* pCanvas = new MyGLCanvas(m_pCtrl, m_pWndLogging,
+	                                     (int*)MyGLCanvas::GetDefaultAttributes());
+	auto* pVMeshes = new VMeshes();
+	pVMeshes->AddMesh(pMesh);
+	pCanvas->SetVMeshes(pVMeshes);
+	m_pCtrl->AddPage(pCanvas, dlg.GetFilename(), true);
+
+	IParameterized* pRaw = pParam.get();
 	m_paramByCanvas[pCanvas] = std::move(pParam);
 	m_pParamPanel->Bind(pRaw);
 

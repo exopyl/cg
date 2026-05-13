@@ -316,3 +316,24 @@ public:
 private:
 	int m_level = 2;
 };
+
+// ---------------------------------------------------------------------------
+// SVG-based shapes
+// ---------------------------------------------------------------------------
+
+// Loads an SVG file and produces an extruded 3D mesh. The filename is set
+// at construction (typically from a wxFileDialog) and is NOT exposed as a
+// Parameter — only the extrusion height and the bezier-flatten tolerance
+// are user-editable from the property panel.
+class ParameterizedSvgExtrusion : public ParameterizedMesh
+{
+public:
+	explicit ParameterizedSvgExtrusion(const std::string& filename);
+	std::vector<Parameter> GetParameters() override;
+	void Regenerate() override;
+	std::string GetName() const override { return "SVG extrusion"; }
+private:
+	std::string m_filename;
+	float       m_height     = 0.2f;
+	float       m_flattenTol = 0.5f;
+};

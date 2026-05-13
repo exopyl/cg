@@ -118,6 +118,7 @@ class MyFrame : public wxFrame
 	ID_GEOMETRY_NEW_PARAM_TREFOIL_KNOT,
 	ID_GEOMETRY_NEW_PARAM_BORROMEAN_RINGS,
 	ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE,
+	ID_GEOMETRY_NEW_PARAM_SVG,
 	ID_GEOMETRY_CUBE,
 	ID_GEOMETRY_SPHERE,
 	ID_GEOMETRY_SPHERE_LAT,
@@ -207,6 +208,7 @@ private:
     void OnExportImage(wxCommandEvent& evt);
     void OnNewGeometry(wxCommandEvent& evt);
     void OnNewParameterizedGeometry(wxCommandEvent& evt);
+    void OnNewParameterizedSvg(wxCommandEvent& evt);
     void OnParameterChanged();
     void OnExit(wxCommandEvent& evt);
     void OnAbout(wxCommandEvent& evt);
