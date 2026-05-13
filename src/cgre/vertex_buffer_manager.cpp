@@ -152,7 +152,11 @@ void VertexArrayManager::Draw (int id)
 //
 // VBO
 //
-// http://raptor.developpez.com/tutorial/opengl/vbo/
+// Server-side buffers (positions, normals, optional UVs, optional colors,
+// triangle indices) driving glDrawElements via the fixed-function client-
+// state API. Buffers are rebuilt on demand whenever the underlying Mesh's
+// revision counter changes — keeps the visual in sync with in-place edits
+// from the remote console (e.g. the `flip` command).
 //
 VBOManager::VBOManager()
 {
@@ -161,79 +165,171 @@ VBOManager::VBOManager()
 
 VBOManager::~VBOManager()
 {
+	for (auto& kv : m_mapVBO)
+		releaseBuffers(kv.second);
+	m_mapVBO.clear();
 	m_idCurrent = 0;
+}
+
+void VBOManager::releaseBuffers(vboInfo& info)
+{
+	GLuint ids[] = { info.vboPositions, info.vboNormals,
+	                 info.vboColors,    info.vboTexCoords,
+	                 info.iboIndices };
+	for (GLuint& id : ids)
+	{
+		if (id != 0)
+		{
+			glDeleteBuffers(1, &id);
+			id = 0;
+		}
+	}
+	info.vboPositions = 0;
+	info.vboNormals   = 0;
+	info.vboColors    = 0;
+	info.vboTexCoords = 0;
+	info.iboIndices   = 0;
+}
+
+void VBOManager::uploadMesh(Mesh* mesh, vboInfo& info)
+{
+	info.pMesh        = mesh;
+	info.hasNormals   = !mesh->m_pVertexNormals.empty();
+	info.hasColors    = !mesh->m_pVertexColors.empty();
+	info.hasTexCoords = !mesh->m_pTextureCoordinates.empty();
+	info.count        = 3 * mesh->m_nFaces;
+
+	const unsigned int nVerts = mesh->m_nVertices;
+
+	// Positions (always present)
+	if (info.vboPositions == 0) glGenBuffers(1, &info.vboPositions);
+	glBindBuffer(GL_ARRAY_BUFFER, info.vboPositions);
+	glBufferData(GL_ARRAY_BUFFER, 3 * nVerts * sizeof(float),
+	             mesh->m_pVertices.data(), GL_STATIC_DRAW);
+
+	if (info.hasNormals)
+	{
+		if (info.vboNormals == 0) glGenBuffers(1, &info.vboNormals);
+		glBindBuffer(GL_ARRAY_BUFFER, info.vboNormals);
+		glBufferData(GL_ARRAY_BUFFER, 3 * nVerts * sizeof(float),
+		             mesh->m_pVertexNormals.data(), GL_STATIC_DRAW);
+	}
+	else if (info.vboNormals != 0)
+	{
+		glDeleteBuffers(1, &info.vboNormals);
+		info.vboNormals = 0;
+	}
+
+	if (info.hasColors)
+	{
+		if (info.vboColors == 0) glGenBuffers(1, &info.vboColors);
+		glBindBuffer(GL_ARRAY_BUFFER, info.vboColors);
+		glBufferData(GL_ARRAY_BUFFER, 3 * nVerts * sizeof(float),
+		             mesh->m_pVertexColors.data(), GL_STATIC_DRAW);
+	}
+	else if (info.vboColors != 0)
+	{
+		glDeleteBuffers(1, &info.vboColors);
+		info.vboColors = 0;
+	}
+
+	if (info.hasTexCoords)
+	{
+		if (info.vboTexCoords == 0) glGenBuffers(1, &info.vboTexCoords);
+		glBindBuffer(GL_ARRAY_BUFFER, info.vboTexCoords);
+		glBufferData(GL_ARRAY_BUFFER, 2 * nVerts * sizeof(float),
+		             mesh->m_pTextureCoordinates.data(), GL_STATIC_DRAW);
+	}
+	else if (info.vboTexCoords != 0)
+	{
+		glDeleteBuffers(1, &info.vboTexCoords);
+		info.vboTexCoords = 0;
+	}
+
+	// Indices (flattened triangle list)
+	unsigned int* pIndices = mesh->GetTriangles();
+	if (pIndices)
+	{
+		if (info.iboIndices == 0) glGenBuffers(1, &info.iboIndices);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info.iboIndices);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+		             3 * mesh->m_nFaces * sizeof(unsigned int),
+		             pIndices, GL_STATIC_DRAW);
+		free(pIndices);
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	info.revision = mesh->GetRevision();
 }
 
 int VBOManager::addMesh (Mesh *mesh)
 {
-	vboInfo info;
+	if (!mesh) return -1;
 
-	unsigned int* pIndices = mesh->GetTriangles();
-	float* pVertices = mesh->m_pVertices.data();
-	if (!pIndices)
+	vboInfo info{};
+	uploadMesh(mesh, info);
+	if (info.iboIndices == 0)
 		return -1;
 
-	bool bHasNormals = (!mesh->m_pVertexNormals.empty())? true : false;
-	bool bHasColors = (!mesh->m_pVertexColors.empty())? true : false;
-
-
-
-	// G�n�ration des buffers
-	glGenBuffers(3, info.buffers);
-
-	// Buffer d'informations de vertex
-	glBindBuffer(GL_ARRAY_BUFFER, info.buffers[0]);
-	glBufferData(GL_ARRAY_BUFFER, 3*mesh->m_nVertices*sizeof(float), mesh->m_pVertices.data(), GL_STATIC_DRAW);
-
-	// indices
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info.buffers[1]);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3*mesh->m_nFaces*sizeof(unsigned int), pIndices, GL_STATIC_DRAW);
-
-	// normals
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info.buffers[2]);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3*mesh->m_nVertices*sizeof(float), mesh->m_pVertexNormals.data(), GL_STATIC_DRAW);
-
-	// colors
-	if (0 && !mesh->m_pVertexColors.empty())
-	{
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info.buffers[2]);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3*mesh->m_nVertices*sizeof(float), mesh->m_pVertexColors.data(), GL_STATIC_DRAW);
-	}
-
-	
-	info.count = 3*mesh->m_nFaces;
-
 	m_mapVBO[m_idCurrent++] = info;
-
-	// clean
-	free(pIndices);
-
-	return m_idCurrent-1;
+	return m_idCurrent - 1;
 }
 
 
 void VBOManager::Draw (int id)
 {
-	vboInfo info = m_mapVBO[id];
+	auto it = m_mapVBO.find(id);
+	if (it == m_mapVBO.end())
+		return;
+	vboInfo& info = it->second;
+
+	// Pick up in-place mesh mutations (e.g. RemoteConsole `flip`).
+	if (info.pMesh && info.pMesh->GetRevision() != info.revision)
+		uploadMesh(info.pMesh, info);
 
 	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_NORMAL_ARRAY);
-	//glEnableClientState(GL_COLOR_ARRAY);
-	
-	glBindBuffer(GL_ARRAY_BUFFER, info.buffers[0]);
-	glVertexPointer(3, GL_FLOAT, 3 * sizeof(float), 0);
+	glBindBuffer(GL_ARRAY_BUFFER, info.vboPositions);
+	glVertexPointer(3, GL_FLOAT, 0, nullptr);
 
-	glBindBuffer(GL_ARRAY_BUFFER, info.buffers[2]);
-	glNormalPointer(GL_FLOAT, 0, 0);
+	if (info.hasNormals)
+	{
+		glEnableClientState(GL_NORMAL_ARRAY);
+		glBindBuffer(GL_ARRAY_BUFFER, info.vboNormals);
+		glNormalPointer(GL_FLOAT, 0, nullptr);
+	}
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info.buffers[1]);
-	glDrawElements(GL_TRIANGLES, info.count, GL_UNSIGNED_INT, 0);
+	if (info.hasColors)
+	{
+		glEnableClientState(GL_COLOR_ARRAY);
+		glBindBuffer(GL_ARRAY_BUFFER, info.vboColors);
+		glColorPointer(3, GL_FLOAT, 0, nullptr);
+	}
 
-	// clean
-	glDisableVertexAttribArray(0);
-	glDisableVertexAttribArray(1);
+	if (info.hasTexCoords)
+	{
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		glBindBuffer(GL_ARRAY_BUFFER, info.vboTexCoords);
+		glTexCoordPointer(2, GL_FLOAT, 0, nullptr);
+	}
 
-	//glDisableClientState(GL_COLOR_ARRAY);
-	glDisableClientState(GL_NORMAL_ARRAY);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info.iboIndices);
+
+	// Offset the surface so wireframe / vertex normals overlays don't z-fight
+	// (parity with VertexArrayManager::Draw).
+	glEnable(GL_POLYGON_OFFSET_FILL);
+	glPolygonOffset(1.0f, 1.0f);
+
+	glDrawElements(GL_TRIANGLES, info.count, GL_UNSIGNED_INT, nullptr);
+
+	glDisable(GL_POLYGON_OFFSET_FILL);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	if (info.hasTexCoords) glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	if (info.hasColors)    glDisableClientState(GL_COLOR_ARRAY);
+	if (info.hasNormals)   glDisableClientState(GL_NORMAL_ARRAY);
 	glDisableClientState(GL_VERTEX_ARRAY);
 }

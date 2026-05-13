@@ -256,12 +256,14 @@ void MyGLCanvas::DrawGL()
 		repere_draw ();
 	for (const auto& mesh : m_pVMeshes->GetMeshes())
 	{
-		// CG_RENDERING_VERTEX_ARRAY: one glDrawElements per mesh instead of
-		// glBegin/glVertex3f per face. Cuts the CPU->GPU call count from
-		// O(faces) to O(1) per mesh and gives a huge FPS win on heavy models.
-		// The extras (wireframe, vertex normals, points) are still drawn by
-		// mesh_draw inside MeshRenderer::Draw.
-		int id = MeshRenderer::getInstance()->GetMeshId(mesh, CG_RENDERING_VERTEX_ARRAY);
+		// CG_RENDERING_VBO: server-side buffers (positions, normals, UVs,
+		// colors, indices) bound once and re-drawn from VRAM. Avoids the
+		// per-frame CPU->GPU push of CG_RENDERING_VERTEX_ARRAY. VBOManager
+		// re-uploads automatically when Mesh::GetRevision() changes, so
+		// RemoteConsole edits like `flip` stay visible.
+		// The overlays (wireframe, vertex normals, points) are still drawn
+		// by mesh_draw inside MeshRenderer::Draw.
+		int id = MeshRenderer::getInstance()->GetMeshId(mesh, CG_RENDERING_VBO);
 
 		// Update rendering properties from the canvas prop
 		MeshRenderer::getInstance()->SetProperties(id, prop);

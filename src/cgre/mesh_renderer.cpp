@@ -445,8 +445,19 @@ void MeshRenderer::Draw (int id)
 		m_displayListManager->Draw (el.id);
 		break;
 	case CG_RENDERING_VBO:
-		activateMeshMaterial();
-		m_vboManager->Draw (el.id);
+		if (el.properties.display_fill)
+		{
+			activateMeshMaterial();
+			m_vboManager->Draw (el.id);
+		}
+
+		// Overlays (wireframe, points, vertex normals, warnings) still go
+		// through the legacy mesh_draw path — mirror VERTEX_ARRAY.
+		{
+			rendering_properties_s extras = el.properties;
+			extras.display_fill = 0; // Surface already handled
+			mesh_draw(el.pMesh, extras, GetMaterialRendererIds(id));
+		}
 		break;
 	case CG_RENDERING_VERTEX_BUFFER:
 		activateMeshMaterial();
