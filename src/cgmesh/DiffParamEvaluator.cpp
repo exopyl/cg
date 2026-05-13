@@ -318,7 +318,18 @@ bool MeshAlgoTensorEvaluator::Evaluate (TensorMethodId tensorMethodId)
 		break;
 	}
 	
-	m_pModel->m_pMesh->m_pTensors = m_pDiffParams;
+	// Transfer ownership of every computed Tensor from m_pDiffParams into
+	// the Mesh's vector<unique_ptr<Tensor>>. We null out each slot in
+	// m_pDiffParams so DiffParamEvaluator's own destructor (which loops
+	// and deletes non-null entries) doesn't double-free.
+	auto& dst = m_pModel->m_pMesh->m_pTensors;
+	dst.clear();
+	dst.resize(m_nDiffParams);
+	for (int i = 0; i < m_nDiffParams; ++i)
+	{
+		dst[i].reset(m_pDiffParams[i]);
+		m_pDiffParams[i] = nullptr;
+	}
 
 	return true;
 }
@@ -498,7 +509,7 @@ static float* get_colors_from_array (unsigned int n, float *array, int *defined)
 float* MeshAlgoTensorEvaluator::ComparisonCurvatures (CurvatureId type)
 {
 	unsigned int nv = m_pModel->m_pMesh->m_nVertices;
-	Tensor **pTensors = m_pModel->m_pMesh->m_pTensors;
+	auto& pTensors = m_pModel->m_pMesh->m_pTensors; // vector<unique_ptr<Tensor>>; -> forwards
 
 	int i;
 	float *array = (float*)malloc(nv*sizeof(float));
@@ -545,7 +556,7 @@ float* MeshAlgoTensorEvaluator::ComparisonCurvatures (CurvatureId type)
 float* MeshAlgoTensorEvaluator::ComparisonDirections (void)
 {
 	unsigned int nv = m_pModel->m_pMesh->m_nVertices;
-	Tensor **pTensors = m_pModel->m_pMesh->m_pTensors;
+	auto& pTensors = m_pModel->m_pMesh->m_pTensors; // vector<unique_ptr<Tensor>>; -> forwards
 
 	int i;
 	float *array = (float*)malloc(nv*sizeof(float));

@@ -337,7 +337,7 @@ public:
 	unsigned int m_nTextureCoordinates;
 	std::vector<float> m_pTextureCoordinates;
 	std::vector<std::unique_ptr<Material>> m_pMaterials;
-	Tensor **m_pTensors;
+	std::vector<std::unique_ptr<Tensor>>   m_pTensors;
 
 	BoundingBox m_bbox;
 

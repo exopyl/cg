@@ -89,7 +89,7 @@ bool ParametricSurface::Generate(void)
 			m_pVertices[3 * index + 2] = diff.position[2];
 
 			// tensor
-			m_pTensors[index] = EvaluateTensor(diff);
+			m_pTensors[index].reset(EvaluateTensor(diff));
 
 			index++;
 		}

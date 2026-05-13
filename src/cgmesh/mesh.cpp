@@ -128,7 +128,7 @@ void Mesh::Init ()
 	m_pMaterials.clear();
 	m_nTextureCoordinates = 0;
 	m_pTextureCoordinates.clear();
-	m_pTensors = nullptr;
+	m_pTensors.clear();
 	m_pOctree = nullptr;
 	m_revision = 0;
 }
@@ -151,7 +151,7 @@ void Mesh::InitVertexColors (float r, float g, float b)
 
 void Mesh::InitVertexColorsFromCurvatures (Tensor::eCurvature curvature)
 {
-	if (!m_pTensors)
+	if (m_pTensors.empty())
 		return;
 
 	if (m_nVertices > 0)
@@ -297,17 +297,15 @@ void Mesh::InitFaces (unsigned int nFaces)
 
 void Mesh::InitTensors (void)
 {
-	m_pTensors = nullptr;
+	m_pTensors.clear();
 	if (m_nVertices)
-	{
-		m_pTensors = new Tensor*[m_nVertices];
-		memset (m_pTensors, 0, m_nVertices*sizeof(Tensor*));
-	}
+		m_pTensors.resize(m_nVertices); // unique_ptr default-constructs to nullptr
 }
 
 Tensor* Mesh::GetTensor (unsigned int index)
 {
-	return m_pTensors[index];
+	if (index >= m_pTensors.size()) return nullptr;
+	return m_pTensors[index].get();
 }
 
 void Mesh::Init (unsigned int nVertices, unsigned int nFaces)
