@@ -1215,10 +1215,10 @@ void MyFrame::UpdatePropertiesGrid()
 
         for (auto& mesh : pObject->GetMeshes())
         {
-            if (mesh->m_nMaterials > 0)
+            if (mesh->GetNMaterials() > 0)
             {
                 wxTreeItemId meshItem = m_hierarchyMaterials->AppendItem(root, wxString(mesh->m_name), 0);
-                for (unsigned int i = 0; i < mesh->m_nMaterials; i++)
+                for (unsigned int i = 0; i < mesh->GetNMaterials(); i++)
                 {
                     Material* mat = mesh->GetMaterial(i);
                     if (mat)

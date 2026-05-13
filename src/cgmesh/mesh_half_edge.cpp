@@ -207,11 +207,12 @@ void Mesh_half_edge::export_statistics (const std::string & filename)
 	free(verticesinfaces);
 
 	// materials
-	fprintf (ptr, "<p>Materials : %d", m_pMesh->m_nMaterials);
-	for (unsigned int i=0; i<m_pMesh->m_nMaterials; i++)
+	fprintf (ptr, "<p>Materials : %zu", m_pMesh->m_pMaterials.size());
+	for (size_t i = 0; i < m_pMesh->m_pMaterials.size(); ++i)
 	{
-		Material *pMaterial = (Material*)m_pMesh->m_pMaterials[i];
-		fprintf (ptr, "<br>material %d : %s", i, pMaterial->GetName().c_str());
+		Material *pMaterial = m_pMesh->m_pMaterials[i].get();
+		if (!pMaterial) continue;
+		fprintf (ptr, "<br>material %u : %s", (unsigned int)i, pMaterial->GetName().c_str());
 	}
 
 

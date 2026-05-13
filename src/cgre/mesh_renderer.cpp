@@ -502,7 +502,7 @@ const vector<int>& MeshRenderer::GetMaterialRendererIds(int elementId)
 	el.materialCache.rendererIds.clear();
 	el.materialCache.revision = currentRevision;
 
-	for (unsigned int i = 0; i < el.pMesh->m_nMaterials; i++)
+	for (unsigned int i = 0; i < el.pMesh->GetNMaterials(); i++)
 	{
 		Material* mat = el.pMesh->GetMaterial(i);
 		if (mat)

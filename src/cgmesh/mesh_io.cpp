@@ -146,7 +146,8 @@ int Mesh::import_mtl (const char *filename, const char *path)
 		else if (sscanf(line, " map_Kd %s", name) == 1) { // diffuse texture
 			MaterialTexture *tex = new MaterialTexture (name, path);
 			tex->SetName (mat->GetName());
-			delete mat;
+			// mat is owned by the Mesh's unique_ptr (Material_Add above);
+			// SetMaterial(mi, tex) will reset the slot which destroys mat.
 			mat = nullptr;
 			SetMaterial (mi, tex);
 		}
@@ -355,7 +356,7 @@ int Mesh::export_obj (const char *filename)
 
 	// materials
 	char *filematname = nullptr;
-	if (m_nMaterials > 0)
+	if (!m_pMaterials.empty())
 	{
 		filematname = strdup (filename);
 		sprintf (filematname+strlen (filematname)-3, "%s", "mtl");
@@ -444,19 +445,19 @@ int Mesh::export_obj (const char *filename)
 	//
 	// materials
 	//
-	if (m_nMaterials > 0)
+	if (!m_pMaterials.empty())
 	{
 		fp = fopen(filematname,"w");
 		if (fp == nullptr)
 			return -1;
-		
+
 		fprintf (fp, "\n");
 		fprintf (fp, "# Wavefront material file\n");
 		fprintf (fp, "\n");
 
-		for (unsigned int i=0; i<m_nMaterials; i++)
+		for (size_t i = 0; i < m_pMaterials.size(); ++i)
 		{
-			Material *pMaterial = m_pMaterials[i];
+			Material *pMaterial = m_pMaterials[i].get();
 			if (!pMaterial)
 				continue;
 			switch (pMaterial->GetType ())
@@ -464,7 +465,7 @@ int Mesh::export_obj (const char *filename)
 			case MATERIAL_COLOR:
 			{
 				MaterialColor *pMaterialColor = dynamic_cast<MaterialColor*> (pMaterial);
-				fprintf (fp, "newmtl material_%d\n", i);
+				fprintf (fp, "newmtl material_%u\n", (unsigned int)i);
 				fprintf (fp, "Ka 0.200000 0.200000 0.200000\n");
 				fprintf (fp, "Kd %f %f %f\n",
 					 pMaterialColor->m_r/255., pMaterialColor->m_g/255., pMaterialColor->m_b/255.);
@@ -1272,30 +1273,16 @@ int Mesh::import_pgm (const char *filename)
     }
 
   /* Get header information */
-  if (fscanf (ptr, "%c %c", &id[0], &id[1]) != 2)
-  {
-      fclose(ptr);
-      return false;
-  }
-
+  fscanf (ptr, "%c %c", &id[0], &id[1]);
   if (id[0]!='P' && id[1]!='2' && id[1]!='5')
     {
       printf ("\"%s\" is not a valid PGM file\n", filename);
-      fclose(ptr);
       return false;
     }
   _pgm_skip_spaces (ptr);
-  if (fscanf (ptr, "%d %d", &width, &height) != 2)
-  {
-      fclose(ptr);
-      return false;
-  }
+  fscanf (ptr, "%d %d", &width, &height);
   _pgm_skip_spaces (ptr);
-  if (fscanf (ptr, "%d", &levels) != 1)
-  {
-      fclose(ptr);
-      return false;
-  }
+  fscanf (ptr, "%d", &levels);
   _pgm_skip_spaces (ptr);
 
   /* Create the data */
@@ -1308,14 +1295,7 @@ int Mesh::import_pgm (const char *filename)
     for (j=0; j<height; j++)
       for (i=0; i<width; i++)
 	  {
-		int val;
-		if (fscanf (ptr, "%d", &val) != 1)
-		{
-			// handle error if needed, for now just break
-			fclose(ptr); // Close file handle before breaking/returning
-			return false;
-		}
-		data[j*width+i] = (unsigned char)val;
+		fscanf (ptr, "%d", &data[j*width+i]);
 	  }
   }
   if (id[1]=='5') /* raw mode */

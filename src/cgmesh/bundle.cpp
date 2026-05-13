@@ -510,7 +510,7 @@ static int _smooth_cost_func (int fi1, int fi2, int ti1, int ti2, void *d)
 
 		// walking color in ti1
 		unsigned char r1, g1, b1, a1;
-		MaterialTexture *texture1 = (MaterialTexture*)mesh->m_pMaterials[ti1];
+		MaterialTexture *texture1 = (MaterialTexture*)mesh->m_pMaterials[ti1].get();
 		texture1->GetImage()->get_nearest_pixel (u1, v1, &r1, &g1, &b1, &a1);
 
 		// walking texture coordinates in texture ti1
@@ -519,7 +519,7 @@ static int _smooth_cost_func (int fi1, int fi2, int ti1, int ti2, void *d)
 
 		// walking color in ti2
 		unsigned char r2, g2, b2, a2;
-		MaterialTexture *texture2 = (MaterialTexture*)mesh->m_pMaterials[ti2];
+		MaterialTexture *texture2 = (MaterialTexture*)mesh->m_pMaterials[ti2].get();
 		texture2->GetImage()->get_nearest_pixel (u2, v2, &r2, &g2, &b2, &a2);
 
 		energy += (int)0.5*sqrt((float)((r1-r2)*(r1-r2)+(g1-g2)*(g1-g2)+(b1-b2)*(b1-b2)));

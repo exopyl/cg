@@ -103,7 +103,7 @@ std::string cmdMesh(MyFrame* frame, int n)
     os << "name \"" << m->m_name << "\"\n";
     os << "vertices " << m->GetNVertices() << "\n";
     os << "faces " << m->GetNFaces() << "\n";
-    os << "materials " << m->m_nMaterials << "\n";
+    os << "materials " << m->GetNMaterials() << "\n";
     os << bboxLine(m->bbox());
     os << "OK\n";
     return os.str();
@@ -191,7 +191,7 @@ std::string cmdMaterial(MyFrame* frame, int n, int matId)
     if (n < 0 || (size_t)n >= meshes.size())
         return "ERR mesh index out of range\n";
     Mesh* m = meshes[n];
-    if (!m || matId < 0 || (unsigned)matId >= m->m_nMaterials)
+    if (!m || matId < 0 || (unsigned)matId >= m->GetNMaterials())
         return "ERR material index out of range\n";
     Material* mat = m->GetMaterial(matId);
     if (!mat) return "ERR material slot empty\n";

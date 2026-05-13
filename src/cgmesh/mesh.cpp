@@ -125,8 +125,7 @@ void Mesh::Init ()
 	m_pVertexColors.clear();
 	m_pFaces = nullptr;
 	m_pFaceNormals.clear();
-	m_nMaterials = 0;
-	m_pMaterials = nullptr;
+	m_pMaterials.clear();
 	m_nTextureCoordinates = 0;
 	m_pTextureCoordinates.clear();
 	m_pTensors = nullptr;
@@ -318,8 +317,7 @@ void Mesh::Init (unsigned int nVertices, unsigned int nFaces)
 	InitVertices (nVertices);
 	InitFaces (nFaces);
 
-	m_nMaterials = 0;
-	m_pMaterials = nullptr;
+	m_pMaterials.clear();
 
 	IncrementRevision();
 }
@@ -355,14 +353,8 @@ void Mesh::DeleteFaces (void)
 
 Mesh::~Mesh ()
 {
-	// vector members destruct themselves
+	// vector + unique_ptr members destruct themselves
 	DeleteFaces ();
-	if (m_pMaterials)
-	{
-		for (unsigned int i = 0; i < m_nMaterials; i++)
-			delete m_pMaterials[i];
-		delete[] m_pMaterials;
-	}
 	if (m_pOctree) delete m_pOctree;
 }
 
@@ -375,10 +367,9 @@ void Mesh::Dump ()
 	printf ("nFace : %d\n", m_nFaces);
 	printf ("pFaces : %p\n", (void*)m_pFaces);
 	printf ("pTextureCoordinates : %p\n", (void*)m_pTextureCoordinates.data());
-	printf ("nMaterials : %d\n", m_nMaterials);
-	printf ("pMaterials : %p\n", (void*)m_pMaterials);
-	for (unsigned int i=0; i<m_nMaterials; i++)
-		m_pMaterials[i]->Dump();
+	printf ("nMaterials : %zu\n", m_pMaterials.size());
+	for (const auto& mat : m_pMaterials)
+		if (mat) mat->Dump();
 }
 
 uint64_t Mesh::GetRevision() const
@@ -683,26 +674,29 @@ int Mesh::Append (Mesh *m)
 	for (unsigned int i=0; i<m_nFaces; i++)
 		res_f[i] = m_pFaces[i];
 
+	const unsigned int matOffset = (unsigned int)m_pMaterials.size();
+
 	for (unsigned int i=0; i<m->m_nFaces; i++)
 	{
 		res_f[m_nFaces+i] = new Face (*m->m_pFaces[i]);
 		for (unsigned int j=0; j<res_f[m_nFaces+i]->m_nVertices; j++)
 			res_f[m_nFaces+i]->m_pVertices[j] += m_nVertices;
-		res_f[m_nFaces+i]->SetMaterialId(m_nMaterials + m->m_pFaces[i]->GetMaterialId());
+		res_f[m_nFaces+i]->SetMaterialId(matOffset + m->m_pFaces[i]->GetMaterialId());
 	}
 
-	// materials
-	unsigned int res_nMaterials = m_nMaterials + m->m_nMaterials;
-	for (unsigned int i=0; i<m->m_nMaterials; i++)
-		Material_Add (m->m_pMaterials[i]);
-
+	// Materials: transfer ownership from `m` to `this`. After Append, `m`'s
+	// material array is emptied (it no longer owns them). This is a
+	// behavior change from the previous raw-pointer code which shared
+	// pointers between the two meshes — a guaranteed double-free at
+	// destruction. Append currently has no callers so the swap is safe.
+	for (auto& mat : m->m_pMaterials)
+		m_pMaterials.push_back(std::move(mat));
+	m->m_pMaterials.clear();
 
 	m_nVertices = res_nv;
 
 	m_nFaces = res_nf;
 	m_pFaces = res_f;
-
-	m_nMaterials = res_nMaterials;
 
 	return 1;
 }
@@ -1042,7 +1036,7 @@ int Mesh::GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i,
 
 void* Mesh::GetMaterial (void)
 {
-	if (m_nMaterials == 0)
+	if (m_pMaterials.empty())
 	{
 		// add a default material
 		MaterialColorExt *pMaterial;

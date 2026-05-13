@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <vector>
+#include <memory>
 #include <cstdint>
 
 #include "../cgmath/cgmath.h"
@@ -269,53 +270,41 @@ public:
 	//
 	// Materials
 	//
+	// Ownership: Mesh owns its materials via unique_ptr. SetMaterial and
+	// Material_Add take a raw pointer to a heap-allocated Material that the
+	// caller has just `new`ed — ownership transfers to Mesh.
+	//
+	unsigned int GetNMaterials () const { return (unsigned int)m_pMaterials.size(); }
+
 	Material* GetMaterial (unsigned int id)
 		{
-			if (id < m_nMaterials)
-				return m_pMaterials[id];
+			if (id < m_pMaterials.size())
+				return m_pMaterials[id].get();
 			return nullptr;
 		}
 	int GetMaterialId (const std::string & material_name)
 		{
-			for (unsigned int i=0; i<m_nMaterials; i++)
-				if (m_pMaterials[i]->GetName() == material_name)
-					return i;
+			for (size_t i = 0; i < m_pMaterials.size(); ++i)
+				if (m_pMaterials[i] && m_pMaterials[i]->GetName() == material_name)
+					return (int)i;
 			return -1;
 		}
 	void SetMaterial (unsigned int id, Material *pMaterial)
 	{
-		if (m_pMaterials == nullptr)
-		{
-			m_pMaterials = new Material*[id+1];
-			m_nMaterials = id+1;
-		}
-		else if (id > m_nMaterials)
-		{
-			delete m_pMaterials;
-			m_pMaterials = new Material*[id+1];
-			m_nMaterials = id+1;
-		}
-		m_pMaterials[id] = pMaterial;
+		if (id >= m_pMaterials.size())
+			m_pMaterials.resize(id + 1);
+		m_pMaterials[id].reset(pMaterial);
 	};
 
 	unsigned int Material_Add (Material *pMaterial)
 	{
-		Material **pMaterials = new Material*[m_nMaterials+1];
-		if (pMaterials == nullptr)
-			return 0;
-		
-		for (unsigned int i=0; i<m_nMaterials; i++)
-			pMaterials[i] = m_pMaterials[i];
-		pMaterials[m_nMaterials] = pMaterial;
-		delete[] m_pMaterials;
-		m_pMaterials = pMaterials;
-		m_nMaterials++;
-		return m_nMaterials-1;
+		m_pMaterials.emplace_back(pMaterial);
+		return (unsigned int)m_pMaterials.size() - 1;
 	};
 
 	void ApplyMaterial (unsigned int id)
 	{
-		if (id > m_nMaterials)
+		if (id >= m_pMaterials.size())
 			return;
 		for (unsigned int i=0; i<m_nFaces; i++)
 			m_pFaces[i]->m_iMaterialId = id;
@@ -347,8 +336,7 @@ public:
 	std::vector<float> m_pFaceNormals;
 	unsigned int m_nTextureCoordinates;
 	std::vector<float> m_pTextureCoordinates;
-	unsigned int m_nMaterials;
-	Material **m_pMaterials;
+	std::vector<std::unique_ptr<Material>> m_pMaterials;
 	Tensor **m_pTensors;
 
 	BoundingBox m_bbox;

@@ -18,7 +18,7 @@ class Material
 public:
 	Material () = default;
 	Material (const Material &m) {}; // constructor of copy
-	//virtual ~Material ();
+	virtual ~Material () = default; // required: subclasses (MaterialTexture) hold resources
 
 	virtual MaterialType GetType (void) { return MATERIAL_NONE; };
 	virtual void Dump (void) {};

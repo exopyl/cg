@@ -146,7 +146,7 @@ TEST(TEST_cgmesh_io, 3ds_sink)
     // Check materials are loaded (sink.3ds has materials)
     bool foundMaterial = false;
     for (auto pMesh : meshes) {
-        if (pMesh->m_nMaterials > 0) {
+        if (pMesh->GetNMaterials() > 0) {
             foundMaterial = true;
             break;
         }
@@ -193,7 +193,7 @@ TEST(TEST_cgmesh_io, 3ds_floppy)
     ASSERT_EQ(meshes.size(), 1);
     
     // Floppy also has materials
-    EXPECT_GT(meshes[0]->m_nMaterials, 0u);
+    EXPECT_GT(meshes[0]->GetNMaterials(), 0u);
 
     delete pVMeshes;
 }
@@ -222,13 +222,13 @@ TEST(TEST_cgmesh_io, glb_duck)
     bool foundTexture = false;
     bool foundTexCoords = false;
     for (auto pMesh : meshes) {
-        if (pMesh->m_nMaterials > 0) {
+        if (pMesh->GetNMaterials() > 0) {
             foundMaterial = true;
         }
         if (pMesh->m_nTextureCoordinates > 0) {
             foundTexCoords = true;
         }
-        for (unsigned int i = 0; i < pMesh->m_nMaterials; ++i) {
+        for (unsigned int i = 0; i < pMesh->GetNMaterials(); ++i) {
             MaterialTexture* mt = dynamic_cast<MaterialTexture*>(pMesh->GetMaterial(i));
             if (mt && mt->GetImage()) {
                 foundTexture = true;
@@ -258,7 +258,7 @@ TEST(TEST_cgmesh_io, glb_fox_non_indexed)
     EXPECT_EQ(pMesh->m_nVertices, 1728u);
     EXPECT_EQ(pMesh->m_nFaces, 576u);
     EXPECT_GT(pMesh->m_nTextureCoordinates, 0u);
-    EXPECT_GT(pMesh->m_nMaterials, 0u);
+    EXPECT_GT(pMesh->GetNMaterials(), 0u);
 
     delete pVMeshes;
 }
