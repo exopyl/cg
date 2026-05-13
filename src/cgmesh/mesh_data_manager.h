@@ -120,14 +120,11 @@ public:
             return it->second.triangles;
         }
 
-        // Recompute
+        // Recompute — use BuildTriangulation so quads / n-gons emit all
+        // their triangles (the legacy GetTriangles() only writes vertices
+        // 0,1,2 per face, which produces visible holes on n-gon meshes).
         CachedTriangles cached;
-        unsigned int* pTris = pMesh->GetTriangles();
-        if (pTris)
-        {
-            cached.triangles.assign(pTris, pTris + 3 * pMesh->m_nFaces);
-            free(pTris);
-        }
+        cached.triangles = pMesh->BuildTriangulation();
         cached.revision = currentRevision;
         m_triangles[pMesh] = std::move(cached);
         return m_triangles[pMesh].triangles;

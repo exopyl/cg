@@ -8,11 +8,17 @@
 #include <algorithm>
 #include <unordered_map>
 #include <vector>
+#include <array>
+#include <functional>
 
 #include "mesh.h"
 #include "../cgmath/cgmath.h"
 #include "../cgimg/cgimg.h"
 #include "octree.h"
+
+extern "C" {
+#include "../../extern/glutess/glutess.h"
+}
 
 //
 // Face
@@ -390,6 +396,467 @@ unsigned int* Mesh::GetTriangles (void)
 		pFaces[3*i+2] = m_pFaces[i]->GetVertex(2);
 	}
 	return pFaces;
+}
+
+// ----- Polygon triangulation ------------------------------------------------
+//
+// All three Mesh APIs that produce triangles (BuildTriangulation,
+// BuildPolygonRenderData, Triangulate) funnel through forEachFaceTriangle()
+// below. The helper yields LOCAL-TO-FACE indices (0..N-1) via the caller's
+// emit callback; each caller maps those local indices to whatever it needs
+// (global vertex indices, expansion slots, fresh Face*).
+//
+// Convex faces (including all triangles) fan-triangulate from vertex 0;
+// concave faces go through extern/glutess. Self-intersecting polygons that
+// would require a new combine vertex are flagged and the affected sub-
+// triangles are silently dropped (no UINT32_MAX poison reaches the IBO).
+//
+namespace {
+
+constexpr unsigned int kInvalidLocalIdx = ~0u;
+
+struct TessCtx
+{
+    // The emit callback is type-erased through std::function so this struct
+    // can serve every triangulation entry point without templates inside C
+    // callbacks.
+    std::function<void(unsigned int, unsigned int, unsigned int)>* emit = nullptr;
+
+    bool         combineHit  = false;        // set if a combine vertex was requested
+    unsigned int triLocal[3] = { 0, 0, 0 };  // batched local indices
+    int          triCount    = 0;
+
+    // Stable storage for the coordinates handed to gluTessVertex: glutess
+    // keeps the pointers alive across the polygon, so the doubles must
+    // outlive gluTessEndPolygon.
+    std::vector<std::array<GLdouble, 3>> coords;
+};
+
+void GLAPIENTRY tessBeginCB(GLenum /*type*/, void* userData)
+{
+    static_cast<TessCtx*>(userData)->triCount = 0;
+}
+
+void GLAPIENTRY tessVertexCB(void* vertexData, void* userData)
+{
+    auto* ctx = static_cast<TessCtx*>(userData);
+    ctx->triLocal[ctx->triCount++] = (unsigned int)(uintptr_t)vertexData;
+    if (ctx->triCount == 3)
+    {
+        const bool poisoned = (ctx->triLocal[0] == kInvalidLocalIdx
+                            || ctx->triLocal[1] == kInvalidLocalIdx
+                            || ctx->triLocal[2] == kInvalidLocalIdx);
+        if (!poisoned && ctx->emit)
+            (*ctx->emit)(ctx->triLocal[0], ctx->triLocal[1], ctx->triLocal[2]);
+        ctx->triCount = 0;
+    }
+}
+
+void GLAPIENTRY tessEndCB(void* /*userData*/) {}
+
+void GLAPIENTRY tessEdgeFlagCB(GLboolean /*flag*/, void* /*userData*/)
+{
+    // Forces glutess to emit GL_TRIANGLES (rather than fans/strips).
+}
+
+void GLAPIENTRY tessCombineCB(GLdouble /*coords*/[3], void* /*data*/[4],
+                              GLfloat /*weight*/[4], void** outData,
+                              void* userData)
+{
+    // Self-intersection: glutess wants a brand-new vertex we cannot create
+    // (we don't extend the mesh on the fly). Mark the context and emit a
+    // sentinel local index — the vertex callback above drops any triangle
+    // that contains it.
+    static_cast<TessCtx*>(userData)->combineHit = true;
+    *outData = (void*)(uintptr_t)kInvalidLocalIdx;
+}
+
+void GLAPIENTRY tessErrorCB(GLenum errnum, void* /*userData*/)
+{
+    std::fprintf(stderr, "glutess error during triangulation: 0x%x\n", (unsigned)errnum);
+}
+
+GLUtesselator* makeTess()
+{
+    GLUtesselator* tess = gluNewTess();
+    if (!tess) return nullptr;
+    gluTessCallback(tess, GLU_TESS_BEGIN_DATA,     (_GLUfuncptr)tessBeginCB);
+    gluTessCallback(tess, GLU_TESS_VERTEX_DATA,    (_GLUfuncptr)tessVertexCB);
+    gluTessCallback(tess, GLU_TESS_END_DATA,       (_GLUfuncptr)tessEndCB);
+    gluTessCallback(tess, GLU_TESS_EDGE_FLAG_DATA, (_GLUfuncptr)tessEdgeFlagCB);
+    gluTessCallback(tess, GLU_TESS_COMBINE_DATA,   (_GLUfuncptr)tessCombineCB);
+    gluTessCallback(tess, GLU_TESS_ERROR_DATA,     (_GLUfuncptr)tessErrorCB);
+    return tess;
+}
+
+// True iff the polygon is convex when projected onto its Newell-method
+// normal. N<4 is trivially convex. Newell handles non-planar faces robustly.
+bool faceIsConvex(Face* face, Mesh& mesh)
+{
+    const unsigned int n = face->GetNVertices();
+    if (n < 4) return true;
+
+    auto vert = [&](unsigned int k) {
+        const unsigned int idx = face->GetVertex(k);
+        return std::array<double, 3>{
+            mesh.m_pVertices[3*idx + 0],
+            mesh.m_pVertices[3*idx + 1],
+            mesh.m_pVertices[3*idx + 2]
+        };
+    };
+
+    double nx = 0, ny = 0, nz = 0;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        auto a = vert(i);
+        auto b = vert((i + 1) % n);
+        nx += (a[1] - b[1]) * (a[2] + b[2]);
+        ny += (a[2] - b[2]) * (a[0] + b[0]);
+        nz += (a[0] - b[0]) * (a[1] + b[1]);
+    }
+
+    double prevSign = 0;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        auto a = vert((i + n - 1) % n);
+        auto b = vert(i);
+        auto c = vert((i + 1) % n);
+        const double e1x = b[0] - a[0], e1y = b[1] - a[1], e1z = b[2] - a[2];
+        const double e2x = c[0] - b[0], e2y = c[1] - b[1], e2z = c[2] - b[2];
+        const double cx = e1y*e2z - e1z*e2y;
+        const double cy = e1z*e2x - e1x*e2z;
+        const double cz = e1x*e2y - e1y*e2x;
+        const double dot = cx*nx + cy*ny + cz*nz;
+        if (std::fabs(dot) < 1e-12) continue;
+        const double sign = dot > 0 ? 1.0 : -1.0;
+        if (prevSign == 0) prevSign = sign;
+        else if (sign != prevSign) return false;
+    }
+    return true;
+}
+
+// Iterate the triangles of face m_pFaces[fi], invoking emit(localA, localB,
+// localC) for each. Local indices are 0..N-1, addressing positions within
+// the face's own vertex list. `tess` is a lazily-allocated, reusable
+// tessellator handle (pass &nullptr on first call; caller cleans up).
+template <class Emit>
+void forEachFaceTriangle(Mesh& mesh, unsigned int fi, GLUtesselator*& tess, Emit&& emit)
+{
+    Face* face = mesh.m_pFaces[fi];
+    if (!face) return;
+    const unsigned int n = face->GetNVertices();
+    if (n < 3) return;
+
+    if (n == 3)
+    {
+        emit(0u, 1u, 2u);
+        return;
+    }
+
+    if (faceIsConvex(face, mesh))
+    {
+        for (unsigned int k = 1; k + 1 < n; ++k)
+            emit(0u, k, k + 1);
+        return;
+    }
+
+    // Concave: glutess.
+    TessCtx ctx;
+    std::function<void(unsigned int, unsigned int, unsigned int)> emitFn =
+        [&](unsigned int a, unsigned int b, unsigned int c) { emit(a, b, c); };
+    ctx.emit = &emitFn;
+    ctx.coords.reserve(n);
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        const unsigned int vi = face->GetVertex(i);
+        ctx.coords.push_back({
+            (GLdouble)mesh.m_pVertices[3*vi + 0],
+            (GLdouble)mesh.m_pVertices[3*vi + 1],
+            (GLdouble)mesh.m_pVertices[3*vi + 2]
+        });
+    }
+
+    if (!tess) tess = makeTess();
+    if (!tess) return; // gluNewTess failed (allocation)
+
+    gluTessBeginPolygon(tess, &ctx);
+    gluTessBeginContour(tess);
+    for (unsigned int i = 0; i < n; ++i)
+        gluTessVertex(tess, ctx.coords[i].data(), (void*)(uintptr_t)i);
+    gluTessEndContour(tess);
+    gluTessEndPolygon(tess);
+
+    if (ctx.combineHit)
+    {
+        std::fprintf(stderr,
+            "Triangulation: face %u self-intersects; affected sub-triangles dropped\n",
+            fi);
+    }
+}
+
+} // namespace
+
+std::vector<unsigned int> Mesh::BuildTriangulation()
+{
+    std::vector<unsigned int> out;
+    out.reserve(3 * m_nFaces);
+
+    GLUtesselator* tess = nullptr;
+    for (unsigned int fi = 0; fi < m_nFaces; ++fi)
+    {
+        Face* face = m_pFaces[fi];
+        if (!face) continue;
+        forEachFaceTriangle(*this, fi, tess,
+            [&](unsigned int a, unsigned int b, unsigned int c) {
+                out.push_back((unsigned int)face->GetVertex(a));
+                out.push_back((unsigned int)face->GetVertex(b));
+                out.push_back((unsigned int)face->GetVertex(c));
+            });
+    }
+    if (tess) gluDeleteTess(tess);
+    return out;
+}
+
+// ----- Polygon render data --------------------------------------------------
+//
+// BuildPolygonRenderData() expands the mesh into a per-polygon vertex layout:
+// each face contributes its own N render-vertices, all carrying the face's
+// Newell normal. Adjacent faces no longer share corner vertices, so the
+// shading within each polygon is strictly uniform — eliminating the
+// triangulation-diagonal kinks that smooth shading over a shared topology
+// produces on non-planar n-gons.
+//
+namespace {
+
+void computeNewellNormal(Face* face, Mesh& mesh, float outN[3])
+{
+    const unsigned int n = face->GetNVertices();
+    double nx = 0, ny = 0, nz = 0;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        const unsigned int viA = face->GetVertex(i);
+        const unsigned int viB = face->GetVertex((i + 1) % n);
+        const double ax = mesh.m_pVertices[3*viA + 0];
+        const double ay = mesh.m_pVertices[3*viA + 1];
+        const double az = mesh.m_pVertices[3*viA + 2];
+        const double bx = mesh.m_pVertices[3*viB + 0];
+        const double by = mesh.m_pVertices[3*viB + 1];
+        const double bz = mesh.m_pVertices[3*viB + 2];
+        nx += (ay - by) * (az + bz);
+        ny += (az - bz) * (ax + bx);
+        nz += (ax - bx) * (ay + by);
+    }
+    const double len = std::sqrt(nx*nx + ny*ny + nz*nz);
+    if (len > 1e-12)
+    {
+        outN[0] = (float)(nx / len);
+        outN[1] = (float)(ny / len);
+        outN[2] = (float)(nz / len);
+    }
+    else
+    {
+        outN[0] = 0.0f; outN[1] = 0.0f; outN[2] = 1.0f;
+    }
+}
+
+} // namespace
+
+Mesh::PolygonRenderData Mesh::BuildPolygonRenderData()
+{
+    PolygonRenderData out;
+
+    const bool hasNormals = !m_pVertexNormals.empty();
+    const bool hasUV      = !m_pTextureCoordinates.empty();
+    const bool hasColors  = !m_pVertexColors.empty();
+
+    // Seed the output with the shared topology layout. Triangle faces will
+    // reference these slots directly (smooth shading preserved). Only
+    // N>=4 polygons append fresh slots below.
+    out.positions.assign(m_pVertices.begin(),           m_pVertices.end());
+    if (hasNormals) out.normals.assign  (m_pVertexNormals.begin(),       m_pVertexNormals.end());
+    if (hasUV)      out.texCoords.assign(m_pTextureCoordinates.begin(),  m_pTextureCoordinates.end());
+    if (hasColors)  out.colors.assign   (m_pVertexColors.begin(),        m_pVertexColors.end());
+    out.indices.reserve(3u * m_nFaces);
+
+    GLUtesselator* tess = nullptr;
+
+    for (unsigned int fi = 0; fi < m_nFaces; ++fi)
+    {
+        Face* face = m_pFaces[fi];
+        if (!face) continue;
+        const unsigned int n = face->GetNVertices();
+        if (n < 3) continue;
+
+        if (n == 3)
+        {
+            // Triangle: index directly into the shared topology slots.
+            out.indices.push_back((unsigned int)face->GetVertex(0));
+            out.indices.push_back((unsigned int)face->GetVertex(1));
+            out.indices.push_back((unsigned int)face->GetVertex(2));
+            continue;
+        }
+
+        // N>=4: append N fresh render-vertices carrying the polygon's
+        // Newell normal uniformly.
+        float fn[3];
+        computeNewellNormal(face, *this, fn);
+
+        const unsigned int base = (unsigned int)(out.positions.size() / 3);
+
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            const unsigned int vi = face->GetVertex(i);
+
+            out.positions.push_back(m_pVertices[3*vi + 0]);
+            out.positions.push_back(m_pVertices[3*vi + 1]);
+            out.positions.push_back(m_pVertices[3*vi + 2]);
+
+            if (hasNormals)
+            {
+                out.normals.push_back(fn[0]);
+                out.normals.push_back(fn[1]);
+                out.normals.push_back(fn[2]);
+            }
+
+            if (hasUV)
+            {
+                if (2*vi + 1 < m_pTextureCoordinates.size())
+                {
+                    out.texCoords.push_back(m_pTextureCoordinates[2*vi + 0]);
+                    out.texCoords.push_back(m_pTextureCoordinates[2*vi + 1]);
+                }
+                else
+                {
+                    out.texCoords.push_back(0.0f);
+                    out.texCoords.push_back(0.0f);
+                }
+            }
+
+            if (hasColors)
+            {
+                if (3*vi + 2 < m_pVertexColors.size())
+                {
+                    out.colors.push_back(m_pVertexColors[3*vi + 0]);
+                    out.colors.push_back(m_pVertexColors[3*vi + 1]);
+                    out.colors.push_back(m_pVertexColors[3*vi + 2]);
+                }
+                else
+                {
+                    out.colors.push_back(1.0f);
+                    out.colors.push_back(1.0f);
+                    out.colors.push_back(1.0f);
+                }
+            }
+        }
+
+        forEachFaceTriangle(*this, fi, tess,
+            [&](unsigned int a, unsigned int b, unsigned int c) {
+                out.indices.push_back(base + a);
+                out.indices.push_back(base + b);
+                out.indices.push_back(base + c);
+            });
+    }
+
+    if (tess) gluDeleteTess(tess);
+    return out;
+}
+
+// ----- In-place triangulation ----------------------------------------------
+//
+// Triangulate() walks faces and replaces every N>=4 polygon with (N-2)
+// triangle Face objects (fan for convex, glutess for concave). Triangle
+// faces are kept as-is. Material ids, face-relative texture-coordinate
+// indices (m_pTextureCoordinatesIndices) and inline per-face UV coordinates
+// (m_pTextureCoordinates) all propagate to each sub-triangle.
+//
+void Mesh::Triangulate()
+{
+    if (m_nFaces == 0) return;
+
+    std::vector<Face*> newFaces;
+    newFaces.reserve(m_nFaces);
+
+    // Emit one triangle Face* from local-to-source-face indices a/b/c.
+    auto emitTriangle = [&](Face* src, unsigned int a, unsigned int b, unsigned int c) {
+        Face* f = new Face();
+        f->SetNVertices(3);
+        f->SetVertex(0, src->GetVertex(a));
+        f->SetVertex(1, src->GetVertex(b));
+        f->SetVertex(2, src->GetVertex(c));
+        f->SetMaterialId((unsigned int)src->GetMaterialId());
+
+        // Propagate the "this face uses texture coords" flag — the OBJ
+        // exporter (mesh_io.cpp) consults it to decide whether to emit
+        // 'vt' indices, so the data alone isn't enough.
+        f->m_bUseTextureCoordinates = src->m_bUseTextureCoordinates;
+
+        // Propagate face-relative texture-coordinate indices if the source
+        // face owns them.
+        if (src->m_pTextureCoordinatesIndices)
+        {
+            f->ActivateTextureCoordinatesIndices();
+            f->m_pTextureCoordinatesIndices[0] = src->m_pTextureCoordinatesIndices[a];
+            f->m_pTextureCoordinatesIndices[1] = src->m_pTextureCoordinatesIndices[b];
+            f->m_pTextureCoordinatesIndices[2] = src->m_pTextureCoordinatesIndices[c];
+        }
+        // Propagate inline per-face UV coords if the source face owns them.
+        if (src->m_pTextureCoordinates)
+        {
+            f->ActivateTextureCoordinates();
+            f->m_pTextureCoordinates[0] = src->m_pTextureCoordinates[2*a + 0];
+            f->m_pTextureCoordinates[1] = src->m_pTextureCoordinates[2*a + 1];
+            f->m_pTextureCoordinates[2] = src->m_pTextureCoordinates[2*b + 0];
+            f->m_pTextureCoordinates[3] = src->m_pTextureCoordinates[2*b + 1];
+            f->m_pTextureCoordinates[4] = src->m_pTextureCoordinates[2*c + 0];
+            f->m_pTextureCoordinates[5] = src->m_pTextureCoordinates[2*c + 1];
+        }
+
+        newFaces.push_back(f);
+    };
+
+    GLUtesselator* tess = nullptr;
+
+    for (unsigned int fi = 0; fi < m_nFaces; ++fi)
+    {
+        Face* face = m_pFaces[fi];
+        if (!face) continue;
+
+        const unsigned int n = face->GetNVertices();
+        if (n < 3)
+        {
+            delete face;
+            m_pFaces[fi] = nullptr; // avoid dangling pointer in the source array
+            continue;
+        }
+
+        if (n == 3)
+        {
+            // Reuse the existing Face — no churn.
+            newFaces.push_back(face);
+            m_pFaces[fi] = nullptr;
+            continue;
+        }
+
+        forEachFaceTriangle(*this, fi, tess,
+            [&](unsigned int a, unsigned int b, unsigned int c) {
+                emitTriangle(face, a, b, c);
+            });
+
+        delete face;
+        m_pFaces[fi] = nullptr;
+    }
+
+    if (tess) gluDeleteTess(tess);
+
+    // Swap the new face array in.
+    delete[] m_pFaces;
+    m_pFaces = new Face*[newFaces.size()];
+    for (size_t i = 0; i < newFaces.size(); ++i)
+        m_pFaces[i] = newFaces[i];
+    m_nFaces = (unsigned int)newFaces.size();
+
+    ComputeNormals();      // also resizes m_pFaceNormals to 3*m_nFaces
+    IncrementRevision();
 }
 
 int Mesh::SetVertices (unsigned int nVertices, float *pVertices)
@@ -1063,11 +1530,33 @@ int Mesh::MergeVertices (float tolerance)
 	if (m_nVertices == 0)
 		return 0;
 
+	// Per-vertex attribute arrays are merged in sync with positions IF they
+	// are sized 2*nVertices (UV) or 3*nVertices (normals/colors) — i.e. they
+	// are indexed by vertex index, parallel to m_pVertices. Otherwise they
+	// belong to a face-indexed model (typical OBJ flow) and we leave them
+	// untouched.
+	const bool uvParallel    = !m_pTextureCoordinates.empty()
+	                        && m_pTextureCoordinates.size() == 2u * m_nVertices;
+	const bool normParallel  = !m_pVertexNormals.empty()
+	                        && m_pVertexNormals.size()      == 3u * m_nVertices;
+	const bool colorParallel = !m_pVertexColors.empty()
+	                        && m_pVertexColors.size()       == 3u * m_nVertices;
+
 	unsigned int *remap = new unsigned int[m_nVertices];
 	float *newVertices = new float[3 * m_nVertices];
+	// For each new slot, remember the original vertex index that filled it
+	// (the "winner" of the merge group). Used to look up the winner's
+	// attributes during seam-aware matching and during rebuild below.
+	std::vector<unsigned int> newOrig;
+	newOrig.reserve(m_nVertices);
+
 	unsigned int nNewVertices = 0;
 	const float tol  = std::fabs(tolerance);
 	const float tol2 = tol * tol;
+	const float uvTol2    = tol2;            // UVs share the position tolerance
+	const float colorTol2 = tol2;            // ditto for colors
+	const float normalCosMin = 0.9999f;      // ~0.81° angular tolerance
+
 	// Cell size : tolerance (or a tiny epsilon when tolerance == 0 so we still
 	// catch exact duplicates without exploding the grid).
 	const float cell = (tol > 0.0f) ? tol : 1e-12f;
@@ -1076,7 +1565,6 @@ int Mesh::MergeVertices (float tolerance)
 	struct CellKey { int x, y, z; };
 	struct CellKeyHash {
 		size_t operator() (const CellKey &k) const noexcept {
-			// Mix 3 ints into a 64-bit hash. Splitmix-style.
 			uint64_t h = (uint64_t)(uint32_t)k.x;
 			h ^= ((uint64_t)(uint32_t)k.y + 0x9E3779B97F4A7C15ULL + (h<<6) + (h>>2));
 			h ^= ((uint64_t)(uint32_t)k.z + 0x9E3779B97F4A7C15ULL + (h<<6) + (h>>2));
@@ -1101,8 +1589,6 @@ int Mesh::MergeVertices (float tolerance)
 		const int cy = (int)std::floor(yi * invCell);
 		const int cz = (int)std::floor(zi * invCell);
 
-		// Probe the 3x3x3 neighbourhood. A vertex within tolerance can fall
-		// in an adjacent cell when sitting close to a cell boundary.
 		bool found = false;
 		unsigned int hit = 0;
 		for (int dz = -1; dz <= 1 && !found; ++dz)
@@ -1114,15 +1600,41 @@ int Mesh::MergeVertices (float tolerance)
 			if (it == grid.end()) continue;
 			for (unsigned int j : it->second)
 			{
-				float ex = newVertices[3 * j]     - xi;
-				float ey = newVertices[3 * j + 1] - yi;
-				float ez = newVertices[3 * j + 2] - zi;
-				if (ex * ex + ey * ey + ez * ez <= tol2)
+				// Position check (always)
+				const float ex = newVertices[3 * j]     - xi;
+				const float ey = newVertices[3 * j + 1] - yi;
+				const float ez = newVertices[3 * j + 2] - zi;
+				if (ex * ex + ey * ey + ez * ez > tol2)
+					continue;
+
+				// Attribute checks against the winner (newOrig[j]) — required
+				// to preserve UV seams / normal creases / colour islands.
+				const unsigned int jOrig = newOrig[j];
+
+				if (uvParallel)
 				{
-					hit = j;
-					found = true;
-					break;
+					const float du = m_pTextureCoordinates[2 * jOrig    ] - m_pTextureCoordinates[2 * i    ];
+					const float dv = m_pTextureCoordinates[2 * jOrig + 1] - m_pTextureCoordinates[2 * i + 1];
+					if (du * du + dv * dv > uvTol2) continue;
 				}
+				if (normParallel)
+				{
+					const float dotN = m_pVertexNormals[3 * jOrig    ] * m_pVertexNormals[3 * i    ]
+					                 + m_pVertexNormals[3 * jOrig + 1] * m_pVertexNormals[3 * i + 1]
+					                 + m_pVertexNormals[3 * jOrig + 2] * m_pVertexNormals[3 * i + 2];
+					if (dotN < normalCosMin) continue;
+				}
+				if (colorParallel)
+				{
+					const float dr = m_pVertexColors[3 * jOrig    ] - m_pVertexColors[3 * i    ];
+					const float dg = m_pVertexColors[3 * jOrig + 1] - m_pVertexColors[3 * i + 1];
+					const float db = m_pVertexColors[3 * jOrig + 2] - m_pVertexColors[3 * i + 2];
+					if (dr * dr + dg * dg + db * db > colorTol2) continue;
+				}
+
+				hit = j;
+				found = true;
+				break;
 			}
 		}
 
@@ -1136,6 +1648,7 @@ int Mesh::MergeVertices (float tolerance)
 			newVertices[3 * nNewVertices + 1] = yi;
 			newVertices[3 * nNewVertices + 2] = zi;
 			remap[i] = nNewVertices;
+			newOrig.push_back(i);
 			grid[CellKey{cx, cy, cz}].push_back(nNewVertices);
 			nNewVertices++;
 		}
@@ -1145,21 +1658,64 @@ int Mesh::MergeVertices (float tolerance)
 	m_pVertices.assign(newVertices, newVertices + 3 * nNewVertices);
 	delete[] newVertices;
 
-	// Rebuild vertex normals
-	if (!m_pVertexNormals.empty())
+	// Rebuild parallel attribute arrays using the merge winners. Each new
+	// slot ni copies attributes from newOrig[ni] in the source mesh, which
+	// is the vertex that first filled that slot during the matching pass.
+
+	if (uvParallel)
 	{
+		std::vector<float> newUVs(2 * nNewVertices);
+		for (unsigned int ni = 0; ni < nNewVertices; ++ni)
+		{
+			const unsigned int orig = newOrig[ni];
+			newUVs[2 * ni    ] = m_pTextureCoordinates[2 * orig    ];
+			newUVs[2 * ni + 1] = m_pTextureCoordinates[2 * orig + 1];
+		}
+		m_pTextureCoordinates = std::move(newUVs);
+		m_nTextureCoordinates = nNewVertices;
+	}
+
+	if (normParallel)
+	{
+		std::vector<float> newNormals(3 * nNewVertices);
+		for (unsigned int ni = 0; ni < nNewVertices; ++ni)
+		{
+			const unsigned int orig = newOrig[ni];
+			newNormals[3 * ni    ] = m_pVertexNormals[3 * orig    ];
+			newNormals[3 * ni + 1] = m_pVertexNormals[3 * orig + 1];
+			newNormals[3 * ni + 2] = m_pVertexNormals[3 * orig + 2];
+		}
+		m_pVertexNormals = std::move(newNormals);
+	}
+	else if (!m_pVertexNormals.empty())
+	{
+		// Best-effort: shrink to new size. Caller typically follows with
+		// ComputeNormals() which fully overwrites this.
 		m_pVertexNormals.assign(3 * nNewVertices, 0.0f);
 	}
 
-	// Rebuild vertex colors
-	if (!m_pVertexColors.empty())
+	if (colorParallel)
 	{
+		std::vector<float> newColors(3 * nNewVertices);
+		for (unsigned int ni = 0; ni < nNewVertices; ++ni)
+		{
+			const unsigned int orig = newOrig[ni];
+			newColors[3 * ni    ] = m_pVertexColors[3 * orig    ];
+			newColors[3 * ni + 1] = m_pVertexColors[3 * orig + 1];
+			newColors[3 * ni + 2] = m_pVertexColors[3 * orig + 2];
+		}
+		m_pVertexColors = std::move(newColors);
+	}
+	else if (!m_pVertexColors.empty())
+	{
+		// Size mismatch case: try a best-effort remap and clamp.
 		std::vector<float> newColors(3 * nNewVertices, 0.0f);
-		// Copy color from first occurrence
+		const size_t srcSize = m_pVertexColors.size();
 		for (unsigned int i = 0; i < m_nVertices; i++)
 		{
+			if (3u * i + 2 >= srcSize) continue;
 			unsigned int ni = remap[i];
-			newColors[3 * ni]     = m_pVertexColors[3 * i];
+			newColors[3 * ni    ] = m_pVertexColors[3 * i    ];
 			newColors[3 * ni + 1] = m_pVertexColors[3 * i + 1];
 			newColors[3 * ni + 2] = m_pVertexColors[3 * i + 2];
 		}

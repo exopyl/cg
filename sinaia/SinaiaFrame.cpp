@@ -160,6 +160,8 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_UPDATE_UI(ID_NotebookWindowList, MyFrame::OnUpdateUI)
     EVT_MENU_RANGE(MyFrame::ID_FirstPerspective, MyFrame::ID_FirstPerspective+1000,
                    MyFrame::OnRestorePerspective)
+    EVT_MENU(ID_TREATMENT_MAKE_TRIANGLES, MyFrame::OnTreatmentMakeTriangles)
+    EVT_UPDATE_UI(ID_TREATMENT_MAKE_TRIANGLES, MyFrame::OnUpdateUITreatmentMakeTriangles)
     EVT_MENU(ID_TREATMENT_MERGE_VERTICES, MyFrame::OnTreatmentMergeVertices)
     EVT_MENU(ID_TREATMENT_SMOOTHING_TAUBIN, MyFrame::OnTreatmentSmoothingTaubin)
     EVT_MENU(ID_TREATMENT_SMOOTHING_LAPLACIAN, MyFrame::OnTreatmentSmoothingLaplacian)
@@ -354,6 +356,7 @@ MyFrame::MyFrame(wxWindow* parent,
     help_menu->Append(wxID_ABOUT, _("About..."));
 
     wxMenu* treatments_menu = new wxMenu;
+    treatments_menu->Append(ID_TREATMENT_MAKE_TRIANGLES, _("Make triangles"));
     treatments_menu->Append(ID_TREATMENT_MERGE_VERTICES, _("Merge vertices"));
 
     wxMenu* smoothing_menu = new wxMenu;
@@ -2103,6 +2106,54 @@ void MyFrame::OnSlider(wxScrollEvent& event)
 //
 // Treatments
 //
+void MyFrame::OnUpdateUITreatmentMakeTriangles(wxUpdateUIEvent& event)
+{
+	if (!m_pCtrl || m_pCtrl->GetSelection() < 0)
+	{
+		event.Enable(false);
+		return;
+	}
+	MyGLCanvas* pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+	if (!pGLCanvas)
+	{
+		event.Enable(false);
+		return;
+	}
+	VMeshes* pVMeshes = pGLCanvas->GetVMeshes();
+	if (!pVMeshes || pVMeshes->GetNMeshes() == 0)
+	{
+		event.Enable(false);
+		return;
+	}
+	// Grey the entry when there's nothing left to triangulate.
+	event.Enable(!pVMeshes->IsTriangleMesh());
+}
+
+void MyFrame::OnTreatmentMakeTriangles(wxCommandEvent& WXUNUSED(event))
+{
+	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+	if (!pGLCanvas)
+		return;
+
+	VMeshes * pVMeshes = pGLCanvas->GetVMeshes();
+	if (!pVMeshes)
+		return;
+
+	for (auto& pMesh : pVMeshes->GetMeshes())
+	{
+		const auto nFacesBefore = pMesh->GetNFaces();
+		pMesh->Triangulate();
+		const auto nFacesAfter  = pMesh->GetNFaces();
+
+		*m_pWndLogging << wxString::Format(_T("Make triangles: %u -> %u faces\n"),
+		                                    nFacesBefore, nFacesAfter);
+	}
+
+	pGLCanvas->UpdateTopologicIssues();
+	pGLCanvas->Refresh();
+	UpdatePropertiesGrid();
+}
+
 void MyFrame::OnTreatmentMergeVertices(wxCommandEvent& WXUNUSED(event))
 {
 	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());

@@ -193,26 +193,33 @@ void VBOManager::releaseBuffers(vboInfo& info)
 
 void VBOManager::uploadMesh(Mesh* mesh, vboInfo& info)
 {
-	info.pMesh        = mesh;
-	info.hasNormals   = !mesh->m_pVertexNormals.empty();
-	info.hasColors    = !mesh->m_pVertexColors.empty();
-	info.hasTexCoords = !mesh->m_pTextureCoordinates.empty();
-	info.count        = 3 * mesh->m_nFaces;
+	info.pMesh = mesh;
 
-	const unsigned int nVerts = mesh->m_nVertices;
+	// Build the expanded per-polygon vertex layout: every face contributes
+	// its own N corners, each carrying the face's polygon normal. Adjacent
+	// faces do NOT share corners — this is what guarantees uniform shading
+	// within each polygon and eliminates fan-diagonal kinks on non-planar
+	// n-gons.
+	const Mesh::PolygonRenderData rd = mesh->BuildPolygonRenderData();
 
-	// Positions (always present)
+	info.hasNormals   = !rd.normals.empty();
+	info.hasColors    = !rd.colors.empty();
+	info.hasTexCoords = !rd.texCoords.empty();
+
+	const size_t nRenderVerts = rd.positions.size() / 3;
+
+	// Positions
 	if (info.vboPositions == 0) glGenBuffers(1, &info.vboPositions);
 	glBindBuffer(GL_ARRAY_BUFFER, info.vboPositions);
-	glBufferData(GL_ARRAY_BUFFER, 3 * nVerts * sizeof(float),
-	             mesh->m_pVertices.data(), GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, rd.positions.size() * sizeof(float),
+	             rd.positions.data(), GL_STATIC_DRAW);
 
 	if (info.hasNormals)
 	{
 		if (info.vboNormals == 0) glGenBuffers(1, &info.vboNormals);
 		glBindBuffer(GL_ARRAY_BUFFER, info.vboNormals);
-		glBufferData(GL_ARRAY_BUFFER, 3 * nVerts * sizeof(float),
-		             mesh->m_pVertexNormals.data(), GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, rd.normals.size() * sizeof(float),
+		             rd.normals.data(), GL_STATIC_DRAW);
 	}
 	else if (info.vboNormals != 0)
 	{
@@ -224,8 +231,8 @@ void VBOManager::uploadMesh(Mesh* mesh, vboInfo& info)
 	{
 		if (info.vboColors == 0) glGenBuffers(1, &info.vboColors);
 		glBindBuffer(GL_ARRAY_BUFFER, info.vboColors);
-		glBufferData(GL_ARRAY_BUFFER, 3 * nVerts * sizeof(float),
-		             mesh->m_pVertexColors.data(), GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, rd.colors.size() * sizeof(float),
+		             rd.colors.data(), GL_STATIC_DRAW);
 	}
 	else if (info.vboColors != 0)
 	{
@@ -237,8 +244,8 @@ void VBOManager::uploadMesh(Mesh* mesh, vboInfo& info)
 	{
 		if (info.vboTexCoords == 0) glGenBuffers(1, &info.vboTexCoords);
 		glBindBuffer(GL_ARRAY_BUFFER, info.vboTexCoords);
-		glBufferData(GL_ARRAY_BUFFER, 2 * nVerts * sizeof(float),
-		             mesh->m_pTextureCoordinates.data(), GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, rd.texCoords.size() * sizeof(float),
+		             rd.texCoords.data(), GL_STATIC_DRAW);
 	}
 	else if (info.vboTexCoords != 0)
 	{
@@ -246,22 +253,25 @@ void VBOManager::uploadMesh(Mesh* mesh, vboInfo& info)
 		info.vboTexCoords = 0;
 	}
 
-	// Indices (flattened triangle list)
-	unsigned int* pIndices = mesh->GetTriangles();
-	if (pIndices)
+	if (!rd.indices.empty())
 	{
 		if (info.iboIndices == 0) glGenBuffers(1, &info.iboIndices);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info.iboIndices);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-		             3 * mesh->m_nFaces * sizeof(unsigned int),
-		             pIndices, GL_STATIC_DRAW);
-		free(pIndices);
+		             rd.indices.size() * sizeof(unsigned int),
+		             rd.indices.data(), GL_STATIC_DRAW);
+		info.count = (int)rd.indices.size();
+	}
+	else
+	{
+		info.count = 0;
 	}
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
 	info.revision = mesh->GetRevision();
+	(void)nRenderVerts;
 }
 
 int VBOManager::addMesh (Mesh *mesh)

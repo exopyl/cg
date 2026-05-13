@@ -136,6 +136,7 @@ class MyFrame : public wxFrame
 		ID_BUTTON_NPR_COMPUTE,
 		ID_BUTTON_NPR_EXPORT,
 
+	ID_TREATMENT_MAKE_TRIANGLES,
 	ID_TREATMENT_MERGE_VERTICES,
 	ID_TREATMENT_SMOOTHING_TAUBIN,
 	ID_TREATMENT_SMOOTHING_LAPLACIAN,
@@ -243,6 +244,7 @@ private:
 	void OnButtonNPRExport(wxCommandEvent& evt);
 	void OnSlider(wxScrollEvent& event);
 
+	void OnTreatmentMakeTriangles(wxCommandEvent& evt);
 	void OnTreatmentMergeVertices(wxCommandEvent& evt);
 	void OnTreatmentSmoothingTaubin(wxCommandEvent& evt);
 	void OnTreatmentSmoothingLaplacian(wxCommandEvent& evt);
@@ -257,6 +259,7 @@ private:
     void OnManagerFlag(wxCommandEvent& evt);
     void OnNotebookFlag(wxCommandEvent& evt);
     void OnUpdateUI(wxUpdateUIEvent& evt);
+    void OnUpdateUITreatmentMakeTriangles(wxUpdateUIEvent& evt);
 
     void OnPaneClose(wxAuiManagerEvent& evt);
     void OnShowWindow(wxCommandEvent& evt);

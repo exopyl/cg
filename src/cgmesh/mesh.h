@@ -143,6 +143,42 @@ public:
 
 	// Getters / Setters
 	unsigned int* GetTriangles (void);
+
+	// Triangulation utility: returns a flat triangle-index list covering
+	// every face. Triangles emit as-is; quads fan-triangulate from vertex
+	// 0; faces with N>=5 or detected concave are routed through glutess.
+	// Returned vector size is 3 * (sum of (N-2) over all faces). Useful
+	// for any code that needs raw triangle topology; the rendering path
+	// uses BuildPolygonRenderData() instead, which preserves polygon
+	// identity (one normal per polygon).
+	std::vector<unsigned int> BuildTriangulation();
+
+	// Hybrid render data layout:
+	//   - Triangle faces (N==3) index directly into the shared topology
+	//     slots (positions = m_pVertices, normals = m_pVertexNormals) →
+	//     no duplication, smooth shading preserved.
+	//   - Polygon faces (N>=4) append N fresh "expansion" slots that
+	//     duplicate the corner positions but carry the face's Newell
+	//     polygon normal uniformly → eliminates fan-diagonal kinks on
+	//     non-planar n-gons.
+	// A mesh of pure triangles emits exactly m_nVertices render-vertices
+	// (same as the topology); only n-gons pay the duplication cost.
+	struct PolygonRenderData
+	{
+		std::vector<float>        positions; // 3 floats per render-vertex
+		std::vector<float>        normals;   // 3 floats per render-vertex
+		std::vector<float>        texCoords; // 2 floats per render-vertex (empty if absent)
+		std::vector<float>        colors;    // 3 floats per render-vertex (empty if absent)
+		std::vector<unsigned int> indices;   // triangle indices into the above
+	};
+	PolygonRenderData BuildPolygonRenderData();
+
+	// Replace every N-gon face (N>=4) with (N-2) triangle Face objects
+	// (fan for convex, glutess for concave). Triangles are kept as-is.
+	// Material ids are propagated to each emitted sub-triangle. After
+	// triangulation, ComputeNormals() is called and the revision is
+	// bumped so render caches refresh on the next draw.
+	void Triangulate();
 	inline int GetVertex (unsigned int i, float v[3]) {
 		if (i>=m_nVertices) return -1;
 		i*=3;

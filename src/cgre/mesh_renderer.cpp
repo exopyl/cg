@@ -421,6 +421,17 @@ void MeshRenderer::Draw (int id)
 			MaterialRenderer::getInstance()->ActivateMaterial(matIds[0]);
 	};
 
+	// Enable the clipping plane up here so it covers every draw path
+	// (VBO surface, vertex-array surface, mesh_draw overlays). Without this,
+	// only the legacy mesh_draw branch saw the clip plane and the VBO
+	// surface stayed uncut.
+	if (el.properties.clipping_plane_active)
+	{
+		GLdouble plane[] = { 0.0, 0.0, -1.0, (GLdouble)el.properties.clipping_plane_z };
+		glClipPlane(GL_CLIP_PLANE0, plane);
+		glEnable(GL_CLIP_PLANE0);
+	}
+
 	switch (el.method)
 	{
 	case CG_RENDERING_DEFAULT:
@@ -466,6 +477,9 @@ void MeshRenderer::Draw (int id)
 	default:
 		break;
 	}
+
+	if (el.properties.clipping_plane_active)
+		glDisable(GL_CLIP_PLANE0);
 }
 
 int MeshRenderer::GetMeshId (Mesh *pMesh, CG_rendering_method method)
