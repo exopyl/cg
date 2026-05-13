@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 # Options
 set(ENABLE_COVERAGE Off CACHE BOOL "Enable coverage.")
 set(ENABLE_SINAIA Off CACHE BOOL "Enable sinaia.")
+set(ENABLE_CGNET_DEMO Off CACHE BOOL "Build the cgnet_demo executable.")
 set(ENABLE_OPENNURBS On CACHE BOOL "Enable openNURBS (.3dm) import.")
 set(EXTERN_OPENNURBS "${CMAKE_SOURCE_DIR}/extern/opennurbs-v8.27.26019.16021" CACHE PATH "Path to openNURBS directory.")
 
@@ -27,8 +28,10 @@ endif ()
 add_subdirectory(src/cgmath)
 add_subdirectory(src/cgimg)
 add_subdirectory(src/cgmesh)
-if ( ENABLE_SINAIA )
+if ( WIN32 )
 	add_subdirectory(src/cgnet)
+endif ()
+if ( ENABLE_SINAIA )
 	add_subdirectory(src/cgre)
 endif ()
 
@@ -37,6 +40,10 @@ add_subdirectory(test)
 
 if ( ENABLE_SINAIA )
 	add_subdirectory(sinaia)
+endif ()
+
+if ( ENABLE_CGNET_DEMO AND WIN32 )
+	add_subdirectory(cgnet_demo)
 endif ()
 
 if ( ENABLE_COVERAGE )

@@ -37,6 +37,15 @@ if (UNIX AND ENABLE_OPENNURBS)
     )
 endif()
 
+if (WIN32 AND ENABLE_OPENNURBS)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${EXTERN_OPENNURBS}/lib/vc14x_x64/OpenNURBS.dll"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        COMMENT "Copying OpenNURBS.dll to $<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    )
+endif()
+
 if (WIN32 AND EXTERN_GOOGLETEST)
     add_subdirectory(${EXTERN_GOOGLETEST} gtest)
     target_link_libraries(${PROJECT_NAME} GTest::gtest_main)
@@ -49,6 +58,9 @@ endif (WIN32 AND EXTERN_GOOGLETEST)
 gtest_discover_tests(${PROJECT_NAME})
 
 target_link_libraries(${PROJECT_NAME} cgmath cgimg cgmesh)
+if ( WIN32 )
+    target_link_libraries(${PROJECT_NAME} cgnet)
+endif ()
 if ( ENABLE_COVERAGE )
     if ( UNIX )
         target_link_libraries(${PROJECT_NAME} pthread gcov)
