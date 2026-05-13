@@ -222,7 +222,12 @@ bool VMeshes::export_stl_binary(const char* filename)
 	char header[80] = {0};
 	{
 		std::string name = stemFromPath(filename);
-		std::strncpy(header, name.c_str(), sizeof(header));
+		// Binary fixed-width copy: clamp and memcpy. Remaining bytes stay
+		// NUL from the zero-init above. The STL header is binary, so the
+		// missing trailing NUL that static analyzers flag on strncpy is a
+		// non-issue here — but memcpy makes the intent explicit.
+		const size_t n = name.size() < sizeof(header) ? name.size() : sizeof(header);
+		std::memcpy(header, name.data(), n);
 	}
 	fwrite(header, 1, 80, fp);
 

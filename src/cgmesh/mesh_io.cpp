@@ -1739,7 +1739,12 @@ int Mesh::export_stl_binary (const char *filename)
 		size_t dot = stem.find_last_of('.');
 		if (dot != std::string::npos) stem = stem.substr(0, dot);
 		if (stem.empty()) stem = "mesh";
-		std::strncpy(header, stem.c_str(), sizeof(header));
+		// Binary fixed-width copy: clamp and memcpy. Remaining bytes stay
+		// NUL from the zero-init above. The STL header is binary, so the
+		// missing trailing NUL that static analyzers flag on strncpy is a
+		// non-issue here — but memcpy makes the intent explicit.
+		const size_t n = stem.size() < sizeof(header) ? stem.size() : sizeof(header);
+		std::memcpy(header, stem.data(), n);
 	}
 	fwrite(header, 1, 80, fp);
 
