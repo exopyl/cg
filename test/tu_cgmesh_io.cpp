@@ -264,18 +264,105 @@ TEST(TEST_cgmesh_io, glb_fox_non_indexed)
 }
 
 #ifdef CG_HAS_OPENNURBS
-TEST(TEST_cgmesh_io, rhino_3dm)
+
+// Parameterized over every .3dm asset in test/data/3dm. Each parameter
+// carries the expected per-mesh counts (vertices, indices, materials) so
+// the test pins down the importer's output to the values captured the day
+// the test was written. Indices = 3 * nFaces (triangulated export from
+// openNURBS).
+
+struct MeshExpect
 {
+    unsigned int vertices;
+    unsigned int indices;
+    unsigned int materials;
+};
+
+struct Rhino3dmExpectation
+{
+    const char* filename;
+    std::vector<MeshExpect> meshes;
+};
+
+class TEST_cgmesh_io_rhino_3dm : public ::testing::TestWithParam<Rhino3dmExpectation> {};
+
+TEST_P(TEST_cgmesh_io_rhino_3dm, load)
+{
+    const auto& exp = GetParam();
+    const std::string filename = std::string("./test/data/3dm/") + exp.filename;
+
     VMeshes* pVMeshes = new VMeshes();
 
-    // action
-    bool res = pVMeshes->load("./test/data/3dm/flying.3dm");
+    ASSERT_TRUE(pVMeshes->load(filename.c_str())) << "load failed for " << filename;
 
-    // expectations
-    ASSERT_TRUE(res);
-    EXPECT_GT(pVMeshes->GetNVertices(), 0u);
-    EXPECT_GT(pVMeshes->GetNFaces(), 0u);
+    ASSERT_EQ(pVMeshes->GetNMeshes(), exp.meshes.size())
+        << "nMeshes mismatch for " << exp.filename;
+
+    for (size_t i = 0; i < exp.meshes.size(); ++i)
+    {
+        Mesh* m = pVMeshes->GetMeshes()[i];
+        ASSERT_NE(m, nullptr) << exp.filename << " mesh[" << i << "] is null";
+        EXPECT_EQ(m->GetNVertices(),     exp.meshes[i].vertices)
+            << exp.filename << " mesh[" << i << "] vertices";
+        EXPECT_EQ(3u * m->GetNFaces(),   exp.meshes[i].indices)
+            << exp.filename << " mesh[" << i << "] indices";
+        EXPECT_EQ(m->GetNMaterials(),    exp.meshes[i].materials)
+            << exp.filename << " mesh[" << i << "] materials";
+    }
 
     delete pVMeshes;
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    AllFiles,
+    TEST_cgmesh_io_rhino_3dm,
+    ::testing::Values(
+        Rhino3dmExpectation{"balls.3dm", {
+            {6612, 37968, 1}, {6612, 37968, 1}, {6612, 37968, 1},
+            {6612, 37968, 1}, {6612, 37968, 1}, {4, 6, 1},
+        }},
+        Rhino3dmExpectation{"Epicycles.3dm", {
+            {3390, 10608, 1}, {357, 1050, 1}, {2676, 8016, 1},
+        }},
+        Rhino3dmExpectation{"flying.3dm", {
+            {25, 96, 1}, {25, 96, 1},
+        }},
+        Rhino3dmExpectation{"gemstones.3dm", {
+            {390, 390, 1},   {300, 300, 1},   {444, 444, 1},   {282, 282, 1},   {210, 210, 1},
+            {804, 804, 1},   {384, 384, 1},   {558, 558, 1},   {426, 426, 1},   {426, 426, 1},
+            {672, 672, 1},   {432, 432, 1},   {474, 474, 1},   {462, 462, 1},   {426, 426, 1},
+            {426, 426, 1},   {486, 486, 1},   {504, 504, 1},   {684, 684, 1},   {378, 378, 1},
+            {648, 648, 1},   {648, 648, 1},   {2820, 2820, 1}, {3744, 3744, 1}, {216, 216, 1},
+            {378, 378, 1},   {282, 282, 1},   {294, 294, 1},   {216, 216, 1},   {1440, 1440, 1},
+            {312, 312, 1},   {252, 252, 1},   {576, 576, 1},   {576, 576, 1},   {366, 366, 1},
+            {258, 258, 1},   {204, 204, 1},   {150, 150, 1},   {558, 558, 1},   {960, 960, 1},
+            {240, 240, 1},   {324, 324, 1},   {540, 540, 1},   {132, 132, 1},   {330, 330, 1},
+            {180, 180, 1},   {378, 378, 1},   {378, 378, 1},   {372, 372, 1},   {216, 216, 1},
+            {180, 180, 1},   {234, 234, 1},   {258, 258, 1},   {138, 138, 1},   {258, 258, 1},
+            {210, 210, 1},   {102, 102, 1},   {420, 420, 1},   {156, 156, 1},   {186, 186, 1},
+            {162, 162, 1},   {174, 174, 1},   {402, 402, 1},   {60, 60, 1},     {60, 60, 1},
+            {372, 372, 1},   {156, 156, 1},   {276, 276, 1},   {210, 210, 1},   {174, 174, 1},
+            {156, 156, 1},   {222, 222, 1},   {210, 210, 1},   {282, 282, 1},   {288, 288, 1},
+            {318, 318, 1},   {354, 354, 1},   {210, 210, 1},   {246, 246, 1},   {528, 528, 1},
+            {354, 354, 1},   {210, 210, 1},
+        }},
+        Rhino3dmExpectation{"Pistons.3dm", {
+            {194, 564, 1},   {794, 2358, 1},  {466, 1422, 1},  {794, 2358, 1},
+            {194, 564, 1},   {466, 1422, 1},  {194, 564, 1},   {466, 1422, 1},
+            {794, 2358, 1},  {556, 1686, 1},  {794, 2358, 1},  {2210, 6804, 1},
+            {194, 564, 1},
+        }},
+        Rhino3dmExpectation{"UniJoint.3dm", {
+            {1164, 4452, 1}, {1653, 7620, 1}, {1204, 4638, 1},
+        }}
+    ),
+    [](const ::testing::TestParamInfo<Rhino3dmExpectation>& info) {
+        // gtest-friendly suffix: strip the .3dm extension, sanitize separators
+        std::string s = info.param.filename;
+        const size_t dot = s.find_last_of('.');
+        if (dot != std::string::npos) s.resize(dot);
+        for (char& c : s) if (c == '.' || c == '-' || c == ' ') c = '_';
+        return s;
+    }
+);
 #endif
