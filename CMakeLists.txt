@@ -28,6 +28,7 @@ add_subdirectory(src/cgmath)
 add_subdirectory(src/cgimg)
 add_subdirectory(src/cgmesh)
 if ( ENABLE_SINAIA )
+	add_subdirectory(src/cgnet)
 	add_subdirectory(src/cgre)
 endif ()
 

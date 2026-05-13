@@ -17,35 +17,7 @@
 #include <string>
 #include <vector>
 
-#define _WINSOCKAPI_ // avoid winsock.h pulled from windows.h
-#include <winsock2.h>
-#include <ws2tcpip.h>
-
 namespace {
-
-// ----- low-level socket helpers ---------------------------------------------
-
-bool sendAll(SOCKET s, const std::string& data)
-{
-    size_t sent = 0;
-    while (sent < data.size())
-    {
-        int n = send(s, data.data() + sent, static_cast<int>(data.size() - sent), 0);
-        if (n <= 0)
-            return false;
-        sent += static_cast<size_t>(n);
-    }
-    return true;
-}
-
-std::string trim(const std::string& s)
-{
-    size_t a = 0;
-    size_t b = s.size();
-    while (a < b && (s[a] == ' ' || s[a] == '\t')) ++a;
-    while (b > a && (s[b-1] == ' ' || s[b-1] == '\t' || s[b-1] == '\r')) --b;
-    return s.substr(a, b - a);
-}
 
 // ----- main-thread marshaling -----------------------------------------------
 
@@ -66,6 +38,15 @@ auto callOnMain(Fn&& fn) -> decltype(fn())
         }
     });
     return fut.get();
+}
+
+std::string trim(const std::string& s)
+{
+    size_t a = 0;
+    size_t b = s.size();
+    while (a < b && (s[a] == ' ' || s[a] == '\t')) ++a;
+    while (b > a && (s[b-1] == ' ' || s[b-1] == '\t')) --b;
+    return s.substr(a, b - a);
 }
 
 // ----- handler helpers ------------------------------------------------------
@@ -339,88 +320,59 @@ std::string cmdHelp()
 
 // ----- dispatcher -----------------------------------------------------------
 
-std::string dispatch(const std::string& rawLine, MyFrame* frame)
+cgnet::Reply dispatch(const std::string& rawLine, MyFrame* frame)
 {
     const std::string line = trim(rawLine);
-    if (line.empty()) return "OK\n";
+    if (line.empty()) return { "OK\n", false };
 
     std::istringstream iss(line);
     std::string cmd;
     iss >> cmd;
 
-    if (cmd == "info")   return cmdInfo(frame);
-    if (cmd == "help")   return cmdHelp();
-    if (cmd == "quit")   return "bye\nOK\n";
+    if (cmd == "info")   return { cmdInfo(frame), false };
+    if (cmd == "help")   return { cmdHelp(), false };
+    if (cmd == "quit")   return { "bye\nOK\n", true };
 
     if (cmd == "mesh")
     {
         int n = -1; iss >> n;
-        if (iss.fail()) return "ERR usage: mesh N\n";
-        return cmdMesh(frame, n);
+        if (iss.fail()) return { "ERR usage: mesh N\n", false };
+        return { cmdMesh(frame, n), false };
     }
     if (cmd == "face")
     {
         int n = -1, f = -1; iss >> n >> f;
-        if (iss.fail()) return "ERR usage: face N F\n";
-        return cmdFace(frame, n, f);
+        if (iss.fail()) return { "ERR usage: face N F\n", false };
+        return { cmdFace(frame, n, f), false };
     }
     if (cmd == "vertex")
     {
         int n = -1, v = -1; iss >> n >> v;
-        if (iss.fail()) return "ERR usage: vertex N V\n";
-        return cmdVertex(frame, n, v);
+        if (iss.fail()) return { "ERR usage: vertex N V\n", false };
+        return { cmdVertex(frame, n, v), false };
     }
     if (cmd == "material")
     {
         int n = -1, m = -1; iss >> n >> m;
-        if (iss.fail()) return "ERR usage: material N M\n";
-        return cmdMaterial(frame, n, m);
+        if (iss.fail()) return { "ERR usage: material N M\n", false };
+        return { cmdMaterial(frame, n, m), false };
     }
     if (cmd == "flip")
     {
         int n = -1; iss >> n;
-        if (iss.fail()) return "ERR usage: flip N\n";
-        return cmdFlip(frame, n);
+        if (iss.fail()) return { "ERR usage: flip N\n", false };
+        return { cmdFlip(frame, n), false };
     }
     if (cmd == "screenshot")
     {
         std::string path;
         std::getline(iss, path);
         path = trim(path);
-        if (path.empty()) return "ERR usage: screenshot PATH\n";
-        return cmdScreenshot(frame, path);
+        if (path.empty()) return { "ERR usage: screenshot PATH\n", false };
+        return { cmdScreenshot(frame, path), false };
     }
 
-    return "ERR unknown command: " + cmd + " (try 'help')\n";
-}
-
-// ----- client handling ------------------------------------------------------
-
-void handleClient(SOCKET client, MyFrame* frame, const std::atomic<bool>& running)
-{
-    const std::string banner = "sinaia remote console 1.0 — type 'help'\n";
-    sendAll(client, banner);
-
-    std::string buffer;
-    char chunk[1024];
-    while (running.load())
-    {
-        const int n = recv(client, chunk, sizeof(chunk), 0);
-        if (n <= 0) break;
-        buffer.append(chunk, chunk + n);
-
-        for (;;)
-        {
-            const size_t pos = buffer.find('\n');
-            if (pos == std::string::npos) break;
-            std::string line = buffer.substr(0, pos);
-            buffer.erase(0, pos + 1);
-
-            const std::string response = dispatch(line, frame);
-            if (!sendAll(client, response)) return;
-            if (trim(line) == "quit") return;
-        }
-    }
+    return { "ERR unknown command: " + cmd + " (try 'help')\n", false };
 }
 
 } // namespace
@@ -433,91 +385,20 @@ RemoteConsole& RemoteConsole::Get()
     return inst;
 }
 
-RemoteConsole::~RemoteConsole()
-{
-    Stop();
-}
-
 void RemoteConsole::Start(unsigned short port, MyFrame* frame)
 {
-    if (m_running.exchange(true))
-        return; // already running
-    m_port  = port;
+    if (m_console.IsRunning())
+        return;
     m_frame = frame;
-    m_thread = std::thread([this]() { Loop(); });
+    MyFrame* capturedFrame = frame;
+    m_console.Start(port,
+                    "sinaia remote console 1.0 \xE2\x80\x94 type 'help'\n",
+                    [capturedFrame](const std::string& line) -> cgnet::Reply {
+                        return dispatch(line, capturedFrame);
+                    });
 }
 
 void RemoteConsole::Stop()
 {
-    if (!m_running.exchange(false))
-        return;
-    // Close the listener to unblock accept()
-    const intptr_t s = m_listenerSocket.exchange(0);
-    if (s != 0)
-        closesocket(static_cast<SOCKET>(s));
-    if (m_thread.joinable())
-        m_thread.join();
-}
-
-void RemoteConsole::Loop()
-{
-    WSADATA wsa;
-    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-    {
-        m_running.store(false);
-        return;
-    }
-
-    SOCKET listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (listener == INVALID_SOCKET)
-    {
-        WSACleanup();
-        m_running.store(false);
-        return;
-    }
-
-    int reuse = 1;
-    setsockopt(listener, SOL_SOCKET, SO_REUSEADDR,
-               reinterpret_cast<const char*>(&reuse), sizeof(reuse));
-
-    sockaddr_in addr{};
-    addr.sin_family      = AF_INET;
-    addr.sin_port        = htons(m_port);
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK); // 127.0.0.1 only
-
-    if (::bind(listener, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR)
-    {
-        closesocket(listener);
-        WSACleanup();
-        m_running.store(false);
-        return;
-    }
-
-    if (listen(listener, 1) == SOCKET_ERROR)
-    {
-        closesocket(listener);
-        WSACleanup();
-        m_running.store(false);
-        return;
-    }
-
-    m_listenerSocket.store(static_cast<intptr_t>(listener));
-
-    while (m_running.load())
-    {
-        sockaddr_in cli{};
-        int cliLen = sizeof(cli);
-        SOCKET client = accept(listener, reinterpret_cast<sockaddr*>(&cli), &cliLen);
-        if (client == INVALID_SOCKET)
-            break; // listener closed by Stop() or genuine error
-
-        handleClient(client, m_frame, m_running);
-        closesocket(client);
-    }
-
-    if (m_listenerSocket.load() != 0)
-    {
-        closesocket(static_cast<SOCKET>(m_listenerSocket.exchange(0)));
-    }
-    WSACleanup();
+    m_console.Stop();
 }

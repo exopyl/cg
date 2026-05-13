@@ -25,11 +25,7 @@ set(srcs
         )
 
 add_executable(${APP_TARGET} WIN32 ${srcs})
-target_link_libraries(${APP_TARGET} cgimg cgmath cgmesh cgre)
-
-if (WIN32)
-    target_link_libraries(${APP_TARGET} ws2_32)
-endif()
+target_link_libraries(${APP_TARGET} cgimg cgmath cgmesh cgnet cgre)
 
 # opengl
 find_package(OpenGL REQUIRED)
