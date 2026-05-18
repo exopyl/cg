@@ -11,6 +11,10 @@ file(MAKE_DIRECTORY ${SHADER_OUTPUT_DIR})
 set(SHADERS
     ${SHADER_SOURCE_DIR}/basic.vert
     ${SHADER_SOURCE_DIR}/basic.frag
+    ${SHADER_SOURCE_DIR}/normals.frag
+    ${SHADER_SOURCE_DIR}/toon.frag
+    ${SHADER_SOURCE_DIR}/outline.vert
+    ${SHADER_SOURCE_DIR}/outline.frag
 )
 
 # Compile each shader

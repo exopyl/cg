@@ -13,7 +13,7 @@ namespace Vecna::Core {
 class Window;
 } // namespace Vecna::Core
 
-namespace Vecna::Renderer {
+namespace cgre2 {
 
 class VulkanDevice;
 
@@ -38,7 +38,7 @@ public:
     /// @param surface The Vulkan surface for presentation.
     /// @param window The window for dimensions.
     /// @throws std::runtime_error if swapchain creation fails.
-    Swapchain(VulkanDevice& device, VkSurfaceKHR surface, Core::Window& window);
+    Swapchain(VulkanDevice& device, VkSurfaceKHR surface, Vecna::Core::Window& window);
     ~Swapchain();
 
     // Non-copyable, non-movable
@@ -116,7 +116,7 @@ private:
 
     VulkanDevice& m_device;
     VkSurfaceKHR m_surface = VK_NULL_HANDLE;
-    Core::Window& m_window;
+    Vecna::Core::Window& m_window;
 
     VkSwapchainKHR m_swapchain = VK_NULL_HANDLE;
     VkFormat m_imageFormat = VK_FORMAT_UNDEFINED;
@@ -144,4 +144,4 @@ private:
     uint32_t m_currentFrame = 0;
 };
 
-} // namespace Vecna::Renderer
+} // namespace cgre2

@@ -9,7 +9,7 @@
 struct VmaAllocator_T;
 typedef VmaAllocator_T* VmaAllocator;
 
-namespace Vecna::Renderer {
+namespace cgre2 {
 
 class VulkanInstance;
 
@@ -87,4 +87,4 @@ private:
     VkCommandPool m_transferCommandPool = VK_NULL_HANDLE;
 };
 
-} // namespace Vecna::Renderer
+} // namespace cgre2

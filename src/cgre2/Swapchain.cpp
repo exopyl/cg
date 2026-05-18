@@ -11,9 +11,9 @@
 #include <limits>
 #include <stdexcept>
 
-namespace Vecna::Renderer {
+namespace cgre2 {
 
-Swapchain::Swapchain(VulkanDevice& device, VkSurfaceKHR surface, Core::Window& window)
+Swapchain::Swapchain(VulkanDevice& device, VkSurfaceKHR surface, Vecna::Core::Window& window)
     : m_device(device)
     , m_surface(surface)
     , m_window(window) {
@@ -39,15 +39,15 @@ Swapchain::~Swapchain() {
         vkDestroySemaphore(m_device.getDevice(), m_renderFinishedSemaphores[i], nullptr);
         vkDestroyFence(m_device.getDevice(), m_inFlightFences[i], nullptr);
     }
-    Core::Logger::info("Renderer", "Sync objects destroyed");
+    Vecna::Core::Logger::info("Renderer", "Sync objects destroyed");
 
     // Destroy command pool (command buffers are freed automatically)
     if (m_commandPool != VK_NULL_HANDLE) {
         vkDestroyCommandPool(m_device.getDevice(), m_commandPool, nullptr);
     }
-    Core::Logger::info("Renderer", "Command pool destroyed");
+    Vecna::Core::Logger::info("Renderer", "Command pool destroyed");
 
-    Core::Logger::info("Renderer", "Swapchain destroyed");
+    Vecna::Core::Logger::info("Renderer", "Swapchain destroyed");
 }
 
 void Swapchain::cleanupSwapchain() {
@@ -93,11 +93,11 @@ void Swapchain::createSwapchain() {
 
     // Validate swapchain support before proceeding
     if (swapchainSupport.formats.empty()) {
-        Core::Logger::error("Renderer", "No surface formats available for swapchain");
+        Vecna::Core::Logger::error("Renderer", "No surface formats available for swapchain");
         throw std::runtime_error("No surface formats available for swapchain");
     }
     if (swapchainSupport.presentModes.empty()) {
-        Core::Logger::error("Renderer", "No present modes available for swapchain");
+        Vecna::Core::Logger::error("Renderer", "No present modes available for swapchain");
         throw std::runtime_error("No present modes available for swapchain");
     }
 
@@ -146,7 +146,7 @@ void Swapchain::createSwapchain() {
     createInfo.oldSwapchain = VK_NULL_HANDLE;
 
     if (vkCreateSwapchainKHR(m_device.getDevice(), &createInfo, nullptr, &m_swapchain) != VK_SUCCESS) {
-        Core::Logger::error("Renderer", "Failed to create swapchain");
+        Vecna::Core::Logger::error("Renderer", "Failed to create swapchain");
         throw std::runtime_error("Failed to create swapchain");
     }
 
@@ -166,7 +166,7 @@ void Swapchain::createSwapchain() {
         presentModeName = "IMMEDIATE";
     }
 
-    Core::Logger::info("Renderer", "Swapchain created (" +
+    Vecna::Core::Logger::info("Renderer", "Swapchain created (" +
         std::to_string(extent.width) + "x" + std::to_string(extent.height) +
         ", " + std::to_string(imageCount) + " images, " + presentModeName + ")");
 }
@@ -191,11 +191,11 @@ void Swapchain::createImageViews() {
         createInfo.subresourceRange.layerCount = 1;
 
         if (vkCreateImageView(m_device.getDevice(), &createInfo, nullptr, &m_imageViews[i]) != VK_SUCCESS) {
-            Core::Logger::error("Renderer", "Failed to create image view");
+            Vecna::Core::Logger::error("Renderer", "Failed to create image view");
             throw std::runtime_error("Failed to create image view");
         }
     }
-    Core::Logger::info("Renderer", "Image views created");
+    Vecna::Core::Logger::info("Renderer", "Image views created");
 }
 
 VkFormat Swapchain::findDepthFormat() const {
@@ -215,7 +215,7 @@ VkFormat Swapchain::findDepthFormat() const {
         }
     }
 
-    Core::Logger::error("Renderer", "Failed to find supported depth format");
+    Vecna::Core::Logger::error("Renderer", "Failed to find supported depth format");
     throw std::runtime_error("Failed to find supported depth format");
 }
 
@@ -243,7 +243,7 @@ void Swapchain::createDepthResources() {
 
     if (vmaCreateImage(m_device.getAllocator(), &imageInfo, &allocInfo,
                        &m_depthImage, &m_depthImageAllocation, nullptr) != VK_SUCCESS) {
-        Core::Logger::error("Renderer", "Failed to create depth image");
+        Vecna::Core::Logger::error("Renderer", "Failed to create depth image");
         throw std::runtime_error("Failed to create depth image");
     }
 
@@ -260,7 +260,7 @@ void Swapchain::createDepthResources() {
     viewInfo.subresourceRange.layerCount = 1;
 
     if (vkCreateImageView(m_device.getDevice(), &viewInfo, nullptr, &m_depthImageView) != VK_SUCCESS) {
-        Core::Logger::error("Renderer", "Failed to create depth image view");
+        Vecna::Core::Logger::error("Renderer", "Failed to create depth image view");
         throw std::runtime_error("Failed to create depth image view");
     }
 
@@ -272,7 +272,7 @@ void Swapchain::createDepthResources() {
         case VK_FORMAT_D24_UNORM_S8_UINT: depthFormatName = "D24_UNORM_S8_UINT"; break;
         default: break;
     }
-    Core::Logger::info("Renderer", "Depth buffer created (format: " + std::string(depthFormatName) + ")");
+    Vecna::Core::Logger::info("Renderer", "Depth buffer created (format: " + std::string(depthFormatName) + ")");
 }
 
 void Swapchain::createRenderPass() {
@@ -337,10 +337,10 @@ void Swapchain::createRenderPass() {
     renderPassInfo.pDependencies = &dependency;
 
     if (vkCreateRenderPass(m_device.getDevice(), &renderPassInfo, nullptr, &m_renderPass) != VK_SUCCESS) {
-        Core::Logger::error("Renderer", "Failed to create render pass");
+        Vecna::Core::Logger::error("Renderer", "Failed to create render pass");
         throw std::runtime_error("Failed to create render pass");
     }
-    Core::Logger::info("Renderer", "Render pass created (with depth attachment)");
+    Vecna::Core::Logger::info("Renderer", "Render pass created (with depth attachment)");
 }
 
 void Swapchain::createFramebuffers() {
@@ -360,11 +360,11 @@ void Swapchain::createFramebuffers() {
         framebufferInfo.layers = 1;
 
         if (vkCreateFramebuffer(m_device.getDevice(), &framebufferInfo, nullptr, &m_framebuffers[i]) != VK_SUCCESS) {
-            Core::Logger::error("Renderer", "Failed to create framebuffer");
+            Vecna::Core::Logger::error("Renderer", "Failed to create framebuffer");
             throw std::runtime_error("Failed to create framebuffer");
         }
     }
-    Core::Logger::info("Renderer", "Framebuffers created");
+    Vecna::Core::Logger::info("Renderer", "Framebuffers created");
 }
 
 void Swapchain::createCommandPool() {
@@ -374,10 +374,10 @@ void Swapchain::createCommandPool() {
     poolInfo.queueFamilyIndex = m_device.getGraphicsQueueFamily();
 
     if (vkCreateCommandPool(m_device.getDevice(), &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
-        Core::Logger::error("Renderer", "Failed to create command pool");
+        Vecna::Core::Logger::error("Renderer", "Failed to create command pool");
         throw std::runtime_error("Failed to create command pool");
     }
-    Core::Logger::info("Renderer", "Command pool created");
+    Vecna::Core::Logger::info("Renderer", "Command pool created");
 }
 
 void Swapchain::createCommandBuffers() {
@@ -390,10 +390,10 @@ void Swapchain::createCommandBuffers() {
     allocInfo.commandBufferCount = static_cast<uint32_t>(m_commandBuffers.size());
 
     if (vkAllocateCommandBuffers(m_device.getDevice(), &allocInfo, m_commandBuffers.data()) != VK_SUCCESS) {
-        Core::Logger::error("Renderer", "Failed to allocate command buffers");
+        Vecna::Core::Logger::error("Renderer", "Failed to allocate command buffers");
         throw std::runtime_error("Failed to allocate command buffers");
     }
-    Core::Logger::info("Renderer", "Command buffers allocated");
+    Vecna::Core::Logger::info("Renderer", "Command buffers allocated");
 }
 
 void Swapchain::createSyncObjects() {
@@ -412,11 +412,11 @@ void Swapchain::createSyncObjects() {
         if (vkCreateSemaphore(m_device.getDevice(), &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]) != VK_SUCCESS ||
             vkCreateSemaphore(m_device.getDevice(), &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]) != VK_SUCCESS ||
             vkCreateFence(m_device.getDevice(), &fenceInfo, nullptr, &m_inFlightFences[i]) != VK_SUCCESS) {
-            Core::Logger::error("Renderer", "Failed to create sync objects");
+            Vecna::Core::Logger::error("Renderer", "Failed to create sync objects");
             throw std::runtime_error("Failed to create sync objects");
         }
     }
-    Core::Logger::info("Renderer", "Sync objects created");
+    Vecna::Core::Logger::info("Renderer", "Sync objects created");
 }
 
 VkResult Swapchain::acquireNextImage(uint32_t* imageIndex) {
@@ -451,7 +451,7 @@ VkResult Swapchain::submitAndPresent(VkCommandBuffer commandBuffer, uint32_t ima
     submitInfo.pSignalSemaphores = signalSemaphores;
 
     if (vkQueueSubmit(m_device.getGraphicsQueue(), 1, &submitInfo, m_inFlightFences[m_currentFrame]) != VK_SUCCESS) {
-        Core::Logger::error("Renderer", "Failed to submit draw command buffer");
+        Vecna::Core::Logger::error("Renderer", "Failed to submit draw command buffer");
         throw std::runtime_error("Failed to submit draw command buffer");
     }
 
@@ -531,12 +531,12 @@ void Swapchain::recreate() {
             m_renderPass = VK_NULL_HANDLE;
         }
         createRenderPass();
-        Core::Logger::info("Renderer", "Render pass recreated due to format change");
+        Vecna::Core::Logger::info("Renderer", "Render pass recreated due to format change");
     }
 
     createFramebuffers();
 
-    Core::Logger::info("Renderer", "Swapchain recreated (" +
+    Vecna::Core::Logger::info("Renderer", "Swapchain recreated (" +
         std::to_string(m_extent.width) + "x" + std::to_string(m_extent.height) + ")");
 }
 
@@ -612,4 +612,4 @@ VkExtent2D Swapchain::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilit
     return extent;
 }
 
-} // namespace Vecna::Renderer
+} // namespace cgre2

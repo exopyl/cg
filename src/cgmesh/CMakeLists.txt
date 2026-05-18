@@ -4,8 +4,10 @@ project(libcgmesh)
 
 file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/*.cpp)
 file(GLOB HEADER_FILES ${PROJECT_SOURCE_DIR}/*.h)
-file(GLOB GLUTESS_SRC_FILES ${CMAKE_SOURCE_DIR}/extern/glutess/*.c)
-file(GLOB GLUTESS_HEADER_FILES ${CMAKE_SOURCE_DIR}/extern/glutess/*.h)
+# Paths relative to cgmesh's own location so this works whether cgmesh is
+# built from the repo-root CMakeLists or as a subproject of vecna/.
+file(GLOB GLUTESS_SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/glutess/*.c)
+file(GLOB GLUTESS_HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/glutess/*.h)
 
 if (UNIX)
 	add_compile_options(-fpermissive)
@@ -18,7 +20,7 @@ target_link_libraries(cgmesh cgimg)
 
 if (ENABLE_OPENNURBS)
     if (NOT EXTERN_OPENNURBS)
-        set(EXTERN_OPENNURBS "${CMAKE_SOURCE_DIR}/extern/opennurbs-v8.27.26019.16021")
+        set(EXTERN_OPENNURBS "${CMAKE_CURRENT_SOURCE_DIR}/../../extern/opennurbs-v8.27.26019.16021")
     endif()
     
     if (NOT EXISTS "${EXTERN_OPENNURBS}/include")

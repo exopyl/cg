@@ -7,7 +7,7 @@
 #include <cstring>
 #include <stdexcept>
 
-namespace Vecna::Renderer {
+namespace cgre2 {
 
 // Validation layer configuration
 #ifdef NDEBUG
@@ -59,7 +59,7 @@ VulkanInstance::~VulkanInstance() {
 
     if (m_instance != VK_NULL_HANDLE) {
         vkDestroyInstance(m_instance, nullptr);
-        Core::Logger::info("Renderer", "Vulkan instance destroyed");
+        Vecna::Core::Logger::info("Renderer", "Vulkan instance destroyed");
     }
 }
 
@@ -67,11 +67,11 @@ void VulkanInstance::createInstance() {
     // Check validation layer support if enabled
     if (ENABLE_VALIDATION_LAYERS) {
         if (!checkValidationLayerSupport()) {
-            Core::Logger::warn("Renderer", "Validation layers requested but not available");
+            Vecna::Core::Logger::warn("Renderer", "Validation layers requested but not available");
             m_validationEnabled = false;
         } else {
             m_validationEnabled = true;
-            Core::Logger::info("Renderer", "Validation layers enabled");
+            Vecna::Core::Logger::info("Renderer", "Validation layers enabled");
         }
     }
 
@@ -112,11 +112,11 @@ void VulkanInstance::createInstance() {
     // Create instance
     VkResult result = vkCreateInstance(&createInfo, nullptr, &m_instance);
     if (result != VK_SUCCESS) {
-        Core::Logger::error("Renderer", "Failed to create Vulkan instance");
+        Vecna::Core::Logger::error("Renderer", "Failed to create Vulkan instance");
         throw std::runtime_error("Failed to create Vulkan instance");
     }
 
-    Core::Logger::info("Renderer", "Vulkan instance created");
+    Vecna::Core::Logger::info("Renderer", "Vulkan instance created");
 }
 
 void VulkanInstance::setupDebugMessenger() {
@@ -129,10 +129,10 @@ void VulkanInstance::setupDebugMessenger() {
 
     VkResult result = CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessenger);
     if (result != VK_SUCCESS) {
-        Core::Logger::warn("Renderer", "Failed to create debug messenger");
+        Vecna::Core::Logger::warn("Renderer", "Failed to create debug messenger");
         // Non-fatal: continue without debug messenger
     } else {
-        Core::Logger::debug("Renderer", "Debug messenger created");
+        Vecna::Core::Logger::debug("Renderer", "Debug messenger created");
     }
 }
 
@@ -140,7 +140,7 @@ void VulkanInstance::destroyDebugMessenger() {
     if (m_validationEnabled && m_debugMessenger != VK_NULL_HANDLE) {
         DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
         m_debugMessenger = VK_NULL_HANDLE;
-        Core::Logger::debug("Renderer", "Debug messenger destroyed");
+        Vecna::Core::Logger::debug("Renderer", "Debug messenger destroyed");
     }
 }
 
@@ -174,7 +174,7 @@ std::vector<const char*> VulkanInstance::getRequiredExtensions() const {
 
     // Check if GLFW supports Vulkan (returns nullptr if not)
     if (glfwExtensions == nullptr) {
-        Core::Logger::error("Renderer", "GLFW does not support Vulkan or is not initialized");
+        Vecna::Core::Logger::error("Renderer", "GLFW does not support Vulkan or is not initialized");
         throw std::runtime_error("GLFW does not support Vulkan");
     }
 
@@ -186,7 +186,7 @@ std::vector<const char*> VulkanInstance::getRequiredExtensions() const {
     }
 
     // Log enabled extensions
-    Core::Logger::debug("Renderer", "Vulkan extensions enabled: " + std::to_string(extensions.size()));
+    Vecna::Core::Logger::debug("Renderer", "Vulkan extensions enabled: " + std::to_string(extensions.size()));
 
     return extensions;
 }
@@ -215,14 +215,14 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanInstance::debugCallback(
 
     // Map Vulkan severity to Logger level
     if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-        Core::Logger::error("Vulkan", pCallbackData->pMessage);
+        Vecna::Core::Logger::error("Vulkan", pCallbackData->pMessage);
     } else if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        Core::Logger::warn("Vulkan", pCallbackData->pMessage);
+        Vecna::Core::Logger::warn("Vulkan", pCallbackData->pMessage);
     } else {
-        Core::Logger::debug("Vulkan", pCallbackData->pMessage);
+        Vecna::Core::Logger::debug("Vulkan", pCallbackData->pMessage);
     }
 
     return VK_FALSE;
 }
 
-} // namespace Vecna::Renderer
+} // namespace cgre2

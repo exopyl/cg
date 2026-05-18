@@ -27,14 +27,15 @@ namespace Vecna::UI {
 class IUIRenderer;
 } // namespace Vecna::UI
 
-namespace Vecna::Renderer {
+namespace cgre2 {
 class IndexBuffer;
 class Pipeline;
+class ShaderManager;
 class Swapchain;
 class VertexBuffer;
 class VulkanDevice;
 class VulkanInstance;
-} // namespace Vecna::Renderer
+} // namespace cgre2
 
 namespace Vecna::Core {
 
@@ -54,17 +55,17 @@ public:
     [[nodiscard]] Window& getWindow() { return *m_window; }
     [[nodiscard]] const Window& getWindow() const { return *m_window; }
 
-    [[nodiscard]] Renderer::VulkanInstance& getVulkanInstance() { return *m_vulkanInstance; }
-    [[nodiscard]] const Renderer::VulkanInstance& getVulkanInstance() const { return *m_vulkanInstance; }
+    [[nodiscard]] cgre2::VulkanInstance& getVulkanInstance() { return *m_vulkanInstance; }
+    [[nodiscard]] const cgre2::VulkanInstance& getVulkanInstance() const { return *m_vulkanInstance; }
 
-    [[nodiscard]] Renderer::VulkanDevice& getVulkanDevice() { return *m_vulkanDevice; }
-    [[nodiscard]] const Renderer::VulkanDevice& getVulkanDevice() const { return *m_vulkanDevice; }
+    [[nodiscard]] cgre2::VulkanDevice& getVulkanDevice() { return *m_vulkanDevice; }
+    [[nodiscard]] const cgre2::VulkanDevice& getVulkanDevice() const { return *m_vulkanDevice; }
 
-    [[nodiscard]] Renderer::Swapchain& getSwapchain() { return *m_swapchain; }
-    [[nodiscard]] const Renderer::Swapchain& getSwapchain() const { return *m_swapchain; }
+    [[nodiscard]] cgre2::Swapchain& getSwapchain() { return *m_swapchain; }
+    [[nodiscard]] const cgre2::Swapchain& getSwapchain() const { return *m_swapchain; }
 
-    [[nodiscard]] Renderer::Pipeline& getPipeline() { return *m_pipeline; }
-    [[nodiscard]] const Renderer::Pipeline& getPipeline() const { return *m_pipeline; }
+    [[nodiscard]] cgre2::Pipeline& getPipeline() { return *m_pipeline; }
+    [[nodiscard]] const cgre2::Pipeline& getPipeline() const { return *m_pipeline; }
 
 private:
     void createSurface();
@@ -75,6 +76,9 @@ private:
 
     void handleKeyboardShortcuts();
     void onShadingModeChanged(bool flat);
+    void onShowNormalsChanged(bool show);
+    void onToonChanged(bool toon);
+    void onOutlineChanged(bool outline);
 
     // File operations (Story 3-4)
     void openFileDialog();
@@ -88,16 +92,23 @@ private:
     // This ensures Vulkan resources are released before GLFW terminates.
     // IMPORTANT: Pipeline must be destroyed BEFORE Swapchain (references render pass).
     std::unique_ptr<Window> m_window;
-    std::unique_ptr<Renderer::VulkanInstance> m_vulkanInstance;
+    std::unique_ptr<cgre2::VulkanInstance> m_vulkanInstance;
     VkSurfaceKHR m_surface = VK_NULL_HANDLE;
-    std::unique_ptr<Renderer::VulkanDevice> m_vulkanDevice;
-    std::unique_ptr<Renderer::Swapchain> m_swapchain;
-    std::unique_ptr<Renderer::Pipeline> m_pipeline;
+    std::unique_ptr<cgre2::VulkanDevice> m_vulkanDevice;
+    std::unique_ptr<cgre2::Swapchain> m_swapchain;
+    // Caches VkShaderModule + SPIR-V reflection metadata. Lives between
+    // pipeline recreations and is destroyed AFTER the last Pipeline so
+    // every VkShaderModule outlives the pipelines that reference it.
+    std::unique_ptr<cgre2::ShaderManager> m_shaderManager;
+    std::unique_ptr<cgre2::Pipeline> m_pipeline;
+    // Inverted-hull outline pass — same vertex/index buffers as the main
+    // mesh, different shaders + cullMode=FRONT. Lifetime mirrors m_pipeline.
+    std::unique_ptr<cgre2::Pipeline> m_outlinePipeline;
 
     // Geometry buffers (cube default or loaded model)
     // IMPORTANT: Must be destroyed BEFORE VulkanDevice (requires VMA for cleanup)
-    std::unique_ptr<Renderer::VertexBuffer> m_vertexBuffer;
-    std::unique_ptr<Renderer::IndexBuffer> m_indexBuffer;
+    std::unique_ptr<cgre2::VertexBuffer> m_vertexBuffer;
+    std::unique_ptr<cgre2::IndexBuffer> m_indexBuffer;
 
     // Trackball rotation (Story 4-2)
     std::unique_ptr<Scene::Trackball> m_trackball;
@@ -123,6 +134,28 @@ private:
     // Flat shading mode (specialization constant in pipeline)
     bool m_flatShading = false;
     bool m_pendingShadingChange = false;
+
+    // Debug overlay: switches the fragment shader from basic.frag (Lambert
+    // diffuse) to normals.frag (normal-as-RGB). Smoke test for the cgre2
+    // shader-pipeline plumbing — a second .spv goes through ShaderManager,
+    // a second Pipeline is built sharing the same vertex module from the
+    // cache, and the basic.frag-only spec constant `useFlat` is silently
+    // ignored by normals.frag.
+    bool m_showNormals = false;
+    bool m_pendingShowNormalsChange = false;
+
+    // Toon (cel) shading: posterizes the diffuse term into a few discrete
+    // bands. Precedence order in createPipeline:
+    //   m_showNormals > m_useToon > m_flatShading (via basic.frag)
+    bool m_useToon = false;
+    bool m_pendingToonChange = false;
+
+    // Inverted-hull outline: an extra pass with a dedicated pipeline that
+    // culls front faces and inflates each vertex along its normal, drawn
+    // BEFORE the main mesh so depth testing leaves only the silhouette
+    // visible. Independent of the main shader choice.
+    bool m_useOutline = false;
+    bool m_pendingOutlineChange = false;
 
     // Deferred model load (avoids buffer destruction mid-render when triggered from ImGui menu)
     std::optional<std::filesystem::path> m_pendingModelPath;

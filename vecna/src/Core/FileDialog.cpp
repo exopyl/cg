@@ -48,9 +48,10 @@ std::optional<std::filesystem::path> FileDialog::openModel() {
     return openFile(
         "Ouvrir un modele 3D",
         {
-            {"Fichiers 3D", "obj stl"},
+            {"Fichiers 3D", "obj stl glb"},
             {"Wavefront OBJ", "obj"},
-            {"STL", "stl"}
+            {"STL", "stl"},
+            {"glTF Binary (GLB)", "glb"}
         }
     );
 }

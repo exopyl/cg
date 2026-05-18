@@ -8,7 +8,7 @@
 #include <cstring>
 #include <stdexcept>
 
-namespace Vecna::Renderer {
+namespace cgre2 {
 
 // Validate Vertex size at compile time
 static_assert(sizeof(Vertex) == 36, "Vertex size must be 36 bytes (9 * float)");
@@ -42,7 +42,7 @@ Buffer::~Buffer() {
         vmaDestroyBuffer(m_device->getAllocator(), m_buffer, m_allocation);
         m_buffer = VK_NULL_HANDLE;
         m_allocation = nullptr;
-        Core::Logger::info("Renderer", "Buffer destroyed");
+        Vecna::Core::Logger::info("Renderer", "Buffer destroyed");
     }
 }
 
@@ -107,19 +107,19 @@ void Buffer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, bool gpuO
     );
 
     if (result != VK_SUCCESS) {
-        Core::Logger::error("Renderer", "Failed to create buffer");
+        Vecna::Core::Logger::error("Renderer", "Failed to create buffer");
         throw std::runtime_error("Failed to create buffer");
     }
 }
 
 void Buffer::upload(const void* data, VkDeviceSize size) {
     if (m_type == BufferType::Staging) {
-        Core::Logger::error("Renderer", "Cannot upload to staging buffer via staging");
+        Vecna::Core::Logger::error("Renderer", "Cannot upload to staging buffer via staging");
         throw std::runtime_error("Cannot upload to staging buffer via staging");
     }
 
     if (size != m_size) {
-        Core::Logger::error("Renderer", "Upload size mismatch: expected " +
+        Vecna::Core::Logger::error("Renderer", "Upload size mismatch: expected " +
                           std::to_string(m_size) + ", got " + std::to_string(size));
         throw std::runtime_error("Upload size mismatch");
     }
@@ -149,7 +149,7 @@ void Buffer::upload(const void* data, VkDeviceSize size) {
     );
 
     if (result != VK_SUCCESS) {
-        Core::Logger::error("Renderer", "Failed to create staging buffer");
+        Vecna::Core::Logger::error("Renderer", "Failed to create staging buffer");
         throw std::runtime_error("Failed to create staging buffer");
     }
 
@@ -162,7 +162,7 @@ void Buffer::upload(const void* data, VkDeviceSize size) {
     // Cleanup staging buffer
     vmaDestroyBuffer(m_device->getAllocator(), stagingBuffer, stagingAllocation);
 
-    Core::Logger::info("Renderer", "Buffer transfer complete (" + std::to_string(size) + " bytes)");
+    Vecna::Core::Logger::info("Renderer", "Buffer transfer complete (" + std::to_string(size) + " bytes)");
 }
 
 void Buffer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
@@ -176,7 +176,7 @@ void Buffer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize siz
     VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
     VkResult result = vkAllocateCommandBuffers(m_device->getDevice(), &allocInfo, &commandBuffer);
     if (result != VK_SUCCESS) {
-        Core::Logger::error("Renderer", "Failed to allocate transfer command buffer");
+        Vecna::Core::Logger::error("Renderer", "Failed to allocate transfer command buffer");
         throw std::runtime_error("Failed to allocate transfer command buffer");
     }
 
@@ -187,7 +187,7 @@ void Buffer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize siz
     result = vkBeginCommandBuffer(commandBuffer, &beginInfo);
     if (result != VK_SUCCESS) {
         vkFreeCommandBuffers(m_device->getDevice(), m_device->getTransferCommandPool(), 1, &commandBuffer);
-        Core::Logger::error("Renderer", "Failed to begin transfer command buffer");
+        Vecna::Core::Logger::error("Renderer", "Failed to begin transfer command buffer");
         throw std::runtime_error("Failed to begin transfer command buffer");
     }
 
@@ -209,7 +209,7 @@ void Buffer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize siz
     result = vkQueueSubmit(m_device->getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
     if (result != VK_SUCCESS) {
         vkFreeCommandBuffers(m_device->getDevice(), m_device->getTransferCommandPool(), 1, &commandBuffer);
-        Core::Logger::error("Renderer", "Failed to submit transfer command buffer");
+        Vecna::Core::Logger::error("Renderer", "Failed to submit transfer command buffer");
         throw std::runtime_error("Failed to submit transfer command buffer");
     }
     vkQueueWaitIdle(m_device->getGraphicsQueue());
@@ -224,7 +224,7 @@ VertexBuffer::VertexBuffer(VulkanDevice& device, const std::vector<Vertex>& vert
     : m_buffer(device, vertices.size() * sizeof(Vertex), BufferType::Vertex)
     , m_vertexCount(static_cast<uint32_t>(vertices.size())) {
 
-    Core::Logger::info("Renderer", "Creating vertex buffer (" +
+    Vecna::Core::Logger::info("Renderer", "Creating vertex buffer (" +
                       std::to_string(m_buffer.getSize()) + " bytes, " +
                       std::to_string(m_vertexCount) + " vertices)");
 
@@ -237,11 +237,11 @@ IndexBuffer::IndexBuffer(VulkanDevice& device, const std::vector<uint32_t>& indi
     : m_buffer(device, indices.size() * sizeof(uint32_t), BufferType::Index)
     , m_indexCount(static_cast<uint32_t>(indices.size())) {
 
-    Core::Logger::info("Renderer", "Creating index buffer (" +
+    Vecna::Core::Logger::info("Renderer", "Creating index buffer (" +
                       std::to_string(m_buffer.getSize()) + " bytes, " +
                       std::to_string(m_indexCount) + " indices)");
 
     m_buffer.upload(indices.data(), m_buffer.getSize());
 }
 
-} // namespace Vecna::Renderer
+} // namespace cgre2

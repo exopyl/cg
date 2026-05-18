@@ -4,7 +4,7 @@
 
 #include <vector>
 
-namespace Vecna::Renderer {
+namespace cgre2 {
 
 /// RAII wrapper for VkInstance with optional validation layers.
 /// Validation layers are enabled in Debug builds, disabled in Release.
@@ -49,4 +49,4 @@ private:
     bool m_validationEnabled = false;
 };
 
-} // namespace Vecna::Renderer
+} // namespace cgre2

@@ -4,6 +4,9 @@
 #include "Vecna/Core/Logger.hpp"
 #include "Vecna/Renderer/Buffer.hpp"
 #include "Vecna/Renderer/Pipeline.hpp"
+#include "Vecna/Renderer/Shader.hpp"
+#include "Vecna/Renderer/SpecializationConstants.hpp"
+#include "Vecna/Renderer/Vertex.hpp"
 #include "Vecna/Renderer/Swapchain.hpp"
 #include "Vecna/Renderer/VulkanDevice.hpp"
 #include "Vecna/Renderer/VulkanInstance.hpp"
@@ -77,17 +80,20 @@ Application::Application() {
     m_window = std::make_unique<Window>();
 
     // Create Vulkan instance (requires GLFW to be initialized)
-    m_vulkanInstance = std::make_unique<Renderer::VulkanInstance>();
+    m_vulkanInstance = std::make_unique<cgre2::VulkanInstance>();
 
     // Create surface (requires Window and VulkanInstance)
     createSurface();
 
     // Create Vulkan device (selects GPU and creates logical device)
     // Requires surface for present queue family detection
-    m_vulkanDevice = std::make_unique<Renderer::VulkanDevice>(*m_vulkanInstance, m_surface);
+    m_vulkanDevice = std::make_unique<cgre2::VulkanDevice>(*m_vulkanInstance, m_surface);
 
     // Create swapchain (requires device and surface)
-    m_swapchain = std::make_unique<Renderer::Swapchain>(*m_vulkanDevice, m_surface, *m_window);
+    m_swapchain = std::make_unique<cgre2::Swapchain>(*m_vulkanDevice, m_surface, *m_window);
+
+    // ShaderManager outlives every Pipeline we'll create from it.
+    m_shaderManager = std::make_unique<cgre2::ShaderManager>(*m_vulkanDevice);
 
     // Create graphics pipeline (requires device and render pass from swapchain)
     createPipeline();
@@ -114,6 +120,9 @@ Application::Application() {
         *m_vulkanInstance, *m_vulkanDevice, *m_swapchain, *m_window);
     imguiRenderer->setOnFileOpen([this]() { openFileDialog(); });
     imguiRenderer->setOnShadingModeChanged([this](bool flat) { onShadingModeChanged(flat); });
+    imguiRenderer->setOnShowNormalsChanged([this](bool show) { onShowNormalsChanged(show); });
+    imguiRenderer->setOnToonChanged([this](bool toon) { onToonChanged(toon); });
+    imguiRenderer->setOnOutlineChanged([this](bool outline) { onOutlineChanged(outline); });
     m_uiRenderer = std::move(imguiRenderer);
     m_uiRenderer->init();
 
@@ -137,7 +146,11 @@ Application::~Application() {
     // IMPORTANT: Pipeline must be destroyed BEFORE Swapchain (references render pass)
     m_indexBuffer.reset();
     m_vertexBuffer.reset();
+    m_outlinePipeline.reset();
     m_pipeline.reset();
+    // ShaderManager destroys VkShaderModule handles; must come AFTER any
+    // pipeline that references them but BEFORE the device that owns them.
+    m_shaderManager.reset();
     m_swapchain.reset();
     m_vulkanDevice.reset();
 
@@ -172,19 +185,76 @@ void Application::createPipeline() {
         throw std::runtime_error("Failed to find shader directory");
     }
 
-    m_pipeline = std::make_unique<Renderer::Pipeline>(
-        *m_vulkanDevice,
-        m_swapchain->getRenderPass(),
-        shaderDir,
-        m_flatShading
-    );
+    auto& vert = m_shaderManager->load(shaderDir + "/basic.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+
+    // Precedence: Normals → Toon → basic (with optional flat).
+    std::string fragSpv;
+    if      (m_showNormals) fragSpv = shaderDir + "/normals.frag.spv";
+    else if (m_useToon)     fragSpv = shaderDir + "/toon.frag.spv";
+    else                    fragSpv = shaderDir + "/basic.frag.spv";
+    auto& frag = m_shaderManager->load(fragSpv, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    // basic.frag declares `layout(constant_id = 0) const bool useFlat`.
+    // The other fragment shaders don't reference constant_id 0 and Vulkan
+    // silently ignores the entry there.
+    cgre2::SpecializationConstants spec;
+    spec.setBool(0, m_flatShading);
+
+    // Push constant range — basic.vert and all current fragments share the
+    // same `PushConstants { mat4 mvp; mat4 model; }` block.
+    VkPushConstantRange pc{};
+    pc.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    pc.offset     = 0;
+    pc.size       = cgre2::PUSH_CONSTANT_SIZE;
+
+    const cgre2::VertexLayout vertexLayout = cgre2::Vertex::getLayout();
+
+    cgre2::PipelineCreateInfo info{};
+    info.renderPass            = m_swapchain->getRenderPass();
+    info.vertexShader          = &vert;
+    info.fragmentShader        = &frag;
+    info.vertexLayout          = &vertexLayout;
+    info.specialization        = &spec;
+    info.pushConstantRanges    = { pc };
+
+    m_pipeline = std::make_unique<cgre2::Pipeline>(*m_vulkanDevice, info);
+
+    // Outline pass — its own vertex shader inflates along the normal, its
+    // fragment outputs solid black, and the rasterizer culls FRONT faces
+    // so only the inflated back faces show through. Rendered BEFORE the
+    // main mesh in recordCommandBuffer; depth testing handles the rest.
+    auto& outlineVert = m_shaderManager->load(shaderDir + "/outline.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    auto& outlineFrag = m_shaderManager->load(shaderDir + "/outline.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    cgre2::SpecializationConstants outlineSpec;
+    outlineSpec.setFloat(0, 0.02f);  // inflate distance in world units
+
+    // outline.vert uses the push constants; outline.frag does not. Most
+    // robust is to keep the VERTEX|FRAGMENT range — Vulkan accepts a
+    // range that covers stages whose shader doesn't actually reference
+    // it as long as the layout matches.
+    VkPushConstantRange outlinePc{};
+    outlinePc.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    outlinePc.offset     = 0;
+    outlinePc.size       = cgre2::PUSH_CONSTANT_SIZE;
+
+    cgre2::PipelineCreateInfo outlineInfo{};
+    outlineInfo.renderPass         = m_swapchain->getRenderPass();
+    outlineInfo.vertexShader       = &outlineVert;
+    outlineInfo.fragmentShader     = &outlineFrag;
+    outlineInfo.vertexLayout       = &vertexLayout;
+    outlineInfo.specialization     = &outlineSpec;
+    outlineInfo.pushConstantRanges = { outlinePc };
+    outlineInfo.cullMode           = VK_CULL_MODE_FRONT_BIT;
+
+    m_outlinePipeline = std::make_unique<cgre2::Pipeline>(*m_vulkanDevice, outlineInfo);
 }
 
 void Application::createCube() {
     // Cube geometry with flat shading (24 vertices, 4 per face)
     // Each face has distinct normals and colors for visibility
     // CCW winding order for front-facing triangles
-    static const std::vector<Renderer::Vertex> vertices = {
+    static const std::vector<cgre2::Vertex> vertices = {
         // Front face (Z+) - Red
         {{-0.5f, -0.5f,  0.5f}, { 0.0f,  0.0f,  1.0f}, {1.0f, 0.0f, 0.0f}},
         {{ 0.5f, -0.5f,  0.5f}, { 0.0f,  0.0f,  1.0f}, {1.0f, 0.0f, 0.0f}},
@@ -232,8 +302,8 @@ void Application::createCube() {
         20, 21, 22,  22, 23, 20, // Left
     };
 
-    m_vertexBuffer = std::make_unique<Renderer::VertexBuffer>(*m_vulkanDevice, vertices);
-    m_indexBuffer = std::make_unique<Renderer::IndexBuffer>(*m_vulkanDevice, indices);
+    m_vertexBuffer = std::make_unique<cgre2::VertexBuffer>(*m_vulkanDevice, vertices);
+    m_indexBuffer = std::make_unique<cgre2::IndexBuffer>(*m_vulkanDevice, indices);
 
     Logger::info("Core", "Cube buffers created (vertex: " +
                  std::to_string(m_vertexBuffer->getSize()) + " bytes, index: " +
@@ -263,6 +333,32 @@ void Application::run() {
             m_pipeline.reset();
             createPipeline();
             Logger::info("Core", m_flatShading ? "Switched to flat shading" : "Switched to smooth shading");
+        }
+
+        // Process deferred normals-visualization toggle (same recreation
+        // pattern as the shading toggle — both swap the pipeline, only
+        // the fragment shader picked by createPipeline differs).
+        if (m_pendingShowNormalsChange) {
+            m_pendingShowNormalsChange = false;
+            vkDeviceWaitIdle(m_vulkanDevice->getDevice());
+            m_pipeline.reset();
+            createPipeline();
+            Logger::info("Core", m_showNormals ? "Showing normals" : "Showing diffuse");
+        }
+
+        if (m_pendingToonChange) {
+            m_pendingToonChange = false;
+            vkDeviceWaitIdle(m_vulkanDevice->getDevice());
+            m_pipeline.reset();
+            createPipeline();
+            Logger::info("Core", m_useToon ? "Toon shading on" : "Toon shading off");
+        }
+
+        // Outline only changes which pipelines get bound during draw —
+        // no pipeline recreation needed, both pipelines already exist.
+        if (m_pendingOutlineChange) {
+            m_pendingOutlineChange = false;
+            Logger::info("Core", m_useOutline ? "Outline on" : "Outline off");
         }
 
         drawFrame();
@@ -345,10 +441,7 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t im
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    // Bind the graphics pipeline
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipeline());
-
-    // Set dynamic viewport
+    // Set dynamic viewport — shared by all draws in this render pass.
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -358,7 +451,6 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t im
     viewport.maxDepth = 1.0f;
     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
-    // Set dynamic scissor
     VkRect2D scissor{};
     scissor.offset = {0, 0};
     scissor.extent = m_swapchain->getExtent();
@@ -369,18 +461,14 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t im
         throw std::runtime_error("Geometry buffers not initialized");
     }
 
-    // Bind vertex buffer
+    // Vertex + index buffers — same data for both the outline pass (if
+    // enabled) and the main mesh pass, only the pipeline differs.
     VkBuffer vertexBuffers[] = {m_vertexBuffer->getBuffer()};
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-
-    // Bind index buffer
     vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer->getBuffer(), 0, VK_INDEX_TYPE_UINT32);
 
     // Calculate MVP matrix using TMatrix4 (column-major, Vulkan-ready)
-    // Model rotation from trackball (Story 4-2) — always centered on model origin.
-    // Pan offset is handled entirely in the view matrix (camera position/target).
-    // This keeps pan direction always aligned with screen axes regardless of rotation.
     Matrix4f model;
     std::copy(m_trackball->getTransform(), m_trackball->getTransform() + 16, model.data());
 
@@ -388,18 +476,31 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t im
     Matrix4f view = m_camera->GetViewMatrix();
     Matrix4f projection = m_camera->GetProjectionMatrix(aspect);
 
-    // MVP = Projection * View * Model
     Matrix4f mvp = projection * view * model;
 
-    // Push MVP + model matrices (ColumnMajor data() is directly Vulkan-compatible)
-    Renderer::PushConstants pushConstants{};
+    cgre2::PushConstants pushConstants{};
     std::copy(mvp.data(), mvp.data() + 16, pushConstants.mvp);
     std::copy(model.data(), model.data() + 16, pushConstants.model);
+
+    // Outline pass FIRST when enabled. The inflated back faces fill the
+    // body of the mesh with black; the main pass below overdraws them
+    // wherever the actual front faces project — what's left visible is
+    // the silhouette band.
+    if (m_useOutline && m_outlinePipeline) {
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          m_outlinePipeline->getPipeline());
+        vkCmdPushConstants(commandBuffer, m_outlinePipeline->getPipelineLayout(),
+                           VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           sizeof(cgre2::PushConstants), &pushConstants);
+        vkCmdDrawIndexed(commandBuffer, m_indexBuffer->getIndexCount(), 1, 0, 0, 0);
+    }
+
+    // Main mesh pass.
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      m_pipeline->getPipeline());
     vkCmdPushConstants(commandBuffer, m_pipeline->getPipelineLayout(),
                        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                       sizeof(Renderer::PushConstants), &pushConstants);
-
-    // Draw indexed cube
+                       sizeof(cgre2::PushConstants), &pushConstants);
     vkCmdDrawIndexed(commandBuffer, m_indexBuffer->getIndexCount(), 1, 0, 0, 0);
 
     // Render UI overlay via abstraction (Story 5-1)
@@ -433,6 +534,21 @@ void Application::handleKeyboardShortcuts() {
 void Application::onShadingModeChanged(bool flat) {
     m_flatShading = flat;
     m_pendingShadingChange = true;
+}
+
+void Application::onShowNormalsChanged(bool show) {
+    m_showNormals = show;
+    m_pendingShowNormalsChange = true;
+}
+
+void Application::onToonChanged(bool toon) {
+    m_useToon = toon;
+    m_pendingToonChange = true;
+}
+
+void Application::onOutlineChanged(bool outline) {
+    m_useOutline = outline;
+    m_pendingOutlineChange = true;
 }
 
 void Application::openFileDialog() {
@@ -496,19 +612,24 @@ void Application::loadModel(const std::filesystem::path& path) {
     Logger::info("Loader", "Centered model (diagonal: " + std::to_string(diagonal) +
                  ", camera distance: " + std::to_string(cameraDistance) + ")");
 
-    // Compute normals if not present
-    if (mesh.m_pVertexNormals.empty()) {
-        mesh.ComputeNormals();
-    }
+    // Always recompute normals from geometry. The `empty()` heuristic that
+    // used to gate this is unreliable: Mesh::InitVertices pre-sizes
+    // m_pVertexNormals to 3*N zeros during load, so empty() never trips
+    // even when no real normals were parsed. Mesh::import_obj does not
+    // read `vn` lines anyway (only v/vt/f), so for OBJ this is the only
+    // way to get sane shading. For STL, the .stl-specific welding pass
+    // below recomputes per-vertex normals from scratch and overrides what
+    // we set here, so this is harmless there.
+    mesh.ComputeNormals();
 
     // Convert cgmesh data to Vecna vertex/index format
-    std::vector<Renderer::Vertex> vertices;
+    std::vector<cgre2::Vertex> vertices;
     std::vector<uint32_t> indices;
 
     // Build vertex array from mesh data
     vertices.resize(mesh.m_nVertices);
     for (unsigned int i = 0; i < mesh.m_nVertices; i++) {
-        Renderer::Vertex& v = vertices[i];
+        cgre2::Vertex& v = vertices[i];
         v.position[0] = mesh.m_pVertices[3 * i];
         v.position[1] = mesh.m_pVertices[3 * i + 1];
         v.position[2] = mesh.m_pVertices[3 * i + 2];
@@ -599,7 +720,7 @@ void Application::loadModel(const std::filesystem::path& path) {
 
         constexpr float WELD_SCALE = 1e5f;  // ~0.01mm precision
         std::unordered_map<std::array<int32_t, 3>, uint32_t, PositionHash> posMap;
-        std::vector<Renderer::Vertex> weldedVerts;
+        std::vector<cgre2::Vertex> weldedVerts;
         std::vector<uint32_t> remap(vertices.size());
 
         for (size_t i = 0; i < vertices.size(); i++) {
@@ -678,8 +799,8 @@ void Application::loadModel(const std::filesystem::path& path) {
     m_indexBuffer.reset();
     m_vertexBuffer.reset();
 
-    m_vertexBuffer = std::make_unique<Renderer::VertexBuffer>(*m_vulkanDevice, vertices);
-    m_indexBuffer = std::make_unique<Renderer::IndexBuffer>(*m_vulkanDevice, indices);
+    m_vertexBuffer = std::make_unique<cgre2::VertexBuffer>(*m_vulkanDevice, vertices);
+    m_indexBuffer = std::make_unique<cgre2::IndexBuffer>(*m_vulkanDevice, indices);
 
     // Transmit model info to UI for display (Story 5-3)
     if (auto* imgui = dynamic_cast<UI::ImGuiRenderer*>(m_uiRenderer.get())) {

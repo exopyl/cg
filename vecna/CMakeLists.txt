@@ -34,10 +34,16 @@ find_package(Vulkan REQUIRED)
 # Shader compilation
 include(ShaderCompilation)
 
-# Add cgmath/cgimg/cgmesh libraries (OBJ parser dependency)
+# Add cgmath/cgimg/cgmesh libraries (OBJ parser dependency).
+# tinygltf is already vendored at <repo>/extern/tinygltf and consumed
+# unconditionally by cgmesh/vmeshes.cpp, so no FetchContent is needed.
 add_subdirectory(../src/cgmath ${CMAKE_CURRENT_BINARY_DIR}/cgmath)
 add_subdirectory(../src/cgimg ${CMAKE_CURRENT_BINARY_DIR}/cgimg)
 add_subdirectory(../src/cgmesh ${CMAKE_CURRENT_BINARY_DIR}/cgmesh)
+
+# cgre2: Vulkan renderer (extracted from vecna's src/Renderer/). Needs to
+# come AFTER FetchDependencies above so the glfw/vma targets exist.
+add_subdirectory(../src/cgre2 ${CMAKE_CURRENT_BINARY_DIR}/cgre2)
 
 # cgmesh is legacy C++ code: relax conformance and suppress warnings
 if(MSVC)
@@ -49,7 +55,8 @@ endif()
 # Add shaders subdirectory
 add_subdirectory(shaders)
 
-# Collect source files
+# Collect source files. Renderer .cpp files now live in src/cgre2 and are
+# pulled in by linking the cgre2 library.
 set(VECNA_SOURCES
     src/main.cpp
     src/Core/Application.cpp
@@ -57,11 +64,6 @@ set(VECNA_SOURCES
     src/Core/GLFWContext.cpp
     src/Core/Logger.cpp
     src/Core/Window.cpp
-    src/Renderer/Buffer.cpp
-    src/Renderer/Pipeline.cpp
-    src/Renderer/Swapchain.cpp
-    src/Renderer/VulkanDevice.cpp
-    src/Renderer/VulkanInstance.cpp
     src/Scene/Trackball.cpp
     src/UI/ImGuiRenderer.cpp
 )
@@ -77,6 +79,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 # Link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
+    cgre2
     Vulkan::Vulkan
     glfw
     imgui

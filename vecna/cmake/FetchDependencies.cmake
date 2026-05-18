@@ -107,4 +107,33 @@ if(VECNA_BUILD_TESTS)
     FetchContent_MakeAvailable(googletest)
 endif()
 
+# SPIRV-Reflect - SPIR-V reflection for cgre2's ShaderModule.
+# Used to derive descriptor set layouts, push-constant ranges and vertex
+# input attributes from compiled shader bytecode instead of hand-mirroring
+# them in C++.
+message(STATUS "Fetching SPIRV-Reflect...")
+FetchContent_Declare(
+    spirv_reflect
+    GIT_REPOSITORY https://github.com/KhronosGroup/SPIRV-Reflect.git
+    GIT_TAG        vulkan-sdk-1.3.296.0
+    GIT_SHALLOW    TRUE
+)
+
+FetchContent_GetProperties(spirv_reflect)
+if(NOT spirv_reflect_POPULATED)
+    FetchContent_Populate(spirv_reflect)
+endif()
+
+# The repo ships a single-translation-unit static lib pattern: compile
+# spirv_reflect.c with a public include path covering the source dir.
+add_library(spirv_reflect STATIC ${spirv_reflect_SOURCE_DIR}/spirv_reflect.c)
+target_include_directories(spirv_reflect PUBLIC ${spirv_reflect_SOURCE_DIR})
+
+# Third-party code, silence warnings the way we do for imgui.
+if(MSVC)
+    target_compile_options(spirv_reflect PRIVATE /W0)
+else()
+    target_compile_options(spirv_reflect PRIVATE -w)
+endif()
+
 message(STATUS "All dependencies fetched successfully")

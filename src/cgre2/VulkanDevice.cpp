@@ -30,7 +30,7 @@
 #pragma GCC diagnostic pop
 #endif
 
-namespace Vecna::Renderer {
+namespace cgre2 {
 
 // Scoring constants for GPU selection
 static constexpr int DISCRETE_GPU_BONUS = 1000;
@@ -44,13 +44,13 @@ VulkanDevice::VulkanDevice(const VulkanInstance& instance, VkSurfaceKHR surface)
     : m_surface(surface) {
     pickPhysicalDevice(instance.getInstance());
     createLogicalDevice();
-    Core::Logger::info("Renderer", "Logical device created");
+    Vecna::Core::Logger::info("Renderer", "Logical device created");
 
     createAllocator(instance.getInstance());
-    Core::Logger::info("Renderer", "VMA allocator initialized");
+    Vecna::Core::Logger::info("Renderer", "VMA allocator initialized");
 
     createTransferCommandPool();
-    Core::Logger::info("Renderer", "Transfer command pool created");
+    Vecna::Core::Logger::info("Renderer", "Transfer command pool created");
 }
 
 VulkanDevice::~VulkanDevice() {
@@ -63,7 +63,7 @@ VulkanDevice::~VulkanDevice() {
     if (m_transferCommandPool != VK_NULL_HANDLE) {
         vkDestroyCommandPool(m_device, m_transferCommandPool, nullptr);
         m_transferCommandPool = VK_NULL_HANDLE;
-        Core::Logger::info("Renderer", "Transfer command pool destroyed");
+        Vecna::Core::Logger::info("Renderer", "Transfer command pool destroyed");
     }
 
     // IMPORTANT: Destroy VMA allocator BEFORE logical device
@@ -77,7 +77,7 @@ VulkanDevice::~VulkanDevice() {
         m_device = VK_NULL_HANDLE;
     }
 
-    Core::Logger::info("Renderer", "Vulkan device destroyed");
+    Vecna::Core::Logger::info("Renderer", "Vulkan device destroyed");
 }
 
 void VulkanDevice::pickPhysicalDevice(VkInstance instance) {
@@ -85,11 +85,11 @@ void VulkanDevice::pickPhysicalDevice(VkInstance instance) {
     vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
 
     if (deviceCount == 0) {
-        Core::Logger::error("Renderer", "Failed to find GPUs with Vulkan support");
+        Vecna::Core::Logger::error("Renderer", "Failed to find GPUs with Vulkan support");
         throw std::runtime_error("Failed to find GPUs with Vulkan support");
     }
 
-    Core::Logger::info("Renderer", "Found " + std::to_string(deviceCount) + " physical device(s)");
+    Vecna::Core::Logger::info("Renderer", "Found " + std::to_string(deviceCount) + " physical device(s)");
 
     std::vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
@@ -105,7 +105,7 @@ void VulkanDevice::pickPhysicalDevice(VkInstance instance) {
         VkPhysicalDeviceProperties properties;
         vkGetPhysicalDeviceProperties(device, &properties);
 
-        Core::Logger::info("Renderer", "GPU " + std::to_string(i) + ": " +
+        Vecna::Core::Logger::info("Renderer", "GPU " + std::to_string(i) + ": " +
                           std::string(properties.deviceName) + " (score: " + std::to_string(score) + ")");
 
         if (score > bestScore) {
@@ -115,7 +115,7 @@ void VulkanDevice::pickPhysicalDevice(VkInstance instance) {
     }
 
     if (bestDevice == VK_NULL_HANDLE || bestScore == 0) {
-        Core::Logger::error("Renderer", "Failed to find a suitable GPU");
+        Vecna::Core::Logger::error("Renderer", "Failed to find a suitable GPU");
         throw std::runtime_error("Failed to find a suitable GPU");
     }
 
@@ -124,7 +124,7 @@ void VulkanDevice::pickPhysicalDevice(VkInstance instance) {
     // Log selected GPU name
     VkPhysicalDeviceProperties properties;
     vkGetPhysicalDeviceProperties(m_physicalDevice, &properties);
-    Core::Logger::info("Renderer", "Selected GPU: " + std::string(properties.deviceName));
+    Vecna::Core::Logger::info("Renderer", "Selected GPU: " + std::string(properties.deviceName));
 
     // Store the queue family indices
     QueueFamilyIndices indices = findQueueFamilies(m_physicalDevice);
@@ -257,7 +257,7 @@ void VulkanDevice::createLogicalDevice() {
     createInfo.ppEnabledLayerNames = nullptr;
 
     if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) != VK_SUCCESS) {
-        Core::Logger::error("Renderer", "Failed to create logical device");
+        Vecna::Core::Logger::error("Renderer", "Failed to create logical device");
         throw std::runtime_error("Failed to create logical device");
     }
 
@@ -274,7 +274,7 @@ void VulkanDevice::createAllocator(VkInstance instance) {
     allocatorInfo.instance = instance;
 
     if (vmaCreateAllocator(&allocatorInfo, &m_allocator) != VK_SUCCESS) {
-        Core::Logger::error("Renderer", "Failed to create VMA allocator");
+        Vecna::Core::Logger::error("Renderer", "Failed to create VMA allocator");
         throw std::runtime_error("Failed to create VMA allocator");
     }
 }
@@ -294,9 +294,9 @@ void VulkanDevice::createTransferCommandPool() {
     poolInfo.queueFamilyIndex = m_graphicsQueueFamily;
 
     if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_transferCommandPool) != VK_SUCCESS) {
-        Core::Logger::error("Renderer", "Failed to create transfer command pool");
+        Vecna::Core::Logger::error("Renderer", "Failed to create transfer command pool");
         throw std::runtime_error("Failed to create transfer command pool");
     }
 }
 
-} // namespace Vecna::Renderer
+} // namespace cgre2

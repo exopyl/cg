@@ -15,9 +15,9 @@
 
 namespace Vecna::UI {
 
-ImGuiRenderer::ImGuiRenderer(Renderer::VulkanInstance& vulkanInstance,
-                             Renderer::VulkanDevice& vulkanDevice,
-                             Renderer::Swapchain& swapchain,
+ImGuiRenderer::ImGuiRenderer(cgre2::VulkanInstance& vulkanInstance,
+                             cgre2::VulkanDevice& vulkanDevice,
+                             cgre2::Swapchain& swapchain,
                              Core::Window& window)
     : m_vulkanInstance(vulkanInstance)
     , m_vulkanDevice(vulkanDevice)
@@ -158,6 +158,24 @@ void ImGuiRenderer::renderMenuBar() {
             if (ImGui::Checkbox("Flat shading", &m_flatShading)) {
                 if (m_onShadingModeChanged) {
                     m_onShadingModeChanged(m_flatShading);
+                }
+                ImGui::CloseCurrentPopup();
+            }
+            if (ImGui::Checkbox("Visualiser normales", &m_showNormals)) {
+                if (m_onShowNormalsChanged) {
+                    m_onShowNormalsChanged(m_showNormals);
+                }
+                ImGui::CloseCurrentPopup();
+            }
+            if (ImGui::Checkbox("Toon", &m_useToon)) {
+                if (m_onToonChanged) {
+                    m_onToonChanged(m_useToon);
+                }
+                ImGui::CloseCurrentPopup();
+            }
+            if (ImGui::Checkbox("Contour", &m_useOutline)) {
+                if (m_onOutlineChanged) {
+                    m_onOutlineChanged(m_useOutline);
                 }
                 ImGui::CloseCurrentPopup();
             }

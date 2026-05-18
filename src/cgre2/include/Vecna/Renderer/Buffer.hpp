@@ -9,7 +9,7 @@
 struct VmaAllocation_T;
 typedef VmaAllocation_T* VmaAllocation;
 
-namespace Vecna::Renderer {
+namespace cgre2 {
 
 class VulkanDevice;
 struct Vertex;
@@ -139,4 +139,4 @@ private:
     uint32_t m_indexCount = 0;
 };
 
-} // namespace Vecna::Renderer
+} // namespace cgre2
