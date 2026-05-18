@@ -4,8 +4,11 @@
 
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <functional>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 extern "C" {
@@ -242,31 +245,45 @@ Mesh* buildExtrudedMesh(const std::vector<std::array<float, 2>>& verts2D,
     auto* m = new Mesh();
 
     const unsigned int n = (unsigned int)verts2D.size();
-    const unsigned int nVertsTotal = 2 * n;
+    // Disjoint vertex blocks so cap normals don't get averaged with wall
+    // normals by Mesh::ComputeNormals. The VBO renderer feeds the per-vertex
+    // normal to the GPU for triangles (Mesh::BuildPolygonRenderData routes
+    // n==3 faces through the shared topology slots), so even GL_FLAT picks
+    // up the per-vertex average of the provoking vertex. Sharing cap and
+    // wall corners would tilt every cap-boundary normal toward the local
+    // wall direction and produce visibly non-uniform top/bottom shading.
+    //
+    //   [   0 ..  n-1] : bottom cap  (z = 0)
+    //   [   n .. 2n-1] : top    cap  (z = h)
+    //   [  2n .. 3n-1] : bottom wall (z = 0)
+    //   [  3n .. 4n-1] : top    wall (z = h)
+    const unsigned int kBotCap  = 0;
+    const unsigned int kTopCap  = n;
+    const unsigned int kBotWall = 2u * n;
+    const unsigned int kTopWall = 3u * n;
+    const unsigned int nVertsTotal = 4u * n;
     const unsigned int nFacesTotal =
         (unsigned int)(bottomTris.size() / 3) +     // bottom cap
         (unsigned int)(bottomTris.size() / 3) +     // top cap
         (unsigned int)(outlineEdges.size() * 2);    // walls (2 tris per edge)
 
-    // Vertex buffer: first n verts at z=0 (bottom), next n at z=height (top).
     std::vector<float> verts;
     verts.reserve(3 * nVertsTotal);
-    for (unsigned int i = 0; i < n; ++i)
+    auto pushBlock = [&](float z)
     {
-        const float x = verts2D[i][0];
-        const float y = invertY ? -verts2D[i][1] : verts2D[i][1];
-        verts.push_back(x);
-        verts.push_back(y);
-        verts.push_back(0.0f);
-    }
-    for (unsigned int i = 0; i < n; ++i)
-    {
-        const float x = verts2D[i][0];
-        const float y = invertY ? -verts2D[i][1] : verts2D[i][1];
-        verts.push_back(x);
-        verts.push_back(y);
-        verts.push_back(height);
-    }
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            const float x = verts2D[i][0];
+            const float y = invertY ? -verts2D[i][1] : verts2D[i][1];
+            verts.push_back(x);
+            verts.push_back(y);
+            verts.push_back(z);
+        }
+    };
+    pushBlock(0.0f);    // bottom cap
+    pushBlock(height);  // top cap
+    pushBlock(0.0f);    // bottom wall (duplicate of bottom cap)
+    pushBlock(height);  // top wall    (duplicate of top cap)
     m->SetVertices(nVertsTotal, verts.data());
 
     // Faces
@@ -276,86 +293,123 @@ Mesh* buildExtrudedMesh(const std::vector<std::array<float, 2>>& verts2D,
 
     unsigned int fi = 0;
 
-    // Bottom cap — normal points down. We use the original triangle winding
-    // for the TOP cap (above) and reverse it for the bottom; that way both
-    // caps end up facing outward when the SVG winding is CCW (default for
-    // filled shapes flipped by invertY).
+    auto worldY = [&](unsigned int i) -> float
+    {
+        return invertY ? -verts2D[i][1] : verts2D[i][1];
+    };
+
+    // Cap orientation. We can't assume a fixed glutess output winding:
+    // glutess preserves the contour's input orientation, and an SVG path
+    // from potrace (e.g. batman.svg, with a `scale(0.1, -0.1)` transform)
+    // can wind either way in the input plane. Combined with the optional
+    // Y flip below, a hard-coded (flipped / !flipped) policy gets the cap
+    // normals backwards for some files. Instead, compute each triangle's
+    // signed area in world XY and pick the winding that yields the desired
+    // ±Z normal per cap: bottom wants CW (normal -Z), top wants CCW (+Z).
+    auto emitCap = [&](unsigned int blockOff, bool wantCCW)
+    {
+        for (size_t t = 0; t + 2 < bottomTris.size(); t += 3)
+        {
+            const unsigned int i[3] = { bottomTris[t + 0],
+                                        bottomTris[t + 1],
+                                        bottomTris[t + 2] };
+            const float x0 = verts2D[i[0]][0], y0 = worldY(i[0]);
+            const float x1 = verts2D[i[1]][0], y1 = worldY(i[1]);
+            const float x2 = verts2D[i[2]][0], y2 = worldY(i[2]);
+            const bool worldCCW =
+                (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0) > 0.0f;
+
+            // Keep glutess order when it already matches the desired
+            // winding; otherwise swap i[1] and i[2] to reverse.
+            const unsigned int second = (worldCCW == wantCCW) ? i[1] : i[2];
+            const unsigned int third  = (worldCCW == wantCCW) ? i[2] : i[1];
+
+            Face* f = new Face();
+            f->SetNVertices(3);
+            f->SetVertex(0, blockOff + i[0]);
+            f->SetVertex(1, blockOff + second);
+            f->SetVertex(2, blockOff + third);
+            m->m_pFaces[fi++] = f;
+        }
+    };
+    emitCap(kBotCap, /*wantCCW=*/false);
+    emitCap(kTopCap, /*wantCCW=*/true);
+
+    // Side walls. For each contour edge we want a normal that points AWAY
+    // from the filled region — but the SVG contour can be wound either way
+    // (potrace with a scale(-Y) transform, hand-authored CW outlines, …),
+    // so we can't just hard-code a winding per invertY.
     //
-    // Note: when invertY is true, the Y flip reverses orientation, so the
-    // *original* glutess CCW triangles become CW in our world. We compensate
-    // accordingly.
-    const bool flipped = invertY;
+    // The cap tessellation knows the truth: an outline edge is a BOUNDARY
+    // edge of the cap mesh, contained in exactly one cap triangle whose
+    // third vertex lies on the filled side. We index every cap triangle's
+    // edges → third-vertex, then for each outline edge we compute which
+    // side of (a→b) the third vertex lies on and emit the wall winding
+    // whose cross product points to the opposite side.
+    auto edgeKey = [](unsigned int u, unsigned int v) -> std::uint64_t
+    {
+        if (u > v) std::swap(u, v);
+        return (std::uint64_t(u) << 32) | std::uint64_t(v);
+    };
+
+    std::unordered_map<std::uint64_t, unsigned int> edgeThird;
+    edgeThird.reserve(bottomTris.size());
     for (size_t t = 0; t + 2 < bottomTris.size(); t += 3)
     {
-        Face* f = new Face();
-        f->SetNVertices(3);
-        if (flipped)
-        {
-            f->SetVertex(0, bottomTris[t + 0]);
-            f->SetVertex(1, bottomTris[t + 2]);
-            f->SetVertex(2, bottomTris[t + 1]);
-        }
-        else
-        {
-            f->SetVertex(0, bottomTris[t + 0]);
-            f->SetVertex(1, bottomTris[t + 1]);
-            f->SetVertex(2, bottomTris[t + 2]);
-        }
-        m->m_pFaces[fi++] = f;
+        const unsigned int i[3] = { bottomTris[t + 0],
+                                    bottomTris[t + 1],
+                                    bottomTris[t + 2] };
+        for (int k = 0; k < 3; ++k)
+            edgeThird[edgeKey(i[k], i[(k + 1) % 3])] = i[(k + 2) % 3];
     }
 
-    // Top cap — opposite winding to face +Z.
-    for (size_t t = 0; t + 2 < bottomTris.size(); t += 3)
-    {
-        Face* f = new Face();
-        f->SetNVertices(3);
-        const unsigned int a = bottomTris[t + 0] + n;
-        const unsigned int b = bottomTris[t + 1] + n;
-        const unsigned int c = bottomTris[t + 2] + n;
-        if (flipped)
-        {
-            f->SetVertex(0, a);
-            f->SetVertex(1, b);
-            f->SetVertex(2, c);
-        }
-        else
-        {
-            f->SetVertex(0, a);
-            f->SetVertex(1, c);
-            f->SetVertex(2, b);
-        }
-        m->m_pFaces[fi++] = f;
-    }
-
-    // Side walls: each contour edge (a,b) becomes two triangles connecting
-    // the bottom edge to the top edge.
-    //   bottom:  b_a, b_b
-    //   top:     t_a = b_a + n, t_b = b_b + n
-    //   tri1: (b_a, b_b, t_b)
-    //   tri2: (b_a, t_b, t_a)
-    // Winding flipped when invertY for outward normals.
     for (auto [a, b] : outlineEdges)
     {
-        const unsigned int t_a = a + n;
-        const unsigned int t_b = b + n;
+        auto it = edgeThird.find(edgeKey(a, b));
+        if (it == edgeThird.end())
+            continue;                              // tessellation gap; skip wall
+        const unsigned int c = it->second;
+
+        const float ax = verts2D[a][0], ay = worldY(a);
+        const float bx = verts2D[b][0], by = worldY(b);
+        const float cx = verts2D[c][0], cy = worldY(c);
+
+        // crossZ = (b-a) × (c-a)._z, Y-up math: >0 means c is on the LEFT
+        // of (a→b). c is on the filled side, so outward is the opposite.
+        const float crossZ = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+        const bool outwardOnLeft = (crossZ < 0.0f);
+
+        const unsigned int b_a = kBotWall + a;
+        const unsigned int b_b = kBotWall + b;
+        const unsigned int t_a = kTopWall + a;
+        const unsigned int t_b = kTopWall + b;
 
         Face* f1 = new Face();
-        f1->SetNVertices(3);
         Face* f2 = new Face();
+        f1->SetNVertices(3);
         f2->SetNVertices(3);
-        if (flipped)
+
+        if (outwardOnLeft)
         {
-            f1->SetVertex(0, a); f1->SetVertex(1, t_b); f1->SetVertex(2, b);
-            f2->SetVertex(0, a); f2->SetVertex(1, t_a); f2->SetVertex(2, t_b);
+            // Winding (b_a, t_b, b_b) gives a normal rotated +90° CCW from
+            // the edge direction, i.e. to the LEFT of (a→b).
+            f1->SetVertex(0, b_a); f1->SetVertex(1, t_b); f1->SetVertex(2, b_b);
+            f2->SetVertex(0, b_a); f2->SetVertex(1, t_a); f2->SetVertex(2, t_b);
         }
         else
         {
-            f1->SetVertex(0, a); f1->SetVertex(1, b);   f1->SetVertex(2, t_b);
-            f2->SetVertex(0, a); f2->SetVertex(1, t_b); f2->SetVertex(2, t_a);
+            // Mirror winding gives the normal on the RIGHT of (a→b).
+            f1->SetVertex(0, b_a); f1->SetVertex(1, b_b); f1->SetVertex(2, t_b);
+            f2->SetVertex(0, b_a); f2->SetVertex(1, t_b); f2->SetVertex(2, t_a);
         }
         m->m_pFaces[fi++] = f1;
         m->m_pFaces[fi++] = f2;
     }
+
+    // If any walls were skipped (e.g. an outline edge wasn't adjacent to
+    // any cap triangle because of a glutess COMBINE split), shrink the
+    // face count so we never index uninitialized slots.
+    m->m_nFaces = fi;
 
     m->ComputeNormals();
     m->IncrementRevision();

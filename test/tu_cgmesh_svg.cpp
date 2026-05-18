@@ -31,7 +31,7 @@ TEST(TEST_cgmesh_svg, square_produces_extruded_solid)
     //   - 4 side quads = 8 triangles
     //   - total: 12 triangles
     //   - vertices: 4 bottom + 4 top = 8
-    EXPECT_EQ(m->GetNVertices(), 8u);
+    EXPECT_EQ(m->GetNVertices(), 16u);
     EXPECT_EQ(m->GetNFaces(),    12u);
 
     EXPECT_TRUE(m->IsTriangleMesh());
@@ -74,7 +74,7 @@ TEST(TEST_cgmesh_svg, triangle_produces_extruded_solid)
     //   - 3 side quads = 6 triangles
     //   - total: 8 triangles
     //   - vertices: 3 + 3 = 6
-    EXPECT_EQ(m->GetNVertices(), 6u);
+    EXPECT_EQ(m->GetNVertices(), 12u);
     EXPECT_EQ(m->GetNFaces(),    8u);
 }
 
