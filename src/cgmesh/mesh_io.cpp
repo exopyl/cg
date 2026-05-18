@@ -178,7 +178,7 @@ int Mesh::import_obj (const char *filename)
 		printf ("Unable to open %s", filename);
 		return -1;
 	}
-	
+
 	unsigned int nPoints=0;
 	unsigned int nTexCoords=0;
 	unsigned int nFaces=0;
@@ -186,6 +186,12 @@ int Mesh::import_obj (const char *filename)
 	mtlfile[0] = '\0';
 	while (fgets (buffer, BUFFER_SIZE, file))
 	{
+		// sscanf("%s") leaves prefix UNTOUCHED on input-failure (blank lines,
+		// trailing whitespace), and its return value is 0 (not -1) in that
+		// case — so the `!= -1` guard alone lets us fall through to strcmp
+		// with whatever stack/residual garbage was left in prefix. Initialize
+		// it on every iteration so strcmp sees a defined empty string.
+		prefix[0] = '\0';
 		if (sscanf(buffer, "%s", prefix) != -1)
 		{
 			if (strcmp(prefix, "mtllib") == 0)
@@ -217,6 +223,11 @@ int Mesh::import_obj (const char *filename)
 	int usemtl = -1;
 	while (fgets (buffer, BUFFER_SIZE, file))
 	{
+		// Same defense as in the counting pass above: blank/whitespace lines
+		// leave prefix unchanged and sscanf returns 0 (not -1), so without
+		// the reset the subsequent strcmp branches could trigger on stale
+		// data and start writing past the allocated vertex/face arrays.
+		prefix[0] = '\0';
 		if (sscanf(buffer, "%s", prefix) == -1)
 			continue;
 		if (strcmp (prefix, "usemtl") == 0)
