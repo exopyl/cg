@@ -9,7 +9,7 @@ set(ENABLE_COVERAGE Off CACHE BOOL "Enable coverage.")
 set(ENABLE_SINAIA Off CACHE BOOL "Enable sinaia.")
 set(ENABLE_CGNET_DEMO Off CACHE BOOL "Build the cgnet_demo executable.")
 set(ENABLE_OPENNURBS On CACHE BOOL "Enable openNURBS (.3dm) import.")
-set(EXTERN_OPENNURBS "${CMAKE_SOURCE_DIR}/extern/opennurbs-v8.27.26019.16021" CACHE PATH "Path to openNURBS directory.")
+set(EXTERN_OPENNURBS "" CACHE PATH "Path to openNURBS directory.")
 
 if (ENABLE_OPENNURBS)
     if (EXISTS "${EXTERN_OPENNURBS}/include")
@@ -35,6 +35,7 @@ if ( ENABLE_SINAIA )
 	add_subdirectory(src/cgre)
 endif ()
 
+enable_testing()
 add_subdirectory(test)
 
 

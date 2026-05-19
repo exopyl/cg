@@ -20,7 +20,7 @@ target_link_libraries(cgmesh cgimg)
 
 if (ENABLE_OPENNURBS)
     if (NOT EXTERN_OPENNURBS)
-        set(EXTERN_OPENNURBS "${CMAKE_CURRENT_SOURCE_DIR}/../../extern/opennurbs-v8.27.26019.16021")
+        message(FATAL_ERROR "ENABLE_OPENNURBS is ON but EXTERN_OPENNURBS is not defined.")
     endif()
     
     if (NOT EXISTS "${EXTERN_OPENNURBS}/include")
