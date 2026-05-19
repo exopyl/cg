@@ -42,4 +42,23 @@ if (ENABLE_OPENNURBS)
     endif()
 endif()
 
+if (ENABLE_OCCT)
+    if (NOT EXTERN_OCCT AND DEFINED ENV{EXTERN_OCCT})
+        set(EXTERN_OCCT "$ENV{EXTERN_OCCT}")
+    endif()
+
+    if (NOT EXTERN_OCCT)
+        message(FATAL_ERROR "ENABLE_OCCT is ON but EXTERN_OCCT is not defined.")
+    endif()
+
+    if (NOT EXISTS "${EXTERN_OCCT}/include")
+        message(FATAL_ERROR "ENABLE_OCCT is ON but EXTERN_OCCT/include does not exist at ${EXTERN_OCCT}/include")
+    endif()
+
+    target_compile_definitions(cgmesh PUBLIC CG_HAS_OCCT)
+    target_include_directories(cgmesh PUBLIC ${EXTERN_OCCT}/include)
+
+    # Note: OCCT libraries will be linked here once needed (TKernel, TKMath, etc.)
+endif()
+
 install(TARGETS cgmesh DESTINATION .)

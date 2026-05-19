@@ -9,11 +9,26 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE":  "Release",
         "ENABLE_OPENNURBS":  "ON",
+        "ENABLE_OCCT":       "ON",
         "ENABLE_SINAIA":     "OFF",
         "ENABLE_CGNET_DEMO": "OFF"
       }
     },
-
+    {
+      "name": "local-windows",
+      "displayName": "Local (Windows, VS 2022)",
+      "description": "Dev local: binaires OPENNURBS/OCCT/wx/googletest pris dans C:/home/dev/extern.",
+      "inherits": "_base",
+      "generator": "Visual Studio 17 2022",
+      "architecture": { "value": "x64", "strategy": "set" },
+      "cacheVariables": {
+        "ENABLE_SINAIA":     "ON",
+        "EXTERN_OPENNURBS":  "...",
+        "EXTERN_OCCT":       "...",
+        "EXTERN_WXWIDGETS":  "...",
+        "EXTERN_GOOGLETEST": "..."
+      }
+    },
     {
       "name": "ci-linux",
       "displayName": "CI (Linux, Ninja)",
@@ -21,18 +36,22 @@
       "inherits": "_base",
       "generator": "Ninja",
       "cacheVariables": {
-        "EXTERN_OPENNURBS": "${sourceDir}/.deps/cg_binaries/opennurbs-v8.27.26019.16021"
+        "EXTERN_OPENNURBS": "${sourceDir}/.deps/cg_binaries/opennurbs-v8.27.26019.16021",
+        "EXTERN_OCCT": "${sourceDir}/.deps/cg_binaries/OCCT-8_0_0"
       }
     }
   ],
-
   "buildPresets": [
+    {
+      "name": "local-windows",
+      "configurePreset": "local-windows",
+      "configuration": "Release"
+    },
     {
       "name": "ci-linux",
       "configurePreset": "ci-linux"
     }
   ],
-
   "testPresets": [
     {
       "name": "ci-linux",

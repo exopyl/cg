@@ -24,6 +24,19 @@ if (ENABLE_OPENNURBS)
     endif()
 endif()
 
+set(ENABLE_OCCT Off CACHE BOOL "Enable OCCT support.")
+set(EXTERN_OCCT "" CACHE PATH "Path to OCCT directory.")
+
+if (ENABLE_OCCT)
+    if (NOT EXTERN_OCCT AND DEFINED ENV{EXTERN_OCCT})
+        set(EXTERN_OCCT "$ENV{EXTERN_OCCT}")
+    endif()
+
+    if (EXISTS "${EXTERN_OCCT}/include")
+        include_directories("${EXTERN_OCCT}/include")
+    endif()
+endif()
+
 if ( ENABLE_COVERAGE )
 	set(CMAKE_C_FLAGS "-g -O0 -fprofile-instr-generate -fcoverage-mapping")
 	set(CMAKE_CXX_FLAGS "-g -O0 -Wall -W -Wshadow -Wunused-variable -Wunused-parameter -Wunused-function -Wunused -Wno-system-headers -Wno-deprecated -Woverloaded-virtual -Wwrite-strings -Wno-pointer-to-int-cast -fprofile-instr-generate -fcoverage-mapping")
