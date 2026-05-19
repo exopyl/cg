@@ -19,6 +19,10 @@ target_include_directories(cgmesh PUBLIC ${PROJECT_SOURCE_DIR})
 target_link_libraries(cgmesh cgimg)
 
 if (ENABLE_OPENNURBS)
+    if (NOT EXTERN_OPENNURBS AND DEFINED ENV{EXTERN_OPENNURBS})
+        set(EXTERN_OPENNURBS "$ENV{EXTERN_OPENNURBS}")
+    endif()
+
     if (NOT EXTERN_OPENNURBS)
         message(FATAL_ERROR "ENABLE_OPENNURBS is ON but EXTERN_OPENNURBS is not defined.")
     endif()

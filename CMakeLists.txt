@@ -12,6 +12,10 @@ set(ENABLE_OPENNURBS On CACHE BOOL "Enable openNURBS (.3dm) import.")
 set(EXTERN_OPENNURBS "" CACHE PATH "Path to openNURBS directory.")
 
 if (ENABLE_OPENNURBS)
+    if (NOT EXTERN_OPENNURBS AND DEFINED ENV{EXTERN_OPENNURBS})
+        set(EXTERN_OPENNURBS "$ENV{EXTERN_OPENNURBS}")
+    endif()
+
     if (EXISTS "${EXTERN_OPENNURBS}/include")
         include_directories("${EXTERN_OPENNURBS}/include")
         # Some opennurbs headers expect android_uuid/uuid.h to be findable
