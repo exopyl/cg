@@ -1,0 +1,44 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "_base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":  "Release",
+        "ENABLE_OPENNURBS":  "ON",
+        "ENABLE_SINAIA":     "OFF",
+        "ENABLE_CGNET_DEMO": "OFF"
+      }
+    },
+
+    {
+      "name": "ci-linux",
+      "displayName": "CI (Linux, Ninja)",
+      "description": "Workflow GitHub Actions Linux: binaires depuis cg_binaries cloné dans .deps/.",
+      "inherits": "_base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "EXTERN_OPENNURBS": "${sourceDir}/.deps/cg_binaries/opennurbs-v8.27.26019.16021"
+      }
+    }
+  ],
+
+  "buildPresets": [
+    {
+      "name": "ci-linux",
+      "configurePreset": "ci-linux"
+    }
+  ],
+
+  "testPresets": [
+    {
+      "name": "ci-linux",
+      "configurePreset": "ci-linux",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error" }
+    }
+  ]
+}
