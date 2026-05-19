@@ -1,8 +1,8 @@
 #include "geodesic_wrapper.h"
 
-#include "geodesic_algorithm_exact.h"
-#include "geodesic_algorithm_dijkstra.h"
-#include "geodesic_algorithm_subdivision.h"
+#include "geodesic/geodesic_algorithm_exact.h"
+#include "geodesic/geodesic_algorithm_dijkstra.h"
+#include "geodesic/geodesic_algorithm_subdivision.h"
 
 GeodesicWrapper::GeodesicWrapper ()
 {

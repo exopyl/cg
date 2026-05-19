@@ -4,7 +4,7 @@
 // wrapper for the code found here :
 // https://code.google.com/p/geodesic/
 //
-#include "geodesic_algorithm_base.h"
+#include "geodesic/geodesic_algorithm_base.h"
 
 class GeodesicWrapper
 {

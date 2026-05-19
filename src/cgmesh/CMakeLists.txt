@@ -15,7 +15,7 @@ endif (UNIX)
 
 add_library(cgmesh STATIC ${HEADER_FILES} ${SRC_FILES} ${GLUTESS_HEADER_FILES} ${GLUTESS_SRC_FILES})
 source_group("glutess" FILES ${GLUTESS_HEADER_FILES} ${GLUTESS_SRC_FILES})
-target_include_directories(cgmesh PUBLIC ${PROJECT_SOURCE_DIR})
+target_include_directories(cgmesh PUBLIC ${PROJECT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../../extern)
 target_link_libraries(cgmesh cgimg)
 
 if (ENABLE_OPENNURBS)
