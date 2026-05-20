@@ -15,6 +15,8 @@ set(SHADERS
     ${SHADER_SOURCE_DIR}/toon.frag
     ${SHADER_SOURCE_DIR}/outline.vert
     ${SHADER_SOURCE_DIR}/outline.frag
+    ${SHADER_SOURCE_DIR}/pbr.vert
+    ${SHADER_SOURCE_DIR}/pbr.frag
 )
 
 # Compile each shader

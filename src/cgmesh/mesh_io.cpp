@@ -46,6 +46,8 @@ int Mesh::load (const char *filename)
 		res = import_ply (filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".u3d") == 0)
 		res = import_u3d (filename);
+	else if (strcmp (filename+(strlen(filename)-4), ".glb") == 0)
+		res = import_glb (filename);
 
 	// check coherency
 	if (m_nTextureCoordinates == 0)

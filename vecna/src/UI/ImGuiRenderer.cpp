@@ -179,6 +179,12 @@ void ImGuiRenderer::renderMenuBar() {
                 }
                 ImGui::CloseCurrentPopup();
             }
+            if (ImGui::Checkbox("PBR (Cook-Torrance)", &m_usePbr)) {
+                if (m_onPbrChanged) {
+                    m_onPbrChanged(m_usePbr);
+                }
+                ImGui::CloseCurrentPopup();
+            }
             ImGui::EndMenu();
         }
         ImGui::EndMainMenuBar();

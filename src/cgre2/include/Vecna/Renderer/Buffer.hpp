@@ -79,11 +79,17 @@ private:
 /// Wraps Buffer with vertex-specific functionality.
 class VertexBuffer {
 public:
-    /// Create a vertex buffer from vertex data.
-    /// @param device The Vulkan device for allocation.
-    /// @param vertices Vector of vertices to upload.
-    /// @throws std::runtime_error if creation fails.
+    /// Create a vertex buffer from typed vertex data (default Vertex layout).
     VertexBuffer(VulkanDevice& device, const std::vector<Vertex>& vertices);
+
+    /// Create a vertex buffer from raw bytes — caller picks the vertex
+    /// format. Used by the PBR path which uploads VertexPBR (or any
+    /// alternative layout) without dragging its type into this header.
+    /// @param data       pointer to vertex bytes, packed (no padding)
+    /// @param bytes      total size of `data` in bytes
+    /// @param vertexCount number of vertices encoded by `data`
+    VertexBuffer(VulkanDevice& device, const void* data,
+                 VkDeviceSize bytes, uint32_t vertexCount);
 
     // Use default move operations (Buffer is movable)
     VertexBuffer(VertexBuffer&&) noexcept = default;

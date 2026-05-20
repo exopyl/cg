@@ -231,6 +231,18 @@ VertexBuffer::VertexBuffer(VulkanDevice& device, const std::vector<Vertex>& vert
     m_buffer.upload(vertices.data(), m_buffer.getSize());
 }
 
+VertexBuffer::VertexBuffer(VulkanDevice& device, const void* data,
+                           VkDeviceSize bytes, uint32_t vertexCount)
+    : m_buffer(device, bytes, BufferType::Vertex)
+    , m_vertexCount(vertexCount) {
+
+    Vecna::Core::Logger::info("Renderer", "Creating vertex buffer (raw, " +
+                      std::to_string(bytes) + " bytes, " +
+                      std::to_string(vertexCount) + " vertices)");
+
+    m_buffer.upload(data, bytes);
+}
+
 // IndexBuffer implementation
 
 IndexBuffer::IndexBuffer(VulkanDevice& device, const std::vector<uint32_t>& indices)

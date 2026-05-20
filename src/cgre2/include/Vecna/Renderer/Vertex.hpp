@@ -34,17 +34,36 @@ struct Vertex {
     [[nodiscard]] static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions();
 };
 
-/// PBR-ready vertex: adds UV (texture sampling) and a tangent (with w
-/// storing handedness in the standard ±1 convention) so the fragment
-/// shader can reconstruct the bitangent and sample normal maps.
+/// PBR-ready vertex: adds two UV sets (texture sampling), a tangent (with
+/// w storing handedness in the standard ±1 convention) so the fragment
+/// shader can reconstruct the bitangent and sample normal maps, and a
+/// second UV set (glTF TEXCOORD_1, often used for AO / lightmap on a
+/// separate parameterization).
 struct VertexPBR {
     float position[3];
     float normal[3];
     float color[3];
-    float uv[2];
+    float uv[2];        // TEXCOORD_0
     float tangent[4];   // .xyz tangent, .w handedness sign
+    float uv1[2];       // TEXCOORD_1 (zero when source has only one set)
 
     [[nodiscard]] static VertexLayout getLayout();
+
+    /// Promote a basic Vertex (position+normal+color only) to a PBR vertex
+    /// by injecting harmless defaults for UV and tangent. Used when feeding
+    /// OBJ/STL meshes through the PBR pipeline: those formats don't carry
+    /// UVs or tangents, and the default material has no maps anyway, so
+    /// the placeholders never affect shading.
+    static VertexPBR fromBasic(const Vertex& v) noexcept {
+        VertexPBR p{};
+        p.position[0] = v.position[0]; p.position[1] = v.position[1]; p.position[2] = v.position[2];
+        p.normal[0]   = v.normal[0];   p.normal[1]   = v.normal[1];   p.normal[2]   = v.normal[2];
+        p.color[0]    = v.color[0];    p.color[1]    = v.color[1];    p.color[2]    = v.color[2];
+        p.uv[0]       = 0.0f; p.uv[1]  = 0.0f;
+        p.tangent[0]  = 1.0f; p.tangent[1] = 0.0f; p.tangent[2] = 0.0f; p.tangent[3] = 1.0f;
+        p.uv1[0]      = 0.0f; p.uv1[1] = 0.0f;
+        return p;
+    }
 };
 
 } // namespace cgre2

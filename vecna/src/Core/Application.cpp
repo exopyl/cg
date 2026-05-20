@@ -2,10 +2,16 @@
 #include "Vecna/Core/FileDialog.hpp"
 #include "Vecna/Core/Window.hpp"
 #include "Vecna/Core/Logger.hpp"
+#include "Vecna/Loader/GltfPbrLoader.hpp"
 #include "Vecna/Renderer/Buffer.hpp"
+#include "Vecna/Renderer/DescriptorLayout.hpp"
+#include "Vecna/Renderer/DescriptorPool.hpp"
 #include "Vecna/Renderer/Pipeline.hpp"
 #include "Vecna/Renderer/Shader.hpp"
 #include "Vecna/Renderer/SpecializationConstants.hpp"
+#include "Vecna/Renderer/Texture.hpp"
+#include "Vecna/Renderer/UniformBuffer.hpp"
+#include "Vecna/Renderer/UniformLayouts.hpp"
 #include "Vecna/Renderer/Vertex.hpp"
 #include "Vecna/Renderer/Swapchain.hpp"
 #include "Vecna/Renderer/VulkanDevice.hpp"
@@ -93,10 +99,15 @@ Application::Application() {
     m_swapchain = std::make_unique<cgre2::Swapchain>(*m_vulkanDevice, m_surface, *m_window);
 
     // ShaderManager outlives every Pipeline we'll create from it.
-    m_shaderManager = std::make_unique<cgre2::ShaderManager>(*m_vulkanDevice);
+    m_shaderManager  = std::make_unique<cgre2::ShaderManager>(*m_vulkanDevice);
+
+    // PBR plumbing (M1+M2 bricks) — lives across pipeline rebuilds.
+    m_textureManager = std::make_unique<cgre2::TextureManager>(*m_vulkanDevice);
+    m_descriptorPool = std::make_unique<cgre2::DescriptorPool>(*m_vulkanDevice);
 
     // Create graphics pipeline (requires device and render pass from swapchain)
     createPipeline();
+    createPbrPipeline();
 
     // Create cube test geometry (Story 2-4)
     createCube();
@@ -123,6 +134,7 @@ Application::Application() {
     imguiRenderer->setOnShowNormalsChanged([this](bool show) { onShowNormalsChanged(show); });
     imguiRenderer->setOnToonChanged([this](bool toon) { onToonChanged(toon); });
     imguiRenderer->setOnOutlineChanged([this](bool outline) { onOutlineChanged(outline); });
+    imguiRenderer->setOnPbrChanged([this](bool pbr) { onPbrChanged(pbr); });
     m_uiRenderer = std::move(imguiRenderer);
     m_uiRenderer->init();
 
@@ -144,10 +156,36 @@ Application::~Application() {
     // Geometry buffers → Pipeline → Swapchain → VulkanDevice → Surface → VulkanInstance → Window (GLFW)
     // IMPORTANT: Geometry buffers must be destroyed BEFORE VulkanDevice (require VMA allocator)
     // IMPORTANT: Pipeline must be destroyed BEFORE Swapchain (references render pass)
+    // The PBR scene's per-primitive buffers + per-material UBOs are
+    // VMA-allocated and reference textures from m_textureManager. They
+    // must be freed BEFORE the device, the pool, and the texture
+    // manager. PBRScene is a value member that would otherwise auto-
+    // destruct AFTER this destructor body (and thus after the device).
+    m_pbrScene = {};
+
     m_indexBuffer.reset();
     m_vertexBuffer.reset();
+    m_pbrVertexBuffer.reset();
     m_outlinePipeline.reset();
     m_pipeline.reset();
+    m_pbrPipeline.reset();
+
+    // PBR resources — descriptor sets are freed implicitly with the
+    // pool; the layouts and UBOs are owned by this object.
+    if (m_sceneSetLayout != VK_NULL_HANDLE && m_vulkanDevice) {
+        vkDestroyDescriptorSetLayout(m_vulkanDevice->getDevice(), m_sceneSetLayout, nullptr);
+        m_sceneSetLayout = VK_NULL_HANDLE;
+    }
+    if (m_materialSetLayout != VK_NULL_HANDLE && m_vulkanDevice) {
+        vkDestroyDescriptorSetLayout(m_vulkanDevice->getDevice(), m_materialSetLayout, nullptr);
+        m_materialSetLayout = VK_NULL_HANDLE;
+    }
+    m_defaultMaterialUbo.reset();
+    m_lightsUbo.reset();
+    m_cameraUbo.reset();
+    m_descriptorPool.reset();
+    m_textureManager.reset();
+
     // ShaderManager destroys VkShaderModule handles; must come AFTER any
     // pipeline that references them but BEFORE the device that owns them.
     m_shaderManager.reset();
@@ -250,6 +288,187 @@ void Application::createPipeline() {
     m_outlinePipeline = std::make_unique<cgre2::Pipeline>(*m_vulkanDevice, outlineInfo);
 }
 
+void Application::createPbrPipeline() {
+    std::string shaderDir = findShaderDirectory();
+    if (shaderDir.empty()) {
+        throw std::runtime_error("Failed to find shader directory");
+    }
+
+    auto& vert = m_shaderManager->load(shaderDir + "/pbr.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    auto& frag = m_shaderManager->load(shaderDir + "/pbr.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    // ---- Descriptor set layouts ----------------------------------------
+    // Set 0 (scene): binding 0 = CameraUBO (used in both stages),
+    //                binding 1 = LightsUBO (fragment only).
+    if (m_sceneSetLayout == VK_NULL_HANDLE) {
+        std::array<VkDescriptorSetLayoutBinding, 2> sceneBindings{};
+        sceneBindings[0].binding         = 0;
+        sceneBindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        sceneBindings[0].descriptorCount = 1;
+        sceneBindings[0].stageFlags      = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+        sceneBindings[1].binding         = 1;
+        sceneBindings[1].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        sceneBindings[1].descriptorCount = 1;
+        sceneBindings[1].stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        VkDescriptorSetLayoutCreateInfo info{};
+        info.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        info.bindingCount = static_cast<uint32_t>(sceneBindings.size());
+        info.pBindings    = sceneBindings.data();
+        if (vkCreateDescriptorSetLayout(m_vulkanDevice->getDevice(), &info, nullptr,
+                                        &m_sceneSetLayout) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create scene descriptor set layout");
+        }
+    }
+
+    // Set 1 (material): 0 = MaterialUBO, 1..5 = samplers (albedo, normal,
+    // metallic-roughness, AO, emissive).
+    if (m_materialSetLayout == VK_NULL_HANDLE) {
+        std::array<VkDescriptorSetLayoutBinding, 6> matBindings{};
+        matBindings[0].binding         = 0;
+        matBindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        matBindings[0].descriptorCount = 1;
+        matBindings[0].stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+        for (uint32_t i = 1; i <= 5; ++i) {
+            matBindings[i].binding         = i;
+            matBindings[i].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            matBindings[i].descriptorCount = 1;
+            matBindings[i].stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+        }
+        VkDescriptorSetLayoutCreateInfo info{};
+        info.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        info.bindingCount = static_cast<uint32_t>(matBindings.size());
+        info.pBindings    = matBindings.data();
+        if (vkCreateDescriptorSetLayout(m_vulkanDevice->getDevice(), &info, nullptr,
+                                        &m_materialSetLayout) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create material descriptor set layout");
+        }
+    }
+
+    // ---- UBOs (created once; their contents are updated per-frame for
+    //           camera, once for lights/material) -------------------------
+    if (!m_cameraUbo) {
+        m_cameraUbo         = std::make_unique<cgre2::UniformBuffer>(*m_vulkanDevice, sizeof(cgre2::CameraUBO));
+        m_lightsUbo         = std::make_unique<cgre2::UniformBuffer>(*m_vulkanDevice, sizeof(cgre2::LightsUBO));
+        m_defaultMaterialUbo = std::make_unique<cgre2::UniformBuffer>(*m_vulkanDevice, sizeof(cgre2::MaterialUBO));
+
+        // One static sun for now, hemispherical-ish ambient until IBL.
+        cgre2::LightsUBO lights{};
+        const float inv = 1.0f / std::sqrt(3.0f);
+        lights.sun.direction[0] = inv;
+        lights.sun.direction[1] = inv;
+        lights.sun.direction[2] = inv;
+        lights.sun.intensity    = 3.0f;
+        lights.sun.color[0]     = 1.0f;
+        lights.sun.color[1]     = 1.0f;
+        lights.sun.color[2]     = 1.0f;
+        lights.ambientColor[0]  = 0.03f;
+        lights.ambientColor[1]  = 0.03f;
+        lights.ambientColor[2]  = 0.03f;
+        m_lightsUbo->update(&lights, sizeof(lights));
+
+        const cgre2::MaterialUBO defaultMat = cgre2::makeDefaultMaterial();
+        m_defaultMaterialUbo->update(&defaultMat, sizeof(defaultMat));
+    }
+
+    // ---- Descriptor sets (allocated once from the pool) ----------------
+    if (m_sceneSet == VK_NULL_HANDLE) {
+        m_sceneSet = m_descriptorPool->allocate(m_sceneSetLayout);
+
+        VkDescriptorBufferInfo camInfo    = m_cameraUbo->descriptorInfo();
+        VkDescriptorBufferInfo lightsInfo = m_lightsUbo->descriptorInfo();
+
+        std::array<VkWriteDescriptorSet, 2> writes{};
+        writes[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[0].dstSet          = m_sceneSet;
+        writes[0].dstBinding      = 0;
+        writes[0].descriptorCount = 1;
+        writes[0].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writes[0].pBufferInfo     = &camInfo;
+        writes[1].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[1].dstSet          = m_sceneSet;
+        writes[1].dstBinding      = 1;
+        writes[1].descriptorCount = 1;
+        writes[1].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writes[1].pBufferInfo     = &lightsInfo;
+        vkUpdateDescriptorSets(m_vulkanDevice->getDevice(),
+                               static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+    }
+
+    if (m_defaultMaterialSet == VK_NULL_HANDLE) {
+        m_defaultMaterialSet = m_descriptorPool->allocate(m_materialSetLayout);
+
+        VkDescriptorBufferInfo matInfo = m_defaultMaterialUbo->descriptorInfo();
+        // 5 sampler bindings filled with TextureManager fallback 1×1
+        // textures so the shader's unconditional sampler reads are valid
+        // even when MAT_HAS_* flags are unset.
+        const std::array<VkDescriptorImageInfo, 5> samplers = {
+            m_textureManager->getWhitePixel().descriptorInfo(),   // albedo
+            m_textureManager->getNormalPixel().descriptorInfo(),  // normal
+            m_textureManager->getWhitePixel().descriptorInfo(),   // MR
+            m_textureManager->getWhitePixel().descriptorInfo(),   // AO
+            m_textureManager->getBlackPixel().descriptorInfo(),   // emissive
+        };
+        std::array<VkWriteDescriptorSet, 6> writes{};
+        writes[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[0].dstSet          = m_defaultMaterialSet;
+        writes[0].dstBinding      = 0;
+        writes[0].descriptorCount = 1;
+        writes[0].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writes[0].pBufferInfo     = &matInfo;
+        for (uint32_t i = 0; i < 5; ++i) {
+            writes[1 + i].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[1 + i].dstSet          = m_defaultMaterialSet;
+            writes[1 + i].dstBinding      = 1 + i;
+            writes[1 + i].descriptorCount = 1;
+            writes[1 + i].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writes[1 + i].pImageInfo      = &samplers[i];
+        }
+        vkUpdateDescriptorSets(m_vulkanDevice->getDevice(),
+                               static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+    }
+
+    // ---- Pipeline ------------------------------------------------------
+    // PBR push constants: just the model matrix (camera lives in the UBO,
+    // so the per-draw push payload stays small).
+    VkPushConstantRange modelRange{};
+    modelRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    modelRange.offset     = 0;
+    modelRange.size       = sizeof(float) * 16;
+
+    static const cgre2::VertexLayout pbrLayout = cgre2::VertexPBR::getLayout();
+
+    cgre2::PipelineCreateInfo info{};
+    info.renderPass            = m_swapchain->getRenderPass();
+    info.vertexShader          = &vert;
+    info.fragmentShader        = &frag;
+    info.vertexLayout          = &pbrLayout;
+    info.descriptorSetLayouts  = { m_sceneSetLayout, m_materialSetLayout };
+    info.pushConstantRanges    = { modelRange };
+
+    m_pbrPipeline = std::make_unique<cgre2::Pipeline>(*m_vulkanDevice, info);
+}
+
+void Application::updateCameraUbo(float aspect) {
+    if (!m_cameraUbo) return;
+
+    Matrix4f view     = m_camera->GetViewMatrix();
+    Matrix4f proj     = m_camera->GetProjectionMatrix(aspect);
+    Matrix4f viewProj = proj * view;
+
+    cgre2::CameraUBO ubo{};
+    std::copy(view.data(),     view.data() + 16,     ubo.view);
+    std::copy(proj.data(),     proj.data() + 16,     ubo.proj);
+    std::copy(viewProj.data(), viewProj.data() + 16, ubo.viewProj);
+    const auto pos = m_camera->GetPosition();
+    ubo.cameraPos[0] = pos[0];
+    ubo.cameraPos[1] = pos[1];
+    ubo.cameraPos[2] = pos[2];
+    ubo.time         = 0.0f;
+
+    m_cameraUbo->update(&ubo, sizeof(ubo));
+}
+
 void Application::createCube() {
     // Cube geometry with flat shading (24 vertices, 4 per face)
     // Each face has distinct normals and colors for visibility
@@ -303,7 +522,16 @@ void Application::createCube() {
     };
 
     m_vertexBuffer = std::make_unique<cgre2::VertexBuffer>(*m_vulkanDevice, vertices);
-    m_indexBuffer = std::make_unique<cgre2::IndexBuffer>(*m_vulkanDevice, indices);
+    m_indexBuffer  = std::make_unique<cgre2::IndexBuffer>(*m_vulkanDevice, indices);
+
+    std::vector<cgre2::VertexPBR> pbrVertices(vertices.size());
+    std::transform(vertices.begin(), vertices.end(), pbrVertices.begin(),
+                   cgre2::VertexPBR::fromBasic);
+    m_pbrVertexBuffer = std::make_unique<cgre2::VertexBuffer>(
+        *m_vulkanDevice,
+        pbrVertices.data(),
+        static_cast<VkDeviceSize>(pbrVertices.size() * sizeof(cgre2::VertexPBR)),
+        static_cast<uint32_t>(pbrVertices.size()));
 
     Logger::info("Core", "Cube buffers created (vertex: " +
                  std::to_string(m_vertexBuffer->getSize()) + " bytes, index: " +
@@ -361,6 +589,13 @@ void Application::run() {
             Logger::info("Core", m_useOutline ? "Outline on" : "Outline off");
         }
 
+        // PBR toggle — same story: pipelines already coexist, we just
+        // route draws to a different one. No recreation cost.
+        if (m_pendingPbrChange) {
+            m_pendingPbrChange = false;
+            Logger::info("Core", m_usePbr ? "PBR on" : "PBR off");
+        }
+
         drawFrame();
     }
 
@@ -378,8 +613,10 @@ void Application::drawFrame() {
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         // Recreate swapchain and pipeline (render pass may have changed)
         m_pipeline.reset();
+        m_pbrPipeline.reset();
         m_swapchain->recreate();
         createPipeline();
+        createPbrPipeline();
         m_uiRenderer->onSwapchainRecreated();
         auto newExtent = m_swapchain->getExtent();
         m_trackball->setDimensions(static_cast<int>(newExtent.width), static_cast<int>(newExtent.height));
@@ -403,8 +640,10 @@ void Application::drawFrame() {
         m_window->resetResizedFlag();
         // Recreate swapchain and pipeline (render pass may have changed)
         m_pipeline.reset();
+        m_pbrPipeline.reset();
         m_swapchain->recreate();
         createPipeline();
+        createPbrPipeline();
         m_uiRenderer->onSwapchainRecreated();
         auto newExtent = m_swapchain->getExtent();
         m_trackball->setDimensions(static_cast<int>(newExtent.width), static_cast<int>(newExtent.height));
@@ -461,14 +700,7 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t im
         throw std::runtime_error("Geometry buffers not initialized");
     }
 
-    // Vertex + index buffers — same data for both the outline pass (if
-    // enabled) and the main mesh pass, only the pipeline differs.
-    VkBuffer vertexBuffers[] = {m_vertexBuffer->getBuffer()};
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer->getBuffer(), 0, VK_INDEX_TYPE_UINT32);
-
-    // Calculate MVP matrix using TMatrix4 (column-major, Vulkan-ready)
+    // Calculate model matrix — shared between PBR and legacy paths.
     Matrix4f model;
     std::copy(m_trackball->getTransform(), m_trackball->getTransform() + 16, model.data());
 
@@ -478,30 +710,99 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t im
 
     Matrix4f mvp = projection * view * model;
 
-    cgre2::PushConstants pushConstants{};
-    std::copy(mvp.data(), mvp.data() + 16, pushConstants.mvp);
-    std::copy(model.data(), model.data() + 16, pushConstants.model);
+    if (m_usePbr && m_pbrPipeline) {
+        // ---- PBR path ---------------------------------------------------
+        // Refresh the camera UBO every frame (cheap memcpy into mapped
+        // memory) so trackball rotations / pan / zoom take effect.
+        updateCameraUbo(aspect);
 
-    // Outline pass FIRST when enabled. The inflated back faces fill the
-    // body of the mesh with black; the main pass below overdraws them
-    // wherever the actual front faces project — what's left visible is
-    // the silhouette band.
-    if (m_useOutline && m_outlinePipeline) {
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          m_outlinePipeline->getPipeline());
-        vkCmdPushConstants(commandBuffer, m_outlinePipeline->getPipelineLayout(),
+                          m_pbrPipeline->getPipeline());
+
+        // Scene set (camera + lights) is bound once per frame.
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                m_pbrPipeline->getPipelineLayout(),
+                                0, 1, &m_sceneSet,
+                                0, nullptr);
+        // For GLB scenes we keep raw glTF vertex positions in the GPU
+        // buffer (no per-vertex translation), so the model matrix has
+        // to fold in the bbox-centering translation that the legacy
+        // path applies upstream via mesh.translate(). modelCentered =
+        // trackball * translate(-sceneCenter). For the fallback path
+        // (cube / OBJ / STL) sceneCenter stays zero so this collapses
+        // back to the trackball alone.
+        Matrix4f modelCentered = model;
+        if (m_pbrSceneCenter[0] != 0.0f ||
+            m_pbrSceneCenter[1] != 0.0f ||
+            m_pbrSceneCenter[2] != 0.0f) {
+            Matrix4f T;  // identity
+            T.at(0, 3) = -m_pbrSceneCenter[0];
+            T.at(1, 3) = -m_pbrSceneCenter[1];
+            T.at(2, 3) = -m_pbrSceneCenter[2];
+            modelCentered = model * T;
+        }
+
+        vkCmdPushConstants(commandBuffer, m_pbrPipeline->getPipelineLayout(),
                            VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           sizeof(float) * 16, modelCentered.data());
+
+        if (!m_pbrScene.meshes.empty()) {
+            // Scene-loaded GLB: one draw per primitive, with its own
+            // material descriptor set.
+            for (const auto& prim : m_pbrScene.meshes) {
+                const auto& mat = m_pbrScene.materials[prim.materialIndex];
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        m_pbrPipeline->getPipelineLayout(),
+                                        1, 1, &mat.descriptorSet,
+                                        0, nullptr);
+
+                VkBuffer vbs[] = { prim.vertexBuffer->getBuffer() };
+                VkDeviceSize off[] = { 0 };
+                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vbs, off);
+                vkCmdBindIndexBuffer(commandBuffer, prim.indexBuffer->getBuffer(),
+                                     0, VK_INDEX_TYPE_UINT32);
+                vkCmdDrawIndexed(commandBuffer, prim.indexBuffer->getIndexCount(), 1, 0, 0, 0);
+            }
+        } else if (m_pbrVertexBuffer) {
+            // Fallback path (cube / OBJ / STL via default material).
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    m_pbrPipeline->getPipelineLayout(),
+                                    1, 1, &m_defaultMaterialSet,
+                                    0, nullptr);
+            VkBuffer pbrVbs[]  = { m_pbrVertexBuffer->getBuffer() };
+            VkDeviceSize off[] = { 0 };
+            vkCmdBindVertexBuffers(commandBuffer, 0, 1, pbrVbs, off);
+            vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer->getBuffer(),
+                                 0, VK_INDEX_TYPE_UINT32);
+            vkCmdDrawIndexed(commandBuffer, m_indexBuffer->getIndexCount(), 1, 0, 0, 0);
+        }
+    } else {
+        // ---- Legacy path (basic / normals / toon + optional outline) ---
+        VkBuffer vertexBuffers[] = { m_vertexBuffer->getBuffer() };
+        VkDeviceSize offsets[]   = { 0 };
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+        vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer->getBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+        cgre2::PushConstants pushConstants{};
+        std::copy(mvp.data(),   mvp.data()   + 16, pushConstants.mvp);
+        std::copy(model.data(), model.data() + 16, pushConstants.model);
+
+        if (m_useOutline && m_outlinePipeline) {
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              m_outlinePipeline->getPipeline());
+            vkCmdPushConstants(commandBuffer, m_outlinePipeline->getPipelineLayout(),
+                               VK_SHADER_STAGE_VERTEX_BIT, 0,
+                               sizeof(cgre2::PushConstants), &pushConstants);
+            vkCmdDrawIndexed(commandBuffer, m_indexBuffer->getIndexCount(), 1, 0, 0, 0);
+        }
+
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          m_pipeline->getPipeline());
+        vkCmdPushConstants(commandBuffer, m_pipeline->getPipelineLayout(),
+                           VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                            sizeof(cgre2::PushConstants), &pushConstants);
         vkCmdDrawIndexed(commandBuffer, m_indexBuffer->getIndexCount(), 1, 0, 0, 0);
     }
-
-    // Main mesh pass.
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      m_pipeline->getPipeline());
-    vkCmdPushConstants(commandBuffer, m_pipeline->getPipelineLayout(),
-                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                       sizeof(cgre2::PushConstants), &pushConstants);
-    vkCmdDrawIndexed(commandBuffer, m_indexBuffer->getIndexCount(), 1, 0, 0, 0);
 
     // Render UI overlay via abstraction (Story 5-1)
     m_uiRenderer->beginFrame();
@@ -549,6 +850,11 @@ void Application::onToonChanged(bool toon) {
 void Application::onOutlineChanged(bool outline) {
     m_useOutline = outline;
     m_pendingOutlineChange = true;
+}
+
+void Application::onPbrChanged(bool pbr) {
+    m_usePbr = pbr;
+    m_pendingPbrChange = true;
 }
 
 void Application::openFileDialog() {
@@ -798,9 +1104,44 @@ void Application::loadModel(const std::filesystem::path& path) {
     // Destroy old buffers and create new ones
     m_indexBuffer.reset();
     m_vertexBuffer.reset();
+    m_pbrVertexBuffer.reset();
 
     m_vertexBuffer = std::make_unique<cgre2::VertexBuffer>(*m_vulkanDevice, vertices);
-    m_indexBuffer = std::make_unique<cgre2::IndexBuffer>(*m_vulkanDevice, indices);
+    m_indexBuffer  = std::make_unique<cgre2::IndexBuffer>(*m_vulkanDevice, indices);
+
+    std::vector<cgre2::VertexPBR> pbrVertices(vertices.size());
+    std::transform(vertices.begin(), vertices.end(), pbrVertices.begin(),
+                   cgre2::VertexPBR::fromBasic);
+    m_pbrVertexBuffer = std::make_unique<cgre2::VertexBuffer>(
+        *m_vulkanDevice,
+        pbrVertices.data(),
+        static_cast<VkDeviceSize>(pbrVertices.size() * sizeof(cgre2::VertexPBR)),
+        static_cast<uint32_t>(pbrVertices.size()));
+
+    // For .glb / .gltf, build a richer PBR scene on the side: real
+    // material factors, embedded textures, per-primitive descriptor
+    // sets. The legacy m_pbrVertexBuffer built above stays as the
+    // fallback the PBR pipeline uses when m_pbrScene is empty (and
+    // when the user toggles non-PBR shaders).
+    m_pbrScene = {};   // release previous scene's GPU resources
+    m_pbrSceneCenter[0] = m_pbrSceneCenter[1] = m_pbrSceneCenter[2] = 0.0f;
+    std::string extLower = path.extension().string();
+    std::transform(extLower.begin(), extLower.end(), extLower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (extLower == ".glb" || extLower == ".gltf") {
+        if (!Loader::loadGltfAsPBR(path, *m_vulkanDevice, *m_textureManager,
+                                   *m_descriptorPool, m_materialSetLayout,
+                                   m_pbrScene)) {
+            Logger::warn("Loader", "GLB PBR load failed; falling back to default material");
+            m_pbrScene = {};
+        } else {
+            // Match the cgmesh path's centering: rotate around the
+            // scene's own centroid rather than the world origin.
+            m_pbrSceneCenter[0] = 0.5f * (m_pbrScene.bboxMin[0] + m_pbrScene.bboxMax[0]);
+            m_pbrSceneCenter[1] = 0.5f * (m_pbrScene.bboxMin[1] + m_pbrScene.bboxMax[1]);
+            m_pbrSceneCenter[2] = 0.5f * (m_pbrScene.bboxMin[2] + m_pbrScene.bboxMax[2]);
+        }
+    }
 
     // Transmit model info to UI for display (Story 5-3)
     if (auto* imgui = dynamic_cast<UI::ImGuiRenderer*>(m_uiRenderer.get())) {

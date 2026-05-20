@@ -64,6 +64,7 @@ set(VECNA_SOURCES
     src/Core/GLFWContext.cpp
     src/Core/Logger.cpp
     src/Core/Window.cpp
+    src/Loader/GltfPbrLoader.cpp
     src/Scene/Trackball.cpp
     src/UI/ImGuiRenderer.cpp
 )

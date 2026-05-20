@@ -9,10 +9,13 @@ set(headers
     include/Vecna/Renderer.hpp
     include/Vecna/Renderer/Buffer.hpp
     include/Vecna/Renderer/DescriptorLayout.hpp
+    include/Vecna/Renderer/DescriptorPool.hpp
     include/Vecna/Renderer/Pipeline.hpp
     include/Vecna/Renderer/Shader.hpp
     include/Vecna/Renderer/SpecializationConstants.hpp
     include/Vecna/Renderer/Swapchain.hpp
+    include/Vecna/Renderer/Texture.hpp
+    include/Vecna/Renderer/UniformBuffer.hpp
     include/Vecna/Renderer/Vertex.hpp
     include/Vecna/Renderer/VulkanDevice.hpp
     include/Vecna/Renderer/VulkanInstance.hpp
@@ -21,9 +24,13 @@ set(headers
 set(sources
     Buffer.cpp
     DescriptorLayout.cpp
+    DescriptorPool.cpp
     Pipeline.cpp
     Shader.cpp
     Swapchain.cpp
+    Texture.cpp
+    TextureManager.cpp
+    UniformBuffer.cpp
     Vertex.cpp
     VulkanDevice.cpp
     VulkanInstance.cpp
@@ -40,6 +47,11 @@ target_include_directories(cgre2 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 # logger and replaces Core::Window& in Swapchain with a window-agnostic
 # size source (callback or framebuffer dimensions passed in).
 target_include_directories(cgre2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../vecna/include)
+
+# Vendored stb_image (used by TextureManager). Same path the rest of the
+# project uses. PRIVATE — only the .cpp needs it; the public Texture.hpp
+# stays stb-free.
+target_include_directories(cgre2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../extern)
 
 # Public Vulkan dep — headers expose VkInstance/VkDevice/... types directly.
 target_link_libraries(cgre2

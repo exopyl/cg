@@ -56,6 +56,7 @@ VertexLayout VertexPBR::getLayout() {
         makeAttr(2, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(VertexPBR, color)),
         makeAttr(3, VK_FORMAT_R32G32_SFLOAT,       offsetof(VertexPBR, uv)),
         makeAttr(4, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(VertexPBR, tangent)),
+        makeAttr(5, VK_FORMAT_R32G32_SFLOAT,       offsetof(VertexPBR, uv1)),
     };
     return layout;
 }
