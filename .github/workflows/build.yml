@@ -34,10 +34,17 @@ jobs:
           mv cgbinaries-*-linux-x86_64/* cg_binaries/
           rm -rf cgbinaries-*-linux-x86_64 cgbinaries-*-linux-x86_64.zip
 
-      - name: Install Ninja + GTest
+      - name: Install Ninja + GTest + OCCT
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build libgtest-dev libgmock-dev
+          sudo apt-get install -y \
+            ninja-build \
+            libgtest-dev libgmock-dev \
+            libocct-foundation-dev \
+            libocct-modeling-data-dev \
+            libocct-modeling-algorithms-dev \
+            libocct-data-exchange-dev \
+            libtbb-dev
 
       - name: Configure
         run: cmake --preset ci-linux

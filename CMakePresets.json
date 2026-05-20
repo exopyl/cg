@@ -32,12 +32,11 @@
     {
       "name": "ci-linux",
       "displayName": "CI (Linux, Ninja)",
-      "description": "Workflow GitHub Actions Linux: binaires depuis cg_binaries cloné dans .deps/.",
+      "description": "Workflow GitHub Actions Linux: OpenNURBS depuis cg_binaries dans .deps/, OCCT via apt (find_package).",
       "inherits": "_base",
       "generator": "Ninja",
       "cacheVariables": {
-        "EXTERN_OPENNURBS": "${sourceDir}/.deps/cg_binaries/opennurbs-v8.27.26019.16021",
-        "EXTERN_OCCT": "${sourceDir}/.deps/cg_binaries/OCCT-8_0_0"
+        "EXTERN_OPENNURBS": "${sourceDir}/.deps/cg_binaries/opennurbs-v8.27.26019.16021"
       }
     }
   ],

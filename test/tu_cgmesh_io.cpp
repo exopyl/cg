@@ -263,6 +263,140 @@ TEST(TEST_cgmesh_io, glb_fox_non_indexed)
     delete pVMeshes;
 }
 
+#ifdef CG_HAS_OCCT
+
+// STEP import via OpenCASCADE. The 4-pin plug is a small mechanical part
+// with rounded barrels and chamfers — typical mix of planar + cylindrical
+// faces, plenty of TopoDS_Face entities. The importer emits one Mesh per
+// face, so the mesh count is determined by the STEP topology (stable
+// across OCCT versions). Per-mesh vertex / triangle counts depend on
+// BRepMesh_IncrementalMesh's deflection settings and may drift slightly
+// with OCCT version bumps, so we only assert non-degeneracy there.
+TEST(TEST_cgmesh_io, step_4pinplug)
+{
+    VMeshes* pVMeshes = new VMeshes();
+
+    bool res = pVMeshes->load("./test/data/4pinplug.stp");
+    ASSERT_TRUE(res);
+
+    auto& meshes = pVMeshes->GetMeshes();
+    ASSERT_GT(meshes.size(), 0u);
+
+    // Aggregate sanity: the assembled scene must carry geometry.
+    EXPECT_GT(pVMeshes->GetNVertices(), 0u);
+    EXPECT_GT(pVMeshes->GetNFaces(),    0u);
+
+    // No empty Mesh in the list (each TopoDS_Face had a non-trivial
+    // triangulation).
+    for (Mesh* m : meshes) {
+        ASSERT_NE(m, nullptr);
+        EXPECT_GT(m->GetNVertices(), 0u);
+        EXPECT_GT(m->GetNFaces(),    0u);
+    }
+
+    // Bounding box has positive extent in at least one axis — catches
+    // the silent-failure mode where the importer returns Meshes filled
+    // with zeros.
+    BoundingBox bbox;
+    for (Mesh* m : meshes) {
+        m->computebbox();
+        bbox.AddBoundingBox(m->bbox());
+    }
+    float diag = bbox.GetDiagonalLength();
+    EXPECT_GT(diag, 0.0f);
+
+    delete pVMeshes;
+}
+
+// IGES import via OpenCASCADE.
+//
+// The three sample files in test/data/ (ex1.iges, ex2.iges, ex3.iges)
+// turn out to be WIREFRAME IGES — they hold only type-106 copious-data
+// curves plus subfigures/groups (ex1 is even labelled "INTEGRATED
+// CIRCUIT SEMICUSTOM CELL", i.e. a 2D PCB layout). They contain zero
+// TopoDS_Face entities after OCCT translation, so there is nothing to
+// tessellate.
+//
+// The contract this test pins down is therefore: when given a
+// wireframe-only IGES, import_iges parses successfully, finds no
+// triangulatable surface, and refuses gracefully (returns false from
+// VMeshes::load) instead of crashing or producing empty Meshes that
+// would later surprise the renderer / bbox code.
+//
+// Replace these files with surface-bearing IGES (types 128/143/144)
+// when one becomes available and flip the expectations to ASSERT_TRUE
+// + non-zero mesh counts.
+class TEST_cgmesh_io_iges_wireframe : public ::testing::TestWithParam<std::string> {};
+
+TEST_P(TEST_cgmesh_io_iges_wireframe, load_returns_false_no_meshes)
+{
+    const std::string filename = std::string("./test/data/") + GetParam();
+
+    VMeshes* pVMeshes = new VMeshes();
+
+    // load returns false: VMeshes::import_iges parsed the file and
+    // ran the IGES → TopoDS_Shape transfer, but tessellateAndAppend
+    // found no TopAbs_FACE and emitted zero Meshes.
+    EXPECT_FALSE(pVMeshes->load(filename.c_str()))
+        << "wireframe IGES " << filename << " should not produce meshes";
+
+    // And no leftover Meshes were pushed onto the vector before the
+    // refusal — important so callers that ignore the bool return still
+    // see a clean state.
+    EXPECT_EQ(pVMeshes->GetMeshes().size(), 0u);
+
+    delete pVMeshes;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    Examples,
+    TEST_cgmesh_io_iges_wireframe,
+    ::testing::Values(std::string("ex1.iges"),
+                      std::string("ex2.iges"),
+                      std::string("ex3.iges")),
+    [](const ::testing::TestParamInfo<std::string>& info) {
+        // Strip extension so the gtest-generated name is `ex1` / `ex2` / `ex3`.
+        std::string s = info.param;
+        const size_t dot = s.find_last_of('.');
+        if (dot != std::string::npos) s.resize(dot);
+        return s;
+    }
+);
+
+// Surface-bearing IGES: Milled_Front_X_Carriage.iges is a real B-Rep
+// solid (entity types 128 NURBS surface, 186 manifold solid, 510 face,
+// 514 shell). It should hit the same happy path as step_4pinplug —
+// non-zero meshes, non-degenerate bbox.
+TEST(TEST_cgmesh_io, iges_milled_front_x_carriage)
+{
+    VMeshes* pVMeshes = new VMeshes();
+
+    ASSERT_TRUE(pVMeshes->load("./test/data/Milled_Front_X_Carriage.iges"));
+
+    auto& meshes = pVMeshes->GetMeshes();
+    ASSERT_GT(meshes.size(), 0u);
+
+    EXPECT_GT(pVMeshes->GetNVertices(), 0u);
+    EXPECT_GT(pVMeshes->GetNFaces(),    0u);
+
+    for (Mesh* m : meshes) {
+        ASSERT_NE(m, nullptr);
+        EXPECT_GT(m->GetNVertices(), 0u);
+        EXPECT_GT(m->GetNFaces(),    0u);
+    }
+
+    BoundingBox bbox;
+    for (Mesh* m : meshes) {
+        m->computebbox();
+        bbox.AddBoundingBox(m->bbox());
+    }
+    EXPECT_GT(bbox.GetDiagonalLength(), 0.0f);
+
+    delete pVMeshes;
+}
+
+#endif // CG_HAS_OCCT
+
 #ifdef CG_HAS_OPENNURBS
 
 // Parameterized over every .3dm asset in test/data/3dm. Each parameter

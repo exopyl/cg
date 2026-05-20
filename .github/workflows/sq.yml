@@ -17,7 +17,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
-        run: sudo apt-get install build-essential clang llvm libgtest-dev googletest gcovr
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential clang llvm libgtest-dev googletest gcovr \
+            libocct-foundation-dev \
+            libocct-modeling-data-dev \
+            libocct-modeling-algorithms-dev \
+            libocct-data-exchange-dev \
+            libtbb-dev
       - name: Versions
         run: |
           echo && cmake --version
@@ -109,7 +117,8 @@ jobs:
             -DCMAKE_CXX_COMPILER=g++ \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DENABLE_OPENNURBS=On \
-            -DEXTERN_OPENNURBS="$GITHUB_WORKSPACE/.deps/cg_binaries/opennurbs-v8.27.26019.16021"
+            -DEXTERN_OPENNURBS="$GITHUB_WORKSPACE/.deps/cg_binaries/opennurbs-v8.27.26019.16021" \
+            -DENABLE_OCCT=On
           ./build-wrapper-linux-x86/build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build build/
 
       - name: Download sonar-scanner

@@ -72,6 +72,17 @@ if(WIN32)
                 "${EXTERN_OPENNURBS}/lib/vc14x_x64/OpenNURBS.dll"
                 "$<TARGET_FILE_DIR:${APP_TARGET}>")
     endif()
+
+    # OCCT ships ~48 interdependent DLLs (TKernel + dependencies). Copy
+    # the whole bin/ folder so STEP loading via Mesh::load → import_step
+    # finds TKernel.dll etc. at runtime.
+    if (ENABLE_OCCT)
+        add_custom_command(TARGET ${APP_TARGET} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${EXTERN_OCCT}/bin"
+                "$<TARGET_FILE_DIR:${APP_TARGET}>"
+                COMMENT "Copying OCCT DLLs to $<TARGET_FILE_DIR:${APP_TARGET}>")
+    endif()
 endif()
 
 if (UNIX AND ENABLE_OPENNURBS)
