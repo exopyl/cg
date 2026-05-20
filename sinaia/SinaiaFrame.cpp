@@ -1118,12 +1118,14 @@ void MyFrame::OnTabAlignment(wxCommandEvent &evt)
 //
 void MyFrame::OnOpen(wxCommandEvent& WXUNUSED(event))
 {
-    wxString wildcard = wxT("All supported formats|*.obj;*.stl;*.3ds;*.3dm;*.gltf;*.glb|")
+    wxString wildcard = wxT("All supported formats|*.obj;*.stl;*.3ds;*.3dm;*.gltf;*.glb;*.step;*.stp;*.iges;*.igs|")
                         wxT("Wavefront OBJ (*.obj)|*.obj|")
                         wxT("STL (*.stl)|*.stl|")
                         wxT("3D Studio (*.3ds)|*.3ds|")
                         wxT("Rhino 3DM (*.3dm)|*.3dm|")
                         wxT("glTF (*.gltf;*.glb)|*.gltf;*.glb|")
+                        wxT("STEP (*.step;*.stp)|*.step;*.stp|")
+                        wxT("IGES (*.iges;*.igs)|*.iges;*.igs|")
                         wxT("All files (*.*)|*.*");
 
     wxFileDialog fd(this, wxT("Open 3D Model"), wxEmptyString, wxEmptyString, wildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST);

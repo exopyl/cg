@@ -32,8 +32,10 @@ if (ENABLE_OCCT)
         set(EXTERN_OCCT "$ENV{EXTERN_OCCT}")
     endif()
 
-    if (EXISTS "${EXTERN_OCCT}/include")
+    if (WIN32)
         include_directories("${EXTERN_OCCT}/include")
+    else()
+        include_directories("${EXTERN_OCCT}/include/opencascade")
     endif()
 endif()
 

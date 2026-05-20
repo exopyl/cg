@@ -46,6 +46,18 @@ if (WIN32 AND ENABLE_OPENNURBS)
     )
 endif()
 
+# OCCT ships ~48 interdependent DLLs; copy the whole bin/ folder next to
+# the test exe so STEP-loading tests can resolve TKernel.dll & friends
+# without polluting PATH. copy_directory is idempotent; cost is one-time.
+if (WIN32 AND ENABLE_OCCT)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${EXTERN_OCCT}/bin"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        COMMENT "Copying OCCT DLLs to $<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    )
+endif()
+
 if (WIN32 AND EXTERN_GOOGLETEST)
     add_subdirectory(${EXTERN_GOOGLETEST} gtest)
     target_link_libraries(${PROJECT_NAME} GTest::gtest_main)

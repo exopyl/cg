@@ -107,6 +107,14 @@ bool VMeshes::load(const char* filename)
 	if (ext == "glb")
 		res = import_gltf(filename);
 
+	// step / stp (via OpenCASCADE, gated on CG_HAS_OCCT)
+	if (ext == "step" || ext == "stp")
+		res = import_step(filename);
+
+	// iges / igs (via OpenCASCADE, gated on CG_HAS_OCCT)
+	if (ext == "iges" || ext == "igs")
+		res = import_iges(filename);
+
 	if (res)
 		return res;
 
