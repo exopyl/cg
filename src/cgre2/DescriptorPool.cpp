@@ -1,13 +1,13 @@
-#include "Vecna/Renderer/DescriptorPool.hpp"
-#include "Vecna/Renderer/VulkanDevice.hpp"
-#include "Vecna/Core/Logger.hpp"
+#include "cgre2/DescriptorPool.hpp"
+#include "cgre2/DeviceContext.hpp"
+#include "cgre2/Logger.hpp"
 
 #include <array>
 #include <stdexcept>
 
 namespace cgre2 {
 
-DescriptorPool::DescriptorPool(VulkanDevice& device, const Sizes& sizes)
+DescriptorPool::DescriptorPool(DeviceContext& device, const Sizes& sizes)
     : m_device(device), m_sizes(sizes)
 {
     createNewVkPool();

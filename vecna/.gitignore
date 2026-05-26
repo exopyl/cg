@@ -22,7 +22,7 @@ _deps/
 
 # Executables
 *.exe
-vecna
+/vecna
 
 # Object files
 *.o

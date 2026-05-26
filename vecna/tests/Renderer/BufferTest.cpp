@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "Vecna/Renderer/Buffer.hpp"
-#include "Vecna/Renderer/Pipeline.hpp"
+#include "cgre2/Buffer.hpp"
+#include "cgre2/Pipeline.hpp"
 
 namespace Vecna::Renderer {
 

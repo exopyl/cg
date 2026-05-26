@@ -1,5 +1,5 @@
 #include "Vecna/Core/FileDialog.hpp"
-#include "Vecna/Core/Logger.hpp"
+#include "cgre2/Logger.hpp"
 
 #include <portable-file-dialogs.h>
 #include <sstream>
@@ -29,17 +29,17 @@ std::optional<std::filesystem::path> FileDialog::openFile(
         pfdFilters.push_back(pattern);
     }
 
-    Logger::debug("Core", "Opening file dialog: " + title);
+    cgre2::Logger::debug("Core", "Opening file dialog: " + title);
 
     auto selection = pfd::open_file(title, ".", pfdFilters).result();
 
     if (selection.empty()) {
-        Logger::debug("Core", "File dialog cancelled");
+        cgre2::Logger::debug("Core", "File dialog cancelled");
         return std::nullopt;
     }
 
     std::filesystem::path path(selection[0]);
-    Logger::info("Core", "File selected: " + path.filename().string());
+    cgre2::Logger::info("Core", "File selected: " + path.filename().string());
 
     return path;
 }

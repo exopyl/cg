@@ -8,7 +8,7 @@
 namespace cgre2 {
 
 class ShaderModule;
-class VulkanDevice;
+class DeviceContext;
 
 /// Owns the VkDescriptorSetLayout handles + VkPushConstantRange list
 /// derived from one or more ShaderModule reflections, merging bindings
@@ -26,7 +26,7 @@ class DescriptorLayouts {
 public:
     /// Reflect-and-build from the given shaders. The vector may contain
     /// any combination of stages; nulls are silently ignored.
-    DescriptorLayouts(VulkanDevice& device,
+    DescriptorLayouts(DeviceContext& device,
                       const std::vector<const ShaderModule*>& shaders);
     ~DescriptorLayouts();
 
@@ -50,7 +50,7 @@ private:
     void build(const std::vector<const ShaderModule*>& shaders);
     void destroy();
 
-    VulkanDevice&                      m_device;
+    DeviceContext&                      m_device;
     std::vector<VkDescriptorSetLayout> m_setLayouts;
     std::vector<VkPushConstantRange>   m_pushConstants;
 };

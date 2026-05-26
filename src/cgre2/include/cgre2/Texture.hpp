@@ -14,7 +14,7 @@ typedef VmaAllocation_T* VmaAllocation;
 
 namespace cgre2 {
 
-class VulkanDevice;
+class DeviceContext;
 
 /// Parameters for an in-memory Texture creation. Pixels must be a packed
 /// RGBA8 buffer of `width * height * 4` bytes. The format hint picks
@@ -42,7 +42,7 @@ public:
     /// Create a 2D texture and upload `info.pixels`. If `info.pixels` is
     /// null, the image is created empty (still in SHADER_READ_ONLY layout
     /// after the ctor) — useful for render targets, attachments, etc.
-    Texture(VulkanDevice& device, const TextureInfo& info);
+    Texture(DeviceContext& device, const TextureInfo& info);
     ~Texture();
 
     Texture(const Texture&) = delete;
@@ -69,7 +69,7 @@ private:
     void createView();
     void createSampler(const TextureInfo& info);
 
-    VulkanDevice&  m_device;
+    DeviceContext&  m_device;
     VkImage        m_image      = VK_NULL_HANDLE;
     VmaAllocation  m_allocation = nullptr;
     VkImageView    m_imageView  = VK_NULL_HANDLE;
@@ -92,7 +92,7 @@ private:
 /// shading code branch-free.
 class TextureManager {
 public:
-    explicit TextureManager(VulkanDevice& device);
+    explicit TextureManager(DeviceContext& device);
     ~TextureManager() = default;
 
     TextureManager(const TextureManager&) = delete;
@@ -120,7 +120,7 @@ public:
 private:
     Texture& makeSinglePixel(const std::string& key, uint8_t r, uint8_t g, uint8_t b, VkFormat fmt);
 
-    VulkanDevice& m_device;
+    DeviceContext& m_device;
     std::unordered_map<std::string, std::unique_ptr<Texture>> m_cache;
 };
 

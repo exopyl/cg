@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "Vecna/Renderer/Pipeline.hpp"
+#include "cgre2/Pipeline.hpp"
 
 namespace Vecna::Renderer {
 

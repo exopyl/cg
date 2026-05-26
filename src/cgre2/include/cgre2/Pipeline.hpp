@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Vecna/Renderer/Vertex.hpp"
+#include "cgre2/Vertex.hpp"
 
 #include <vulkan/vulkan.h>
 
@@ -11,7 +11,7 @@ namespace cgre2 {
 
 class ShaderModule;
 class SpecializationConstants;
-class VulkanDevice;
+class DeviceContext;
 
 /// Size of a 4x4 matrix in floats — kept for the canonical PushConstants
 /// layout below, which most clients will use as-is.
@@ -67,7 +67,7 @@ class Pipeline {
 public:
     /// Build a graphics pipeline from the given info. The info struct can
     /// be discarded as soon as this ctor returns.
-    Pipeline(VulkanDevice& device, const PipelineCreateInfo& info);
+    Pipeline(DeviceContext& device, const PipelineCreateInfo& info);
     ~Pipeline();
 
     Pipeline(const Pipeline&) = delete;
@@ -82,7 +82,7 @@ private:
     void createPipelineLayout(const PipelineCreateInfo& info);
     void createGraphicsPipeline(const PipelineCreateInfo& info);
 
-    VulkanDevice&    m_device;
+    DeviceContext&    m_device;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     VkPipeline       m_pipeline       = VK_NULL_HANDLE;
 };

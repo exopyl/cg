@@ -11,7 +11,7 @@ typedef VmaAllocation_T* VmaAllocation;
 
 namespace cgre2 {
 
-class VulkanDevice;
+class DeviceContext;
 struct Vertex;
 
 /// Type of buffer for GPU memory allocation.
@@ -25,7 +25,7 @@ enum class BufferType {
 /// Handles buffer creation, memory allocation, and cleanup.
 /// Supports staging buffer transfers for GPU-only buffers.
 ///
-/// @note IMPORTANT: Buffers must be destroyed BEFORE VulkanDevice.
+/// @note IMPORTANT: Buffers must be destroyed BEFORE DeviceContext.
 /// They require VMA allocator for cleanup.
 class Buffer {
 public:
@@ -34,7 +34,7 @@ public:
     /// @param size Size in bytes.
     /// @param type Buffer type (Vertex, Index, or Staging).
     /// @throws std::runtime_error if buffer creation fails.
-    Buffer(VulkanDevice& device, VkDeviceSize size, BufferType type);
+    Buffer(DeviceContext& device, VkDeviceSize size, BufferType type);
     ~Buffer();
 
     // Non-copyable
@@ -68,7 +68,7 @@ private:
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, bool gpuOnly);
     void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
-    VulkanDevice* m_device = nullptr;
+    DeviceContext* m_device = nullptr;
     VkBuffer m_buffer = VK_NULL_HANDLE;
     VmaAllocation m_allocation = nullptr;
     VkDeviceSize m_size = 0;
@@ -80,7 +80,7 @@ private:
 class VertexBuffer {
 public:
     /// Create a vertex buffer from typed vertex data (default Vertex layout).
-    VertexBuffer(VulkanDevice& device, const std::vector<Vertex>& vertices);
+    VertexBuffer(DeviceContext& device, const std::vector<Vertex>& vertices);
 
     /// Create a vertex buffer from raw bytes — caller picks the vertex
     /// format. Used by the PBR path which uploads VertexPBR (or any
@@ -88,7 +88,7 @@ public:
     /// @param data       pointer to vertex bytes, packed (no padding)
     /// @param bytes      total size of `data` in bytes
     /// @param vertexCount number of vertices encoded by `data`
-    VertexBuffer(VulkanDevice& device, const void* data,
+    VertexBuffer(DeviceContext& device, const void* data,
                  VkDeviceSize bytes, uint32_t vertexCount);
 
     // Use default move operations (Buffer is movable)
@@ -121,7 +121,7 @@ public:
     /// @param device The Vulkan device for allocation.
     /// @param indices Vector of uint32_t indices to upload.
     /// @throws std::runtime_error if creation fails.
-    IndexBuffer(VulkanDevice& device, const std::vector<uint32_t>& indices);
+    IndexBuffer(DeviceContext& device, const std::vector<uint32_t>& indices);
 
     // Use default move operations (Buffer is movable)
     IndexBuffer(IndexBuffer&&) noexcept = default;

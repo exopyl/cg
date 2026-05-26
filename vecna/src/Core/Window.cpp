@@ -1,6 +1,6 @@
 #include "Vecna/Core/Window.hpp"
 #include "Vecna/Core/GLFWContext.hpp"
-#include "Vecna/Core/Logger.hpp"
+#include "cgre2/Logger.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -43,18 +43,18 @@ Window::Window(const Config& config)
 
     if (m_window == nullptr) {
         GLFWContext::instance().release();
-        Logger::error("Core", "Failed to create GLFW window");
+        cgre2::Logger::error("Core", "Failed to create GLFW window");
         throw std::runtime_error("Failed to create GLFW window");
     }
 
-    Logger::info("Core", "Window created: " + std::to_string(m_width) + "x" + std::to_string(m_height));
+    cgre2::Logger::info("Core", "Window created: " + std::to_string(m_width) + "x" + std::to_string(m_height));
 }
 
 Window::~Window() {
     if (m_window != nullptr) {
         glfwDestroyWindow(m_window);
         m_window = nullptr;
-        Logger::info("Core", "Window destroyed");
+        cgre2::Logger::info("Core", "Window destroyed");
     }
     GLFWContext::instance().release();
 }
@@ -75,7 +75,7 @@ void Window::onFramebufferResize(int width, int height) {
     m_framebufferResized = true;
     m_width = static_cast<uint32_t>(width);
     m_height = static_cast<uint32_t>(height);
-    Logger::debug("Core", "Window resized: " + std::to_string(width) + "x" + std::to_string(height));
+    cgre2::Logger::debug("Core", "Window resized: " + std::to_string(width) + "x" + std::to_string(height));
 }
 
 } // namespace Vecna::Core

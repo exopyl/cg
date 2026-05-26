@@ -1,22 +1,22 @@
 #include "Vecna/Core/Application.hpp"
 #include "Vecna/Core/FileDialog.hpp"
 #include "Vecna/Core/Window.hpp"
-#include "Vecna/Core/Logger.hpp"
+#include "cgre2/Logger.hpp"
 #include "Vecna/Loader/GltfPbrLoader.hpp"
-#include "Vecna/Renderer/Buffer.hpp"
-#include "Vecna/Renderer/DescriptorLayout.hpp"
-#include "Vecna/Renderer/DescriptorPool.hpp"
-#include "Vecna/Renderer/Pipeline.hpp"
-#include "Vecna/Renderer/Shader.hpp"
-#include "Vecna/Renderer/SpecializationConstants.hpp"
-#include "Vecna/Renderer/Texture.hpp"
-#include "Vecna/Renderer/UniformBuffer.hpp"
-#include "Vecna/Renderer/UniformLayouts.hpp"
-#include "Vecna/Renderer/Vertex.hpp"
-#include "Vecna/Renderer/Swapchain.hpp"
-#include "Vecna/Renderer/VulkanDevice.hpp"
-#include "Vecna/Renderer/VulkanInstance.hpp"
-#include "Vecna/Scene/Trackball.hpp"
+#include "cgre2/Buffer.hpp"
+#include "cgre2/DescriptorLayout.hpp"
+#include "cgre2/DescriptorPool.hpp"
+#include "cgre2/Pipeline.hpp"
+#include "cgre2/Shader.hpp"
+#include "cgre2/SpecializationConstants.hpp"
+#include "cgre2/Texture.hpp"
+#include "cgre2/UniformBuffer.hpp"
+#include "cgre2/UniformLayouts.hpp"
+#include "cgre2/Vertex.hpp"
+#include "Vecna/Vulkan/Swapchain.hpp"
+#include "Vecna/Vulkan/VulkanDevice.hpp"
+#include "Vecna/Vulkan/VulkanInstance.hpp"
+#include "cgre2/Trackball.hpp"
 #include "Vecna/UI/ImGuiRenderer.hpp"
 #ifdef _MSC_VER
 #pragma warning(push, 0)
@@ -76,7 +76,7 @@ static constexpr float MIN_DISTANCE = 0.01f;    // Minimum camera distance
 static constexpr float MAX_DISTANCE = 10000.0f;  // Maximum camera distance
 
 Application::Application() {
-    Logger::info("Core", "Application starting");
+    cgre2::Logger::info("Core", "Application starting");
 
     // Create window with default configuration (1280x720, "Vecna", resizable)
     // Window must be created BEFORE VulkanInstance (GLFW must be initialized for extensions)
@@ -86,24 +86,24 @@ Application::Application() {
     m_window = std::make_unique<Window>();
 
     // Create Vulkan instance (requires GLFW to be initialized)
-    m_vulkanInstance = std::make_unique<cgre2::VulkanInstance>();
+    m_vulkanInstance = std::make_unique<Vecna::Vulkan::VulkanInstance>();
 
     // Create surface (requires Window and VulkanInstance)
     createSurface();
 
     // Create Vulkan device (selects GPU and creates logical device)
     // Requires surface for present queue family detection
-    m_vulkanDevice = std::make_unique<cgre2::VulkanDevice>(*m_vulkanInstance, m_surface);
+    m_vulkanDevice = std::make_unique<Vecna::Vulkan::VulkanDevice>(*m_vulkanInstance, m_surface);
 
     // Create swapchain (requires device and surface)
-    m_swapchain = std::make_unique<cgre2::Swapchain>(*m_vulkanDevice, m_surface, *m_window);
+    m_swapchain = std::make_unique<Vecna::Vulkan::Swapchain>(*m_vulkanDevice, m_surface, *m_window);
 
     // ShaderManager outlives every Pipeline we'll create from it.
-    m_shaderManager  = std::make_unique<cgre2::ShaderManager>(*m_vulkanDevice);
+    m_shaderManager  = std::make_unique<cgre2::ShaderManager>(m_vulkanDevice->getContext());
 
     // PBR plumbing (M1+M2 bricks) — lives across pipeline rebuilds.
-    m_textureManager = std::make_unique<cgre2::TextureManager>(*m_vulkanDevice);
-    m_descriptorPool = std::make_unique<cgre2::DescriptorPool>(*m_vulkanDevice);
+    m_textureManager = std::make_unique<cgre2::TextureManager>(m_vulkanDevice->getContext());
+    m_descriptorPool = std::make_unique<cgre2::DescriptorPool>(m_vulkanDevice->getContext());
 
     // Create graphics pipeline (requires device and render pass from swapchain)
     createPipeline();
@@ -114,7 +114,7 @@ Application::Application() {
 
     // Initialize trackball rotation (Story 4-2)
     // Callbacks registered BEFORE ImGui so ImGui chains to them (ImGui calls prev callbacks)
-    m_trackball = std::make_unique<Scene::Trackball>();
+    m_trackball = std::make_unique<cgre2::Trackball>();
     auto extent = m_swapchain->getExtent();
     m_trackball->setDimensions(static_cast<int>(extent.width), static_cast<int>(extent.height));
     // Application owns the GLFW user pointer (all callbacks route through Application)
@@ -138,11 +138,11 @@ Application::Application() {
     m_uiRenderer = std::move(imguiRenderer);
     m_uiRenderer->init();
 
-    Logger::info("Core", "Application initialized");
+    cgre2::Logger::info("Core", "Application initialized");
 }
 
 Application::~Application() {
-    Logger::info("Core", "Application shutting down");
+    cgre2::Logger::info("Core", "Application shutting down");
 
     // Wait for GPU to finish before cleanup
     if (m_vulkanDevice) {
@@ -195,30 +195,30 @@ Application::~Application() {
     if (m_surface != VK_NULL_HANDLE) {
         vkDestroySurfaceKHR(m_vulkanInstance->getInstance(), m_surface, nullptr);
         m_surface = VK_NULL_HANDLE;
-        Logger::info("Core", "Surface destroyed");
+        cgre2::Logger::info("Core", "Surface destroyed");
     }
 
     m_vulkanInstance.reset();
     m_window.reset();
 
-    Logger::info("Core", "Application terminated");
+    cgre2::Logger::info("Core", "Application terminated");
 }
 
 void Application::createSurface() {
     if (glfwCreateWindowSurface(m_vulkanInstance->getInstance(), m_window->getHandle(),
                                 nullptr, &m_surface) != VK_SUCCESS) {
-        Logger::error("Core", "Failed to create window surface");
+        cgre2::Logger::error("Core", "Failed to create window surface");
         throw std::runtime_error("Failed to create window surface");
     }
-    Logger::info("Core", "Surface created");
+    cgre2::Logger::info("Core", "Surface created");
 }
 
 void Application::createPipeline() {
     std::string shaderDir = findShaderDirectory();
     if (shaderDir.empty()) {
-        Logger::error("Core", "Failed to find shader directory. Searched paths:");
+        cgre2::Logger::error("Core", "Failed to find shader directory. Searched paths:");
         for (const auto& path : SHADER_SEARCH_PATHS) {
-            Logger::error("Core", "  - " + path);
+            cgre2::Logger::error("Core", "  - " + path);
         }
         throw std::runtime_error("Failed to find shader directory");
     }
@@ -255,7 +255,7 @@ void Application::createPipeline() {
     info.specialization        = &spec;
     info.pushConstantRanges    = { pc };
 
-    m_pipeline = std::make_unique<cgre2::Pipeline>(*m_vulkanDevice, info);
+    m_pipeline = std::make_unique<cgre2::Pipeline>(m_vulkanDevice->getContext(), info);
 
     // Outline pass — its own vertex shader inflates along the normal, its
     // fragment outputs solid black, and the rasterizer culls FRONT faces
@@ -285,7 +285,7 @@ void Application::createPipeline() {
     outlineInfo.pushConstantRanges = { outlinePc };
     outlineInfo.cullMode           = VK_CULL_MODE_FRONT_BIT;
 
-    m_outlinePipeline = std::make_unique<cgre2::Pipeline>(*m_vulkanDevice, outlineInfo);
+    m_outlinePipeline = std::make_unique<cgre2::Pipeline>(m_vulkanDevice->getContext(), outlineInfo);
 }
 
 void Application::createPbrPipeline() {
@@ -348,9 +348,9 @@ void Application::createPbrPipeline() {
     // ---- UBOs (created once; their contents are updated per-frame for
     //           camera, once for lights/material) -------------------------
     if (!m_cameraUbo) {
-        m_cameraUbo         = std::make_unique<cgre2::UniformBuffer>(*m_vulkanDevice, sizeof(cgre2::CameraUBO));
-        m_lightsUbo         = std::make_unique<cgre2::UniformBuffer>(*m_vulkanDevice, sizeof(cgre2::LightsUBO));
-        m_defaultMaterialUbo = std::make_unique<cgre2::UniformBuffer>(*m_vulkanDevice, sizeof(cgre2::MaterialUBO));
+        m_cameraUbo         = std::make_unique<cgre2::UniformBuffer>(m_vulkanDevice->getContext(), sizeof(cgre2::CameraUBO));
+        m_lightsUbo         = std::make_unique<cgre2::UniformBuffer>(m_vulkanDevice->getContext(), sizeof(cgre2::LightsUBO));
+        m_defaultMaterialUbo = std::make_unique<cgre2::UniformBuffer>(m_vulkanDevice->getContext(), sizeof(cgre2::MaterialUBO));
 
         // One static sun for now, hemispherical-ish ambient until IBL.
         cgre2::LightsUBO lights{};
@@ -446,7 +446,7 @@ void Application::createPbrPipeline() {
     info.descriptorSetLayouts  = { m_sceneSetLayout, m_materialSetLayout };
     info.pushConstantRanges    = { modelRange };
 
-    m_pbrPipeline = std::make_unique<cgre2::Pipeline>(*m_vulkanDevice, info);
+    m_pbrPipeline = std::make_unique<cgre2::Pipeline>(m_vulkanDevice->getContext(), info);
 }
 
 void Application::updateCameraUbo(float aspect) {
@@ -521,25 +521,25 @@ void Application::createCube() {
         20, 21, 22,  22, 23, 20, // Left
     };
 
-    m_vertexBuffer = std::make_unique<cgre2::VertexBuffer>(*m_vulkanDevice, vertices);
-    m_indexBuffer  = std::make_unique<cgre2::IndexBuffer>(*m_vulkanDevice, indices);
+    m_vertexBuffer = std::make_unique<cgre2::VertexBuffer>(m_vulkanDevice->getContext(), vertices);
+    m_indexBuffer  = std::make_unique<cgre2::IndexBuffer>(m_vulkanDevice->getContext(), indices);
 
     std::vector<cgre2::VertexPBR> pbrVertices(vertices.size());
     std::transform(vertices.begin(), vertices.end(), pbrVertices.begin(),
                    cgre2::VertexPBR::fromBasic);
     m_pbrVertexBuffer = std::make_unique<cgre2::VertexBuffer>(
-        *m_vulkanDevice,
+        m_vulkanDevice->getContext(),
         pbrVertices.data(),
         static_cast<VkDeviceSize>(pbrVertices.size() * sizeof(cgre2::VertexPBR)),
         static_cast<uint32_t>(pbrVertices.size()));
 
-    Logger::info("Core", "Cube buffers created (vertex: " +
+    cgre2::Logger::info("Core", "Cube buffers created (vertex: " +
                  std::to_string(m_vertexBuffer->getSize()) + " bytes, index: " +
                  std::to_string(m_indexBuffer->getSize()) + " bytes)");
 }
 
 void Application::run() {
-    Logger::info("Core", "Entering main loop");
+    cgre2::Logger::info("Core", "Entering main loop");
 
     while (!m_window->shouldClose()) {
         m_window->pollEvents();
@@ -560,7 +560,7 @@ void Application::run() {
             vkDeviceWaitIdle(m_vulkanDevice->getDevice());
             m_pipeline.reset();
             createPipeline();
-            Logger::info("Core", m_flatShading ? "Switched to flat shading" : "Switched to smooth shading");
+            cgre2::Logger::info("Core", m_flatShading ? "Switched to flat shading" : "Switched to smooth shading");
         }
 
         // Process deferred normals-visualization toggle (same recreation
@@ -571,7 +571,7 @@ void Application::run() {
             vkDeviceWaitIdle(m_vulkanDevice->getDevice());
             m_pipeline.reset();
             createPipeline();
-            Logger::info("Core", m_showNormals ? "Showing normals" : "Showing diffuse");
+            cgre2::Logger::info("Core", m_showNormals ? "Showing normals" : "Showing diffuse");
         }
 
         if (m_pendingToonChange) {
@@ -579,21 +579,21 @@ void Application::run() {
             vkDeviceWaitIdle(m_vulkanDevice->getDevice());
             m_pipeline.reset();
             createPipeline();
-            Logger::info("Core", m_useToon ? "Toon shading on" : "Toon shading off");
+            cgre2::Logger::info("Core", m_useToon ? "Toon shading on" : "Toon shading off");
         }
 
         // Outline only changes which pipelines get bound during draw —
         // no pipeline recreation needed, both pipelines already exist.
         if (m_pendingOutlineChange) {
             m_pendingOutlineChange = false;
-            Logger::info("Core", m_useOutline ? "Outline on" : "Outline off");
+            cgre2::Logger::info("Core", m_useOutline ? "Outline on" : "Outline off");
         }
 
         // PBR toggle — same story: pipelines already coexist, we just
         // route draws to a different one. No recreation cost.
         if (m_pendingPbrChange) {
             m_pendingPbrChange = false;
-            Logger::info("Core", m_usePbr ? "PBR on" : "PBR off");
+            cgre2::Logger::info("Core", m_usePbr ? "PBR on" : "PBR off");
         }
 
         drawFrame();
@@ -602,7 +602,7 @@ void Application::run() {
     // Wait for the device to finish before exiting
     vkDeviceWaitIdle(m_vulkanDevice->getDevice());
 
-    Logger::info("Core", "Exiting main loop");
+    cgre2::Logger::info("Core", "Exiting main loop");
 }
 
 void Application::drawFrame() {
@@ -866,7 +866,7 @@ void Application::openFileDialog() {
 }
 
 void Application::loadModel(const std::filesystem::path& path) {
-    Logger::info("Loader", "Loading model: " + path.filename().string());
+    cgre2::Logger::info("Loader", "Loading model: " + path.filename().string());
 
     // Load mesh using cgmesh
     Mesh mesh;
@@ -875,19 +875,19 @@ void Application::loadModel(const std::filesystem::path& path) {
     int rc = mesh.load(path.string().c_str());
     double loadTimeMs = ticker.stop();
     if (rc != 0) {
-        Logger::error("Loader", "Failed to load model: " + path.string());
+        cgre2::Logger::error("Loader", "Failed to load model: " + path.string());
         showUIError("Impossible de charger le fichier : " + path.filename().string());
         return;
     }
 
-    Logger::info("Loader", "Parsed " + std::to_string(mesh.m_nVertices) + " vertices, " +
+    cgre2::Logger::info("Loader", "Parsed " + std::to_string(mesh.m_nVertices) + " vertices, " +
                  std::to_string(mesh.m_nFaces) + " faces");
 
     // Center model at origin using bounding box center
     mesh.computebbox();
     float bboxCenter[3];
     if (!mesh.bbox().GetCenter(bboxCenter)) {
-        Logger::error("Loader", "Model has empty bounding box");
+        cgre2::Logger::error("Loader", "Model has empty bounding box");
         showUIError("Le modele est vide ou invalide");
         return;
     }
@@ -915,7 +915,7 @@ void Application::loadModel(const std::filesystem::path& path) {
     m_camera->SetPosition(0.0f, 0.0f, m_cameraDistance);
     m_camera->SetClippingPlanes(m_cameraDistance * 0.01f, m_cameraDistance * 10.0f);
 
-    Logger::info("Loader", "Centered model (diagonal: " + std::to_string(diagonal) +
+    cgre2::Logger::info("Loader", "Centered model (diagonal: " + std::to_string(diagonal) +
                  ", camera distance: " + std::to_string(cameraDistance) + ")");
 
     // Always recompute normals from geometry. The `empty()` heuristic that
@@ -993,18 +993,18 @@ void Application::loadModel(const std::filesystem::path& path) {
     }
 
     if (skippedFaces > 0) {
-        Logger::warn("Loader", "Skipped " + std::to_string(skippedFaces) +
+        cgre2::Logger::warn("Loader", "Skipped " + std::to_string(skippedFaces) +
                      " faces with out-of-bounds vertex indices");
         showUIError(std::to_string(skippedFaces) + " faces ignorees (indices invalides)");
     }
 
     if (indices.empty()) {
-        Logger::error("Loader", "Model has no valid faces");
+        cgre2::Logger::error("Loader", "Model has no valid faces");
         showUIError("Le modele ne contient aucune face valide");
         return;
     }
 
-    Logger::info("Loader", "Converted to " + std::to_string(vertices.size()) + " vertices, " +
+    cgre2::Logger::info("Loader", "Converted to " + std::to_string(vertices.size()) + " vertices, " +
                  std::to_string(indices.size() / 3) + " triangles");
 
     // STL files have 3 unique vertices per triangle (no sharing).
@@ -1088,7 +1088,7 @@ void Application::loadModel(const std::filesystem::path& path) {
             }
         }
 
-        Logger::info("Loader", "Welded " + std::to_string(beforeCount) + " -> " +
+        cgre2::Logger::info("Loader", "Welded " + std::to_string(beforeCount) + " -> " +
                      std::to_string(vertices.size()) + " vertices");
     }
 
@@ -1106,14 +1106,14 @@ void Application::loadModel(const std::filesystem::path& path) {
     m_vertexBuffer.reset();
     m_pbrVertexBuffer.reset();
 
-    m_vertexBuffer = std::make_unique<cgre2::VertexBuffer>(*m_vulkanDevice, vertices);
-    m_indexBuffer  = std::make_unique<cgre2::IndexBuffer>(*m_vulkanDevice, indices);
+    m_vertexBuffer = std::make_unique<cgre2::VertexBuffer>(m_vulkanDevice->getContext(), vertices);
+    m_indexBuffer  = std::make_unique<cgre2::IndexBuffer>(m_vulkanDevice->getContext(), indices);
 
     std::vector<cgre2::VertexPBR> pbrVertices(vertices.size());
     std::transform(vertices.begin(), vertices.end(), pbrVertices.begin(),
                    cgre2::VertexPBR::fromBasic);
     m_pbrVertexBuffer = std::make_unique<cgre2::VertexBuffer>(
-        *m_vulkanDevice,
+        m_vulkanDevice->getContext(),
         pbrVertices.data(),
         static_cast<VkDeviceSize>(pbrVertices.size() * sizeof(cgre2::VertexPBR)),
         static_cast<uint32_t>(pbrVertices.size()));
@@ -1129,10 +1129,10 @@ void Application::loadModel(const std::filesystem::path& path) {
     std::transform(extLower.begin(), extLower.end(), extLower.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     if (extLower == ".glb" || extLower == ".gltf") {
-        if (!Loader::loadGltfAsPBR(path, *m_vulkanDevice, *m_textureManager,
+        if (!Loader::loadGltfAsPBR(path, m_vulkanDevice->getContext(), *m_textureManager,
                                    *m_descriptorPool, m_materialSetLayout,
                                    m_pbrScene)) {
-            Logger::warn("Loader", "GLB PBR load failed; falling back to default material");
+            cgre2::Logger::warn("Loader", "GLB PBR load failed; falling back to default material");
             m_pbrScene = {};
         } else {
             // Match the cgmesh path's centering: rotate around the
@@ -1148,7 +1148,7 @@ void Application::loadModel(const std::filesystem::path& path) {
         imgui->setModelInfo(m_modelInfo);
     }
 
-    Logger::info("Loader", "Model loaded successfully");
+    cgre2::Logger::info("Loader", "Model loaded successfully");
 }
 
 void Application::showUIError(const std::string& message) {

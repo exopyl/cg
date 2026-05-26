@@ -7,7 +7,7 @@
 
 namespace cgre2 {
 
-class VulkanDevice;
+class DeviceContext;
 
 /// Allocate-only descriptor pool that grows on demand. We never free
 /// individual sets — sets live as long as the pool does, and the pool
@@ -29,7 +29,7 @@ public:
         uint32_t maxSetsPerPool            = 128;
     };
 
-    DescriptorPool(VulkanDevice& device, const Sizes& sizes = {});
+    DescriptorPool(DeviceContext& device, const Sizes& sizes = {});
     ~DescriptorPool();
 
     DescriptorPool(const DescriptorPool&) = delete;
@@ -44,7 +44,7 @@ public:
 private:
     void createNewVkPool();
 
-    VulkanDevice&                m_device;
+    DeviceContext&                m_device;
     Sizes                        m_sizes;
     std::vector<VkDescriptorPool> m_pools;            // grows on exhaustion
 };

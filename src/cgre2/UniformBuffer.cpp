@@ -1,5 +1,5 @@
-#include "Vecna/Renderer/UniformBuffer.hpp"
-#include "Vecna/Renderer/VulkanDevice.hpp"
+#include "cgre2/UniformBuffer.hpp"
+#include "cgre2/DeviceContext.hpp"
 
 #include <vk_mem_alloc.h>
 
@@ -8,7 +8,7 @@
 
 namespace cgre2 {
 
-UniformBuffer::UniformBuffer(VulkanDevice& device, VkDeviceSize size)
+UniformBuffer::UniformBuffer(DeviceContext& device, VkDeviceSize size)
     : m_device(device), m_size(size)
 {
     if (size == 0) {

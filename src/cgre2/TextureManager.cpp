@@ -1,6 +1,6 @@
-#include "Vecna/Renderer/Texture.hpp"
-#include "Vecna/Renderer/VulkanDevice.hpp"
-#include "Vecna/Core/Logger.hpp"
+#include "cgre2/Texture.hpp"
+#include "cgre2/DeviceContext.hpp"
+#include "cgre2/Logger.hpp"
 
 // cgmesh's vmeshes.cpp also pulls stb_image in, with TINYGLTF_NO_STB_IMAGE
 // + its own STB_IMAGE_IMPLEMENTATION. To avoid duplicate-symbol link
@@ -18,7 +18,7 @@
 
 namespace cgre2 {
 
-TextureManager::TextureManager(VulkanDevice& device) : m_device(device) {}
+TextureManager::TextureManager(DeviceContext& device) : m_device(device) {}
 
 Texture& TextureManager::loadFromBytes(const std::string& cacheKey,
                                        const uint8_t*     rgba,
@@ -60,7 +60,7 @@ Texture& TextureManager::load(const std::filesystem::path& path, VkFormat format
     if (!rawPixels) {
         const std::string err = "TextureManager::load: stbi_load failed for " +
                                 path.string() + " (" + stbi_failure_reason() + ")";
-        Vecna::Core::Logger::error("Renderer", err);
+        cgre2::Logger::error("Renderer", err);
         throw std::runtime_error(err);
     }
     // RAII guard: stbi_image_free runs even if Texture's ctor throws.

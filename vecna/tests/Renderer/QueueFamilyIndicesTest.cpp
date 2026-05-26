@@ -2,7 +2,7 @@
 // Unit tests for QueueFamilyIndices struct
 
 #include <gtest/gtest.h>
-#include "Vecna/Renderer/VulkanDevice.hpp"
+#include "Vecna/Vulkan/VulkanDevice.hpp"
 
 using namespace Vecna::Renderer;
 

@@ -3,7 +3,7 @@
 #include <string>
 #include <string_view>
 
-namespace Vecna::Core {
+namespace cgre2 {
 
 class Logger {
 public:
@@ -28,4 +28,4 @@ private:
     static Level s_minLevel;
 };
 
-} // namespace Vecna::Core
+} // namespace cgre2

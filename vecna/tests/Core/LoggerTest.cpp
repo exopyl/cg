@@ -1,13 +1,13 @@
-// Tests for Vecna::Core::Logger
+// Tests for cgre2::Logger
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include "Vecna/Core/Logger.hpp"
+#include "cgre2/Logger.hpp"
 
 #include <sstream>
 #include <iostream>
 
-using namespace Vecna::Core;
+using namespace cgre2;
 using ::testing::HasSubstr;
 using ::testing::IsEmpty;
 

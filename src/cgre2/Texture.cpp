@@ -1,6 +1,6 @@
-#include "Vecna/Renderer/Texture.hpp"
-#include "Vecna/Renderer/VulkanDevice.hpp"
-#include "Vecna/Core/Logger.hpp"
+#include "cgre2/Texture.hpp"
+#include "cgre2/DeviceContext.hpp"
+#include "cgre2/Logger.hpp"
 
 #include <vk_mem_alloc.h>
 
@@ -18,9 +18,9 @@ uint32_t computeMipLevels(uint32_t w, uint32_t h)
 }
 
 // Single-shot command buffer recorded onto the graphics queue. The
-// transferCommandPool exposed by VulkanDevice is allocated on the
+// transferCommandPool exposed by DeviceContext is allocated on the
 // graphics queue family, so blit/copy/barriers run there.
-VkCommandBuffer beginOneShot(VulkanDevice& device)
+VkCommandBuffer beginOneShot(DeviceContext& device)
 {
     VkCommandBufferAllocateInfo info{};
     info.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -40,7 +40,7 @@ VkCommandBuffer beginOneShot(VulkanDevice& device)
     return cmd;
 }
 
-void endOneShot(VulkanDevice& device, VkCommandBuffer cmd)
+void endOneShot(DeviceContext& device, VkCommandBuffer cmd)
 {
     vkEndCommandBuffer(cmd);
 
@@ -98,7 +98,7 @@ VkDescriptorImageInfo Texture::descriptorInfo() const
     return info;
 }
 
-Texture::Texture(VulkanDevice& device, const TextureInfo& info)
+Texture::Texture(DeviceContext& device, const TextureInfo& info)
     : m_device(device), m_format(info.format), m_extent{info.width, info.height}
 {
     if (info.width == 0 || info.height == 0) {

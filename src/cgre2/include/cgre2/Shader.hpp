@@ -10,7 +10,7 @@
 
 namespace cgre2 {
 
-class VulkanDevice;
+class DeviceContext;
 
 /// Single descriptor binding extracted from SPIR-V reflection.
 /// `stageFlags` is set to the owning shader's stage; the layout builder
@@ -50,7 +50,7 @@ class ShaderModule {
 public:
     /// Read `spirvPath`, create the Vulkan module, run reflection.
     /// @throws std::runtime_error on I/O, validation or reflection failure.
-    ShaderModule(VulkanDevice& device,
+    ShaderModule(DeviceContext& device,
                  const std::string& spirvPath,
                  VkShaderStageFlagBits stage);
     ~ShaderModule();
@@ -73,7 +73,7 @@ private:
     void reflect(const std::vector<uint32_t>& spirv);
     [[nodiscard]] static std::vector<uint32_t> readSpirv(const std::string& path);
 
-    VulkanDevice&         m_device;
+    DeviceContext&         m_device;
     VkShaderModule        m_module = VK_NULL_HANDLE;
     VkShaderStageFlagBits m_stage;
     std::string           m_entryPoint = "main";
@@ -90,7 +90,7 @@ private:
 /// modules.
 class ShaderManager {
 public:
-    explicit ShaderManager(VulkanDevice& device);
+    explicit ShaderManager(DeviceContext& device);
     ~ShaderManager() = default;
 
     ShaderManager(const ShaderManager&) = delete;
@@ -108,7 +108,7 @@ public:
     void clear();
 
 private:
-    VulkanDevice& m_device;
+    DeviceContext& m_device;
     std::unordered_map<std::string, std::unique_ptr<ShaderModule>> m_cache;
 };
 

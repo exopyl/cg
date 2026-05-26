@@ -1,8 +1,8 @@
-#include "Vecna/Core/Logger.hpp"
+#include "cgre2/Logger.hpp"
 
 #include <iostream>
 
-namespace Vecna::Core {
+namespace cgre2 {
 
 Logger::Level Logger::s_minLevel = Level::Info;
 
@@ -42,4 +42,4 @@ void Logger::log(Level level, std::string_view module, std::string_view message)
     output << "[" << module << "] " << message << std::endl;
 }
 
-} // namespace Vecna::Core
+} // namespace cgre2

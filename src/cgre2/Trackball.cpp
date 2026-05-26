@@ -1,9 +1,9 @@
-#include "Vecna/Scene/Trackball.hpp"
+#include "cgre2/Trackball.hpp"
 
 #include <cmath>
 #include <cstring>
 
-namespace Vecna::Scene {
+namespace cgre2 {
 
 static constexpr float PI = 3.14159265f;
 static constexpr float PI_OVER_2 = PI / 2.0f;
@@ -138,4 +138,4 @@ void Trackball::onMouseMove(int x, int y) {
     std::memcpy(m_transform, result, sizeof(m_transform));
 }
 
-} // namespace Vecna::Scene
+} // namespace cgre2

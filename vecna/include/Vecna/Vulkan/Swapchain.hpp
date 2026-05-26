@@ -13,7 +13,7 @@ namespace Vecna::Core {
 class Window;
 } // namespace Vecna::Core
 
-namespace cgre2 {
+namespace Vecna::Vulkan {
 
 class VulkanDevice;
 
@@ -144,4 +144,4 @@ private:
     uint32_t m_currentFrame = 0;
 };
 
-} // namespace cgre2
+} // namespace Vecna::Vulkan

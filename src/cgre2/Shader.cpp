@@ -1,6 +1,6 @@
-#include "Vecna/Renderer/Shader.hpp"
-#include "Vecna/Renderer/VulkanDevice.hpp"
-#include "Vecna/Core/Logger.hpp"
+#include "cgre2/Shader.hpp"
+#include "cgre2/DeviceContext.hpp"
+#include "cgre2/Logger.hpp"
 
 #include <spirv_reflect.h>
 
@@ -42,14 +42,14 @@ namespace {
 void checkSpv(SpvReflectResult r, const char* what) {
     if (r != SPV_REFLECT_RESULT_SUCCESS) {
         const std::string err = std::string(what) + ": " + spvReflectResultToString(r);
-        Vecna::Core::Logger::error("Renderer", err);
+        cgre2::Logger::error("Renderer", err);
         throw std::runtime_error(err);
     }
 }
 
 } // namespace
 
-ShaderModule::ShaderModule(VulkanDevice& device,
+ShaderModule::ShaderModule(DeviceContext& device,
                            const std::string& spirvPath,
                            VkShaderStageFlagBits stage)
     : m_device(device), m_stage(stage), m_sourcePath(spirvPath) {
@@ -65,7 +65,7 @@ ShaderModule::ShaderModule(VulkanDevice& device,
 
     reflect(bytecode);
 
-    Vecna::Core::Logger::info("Renderer",
+    cgre2::Logger::info("Renderer",
         "Shader loaded: " + spirvPath +
         " (bindings=" + std::to_string(m_descriptorBindings.size()) +
         ", pushConstants=" + std::to_string(m_pushConstants.size()) +
@@ -182,7 +182,7 @@ void ShaderModule::reflect(const std::vector<uint32_t>& spirv) {
 
 // ShaderManager
 
-ShaderManager::ShaderManager(VulkanDevice& device) : m_device(device) {}
+ShaderManager::ShaderManager(DeviceContext& device) : m_device(device) {}
 
 ShaderModule& ShaderManager::load(const std::string& spirvPath, VkShaderStageFlagBits stage) {
     auto it = m_cache.find(spirvPath);

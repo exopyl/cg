@@ -62,11 +62,15 @@ set(VECNA_SOURCES
     src/Core/Application.cpp
     src/Core/FileDialog.cpp
     src/Core/GLFWContext.cpp
-    src/Core/Logger.cpp
     src/Core/Window.cpp
     src/Loader/GltfPbrLoader.cpp
-    src/Scene/Trackball.cpp
     src/UI/ImGuiRenderer.cpp
+    # Logger.cpp + Trackball.cpp moved to src/cgre2/ — now linked via cgre2
+    # Vulkan bootstrap moved out of cgre2 in P2 — vecna now owns these
+    # since they hard-depend on GLFW (extension list + window surface).
+    src/Vulkan/VulkanInstance.cpp
+    src/Vulkan/VulkanDevice.cpp
+    src/Vulkan/Swapchain.cpp
 )
 
 # Create executable

@@ -1,4 +1,4 @@
-#include "Vecna/Renderer/Vertex.hpp"
+#include "cgre2/Vertex.hpp"
 
 namespace cgre2 {
 

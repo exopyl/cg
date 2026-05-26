@@ -1,11 +1,11 @@
 #include "Vecna/Loader/GltfPbrLoader.hpp"
-#include "Vecna/Renderer/DescriptorPool.hpp"
-#include "Vecna/Renderer/Texture.hpp"
-#include "Vecna/Renderer/UniformBuffer.hpp"
-#include "Vecna/Renderer/UniformLayouts.hpp"
-#include "Vecna/Renderer/Vertex.hpp"
-#include "Vecna/Renderer/VulkanDevice.hpp"
-#include "Vecna/Core/Logger.hpp"
+#include "cgre2/DescriptorPool.hpp"
+#include "cgre2/Texture.hpp"
+#include "cgre2/UniformBuffer.hpp"
+#include "cgre2/UniformLayouts.hpp"
+#include "cgre2/Vertex.hpp"
+#include "cgre2/DeviceContext.hpp"
+#include "cgre2/Logger.hpp"
 
 // Each of cgmesh's vmeshes.cpp, cgre2's TextureManager.cpp, and this file
 // compiles a private copy of stb_image (STB_IMAGE_STATIC = symbols are
@@ -200,7 +200,7 @@ cgre2::Texture* uploadTexture(cgre2::TextureManager& tm,
     if (tex.source < 0) return nullptr;
     const auto& img = model.images[tex.source];
     if (img.image.empty() || img.width <= 0 || img.height <= 0) {
-        Vecna::Core::Logger::warn("Loader",
+        cgre2::Logger::warn("Loader",
             "GLB image #" + std::to_string(tex.source) + " (" + sourceLabel + ") is empty");
         return nullptr;
     }
@@ -215,7 +215,7 @@ cgre2::Texture* uploadTexture(cgre2::TextureManager& tm,
 
 void buildMaterial(const tinygltf::Model&   model,
                    const tinygltf::Material& srcMat,
-                   cgre2::VulkanDevice&     device,
+                   cgre2::DeviceContext&     device,
                    cgre2::TextureManager&   textureManager,
                    cgre2::DescriptorPool&   descriptorPool,
                    VkDescriptorSetLayout    layout,
@@ -250,7 +250,7 @@ void buildMaterial(const tinygltf::Model&   model,
     if (srcMat.alphaMode == "MASK") {
         ubo.flags |= cgre2::MAT_ALPHA_MASK;
     } else if (srcMat.alphaMode == "BLEND") {
-        Vecna::Core::Logger::warn("Loader",
+        cgre2::Logger::warn("Loader",
             "Material '" + srcMat.name + "' uses alphaMode=BLEND; the PBR "
             "pipeline doesn't enable alpha blending yet — rendered opaque.");
     }
@@ -276,7 +276,7 @@ void buildMaterial(const tinygltf::Model&   model,
         if (tc == 1) {
             ubo.flags |= bit;
         } else if (tc > 1) {
-            Vecna::Core::Logger::warn("Loader",
+            cgre2::Logger::warn("Loader",
                 std::string("Material '") + srcMat.name + "' " + mapName +
                 " uses TEXCOORD_" + std::to_string(tc) +
                 " — only sets 0 and 1 are supported; falling back to 0.");
@@ -328,14 +328,14 @@ void buildMaterial(const tinygltf::Model&   model,
 
 bool assemblePrimitive(const tinygltf::Model&     model,
                        const tinygltf::Primitive& prim,
-                       cgre2::VulkanDevice&       device,
+                       cgre2::DeviceContext&       device,
                        uint32_t                   defaultMaterialIndex,
                        PBRScene&                  scene,
                        float                      bboxMinOut[3],
                        float                      bboxMaxOut[3])
 {
     if (prim.mode != TINYGLTF_MODE_TRIANGLES) {
-        Vecna::Core::Logger::warn("Loader", "GLB: skipping non-TRIANGLES primitive");
+        cgre2::Logger::warn("Loader", "GLB: skipping non-TRIANGLES primitive");
         return false;
     }
 
@@ -446,7 +446,7 @@ bool assemblePrimitive(const tinygltf::Model&     model,
 } // anonymous namespace
 
 bool loadGltfAsPBR(const std::filesystem::path& path,
-                   cgre2::VulkanDevice&         device,
+                   cgre2::DeviceContext&         device,
                    cgre2::TextureManager&       textureManager,
                    cgre2::DescriptorPool&       descriptorPool,
                    VkDescriptorSetLayout        materialSetLayout,
@@ -462,9 +462,9 @@ bool loadGltfAsPBR(const std::filesystem::path& path,
     const bool ok = isBinary
         ? loader.LoadBinaryFromFile(&model, &err, &warn, filenameStr)
         : loader.LoadASCIIFromFile (&model, &err, &warn, filenameStr);
-    if (!warn.empty()) Vecna::Core::Logger::warn("Loader", "glTF: " + warn);
+    if (!warn.empty()) cgre2::Logger::warn("Loader", "glTF: " + warn);
     if (!ok) {
-        Vecna::Core::Logger::error("Loader", "glTF parse failed: " + err);
+        cgre2::Logger::error("Loader", "glTF parse failed: " + err);
         return false;
     }
 
@@ -526,11 +526,11 @@ bool loadGltfAsPBR(const std::filesystem::path& path,
     }
 
     if (outScene.meshes.empty()) {
-        Vecna::Core::Logger::warn("Loader", "GLB: no triangle primitives extracted from " + filenameStr);
+        cgre2::Logger::warn("Loader", "GLB: no triangle primitives extracted from " + filenameStr);
         return false;
     }
 
-    Vecna::Core::Logger::info("Loader",
+    cgre2::Logger::info("Loader",
         "GLB PBR: " + std::to_string(outScene.meshes.size()) + " primitives, " +
         std::to_string(outScene.materials.size() - 1) + " materials (+1 default)");
 

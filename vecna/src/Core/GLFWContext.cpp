@@ -1,5 +1,5 @@
 #include "Vecna/Core/GLFWContext.hpp"
-#include "Vecna/Core/Logger.hpp"
+#include "cgre2/Logger.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -17,18 +17,18 @@ GLFWContext::GLFWContext() = default;
 GLFWContext::~GLFWContext() {
     if (m_initialized) {
         glfwTerminate();
-        Logger::info("Core", "GLFW terminated");
+        cgre2::Logger::info("Core", "GLFW terminated");
     }
 }
 
 void GLFWContext::addRef() {
     if (!m_initialized) {
         if (glfwInit() == GLFW_FALSE) {
-            Logger::error("Core", "Failed to initialize GLFW");
+            cgre2::Logger::error("Core", "Failed to initialize GLFW");
             throw std::runtime_error("Failed to initialize GLFW");
         }
         m_initialized = true;
-        Logger::info("Core", "GLFW initialized");
+        cgre2::Logger::info("Core", "GLFW initialized");
     }
     ++m_refCount;
 }

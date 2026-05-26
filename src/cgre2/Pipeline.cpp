@@ -1,15 +1,15 @@
-#include "Vecna/Renderer/Pipeline.hpp"
-#include "Vecna/Renderer/Shader.hpp"
-#include "Vecna/Renderer/SpecializationConstants.hpp"
-#include "Vecna/Renderer/VulkanDevice.hpp"
-#include "Vecna/Core/Logger.hpp"
+#include "cgre2/Pipeline.hpp"
+#include "cgre2/Shader.hpp"
+#include "cgre2/SpecializationConstants.hpp"
+#include "cgre2/DeviceContext.hpp"
+#include "cgre2/Logger.hpp"
 
 #include <array>
 #include <stdexcept>
 
 namespace cgre2 {
 
-Pipeline::Pipeline(VulkanDevice& device, const PipelineCreateInfo& info)
+Pipeline::Pipeline(DeviceContext& device, const PipelineCreateInfo& info)
     : m_device(device) {
     if (!info.vertexShader || !info.fragmentShader) {
         throw std::runtime_error("PipelineCreateInfo: vertex and fragment shaders are required");
@@ -34,7 +34,7 @@ Pipeline::~Pipeline() {
         vkDestroyPipelineLayout(m_device.getDevice(), m_pipelineLayout, nullptr);
         m_pipelineLayout = VK_NULL_HANDLE;
     }
-    Vecna::Core::Logger::info("Renderer", "Graphics pipeline destroyed");
+    cgre2::Logger::info("Renderer", "Graphics pipeline destroyed");
 }
 
 void Pipeline::createPipelineLayout(const PipelineCreateInfo& info) {
@@ -50,10 +50,10 @@ void Pipeline::createPipelineLayout(const PipelineCreateInfo& info) {
                                             : info.pushConstantRanges.data();
 
     if (vkCreatePipelineLayout(m_device.getDevice(), &layoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
-        Vecna::Core::Logger::error("Renderer", "Failed to create pipeline layout");
+        cgre2::Logger::error("Renderer", "Failed to create pipeline layout");
         throw std::runtime_error("Failed to create pipeline layout");
     }
-    Vecna::Core::Logger::info("Renderer", "Pipeline layout created");
+    cgre2::Logger::info("Renderer", "Pipeline layout created");
 }
 
 void Pipeline::createGraphicsPipeline(const PipelineCreateInfo& info) {
@@ -170,10 +170,10 @@ void Pipeline::createGraphicsPipeline(const PipelineCreateInfo& info) {
     pipelineInfo.basePipelineIndex   = -1;
 
     if (vkCreateGraphicsPipelines(m_device.getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS) {
-        Vecna::Core::Logger::error("Renderer", "Failed to create graphics pipeline");
+        cgre2::Logger::error("Renderer", "Failed to create graphics pipeline");
         throw std::runtime_error("Failed to create graphics pipeline");
     }
-    Vecna::Core::Logger::info("Renderer", "Graphics pipeline created");
+    cgre2::Logger::info("Renderer", "Graphics pipeline created");
 }
 
 } // namespace cgre2

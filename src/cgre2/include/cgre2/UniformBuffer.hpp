@@ -10,7 +10,7 @@ typedef VmaAllocation_T* VmaAllocation;
 
 namespace cgre2 {
 
-class VulkanDevice;
+class DeviceContext;
 
 /// Host-visible, persistent-mapped uniform buffer. Suitable for "per-
 /// frame" data updated from the CPU each draw call (camera matrices,
@@ -25,7 +25,7 @@ class UniformBuffer {
 public:
     /// @param size in bytes. Caller is responsible for alignment of
     ///             individual fields per std140 / std430 conventions.
-    UniformBuffer(VulkanDevice& device, VkDeviceSize size);
+    UniformBuffer(DeviceContext& device, VkDeviceSize size);
     ~UniformBuffer();
 
     UniformBuffer(const UniformBuffer&) = delete;
@@ -45,7 +45,7 @@ public:
     [[nodiscard]] VkDescriptorBufferInfo descriptorInfo() const;
 
 private:
-    VulkanDevice&  m_device;
+    DeviceContext&  m_device;
     VkBuffer       m_buffer     = VK_NULL_HANDLE;
     VmaAllocation  m_allocation = nullptr;
     void*          m_mapped     = nullptr;

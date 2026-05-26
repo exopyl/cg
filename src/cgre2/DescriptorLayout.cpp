@@ -1,7 +1,7 @@
-#include "Vecna/Renderer/DescriptorLayout.hpp"
-#include "Vecna/Renderer/Shader.hpp"
-#include "Vecna/Renderer/VulkanDevice.hpp"
-#include "Vecna/Core/Logger.hpp"
+#include "cgre2/DescriptorLayout.hpp"
+#include "cgre2/Shader.hpp"
+#include "cgre2/DeviceContext.hpp"
+#include "cgre2/Logger.hpp"
 
 #include <algorithm>
 #include <map>
@@ -24,7 +24,7 @@ struct BindingKey {
 
 } // namespace
 
-DescriptorLayouts::DescriptorLayouts(VulkanDevice& device,
+DescriptorLayouts::DescriptorLayouts(DeviceContext& device,
                                      const std::vector<const ShaderModule*>& shaders)
     : m_device(device) {
     try {
@@ -79,7 +79,7 @@ void DescriptorLayouts::build(const std::vector<const ShaderModule*>& shaders) {
                         " binding=" + std::to_string(b.binding) +
                         " between shader stages (different type or count) — '" +
                         b.name + "' in " + sm->getSourcePath();
-                    Vecna::Core::Logger::error("Renderer", err);
+                    cgre2::Logger::error("Renderer", err);
                     throw std::runtime_error(err);
                 }
                 existing.stageFlags |= b.stageFlags;

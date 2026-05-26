@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 
 #include "Vecna/Scene/ModelInfo.hpp"
+#include "Vecna/Loader/GltfPbrLoader.hpp"
 
 #include <filesystem>
 #include <memory>
@@ -19,23 +20,29 @@ namespace Vecna::Core {
 class Window;
 } // namespace Vecna::Core
 
-namespace Vecna::Scene {
+namespace cgre2 {
 class Trackball;
-} // namespace Vecna::Scene
+}
 
 namespace Vecna::UI {
 class IUIRenderer;
 } // namespace Vecna::UI
 
 namespace cgre2 {
+class DescriptorPool;
 class IndexBuffer;
 class Pipeline;
 class ShaderManager;
-class Swapchain;
+class TextureManager;
+class UniformBuffer;
 class VertexBuffer;
-class VulkanDevice;
-class VulkanInstance;
 } // namespace cgre2
+
+namespace Vecna::Vulkan {
+class VulkanInstance;
+class VulkanDevice;
+class Swapchain;
+} // namespace Vecna::Vulkan
 
 namespace Vecna::Core {
 
@@ -55,14 +62,14 @@ public:
     [[nodiscard]] Window& getWindow() { return *m_window; }
     [[nodiscard]] const Window& getWindow() const { return *m_window; }
 
-    [[nodiscard]] cgre2::VulkanInstance& getVulkanInstance() { return *m_vulkanInstance; }
-    [[nodiscard]] const cgre2::VulkanInstance& getVulkanInstance() const { return *m_vulkanInstance; }
+    [[nodiscard]] Vecna::Vulkan::VulkanInstance& getVulkanInstance() { return *m_vulkanInstance; }
+    [[nodiscard]] const Vecna::Vulkan::VulkanInstance& getVulkanInstance() const { return *m_vulkanInstance; }
 
-    [[nodiscard]] cgre2::VulkanDevice& getVulkanDevice() { return *m_vulkanDevice; }
-    [[nodiscard]] const cgre2::VulkanDevice& getVulkanDevice() const { return *m_vulkanDevice; }
+    [[nodiscard]] Vecna::Vulkan::VulkanDevice& getVulkanDevice() { return *m_vulkanDevice; }
+    [[nodiscard]] const Vecna::Vulkan::VulkanDevice& getVulkanDevice() const { return *m_vulkanDevice; }
 
-    [[nodiscard]] cgre2::Swapchain& getSwapchain() { return *m_swapchain; }
-    [[nodiscard]] const cgre2::Swapchain& getSwapchain() const { return *m_swapchain; }
+    [[nodiscard]] Vecna::Vulkan::Swapchain& getSwapchain() { return *m_swapchain; }
+    [[nodiscard]] const Vecna::Vulkan::Swapchain& getSwapchain() const { return *m_swapchain; }
 
     [[nodiscard]] cgre2::Pipeline& getPipeline() { return *m_pipeline; }
     [[nodiscard]] const cgre2::Pipeline& getPipeline() const { return *m_pipeline; }
@@ -70,15 +77,18 @@ public:
 private:
     void createSurface();
     void createPipeline();
+    void createPbrPipeline();
     void createCube();
     void drawFrame();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void updateCameraUbo(float aspect);
 
     void handleKeyboardShortcuts();
     void onShadingModeChanged(bool flat);
     void onShowNormalsChanged(bool show);
     void onToonChanged(bool toon);
     void onOutlineChanged(bool outline);
+    void onPbrChanged(bool pbr);
 
     // File operations (Story 3-4)
     void openFileDialog();
@@ -92,10 +102,10 @@ private:
     // This ensures Vulkan resources are released before GLFW terminates.
     // IMPORTANT: Pipeline must be destroyed BEFORE Swapchain (references render pass).
     std::unique_ptr<Window> m_window;
-    std::unique_ptr<cgre2::VulkanInstance> m_vulkanInstance;
+    std::unique_ptr<Vecna::Vulkan::VulkanInstance> m_vulkanInstance;
     VkSurfaceKHR m_surface = VK_NULL_HANDLE;
-    std::unique_ptr<cgre2::VulkanDevice> m_vulkanDevice;
-    std::unique_ptr<cgre2::Swapchain> m_swapchain;
+    std::unique_ptr<Vecna::Vulkan::VulkanDevice> m_vulkanDevice;
+    std::unique_ptr<Vecna::Vulkan::Swapchain> m_swapchain;
     // Caches VkShaderModule + SPIR-V reflection metadata. Lives between
     // pipeline recreations and is destroyed AFTER the last Pipeline so
     // every VkShaderModule outlives the pipelines that reference it.
@@ -111,7 +121,7 @@ private:
     std::unique_ptr<cgre2::IndexBuffer> m_indexBuffer;
 
     // Trackball rotation (Story 4-2)
-    std::unique_ptr<Scene::Trackball> m_trackball;
+    std::unique_ptr<cgre2::Trackball> m_trackball;
 
     // GLFW callbacks (routed via glfwSetWindowUserPointer → Application*)
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
@@ -166,6 +176,38 @@ private:
     // UI renderer abstraction (Story 5-1)
     // IMPORTANT: Must be destroyed BEFORE VulkanDevice (uses Vulkan resources)
     std::unique_ptr<UI::IUIRenderer> m_uiRenderer;
+
+    // PBR rendering (Cook-Torrance + glTF) — additions from the PBR story.
+    // Lifetime: all VkDescriptorSetLayout, VkDescriptorSet, and unique_ptr-
+    // wrapped cgre2 resources below must be released BEFORE m_vulkanDevice
+    // (they hold VkDescriptorSetLayout handles and VMA-allocated buffers).
+    std::unique_ptr<cgre2::TextureManager> m_textureManager;
+    std::unique_ptr<cgre2::DescriptorPool> m_descriptorPool;
+    std::unique_ptr<cgre2::Pipeline>       m_pbrPipeline;
+
+    VkDescriptorSetLayout m_sceneSetLayout     = VK_NULL_HANDLE;
+    VkDescriptorSetLayout m_materialSetLayout  = VK_NULL_HANDLE;
+    VkDescriptorSet       m_sceneSet           = VK_NULL_HANDLE;
+    VkDescriptorSet       m_defaultMaterialSet = VK_NULL_HANDLE;
+
+    std::unique_ptr<cgre2::UniformBuffer> m_cameraUbo;
+    std::unique_ptr<cgre2::UniformBuffer> m_lightsUbo;
+    std::unique_ptr<cgre2::UniformBuffer> m_defaultMaterialUbo;
+
+    // VertexPBR-typed buffer used by the PBR pipeline. Built alongside
+    // m_vertexBuffer (basic Vertex layout) at model-load time so the
+    // renderer can switch between basic and PBR pipelines without
+    // re-uploading geometry.
+    std::unique_ptr<cgre2::VertexBuffer> m_pbrVertexBuffer;
+
+    // PBR scene loaded from glTF — per-primitive vertex/index buffers
+    // + materials. Reset via `m_pbrScene = {}` before reloading.
+    Loader::PBRScene m_pbrScene;
+    float            m_pbrSceneCenter[3] = {0.0f, 0.0f, 0.0f};
+
+    // Cook-Torrance PBR toggle (UI checkbox).
+    bool m_usePbr           = false;
+    bool m_pendingPbrChange = false;
 };
 
 } // namespace Vecna::Core

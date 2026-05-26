@@ -1,9 +1,9 @@
 #include "Vecna/UI/ImGuiRenderer.hpp"
-#include "Vecna/Core/Logger.hpp"
+#include "cgre2/Logger.hpp"
 #include "Vecna/Core/Window.hpp"
-#include "Vecna/Renderer/Swapchain.hpp"
-#include "Vecna/Renderer/VulkanDevice.hpp"
-#include "Vecna/Renderer/VulkanInstance.hpp"
+#include "Vecna/Vulkan/Swapchain.hpp"
+#include "Vecna/Vulkan/VulkanDevice.hpp"
+#include "Vecna/Vulkan/VulkanInstance.hpp"
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -15,9 +15,9 @@
 
 namespace Vecna::UI {
 
-ImGuiRenderer::ImGuiRenderer(cgre2::VulkanInstance& vulkanInstance,
-                             cgre2::VulkanDevice& vulkanDevice,
-                             cgre2::Swapchain& swapchain,
+ImGuiRenderer::ImGuiRenderer(Vecna::Vulkan::VulkanInstance& vulkanInstance,
+                             Vecna::Vulkan::VulkanDevice& vulkanDevice,
+                             Vecna::Vulkan::Swapchain& swapchain,
                              Core::Window& window)
     : m_vulkanInstance(vulkanInstance)
     , m_vulkanDevice(vulkanDevice)
@@ -94,7 +94,7 @@ void ImGuiRenderer::init() {
     ImGui_ImplVulkan_CreateFontsTexture();
 
     m_initialized = true;
-    Core::Logger::info("UI", "ImGui initialized");
+    cgre2::Logger::info("UI", "ImGui initialized");
 }
 
 void ImGuiRenderer::shutdown() {
@@ -112,7 +112,7 @@ void ImGuiRenderer::shutdown() {
     }
 
     m_initialized = false;
-    Core::Logger::info("UI", "ImGui shutdown");
+    cgre2::Logger::info("UI", "ImGui shutdown");
 }
 
 void ImGuiRenderer::beginFrame() {
