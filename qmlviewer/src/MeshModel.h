@@ -8,7 +8,7 @@
 
 #include <memory>
 
-class Mesh;
+class VMeshes;
 
 class MeshModel : public QObject
 {
@@ -19,6 +19,7 @@ class MeshModel : public QObject
     Q_PROPERTY(QString source         READ source         NOTIFY meshChanged)
     Q_PROPERTY(int     vertexCount    READ vertexCount    NOTIFY meshChanged)
     Q_PROPERTY(int     faceCount      READ faceCount      NOTIFY meshChanged)
+    Q_PROPERTY(int     meshCount      READ meshCount      NOTIFY meshChanged)
     Q_PROPERTY(bool    isTriangleMesh READ isTriangleMesh NOTIFY meshChanged)
     Q_PROPERTY(QVector3D bboxMin      READ bboxMin        NOTIFY meshChanged)
     Q_PROPERTY(QVector3D bboxMax      READ bboxMax        NOTIFY meshChanged)
@@ -40,27 +41,33 @@ public:
     QString source() const { return m_source; }
     int vertexCount() const;
     int faceCount() const;
+    int meshCount() const;
     bool isTriangleMesh() const;
     QVector3D bboxMin() const;
     QVector3D bboxMax() const;
     QVector3D bboxCenter() const;
     float bboxDiagonal() const;
-    bool loaded() const { return m_mesh != nullptr; }
+    bool loaded() const { return m_meshes != nullptr; }
     QString lastError() const { return m_lastError; }
     qint64 loadTimeMs() const { return m_loadTimeMs; }
 
-    /// Internal access to the underlying cgmesh::Mesh — used by
-    /// CgreQuickItem to call BuildPolygonRenderData() on it for the
-    /// cgre2-under-QML render path. Returns nullptr when no mesh is
-    /// loaded.
-    Mesh *internalMesh() const noexcept { return m_mesh.get(); }
+    /// Internal access to the underlying cgmesh::VMeshes — used by
+    /// CgreQuickItem to iterate sub-meshes and upload one VBO+IBO per
+    /// Mesh. Returns nullptr when no file is loaded.
+    VMeshes *internalMeshes() const noexcept { return m_meshes.get(); }
 
 signals:
     void meshChanged();
 
 private:
-    std::unique_ptr<Mesh> m_mesh;
+    std::unique_ptr<VMeshes> m_meshes;
     QString m_source;
     QString m_lastError;
     qint64  m_loadTimeMs = 0;
+
+    // Aggregate bbox cached at load time — VMeshes does not expose a
+    // per-collection bbox, so we union the sub-mesh bboxes ourselves.
+    float m_bboxMin[3] = { 0.0f, 0.0f, 0.0f };
+    float m_bboxMax[3] = { 0.0f, 0.0f, 0.0f };
+    float m_diagonal   = 0.0f;
 };

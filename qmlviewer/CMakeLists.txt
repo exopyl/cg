@@ -26,8 +26,8 @@ set(QMLVIEWER_SHADER_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
 file(MAKE_DIRECTORY ${QMLVIEWER_SHADER_DIR})
 
 set(QMLVIEWER_SHADER_SOURCES
-    ${CMAKE_SOURCE_DIR}/vecna/shaders/basic.vert
-    ${CMAKE_SOURCE_DIR}/vecna/shaders/basic.frag
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/textured.vert
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/textured.frag
 )
 
 set(_qmlviewer_spirv "")
@@ -49,6 +49,7 @@ qt_standard_project_setup(REQUIRES 6.5)
 
 qt_add_executable(qmlviewer
     src/main.cpp
+    src/WindowController.h
 )
 
 qt_add_qml_module(qmlviewer
