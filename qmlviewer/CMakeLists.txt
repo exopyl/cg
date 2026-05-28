@@ -5,7 +5,7 @@ project(qmlviewer LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Qml Quick)
+find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Qml Quick Network)
 
 # cgre2 is added by the root CMakeLists.txt when ENABLE_QMLVIEWER is ON;
 # its DeviceContext.cpp + Pipeline / Buffer / Shader / Trackball / Logger
@@ -50,6 +50,10 @@ qt_standard_project_setup(REQUIRES 6.5)
 qt_add_executable(qmlviewer
     src/main.cpp
     src/WindowController.h
+    src/TcpLogServer.h
+    src/TcpLogServer.cpp
+    src/ControlServer.h
+    src/ControlServer.cpp
 )
 
 qt_add_qml_module(qmlviewer
@@ -85,6 +89,7 @@ target_link_libraries(qmlviewer
         Qt6::Gui
         Qt6::Qml
         Qt6::Quick
+        Qt6::Network
         Vulkan::Vulkan
         cgre2
         cgmesh

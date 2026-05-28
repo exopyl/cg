@@ -7,6 +7,7 @@
 #include "cgre2/DescriptorLayout.hpp"
 #include "cgre2/DescriptorPool.hpp"
 #include "cgre2/DeviceContext.hpp"
+#include "cgre2/Logger.hpp"
 #include "cgre2/Pipeline.hpp"
 #include "cgre2/Shader.hpp"
 #include "cgre2/Texture.hpp"
@@ -170,9 +171,9 @@ void CgreQuickItem::onSceneGraphInitialized()
 
     try {
         m_adapter = std::make_unique<QtDeviceAdapter>(w);
-        qInfo("CgreQuickItem: extracted Vulkan handles from Qt (cgre2::DeviceContext ready)");
+        cgre2::Logger::info("Viewer", "extracted Vulkan handles from Qt (DeviceContext ready)");
     } catch (const std::exception &e) {
-        qWarning("CgreQuickItem: failed to build QtDeviceAdapter: %s", e.what());
+        cgre2::Logger::error("Viewer", std::string("failed to build QtDeviceAdapter: ") + e.what());
         return;
     }
 
@@ -194,7 +195,7 @@ void CgreQuickItem::ensurePipeline()
 
     void *rpPtr = rif->getResource(w, QSGRendererInterface::RenderPassResource);
     if (!rpPtr) {
-        qWarning("CgreQuickItem: no Vulkan render pass from Qt yet");
+        cgre2::Logger::warn("Viewer", "no Vulkan render pass from Qt yet");
         return;
     }
     const VkRenderPass renderPass = *static_cast<VkRenderPass *>(rpPtr);
@@ -228,9 +229,9 @@ void CgreQuickItem::ensurePipeline()
         info.depthCompareOp       = VK_COMPARE_OP_LESS;
 
         m_pipeline = std::make_unique<cgre2::Pipeline>(dctx, info);
-        qInfo("CgreQuickItem: cgre2 pipeline built against Qt render pass");
+        cgre2::Logger::info("Viewer", "pipeline built against Qt render pass");
     } catch (const std::exception &e) {
-        qWarning("CgreQuickItem: pipeline build failed: %s", e.what());
+        cgre2::Logger::error("Viewer", std::string("pipeline build failed: ") + e.what());
         m_pipeline.reset();
         m_descriptorLayouts.reset();
         m_shaderManager.reset();
@@ -331,7 +332,8 @@ cgre2::Texture *CgreQuickItem::loadAlbedo(MaterialTexture *mt)
             return &m_textures->load(p, VK_FORMAT_R8G8B8A8_SRGB);
         }
     } catch (const std::exception &e) {
-        qWarning("CgreQuickItem: albedo load failed (%s): %s", fname.c_str(), e.what());
+        cgre2::Logger::warn("Viewer",
+            "albedo load failed (" + fname + "): " + e.what());
     }
     return nullptr;
 }
@@ -434,6 +436,15 @@ void CgreQuickItem::rebuildMeshBuffers()
             // sub-mesh has no material at all.
             const bool useVertexColor = (mat == nullptr) && haveColors;
 
+            cgre2::Logger::debug("Viewer",
+                "submesh #" + std::to_string(m_vertexBuffers.size())
+                + " matType=" + std::to_string(mat ? static_cast<int>(mat->GetType()) : -1)
+                + " color=(" + std::to_string(matColor[0]) + "," + std::to_string(matColor[1])
+                + "," + std::to_string(matColor[2]) + ")"
+                + " tex=" + (submeshTex ? "1" : "0")
+                + " uv=" + (haveTexCoords ? "1" : "0")
+                + " vtxCol=" + (useVertexColor ? "1" : "0"));
+
             // VertexPBR (68 B): value-initialised, so tangent/uv1 default to
             // zero — unused in the minimal scope (no normal mapping). UVs are
             // copied straight; any V-flip is deferred to when the albedo
@@ -468,10 +479,12 @@ void CgreQuickItem::rebuildMeshBuffers()
 
         m_uploadedMeshes = meshes;
         m_zoomFactor     = 1.0f;
-        qInfo("CgreQuickItem: uploaded %zu sub-mesh(es) — %zu verts, %zu indices",
-              m_vertexBuffers.size(), totalVerts, totalIndices);
+        cgre2::Logger::info("Viewer",
+            "uploaded " + std::to_string(m_vertexBuffers.size()) + " sub-mesh(es) — "
+            + std::to_string(totalVerts) + " verts, "
+            + std::to_string(totalIndices) + " indices");
     } catch (const std::exception &e) {
-        qWarning("CgreQuickItem: mesh upload failed: %s", e.what());
+        cgre2::Logger::error("Viewer", std::string("mesh upload failed: ") + e.what());
         m_vertexBuffers.clear();
         m_indexBuffers.clear();
         m_indexCounts.clear();
