@@ -30,6 +30,14 @@ public:
 	
 	void set_zoom (float zoom);
 	void set_zoom_precision (float fZoomPrecision);
+
+	// Camera framing helper. The camera always orbits the world origin; the
+	// model is shown wherever its coordinates place it.
+	//
+	// set_scene_radius lets the camera derive its near/far planes from the
+	// *current* zoom each frame, so the model never crosses the clip planes
+	// while zooming. A radius <= 0 (the default) keeps the fixed .01/10 planes.
+	void set_scene_radius (float radius);
 	void get_matrix (GLfloat m[4][4]);
 	void get_matrix (GLfloat *m);
 	int  get_inverse_matrix (GLfloat *m);
@@ -55,4 +63,9 @@ public:
 	float     m_fZoomPrecision;
 	GLfloat   xtrans, ytrans;
 	int       lastX, lastY;
+
+	// Perspective clip planes (fallback when no scene radius is set) and
+	// scene radius for dynamic clip planes.
+	float     m_zNear, m_zFar;
+	float     m_sceneRadius;
 };

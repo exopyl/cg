@@ -100,9 +100,12 @@ TEST(TEST_cgmesh_merge, uv_seam_keeps_vertices_separate)
     delete m;
 }
 
-TEST(TEST_cgmesh_merge, normal_crease_keeps_vertices_separate)
+TEST(TEST_cgmesh_merge, normals_are_not_a_merge_criterion)
 {
-    // 2 colocated vertices, normals 90° apart → must NOT merge.
+    // 2 colocated vertices, normals 90° apart. Normals are NOT a merge
+    // criterion (callers recompute them afterwards), so the vertices weld.
+    // This is what lets a faceted STL — whose unmerged vertices each carry
+    // their own facet normal — actually merge.
     auto* m = new Mesh();
     const float verts[] = { 0, 0, 0,   0, 0, 0 };
     m->SetVertices(2, const_cast<float*>(verts));
@@ -111,8 +114,8 @@ TEST(TEST_cgmesh_merge, normal_crease_keeps_vertices_separate)
     m->m_pVertexNormals = { 1, 0, 0,   0, 1, 0 };
 
     m->MergeVertices(1e-6f);
-    EXPECT_EQ(m->GetNVertices(), 2u);
-    EXPECT_EQ(m->m_pVertexNormals.size(), 6u);
+    EXPECT_EQ(m->GetNVertices(), 1u);              // welded despite differing normals
+    EXPECT_EQ(m->m_pVertexNormals.size(), 3u);     // normals shrunk to the merged count
     delete m;
 }
 

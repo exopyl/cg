@@ -1555,7 +1555,6 @@ int Mesh::MergeVertices (float tolerance)
 	const float tol2 = tol * tol;
 	const float uvTol2    = tol2;            // UVs share the position tolerance
 	const float colorTol2 = tol2;            // ditto for colors
-	const float normalCosMin = 0.9999f;      // ~0.81° angular tolerance
 
 	// Cell size : tolerance (or a tiny epsilon when tolerance == 0 so we still
 	// catch exact duplicates without exploding the grid).
@@ -1607,8 +1606,11 @@ int Mesh::MergeVertices (float tolerance)
 				if (ex * ex + ey * ey + ez * ez > tol2)
 					continue;
 
-				// Attribute checks against the winner (newOrig[j]) — required
-				// to preserve UV seams / normal creases / colour islands.
+				// Attribute checks against the winner (newOrig[j]). Vertex
+				// normals are deliberately NOT a criterion: callers recompute
+				// them after merging, so gating on them would only block welds
+				// (e.g. at every facet boundary of an STL). Only authored data
+				// a weld would corrupt — UV seams and colour islands — is kept.
 				const unsigned int jOrig = newOrig[j];
 
 				if (uvParallel)
@@ -1616,13 +1618,6 @@ int Mesh::MergeVertices (float tolerance)
 					const float du = m_pTextureCoordinates[2 * jOrig    ] - m_pTextureCoordinates[2 * i    ];
 					const float dv = m_pTextureCoordinates[2 * jOrig + 1] - m_pTextureCoordinates[2 * i + 1];
 					if (du * du + dv * dv > uvTol2) continue;
-				}
-				if (normParallel)
-				{
-					const float dotN = m_pVertexNormals[3 * jOrig    ] * m_pVertexNormals[3 * i    ]
-					                 + m_pVertexNormals[3 * jOrig + 1] * m_pVertexNormals[3 * i + 1]
-					                 + m_pVertexNormals[3 * jOrig + 2] * m_pVertexNormals[3 * i + 2];
-					if (dotN < normalCosMin) continue;
 				}
 				if (colorParallel)
 				{

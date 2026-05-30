@@ -13,6 +13,8 @@
 #include <wx/statusbr.h>
 #include <wx/image.h>
 #include <cstring>
+#include <cmath>
+#include <algorithm>
 
 BEGIN_EVENT_TABLE(MyGLCanvas, wxGLCanvas)
     EVT_SIZE(MyGLCanvas::OnSize)
@@ -125,7 +127,7 @@ VMeshes* MyGLCanvas::GetVMeshes(void)
 	return m_pVMeshes;
 };
 
-void MyGLCanvas::SetVMeshes(VMeshes* pObject)
+void MyGLCanvas::SetVMeshes(VMeshes* pObject, bool normalize)
 {
 	if (m_pVMeshes)
 	{
@@ -146,14 +148,27 @@ void MyGLCanvas::SetVMeshes(VMeshes* pObject)
 		mesh->ComputeNormals();
 	}
 
-	float center[3];
-	bbox.GetCenter(center);
-	float fLargestLength = bbox.GetLargestLength();
-	for (const auto& mesh : m_pVMeshes->GetMeshes())
+	if (normalize)
 	{
-		mesh->translate(-center[0], -center[1], -center[2]);
-		mesh->scale(1.f / fLargestLength);
+		float center[3];
+		bbox.GetCenter(center);
+		float fLargestLength = bbox.GetLargestLength();
+		for (const auto& mesh : m_pVMeshes->GetMeshes())
+		{
+			mesh->translate(-center[0], -center[1], -center[2]);
+			mesh->scale(1.f / fLargestLength);
+		}
+		// Keep the aggregate bbox in sync so the camera framing below works on
+		// the final (normalized) coordinates.
+		bbox.Translate(-center[0], -center[1], -center[2]);
+		const float s = (fLargestLength != 0.f) ? 1.f / fLargestLength : 1.f;
+		bbox.Scale(s, s, s);
 	}
+
+	// Frame the camera on the resulting model. This is a view-only adjustment
+	// (it touches neither the mesh nor the rendering properties) and is what
+	// makes a non-normalized model visible despite its native scale/position.
+	FrameCamera(bbox);
 
 	UpdateTopologicIssues();
 
@@ -161,9 +176,46 @@ void MyGLCanvas::SetVMeshes(VMeshes* pObject)
 }
 
 //
+// Set the camera distance and clip planes. The camera orbits the WORLD ORIGIN
+// (it is not recentred on the model), so each model is shown at its own
+// coordinate position — a normalized model sits at the origin and appears
+// centred, a non-normalized one appears offset by its native coordinates.
+// We fit the sphere *centred on the origin* that contains the model, which
+// just guarantees it stays visible and inside the clip planes.
+//
+void MyGLCanvas::FrameCamera(const BoundingBox& bbox)
+{
+	if (bbox.IsEmpty())
+		return;
+
+	float mn[3], mx[3];
+	bbox.GetMinMax(mn, mx);
+	const float ax = std::max(std::fabs(mn[0]), std::fabs(mx[0]));
+	const float ay = std::max(std::fabs(mn[1]), std::fabs(mx[1]));
+	const float az = std::max(std::fabs(mn[2]), std::fabs(mx[2]));
+	const float radius = std::sqrt(ax * ax + ay * ay + az * az);
+	if (radius <= 0.f)
+		return;
+
+	// Distance at which a sphere of `radius` (centred on the origin) fits the
+	// vertical fov, + margin.
+	const float halfFovy = (m_fFovy * 0.5f) * 3.14159265f / 180.f;
+	const float sinHalf  = sinf(halfFovy);
+	const float distance = (sinHalf > 1e-4f ? radius / sinHalf : radius * 3.f) * 1.2f;
+
+	m_pTrackball->set_zoom(-distance);
+	// Scale the zoom step to the model so right-drag zoom stays usable at any
+	// scale (the historical feel was precision 2 at distance ~5).
+	m_pTrackball->set_zoom_precision(std::max(0.5f, distance * 0.4f));
+	// Let the trackball derive near/far from the live zoom each frame so the
+	// clip planes follow the scene when zooming in/out.
+	m_pTrackball->set_scene_radius(radius);
+}
+
 //
 //
-void MyGLCanvas::LoadModel(const wxString& filename)
+//
+void MyGLCanvas::LoadModel(const wxString& filename, const ImportSettings& settings)
 {
 #ifdef LINUX
 	locale_t loc;
@@ -180,7 +232,42 @@ void MyGLCanvas::LoadModel(const wxString& filename)
 	wxString msg = wxString::Format(wxT("%zu meshes imported"), meshes->GetNMeshes());
 	*m_CtrlLog << msg << _T("\n");
 
-	SetVMeshes(meshes);
+	// Echo the import options so the effect of each operation is traceable.
+	*m_CtrlLog << wxString::Format(
+		_T("Import options: Normalisation=%s, Triangulate=%s, Merge vertices=%s\n"),
+		settings.normalize     ? _T("on") : _T("off"),
+		settings.triangulate   ? _T("on") : _T("off"),
+		settings.mergeVertices ? _T("on") : _T("off"));
+
+	// Normalise (if enabled), compute normals, frame the camera and show the
+	// model. Import operations then run on the resulting mesh — the same state
+	// the Treatments menu operates on — so Merge vertices is effective at unit
+	// scale rather than a no-op on raw (large) coordinates.
+	SetVMeshes(meshes, settings.normalize);
+
+	if (settings.triangulate || settings.mergeVertices)
+	{
+		for (auto& pMesh : meshes->GetMeshes())
+		{
+			if (settings.triangulate)
+			{
+				const auto nBefore = pMesh->GetNFaces();
+				pMesh->Triangulate();
+				*m_CtrlLog << wxString::Format(_T("  Triangulate: %u -> %u faces\n"),
+				                               nBefore, pMesh->GetNFaces());
+			}
+			if (settings.mergeVertices)
+			{
+				const auto nBefore = pMesh->GetNVertices();
+				pMesh->MergeVertices();
+				*m_CtrlLog << wxString::Format(_T("  Merge vertices: %u -> %u vertices\n"),
+				                               nBefore, pMesh->GetNVertices());
+			}
+			pMesh->ComputeNormals();
+		}
+		UpdateTopologicIssues();
+		Refresh(false);
+	}
 
 /*
 	m_listId.clear ();

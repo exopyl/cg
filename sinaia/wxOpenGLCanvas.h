@@ -5,9 +5,11 @@
 #include <chrono>
 #include <list>
 #include "../src/cgre/cgre.h"
+#include "ImportSettings.h"
 
 
 class Mesh;
+class BoundingBox;
 
 //
 // ref : http://wiki.wxwidgets.org/WxGLCanvas
@@ -23,14 +25,17 @@ public:
 	MyGLCanvas(wxWindow *parent, wxTextCtrl* pCtrlLog, int *args = 0);
 	virtual ~MyGLCanvas();
 	
-	void LoadModel(const wxString& filename);
+	void LoadModel(const wxString& filename, const ImportSettings& settings = ImportSettings());
 	void SaveModel(const wxString& filename);
 
 	Mesh* GetMesh(void);
 	void  SetMesh(Mesh *pMesh);
 
 	VMeshes* GetVMeshes(void);
-	void SetVMeshes(VMeshes* pVMeshes);
+	// normalize: when true (default), the meshes are centered and scaled to a
+	// unit bounding box. File import passes the user's "Normalisation" import
+	// option here; geometry-creation callers keep the default.
+	void SetVMeshes(VMeshes* pVMeshes, bool normalize = true);
 
 	void SetBackgroundColor (unsigned char r, unsigned char g, unsigned char b);
 	void GetBackgroundColor (unsigned char *r, unsigned char *g, unsigned char *b);
@@ -92,6 +97,10 @@ protected:
 
 private:
 	void InitGL();
+
+	// Position the camera (zoom, rotation pivot and clip planes) so the given
+	// model bounding box fits in view, whatever its native scale/position.
+	void FrameCamera(const BoundingBox& bbox);
 
 	bool m_bInitialized;
 

@@ -210,6 +210,7 @@ private:
     void OnNewParameterizedGeometry(wxCommandEvent& evt);
     void OnNewParameterizedSvg(wxCommandEvent& evt);
     void OnParameterChanged();
+    void OnSettings(wxCommandEvent& evt);
     void OnExit(wxCommandEvent& evt);
     void OnAbout(wxCommandEvent& evt);
     void OnTabAlignment(wxCommandEvent &evt);
@@ -296,6 +297,9 @@ private:
     long m_notebook_theme;
 
     bool m_bShowFps = false;
+
+    // Operations applied to a model on import (edited via File > Settings).
+    ImportSettings m_importSettings;
 
     // Parameterized geometry: the panel shows the params of the object
     // associated with the currently active tab. One entry per tab.

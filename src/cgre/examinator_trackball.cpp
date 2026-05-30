@@ -28,6 +28,10 @@ Ctrackball::Ctrackball ()
 	ytrans = 0.;
 	lastX = 0;
 	lastY = 0;
+
+	m_zNear = .01f;
+	m_zFar  = 10.f;
+	m_sceneRadius = 0.f;
 }
 
 void
@@ -140,8 +144,20 @@ void Ctrackball::set_camera (void)
 	// adjust perspective
 	float fovyInDegrees = 45.f;
 	float aspectRatio = (float)gl_window_width / (float)gl_window_height;
-	float zNear = .01f;
-	float zFar = 10.f;
+	float zNear = m_zNear;
+	float zFar = m_zFar;
+
+	// When a scene radius is known, bracket the model around the current eye
+	// distance (|zoom|) so zooming never pushes it through the clip planes.
+	if (m_sceneRadius > 0.f)
+	{
+		const float dist = fabsf(zoom);
+		zFar  = dist + m_sceneRadius * 1.2f;
+		zNear = dist - m_sceneRadius * 1.2f;
+		const float minNear = zFar * 0.001f;   // keep far/near ratio sane
+		if (zNear < minNear)
+			zNear = minNear;
+	}
 
 	float ymax = zNear * tanf(fovyInDegrees * 3.14159 / 360.0);
 	// ymin = -ymax;
@@ -230,6 +246,12 @@ void
 Ctrackball::set_zoom_precision (float fZoomPrecision)
 {
 	m_fZoomPrecision = fZoomPrecision;
+}
+
+void
+Ctrackball::set_scene_radius (float radius)
+{
+	m_sceneRadius = radius;
 }
 
 void

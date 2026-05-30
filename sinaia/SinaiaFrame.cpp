@@ -23,6 +23,7 @@
 #include "wxOpenGLCanvas.h"
 //#include "DrawingArea.h"
 #include "SettingsPanel.h"
+#include "SettingsDialog.h"
 #include "PropertyPanel.h"
 
 #include "../src/cgmesh/smoothing_taubin.h"
@@ -109,6 +110,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_BORROMEAN_RINGS, MyFrame::OnNewParameterizedGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE, MyFrame::OnNewParameterizedGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_SVG,           MyFrame::OnNewParameterizedSvg)
+    EVT_MENU(ID_Settings, MyFrame::OnSettings)
     EVT_MENU(wxID_EXIT, MyFrame::OnExit)
     EVT_MENU(wxID_ABOUT, MyFrame::OnAbout)
     EVT_MENU(ID_3D_FRAME, MyFrame::On3DFrame)
@@ -265,6 +267,8 @@ MyFrame::MyFrame(wxWindow* parent,
     file_menu->Append(wxID_SAVEAS, _T("&Save As...\tF12"), _T("Save to a new file"));
     file_menu->AppendSeparator();
     file_menu->Append(ID_FILE_EXPORT_IMAGE, _T("&Export image as..."), _T("Export current view to a BMP image"));
+    file_menu->AppendSeparator();
+    file_menu->Append(ID_Settings, _T("&Settings..."), _T("Configure import options"));
     file_menu->AppendSeparator();
     file_menu->Append(wxID_EXIT, _("Exit"));
 
@@ -1147,7 +1151,7 @@ void MyFrame::OpenDocument(const wxString& strFilename)
     *m_pWndLogging << _T("Opening ") << strFilename << _T("\n");
 
     MyGLCanvas* pGLCanvas = new MyGLCanvas(m_pCtrl, m_pWndLogging, (int*)MyGLCanvas::GetDefaultAttributes());
-    pGLCanvas->LoadModel(strFilename);
+    pGLCanvas->LoadModel(strFilename, m_importSettings);
 
     wxArrayString aString = wxSplit(strFilename, '\\');
     wxString title = aString.back();
@@ -1558,6 +1562,18 @@ void MyFrame::OnParameterChanged()
 	auto *pNewVMeshes = new VMeshes();
 	pNewVMeshes->AddMesh(pNewMesh);
 	pCanvas->SetVMeshes(pNewVMeshes);  // deletes old VMeshes, normalizes, refreshes
+}
+
+//
+// File > Settings: edit the operations applied to a model on import. The
+// new settings take effect for subsequently imported models only; models
+// already open are left untouched.
+//
+void MyFrame::OnSettings(wxCommandEvent& WXUNUSED(event))
+{
+	SettingsDialog dlg(this, m_importSettings);
+	if (dlg.ShowModal() == wxID_OK)
+		m_importSettings = dlg.GetImportSettings();
 }
 
 //
