@@ -27,6 +27,7 @@ typedef struct rendering_properties
 	int display_fill;
 	int display_warning;
 	int display_repere;
+	int display_grid;
 	int normalized;
 	float pointsize;
 	float linesize;

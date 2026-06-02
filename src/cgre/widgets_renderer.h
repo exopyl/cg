@@ -10,7 +10,7 @@ extern void screenshot (int win_width, int win_height);
 // utils
 extern void repere_draw (void);
 extern void repere_draw2 (void);
-extern void draw_grid (float size = 1.f, int step = 10);
+extern void draw_grid (float size = 2., int step = 10);
 
 //extern void display_framerate (CFrameRate& framerate);
 
