@@ -8,6 +8,11 @@ bool BoundingBox::IsEmpty() const
 	return m_bEmpty;
 }
 
+void BoundingBox::Clear()
+{
+	m_bEmpty = true;
+}
+
 void BoundingBox::AddPoint(float x, float y, float z)
 {
 	if (m_bEmpty)

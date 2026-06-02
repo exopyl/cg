@@ -24,6 +24,7 @@ public:
 	size_t GetNMeshes() const;
 	bool IsTriangleMesh() const;
 
+	void Normalize();
 
 protected:
 	// import / export

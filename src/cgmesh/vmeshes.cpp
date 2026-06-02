@@ -54,6 +54,26 @@ bool VMeshes::IsTriangleMesh() const
 	return true;
 }
 
+void VMeshes::Normalize()
+{
+	BoundingBox bbox;
+	for (const auto& mesh : GetMeshes())
+	{
+		mesh->computebbox();
+		bbox.AddBoundingBox(mesh->bbox());
+	}
+
+	float center[3];
+	bbox.GetCenter(center);
+	float fLargestLength = bbox.GetLargestLength();
+	for (const auto& mesh : GetMeshes())
+	{
+		mesh->translate(-center[0], -center[1], -center[2]);
+		mesh->scale(1.f / fLargestLength);
+        mesh->IncrementRevision();
+	}
+}
+
 bool VMeshes::save (const char *filename)
 {
 	bool res = false;

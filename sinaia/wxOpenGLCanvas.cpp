@@ -138,37 +138,38 @@ void MyGLCanvas::SetVMeshes(VMeshes* pObject, bool normalize)
 
 	m_pVMeshes = pObject;
 
+    ApplyNormalization(normalize);
+}
 
-	BoundingBox bbox;
+void MyGLCanvas::ApplyNormalization(bool normalize)
+{
+	if (!m_pVMeshes) return;
+
 	for (const auto& mesh : m_pVMeshes->GetMeshes())
 	{
-		mesh->computebbox();
-		bbox.AddBoundingBox(mesh->bbox());
-
 		mesh->ComputeNormals();
 	}
 
 	if (normalize)
 	{
-		float center[3];
-		bbox.GetCenter(center);
-		float fLargestLength = bbox.GetLargestLength();
-		for (const auto& mesh : m_pVMeshes->GetMeshes())
-		{
-			mesh->translate(-center[0], -center[1], -center[2]);
-			mesh->scale(1.f / fLargestLength);
-		}
-		// Keep the aggregate bbox in sync so the camera framing below works on
-		// the final (normalized) coordinates.
-		bbox.Translate(-center[0], -center[1], -center[2]);
-		const float s = (fLargestLength != 0.f) ? 1.f / fLargestLength : 1.f;
-		bbox.Scale(s, s, s);
+		m_pVMeshes->Normalize(); // This method now re-centers and re-scales meshes and updates their individual bboxes
 	}
 
-	// Frame the camera on the resulting model. This is a view-only adjustment
-	// (it touches neither the mesh nor the rendering properties) and is what
-	// makes a non-normalized model visible despite its native scale/position.
-	FrameCamera(bbox);
+	// Always compute the aggregate bounding box for all meshes AFTER potential normalization
+	BoundingBox aggregateBbox;
+	for (const auto& mesh : m_pVMeshes->GetMeshes())
+	{
+		mesh->computebbox(); // Ensure individual mesh bboxes are up-to-date
+		aggregateBbox.AddBoundingBox(mesh->bbox());
+	}
+
+	// Add grid to bounding box to ensure it's not clipped
+	aggregateBbox.AddPoint(2.f, 2.f, 1.f);
+	aggregateBbox.AddPoint(-2.f, -2.f, -1.f);
+
+	// Frame the camera on the resulting model.
+	m_pTrackball->ResetTransformations(); // Reset camera rotation/translation
+	FrameCamera(aggregateBbox);
 
 	UpdateTopologicIssues();
 
@@ -341,6 +342,8 @@ void MyGLCanvas::DrawGL()
 
 	if (prop.display_repere)
 		repere_draw ();
+	if (prop.display_grid)
+		draw_grid();
 	for (const auto& mesh : m_pVMeshes->GetMeshes())
 	{
 		// CG_RENDERING_VBO: server-side buffers (positions, normals, UVs,
@@ -659,34 +662,55 @@ void MyGLCanvas::InitGL()
 */
 
 	float white[4] = {1.0, 1.0, 1.0, 1.0};
-	float black[4] = {0.0, 0.0, 0.0, 0.0};
-	// Lights
+	float black[4] = {0.0, 0.0, 0.0, 1.0};
+
+	// Lighting. A single full-intensity headlight plus the default global
+	// ambient (0.2) flattens the model: lit faces clip toward white and
+	// recesses stay bright, washing out the texture relief. Instead use a
+	// low global ambient, a slightly-under-full key light from the upper
+	// front-left, and a dim fill from the opposite side. Both are directional
+	// (w=0) so the shading is independent of this very large model's scale and
+	// off-origin position.
+	GLfloat globalAmbient[4] = { 0.12f, 0.12f, 0.12f, 1.0f };
+	glLightModelfv (GL_LIGHT_MODEL_AMBIENT, globalAmbient);
+
+	// Two-sided lighting: light back faces with a flipped normal. Imported
+	// meshes (e.g. OBJ from 3D Warehouse) often have inconsistent face winding,
+	// which leaves some faces with inward-pointing normals; without this they
+	// render near-black ("black reflections" that move with the view).
+	glLightModeli (GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+
 	glEnable (GL_LIGHTING);
+
+	// Key light
+	GLfloat keyDiffuse[4]  = { 0.75f, 0.75f, 0.75f, 1.0f };
+	GLfloat keyDir[4]      = { -0.4f, 0.6f, 1.0f, 0.0f };
 	glEnable (GL_LIGHT0);
-	glLightfv(GL_LIGHT0, GL_DIFFUSE, white);
-	glLightfv(GL_LIGHT0, GL_AMBIENT, black);
+	glLightfv (GL_LIGHT0, GL_AMBIENT,  black);
+	glLightfv (GL_LIGHT0, GL_DIFFUSE,  keyDiffuse);
+	glLightfv (GL_LIGHT0, GL_SPECULAR, white);
+	glLightfv (GL_LIGHT0, GL_POSITION, keyDir);
 
+	// Fill light: dimmer, opposite side, no specular — lifts shadows just
+	// enough to keep them readable without flattening the relief.
+	GLfloat fillDiffuse[4] = { 0.28f, 0.28f, 0.30f, 1.0f };
+	GLfloat fillDir[4]     = { 0.7f, 0.25f, 0.4f, 0.0f };
+	glEnable (GL_LIGHT1);
+	glLightfv (GL_LIGHT1, GL_AMBIENT,  black);
+	glLightfv (GL_LIGHT1, GL_DIFFUSE,  fillDiffuse);
+	glLightfv (GL_LIGHT1, GL_SPECULAR, black);
+	glLightfv (GL_LIGHT1, GL_POSITION, fillDir);
 
-	GLfloat shininess[] = { 100.0F }; 
-	glLightfv( GL_LIGHT0, GL_SPECULAR, white);
-	glLightfv( GL_LIGHT0, GL_DIFFUSE, white);
-	GLfloat position[] = { 0.0, 0.0, 50.0, 1.0 };
-	glLightfv (GL_LIGHT0, GL_POSITION, position);
-
-
-	glEnable (GL_COLOR_MATERIAL);
-	glColorMaterial (GL_FRONT, GL_DIFFUSE);
+	// Default material (overridden per material at draw time).
 	glColor3f (.2, .5, .8);
-
 	GLfloat no_mat[] = {0.f, 0.f, 0.f, 1.f};
 	GLfloat mat_diffuse[] = {0.1f, 0.5f, 0.8f, 1.f};
 	GLfloat no_shininess[] = {20.f};
-	glMaterialfv (GL_FRONT, GL_AMBIENT, no_mat);
-	glMaterialfv (GL_FRONT, GL_DIFFUSE, mat_diffuse);
-	glMaterialfv (GL_FRONT, GL_SPECULAR, no_mat);
-	glMaterialfv (GL_FRONT, GL_SHININESS, no_shininess);
-	glMaterialfv (GL_FRONT, GL_EMISSION, no_mat);
-
+	glMaterialfv (GL_FRONT_AND_BACK, GL_AMBIENT, no_mat);
+	glMaterialfv (GL_FRONT_AND_BACK, GL_DIFFUSE, mat_diffuse);
+	glMaterialfv (GL_FRONT_AND_BACK, GL_SPECULAR, no_mat);
+	glMaterialfv (GL_FRONT_AND_BACK, GL_SHININESS, no_shininess);
+	glMaterialfv (GL_FRONT_AND_BACK, GL_EMISSION, no_mat);
 
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     glEnable(GL_COLOR_MATERIAL);
@@ -810,6 +834,17 @@ void MyGLCanvas::ChangeRepere(void)
 bool MyGLCanvas::GetRepere(void)
 {
 	return prop.display_repere;
+}
+
+void MyGLCanvas::ChangeGrid(void)
+{
+	prop.display_grid = !prop.display_grid;
+	Refresh(false);
+}
+
+bool MyGLCanvas::GetGrid(void)
+{
+	return prop.display_grid;
 }
 
 void MyGLCanvas::ChangeBoundingBox (void)

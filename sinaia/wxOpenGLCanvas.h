@@ -58,9 +58,14 @@ public:
 	void ChangeRepere(void);
 	bool GetRepere(void);
 
+	void ChangeGrid(void);
+	bool GetGrid(void);
+
 	void SetClippingPlane(bool bActive) { prop.clipping_plane_active = bActive; Refresh(false); };
 	bool GetClippingPlane (void) { return prop.clipping_plane_active; };
 	void SetClippingPlaneZ(float z) { prop.clipping_plane_z = z; Refresh(false); };
+
+	void ApplyNormalization(bool normalize);
 
 	void ChangeWarning(void);	bool GetWarning(void);
 

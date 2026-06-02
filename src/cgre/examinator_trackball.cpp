@@ -248,6 +248,15 @@ Ctrackball::set_zoom_precision (float fZoomPrecision)
 	m_fZoomPrecision = fZoomPrecision;
 }
 
+void Ctrackball::ResetTransformations()
+{
+    for (int i=0; i<4; i++)
+        for (int j=0; j<4; j++)
+            tb_transform[i][j] = (i == j)? 1.0 : 0.0;
+    xtrans = 0.f;
+    ytrans = 0.f;
+}
+
 void
 Ctrackball::set_scene_radius (float radius)
 {

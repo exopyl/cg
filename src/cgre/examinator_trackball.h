@@ -31,6 +31,8 @@ public:
 	void set_zoom (float zoom);
 	void set_zoom_precision (float fZoomPrecision);
 
+	void ResetTransformations();
+
 	// Camera framing helper. The camera always orbits the world origin; the
 	// model is shown wherever its coordinates place it.
 	//

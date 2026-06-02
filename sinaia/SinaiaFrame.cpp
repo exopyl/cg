@@ -114,6 +114,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(wxID_EXIT, MyFrame::OnExit)
     EVT_MENU(wxID_ABOUT, MyFrame::OnAbout)
     EVT_MENU(ID_3D_FRAME, MyFrame::On3DFrame)
+    EVT_MENU(ID_3D_GRID, MyFrame::On3DGrid)
     EVT_MENU(ID_3D_FILL, MyFrame::On3DFill)
     EVT_MENU(ID_3D_WIREFRAME, MyFrame::On3DWireframe)
     EVT_MENU(ID_3D_SMOOTH, MyFrame::On3DSmooth)
@@ -166,6 +167,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_TREATMENT_MAKE_TRIANGLES, MyFrame::OnTreatmentMakeTriangles)
     EVT_UPDATE_UI(ID_TREATMENT_MAKE_TRIANGLES, MyFrame::OnUpdateUITreatmentMakeTriangles)
     EVT_MENU(ID_TREATMENT_MERGE_VERTICES, MyFrame::OnTreatmentMergeVertices)
+    EVT_MENU(ID_TREATMENT_NORMALIZE, MyFrame::OnTreatmentNormalize)
     EVT_MENU(ID_TREATMENT_SMOOTHING_TAUBIN, MyFrame::OnTreatmentSmoothingTaubin)
     EVT_MENU(ID_TREATMENT_SMOOTHING_LAPLACIAN, MyFrame::OnTreatmentSmoothingLaplacian)
     EVT_MENU(ID_TREATMENT_SUBDIVISION_LOOP, MyFrame::OnTreatmentSubdivisionLoop)
@@ -329,28 +331,13 @@ MyFrame::MyFrame(wxWindow* parent,
 
     wxMenu* options_menu = new wxMenu;
 
+    // The notebook appearance options (theme, close button, alignment, tab
+    // flags) have been moved to the "2D Panel" tab of the Settings dialog
+    // (File > Settings...). See SettingsDialog / PanelSettings. The 3D view
+    // options below stay in the menu, where they apply live.
     wxMenu* panel_menu = new wxMenu;
-    panel_menu->AppendRadioItem(ID_NotebookArtGloss, _("Glossy Theme (Default)"));
-    panel_menu->AppendRadioItem(ID_NotebookArtSimple, _("Simple Theme"));
-    panel_menu->AppendSeparator();
-    panel_menu->AppendRadioItem(ID_NotebookNoCloseButton, _("No Close Button"));
-    panel_menu->AppendRadioItem(ID_NotebookCloseButton, _("Close Button at Right"));
-    panel_menu->AppendRadioItem(ID_NotebookCloseButtonAll, _("Close Button on All Tabs"));
-    panel_menu->AppendRadioItem(ID_NotebookCloseButtonActive, _("Close Button on Active Tab"));
-    panel_menu->AppendSeparator();
-    panel_menu->AppendRadioItem(ID_NotebookAlignTop, _("Tab Top Alignment"));
-    panel_menu->AppendRadioItem(ID_NotebookAlignBottom, _("Tab Bottom Alignment"));
-    panel_menu->AppendSeparator();
-    panel_menu->AppendCheckItem(ID_NotebookAllowTabMove, _("Allow Tab Move"));
-    panel_menu->AppendCheckItem(ID_NotebookAllowTabExternalMove, _("Allow External Tab Move"));
-    panel_menu->AppendCheckItem(ID_NotebookAllowTabSplit, _("Allow Notebook Split"));
-    panel_menu->AppendCheckItem(ID_NotebookScrollButtons, _("Scroll Buttons Visible"));
-    panel_menu->AppendCheckItem(ID_NotebookWindowList, _("Window List Button Visible"));
-    panel_menu->AppendCheckItem(ID_NotebookTabFixedWidth, _("Fixed-width Tabs"));
-    panel_menu->AppendSeparator();
     panel_menu->Append(ID_BUTTON_RENDERING_BGCOLOR, _("Background"));
     panel_menu->AppendCheckItem(ID_RENDER_SHOW_FPS, _("Show FPS"));
-
     options_menu->AppendSubMenu(panel_menu, wxT("3D Panel"));
 
     wxMenu* windows_menu = new wxMenu;
@@ -367,7 +354,7 @@ MyFrame::MyFrame(wxWindow* parent,
     wxMenu* treatments_menu = new wxMenu;
     treatments_menu->Append(ID_TREATMENT_MAKE_TRIANGLES, _("Make triangles"));
     treatments_menu->Append(ID_TREATMENT_MERGE_VERTICES, _("Merge vertices"));
-
+    treatments_menu->Append(ID_TREATMENT_NORMALIZE, _("Normalize"));
     wxMenu* smoothing_menu = new wxMenu;
     smoothing_menu->Append(ID_TREATMENT_SMOOTHING_TAUBIN, _("Taubin"));
     smoothing_menu->Append(ID_TREATMENT_SMOOTHING_LAPLACIAN, _("Laplacian"));
@@ -435,6 +422,7 @@ MyFrame::MyFrame(wxWindow* parent,
     //m_pToolBar2->AddTool(wxID_SAVE, wxT("Test"), tb2_save);
     m_pToolBar2->AddTool(wxID_SAVEAS, wxT("Test"), tb2_saveas);
     m_pToolBar2->AddTool(ID_3D_FRAME, wxT("Repere"), wxBitmap(repere_xpm));
+    m_pToolBar2->AddTool(ID_3D_GRID, wxT("Grid"), wxBitmap(grid_xpm));
     m_pToolBar2->AddTool(ID_3D_FILL, wxT("Test"), wxBitmap (fill_xpm));
     m_pToolBar2->AddTool(ID_3D_WIREFRAME, wxT("Test"), wxBitmap (wireframe_xpm));
     m_pToolBar2->AddTool(ID_3D_POINT, wxT("Test"), wxBitmap (cloud_xpm));
@@ -1063,6 +1051,9 @@ void MyFrame::OnNotebookPageChanged(wxAuiNotebookEvent& event)
         p = m_pToolBar2->FindTool(ID_3D_FRAME);
         if (p) p->SetSticky(pGLCanvas->GetRepere());
 
+        p = m_pToolBar2->FindTool(ID_3D_GRID);
+        if (p) p->SetSticky(pGLCanvas->GetGrid());
+
         p = m_pToolBar2->FindTool(ID_3D_FILL);
         if (p) p->SetSticky(pGLCanvas->GetFill());
 
@@ -1166,6 +1157,10 @@ void MyFrame::OpenDocument(const wxString& strFilename)
 
     p = m_pToolBar2->FindTool(ID_3D_FRAME);
     b = pGLCanvas->GetRepere();
+    p->SetSticky(b);
+
+    p = m_pToolBar2->FindTool(ID_3D_GRID);
+    b = pGLCanvas->GetGrid();
     p->SetSticky(b);
 
     p = m_pToolBar2->FindTool(ID_3D_FILL);
@@ -1571,9 +1566,49 @@ void MyFrame::OnParameterChanged()
 //
 void MyFrame::OnSettings(wxCommandEvent& WXUNUSED(event))
 {
-	SettingsDialog dlg(this, m_importSettings);
+	// Seed the dialog with the current import options and the live notebook
+	// appearance options (the "2D Panel" tab).
+	PanelSettings panel;
+	panel.notebookStyle = m_notebook_style;
+	panel.notebookTheme = static_cast<int>(m_notebook_theme);
+
+	// The 2D Panel options are applied live as the user edits them; the dialog
+	// calls back into ApplyPanelSettings on every change and restores this
+	// initial state itself if the user cancels.
+	SettingsDialog dlg(this, m_importSettings, panel,
+	                   [this](const PanelSettings& p) { ApplyPanelSettings(p); });
 	if (dlg.ShowModal() == wxID_OK)
+	{
 		m_importSettings = dlg.GetImportSettings();
+		ApplyPanelSettings(dlg.GetPanelSettings());
+	}
+}
+
+//
+// Apply the notebook appearance options edited in the "2D Panel" tab of the
+// Settings dialog: restyle every managed wxAuiNotebook with the chosen flags
+// and tab art theme. (FPS overlay and 3D background colour stay in the
+// "Options > 3D Panel" menu and are handled by their own live handlers.)
+//
+void MyFrame::ApplyPanelSettings(const PanelSettings& panel)
+{
+	m_notebook_style = panel.notebookStyle;
+	m_notebook_theme = panel.notebookTheme;
+
+	wxAuiPaneInfoArray& all_panes = m_mgr.GetAllPanes();
+	for (size_t i = 0, count = all_panes.GetCount(); i < count; ++i)
+	{
+		wxAuiPaneInfo& pane = all_panes.Item(i);
+		if (pane.window->IsKindOf(CLASSINFO(wxAuiNotebook)))
+		{
+			wxAuiNotebook* nb = (wxAuiNotebook*)pane.window;
+			nb->SetArtProvider(m_notebook_theme == 1
+			                       ? static_cast<wxAuiTabArt*>(new wxAuiSimpleTabArt)
+			                       : static_cast<wxAuiTabArt*>(new wxAuiDefaultTabArt));
+			nb->SetWindowStyleFlag(m_notebook_style);
+			nb->Refresh();
+		}
+	}
 }
 
 //
@@ -1590,6 +1625,24 @@ void MyFrame::On3DFrame(wxCommandEvent& WXUNUSED(event))
 
 		wxAuiToolBarItem *p = m_pToolBar2->FindTool(ID_3D_FRAME);
 		bool b = pGLCanvas->GetRepere ();
+		p->SetSticky (b);
+	}
+}
+
+//
+//
+//
+void MyFrame::On3DGrid(wxCommandEvent& WXUNUSED(event))
+{
+	*m_pWndLogging << _T("Grid\n");
+	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection ());
+	if (pGLCanvas)
+	{
+		pGLCanvas->ChangeGrid ();
+		pGLCanvas->Refresh ();
+
+		wxAuiToolBarItem *p = m_pToolBar2->FindTool(ID_3D_GRID);
+		bool b = pGLCanvas->GetGrid ();
 		p->SetSticky (b);
 	}
 }
@@ -2239,6 +2292,23 @@ void MyFrame::OnTreatmentMergeVertices(wxCommandEvent& WXUNUSED(event))
 	pGLCanvas->UpdateTopologicIssues();
 	pGLCanvas->Refresh();
 	UpdatePropertiesGrid();
+}
+
+void MyFrame::OnTreatmentNormalize(wxCommandEvent& WXUNUSED(event))
+{
+	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+	if (!pGLCanvas)
+		return;
+
+    VMeshes * pVMeshes = pGLCanvas->GetVMeshes();
+	if (!pVMeshes)
+		return;
+
+	pGLCanvas->ApplyNormalization(true); // Call the new ApplyNormalization method
+
+	pGLCanvas->Refresh();
+	UpdatePropertiesGrid();
+	*m_pWndLogging << _T("Model normalized\n");
 }
 
 void MyFrame::OnTreatmentSmoothingTaubin(wxCommandEvent& WXUNUSED(event))

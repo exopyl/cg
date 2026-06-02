@@ -71,6 +71,7 @@ class MyFrame : public wxFrame
         ID_SampleItem,
 
         ID_3D_FRAME,
+        ID_3D_GRID,
         ID_3D_FILL,
         ID_3D_WIREFRAME,		ID_3D_POINT,
 		ID_3D_SMOOTH,
@@ -139,6 +140,7 @@ class MyFrame : public wxFrame
 
 	ID_TREATMENT_MAKE_TRIANGLES,
 	ID_TREATMENT_MERGE_VERTICES,
+	ID_TREATMENT_NORMALIZE,
 	ID_TREATMENT_SMOOTHING_TAUBIN,
 	ID_TREATMENT_SMOOTHING_LAPLACIAN,
 	ID_TREATMENT_SUBDIVISION_LOOP,
@@ -176,6 +178,9 @@ public:
     // model is open. Used by the remote console.
     MyGLCanvas* GetActiveCanvas();
 
+    // Load a model file into a new tab. Used by the remote console ('open').
+    void LoadModelFile(const wxString& filename) { OpenDocument(filename); }
+
 private:
     wxTextCtrl* CreateTextCtrl(const wxString& text = wxEmptyString);
     wxGrid* CreateGrid();
@@ -211,6 +216,7 @@ private:
     void OnNewParameterizedSvg(wxCommandEvent& evt);
     void OnParameterChanged();
     void OnSettings(wxCommandEvent& evt);
+    void ApplyPanelSettings(const struct PanelSettings& panel);
     void OnExit(wxCommandEvent& evt);
     void OnAbout(wxCommandEvent& evt);
     void OnTabAlignment(wxCommandEvent &evt);
@@ -221,6 +227,7 @@ private:
     void OnNotebookPageChanged(wxAuiNotebookEvent& event);
 
     void On3DFrame(wxCommandEvent& evt);
+    void On3DGrid(wxCommandEvent& evt);
     void On3DFill(wxCommandEvent& evt);	void On3DWireframe(wxCommandEvent& evt);
 	void On3DPoint(wxCommandEvent& evt);
 	void On3DSmooth(wxCommandEvent& evt);
@@ -249,6 +256,7 @@ private:
 
 	void OnTreatmentMakeTriangles(wxCommandEvent& evt);
 	void OnTreatmentMergeVertices(wxCommandEvent& evt);
+	void OnTreatmentNormalize(wxCommandEvent& evt);
 	void OnTreatmentSmoothingTaubin(wxCommandEvent& evt);
 	void OnTreatmentSmoothingLaplacian(wxCommandEvent& evt);
 	void OnTreatmentSubdivisionLoop(wxCommandEvent& evt);

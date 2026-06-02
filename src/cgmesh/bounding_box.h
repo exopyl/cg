@@ -6,6 +6,7 @@ public:
 	BoundingBox() = default;
 
 	bool IsEmpty() const;
+	void Clear();
 	void AddPoint(float x, float y, float z);
 	void AddBoundingBox(const BoundingBox& bbox);
 

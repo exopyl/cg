@@ -273,6 +273,23 @@ std::string cmdFlip(MyFrame* frame, int n)
     return os.str();
 }
 
+std::string cmdOpen(MyFrame* frame, const std::string& path)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    bool ok = callOnMain([frame, &path]() -> bool {
+        const wxString wxPath = wxString::FromUTF8(path.c_str());
+        if (!wxFileExists(wxPath))
+            return false;
+        frame->LoadModelFile(wxPath);
+        return true;
+    });
+
+    if (!ok)
+        return "ERR open failed (file not found?): " + path + "\n";
+    return "opened " + path + "\nOK\n";
+}
+
 std::string cmdScreenshot(MyFrame* frame, const std::string& path)
 {
     if (!frame) return "ERR frame unavailable\n";
@@ -312,6 +329,7 @@ std::string cmdHelp()
         "  vertex N V                 vertex V of mesh N: pos, normal, uv\n"
         "  material N M               material M of mesh N: type, colors\n"
         "  flip N                     flip winding of every face of mesh N\n"
+        "  open PATH                  load a model file into a new tab\n"
         "  screenshot PATH            save current viewport to PATH as PNG\n"
         "  help                       this help\n"
         "  quit                       close the connection\n"
@@ -370,6 +388,14 @@ cgnet::Reply dispatch(const std::string& rawLine, MyFrame* frame)
         path = trim(path);
         if (path.empty()) return { "ERR usage: screenshot PATH\n", false };
         return { cmdScreenshot(frame, path), false };
+    }
+    if (cmd == "open")
+    {
+        std::string path;
+        std::getline(iss, path);
+        path = trim(path);
+        if (path.empty()) return { "ERR usage: open PATH\n", false };
+        return { cmdOpen(frame, path), false };
     }
 
     return { "ERR unknown command: " + cmd + " (try 'help')\n", false };
