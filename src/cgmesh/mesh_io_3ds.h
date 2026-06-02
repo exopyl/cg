@@ -36,6 +36,12 @@
 	void ProcessNextMaterialChunk_3DS	(t3DSModel*,				t3DSChunk*);
 	void ProcessNextKeyFrameChunk_3DS	(t3DSModel*,				t3DSChunk*);
 	void ProcessKeyFrameChunk_3DS		(t3DSModel*,				t3DSChunk*);
+
+	// Lightweight keyframer parser: captures the per-object node hierarchy
+	// (parent, pivot, first position/rotation/scale key) used to assemble the
+	// scene. See t3DSKfNode.
+	void ParseKeyframer_3DS				(t3DSModel*,				t3DSChunk*);
+	void ParseKfNode_3DS				(t3DSModel*, t3DSKfNode*,	t3DSChunk*);
 	void ProcessTrackHeader				(t3DSTrackHeader*,			t3DSChunk*);
 
 	// This reads the RGB value for the object's color

@@ -261,31 +261,138 @@ bool VMeshes::export_ply(const char* filename)
 	return false;
 }
 
+namespace {
+
+// Helpers building 4x4 transforms in the column-vector convention (w = M * v),
+// in native 3DS coordinates (Z-up). See VMeshes::import_3ds.
+Matrix4f Kf_Translation(float tx, float ty, float tz)
+{
+	return Matrix4f(1,0,0,tx, 0,1,0,ty, 0,0,1,tz, 0,0,0,1);
+}
+
+Matrix4f Kf_Scale(float sx, float sy, float sz)
+{
+	return Matrix4f(sx,0,0,0, 0,sy,0,0, 0,0,sz,0, 0,0,0,1);
+}
+
+// Rodrigues axis-angle rotation. 3DS stores the rotation with the opposite
+// sign to the right-hand rule, so callers pass the negated angle.
+Matrix4f Kf_Rotation(float angle, const float axis[3])
+{
+	float x = axis[0], y = axis[1], z = axis[2];
+	float len = std::sqrt(x*x + y*y + z*z);
+	if (len < 1e-12f || std::fabs(angle) < 1e-9f)
+		return Matrix4f(); // identity
+	x /= len; y /= len; z /= len;
+	float c = std::cos(angle), s = std::sin(angle), t = 1.0f - c;
+	return Matrix4f(
+		t*x*x + c,   t*x*y - s*z, t*x*z + s*y, 0,
+		t*x*y + s*z, t*y*y + c,   t*y*z - s*x, 0,
+		t*x*z - s*y, t*y*z + s*x, t*z*z + c,   0,
+		0, 0, 0, 1);
+}
+
+} // namespace
+
 bool VMeshes::import_3ds(const char* filename)
 {
 	t3DSModel* p = Load3DSFile(filename, nullptr);
 	if (!p) return false;
 
+	// 3DS materials reference texture files by bare name; they live next to the
+	// model. Remember the model's directory so MaterialTexture can find them.
+	std::string modelDir;
+	{
+		std::string f(filename ? filename : "");
+		size_t slash = f.find_last_of("/\\");
+		if (slash != std::string::npos)
+			modelDir = f.substr(0, slash);
+	}
+
+	// Build the world matrix of every keyframer node (frame-0 pose). Parents
+	// always precede their children in the file, so a single forward pass
+	// accumulates parent * local correctly.
+	std::vector<Matrix4f> nodeWorld(p->pKfNodes.size());
+	for (size_t i = 0; i < p->pKfNodes.size(); ++i)
+	{
+		const t3DSKfNode& n = p->pKfNodes[i];
+		Matrix4f local = Kf_Translation(n.pos[0], n.pos[1], n.pos[2])
+		               * (n.hasRot ? Kf_Rotation(-n.rotAngle, n.rotAxis) : Matrix4f())
+		               * Kf_Scale(n.scale[0], n.scale[1], n.scale[2]);
+		if (n.parent >= 0 && n.parent < (int)i)
+			nodeWorld[i] = nodeWorld[n.parent] * local;
+		else
+			nodeWorld[i] = local;
+	}
+
 	for (auto& object : p->pObject)
 	{
 		auto pMesh = new Mesh();
-
-		Matrix3f rot2(
-			object.LocalCoordinateSystem[0][0], object.LocalCoordinateSystem[0][1], object.LocalCoordinateSystem[0][2],
-			object.LocalCoordinateSystem[1][0], object.LocalCoordinateSystem[1][1], object.LocalCoordinateSystem[1][2],
-			object.LocalCoordinateSystem[2][0], object.LocalCoordinateSystem[2][1], object.LocalCoordinateSystem[2][2]
-		);
-		rot2.Inverse();
 
 		unsigned int nVertices = object.numOfVerts;
 		unsigned int nFaces = object.numOfFaces;
 		pMesh->Init(nVertices, nFaces);
 
+		// Find the keyframer node driving this object (matched by name).
+		int nodeIdx = -1;
+		for (size_t i = 0; i < p->pKfNodes.size(); ++i)
+			if (strcmp(p->pKfNodes[i].strName, object.strName) == 0)
+			{
+				nodeIdx = (int)i;
+				break;
+			}
+
+		// 3DS stores mesh vertices in world space together with a per-object
+		// mesh matrix (LocalCoordinateSystem) and keyframer node transform. The
+		// part is placed by: v' = nodeWorld * T(-pivot) * inverse(meshMatrix) * v
+		// (lib3ds convention). Both the vertices and the mesh matrix were Y/Z
+		// swapped on read for the engine's Y-up frame; we undo that to compute
+		// in native 3DS space, then swap the result back.
+		//
+		// Files without a keyframer node for this object keep the legacy
+		// behaviour (vertices used as-is): meshMatrixOk stays false.
+		Matrix4f display;       // identity by default
+		bool useTransform = false;
+		if (nodeIdx >= 0)
+		{
+			const auto& L = object.LocalCoordinateSystem; // stored row (a,b,c) -> raw (a,-c,b)
+			Matrix4f meshMatrix(
+				L[0][0], L[1][0], L[2][0], L[3][0],
+				-L[0][2], -L[1][2], -L[2][2], -L[3][2],
+				L[0][1], L[1][1], L[2][1], L[3][1],
+				0, 0, 0, 1);
+			Matrix4f meshInv;
+			if (meshMatrix.GetInverse(meshInv))
+			{
+				const t3DSKfNode& n = p->pKfNodes[nodeIdx];
+				display = nodeWorld[nodeIdx]
+				        * Kf_Translation(-n.pivot[0], -n.pivot[1], -n.pivot[2])
+				        * meshInv;
+				useTransform = true;
+			}
+		}
+
 		for (unsigned int i = 0; i < nVertices; i++)
 		{
-			pMesh->m_pVertices[3 * i] = object.pVerts[i].fX;
-			pMesh->m_pVertices[3 * i + 1] = object.pVerts[i].fY;
-			pMesh->m_pVertices[3 * i + 2] = object.pVerts[i].fZ;
+			if (useTransform)
+			{
+				// Undo the engine Y/Z swap to recover native 3DS coords.
+				float ex = object.pVerts[i].fX;
+				float ey = object.pVerts[i].fY;
+				float ez = object.pVerts[i].fZ;
+				TVector4<float> v(ex, -ez, ey, 1.0f);
+				TVector4<float> w = display * v;
+				// Re-apply the swap on the assembled world position.
+				pMesh->m_pVertices[3 * i]     = w.x;
+				pMesh->m_pVertices[3 * i + 1] = w.z;
+				pMesh->m_pVertices[3 * i + 2] = -w.y;
+			}
+			else
+			{
+				pMesh->m_pVertices[3 * i]     = object.pVerts[i].fX;
+				pMesh->m_pVertices[3 * i + 1] = object.pVerts[i].fY;
+				pMesh->m_pVertices[3 * i + 2] = object.pVerts[i].fZ;
+			}
 		}
 
 		// Load normals if present
@@ -310,6 +417,30 @@ bool VMeshes::import_3ds(const char* filename)
 
 		pMesh->m_name = std::string(object.strName);
 
+		// Texture coordinates. 3DS stores one UV per vertex (parallel to the
+		// position array), which is exactly the per-vertex layout the VBO /
+		// polygon render path expects. Populate the mesh-level UV array, and
+		// mirror the indices onto each face for the immediate-mode path.
+		if (object.pTexVerts && object.numTexVertex > 0)
+		{
+			const unsigned int nUV = (unsigned int)object.numTexVertex;
+			pMesh->m_pTextureCoordinates.assign(2 * nVertices, 0.0f);
+			for (unsigned int i = 0; i < nVertices && i < nUV; i++)
+			{
+				pMesh->m_pTextureCoordinates[2 * i]     = object.pTexVerts[i].fU;
+				// 3DS stores V with origin at the bottom; OpenGL samples the
+				// first uploaded row at V=0 (top of the image). Flip V.
+				pMesh->m_pTextureCoordinates[2 * i + 1] = 1.0f - object.pTexVerts[i].fV;
+			}
+			for (unsigned int i = 0; i < nFaces; i++)
+			{
+				Face* pFace = pMesh->m_pFaces[i];
+				pFace->ActivateTextureCoordinatesIndices();
+				pFace->m_bUseTextureCoordinates = true;
+				pFace->InitTexCoord(); // index = vertex index (UVs are per-vertex)
+			}
+		}
+
 		// Materials: only import those used by this object
 		std::map<int, int> materialMapping; // 3dsMatIdx -> meshMatIdx
 		for (auto& matList : object.pFacesMaterialList)
@@ -322,7 +453,18 @@ bool VMeshes::import_3ds(const char* filename)
 
 				if (strlen(mat3ds.strFile) > 0)
 				{
-					pMaterial = new MaterialColor(mat3ds.sMaterial.Diffuse.r, mat3ds.sMaterial.Diffuse.g, mat3ds.sMaterial.Diffuse.b);
+					// Textured material: load the referenced image from the
+					// model's directory (PNG now supported via cgimg). The 3DS
+					// diffuse/ambient/specular tint the texture under lighting
+					// (GL_MODULATE) — e.g. a light rubber tread darkened by a
+					// grey diffuse.
+					auto pTex = new MaterialTexture(mat3ds.strFile,
+					                                modelDir.empty() ? nullptr : modelDir.c_str());
+					pTex->SetAmbient(mat3ds.sMaterial.Ambient.r / 255.f, mat3ds.sMaterial.Ambient.g / 255.f, mat3ds.sMaterial.Ambient.b / 255.f, 1.f);
+					pTex->SetDiffuse(mat3ds.sMaterial.Diffuse.r / 255.f, mat3ds.sMaterial.Diffuse.g / 255.f, mat3ds.sMaterial.Diffuse.b / 255.f, 1.f);
+					pTex->SetSpecular(mat3ds.sMaterial.Specular.r / 255.f, mat3ds.sMaterial.Specular.g / 255.f, mat3ds.sMaterial.Specular.b / 255.f, 1.f);
+					pTex->SetShininess(mat3ds.sMaterial.Power / 100.f);
+					pMaterial = pTex;
 				}
 				else
 				{

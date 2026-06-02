@@ -163,13 +163,26 @@ public:
 	//     non-planar n-gons.
 	// A mesh of pure triangles emits exactly m_nVertices render-vertices
 	// (same as the topology); only n-gons pay the duplication cost.
+	// A contiguous run of 'indices' that shares one material. Lets the VBO
+	// path draw a multi-material mesh as one buffer + several glDrawElements
+	// calls (activating each material in turn) instead of falling back to slow
+	// immediate mode.
+	struct MaterialRange
+	{
+		unsigned int materialId; // mesh material index, or MATERIAL_NONE
+		unsigned int offset;     // first index into 'indices'
+		unsigned int count;      // number of indices (multiple of 3)
+	};
+
 	struct PolygonRenderData
 	{
 		std::vector<float>        positions; // 3 floats per render-vertex
 		std::vector<float>        normals;   // 3 floats per render-vertex
 		std::vector<float>        texCoords; // 2 floats per render-vertex (empty if absent)
 		std::vector<float>        colors;    // 3 floats per render-vertex (empty if absent)
-		std::vector<unsigned int> indices;   // triangle indices into the above
+		std::vector<unsigned int> indices;   // triangle indices into the above,
+		                                     // grouped by material
+		std::vector<MaterialRange> materialRanges; // one run per material
 	};
 	PolygonRenderData BuildPolygonRenderData();
 
@@ -234,6 +247,11 @@ public:
 
 	// edit
 	int DeleteVertices (funcptr_v func);
+	// Weld vertices closer than `tolerance`. The weld is geometric: vertex
+	// normals are NOT a criterion (callers recompute them afterwards), so all
+	// coincident vertices weld — including across facet boundaries of an STL —
+	// and the operation is idempotent. UV seams and per-vertex colour islands
+	// are preserved (coincident vertices whose UV/colour differ are kept).
 	int MergeVertices (float tolerance = 1e-6f);
 
 	// noise

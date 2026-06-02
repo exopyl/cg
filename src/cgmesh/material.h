@@ -185,9 +185,27 @@ public:
 	void Dump (void);
 	std::string GetFilename ();
 	Img* GetImage ();
+
+	// Optional material colours that MODULATE the texture under lighting. 3DS
+	// textured materials carry a diffuse tint (e.g. a light rubber tread
+	// texture darkened by a grey diffuse). Defaults are white/neutral so a
+	// plain texture renders unchanged when no colours are set.
+	inline void SetAmbient  (float r, float g, float b, float a) { m_fAmbient[0]=r; m_fAmbient[1]=g; m_fAmbient[2]=b; m_fAmbient[3]=a; }
+	inline void SetDiffuse  (float r, float g, float b, float a) { m_fDiffuse[0]=r; m_fDiffuse[1]=g; m_fDiffuse[2]=b; m_fDiffuse[3]=a; }
+	inline void SetSpecular (float r, float g, float b, float a) { m_fSpecular[0]=r; m_fSpecular[1]=g; m_fSpecular[2]=b; m_fSpecular[3]=a; }
+	inline void SetShininess(float p) { m_fShininess = p; }
+	inline const float* GetAmbient  () const { return m_fAmbient; }
+	inline const float* GetDiffuse  () const { return m_fDiffuse; }
+	inline const float* GetSpecular () const { return m_fSpecular; }
+	inline float        GetShininess() const { return m_fShininess; }
 private:
 	std::string m_filename;
 	Img* m_pImage = nullptr;
 	unsigned int m_nWidth, m_nHeight;
 	unsigned char *m_pPixels = nullptr;
+
+	float m_fAmbient[4]  = { 1.f, 1.f, 1.f, 1.f };
+	float m_fDiffuse[4]  = { 1.f, 1.f, 1.f, 1.f };
+	float m_fSpecular[4] = { 0.f, 0.f, 0.f, 1.f };
+	float m_fShininess   = 0.f;
 };

@@ -290,6 +290,26 @@ typedef struct _t3DSHideTrack_
 } t3DSHideTrack;
 
 //
+// Keyframer node (animation hierarchy entry). 3DS stores mesh vertices in
+// world space *together* with a per-object node hierarchy (position, rotation,
+// scale, pivot). For an articulated model the parts only assemble correctly
+// once those node transforms are applied. We keep the first key of each track,
+// i.e. the static pose at frame 0, which is enough to place the parts.
+//
+typedef struct _t3DSKfNode_
+{
+	char	strName[255];	// object name this node drives (matches t3DSObject::strName)
+	INT16	parent;			// index of the parent node in t3DSModel::pKfNodes, -1 if root
+
+	FLOAT32	pivot[3];		// pivot point (object local space)
+	FLOAT32	pos[3];			// first position key
+	FLOAT32	rotAngle;		// first rotation key, radians (axis-angle)
+	FLOAT32	rotAxis[3];
+	FLOAT32	scale[3];		// first scale key
+	BOOL3DS	hasRot;			// whether a rotation key was present
+} t3DSKfNode;
+
+//
 // Unknown chunks
 //
 typedef struct _t3DSUnknownChunk
@@ -316,6 +336,7 @@ typedef struct _t3DSModel_
 	vector<t3DSLight>			pLights;		// list of lights
 	vector<t3DSCamera>			pCameras;		// list of cameras
 	vector<t3DSAnimation>		pAnimations;	// list of animations
+	vector<t3DSKfNode>			pKfNodes;		// keyframer node hierarchy (static pose)
 
 	char strPathToModel[255];					// path to the model
 

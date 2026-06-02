@@ -57,6 +57,22 @@ void MaterialRenderer::ActivateMaterial (unsigned int id)
 	{
 		glEnable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, m_pTexturesId[id]);
+
+		// The texture environment is GL_MODULATE: the sampled texel is
+		// multiplied by the lit surface colour. Drive that colour from the
+		// material's diffuse/ambient/specular so the texture is tinted as
+		// authored (e.g. a light rubber tread darkened by a grey diffuse).
+		MaterialTexture *pTex = dynamic_cast<MaterialTexture*>(pMaterial);
+		if (pTex)
+		{
+			glDisable(GL_COLOR_MATERIAL);
+			glMaterialfv (GL_FRONT_AND_BACK, GL_AMBIENT,  pTex->GetAmbient());
+			glMaterialfv (GL_FRONT_AND_BACK, GL_DIFFUSE,  pTex->GetDiffuse());
+			glMaterialfv (GL_FRONT_AND_BACK, GL_SPECULAR, pTex->GetSpecular());
+			glMaterialf  (GL_FRONT_AND_BACK, GL_SHININESS, 128.f * pTex->GetShininess());
+			// Lighting-off path: texel modulated by the current colour.
+			glColor4fv (pTex->GetDiffuse());
+		}
 	}
 	else if (pMaterial->GetType () == MATERIAL_COLOR_ADV)
 	{
@@ -65,12 +81,12 @@ void MaterialRenderer::ActivateMaterial (unsigned int id)
 		MaterialColorExt *pMatColExt = dynamic_cast<MaterialColorExt*>(pMaterial);
 		if (pMatColExt)
 		{
-			// For when lighting is ON
-			glMaterialfv (GL_FRONT, GL_AMBIENT, pMatColExt->m_fAmbient);
-			glMaterialfv (GL_FRONT, GL_DIFFUSE, pMatColExt->m_fDiffuse);
-			glMaterialfv (GL_FRONT, GL_SPECULAR, pMatColExt->m_fSpecular);
-			glMaterialf (GL_FRONT, GL_SHININESS, 128. * pMatColExt->m_fShininess[0]);
-			glMaterialfv (GL_FRONT, GL_EMISSION, pMatColExt->m_fEmission);
+			// For when lighting is ON (both faces — two-sided lighting)
+			glMaterialfv (GL_FRONT_AND_BACK, GL_AMBIENT, pMatColExt->m_fAmbient);
+			glMaterialfv (GL_FRONT_AND_BACK, GL_DIFFUSE, pMatColExt->m_fDiffuse);
+			glMaterialfv (GL_FRONT_AND_BACK, GL_SPECULAR, pMatColExt->m_fSpecular);
+			glMaterialf (GL_FRONT_AND_BACK, GL_SHININESS, 128. * pMatColExt->m_fShininess[0]);
+			glMaterialfv (GL_FRONT_AND_BACK, GL_EMISSION, pMatColExt->m_fEmission);
 
 			// For when lighting is OFF
 			glColor4fv(pMatColExt->m_fDiffuse);

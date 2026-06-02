@@ -1,5 +1,29 @@
 #include "material.h"
 
+#include <cctype>
+#include <string>
+
+// Some exporters append a sequential "_<n>" index to texture map names that
+// does not match the file on disk (e.g. the MTL says "Sand0_3.png" while the
+// actual file is "Sand0.png"). Strip a trailing "_<digits>" before the
+// extension so we can retry with the real name.
+static std::string StripTextureIndexSuffix (const std::string& fn)
+{
+	size_t dot  = fn.find_last_of('.');
+	std::string stem = (dot == std::string::npos) ? fn : fn.substr(0, dot);
+	std::string ext  = (dot == std::string::npos) ? std::string() : fn.substr(dot);
+	size_t us = stem.find_last_of('_');
+	if (us != std::string::npos && us + 1 < stem.size())
+	{
+		bool allDigits = true;
+		for (size_t i = us + 1; i < stem.size(); ++i)
+			if (!std::isdigit((unsigned char)stem[i])) { allDigits = false; break; }
+		if (allDigits)
+			return stem.substr(0, us) + ext;
+	}
+	return fn;
+}
+
 //
 // Material Color
 //
@@ -84,8 +108,17 @@ MaterialTexture::MaterialTexture (char const *filename, char const *path)
 	m_pImage = new Img ();
 	if (m_pImage->load(filename, path) != 0)
 	{
-		delete m_pImage;
-		m_pImage = nullptr;
+		// Retry with a possibly-mangled index suffix stripped (see above).
+		std::string alt = StripTextureIndexSuffix (filename);
+		if (alt == filename || m_pImage->load(alt.c_str(), path) != 0)
+		{
+			delete m_pImage;
+			m_pImage = nullptr;
+		}
+		else
+		{
+			m_filename = alt;
+		}
 	}
 }
 

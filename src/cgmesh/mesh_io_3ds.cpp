@@ -297,10 +297,9 @@ void ProcessNextChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 			// key frame information
 			case CHK3DS_B_KFDATA:
 			{
-				//ProcessNextKeyFrameChunk_3DS (pModel, &currentChunk);
-
-				// Read past this chunk and add the bytes read to the byte counter
-				SkipChunk_3DS(&currentChunk);
+				// Capture the node hierarchy (pivot / position / rotation /
+				// scale) needed to assemble articulated models on import.
+				ParseKeyframer_3DS(pModel, &currentChunk);
 			}
 			break;
 
@@ -1034,6 +1033,126 @@ void ProcessTrackHeader (t3DSTrackHeader* pTrackHeader, t3DSChunk *pPreviousChun
 	ReadINT32 (&pTrackHeader->numOfKeys, pPreviousChunk);
 	pTrackHeader->keyNumber = new INT32[pTrackHeader->numOfKeys];
 	pTrackHeader->accelerationDataPresent = new INT16[pTrackHeader->numOfKeys];
+}
+
+//*****************************************************************************
+// Keyframer (KFDATA) parsing — static pose only
+//*****************************************************************************
+
+// Skip n bytes inside the current chunk, keeping the bytesRead counter in sync.
+static void SkipBytes_3DS (int n, t3DSChunk *pChunk)
+{
+	if (n > 0)
+	{
+		fseek (g_File3DSPointer, n, SEEK_CUR);
+		pChunk->bytesRead += n;
+	}
+}
+
+// Read the standard track header then position the file pointer on the value
+// of the first key, skipping the per-key spline parameters (tension, continuity,
+// bias, ease-to, ease-from) when present. The caller reads the value itself.
+static void ReadTrackFirstKeyPrefix_3DS (t3DSChunk *pChunk)
+{
+	INT16 flag; INT32 unknown1, unknown2, numOfKeys;
+	ReadINT16 (&flag, pChunk);
+	ReadINT32 (&unknown1, pChunk);
+	ReadINT32 (&unknown2, pChunk);
+	ReadINT32 (&numOfKeys, pChunk);
+
+	INT32 framenum; INT16 accel;
+	ReadINT32 (&framenum, pChunk);
+	ReadINT16 (&accel, pChunk);
+	for (int bit = 0; bit < 5; ++bit)
+		if (accel & (1 << bit))
+			SkipBytes_3DS (sizeof(FLOAT32), pChunk);
+}
+
+void ParseKfNode_3DS (t3DSModel *pModel, t3DSKfNode *pNode, t3DSChunk *pPreviousChunk)
+{
+	t3DSChunk currentChunk;
+	memset (&currentChunk, 0, sizeof(t3DSChunk));
+
+	while (pPreviousChunk->bytesRead < pPreviousChunk->length)
+	{
+		ReadChunk_3DS (&currentChunk);
+
+		switch (currentChunk.ID)
+		{
+			case CHK3DS_B_NODE_HDR:
+			{
+				char strName[255] = {0};
+				currentChunk.bytesRead += GetString (strName);
+				memcpy ((void*)pNode->strName, (void*)strName, strlen(strName)+1);
+
+				INT16 flag1, flag2, hierarchyFather;
+				ReadINT16 (&flag1, &currentChunk);
+				ReadINT16 (&flag2, &currentChunk);
+				ReadINT16 (&hierarchyFather, &currentChunk);
+				pNode->parent = hierarchyFather;
+			}
+			break;
+
+			case CHK3DS_B_PIVOT:
+				ReadVector (pNode->pivot, &currentChunk);
+				break;
+
+			case CHK3DS_B_POS_TRACK_TAG:
+				ReadTrackFirstKeyPrefix_3DS (&currentChunk);
+				ReadVector (pNode->pos, &currentChunk);
+				break;
+
+			case CHK3DS_B_ROT_TRACK_TAG:
+				ReadTrackFirstKeyPrefix_3DS (&currentChunk);
+				ReadFloat32 (&pNode->rotAngle, &currentChunk);
+				ReadVector (pNode->rotAxis, &currentChunk);
+				pNode->hasRot = TRUE;
+				break;
+
+			case CHK3DS_B_SCL_TRACK_TA:
+				ReadTrackFirstKeyPrefix_3DS (&currentChunk);
+				ReadVector (pNode->scale, &currentChunk);
+				break;
+
+			default:
+				break;
+		}
+
+		// Consume any unread remainder of this sub-chunk so the parent loop
+		// stays aligned (we only read the first key of each track).
+		SkipChunk_3DS (&currentChunk);
+
+		pPreviousChunk->bytesRead += currentChunk.bytesRead;
+	}
+}
+
+void ParseKeyframer_3DS (t3DSModel *pModel, t3DSChunk *pPreviousChunk)
+{
+	t3DSChunk currentChunk;
+	memset (&currentChunk, 0, sizeof(t3DSChunk));
+
+	while (pPreviousChunk->bytesRead < pPreviousChunk->length)
+	{
+		ReadChunk_3DS (&currentChunk);
+
+		if (currentChunk.ID == CHK3DS_B_OBJECT_NODE_TAG)
+		{
+			t3DSKfNode node = {};
+			node.parent = -1;
+			node.scale[0] = node.scale[1] = node.scale[2] = 1.0f;
+			node.hasRot = FALSE;
+
+			ParseKfNode_3DS (pModel, &node, &currentChunk);
+
+			pModel->pKfNodes.push_back (node);
+		}
+		else
+		{
+			SkipChunk_3DS (&currentChunk);
+		}
+
+		pPreviousChunk->bytesRead += currentChunk.bytesRead;
+	}
 }
 
 //*****************************************************************************

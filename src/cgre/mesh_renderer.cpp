@@ -432,6 +432,26 @@ void MeshRenderer::Draw (int id)
 		glEnable(GL_CLIP_PLANE0);
 	}
 
+	// The fast paths (VBO / vertex array / display list / vertex buffer) bind a
+	// single material for the whole mesh. A mesh carrying several materials
+	// (e.g. a 3DS part whose faces mix a white bezel, a dark screen and a grey
+	// body) must switch material per face, which only the immediate-mode
+	// mesh_draw path does. Route such meshes through it.
+	// The VBO path handles multiple materials itself (one draw call per
+	// material run, see DrawMaterialGroups). The other fast paths bind a
+	// single material for the whole mesh, so a multi-material mesh must go
+	// through the immediate-mode mesh_draw which switches material per face.
+	if (el.pMesh->GetNMaterials() > 1 &&
+	    el.method != CG_RENDERING_DEFAULT &&
+	    el.method != CG_RENDERING_VBO)
+	{
+		mesh_draw(el.pMesh, el.properties, GetMaterialRendererIds(id));
+
+		if (el.properties.clipping_plane_active)
+			glDisable(GL_CLIP_PLANE0);
+		return;
+	}
+
 	switch (el.method)
 	{
 	case CG_RENDERING_DEFAULT:
@@ -458,8 +478,9 @@ void MeshRenderer::Draw (int id)
 	case CG_RENDERING_VBO:
 		if (el.properties.display_fill)
 		{
-			activateMeshMaterial();
-			m_vboManager->Draw (el.id);
+			// One draw call per material run (handles single- and
+			// multi-material meshes); activates each material in turn.
+			m_vboManager->DrawMaterialGroups (el.id, GetMaterialRendererIds(id));
 		}
 
 		// Overlays (wireframe, points, vertex normals, warnings) still go

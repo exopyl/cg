@@ -1,6 +1,7 @@
 #include "gl_wrapper.h"
 
 #include "vertex_buffer_manager.h"
+#include "material_renderer.h"
 #include "../cgmesh/mesh_data_manager.h"
 
 VertexBufferManager::VertexBufferManager()
@@ -267,6 +268,8 @@ void VBOManager::uploadMesh(Mesh* mesh, vboInfo& info)
 		info.count = 0;
 	}
 
+	info.materialRanges = rd.materialRanges;
+
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
@@ -332,6 +335,77 @@ void VBOManager::Draw (int id)
 	glPolygonOffset(1.0f, 1.0f);
 
 	glDrawElements(GL_TRIANGLES, info.count, GL_UNSIGNED_INT, nullptr);
+
+	glDisable(GL_POLYGON_OFFSET_FILL);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	if (info.hasTexCoords) glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	if (info.hasColors)    glDisableClientState(GL_COLOR_ARRAY);
+	if (info.hasNormals)   glDisableClientState(GL_NORMAL_ARRAY);
+	glDisableClientState(GL_VERTEX_ARRAY);
+}
+
+void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds)
+{
+	auto it = m_mapVBO.find(id);
+	if (it == m_mapVBO.end())
+		return;
+	vboInfo& info = it->second;
+
+	// No per-material grouping available: fall back to a single draw (the
+	// caller is expected to have activated the material already).
+	if (info.materialRanges.empty())
+	{
+		Draw(id);
+		return;
+	}
+
+	if (info.pMesh && info.pMesh->GetRevision() != info.revision)
+		uploadMesh(info.pMesh, info);
+
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glBindBuffer(GL_ARRAY_BUFFER, info.vboPositions);
+	glVertexPointer(3, GL_FLOAT, 0, nullptr);
+
+	if (info.hasNormals)
+	{
+		glEnableClientState(GL_NORMAL_ARRAY);
+		glBindBuffer(GL_ARRAY_BUFFER, info.vboNormals);
+		glNormalPointer(GL_FLOAT, 0, nullptr);
+	}
+
+	if (info.hasColors)
+	{
+		glEnableClientState(GL_COLOR_ARRAY);
+		glBindBuffer(GL_ARRAY_BUFFER, info.vboColors);
+		glColorPointer(3, GL_FLOAT, 0, nullptr);
+	}
+
+	if (info.hasTexCoords)
+	{
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		glBindBuffer(GL_ARRAY_BUFFER, info.vboTexCoords);
+		glTexCoordPointer(2, GL_FLOAT, 0, nullptr);
+	}
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info.iboIndices);
+
+	glEnable(GL_POLYGON_OFFSET_FILL);
+	glPolygonOffset(1.0f, 1.0f);
+
+	for (const Mesh::MaterialRange& r : info.materialRanges)
+	{
+		if (r.materialId != MATERIAL_NONE &&
+		    r.materialId < rendererIds.size() &&
+		    rendererIds[r.materialId] != -1)
+		{
+			MaterialRenderer::getInstance()->ActivateMaterial(rendererIds[r.materialId]);
+		}
+		glDrawElements(GL_TRIANGLES, r.count, GL_UNSIGNED_INT,
+		               (const GLvoid*)(size_t)(r.offset * sizeof(unsigned int)));
+	}
 
 	glDisable(GL_POLYGON_OFFSET_FILL);
 

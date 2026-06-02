@@ -147,7 +147,18 @@ int Mesh::import_mtl (const char *filename, const char *path)
 		else if (sscanf(line, " illum %d", &dummy) == 1) {} // ...
 		else if (sscanf(line, " map_Kd %s", name) == 1) { // diffuse texture
 			MaterialTexture *tex = new MaterialTexture (name, path);
-			tex->SetName (mat->GetName());
+			if (mat)
+				tex->SetName (mat->GetName());
+			// Carry the MTL colours so the texture is modulated under lighting
+			// (a dark Kd tints a light texture, etc.) — same as the 3DS path.
+			if (mat)
+			{
+				float d[4]; mat->GetDiffuse(d);
+				tex->SetDiffuse (d[0], d[1], d[2], 1.f);
+				tex->SetAmbient (mat->m_fAmbient[0], mat->m_fAmbient[1], mat->m_fAmbient[2], 1.f);
+				tex->SetSpecular(mat->m_fSpecular[0], mat->m_fSpecular[1], mat->m_fSpecular[2], 1.f);
+				tex->SetShininess(mat->m_fShininess[0] / 128.f);
+			}
 			// mat is owned by the Mesh's unique_ptr (Material_Add above);
 			// SetMaterial(mi, tex) will reset the slot which destroys mat.
 			mat = nullptr;
@@ -197,7 +208,18 @@ int Mesh::import_obj (const char *filename)
 		if (sscanf(buffer, "%s", prefix) != -1)
 		{
 			if (strcmp(prefix, "mtllib") == 0)
-				sscanf(buffer, "%s %s", prefix, mtlfile);
+			{
+				// The .mtl filename may contain spaces (e.g. "Star Wars
+				// Juggeren.mtl"), so a plain %s would truncate it at the first
+				// space. Take the rest of the line after the keyword, trimmed.
+				const char* q = buffer + 6; // past "mtllib"
+				while (*q && isspace((unsigned char)*q)) q++;
+				strncpy(mtlfile, q, BUFFER_SIZE - 1);
+				mtlfile[BUFFER_SIZE - 1] = '\0';
+				size_t len = strlen(mtlfile);
+				while (len > 0 && isspace((unsigned char)mtlfile[len-1]))
+					mtlfile[--len] = '\0';
+			}
 			else if (strcmp(prefix, "v") == 0)
 				nPoints++;
 			else if (strcmp(prefix, "vt") == 0)
@@ -248,9 +270,12 @@ int Mesh::import_obj (const char *filename)
 		}
 		else if (strcmp (prefix, "vt") == 0)
 		{
-			sscanf (buffer, "%s %f %f", prefix,
-				&m_pTextureCoordinates[2*itexcoord],
-				&m_pTextureCoordinates[2*itexcoord+1]);
+			float u = 0.f, v = 0.f;
+			sscanf (buffer, "%s %f %f", prefix, &u, &v);
+			m_pTextureCoordinates[2*itexcoord]   = u;
+			// OBJ stores V with the origin at the bottom; OpenGL samples the
+			// first uploaded row (top of the image) at V=0. Flip V.
+			m_pTextureCoordinates[2*itexcoord+1] = 1.0f - v;
 			itexcoord++;
 		}
 		else if (strcmp (prefix, "f") == 0)
@@ -309,11 +334,16 @@ int Mesh::import_obj (const char *filename)
 				if (!h0)
 					continue;
 
+				// OBJ negative indices count back from the most recently
+				// declared element, i.e. relative to the number of vertices
+				// seen SO FAR (ipoint), not the file total. For the common
+				// "all v then all f" layout the two coincide, but using the
+				// running counter is also correct for interleaved files.
 				if (i0 < 0)
-					i0 = m_nVertices + i0;
+					i0 = ipoint + i0;
 				else
 					i0--;
-				
+
 				if (i0 < 0 || (unsigned int) i0 >= m_nVertices) {
 					printf ("invalid vertex index %d (vn=%d)\n", i0, m_nVertices);
 					continue;
@@ -324,12 +354,25 @@ int Mesh::import_obj (const char *filename)
 				if (h1)
 				{
 					if (i1 < 0)
-						i1 = m_nTextureCoordinates + i1;
+						i1 = itexcoord + i1;   // relative to UVs seen so far
 					else
 						i1--;
+					// Clamp to a valid slot: the index is later used to read
+					// m_pTextureCoordinates[2*i1] at render time, so an
+					// out-of-range value (bad file / under-declared UVs) would
+					// read out of bounds and crash.
+					if (i1 < 0 || (unsigned int) i1 >= m_nTextureCoordinates)
+						i1 = 0;
 					pFace->m_bUseTextureCoordinates = true;
-					pFace->ActivateTextureCoordinatesIndices();
-					pFace->ActivateTextureCoordinates();
+					// Allocate the per-face texcoord arrays ONCE: these
+					// Activate* calls delete[] and reallocate, so calling them
+					// per corner (as before) wiped the indices already written
+					// for earlier corners, leaving uninitialised garbage that
+					// the textured render path then read out of bounds.
+					if (!pFace->m_pTextureCoordinatesIndices)
+						pFace->ActivateTextureCoordinatesIndices();
+					if (!pFace->m_pTextureCoordinates)
+						pFace->ActivateTextureCoordinates();
 					pFace->SetTexCoord (fvn, i1);
 				}
 				fvn++;
@@ -344,6 +387,13 @@ int Mesh::import_obj (const char *filename)
 		}
 	}
 	fclose (file);
+
+	// OBJ vertex normals (vn) are not imported, so compute them from the
+	// geometry. Besides giving proper smooth shading, this guarantees
+	// m_pFaceNormals / m_pVertexNormals are populated — the immediate-mode
+	// render path reads m_pFaceNormals[] unconditionally and would otherwise
+	// read out of bounds on a normal-less mesh.
+	ComputeNormals ();
 
 	return 0;
 }

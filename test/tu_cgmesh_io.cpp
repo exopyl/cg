@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include <filesystem>
+#include <fstream>
+#include <cstdio>
 
 #include "../src/cgmesh/cgmesh.h"
 
@@ -20,6 +22,72 @@ TEST(TEST_cgmesh_io, obj)
     auto exported = mesh->m_pMesh->save("./exported_cube.obj");
 
     EXPECT_EQ(exported, 0);
+}
+
+TEST(TEST_cgmesh_io, obj_texcoords_per_face)
+{
+    // Faces with texture coordinates must keep a valid, in-range texcoord
+    // index for EVERY corner. Regression guard for a bug where the per-face
+    // texcoord arrays were reallocated once per corner, wiping all but the
+    // last corner and leaving out-of-range garbage that crashed the textured
+    // render path.
+    const char* path = "./tc_face.obj";
+    {
+        std::ofstream o(path);
+        o << "v 0 0 0\nv 1 0 0\nv 0 1 0\n";
+        o << "vt 0 0\nvt 1 0\nvt 0 1\n";
+        o << "f 1/1 2/2 3/3\n";
+    }
+
+    Mesh* m = new Mesh();
+    m->load(path);
+    ASSERT_EQ(m->GetNFaces(), 1u);
+
+    Face* f = m->m_pFaces[0];
+    ASSERT_TRUE(f->m_bUseTextureCoordinates);
+    ASSERT_NE(f->m_pTextureCoordinatesIndices, nullptr);
+    for (int k = 0; k < f->GetNVertices(); k++)
+    {
+        unsigned int ti = f->m_pTextureCoordinatesIndices[k];
+        EXPECT_LT(2u*ti + 1u, (unsigned)m->m_pTextureCoordinates.size());
+        EXPECT_EQ(ti, (unsigned)k); // 1/1 2/2 3/3 -> 0,1,2
+    }
+
+    delete m;
+    std::remove(path);
+}
+
+TEST(TEST_cgmesh_io, obj_negative_indices)
+{
+    // OBJ negative indices count back from the most recently declared vertex.
+    // Interleave vertices and faces so the relative offsets only resolve
+    // correctly when measured against the running count (not the file total):
+    // each face's -3/-2/-1 must reference the three vertices just above it.
+    const char* path = "./neg_index.obj";
+    {
+        std::ofstream o(path);
+        o << "v 0 0 0\nv 1 0 0\nv 0 1 0\n";
+        o << "f -3 -2 -1\n";
+        o << "v 5 5 5\nv 6 5 5\nv 5 6 5\n";
+        o << "f -3 -2 -1\n";
+    }
+
+    Mesh* m = new Mesh();
+    m->load(path);
+
+    ASSERT_EQ(m->GetNVertices(), 6u);
+    ASSERT_EQ(m->GetNFaces(), 2u);
+
+    EXPECT_EQ(m->m_pFaces[0]->GetVertex(0), 0);
+    EXPECT_EQ(m->m_pFaces[0]->GetVertex(1), 1);
+    EXPECT_EQ(m->m_pFaces[0]->GetVertex(2), 2);
+
+    EXPECT_EQ(m->m_pFaces[1]->GetVertex(0), 3);
+    EXPECT_EQ(m->m_pFaces[1]->GetVertex(1), 4);
+    EXPECT_EQ(m->m_pFaces[1]->GetVertex(2), 5);
+
+    delete m;
+    std::remove(path);
 }
 
 TEST(TEST_cgmesh_io, off)
@@ -165,6 +233,23 @@ TEST(TEST_cgmesh_io, 3ds_display)
     // expectations
     auto& meshes = pVMeshes->GetMeshes();
     ASSERT_EQ(meshes.size(), 3);
+
+    // The three parts (base / neck / panel) form an articulated rig: they only
+    // assemble correctly once the 3DS keyframer node transforms are applied on
+    // import. Check the assembled bounds (engine Y-up) match the expected
+    // monitor: ~420 wide (x), standing ~450 tall (y), thin in depth (z).
+    BoundingBox total;
+    for (auto pMesh : meshes)
+    {
+        pMesh->computebbox();
+        total.AddBoundingBox(pMesh->bbox());
+    }
+    EXPECT_NEAR(total.GetMinX(), -210.f, 5.f);
+    EXPECT_NEAR(total.GetMaxX(),  210.f, 5.f);
+    EXPECT_NEAR(total.GetMinY(),    0.f, 5.f);
+    EXPECT_NEAR(total.GetMaxY(),  450.f, 5.f);
+    EXPECT_NEAR(total.GetMinZ(), -111.f, 5.f);
+    EXPECT_NEAR(total.GetMaxZ(),  111.f, 5.f);
 
     // Check materials are assigned to faces
     bool foundFaceWithMaterial = false;

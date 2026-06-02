@@ -64,6 +64,10 @@ typedef struct vboInfo
 	bool      hasNormals;
 	bool      hasColors;
 	bool      hasTexCoords;
+
+	// One run of the index buffer per material (see Mesh::MaterialRange).
+	// Empty meshes / single-material meshes still draw via 'count'.
+	std::vector<Mesh::MaterialRange> materialRanges;
 } vboInfo;
 
 class VBOManager
@@ -74,6 +78,12 @@ public:
 
 	int addMesh (Mesh *mesh);
 	void Draw (int id);
+
+	// Draw the mesh grouped by material: one glDrawElements per material run,
+	// activating the matching renderer material in between. rendererIds maps a
+	// mesh material index to a MaterialRenderer id (see
+	// MeshRenderer::GetMaterialRendererIds).
+	void DrawMaterialGroups (int id, const std::vector<int>& rendererIds);
 
 private:
 	void uploadMesh(Mesh* mesh, vboInfo& info);

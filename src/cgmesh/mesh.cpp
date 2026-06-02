@@ -678,6 +678,10 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData()
     if (hasColors)  out.colors.assign   (m_pVertexColors.begin(),        m_pVertexColors.end());
     out.indices.reserve(3u * m_nFaces);
 
+    // Group triangle indices by material so the VBO path can draw one run per
+    // material. std::map keeps a stable material order.
+    std::map<unsigned int, std::vector<unsigned int>> buckets;
+
     GLUtesselator* tess = nullptr;
 
     for (unsigned int fi = 0; fi < m_nFaces; ++fi)
@@ -687,12 +691,15 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData()
         const unsigned int n = face->GetNVertices();
         if (n < 3) continue;
 
+        const unsigned int matId = (unsigned int)face->GetMaterialId();
+        std::vector<unsigned int>& bucket = buckets[matId];
+
         if (n == 3)
         {
             // Triangle: index directly into the shared topology slots.
-            out.indices.push_back((unsigned int)face->GetVertex(0));
-            out.indices.push_back((unsigned int)face->GetVertex(1));
-            out.indices.push_back((unsigned int)face->GetVertex(2));
+            bucket.push_back((unsigned int)face->GetVertex(0));
+            bucket.push_back((unsigned int)face->GetVertex(1));
+            bucket.push_back((unsigned int)face->GetVertex(2));
             continue;
         }
 
@@ -751,13 +758,25 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData()
 
         forEachFaceTriangle(*this, fi, tess,
             [&](unsigned int a, unsigned int b, unsigned int c) {
-                out.indices.push_back(base + a);
-                out.indices.push_back(base + b);
-                out.indices.push_back(base + c);
+                bucket.push_back(base + a);
+                bucket.push_back(base + b);
+                bucket.push_back(base + c);
             });
     }
 
     if (tess) gluDeleteTess(tess);
+
+    // Flatten the per-material buckets into one index array + range table.
+    for (auto& kv : buckets)
+    {
+        MaterialRange r;
+        r.materialId = kv.first;
+        r.offset     = (unsigned int)out.indices.size();
+        r.count      = (unsigned int)kv.second.size();
+        out.indices.insert(out.indices.end(), kv.second.begin(), kv.second.end());
+        out.materialRanges.push_back(r);
+    }
+
     return out;
 }
 
