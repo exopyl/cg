@@ -59,8 +59,11 @@ void VMeshes::Normalize()
 	BoundingBox bbox;
 	for (const auto& mesh : GetMeshes())
 	{
-		mesh->computebbox();
-		bbox.AddBoundingBox(mesh->bbox());
+		if (mesh)
+		{
+			mesh->computebbox();
+			bbox.AddBoundingBox(mesh->bbox());
+		}
 	}
 
 	float center[3];
@@ -68,9 +71,13 @@ void VMeshes::Normalize()
 	float fLargestLength = bbox.GetLargestLength();
 	for (const auto& mesh : GetMeshes())
 	{
-		mesh->translate(-center[0], -center[1], -center[2]);
-		mesh->scale(1.f / fLargestLength);
-        mesh->IncrementRevision();
+		if (mesh)
+		{
+			mesh->translate(-center[0], -center[1], -center[2]);
+			auto l = (fLargestLength == 0.f) ? 1.f : fLargestLength;
+			mesh->scale(1.f / l);
+			mesh->IncrementRevision();
+		}
 	}
 }
 
