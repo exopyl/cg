@@ -142,11 +142,12 @@ jobs:
 
       - name: Discord Notification
         if: always()
-        uses: sarayourfriend/actions-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: ${{ job.status }}
-          content: "SonarQube Status: ${{ job.status }} for ${{ github.workflow }} (${{ github.run_id }})"
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -H "Content-Type: application/json" \
+          -d "{\"content\": \"SonarQube Status: ${{ job.status }} for ${{ github.workflow }} (${{ github.run_id }})\"}" \
+          $DISCORD_WEBHOOK
 
 #      - name: Sonarcloud Scan
 #        uses: sonarsource/sonarcloud-github-action@v2
