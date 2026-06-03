@@ -54,3 +54,11 @@ jobs:
 
       - name: Test
         run: ctest --preset ci-linux
+
+      - name: Discord Notification
+        if: always()
+        uses: sarayourfriend/actions-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: ${{ job.status }}
+          content: "Build Status: ${{ job.status }} for ${{ github.workflow }} (${{ github.run_id }})"

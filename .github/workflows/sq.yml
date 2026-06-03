@@ -140,6 +140,14 @@ jobs:
             -Dsonar.coverageReportPaths=coverage.xml \
             -Dsonar.host.url=https://sonarcloud.io
 
+      - name: Discord Notification
+        if: always()
+        uses: sarayourfriend/actions-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: ${{ job.status }}
+          content: "SonarQube Status: ${{ job.status }} for ${{ github.workflow }} (${{ github.run_id }})"
+
 #      - name: Sonarcloud Scan
 #        uses: sonarsource/sonarcloud-github-action@v2
 #        env:
