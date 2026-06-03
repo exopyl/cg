@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <algorithm> // for std::swap
 using namespace std;
 
 #include "common.h"
@@ -532,8 +533,8 @@ public:
 		}
 		++(ipiv[icol]);
 		if (irow != icol) {
-			for (l=0;l<n;l++) SWAP(a[irow][l],a[icol][l]);
-			SWAP(b[irow],b[icol]);
+			for (l=0;l<n;l++) swap(a[irow][l],a[icol][l]);
+			swap(b[irow],b[icol]);
 							}
 		indxr[i]=irow;
 		indxc[i]=icol;

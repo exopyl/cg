@@ -976,10 +976,8 @@ bool CLitRasterToVector::GetLimitColor(const TPath& path, const Img& sIndexed, i
 
 	if(((ptMin.x & 1) == 1) && ((ptMin.y & 1) == 1))
 	{
-		printf ("%d %d\n", ptMin.x, ptMin.y);
 		int xx = ptMin.x>>1;
 		int yy = (ptMin.y>>1) +1;
-		printf ("=> %d %d\n", xx, yy);
 		unsigned char r, g, b, a;
 		sIndexed.get_pixel(xx  ,yy, &r, &g, &b, &a);
 		iExteriorColor = Color::RGBc2Int(r, g, b);
@@ -1045,7 +1043,8 @@ void CLitRasterToVector::CalculateLayerOrder(const Img& sPalettized)
 			bool bLimitFound = GetLimitPixelCoord(*pPath,ptLimit);
 			if(!bLimitFound)
 				continue;
-			printf ("ptLimit %d %d\n", ptLimit.x, ptLimit.y);
+			
+			//printf ("ptLimit %d %d\n", ptLimit.x, ptLimit.y);
 
 			unsigned char r = (unsigned char)(255.*rand()/RAND_MAX);
 			unsigned char g = (unsigned char)(255.*rand()/RAND_MAX);
@@ -1073,7 +1072,7 @@ void CLitRasterToVector::CalculateLayerOrder(const Img& sPalettized)
 	sOneColorByPolygon.save("sOneColorByPolygon.bmp");
 
 	// Generate relationship between path
-	printf("   CalculateLayerOrder_Generate relationship :\n");
+	//printf("   CalculateLayerOrder_Generate relationship :\n");
 	MapOrder mmorders, mmordersInvert;	
 	for( MapListPath::const_iterator itMapListPath = m_mapListPath.begin(); itMapListPath != m_mapListPath.end(); itMapListPath++)
 	{
@@ -1091,7 +1090,7 @@ void CLitRasterToVector::CalculateLayerOrder(const Img& sPalettized)
 	}
 
 	// Sort path
-	printf("   CalculateLayerOrder_Sort path (size = %zd): \n", mmorders.size());
+	//printf("   CalculateLayerOrder_Sort path (size = %zd): \n", mmorders.size());
 	while(mmorders.size())
 	{
 		// search the layer above all 

@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "common.h"
 #include "algebra_matrix3.h"
 #include "algebra_quaternion.h"
@@ -34,9 +36,9 @@ int mat3_init_identity (mat3 m)
 
 void mat3_transpose(mat3 m)
 {
-	SWAP(m[0][1], m[1][0]);
-	SWAP(m[0][2], m[2][0]);
-	SWAP(m[1][2], m[2][1]);
+	std::swap(m[0][1], m[1][0]);
+	std::swap(m[0][2], m[2][0]);
+	std::swap(m[1][2], m[2][1]);
 }
 
 int mat3_init_rotation_from_vec3_to_vec3 (mat3 m, vec3 vDir1, vec3 vDir2)
