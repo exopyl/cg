@@ -287,7 +287,6 @@ private:
 	int export_stl (const char *filename);          // ASCII STL (called by save() for .stl)
 	int import_u3d (const char *filename);
 	int export_u3d (const char *filename);
-	int import_glb (const char *filename);
 public:
 	int load (const char *filename);
 	int save (const char *filename);
