@@ -24,6 +24,7 @@
 #include "src/cgmath/TCamera.h"
 #include "src/cgmath/TMatrix4.h"
 #include "src/cgmesh/mesh.h"
+#include "src/cgmesh/vmeshes.h"
 #include "src/cgmesh/ticker.h"
 #ifdef _MSC_VER
 #pragma warning(pop)
@@ -37,9 +38,14 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <stdexcept>
 #include <unordered_map>
+
+#if defined(_WIN32)
+#  include <windows.h>  // GetModuleFileNameW (executable-relative shader lookup)
+#endif
 
 // Shader directory search paths (in order of priority)
 // Supports running from: build/Debug, build/Release, build/, project root, or installed location
@@ -51,9 +57,55 @@ static const std::array<std::string, 5> SHADER_SEARCH_PATHS = {
     "./shaders"                   // Installed location (shaders next to executable)
 };
 
+/// Absolute path of the directory containing the running executable, or an
+/// empty path on failure. Shader lookup is anchored here rather than the
+/// current working directory so the app finds its shaders no matter how it is
+/// launched — in particular when double-clicked in Explorer, where the CWD is
+/// the exe's own folder and the CWD-relative paths below never reach them.
+static std::filesystem::path executableDirectory() {
+#if defined(_WIN32)
+    std::wstring buf(MAX_PATH, L'\0');
+    for (;;) {
+        DWORD n = GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
+        if (n == 0) {
+            return {};
+        }
+        if (n < buf.size()) {
+            buf.resize(n);
+            break;
+        }
+        buf.resize(buf.size() * 2);  // path longer than buffer: grow and retry
+    }
+    return std::filesystem::path(buf).parent_path();
+#elif defined(__linux__)
+    std::error_code ec;
+    std::filesystem::path p = std::filesystem::read_symlink("/proc/self/exe", ec);
+    return ec ? std::filesystem::path{} : p.parent_path();
+#else
+    return {};  // Fallback to CWD-relative search below
+#endif
+}
+
 /// Find the shader directory by checking multiple possible locations.
 /// @return Path to shader directory, or empty string if not found.
 static std::string findShaderDirectory() {
+    // 1) Anchored at the executable directory — robust to any working
+    //    directory, including double-click launch. The build's POST_BUILD
+    //    step copies the compiled SPIR-V to "<exedir>/shaders", so that is
+    //    the primary location for an installed / distributed build.
+    const std::filesystem::path exeDir = executableDirectory();
+    if (!exeDir.empty()) {
+        for (const char* rel : {"shaders", "shaders/compiled"}) {
+            const std::filesystem::path candidate = exeDir / rel;
+            std::error_code ec;
+            if (std::filesystem::exists(candidate / "basic.vert.spv", ec)) {
+                return candidate.string();
+            }
+        }
+    }
+
+    // 2) Fallback: CWD-relative paths, for dev builds launched from the
+    //    project root or a build subdirectory.
     for (const auto& path : SHADER_SEARCH_PATHS) {
         // Check if basic.vert.spv exists in this path
         std::string testFile = path + "/basic.vert.spv";
@@ -868,16 +920,29 @@ void Application::openFileDialog() {
 void Application::loadModel(const std::filesystem::path& path) {
     cgre2::Logger::info("Loader", "Loading model: " + path.filename().string());
 
-    // Load mesh using cgmesh
-    Mesh mesh;
+    // Load model using cgmesh's VMeshes. Unlike Mesh::load, VMeshes::load
+    // routes multi-object formats (.3dm, .glb/.gltf, STEP/IGES) through
+    // dedicated importers that split the file into one Mesh per component
+    // (and for .glb uses VMeshes::import_gltf rather than Mesh::import_glb).
+    VMeshes meshes;
     Ticker ticker;
     ticker.start();
-    int rc = mesh.load(path.string().c_str());
+    bool ok = meshes.load(path.string().c_str());
     double loadTimeMs = ticker.stop();
-    if (rc != 0) {
+    if (!ok || meshes.GetMeshes().empty()) {
         cgre2::Logger::error("Loader", "Failed to load model: " + path.string());
         showUIError("Impossible de charger le fichier : " + path.filename().string());
         return;
+    }
+
+    // Merge every sub-mesh into one Mesh for the legacy render path below.
+    // Append concatenates vertices/faces, offsetting vertex and material
+    // indices so the combined mesh stays consistent. Normals are recomputed
+    // from geometry further down (ComputeNormals), so Append not carrying
+    // per-vertex normals across is harmless here.
+    Mesh mesh;
+    for (Mesh* sub : meshes.GetMeshes()) {
+        mesh.Append(sub);
     }
 
     cgre2::Logger::info("Loader", "Parsed " + std::to_string(mesh.m_nVertices) + " vertices, " +

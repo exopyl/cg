@@ -99,6 +99,17 @@ set_project_warnings(${PROJECT_NAME})
 # Add shader dependency
 add_dependencies(${PROJECT_NAME} compile_shaders)
 
+# Copy the compiled SPIR-V next to the executable so the app is self-contained
+# and launches from any working directory (e.g. double-clicked in Explorer).
+# findShaderDirectory() looks in "<exedir>/shaders" first.
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/shaders/compiled
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders
+    COMMENT "Copying compiled shaders next to vecna executable"
+    VERBATIM
+)
+
 # Platform-specific settings
 if(WIN32)
     # Windows-specific
