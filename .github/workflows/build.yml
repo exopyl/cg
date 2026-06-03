@@ -60,6 +60,8 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
+          status_emoji="🚀"
+          if [ "${{ job.status }}" != "success" ]; then status_emoji="💥"; fi
           curl -H "Content-Type: application/json" \
-          -d "{\"content\": \"Build Status: ${{ job.status }} for ${{ github.workflow }} (${{ github.run_id }})\"}" \
+          -d "{\"content\": \"$status_emoji **Build Status: ${{ job.status }}**\nRepo: ${{ github.repository }} | Branch: ${{ github.ref_name }}\nTriggered by: ${{ github.actor }}\n[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}" \
           $DISCORD_WEBHOOK
