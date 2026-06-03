@@ -265,7 +265,6 @@ private:
 	int import_obj (const char *filename);
 	int import_objnm (const char *filename);
 	int export_obj (const char *filename);
-	int import_3ds (const char *filename);
 	int export_3ds (const char *filename);
 	int import_asc (const char *filename);
 	int export_asc (const char *filename);
