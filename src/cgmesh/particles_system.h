@@ -36,13 +36,13 @@ public:
 	int  is_active       (void);
 
 private:
-	float m_x, m_y, m_z;    // position
-	float m_r, m_g, m_b;    // color
-	float m_xi, m_yi, m_zi; // orientation
-	float m_xg, m_yg, m_zg; // gravity
-	int	m_active;			// active or not
-	float m_life;			// life of the particle
-	float m_fade;			// fade speed
+	float m_x = 0.f , m_y = 0.f, m_z = 0.f;    // position
+	float m_r = 0.f, m_g = 0.f, m_b = 0.f;    // color
+	float m_xi = 0.f, m_yi = 0.f, m_zi = 0.f; // orientation
+	float m_xg = 0.f, m_yg = 0.f, m_zg = 0.f; // gravity
+	int	m_active = 0;			// active or not
+	float m_life = 0.f;			// life of the particle
+	float m_fade = 0.f;			// fade speed
 };
 
 

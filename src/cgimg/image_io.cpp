@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <string.h>
+#include <filesystem>
+#include <string>
 
 #include "image.h"
 
@@ -12,28 +14,28 @@ int Img::load (char const *filename, char const *path)
 	if (!filename)
 		return -1;
 
-	char filename_full[4096];
+	std::filesystem::path fullPath;
 	if (path)
-		sprintf (filename_full, "%s/%s", path, filename);
+		fullPath = std::filesystem::path(path) / filename;
 	else
-		sprintf (filename_full, "%s", filename);
+		fullPath = std::filesystem::path(filename);
+
+	std::string ext = fullPath.extension().string();
 
 #ifdef PNG
-	if (strcmp (filename+(strlen(filename)-4), ".png") == 0)
-	     return import_png (filename_full);
+	if (ext == ".png")
+	     return import_png (fullPath.string().c_str());
 #endif
 #ifdef JPEGLIB
-	if (strcmp (filename+(strlen(filename)-4), ".jpg") == 0)
-	     return import_jpg (filename_full);
+	if (ext == ".jpg")
+	     return import_jpg (fullPath.string().c_str());
 #endif
-	if (strcmp (filename+(strlen(filename)-4), ".bmp") == 0)
-	     return import_bmp (filename_full);
-	if (strcmp (filename+(strlen(filename)-4), ".tga") == 0)
-	     return import_tga (filename_full);
-	if (strcmp (filename+(strlen(filename)-4), ".pbm") == 0 ||
-	    strcmp (filename+(strlen(filename)-4), ".pgm") == 0 ||
-	    strcmp (filename+(strlen(filename)-4), ".ppm") == 0	)
-	     return import_pnm (filename_full);
+	if (ext == ".bmp")
+	     return import_bmp (fullPath.string().c_str());
+	if (ext == ".tga")
+	     return import_tga (fullPath.string().c_str());
+	if (ext == ".pbm" || ext == ".pgm" || ext == ".ppm")
+	     return import_pnm (fullPath.string().c_str());
 
 	return -1;
 }
@@ -43,21 +45,21 @@ int Img::save (char const *filename)
 	if (!filename)
 		return -1;
 
+	std::string ext = std::filesystem::path(filename).extension().string();
+
 #ifdef PNG
-	if (strcmp (filename+(strlen(filename)-4), ".png") == 0)
+	if (ext == ".png")
 	     return export_png (filename);
 #endif
 #ifdef JPEGLIB
-	if (strcmp (filename+(strlen(filename)-4), ".jpg") == 0)
+	if (ext == ".jpg")
 	     return export_jpg (filename);
 #endif
-	if (strcmp (filename+(strlen(filename)-4), ".bmp") == 0)
+	if (ext == ".bmp")
 	     return export_bmp (filename);
-	if (strcmp (filename+(strlen(filename)-4), ".tga") == 0)
+	if (ext == ".tga")
 	     return export_tga (filename);
-	if (strcmp (filename+(strlen(filename)-4), ".pbm") == 0 ||
-	    strcmp (filename+(strlen(filename)-4), ".pgm") == 0 ||
-	    strcmp (filename+(strlen(filename)-4), ".ppm") == 0	)
+	if (ext == ".pbm" || ext == ".pgm" || ext == ".ppm")
 	     return export_pnm (filename);
 
 	return -1;

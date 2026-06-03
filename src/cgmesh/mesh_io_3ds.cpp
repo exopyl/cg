@@ -289,7 +289,9 @@ void ProcessNextChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 			{
 				// get the name of the object
 				char strName[255];
-				currentChunk.bytesRead += GetString(strName);
+                string tempStr;
+				currentChunk.bytesRead += GetString(tempStr);
+                snprintf(strName, sizeof(strName), "%s", tempStr.c_str());
 				ProcessNextObjectChunk_3DS(pModel, strName, &currentChunk);
 			}
 			break;
@@ -357,7 +359,10 @@ void ProcessNextObjectChunk_3DS(t3DSModel *pModel, char *strName, t3DSChunk *pPr
 				pModel->pObject.push_back(newObject);
 
 				// Store it, then add the read bytes to our byte counter.
-				memcpy ((void*)pModel->pObject[pModel->numOfObjects - 1].strName, (void*)strName, strlen(strName)+1);
+                size_t len = strlen(strName);
+                if (len >= sizeof(pModel->pObject[pModel->numOfObjects - 1].strName)) len = sizeof(pModel->pObject[pModel->numOfObjects - 1].strName) - 1;
+                memcpy ((void*)pModel->pObject[pModel->numOfObjects - 1].strName, (void*)strName, len);
+                pModel->pObject[pModel->numOfObjects - 1].strName[len] = '\0';
 
 				// Now proceed to read in the rest of the object information
 				ProcessNextTriMeshChunk_3DS(pModel, &(pModel->pObject[pModel->numOfObjects - 1]), &currentChunk);
@@ -376,7 +381,10 @@ void ProcessNextObjectChunk_3DS(t3DSModel *pModel, char *strName, t3DSChunk *pPr
 				pModel->pLights.push_back(newLight);
 
 				// Store it, then add the read bytes to our byte counter.
-				memcpy ((void*)pModel->pLights[pModel->numOfLights - 1].strName, (void*)strName, strlen(strName)+1);
+                size_t len = strlen(strName);
+                if (len >= sizeof(pModel->pLights[pModel->numOfLights - 1].strName)) len = sizeof(pModel->pLights[pModel->numOfLights - 1].strName) - 1;
+                memcpy ((void*)pModel->pLights[pModel->numOfLights - 1].strName, (void*)strName, len);
+                pModel->pLights[pModel->numOfLights - 1].strName[len] = '\0';
 
 				// Read the position of the light
 				ReadVector (pModel->pLights[pModel->numOfLights - 1].position, &currentChunk);
@@ -398,7 +406,10 @@ void ProcessNextObjectChunk_3DS(t3DSModel *pModel, char *strName, t3DSChunk *pPr
 				pModel->pCameras.push_back(newCamera);
 
 				// Store it, then add the read bytes to our byte counter.
-				memcpy ((void*)pModel->pCameras[pModel->numOfCameras - 1].strName, (void*)strName, strlen(strName)+1);
+                size_t len = strlen(strName);
+                if (len >= sizeof(pModel->pCameras[pModel->numOfCameras - 1].strName)) len = sizeof(pModel->pCameras[pModel->numOfCameras - 1].strName) - 1;
+                memcpy ((void*)pModel->pCameras[pModel->numOfCameras - 1].strName, (void*)strName, len);
+                pModel->pCameras[pModel->numOfCameras - 1].strName[len] = '\0';
 
 				// Read the data
 				ReadVector (pModel->pCameras[pModel->numOfCameras - 1].position, &currentChunk);
@@ -860,7 +871,9 @@ void ProcessKeyFrameChunk_3DS (t3DSModel* pModel, t3DSChunk *pPreviousChunk)
 				INT16 flag1, flag2, hierarchyFather;
 
 				//cout << " (10) CHK3DS_B_NODE_HDR : ";
-				currentChunk.bytesRead += GetString (strName);
+                string tempStr;
+				currentChunk.bytesRead += GetString (tempStr);
+                snprintf(strName, sizeof(strName), "%s", tempStr.c_str());
 				//cout << strName;
 				ReadINT16 (&flag1, &currentChunk);
 				ReadINT16 (&flag2, &currentChunk);
@@ -1082,8 +1095,15 @@ void ParseKfNode_3DS (t3DSModel *pModel, t3DSKfNode *pNode, t3DSChunk *pPrevious
 			case CHK3DS_B_NODE_HDR:
 			{
 				char strName[255] = {0};
-				currentChunk.bytesRead += GetString (strName);
-				memcpy ((void*)pNode->strName, (void*)strName, strlen(strName)+1);
+                string tempStr;
+				currentChunk.bytesRead += GetString (tempStr);
+                snprintf(strName, sizeof(strName), "%s", tempStr.c_str());
+                
+                // Safe bounded copy
+                size_t len = strlen(strName);
+                if (len >= sizeof(pNode->strName)) len = sizeof(pNode->strName) - 1;
+                memcpy ((void*)pNode->strName, (void*)strName, len);
+                pNode->strName[len] = '\0';
 
 				INT16 flag1, flag2, hierarchyFather;
 				ReadINT16 (&flag1, &currentChunk);
@@ -1418,22 +1438,21 @@ void ReadChunk_3DS(t3DSChunk *pChunk)
 //*****************************************************************************
 //
 //*****************************************************************************
-int GetString(char *pBuffer)
+int GetString(string &out)
 {
 	int index = 0;
-
-	// Read 1 byte of data which is the first letter of the string
-	fread(pBuffer, 1, 1, g_File3DSPointer);
+    out.clear();
+	char c;
 
 	// Loop until we get nullptr
-	while (*(pBuffer + index++) != 0) {
-
-		// Read in a character at a time until we hit nullptr.
-		fread(pBuffer + index, 1, 1, g_File3DSPointer);
+	while (fread(&c, 1, 1, g_File3DSPointer) == 1) {
+        if (c == 0) break;
+        out.push_back(c);
+		index++;
 	}
 
 	// Return the string length, which is how many bytes we read in (including the nullptr)
-	return strlen(pBuffer) + 1;
+	return index + 1;
 }
 
 
@@ -1601,7 +1620,9 @@ void ReadObjectMaterial_3DS(t3DSModel *pModel, t3DSObject *pObject, t3DSChunk *p
 	// It can also hold other information like the brightness, shine, etc... 
 
 	// material name that is assigned to the current object.
-	pPreviousChunk->bytesRead += GetString(strMaterial);
+    string tempStr;
+	pPreviousChunk->bytesRead += GetString(tempStr);
+    snprintf(strMaterial, sizeof(strMaterial), "%s", tempStr.c_str());
 
 	// Now that we have a material name, we need to go through all of the materials
 	// and check the name against each material.  When we find a material in our material

@@ -6,6 +6,7 @@
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include <string_view>
 
 #include "mesh.h"
 #include "mesh_io_3ds.h"
@@ -18,34 +19,33 @@ int Mesh::load (const char *filename)
 	if (!filename)
 		return res;
 
-	/*if (strcmp (filename+(strlen(filename)-4), ".out") == 0)
-		LoadBundleOut (0);
-		else*/
-	if (strcmp (filename+(strlen(filename)-4), ".asc") == 0)
-	  res = import_asc (filename);
-	else if (strcmp (filename+(strlen(filename)-5), ".npts") == 0 ||
-		 strcmp (filename+(strlen(filename)-5), ".pset") == 0)
-		res = import_pset (filename);
-	else if (strcmp (filename+(strlen(filename)-4), ".obj") == 0)
-		res = import_obj (filename);
-	else if (strcmp(filename + (strlen(filename) - 4), ".stl") == 0)
+	std::filesystem::path p(filename);
+	std::string ext = p.extension().string();
+	
+	if (ext == ".asc")
+		res = import_asc(filename);
+	else if (ext == ".npts" || ext == ".pset")
+		res = import_pset(filename);
+	else if (ext == ".obj")
+		res = import_obj(filename);
+	else if (ext == ".stl")
 		res = import_stl(filename);
-	else if (strcmp (filename+(strlen(filename)-4), ".3ds") == 0)
-		res = import_3ds (filename);
-	else if (strcmp (filename+(strlen(filename)-4), ".ifs") == 0)
-		res = import_ifs (filename);
-	else if (strcmp (filename+(strlen(filename)-4), ".lwo") == 0)
-		res = import_lwo (filename);
-	else if (strcmp (filename+(strlen(filename)-4), ".off") == 0)
-		res = import_off (filename);
-	else if (strcmp (filename+(strlen(filename)-4), ".pgm") == 0)
-		res = import_pgm (filename);
-	else if (strcmp (filename+(strlen(filename)-4), ".pts") == 0)
-		res = import_pts (filename);
-	else if (strcmp (filename+(strlen(filename)-4), ".ply") == 0)
-		res = import_ply (filename);
-	else if (strcmp (filename+(strlen(filename)-4), ".u3d") == 0)
-		res = import_u3d (filename);
+	else if (ext == ".3ds")
+		res = import_3ds(filename);
+	else if (ext == ".ifs")
+		res = import_ifs(filename);
+	else if (ext == ".lwo")
+		res = import_lwo(filename);
+	else if (ext == ".off")
+		res = import_off(filename);
+	else if (ext == ".pgm")
+		res = import_pgm(filename);
+	else if (ext == ".pts")
+		res = import_pts(filename);
+	else if (ext == ".ply")
+		res = import_ply(filename);
+	else if (ext == ".u3d")
+		res = import_u3d(filename);
 
 	// check coherency
 	if (m_nTextureCoordinates == 0)
@@ -207,16 +207,12 @@ int Mesh::import_obj (const char *filename)
 		{
 			if (strcmp(prefix, "mtllib") == 0)
 			{
-				// The .mtl filename may contain spaces (e.g. "Star Wars
-				// Juggeren.mtl"), so a plain %s would truncate it at the first
-				// space. Take the rest of the line after the keyword, trimmed.
 				const char* q = buffer + 6; // past "mtllib"
 				while (*q && isspace((unsigned char)*q)) q++;
-				strncpy(mtlfile, q, BUFFER_SIZE - 1);
-				mtlfile[BUFFER_SIZE - 1] = '\0';
-				size_t len = strlen(mtlfile);
-				while (len > 0 && isspace((unsigned char)mtlfile[len-1]))
-					mtlfile[--len] = '\0';
+				
+				std::string mtlLine(q);
+				mtlLine.erase(mtlLine.find_last_not_of(" \t\r\n") + 1);
+				snprintf(mtlfile, BUFFER_SIZE, "%s", mtlLine.c_str());
 			}
 			else if (strcmp(prefix, "v") == 0)
 				nPoints++;
@@ -254,9 +250,17 @@ int Mesh::import_obj (const char *filename)
 			continue;
 		if (strcmp (prefix, "usemtl") == 0)
 		{
-			char mtl_name[BUFFER_SIZE];
-			sscanf (buffer, "%s %s", prefix, mtl_name);
-			usemtl = GetMaterialId (mtl_name);
+			// Safe: parse the material name without overflowing
+			std::string_view mtl_name(buffer + 6); // past "usemtl"
+			
+			// Trim left
+			while (!mtl_name.empty() && isspace(static_cast<unsigned char>(mtl_name.front())))
+				mtl_name.remove_prefix(1);
+			// Trim right
+			while (!mtl_name.empty() && isspace(static_cast<unsigned char>(mtl_name.back())))
+				mtl_name.remove_suffix(1);
+				
+			usemtl = GetMaterialId (std::string(mtl_name));
 		}
 		else if (strcmp (prefix, "v") == 0)
 		{
@@ -1331,15 +1335,22 @@ int Mesh::import_pgm (const char *filename)
     {
       printf ("couldn't open \"%s\"\n", filename);
       return -1;
-    }
+    char id[2] = {0, 0};
 
-  /* Get header information */
-  fscanf (ptr, "%c %c", &id[0], &id[1]);
-  if (id[0]!='P' && id[1]!='2' && id[1]!='5')
-    {
-      printf ("\"%s\" is not a valid PGM file\n", filename);
-      return false;
-    }
+    /* Get header information */
+    if (fscanf (ptr, "%c %c", &id[0], &id[1]) != 2)
+      {
+        printf ("Failed to read header from \"%s\"\n", filename);
+        fclose (ptr);
+        return -1;
+      }
+
+    if (id[0] != 'P' || (id[1] != '2' && id[1] != '5'))
+      {
+        printf ("\"%s\" is not a valid PGM file\n", filename);
+        fclose (ptr);
+        return -1;
+      }
   _pgm_skip_spaces (ptr);
   fscanf (ptr, "%d %d", &width, &height);
   _pgm_skip_spaces (ptr);
@@ -1356,7 +1367,7 @@ int Mesh::import_pgm (const char *filename)
     for (j=0; j<height; j++)
       for (i=0; i<width; i++)
 	  {
-		fscanf (ptr, "%d", &data[j*width+i]);
+		fscanf (ptr, "%c", &data[j*width+i]);
 	  }
   }
   if (id[1]=='5') /* raw mode */
@@ -1409,6 +1420,7 @@ int Mesh::import_pgm (const char *filename)
 		m_pFaces[2*(j*(width-1)+i)]   = f1;
 		m_pFaces[2*(j*(width-1)+i)+1] = f2;
 	}
+}
 
 	return 0;
 }
@@ -1429,6 +1441,7 @@ int Mesh::import_pts (const char *filename)
   char *buffer = (char*)malloc(512*sizeof(char));
   if (buffer == nullptr)
   {
+	  fclose(ptr);
 	  return -1;
   }
   //
@@ -1488,6 +1501,7 @@ int Mesh::export_pts (const char *filename)
   }
   else
   {
+	  fclose(ptr);
 	  return false;
   }
 

@@ -675,17 +675,21 @@ bool VMeshes::import_gltf(const char* filename)
 
     for (const auto& gltfMesh : model.meshes) {
         for (const auto& primitive : gltfMesh.primitives) {
-            if (primitive.mode != 4) continue; // TINYGLTF_MODE_TRIANGLES = 4
+			if (primitive.mode != 4)
+			{
+				continue; // TINYGLTF_MODE_TRIANGLES = 4
+			}
 
-            auto pMesh = new Mesh();
-            
             // Positions
-            if (primitive.attributes.find("POSITION") == primitive.attributes.end()) continue;
-            const tinygltf::Accessor& posAccessor = model.accessors[primitive.attributes.at("POSITION")];
+			if (primitive.attributes.find("POSITION") == primitive.attributes.end())
+			{
+				continue;
+			}
+			
+			const tinygltf::Accessor& posAccessor = model.accessors[primitive.attributes.at("POSITION")];
             const float* positions = GetAccessorDataPtr<float>(model, posAccessor);
             if (!positions || posAccessor.type != TINYGLTF_TYPE_VEC3 || posAccessor.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT)
             {
-                delete pMesh;
                 continue;
             }
 
@@ -700,7 +704,6 @@ bool VMeshes::import_gltf(const char* filename)
                 indexAccessorPtr = &model.accessors[primitive.indices];
                 if (indexAccessorPtr->bufferView < 0)
                 {
-                    delete pMesh;
                     continue;
                 }
                 indexViewPtr = &model.bufferViews[indexAccessorPtr->bufferView];
@@ -711,12 +714,12 @@ bool VMeshes::import_gltf(const char* filename)
             {
                 if ((posAccessor.count % 3) != 0)
                 {
-                    delete pMesh;
                     continue;
                 }
                 triangleCount = posAccessor.count / 3;
             }
 
+			auto pMesh = new Mesh();
             pMesh->Init(posAccessor.count, static_cast<unsigned int>(triangleCount));
 
             int texCoordSet = 0;

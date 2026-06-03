@@ -16,10 +16,11 @@ int Img::import_png (const char *filename)
 	// Force 4 components so every pixel comes back as RGBA, regardless of the
 	// file's colour type (greyscale / palette / RGB / RGBA).
 	unsigned char *data = stbi_load (filename, &w, &h, &channels, 4);
-	if (!data)
+	if (!data || w <= 0 || h <= 0)
 	{
+		if (data) stbi_image_free(data);
 		printf ("[import_png] failed to load %s: %s\n",
-		        filename, stbi_failure_reason ());
+		        filename, data ? "invalid dimensions" : stbi_failure_reason ());
 		return -1;
 	}
 

@@ -19,8 +19,11 @@
 	*/
 	int Free3DSModel				(t3DSModel *pModel);
 
-	// This reads in a string and saves it in the char array passed in
-	int GetString						(char *);
+#include <string>
+using namespace std;
+// ...
+	// This reads in a string and saves it in the string passed in
+	int GetString						(string &out);
 
 	// This reads the next chunk
 	void ReadChunk_3DS					(t3DSChunk *);

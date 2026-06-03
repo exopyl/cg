@@ -99,14 +99,15 @@ class Chull3D_vertex
   Chull3D_vertex () {};
   Chull3D_vertex (float x, float y, float z);
 
-  int index; // additional data
+  int index = -1; // additional data
 
  private:
   float          pt[3];
-  Chull3D_edge   *duplicate;
+  Chull3D_edge   *duplicate = nullptr;
   short          on_hull;
   short          processed;
-  Chull3D_vertex *prev, *next;
+  Chull3D_vertex* prev = nullptr;
+  Chull3D_vertex* next = nullptr;
 };
 
 /********************/
