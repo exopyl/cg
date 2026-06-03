@@ -954,18 +954,7 @@ int Mesh::SetFace (unsigned int i,
 
 int Mesh::computebbox (void)
 {
-	/*
-	for (int i = 0; i < m_nFaces; i++)
-	{
-		auto pFace = m_pFaces[i];
-		for (int j = 0; j < pFace->GetNVertices(); j++)
-		{
-			int vindex = pFace->GetVertex(j);
-			m_bbox.AddPoint(m_pVertices[3 * vindex], m_pVertices[3 * vindex + 1], m_pVertices[3 * vindex + 2]);
-		}
-	}
-	*/
-
+	m_bbox.Clear();
 	for (int i = 0; i < m_nVertices; i++)
 		m_bbox.AddPoint(m_pVertices[3 * i], m_pVertices[3 * i + 1], m_pVertices[3 * i + 2]);
 	

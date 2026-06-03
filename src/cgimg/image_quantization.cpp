@@ -110,7 +110,7 @@ int Img::quant_kmean (float threshold)
 	int ite = 0;
 	while (bStillMoving && ite < 20)//for (int ite=0; ite<10; ite++)
 	{
-		printf ("Iteration %d\n", ite);
+		//printf ("Iteration %d\n", ite);
 
 		memset (pAccum, 0, 3*nclusters*sizeof(float));
 		memset (pPopulation, 0, nclusters*sizeof(int));

@@ -38,7 +38,6 @@ Polygon2::Polygon2 (const Polygon2 &pol)
 	m_nContours = 0;
 	m_nPoints = nullptr;
 	m_pPoints = nullptr;
-	printf ("--> %d\n", pol.m_nContours);
 	alloc_contours (pol.m_nContours);
 	for (int i=0; i<m_nContours; i++)
 	{

@@ -185,7 +185,7 @@ CurveNURBS::computeInterpolation (int _nPoints, vec3 **_points)
 	float t = 0.0;
 	for (int iPoint=0; iPoint<_nPoints; iPoint++, t += 1.0f/(_nPoints-1.0f))
 	{
-		printf ("=> %f\n", t);
+		//printf ("=> %f\n", t);
 		if (t >= 1.0) t = 1.0; // for numerical robustness
 /*
 			sum(i = 0, n){w_i * P_i * N_i,k(u)}
