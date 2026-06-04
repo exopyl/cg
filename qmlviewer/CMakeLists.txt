@@ -56,11 +56,21 @@ qt_add_executable(qmlviewer
     src/ControlServer.cpp
 )
 
+# Theme.qml is a QML singleton (design tokens + tool metadata) — flag it
+# so `Theme.x` resolves without an explicit instance.
+set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
 qt_add_qml_module(qmlviewer
     URI QmlViewer
     VERSION 1.0
     QML_FILES
         qml/Main.qml
+        qml/Theme.qml
+        qml/AppIcon.qml
+        qml/GlassPanel.qml
+        qml/AnalysisDock.qml
+        qml/AnalysisPanel.qml
+        qml/LegendCard.qml
     SOURCES
         src/MeshModel.h
         src/MeshModel.cpp

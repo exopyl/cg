@@ -15,13 +15,17 @@
 
 #include "mesh.h"
 #include "vmeshes.h"
+#include "mesh_half_edge.h"
+#include "DiffParamEvaluator.h"
 
 #include <QDebug>
+#include <QHoverEvent>
 #include <QMatrix4x4>
 #include <QMouseEvent>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
 #include <QVector3D>
+#include <QVector4D>
 #include <QWheelEvent>
 
 #include <algorithm>
@@ -47,6 +51,15 @@ void writeMatrix(const QMatrix4x4 &m, float out[16])
     std::memcpy(out, m.constData(), 16 * sizeof(float));
 }
 
+// Curvature drop-down label → cgmesh curvature id. Defaults to mean.
+Tensor::eCurvature curvatureIdFromLabel(const QString &type)
+{
+    if (type == QStringLiteral("Gaussienne")) return Tensor::CURVATURE_GAUSSIAN;
+    if (type == QStringLiteral("Minimale"))   return Tensor::CURVATURE_MIN;
+    if (type == QStringLiteral("Maximale"))   return Tensor::CURVATURE_MAX;
+    return Tensor::CURVATURE_MEAN;
+}
+
 } // namespace
 
 namespace qmlviewer {
@@ -54,7 +67,9 @@ namespace qmlviewer {
 CgreQuickItem::CgreQuickItem(QQuickItem *parent)
     : QQuickItem(parent)
 {
-    setAcceptedMouseButtons(Qt::LeftButton);
+    // Left: orbit + anchor the distance first point. Right: clear that anchor.
+    setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton);
+    setAcceptHoverEvents(true);   // for "Mesure / Point" surface picking
 
     connect(this, &QQuickItem::windowChanged, this, &CgreQuickItem::onWindowChanged);
     if (window())
@@ -70,13 +85,32 @@ void CgreQuickItem::geometryChange(const QRectF &newGeometry, const QRectF &oldG
     QQuickItem::geometryChange(newGeometry, oldGeometry);
     m_trackball.setDimensions(static_cast<int>(newGeometry.width()),
                               static_cast<int>(newGeometry.height()));
+    if (m_anchorValid) emit anchorChanged();   // reproject overlay anchor
 }
 
 void CgreQuickItem::mousePressEvent(QMouseEvent *event)
 {
+    // Right click while measuring drops the anchored distance "first point".
+    if (event->button() == Qt::RightButton) {
+        if (m_pickingEnabled && m_anchorValid) {
+            clearAnchor();
+            event->accept();
+            return;
+        }
+        event->ignore();
+        return;
+    }
     if (event->button() != Qt::LeftButton) {
         event->ignore();
         return;
+    }
+    // In measure picking mode, a left click anchors the current hover hit as
+    // the distance "first point". Orbit still works: the trackball press is
+    // recorded too, so a press-drag rotates from here.
+    if (m_pickingEnabled && m_hoverValid) {
+        m_anchorPoint = m_hoverPoint;
+        m_anchorValid = true;
+        emit anchorChanged();
     }
     m_trackball.onMousePress(0, true,
                              static_cast<int>(event->position().x()),
@@ -103,6 +137,8 @@ void CgreQuickItem::mouseMoveEvent(QMouseEvent *event)
                             static_cast<int>(event->position().y()));
     event->accept();
     if (auto *w = window()) w->update();
+    emit axisTransformChanged();
+    if (m_anchorValid) emit anchorChanged();   // reproject overlay anchor
 }
 
 void CgreQuickItem::wheelEvent(QWheelEvent *event)
@@ -119,6 +155,304 @@ void CgreQuickItem::wheelEvent(QWheelEvent *event)
     m_zoomFactor = std::clamp(m_zoomFactor, 0.05f, 100.0f);
 
     event->accept();
+    if (auto *w = window()) w->update();
+    if (m_anchorValid) emit anchorChanged();   // reproject overlay anchor
+}
+
+// -- hover picking ("Mesure / Point") -------------------------------------
+
+void CgreQuickItem::hoverMoveEvent(QHoverEvent *event)
+{
+    m_hoverScreen = event->position();
+    if (m_pickingEnabled)
+        updatePick(event->position());
+    else
+        QQuickItem::hoverMoveEvent(event);
+}
+
+void CgreQuickItem::hoverLeaveEvent(QHoverEvent *event)
+{
+    if (m_hoverValid) {
+        m_hoverValid = false;
+        emit hoverChanged();
+    }
+    QQuickItem::hoverLeaveEvent(event);
+}
+
+void CgreQuickItem::setPickingEnabled(bool on)
+{
+    if (m_pickingEnabled == on)
+        return;
+    m_pickingEnabled = on;
+
+    if (on && m_meshModel) {
+        // The cgmesh octree picker needs triangle faces (m_nFaces aligned with
+        // GetTriangles()). Triangulate non-triangle meshes once — no-op for
+        // meshes that are already triangular — and re-upload matching buffers.
+        if (VMeshes *meshes = m_meshModel->internalMeshes()) {
+            bool changed = false;
+            for (Mesh *mesh : meshes->GetMeshes()) {
+                if (mesh && mesh->GetNVertices() > 0 && !mesh->IsTriangleMesh()) {
+                    mesh->Triangulate();
+                    changed = true;
+                }
+            }
+            if (changed) {
+                m_uploadedMeshes = nullptr;
+                rebuildMeshBuffers();
+                if (auto *w = window()) w->update();
+            }
+        }
+    }
+
+    if (!on && m_hoverValid) {
+        m_hoverValid = false;
+        emit hoverChanged();
+    }
+    if (!on)
+        clearAnchor();
+    emit pickingEnabledChanged();
+}
+
+void CgreQuickItem::clearAnchor()
+{
+    if (!m_anchorValid)
+        return;
+    m_anchorValid = false;
+    emit anchorChanged();
+    if (auto *w = window()) w->update();
+}
+
+QPointF CgreQuickItem::anchorScreen() const
+{
+    if (!m_anchorValid)
+        return QPointF(-1, -1);
+    const float w = float(width());
+    const float h = float(height());
+    if (w <= 0.0f || h <= 0.0f)
+        return QPointF(-1, -1);
+
+    QMatrix4x4 proj, view, model;
+    cameraMatrices(proj, view, model);
+    const QVector4D clip = (proj * view * model) * QVector4D(m_anchorPoint, 1.0f);
+    if (clip.w() <= 0.0f)             // behind the camera
+        return QPointF(-1, -1);
+    // Same NDC→pixel mapping the picker inverts: pos = (ndc + 1)/2 * dim.
+    const float ndcX = clip.x() / clip.w();
+    const float ndcY = clip.y() / clip.w();
+    return QPointF((ndcX + 1.0f) * 0.5f * w,
+                   (ndcY + 1.0f) * 0.5f * h);
+}
+
+void CgreQuickItem::cameraMatrices(QMatrix4x4 &proj, QMatrix4x4 &view, QMatrix4x4 &model) const
+{
+    // Mirror onBeforeRenderPassRecording so the picker unprojects with the
+    // exact same camera the renderer uses.
+    const QVector3D bboxMin = m_meshModel ? m_meshModel->bboxMin() : QVector3D();
+    const QVector3D bboxMax = m_meshModel ? m_meshModel->bboxMax() : QVector3D();
+    const QVector3D center  = 0.5f * (bboxMin + bboxMax);
+    const float     diag    = std::max(2.0f, (bboxMax - bboxMin).length());
+
+    view.setToIdentity();
+    const QVector3D camOffset = QVector3D(1.0f, 0.6f, 1.4f) * diag * m_zoomFactor;
+    view.lookAt(center + camOffset, center, QVector3D(0, 1, 0));
+
+    const float aspect = height() > 0.0 ? float(width()) / float(height()) : 1.0f;
+    proj.setToIdentity();
+    proj.perspective(45.0f, aspect, 0.01f, diag * 100.0f);
+    proj.scale(1.0f, -1.0f, 1.0f);   // Vulkan Y flip (as in the renderer)
+
+    QMatrix4x4 tb(m_trackball.getTransform());
+    tb = tb.transposed();
+    model.setToIdentity();
+    model.translate(center);
+    model = model * tb;
+    model.translate(-center);
+}
+
+void CgreQuickItem::updatePick(const QPointF &posItem)
+{
+    const float w = float(width());
+    const float h = float(height());
+    VMeshes *meshes = m_meshModel ? m_meshModel->internalMeshes() : nullptr;
+
+    auto invalidate = [this]() {
+        if (m_hoverValid) { m_hoverValid = false; }
+        emit hoverChanged();   // also refreshes hoverScreen-bound readout
+    };
+
+    if (!meshes || w <= 0.0f || h <= 0.0f) { invalidate(); return; }
+
+    QMatrix4x4 proj, view, model;
+    cameraMatrices(proj, view, model);
+
+    bool ok = false;
+    const QMatrix4x4 invVP = (proj * view).inverted(&ok);
+    if (!ok) { invalidate(); return; }
+
+    // Cursor → NDC. The Vulkan viewport maps item-top (y=0) to ndc.y=-1, so
+    // ndcY increases downward — consistent with the Y-flipped proj above.
+    const float ndcX = 2.0f * float(posItem.x()) / w - 1.0f;
+    const float ndcY = 2.0f * float(posItem.y()) / h - 1.0f;
+
+    const QVector4D nearH = invVP * QVector4D(ndcX, ndcY, -1.0f, 1.0f);
+    const QVector4D farH  = invVP * QVector4D(ndcX, ndcY,  1.0f, 1.0f);
+    if (qFuzzyIsNull(nearH.w()) || qFuzzyIsNull(farH.w())) { invalidate(); return; }
+
+    const QVector3D nearW = nearH.toVector3DAffine();
+    const QVector3D farW  = farH.toVector3DAffine();
+
+    // Into mesh space: the stored geometry is un-rotated; the displayed model
+    // is `model` (trackball about the bbox centre), so undo it on the ray.
+    const QMatrix4x4 invModel = model.inverted();
+    const QVector3D o = invModel.map(nearW);
+    const QVector3D d = (invModel.map(farW) - o).normalized();
+
+    float oo[3] = { o.x(), o.y(), o.z() };
+    float dd[3] = { d.x(), d.y(), d.z() };
+
+    float     bestT = -1.0f;
+    QVector3D bestHit;
+    bool      found = false;
+    for (Mesh *mesh : meshes->GetMeshes()) {
+        if (!mesh || mesh->GetNVertices() == 0)
+            continue;
+        float t = -1.0f;
+        float hit[3] = { 0, 0, 0 };
+        float nrm[3] = { 0, 0, 0 };
+        if (mesh->GetIntersectionWithRay(oo, dd, &t, hit, nrm) > 0 && t > 0.0f) {
+            if (!found || t < bestT) {
+                bestT = t;
+                bestHit = QVector3D(hit[0], hit[1], hit[2]);
+                found = true;
+            }
+        }
+    }
+
+    m_hoverValid = found;
+    if (found)
+        m_hoverPoint = bestHit;
+    emit hoverChanged();
+}
+
+void CgreQuickItem::resetView()
+{
+    // Trackball has no reset(); a fresh instance is identity. Re-seed its
+    // viewport dimensions so the next drag projects correctly.
+    m_trackball = cgre2::Trackball();
+    m_trackball.setDimensions(static_cast<int>(width()),
+                              static_cast<int>(height()));
+    m_zoomFactor = 1.0f;
+    if (auto *w = window()) w->update();
+    emit axisTransformChanged();
+    if (m_anchorValid) emit anchorChanged();   // reproject overlay anchor
+}
+
+QMatrix4x4 CgreQuickItem::axisTransform() const
+{
+    // Camera rotation: same framing direction as the renderer's view matrix
+    // (eye at camOffset direction, looking at the origin). Only the rotation
+    // part matters for axis directions, so center/zoom are irrelevant here.
+    QMatrix4x4 view;
+    const QVector3D camDir = QVector3D(1.0f, 0.6f, 1.4f).normalized();
+    view.lookAt(camDir, QVector3D(0, 0, 0), QVector3D(0, 1, 0));
+
+    // Trackball rotation (column-major → transpose for QMatrix4x4), exactly
+    // as applied to the model in onBeforeRenderPassRecording.
+    QMatrix4x4 tb(m_trackball.getTransform());
+    tb = tb.transposed();
+
+    return view * tb;
+}
+
+bool CgreQuickItem::evaluateCurvature(const QString &type)
+{
+    if (!m_meshModel)
+        return false;
+    VMeshes *meshes = m_meshModel->internalMeshes();
+    if (!meshes)
+        return false;
+
+    const Tensor::eCurvature cid = curvatureIdFromLabel(type);
+
+    bool any = false;
+    for (Mesh *mesh : meshes->GetMeshes()) {
+        if (!mesh || mesh->GetNVertices() == 0)
+            continue;
+        try {
+            // Desbrun operates on a triangulated, normal-equipped manifold.
+            mesh->Triangulate();    // no-op when already triangular
+            mesh->ComputeNormals();
+
+            // Mesh_half_edge builds an internal triangulated copy (same
+            // vertex order/count); the evaluator fills that copy's tensors.
+            Mesh_half_edge mhe(mesh);
+            MeshAlgoTensorEvaluator eval;
+            if (!eval.Init(&mhe))
+                continue;
+            eval.Evaluate(TENSOR_DESBRUN);   // → mhe.m_pMesh->m_pTensors
+
+            // Cache the per-vertex tensors on the rendered mesh (same vertex
+            // order/count) so re-colouring for another curvature type is cheap
+            // (recolorCurvature, no re-evaluation). Then colour from `cid`.
+            mesh->m_pTensors = std::move(mhe.m_pMesh->m_pTensors);
+            mesh->InitVertexColorsFromCurvatures(cid);
+            if (!mesh->m_pVertexColors.empty())
+                any = true;
+        } catch (const std::exception &e) {
+            cgre2::Logger::warn("Viewer",
+                std::string("curvature evaluation failed: ") + e.what());
+        }
+    }
+
+    if (any) {
+        m_curvatureMode  = true;
+        m_uploadedMeshes = nullptr;   // force a rebuild with the new colours
+        rebuildMeshBuffers();
+        if (auto *w = window()) w->update();
+        cgre2::Logger::info("Viewer",
+            "curvature evaluated (Desbrun, " + type.toStdString() + ")");
+    }
+    return any;
+}
+
+bool CgreQuickItem::recolorCurvature(const QString &type)
+{
+    // Only meaningful while a curvature heatmap is shown and tensors are
+    // cached. Re-maps the existing tensors to the new type — no Desbrun
+    // re-evaluation — and re-uploads the colours.
+    if (!m_curvatureMode || !m_meshModel)
+        return false;
+    VMeshes *meshes = m_meshModel->internalMeshes();
+    if (!meshes)
+        return false;
+
+    const Tensor::eCurvature cid = curvatureIdFromLabel(type);
+
+    bool any = false;
+    for (Mesh *mesh : meshes->GetMeshes()) {
+        if (!mesh || mesh->m_pTensors.empty())
+            continue;
+        mesh->InitVertexColorsFromCurvatures(cid);
+        if (!mesh->m_pVertexColors.empty())
+            any = true;
+    }
+
+    if (any) {
+        m_uploadedMeshes = nullptr;   // force a rebuild with the new colours
+        rebuildMeshBuffers();
+        if (auto *w = window()) w->update();
+    }
+    return any;
+}
+
+void CgreQuickItem::clearAnalysis()
+{
+    if (!m_curvatureMode)
+        return;
+    m_curvatureMode  = false;
+    m_uploadedMeshes = nullptr;   // force a rebuild back to material shading
+    rebuildMeshBuffers();
     if (auto *w = window()) w->update();
 }
 
@@ -408,7 +742,10 @@ void CgreQuickItem::rebuildMeshBuffers()
                 if (mid >= 0)
                     mat = mesh->GetMaterial(static_cast<unsigned int>(mid));
             }
-            if (mat) {
+            // In curvature mode we shade purely from per-vertex colours (the
+            // heatmap), so skip material colour/texture resolution entirely
+            // (no texture bound → white fallback → colour = vertex colour).
+            if (mat && !m_curvatureMode) {
                 const MaterialType mtype = mat->GetType();
                 if (mtype == MATERIAL_COLOR) {
                     auto *mc = static_cast<MaterialColor *>(mat);
@@ -434,7 +771,7 @@ void CgreQuickItem::rebuildMeshBuffers()
             // it would mask every material's diffuse (all sub-meshes look
             // identically grey). Fall back to vertex colors only when the
             // sub-mesh has no material at all.
-            const bool useVertexColor = (mat == nullptr) && haveColors;
+            const bool useVertexColor = (m_curvatureMode || mat == nullptr) && haveColors;
 
             cgre2::Logger::debug("Viewer",
                 "submesh #" + std::to_string(m_vertexBuffers.size())
@@ -478,7 +815,10 @@ void CgreQuickItem::rebuildMeshBuffers()
         }
 
         m_uploadedMeshes = meshes;
-        m_zoomFactor     = 1.0f;
+        // NB: don't reset the camera framing (m_zoomFactor) here — this runs
+        // on every rebuild, including curvature (re)colouring, which must not
+        // disturb the user's view. Reframing happens in onMeshChanged on an
+        // actual new-mesh load.
         cgre2::Logger::info("Viewer",
             "uploaded " + std::to_string(m_vertexBuffers.size()) + " sub-mesh(es) — "
             + std::to_string(totalVerts) + " verts, "
@@ -496,6 +836,18 @@ void CgreQuickItem::rebuildMeshBuffers()
 
 void CgreQuickItem::onMeshChanged()
 {
+    // A freshly loaded mesh starts in normal (material) shading and is
+    // reframed to the default zoom (rebuildMeshBuffers no longer does this,
+    // so that recolouring keeps the current view).
+    m_curvatureMode = false;
+    m_zoomFactor    = 1.0f;
+    // Any picked points belong to the previous mesh's coordinate space — drop
+    // them so a stale anchor/hover doesn't reproject onto the new model.
+    clearAnchor();
+    if (m_hoverValid) {
+        m_hoverValid = false;
+        emit hoverChanged();
+    }
     rebuildMeshBuffers();
     if (QQuickWindow *w = window())
         w->update();
