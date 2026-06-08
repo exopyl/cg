@@ -2,12 +2,22 @@
 #include "../cgmath/cgmath.h"
 
 //
+// Curvature type.
+//
+// Single, shared enumeration for the four curvature scalars derivable from a
+// Tensor. It replaces the two previously divergent enums (Tensor::eCurvature
+// and CurvatureId) which used the *same* value names in *inverted* orders, a
+// silent min/max swap waiting to happen. Scoped (enum class) so the values
+// can never implicitly convert to int or collide.
+//
+enum class CurvatureType { Min, Max, Mean, Gaussian };
+
+//
 // Tensor
 //
 class Tensor
 {
 public:
-	typedef enum {CURVATURE_MIN = 0, CURVATURE_MAX, CURVATURE_GAUSSIAN, CURVATURE_MEAN} eCurvature; 
 	Tensor () { Reset (); };
 	~Tensor () {};
 	
@@ -37,6 +47,29 @@ public:
 	float GetKappaMin (void) { return kappa_min; };
 	void  GetDirectionMax (vec3 dmax) { vec3_copy (dmax, direction_max); };
 	void  GetDirectionMin (vec3 dmin) { vec3_copy (dmin, direction_min); };
+
+	//
+	// derived curvatures
+	//
+	// Mean (H) and Gaussian (K) curvatures are *derived* from the principal
+	// curvatures, so they live here rather than being recomputed with the
+	// same literal formula at every call site.
+	//
+	float GetMeanCurvature (void) const { return (kappa_max + kappa_min) / 2.0f; };
+	float GetGaussianCurvature (void) const { return kappa_max * kappa_min; };
+
+	//! Return the requested curvature scalar.
+	float GetCurvature (CurvatureType type) const
+		{
+			switch (type)
+			{
+			case CurvatureType::Min:      return kappa_min;
+			case CurvatureType::Max:      return kappa_max;
+			case CurvatureType::Mean:     return GetMeanCurvature ();
+			case CurvatureType::Gaussian: return GetGaussianCurvature ();
+			}
+			return 0.0f;
+		};
 
 	void Dump (void)
 		{

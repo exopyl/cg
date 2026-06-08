@@ -94,6 +94,9 @@ bool ParametricSurface::Generate(void)
 			index++;
 		}
 
+	// The tensors were computed analytically for this exact geometry.
+	MarkTensorsComputed();
+
 	// create faces
 	unsigned int fi = 0;
 	for (unsigned int v = 0; v < nv - 1; v++)

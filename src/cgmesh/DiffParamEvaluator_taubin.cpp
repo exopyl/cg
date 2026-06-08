@@ -20,7 +20,7 @@ bool MeshAlgoTensorEvaluator::ApplyTaubin (void)
     {
 		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
-			m_pDiffParams[i] = nullptr;
+			Tensors ()[i] = nullptr;
 			continue;
 		}
 
@@ -178,7 +178,7 @@ bool MeshAlgoTensorEvaluator::ApplyTaubin (void)
 			}
 			pDiffParamWalk->SetDirectionMax (eigenvectors[0][i_max], eigenvectors[1][i_max], eigenvectors[2][i_max]);
 			pDiffParamWalk->SetDirectionMin (eigenvectors[0][i_min], eigenvectors[1][i_min], eigenvectors[2][i_min]);
-			m_pDiffParams[i] = pDiffParamWalk;
+			Tensors ()[i].reset (pDiffParamWalk);
     }
 
 	return true;

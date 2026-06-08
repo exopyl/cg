@@ -15,13 +15,6 @@ enum TensorMethodId {	TENSOR_HAMANN,		//!< Hamann, "Curvature Approximation for 
 			TENSOR_HYBRID		//!< Method mixing the previous methods
 };
 
-//! Curvatures type.
-//! The following methods are implemented.
-enum CurvatureId {	CURVATURE_MAX,		//!< Maximal curvature
-			CURVATURE_MIN,		//!< Minimal curvature
-			CURVATURE_MEAN,		//!< Mean curvature
-			CURVATURE_GAUSSIAN	//!< Gaussian curvature
-};
 
 
 //
@@ -41,17 +34,14 @@ public:
 	// get
 	Tensor* GetDiffParam (int index);
 
-	bool GetExtremalCurvature (CurvatureId id, int extremal, float *curvature);
-	bool GetCurvatures (CurvatureId id, int *nCurvatures, float **pCurvatures);
-	bool GetCurvaturesHistogram (CurvatureId id, int nbins, float **histogram);
+	bool GetExtremalCurvature (CurvatureType id, int extremal, float *curvature);
+	bool GetCurvatures (CurvatureType id, int *nCurvatures, float **pCurvatures);
+	bool GetCurvaturesHistogram (CurvatureType id, int nbins, float **histogram);
 
 	//
 	// colors
 	//
-	void EvaluateColors (CurvatureId type);
-
-	float* ComparisonCurvatures (CurvatureId type);
-	float* ComparisonDirections (void);
+	void EvaluateColors (CurvatureType type);
 
 private:
 	// methods
@@ -66,9 +56,12 @@ private:
 	bool ApplySteiner (void);
 
 	bool ApplyHybrid (void);
-	
+
+	// Non-owning view onto the model mesh's per-vertex tensor storage.
+	// All the Apply* methods write through this; valid only after Init().
+	std::vector<std::unique_ptr<Tensor>> & Tensors (void) const { return m_pModel->m_pMesh->m_pTensors; }
+	int NTensors (void) const { return (int)m_pModel->m_pMesh->m_pTensors.size (); }
+
 	// members
 	Mesh_half_edge *m_pModel;
-	int m_nDiffParams;
-	Tensor **m_pDiffParams;
 };

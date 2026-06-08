@@ -2133,11 +2133,11 @@ void MyFrame::OnButtonCurvaturesTaubin (wxCommandEvent& WXUNUSED(event))
    MeshAlgoTensorEvaluator algo;
    algo.Init (pMeshHE);
    algo.Evaluate (TENSOR_TAUBIN);
-   algo.EvaluateColors (CURVATURE_GAUSSIAN);
+   algo.EvaluateColors (CurvatureType::Gaussian);
 
 
    float *pHistogram = nullptr;
-   algo.GetCurvaturesHistogram (CURVATURE_MAX, 64, &pHistogram);
+   algo.GetCurvaturesHistogram (CurvatureType::Max, 64, &pHistogram);
    for (int i=0; i<64; i++)
 		*m_pWndLogging << pHistogram[i] << " ";
 	*m_pWndLogging << "\n";
@@ -2154,7 +2154,7 @@ void MyFrame::OnButtonCurvaturesDesbrun (wxCommandEvent& WXUNUSED(event))
    MeshAlgoTensorEvaluator algo;
    algo.Init (pMeshHE);
    algo.Evaluate (TENSOR_DESBRUN);
-   algo.EvaluateColors (CURVATURE_MEAN);
+   algo.EvaluateColors (CurvatureType::Mean);
 */
 	pGLCanvas->Refresh ();
 
@@ -2495,7 +2495,7 @@ void MyFrame::OnTreatmentCurvaturesDesbrun(wxCommandEvent& WXUNUSED(event))
 		MeshAlgoTensorEvaluator algo;
 		algo.Init(pMeshHE);
 		algo.Evaluate(TENSOR_DESBRUN);
-		algo.EvaluateColors(CURVATURE_MEAN);
+		algo.EvaluateColors(CurvatureType::Mean);
 
 		// Copy colors back to original mesh
 		pMesh->InitVertexColors();
@@ -2523,7 +2523,7 @@ void MyFrame::OnTreatmentCurvaturesTaubin(wxCommandEvent& WXUNUSED(event))
 		MeshAlgoTensorEvaluator algo;
 		algo.Init(pMeshHE);
 		algo.Evaluate(TENSOR_TAUBIN);
-		algo.EvaluateColors(CURVATURE_MEAN);
+		algo.EvaluateColors(CurvatureType::Mean);
 
 		// Copy colors back to original mesh
 		pMesh->InitVertexColors();
@@ -2551,7 +2551,7 @@ void MyFrame::OnTreatmentCurvaturesHamann(wxCommandEvent& WXUNUSED(event))
 		MeshAlgoTensorEvaluator algo;
 		algo.Init(pMeshHE);
 		algo.Evaluate(TENSOR_HAMANN);
-		algo.EvaluateColors(CURVATURE_MEAN);
+		algo.EvaluateColors(CurvatureType::Mean);
 
 		// Copy colors back to original mesh
 		pMesh->InitVertexColors();

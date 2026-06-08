@@ -140,45 +140,45 @@ static void diff_common(TensorMethodId tensorMethodId)
 	pDiffParamEvaluator->Evaluate (tensorMethodId);
 	float fCurvature;
 	//pDiffParamEvaluator->Dump ();
-	pDiffParamEvaluator->GetExtremalCurvature (CURVATURE_MAX, 1, &fCurvature);
+	pDiffParamEvaluator->GetExtremalCurvature (CurvatureType::Max, 1, &fCurvature);
 	printf ("GetMaxCurvatureMaximal : %f\n", fCurvature);
 	
-	pDiffParamEvaluator->GetExtremalCurvature (CURVATURE_MAX, 0, &fCurvature);
+	pDiffParamEvaluator->GetExtremalCurvature (CurvatureType::Max, 0, &fCurvature);
 	printf ("GetMinCurvatureMaximal : %f\n", fCurvature);
 	
-	pDiffParamEvaluator->GetExtremalCurvature (CURVATURE_MIN, 1, &fCurvature);
+	pDiffParamEvaluator->GetExtremalCurvature (CurvatureType::Min, 1, &fCurvature);
 	printf ("GetMaxCurvatureMinimal : %f\n", fCurvature);
 	
-	pDiffParamEvaluator->GetExtremalCurvature (CURVATURE_MIN, 0, &fCurvature);
+	pDiffParamEvaluator->GetExtremalCurvature (CurvatureType::Min, 0, &fCurvature);
 	printf ("GetMinCurvatureMinimal : %f\n", fCurvature);
 	
 	int n;
 	float *curvatures;
-	pDiffParamEvaluator->GetCurvatures (CURVATURE_MAX, &n, &curvatures);
+	pDiffParamEvaluator->GetCurvatures (CurvatureType::Max, &n, &curvatures);
 	printf ("GetMaximalCurvatures : %d\n", n);
 
 	// histogram
 	float *histogram;
 	int nbins = 64;
-	res = pDiffParamEvaluator->GetCurvaturesHistogram (CURVATURE_MAX, nbins, &histogram);
+	res = pDiffParamEvaluator->GetCurvaturesHistogram (CurvatureType::Max, nbins, &histogram);
 	if (res == true)
 	{
 		output_1array (histogram, nbins, "histogram_maximal_curvatures.txt");
 		SAFE_FREE (histogram);
 	}
-	res = pDiffParamEvaluator->GetCurvaturesHistogram (CURVATURE_MIN, nbins, &histogram);
+	res = pDiffParamEvaluator->GetCurvaturesHistogram (CurvatureType::Min, nbins, &histogram);
 	if (res == true)
 	{
 		output_1array (histogram, nbins, "histogram_minimal_curvatures.txt");
 		SAFE_FREE (histogram);
 	}
-	res = pDiffParamEvaluator->GetCurvaturesHistogram (CURVATURE_MEAN, nbins, &histogram);
+	res = pDiffParamEvaluator->GetCurvaturesHistogram (CurvatureType::Mean, nbins, &histogram);
 	if (res == true)
 	{
 		output_1array (histogram, nbins, "histogram_mean_curvatures.txt");
 		SAFE_FREE (histogram);
 	}
-	res = pDiffParamEvaluator->GetCurvaturesHistogram (CURVATURE_GAUSSIAN, nbins, &histogram);
+	res = pDiffParamEvaluator->GetCurvaturesHistogram (CurvatureType::Gaussian, nbins, &histogram);
 	if (res == true)
 	{
 		output_1array (histogram, nbins, "histogram_gaussian_curvatures.txt");

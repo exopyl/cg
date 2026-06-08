@@ -95,7 +95,7 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
     {
 		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
-			m_pDiffParams[i] = nullptr;
+			Tensors ()[i] = nullptr;
 			continue;
 		}
 
@@ -402,7 +402,7 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 			pDiffParam_walk->SetKappaMin (kappa2); // minimal curvature
 			pDiffParam_walk->SetDirectionMax (basis1[0], basis1[1], basis1[2]);
 			pDiffParam_walk->SetDirectionMin (basis2[0], basis2[1], basis2[2]);
-			m_pDiffParams[i] = pDiffParam_walk;
+			Tensors ()[i].reset (pDiffParam_walk);
 		}
 		
 		// solve the eigensystem
@@ -471,7 +471,7 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 		pDiffParam_walk->SetKappaMin (kappa2); // minimal curvature
 		pDiffParam_walk->SetDirectionMax (principal_direction1[0], principal_direction1[1], principal_direction1[2]);
 		pDiffParam_walk->SetDirectionMin (principal_direction2[0], principal_direction2[1], principal_direction2[2]);
-		m_pDiffParams[i] = pDiffParam_walk;
+		Tensors ()[i].reset (pDiffParam_walk);
     }
 
 	return true;

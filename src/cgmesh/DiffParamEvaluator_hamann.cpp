@@ -16,7 +16,7 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
     {
 		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
-			m_pDiffParams[i] = nullptr;
+			Tensors ()[i] = nullptr;
 			continue;
 		}
 
@@ -127,7 +127,7 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 			pDiffParamWalk->SetKappaMin (1000000.0);
 			pDiffParamWalk->SetDirectionMax (b1[0], b1[1], b1[2]);
 			pDiffParamWalk->SetDirectionMin (b2[0], b2[1], b2[2]);
-			m_pDiffParams[i] = pDiffParamWalk;
+			Tensors ()[i].reset (pDiffParamWalk);
 			continue;
 		}
 		
@@ -201,7 +201,7 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 			pDiffParamWalk->SetDirectionMax (d1[0], d1[1], d1[2]);
 			pDiffParamWalk->SetDirectionMin (d2[0], d2[1], d2[2]);
 		}
-		m_pDiffParams[i] = pDiffParamWalk;
+		Tensors ()[i].reset (pDiffParamWalk);
     }
 
 	return true;

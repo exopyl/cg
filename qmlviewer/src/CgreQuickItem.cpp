@@ -52,12 +52,12 @@ void writeMatrix(const QMatrix4x4 &m, float out[16])
 }
 
 // Curvature drop-down label → cgmesh curvature id. Defaults to mean.
-Tensor::eCurvature curvatureIdFromLabel(const QString &type)
+CurvatureType curvatureIdFromLabel(const QString &type)
 {
-    if (type == QStringLiteral("Gaussienne")) return Tensor::CURVATURE_GAUSSIAN;
-    if (type == QStringLiteral("Minimale"))   return Tensor::CURVATURE_MIN;
-    if (type == QStringLiteral("Maximale"))   return Tensor::CURVATURE_MAX;
-    return Tensor::CURVATURE_MEAN;
+    if (type == QStringLiteral("Gaussienne")) return CurvatureType::Gaussian;
+    if (type == QStringLiteral("Minimale"))   return CurvatureType::Min;
+    if (type == QStringLiteral("Maximale"))   return CurvatureType::Max;
+    return CurvatureType::Mean;
 }
 
 } // namespace
@@ -373,7 +373,7 @@ bool CgreQuickItem::evaluateCurvature(const QString &type)
     if (!meshes)
         return false;
 
-    const Tensor::eCurvature cid = curvatureIdFromLabel(type);
+    const CurvatureType cid = curvatureIdFromLabel(type);
 
     bool any = false;
     for (Mesh *mesh : meshes->GetMeshes()) {
@@ -396,6 +396,10 @@ bool CgreQuickItem::evaluateCurvature(const QString &type)
             // order/count) so re-colouring for another curvature type is cheap
             // (recolorCurvature, no re-evaluation). Then colour from `cid`.
             mesh->m_pTensors = std::move(mhe.m_pMesh->m_pTensors);
+            // The tensors were computed for this mesh's current geometry
+            // (same vertex order/count); stamp them valid on the destination
+            // so the staleness check and recolorCurvature() accept them.
+            mesh->MarkTensorsComputed();
             mesh->InitVertexColorsFromCurvatures(cid);
             if (!mesh->m_pVertexColors.empty())
                 any = true;
@@ -427,7 +431,7 @@ bool CgreQuickItem::recolorCurvature(const QString &type)
     if (!meshes)
         return false;
 
-    const Tensor::eCurvature cid = curvatureIdFromLabel(type);
+    const CurvatureType cid = curvatureIdFromLabel(type);
 
     bool any = false;
     for (Mesh *mesh : meshes->GetMeshes()) {

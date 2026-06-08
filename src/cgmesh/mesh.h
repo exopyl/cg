@@ -134,12 +134,20 @@ public:
 	void Init (void);
 	void Init (unsigned int nVertices, unsigned int nFaces);
 	void InitVertexColors (float r = 0., float g = 0., float b = 0.);
-	void InitVertexColorsFromCurvatures (Tensor::eCurvature curvature);
+	void InitVertexColorsFromCurvatures (CurvatureType curvature);
 	void InitVertexColorsFromArray (float *array, char *defined = nullptr);
 
 	// Revision
 	uint64_t GetRevision() const;
 	void IncrementRevision();
+
+	// Curvature tensors validity
+	// m_pTensors is computed for a given geometry; a later geometry edit
+	// bumps the revision and leaves the tensors stale. MarkTensorsComputed()
+	// stamps them against the current revision; AreTensorsValid() reports
+	// whether they still match it.
+	void MarkTensorsComputed();
+	bool AreTensorsValid() const;
 
 	// Getters / Setters
 	unsigned int* GetTriangles (void);
@@ -398,4 +406,7 @@ public:
 
 private:
 	uint64_t m_revision = 0;
+	// Geometry revision at which m_pTensors was last computed; (uint64_t)-1
+	// means "never computed / invalid".
+	uint64_t m_tensorsRevision = (uint64_t)-1;
 };

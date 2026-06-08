@@ -5,8 +5,6 @@
 //
 MeshAlgoTensorEvaluator::MeshAlgoTensorEvaluator ()
 {
-	m_nDiffParams = 0;
-	m_pDiffParams = nullptr;
 	m_pModel = nullptr;
 }
 
@@ -23,20 +21,8 @@ MeshAlgoTensorEvaluator::~MeshAlgoTensorEvaluator ()
 //
 void MeshAlgoTensorEvaluator::Reset (void)
 {
-	if (m_pDiffParams)
-	{
-		for (int i=0; i<m_nDiffParams; i++)
-		{
-			if (m_pDiffParams[i])
-			{
-				delete m_pDiffParams[i];
-				m_pDiffParams[i] = nullptr;
-			}
-		}
-		delete (m_pDiffParams);
-		m_pDiffParams = nullptr;
-	}
-	m_nDiffParams = 0;
+	// The evaluator no longer owns the tensor buffer (it lives in the mesh,
+	// owned via unique_ptr), so there is nothing to free here.
 	m_pModel = nullptr;
 }
 
@@ -50,17 +36,15 @@ bool MeshAlgoTensorEvaluator::Init (Mesh_half_edge *mesh)
 
 	Reset ();
 	m_pModel = mesh;
-	m_nDiffParams = mesh->m_pMesh->m_nVertices;
-	m_pDiffParams = (Tensor**)malloc(m_nDiffParams*sizeof(Tensor*));
-	if (m_pDiffParams == nullptr)
-	{
-		Reset ();
-		return false;
-	}
-	for (int i=0; i<m_nDiffParams; i++)
-	{
-		m_pDiffParams[i] = new Tensor ();
-	}
+
+	// Prepare the mesh's per-vertex tensor storage: one default Tensor per
+	// vertex. The Apply* methods overwrite each slot (reset() to a computed
+	// tensor, or = nullptr for border / non-manifold vertices).
+	auto& tensors = mesh->m_pMesh->m_pTensors;
+	tensors.clear ();
+	tensors.resize (mesh->m_pMesh->m_nVertices);
+	for (auto& t : tensors)
+		t = std::make_unique<Tensor> ();
 	return true;
 }
 
@@ -69,10 +53,8 @@ bool MeshAlgoTensorEvaluator::Init (Mesh_half_edge *mesh)
 //
 Tensor* MeshAlgoTensorEvaluator::GetDiffParam (int index)
 {
-	if (index >=0 && index < m_nDiffParams && m_pDiffParams)
-	{
-		return m_pDiffParams[index];
-	}
+	if (m_pModel && index >= 0 && index < NTensors ())
+		return Tensors ()[index].get ();
 	return nullptr;
 }
 
@@ -86,61 +68,28 @@ Tensor* MeshAlgoTensorEvaluator::GetDiffParam (int index)
 // 0 : minimal
 // 1 : maximal
 //
-bool MeshAlgoTensorEvaluator::GetExtremalCurvature (CurvatureId id, int extremal, float *_curvature)
+bool MeshAlgoTensorEvaluator::GetExtremalCurvature (CurvatureType id, int extremal, float *_curvature)
 {
-	if (m_pDiffParams == nullptr) return false;
+	if (m_pModel == nullptr) return false;
 
+	int n = NTensors ();
 	int i=0;
 	float fCurvature=0.0;
-	
-	while (m_pDiffParams[i] == 0 && i<m_nDiffParams)
+
+	while (i<n && !Tensors ()[i])
 	{
 		i++;
 	}
-	if (i == m_nDiffParams) return false;
+	if (i == n) return false;
 
 	// init
-	switch (id)
-	{
-	case CURVATURE_MAX:
-		fCurvature = m_pDiffParams[i]->GetKappaMax ();
-		break;
-	case CURVATURE_MIN:
-		fCurvature = m_pDiffParams[i]->GetKappaMin ();
-		break;
-	case CURVATURE_MEAN:
-		fCurvature = (m_pDiffParams[i]->GetKappaMax () + m_pDiffParams[i]->GetKappaMin ()) / 2.0;
-		break;
-	case CURVATURE_GAUSSIAN:
-		fCurvature = (m_pDiffParams[i]->GetKappaMax () * m_pDiffParams[i]->GetKappaMin ());
-		break;
-	default:
-		break;
-	}
+	fCurvature = Tensors ()[i]->GetCurvature (id);
 
 	//
-	for (i; i<m_nDiffParams; i++)
+	for (; i<n; i++)
 	{
-		if (m_pDiffParams[i] == nullptr) continue;
-		float fCurvatureTemp;
-
-		switch (id)
-		{
-		case CURVATURE_MAX:
-			fCurvatureTemp = m_pDiffParams[i]->GetKappaMax ();
-			break;
-		case CURVATURE_MIN:
-			fCurvatureTemp = m_pDiffParams[i]->GetKappaMin ();
-			break;
-		case CURVATURE_MEAN:
-			fCurvatureTemp = (m_pDiffParams[i]->GetKappaMax () + m_pDiffParams[i]->GetKappaMin ()) / 2.0;
-			break;
-		case CURVATURE_GAUSSIAN:
-			fCurvatureTemp = (m_pDiffParams[i]->GetKappaMax () * m_pDiffParams[i]->GetKappaMin ());
-			break;
-		default:
-			break;
-		}
+		if (!Tensors ()[i]) continue;
+		float fCurvatureTemp = Tensors ()[i]->GetCurvature (id);
 
 		switch (extremal)
 		{
@@ -163,39 +112,22 @@ bool MeshAlgoTensorEvaluator::GetExtremalCurvature (CurvatureId id, int extremal
 //
 //
 //
-bool MeshAlgoTensorEvaluator::GetCurvatures (CurvatureId id, int *_nCurvatures, float **_pCurvatures)
+bool MeshAlgoTensorEvaluator::GetCurvatures (CurvatureType id, int *_nCurvatures, float **_pCurvatures)
 {
-	if (m_pDiffParams == nullptr) return false;
+	if (m_pModel == nullptr) return false;
+
+	int n = NTensors ();
 
 	// init
-	float *curvatures = (float*)malloc(m_nDiffParams*sizeof(float));
+	float *curvatures = (float*)malloc(n*sizeof(float));
 	if (curvatures == nullptr) return false;
 	int nCurvatures = 0;
 
 	//
-	for (int i=0; i<m_nDiffParams; i++)
+	for (int i=0; i<n; i++)
 	{
-		if (m_pDiffParams[i] != nullptr)
-		{
-			switch (id)
-			{
-			case CURVATURE_MAX:
-				curvatures[nCurvatures++] = m_pDiffParams[i]->GetKappaMax ();
-				break;
-			case CURVATURE_MIN:
-				curvatures[nCurvatures++] = m_pDiffParams[i]->GetKappaMin ();
-				break;
-			case CURVATURE_MEAN:
-				curvatures[nCurvatures++] = (m_pDiffParams[i]->GetKappaMax () + m_pDiffParams[i]->GetKappaMin ()) / 2.0;
-				break;
-			case CURVATURE_GAUSSIAN:
-				curvatures[nCurvatures++] = (m_pDiffParams[i]->GetKappaMax () * m_pDiffParams[i]->GetKappaMin ());
-				break;
-			default:
-				break;
-			}
-			
-		}
+		if (Tensors ()[i])
+			curvatures[nCurvatures++] = Tensors ()[i]->GetCurvature (id);
 	}
 
 	*_nCurvatures = nCurvatures;
@@ -207,35 +139,15 @@ bool MeshAlgoTensorEvaluator::GetCurvatures (CurvatureId id, int *_nCurvatures, 
 //
 //
 //
-bool MeshAlgoTensorEvaluator::GetCurvaturesHistogram (CurvatureId id, int nbins, float **_histogram)
+bool MeshAlgoTensorEvaluator::GetCurvaturesHistogram (CurvatureType id, int nbins, float **_histogram)
 {
 	float min, max;
 	int nCurvatures;
 	float *curvatures = nullptr;
 
-	switch (id)
-	{
-	case CURVATURE_MAX:
-		GetExtremalCurvature (CURVATURE_MAX, 0, &min);
-		GetExtremalCurvature (CURVATURE_MAX, 1, &max);
-		GetCurvatures (CURVATURE_MAX, &nCurvatures, &curvatures);
-		break;
-	case CURVATURE_MIN:
-		GetExtremalCurvature (CURVATURE_MIN, 0, &min);
-		GetExtremalCurvature (CURVATURE_MIN, 1, &max);
-		GetCurvatures (CURVATURE_MIN, &nCurvatures, &curvatures);
-		break;
-	case CURVATURE_MEAN:
-		GetExtremalCurvature (CURVATURE_MEAN, 0, &min);
-		GetExtremalCurvature (CURVATURE_MEAN, 1, &max);
-		GetCurvatures (CURVATURE_MEAN, &nCurvatures, &curvatures);
-		break;
-	case CURVATURE_GAUSSIAN:
-		GetExtremalCurvature (CURVATURE_GAUSSIAN, 0, &min);
-		GetExtremalCurvature (CURVATURE_GAUSSIAN, 1, &max);
-		GetCurvatures (CURVATURE_GAUSSIAN, &nCurvatures, &curvatures);
-		break;
-	}
+	GetExtremalCurvature (id, 0, &min);
+	GetExtremalCurvature (id, 1, &max);
+	GetCurvatures (id, &nCurvatures, &curvatures);
 
 	if (nCurvatures == 0) return false;
 
@@ -274,10 +186,12 @@ bool MeshAlgoTensorEvaluator::GetCurvaturesHistogram (CurvatureId id, int nbins,
 //
 void MeshAlgoTensorEvaluator::Dump (void)
 {
-	for (int i=0; i<m_nDiffParams; i++)
+	if (m_pModel == nullptr) return;
+	int n = NTensors ();
+	for (int i=0; i<n; i++)
 	{
-		printf ("%d / %d\n", i, m_nDiffParams);
-		if (m_pDiffParams[i]) m_pDiffParams[i]->Dump ();
+		printf ("%d / %d\n", i, n);
+		if (Tensors ()[i]) Tensors ()[i]->Dump ();
 	}
 }
 
@@ -317,19 +231,11 @@ bool MeshAlgoTensorEvaluator::Evaluate (TensorMethodId tensorMethodId)
 		return false;
 		break;
 	}
-	
-	// Transfer ownership of every computed Tensor from m_pDiffParams into
-	// the Mesh's vector<unique_ptr<Tensor>>. We null out each slot in
-	// m_pDiffParams so DiffParamEvaluator's own destructor (which loops
-	// and deletes non-null entries) doesn't double-free.
-	auto& dst = m_pModel->m_pMesh->m_pTensors;
-	dst.clear();
-	dst.resize(m_nDiffParams);
-	for (int i = 0; i < m_nDiffParams; ++i)
-	{
-		dst[i].reset(m_pDiffParams[i]);
-		m_pDiffParams[i] = nullptr;
-	}
+
+	// The Apply* methods wrote the tensors directly into the mesh's storage.
+	// Stamp them as valid for the mesh's current geometry revision so stale
+	// tensors (after a later geometry edit) can be detected.
+	m_pModel->m_pMesh->MarkTensorsComputed ();
 
 	return true;
 }
@@ -366,12 +272,9 @@ static get_jet_color (float index, float *r, float *g, float *b)
 	*b = ((bv[j]-bv[j-1])*index+bv[j-1]*bi[j]-bv[j]*bi[j-1])/(bi[j]-bi[j-1]);
 }
 
-void MeshAlgoTensorEvaluator::EvaluateColors (CurvatureId type)
+void MeshAlgoTensorEvaluator::EvaluateColors (CurvatureType type)
 {
 	int nv = m_pModel->m_pMesh->m_nVertices;
-	float *v = m_pModel->m_pMesh->m_pVertices.data();
-	float *vn = m_pModel->m_pMesh->m_pVertexNormals.data();
-	// m_edges_vertex is no longer used here (index-based half-edge)
 
 	int i;
 	float r, g, b;
@@ -381,32 +284,13 @@ void MeshAlgoTensorEvaluator::EvaluateColors (CurvatureId type)
 	// build the array of the curvatures
 	for (i=0; i<nv; i++)
 	{
-		if (!m_pDiffParams[i])
+		if (!Tensors ()[i])
 		{
 			defined[i] = 0;
 			continue;
 		}
 		defined[i] = 1;
-		float kappa1 = m_pDiffParams[i]->GetKappaMax ();
-		float kappa2 = m_pDiffParams[i]->GetKappaMin ();
-		switch (type)
-		{
-		case CURVATURE_GAUSSIAN:
-			array[i] = fabs (kappa1*kappa2);
-			break;
-		case CURVATURE_MEAN:
-			array[i] = fabs ((kappa1+kappa2)/2.0);
-			break;
-		case CURVATURE_MAX:
-			array[i] = fabs (kappa1);
-			break;
-		case CURVATURE_MIN:
-			array[i] = fabs (kappa2);
-			break;
-		default:
-			printf ("type unknown\n");
-			break;
-		}
+		array[i] = fabs (Tensors ()[i]->GetCurvature (type));
 	}
 	//for (i=0; i<nv; i++)
 	//array[i] = (array[i] > 1.0)? 1.0 : array[i];
@@ -454,134 +338,10 @@ void MeshAlgoTensorEvaluator::EvaluateColors (CurvatureId type)
 	}
 }
 
-static float* get_colors_from_array (unsigned int n, float *array, int *defined)
-{
-	int i;
-	float r, g, b;
-	float *colors = (float*)malloc(3*n*sizeof(float));
-	
-	/* set the absolute value */
-	for (i=0; i<n; i++)
-		array[i] = fabs (array[i]);
-	
-	/* get the maximal value */
-	float min_value = 0.0f, max_value = 0.0f;
-	bool found = false;
-	for (i=0; i<n; i++)
-	{
-		if (defined[i])
-		{
-			if (!found)
-			{
-				min_value = array[i];
-				max_value = array[i];
-				found = true;
-			}
-			else
-			{
-				if (min_value > array[i]) min_value = array[i];
-				if (max_value < array[i]) max_value = array[i];
-			}
-		}
-	}
-	printf ("   %f -> %f\n", min_value, max_value);
-	
-	for (i=0; i<n; i++)
-	{
-		if (defined[i])
-		{
-			get_jet_color (array[i]/max_value, &r, &g, &b);
-			colors[3*i]   = r;
-			colors[3*i+1] = g;
-			colors[3*i+2] = b;
-		}
-		else
-		{
-			colors[3*i]   = 0.0;
-			colors[3*i+1] = 0.0;
-			colors[3*i+2] = 0.0;
-		}
-	}
-	return colors;
-}
-
-
-float* MeshAlgoTensorEvaluator::ComparisonCurvatures (CurvatureId type)
-{
-	unsigned int nv = m_pModel->m_pMesh->m_nVertices;
-	auto& pTensors = m_pModel->m_pMesh->m_pTensors; // vector<unique_ptr<Tensor>>; -> forwards
-
-	int i;
-	float *array = (float*)malloc(nv*sizeof(float));
-	int *defined = (int*)malloc(nv*sizeof(int));
-
-	for (i=0; i<nv; i++)
-	{
-		if (!m_pDiffParams[i])
-		{
-			defined[i] = 0;
-			continue;
-		}
-		defined[i] = 1;
-		float kappa1 = m_pDiffParams[i]->GetKappaMax ();
-		float kappa2 = m_pDiffParams[i]->GetKappaMin ();
-		float kappa1_real = pTensors[i]->GetKappaMax ();
-		float kappa2_real = pTensors[i]->GetKappaMin ();
-		switch (type)
-		{
-		case CURVATURE_GAUSSIAN:
-			array[i] = fabs (kappa1*kappa2 - kappa1_real*kappa2_real);
-			break;
-		case CURVATURE_MEAN:
-			array[i] = fabs ((kappa1+kappa2)/2.0 - (kappa1_real+kappa2_real)/2.0);
-			break;
-		case CURVATURE_MAX:
-			array[i] = fabs (kappa1 - kappa1_real);
-			break;
-		case CURVATURE_MIN:
-			array[i] = fabs (kappa2 - kappa2_real);
-			break;
-		default:
-			printf ("type unknown\n");
-			break;
-		}
-	}
-	
-	float *colors = get_colors_from_array (nv, array, defined);
-	free (array);
-	free (defined);
-	return colors;
-}
-
-float* MeshAlgoTensorEvaluator::ComparisonDirections (void)
-{
-	unsigned int nv = m_pModel->m_pMesh->m_nVertices;
-	auto& pTensors = m_pModel->m_pMesh->m_pTensors; // vector<unique_ptr<Tensor>>; -> forwards
-
-	int i;
-	float *array = (float*)malloc(nv*sizeof(float));
-	int *defined = (int*)malloc(nv*sizeof(int));
-
-	for (i=0; i<nv; i++)
-	{
-		if (!m_pDiffParams[i])
-		{
-			defined[i] = 0;
-			continue;
-		}
-		defined[i] = 1;
-		vec3 dir_max, dir_max_approximated;
-		pTensors[i]->GetDirectionMax (dir_max);
-		m_pDiffParams[i]->GetDirectionMax (dir_max_approximated);
-		
-		vec3_normalize (dir_max);
-		vec3_normalize (dir_max_approximated);
-		array[i] = 1.0 - fabs (vec3_dot_product (dir_max, dir_max_approximated));
-	}
-	
-	float *colors = get_colors_from_array (nv, array, defined);
-	free (array);
-	free (defined);
-	return colors;
-}
+// NOTE: ComparisonCurvatures / ComparisonDirections (and their helper
+// get_colors_from_array) were removed. They compared a freshly computed
+// approximation against a reference set of tensors held in a *second* buffer.
+// Now that the evaluator computes directly into the mesh's single tensor
+// store (no intermediate buffer), there is no second set to compare against,
+// so the feature no longer has a place to stand. It had no callers.
 

@@ -137,6 +137,7 @@ void Mesh::Init ()
 	m_pTensors.clear();
 	m_pOctree = nullptr;
 	m_revision = 0;
+	m_tensorsRevision = (uint64_t)-1;
 }
 
 void Mesh::InitVertexColors (float r, float g, float b)
@@ -155,10 +156,14 @@ void Mesh::InitVertexColors (float r, float g, float b)
 	}
 }
 
-void Mesh::InitVertexColorsFromCurvatures (Tensor::eCurvature curvature)
+void Mesh::InitVertexColorsFromCurvatures (CurvatureType curvature)
 {
-	if (m_pTensors.empty())
+	if (m_pTensors.empty() || m_pTensors.size() < m_nVertices)
 		return;
+
+	if (!AreTensorsValid())
+		printf ("Mesh::InitVertexColorsFromCurvatures: warning, curvature tensors "
+		        "are stale (geometry changed since they were computed)\n");
 
 	if (m_nVertices > 0)
 	{
@@ -169,26 +174,7 @@ void Mesh::InitVertexColorsFromCurvatures (Tensor::eCurvature curvature)
 			if (m_pTensors[i])
 			{
 				defined[i] = 1;
-				float kappa1 = m_pTensors[i]->GetKappaMax ();
-				float kappa2 = m_pTensors[i]->GetKappaMin ();
-				switch (curvature)
-				{
-				case Tensor::CURVATURE_MAX:
-					array[i] = kappa1;
-					break;
-				case Tensor::CURVATURE_MIN:
-					array[i] = kappa2;
-					break;
-				case Tensor::CURVATURE_GAUSSIAN:
-					array[i] = kappa1*kappa2;
-					break;
-				case Tensor::CURVATURE_MEAN:
-					array[i] = (kappa1+kappa2)/2.0;
-					break;
-				default:
-					printf ("type unknown\n");
-					break;
-				}
+				array[i] = m_pTensors[i]->GetCurvature (curvature);
 			}
 			else
 				defined[i] = 0;
@@ -382,8 +368,18 @@ uint64_t Mesh::GetRevision() const
 }
 
 void Mesh::IncrementRevision()
-{ 
+{
 	m_revision++;
+}
+
+void Mesh::MarkTensorsComputed()
+{
+	m_tensorsRevision = m_revision;
+}
+
+bool Mesh::AreTensorsValid() const
+{
+	return !m_pTensors.empty() && m_tensorsRevision == m_revision;
 }
 
 unsigned int* Mesh::GetTriangles (void)
