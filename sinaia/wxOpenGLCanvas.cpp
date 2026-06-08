@@ -173,6 +173,15 @@ void MyGLCanvas::ApplyNormalization(bool normalize)
 
 	UpdateTopologicIssues();
 
+	// A face-less model (point cloud: .ply/.pset/.pts/.asc with only vertices)
+	// has no surface to fill, so the default fill/VBO path draws nothing — the
+	// model loads invisible. Switch to point display so it is visible on import.
+	if (m_pVMeshes->GetNVertices() > 0 && m_pVMeshes->GetNFaces() == 0)
+	{
+		prop.display_points = true;
+		prop.display_fill   = false;
+	}
+
 	Refresh(false);
 }
 

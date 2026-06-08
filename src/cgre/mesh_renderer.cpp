@@ -69,7 +69,10 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 		glBegin (GL_POINTS);
 		for (unsigned int i=0; i<mesh->m_nVertices; i++)
 		{
-			if (!mesh->m_pVertexColors.empty() && !prop.light)
+			// Lighting is disabled for this pass (above), so per-vertex colours
+			// from a coloured cloud (.ply/.pset/.pts) must be applied whenever
+			// present — gating on !prop.light left coloured clouds all red.
+			if (!mesh->m_pVertexColors.empty())
 				glColor3f (mesh->m_pVertexColors[3*i],
 					   mesh->m_pVertexColors[3*i+1],
 					   mesh->m_pVertexColors[3*i+2]);

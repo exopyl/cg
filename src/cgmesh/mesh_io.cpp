@@ -1592,9 +1592,9 @@ int Mesh::import_ply (const char *filename)
 	ply_set_read_cb(ply, "vertex", "ny", vertex_cb_normals, this, 1);
 	ply_set_read_cb(ply, "vertex", "nz", vertex_cb_normals, this, 2);
 	
-	int bColors = ply_set_read_cb(ply, "vertex", "diffuse_red", vertex_cb_colors, this, 0);
-	ply_set_read_cb(ply, "vertex", "diffuse_green", vertex_cb_colors, this, 1);
-	ply_set_read_cb(ply, "vertex", "diffuse_blue", vertex_cb_colors, this, 2);
+	int bColors = ply_set_read_cb(ply, "vertex", "red", vertex_cb_colors, this, 0);
+	ply_set_read_cb(ply, "vertex", "green", vertex_cb_colors, this, 1);
+	ply_set_read_cb(ply, "vertex", "blue", vertex_cb_colors, this, 2);
 	
 	ntriangles = ply_set_read_cb(ply, "face", "vertex_indices", face_cb, this, 0);
 	

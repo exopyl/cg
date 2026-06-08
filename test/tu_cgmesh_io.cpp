@@ -172,6 +172,19 @@ TEST(TEST_cgmesh_io, ply_ascii)
     EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 24104);
 }
 
+TEST(TEST_cgmesh_io, ply_points)
+{
+    // context
+    Mesh_half_edge* mesh = new Mesh_half_edge();
+
+    // action
+    mesh->m_pMesh->load("./test/data/ply/points_on_sphere.ply");
+
+    // expectations
+    EXPECT_EQ(mesh->m_pMesh->GetNVertices(), 8000);
+    EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 0);
+}
+
 TEST(TEST_cgmesh_io, dae)
 {
     // context
