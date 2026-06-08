@@ -428,13 +428,11 @@ static void tandem_end_layer (void *data)
 {
 	mc_triangulation_t *pTri = (mc_triangulation_t*)data;
 
+	// Simplify the iso-surface incrementally, one layer at a time (the whole
+	// point of the "in tandem" algorithm). The debug export to a hard-coded
+	// OBJ file and the exit(0) that used to live here have been removed so the
+	// class is usable as a library and testable.
 	tandem_simplify (pTri);
-	export_tandem (pTri, (char*)"export_simplified.obj");
-	printf ("slice %ld : %ld\n", slice, pTri->he_mesh->map_edges_face->size());
-	slice++;
-	//return;
-	if (slice == 2)
-		exit(0);
 }
 //
 // tandem
