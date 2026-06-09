@@ -104,3 +104,20 @@ target_link_libraries(qmlviewer
         cgre2
         cgmesh
 )
+
+# --- Windows: auto-deploy the Qt runtime next to the .exe ----------------
+# windeployqt copies the Qt DLLs, QML modules and platform plugins into the
+# build output dir, so qmlviewer.exe runs without a manual deploy step or Qt
+# on PATH. Runs after every build of the target (windeployqt is incremental);
+# the config switch keeps debug/release runtimes matched. Qt6::windeployqt is
+# the imported tool target — no hard-coded path.
+if (WIN32 AND TARGET Qt6::windeployqt)
+    add_custom_command(TARGET qmlviewer POST_BUILD
+        COMMAND Qt6::windeployqt
+                --no-translations
+                $<IF:$<CONFIG:Debug>,--debug,--release>
+                --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml"
+                "$<TARGET_FILE:qmlviewer>"
+        COMMENT "windeployqt: deploying Qt runtime next to qmlviewer.exe"
+        VERBATIM)
+endif()

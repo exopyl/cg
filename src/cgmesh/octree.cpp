@@ -22,10 +22,11 @@ Octree::~Octree ()
 	for (int i=0; i<8; i++)
 		if (m_pChildren[i])
 			delete m_pChildren[i];
-	if (m_pPoints)
-		delete m_pPoints;
-	if (m_pIndices)
-		delete m_pIndices;
+	// All three buffers are allocated with new[] (see Build*); use delete[]
+	// (delete[] on nullptr is a no-op). m_pTriangles was previously leaked.
+	delete[] m_pPoints;
+	delete[] m_pIndices;
+	delete[] m_pTriangles;
 }
 
 void Octree::GetCenter (float center[3]) const

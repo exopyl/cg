@@ -54,3 +54,8 @@ private:
 // http://stackoverflow.com/questions/7706339/grayscale-to-red-green-blue-matlab-jet-color-scale
 extern void color_jet(float index, float *_r, float *_g, float *_b);
 extern void color_jet_int (float index, int *_r, int *_g, int *_b);
+
+// Kenneth Moreland's diverging "cool-warm" map (Diverging Color Maps for
+// Scientific Visualization, 2009): index 0 = cool blue, 0.5 = light grey,
+// 1 = warm red. Perceptually ordered (unlike jet). index is clamped to [0,1].
+extern void color_coolwarm(float index, float *_r, float *_g, float *_b);

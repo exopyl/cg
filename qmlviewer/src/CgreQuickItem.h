@@ -109,6 +109,21 @@ public:
     /// drop-down so the heatmap updates live when the type changes.
     Q_INVOKABLE bool recolorCurvature(const QString &type);
 
+    /// Compute per-vertex thickness on the loaded mesh and display it as a
+    /// heatmap (THIN = red, THICK = blue). `method` selects the cgmesh
+    /// MeshAlgoThickness algorithm:
+    ///   - "Rayon normal"  → single inward-normal ray (fast, M2);
+    ///   - anything else (e.g. "SDF (cône)") → robust cone-of-rays Shape
+    ///     Diameter Function (default, M1).
+    /// Colour scale: when `autoScale` is true the field's own min/max is used;
+    /// otherwise it is normalised over [scaleMin, scaleMax] (model units).
+    /// Returns true if at least one sub-mesh was coloured. Wired to the
+    /// thickness panel's "Évaluer" button.
+    Q_INVOKABLE bool evaluateThickness(const QString &method = QString(),
+                                       bool   autoScale = true,
+                                       double scaleMin  = -1.0,
+                                       double scaleMax  = -1.0);
+
     /// Drop any analysis colouring and restore normal material/vertex
     /// shading. Wired to the panel's "Réinitialiser".
     Q_INVOKABLE void clearAnalysis();
@@ -192,6 +207,11 @@ private:
     // and shades each sub-mesh with its per-vertex colours (the curvature
     // heatmap written by evaluateCurvature). Reset on each new mesh load.
     bool m_curvatureMode = false;
+
+    // Same idea for the wall-thickness heatmap (MeshAlgoThickness). Mutually
+    // exclusive with m_curvatureMode; either one routes rendering through the
+    // per-vertex colours. Reset on each new mesh load.
+    bool m_thicknessMode = false;
 
     // -- hover picking ("Mesure / Point") ---------------------------------
     // Rebuild the proj / view / model matrices used by the renderer so the

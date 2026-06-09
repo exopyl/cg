@@ -198,6 +198,11 @@ Item {
                         width: parent.width
                         p: ctl.p.t === "slider" ? ctl.p : null
                         value: ctl.p.t === "slider" ? ctl.val : 0
+                        // Manual scale sliders are inert while "Échelle
+                        // automatique" is on (thickness tool).
+                        enabled: !(panel.tool && panel.tool.id === "thickness"
+                                   && (ctl.p.k === "smin" || ctl.p.k === "smax")
+                                   && panel.params && panel.params["auto"] === true)
                         onMoved: panel.paramChanged(ctl.p.k, v)
                     }
                     SegWidget {
@@ -365,8 +370,10 @@ Item {
         id: sl
         property var p: null
         property real value: 0
+        property bool enabled: true       // dimmed + inert when false
         signal moved(var v)
         implicitHeight: 22
+        opacity: sl.enabled ? 1.0 : 0.35
         readonly property real trackW: width - 54
         readonly property real pct: p ? Math.max(0, Math.min(1, (value - p.min) / (p.max - p.min))) : 0
 
@@ -414,6 +421,7 @@ Item {
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             width: sl.trackW + 8
+            enabled: sl.enabled
             onPressed: function(mouse) { sl.setFromX(mouse.x); }
             onPositionChanged: function(mouse) { if (pressed) sl.setFromX(mouse.x); }
         }

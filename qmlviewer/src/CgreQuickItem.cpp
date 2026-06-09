@@ -17,6 +17,7 @@
 #include "vmeshes.h"
 #include "mesh_half_edge.h"
 #include "DiffParamEvaluator.h"
+#include "thickness.h"
 
 #include <QDebug>
 #include <QHoverEvent>
@@ -411,6 +412,7 @@ bool CgreQuickItem::evaluateCurvature(const QString &type)
 
     if (any) {
         m_curvatureMode  = true;
+        m_thicknessMode  = false;     // the two analysis heatmaps are exclusive
         m_uploadedMeshes = nullptr;   // force a rebuild with the new colours
         rebuildMeshBuffers();
         if (auto *w = window()) w->update();
@@ -450,11 +452,66 @@ bool CgreQuickItem::recolorCurvature(const QString &type)
     return any;
 }
 
+bool CgreQuickItem::evaluateThickness(const QString &method,
+                                      bool autoScale, double scaleMin, double scaleMax)
+{
+    if (!m_meshModel)
+        return false;
+    VMeshes *meshes = m_meshModel->internalMeshes();
+    if (!meshes)
+        return false;
+
+    // "Rayon normal" = single-ray wall thickness (M2); anything else = the
+    // robust cone-of-rays Shape Diameter Function (M1, default).
+    const bool useRay = (method == QStringLiteral("Rayon normal"));
+
+    // Auto scale -> sentinel (-1,-1) lets cgmesh use the field's own min/max.
+    const float lo = autoScale ? -1.f : (float)scaleMin;
+    const float hi = autoScale ? -1.f : (float)scaleMax;
+
+    bool any = false;
+    for (Mesh *mesh : meshes->GetMeshes()) {
+        if (!mesh || mesh->GetNVertices() == 0)
+            continue;
+        try {
+            // Both methods need a triangulated, normal-equipped mesh.
+            // Recompute normals after triangulation (which may change
+            // topology) so the inward ray direction -n is fresh — symmetric
+            // with evaluateCurvature.
+            mesh->Triangulate();   // no-op when already triangular
+            mesh->ComputeNormals();
+            std::vector<float> thickness;
+            std::vector<char>  defined;
+            const bool ok = useRay
+                ? MeshAlgoThickness::ColorizeWallThickness(*mesh, thickness, defined, lo, hi)
+                : MeshAlgoThickness::ColorizeShapeDiameter(*mesh, thickness, defined,
+                                                           16, 60.f, 1, lo, hi);
+            if (ok && !mesh->m_pVertexColors.empty())
+                any = true;
+        } catch (const std::exception &e) {
+            cgre2::Logger::warn("Viewer",
+                std::string("thickness evaluation failed: ") + e.what());
+        }
+    }
+
+    if (any) {
+        m_thicknessMode  = true;
+        m_curvatureMode  = false;     // the two analysis heatmaps are exclusive
+        m_uploadedMeshes = nullptr;   // force a rebuild with the new colours
+        rebuildMeshBuffers();
+        if (auto *w = window()) w->update();
+        cgre2::Logger::info("Viewer",
+            std::string("thickness evaluated (") + (useRay ? "ray" : "SDF cone") + ")");
+    }
+    return any;
+}
+
 void CgreQuickItem::clearAnalysis()
 {
-    if (!m_curvatureMode)
+    if (!m_curvatureMode && !m_thicknessMode)
         return;
     m_curvatureMode  = false;
+    m_thicknessMode  = false;
     m_uploadedMeshes = nullptr;   // force a rebuild back to material shading
     rebuildMeshBuffers();
     if (auto *w = window()) w->update();
@@ -749,7 +806,7 @@ void CgreQuickItem::rebuildMeshBuffers()
             // In curvature mode we shade purely from per-vertex colours (the
             // heatmap), so skip material colour/texture resolution entirely
             // (no texture bound → white fallback → colour = vertex colour).
-            if (mat && !m_curvatureMode) {
+            if (mat && !m_curvatureMode && !m_thicknessMode) {
                 const MaterialType mtype = mat->GetType();
                 if (mtype == MATERIAL_COLOR) {
                     auto *mc = static_cast<MaterialColor *>(mat);
@@ -775,7 +832,7 @@ void CgreQuickItem::rebuildMeshBuffers()
             // it would mask every material's diffuse (all sub-meshes look
             // identically grey). Fall back to vertex colors only when the
             // sub-mesh has no material at all.
-            const bool useVertexColor = (m_curvatureMode || mat == nullptr) && haveColors;
+            const bool useVertexColor = (m_curvatureMode || m_thicknessMode || mat == nullptr) && haveColors;
 
             cgre2::Logger::debug("Viewer",
                 "submesh #" + std::to_string(m_vertexBuffers.size())
@@ -844,6 +901,7 @@ void CgreQuickItem::onMeshChanged()
     // reframed to the default zoom (rebuildMeshBuffers no longer does this,
     // so that recolouring keeps the current view).
     m_curvatureMode = false;
+    m_thicknessMode = false;
     m_zoomFactor    = 1.0f;
     // Any picked points belong to the previous mesh's coordinate space — drop
     // them so a stale anchor/hover doesn't reproject onto the new model.

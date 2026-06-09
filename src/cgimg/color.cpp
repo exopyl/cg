@@ -265,3 +265,36 @@ void color_jet_int (float index, int *_r, int *_g, int *_b)
 	*_g = (int)(255.*fg);
 	*_b = (int)(255.*fb);
 }
+
+void color_coolwarm(float index, float *_r, float *_g, float *_b)
+{
+	// Moreland 2009 diverging map, interpolated in RGB through the published
+	// endpoints: cool blue (59,76,192) -> light grey (221,221,221) -> warm red
+	// (180,4,38). Perceptually ordered and far less misleading than jet.
+	if (index < 0.f) index = 0.f;
+	if (index > 1.f) index = 1.f;
+
+	const float coolR = 0.2314f, coolG = 0.2980f, coolB = 0.7529f;
+	const float midR  = 0.8667f, midG  = 0.8667f, midB  = 0.8667f;
+	const float warmR = 0.7059f, warmG = 0.0157f, warmB = 0.1490f;
+
+	float r, g, b;
+	if (index < 0.5f)
+	{
+		const float t = index / 0.5f;
+		r = coolR + t * (midR - coolR);
+		g = coolG + t * (midG - coolG);
+		b = coolB + t * (midB - coolB);
+	}
+	else
+	{
+		const float t = (index - 0.5f) / 0.5f;
+		r = midR + t * (warmR - midR);
+		g = midG + t * (warmG - midG);
+		b = midB + t * (warmB - midB);
+	}
+
+	*_r = r;
+	*_g = g;
+	*_b = b;
+}

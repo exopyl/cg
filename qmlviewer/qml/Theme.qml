@@ -154,16 +154,24 @@ QtObject {
         },
         {
             id: "thickness", icon: "thickness", label: "Épaisseur", key: "T",
+            evaluable: true,   // calcul réel via CgreQuickItem.evaluateThickness
             blurb: "Colore la paroi selon son épaisseur pour repérer les zones fragiles avant impression.",
-            legend: { kind: "scale", title: "Épaisseur de paroi", unit: "mm",
-                      stops: ["#5b2d8e", "#c8447e", "#f4922f", "#f4d63b"],
-                      left: "0,8", mid: "3,0", right: "6,0" },
+            // Palette cool-warm de Moreland, RÉELLEMENT rendue (color_coolwarm
+            // inversé) : rouge = mince, bleu = épais — convention fabrication.
+            legend: { kind: "scale", title: "Épaisseur de paroi", unit: "",
+                      stops: ["#b40426", "#dddddd", "#3b4cc0"],
+                      left: "Mince", mid: "", right: "Épais" },
+            // "SDF (cône)" = Shape Diameter Function robuste (M1, défaut) ;
+            // "Rayon normal" = rayon unique (M2, rapide). "Sphère roulante"
+            // (M3) pas encore implémentée. Échelle auto par défaut ; min/max
+            // manuels en UNITÉS DU MODÈLE (pas de mm imposé) si l'auto est off.
             params: [
-                { k: "method", t: "select", label: "Méthode", opts: ["Sphère roulante", "Rayon normal"], def: "Sphère roulante" },
-                { k: "tmin",   t: "slider", label: "Épaisseur min", min: 0.6, max: 3, step: 0.1, def: 1.2, unit: "mm" },
-                { k: "tmax",   t: "slider", label: "Épaisseur max", min: 3, max: 8, step: 0.5, def: 5, unit: "mm" }
+                { k: "method", t: "select", label: "Méthode", opts: ["SDF (cône)", "Rayon normal"], def: "SDF (cône)" },
+                { k: "auto",   t: "toggle", label: "Échelle automatique", def: true },
+                { k: "smin",   t: "slider", label: "Min échelle", min: 0.0, max: 5,  step: 0.1, def: 0.5 },
+                { k: "smax",   t: "slider", label: "Max échelle", min: 0.5, max: 20, step: 0.5, def: 5 }
             ],
-            result: { state: "warn", text: "3 zones sous l'épaisseur min — risque d'impression" }
+            result: null
         },
         {
             id: "section", icon: "section", label: "Coupe", key: "S",

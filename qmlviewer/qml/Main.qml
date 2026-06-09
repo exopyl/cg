@@ -712,6 +712,10 @@ ApplicationWindow {
                 onEvaluateClicked: {
                     if (root.activeTool === "curvature")
                         cgreView.evaluateCurvature(root.toolState["curvature"].type)
+                    else if (root.activeTool === "thickness") {
+                        var ts = root.toolState["thickness"]
+                        cgreView.evaluateThickness(ts.method, ts.auto, ts.smin, ts.smax)
+                    }
                 }
             }
         }
