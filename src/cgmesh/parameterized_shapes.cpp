@@ -4,6 +4,11 @@
 #include "surface_parametric.h"
 #include "voxels_menger_sponge.h"
 #include "import_svg.h"
+#include "surface_implicit.h"
+#include "surface_implicit_tandem.h"
+
+#include <math.h>
+#include <stdlib.h>
 
 // ===========================================================================
 // Basic shapes
@@ -484,4 +489,83 @@ void ParameterizedSvgExtrusion::Regenerate()
 	m_pMesh = import_svg_extruded(m_filename, opt);
 	if (m_pMesh)
 		m_pMesh->ComputeNormals();
+}
+
+// ===========================================================================
+// Implicit surface from a point cloud
+// ===========================================================================
+
+ParameterizedImplicitFromPoints::ParameterizedImplicitFromPoints(const std::string& plyPath)
+	: m_filename(plyPath)
+{
+	// Load the cloud once at construction; Mesh::load() dispatches on the .ply
+	// extension and fills m_pVertices even for a face-less point cloud.
+	Mesh tmp;
+	if (tmp.load(m_filename.c_str()) == 0 && tmp.GetNVertices() > 0)
+		m_field.Build(tmp.m_pVertices.data(), (int)tmp.GetNVertices());
+
+	Regenerate();
+}
+
+std::vector<Parameter> ParameterizedImplicitFromPoints::GetParameters()
+{
+	return {
+		Parameter::MakeInt  ("Resolution",       &m_resolution,  4, 200),
+		Parameter::MakeFloat("Iso distance",      &m_isoDistance, 0.001f, 10.f),
+		Parameter::MakeBool ("Simplify (tandem)", &m_simplify),
+	};
+}
+
+void ParameterizedImplicitFromPoints::Regenerate()
+{
+	delete m_pMesh;
+	m_pMesh = nullptr;
+
+	if (m_field.NPoints() == 0)
+		return; // no cloud loaded -> no mesh (the caller reports the error)
+
+	m_field.SetIsoDistance(m_isoDistance);
+
+	float vmin[3], vmax[3];
+	m_field.GetPaddedAABB(vmin, vmax);
+
+	// Interpret "Resolution" as the cell count along the largest axis, so the
+	// grid density is independent of the cloud's world scale. Guard against a
+	// zero divisor / zero resolution for tiny or degenerate clouds.
+	float extMax = vmax[0] - vmin[0];
+	for (int i = 1; i < 3; i++)
+		extMax = (vmax[i] - vmin[i] > extMax) ? (vmax[i] - vmin[i]) : extMax;
+	if (extMax <= 0.f)
+		extMax = 1.f;
+	int perUnit = (int)((float)m_resolution / extMax + 0.5f);
+	if (perUnit < 1)
+		perUnit = 1;
+
+	// The tandem extractor decimates the iso-surface in tandem with extraction
+	// (quadric-error edge contraction). get_triangulation() dispatches to the
+	// right pre/post hooks through the base pointer, so the rest is identical.
+	ImplicitSurface* surf = m_simplify ? new ImplicitSurfaceTandem()
+	                                   : new ImplicitSurface();
+	surf->set_bbox(vmin[0], vmin[1], vmin[2], vmax[0], vmax[1], vmax[2]);
+	surf->set_resolution_per_unit(perUnit);
+	surf->set_orientation(1);
+	surf->set_eval_func(&PointCloudField::Eval);
+	surf->set_eval_data(&m_field);
+	surf->set_value(m_field.GetIsoLevel());
+
+	int nv = 0, nf = 0;
+	float* verts = nullptr;
+	unsigned int* faces = nullptr;
+	surf->get_triangulation(&nv, &verts, &nf, &faces);
+	delete surf;
+
+	m_pMesh = new Mesh();
+	if (nv > 0)
+		m_pMesh->SetVertices((unsigned int)nv, verts);
+	if (nf > 0)
+		m_pMesh->SetFaces((unsigned int)nf, 3, faces);
+	m_pMesh->ComputeNormals();
+
+	free(verts);
+	free(faces);
 }

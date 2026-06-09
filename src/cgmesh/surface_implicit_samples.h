@@ -3,17 +3,17 @@
 
 extern void update_time (float fnewTime);
 
-extern float fSample0 (float, float, float);
-extern float fSample1 (float, float, float);
-extern float fSample2 (float, float, float);
-extern float fSample3 (float, float, float);
-extern float fSample4 (float, float, float);
-extern float fSample5 (float, float, float);
-extern float fSample6 (float, float, float);
-extern float fSample7 (float, float, float);
+extern float fSample0 (float, float, float, void*);
+extern float fSample1 (float, float, float, void*);
+extern float fSample2 (float, float, float, void*);
+extern float fSample3 (float, float, float, void*);
+extern float fSample4 (float, float, float, void*);
+extern float fSample5 (float, float, float, void*);
+extern float fSample6 (float, float, float, void*);
+extern float fSample7 (float, float, float, void*);
 
 #define nSamples 8
-static float (*scalar_functions[nSamples]) (float, float, float) = {fSample0,
+static float (*scalar_functions[nSamples]) (float, float, float, void*) = {fSample0,
 								    fSample1,
 								    fSample2,
 								    fSample3,

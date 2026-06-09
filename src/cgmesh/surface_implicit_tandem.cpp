@@ -1,5 +1,9 @@
 #include "surface_implicit_tandem.h"
 
+#include <stdlib.h>
+#include <set>
+#include <vector>
+
 #include "half_edge.h"
 #include "../cgmath/cgmath.h"
 
@@ -174,7 +178,14 @@ static int tandem_update_edge_quadric (mc_triangulation_t *pTri, int he_idx, flo
 		error = EPSILON;
 
 	// does the edge contraction flip a triangle ?
-	if (!he_mesh->is_border (v0) && !he_mesh->is_border (v1) && 
+	//
+	// This test walks the one-ring of both endpoints -- O(valence^2) per edge.
+	// An edge is only ever contracted while its error stays <= EPSILON, so for
+	// every edge whose QEM error already exceeds the threshold (the vast
+	// majority on any curved surface) the result is irrelevant: skip it. After
+	// the clamp above, error <= EPSILON is exactly the "candidate" case.
+	if (error <= EPSILON &&
+	    !he_mesh->is_border (v0) && !he_mesh->is_border (v1) &&
 	    !he_mesh->vertex_is_near_border (v0) && !he_mesh->vertex_is_near_border (v1))
 	{
 		//printf ("evaluate %d -> %d\n", v0, v1);
@@ -267,11 +278,12 @@ static void tandem_simplify (mc_triangulation_t *pTri)
 	for (int v=0; v<nvertices; v++)
 		tandem_update_vertex_quadric (pTri, v);
 
-	int bAgain = true;
-	while (bAgain)
-	{
-
-	// initialize edge quadrics
+	// Initialize edge quadrics ONCE. Each contraction below refreshes the
+	// quadrics of the edges incident to the merged vertex (the only ones whose
+	// endpoints change), so re-initializing every edge on every pass is
+	// redundant. errors_range is kept only because the local update helper
+	// takes it; it is not used in any decision (the contraction test is the
+	// absolute threshold edata->m_error <= EPSILON).
 	float errors_range[2] = {INFINITY, -INFINITY};
 	for (std::map<std::pair<int,int>,int>::iterator it=he_mesh->m_map_edges->begin ();
 	     it != he_mesh->m_map_edges->end ();
@@ -282,35 +294,54 @@ static void tandem_simplify (mc_triangulation_t *pTri)
 		if (he.m_valid)
 			tandem_update_edge_quadric (pTri, he_idx, errors_range);
 	}
-	//printf ("error_min = %f(%f) error_max = %f(%f)\n", errors_range[0], log(errors_range[0]), errors_range[1], log(errors_range[1]));
 
+	int bAgain = true;
+	while (bAgain)
+	{
 		bAgain = false;
 		//printf ("%d edges\t %d faces\t %d vertices\n",
 		//he_mesh->m_map_edges->size(), he_mesh->map_edges_face->size(), he_mesh->map_edges_vertex->size());
 		//printf ("%d\n", he_mesh->m_map_edges->size());
+		// Snapshot the edge indices before contracting. edge_contract2() mutates
+		// m_map_edges (erase/insert) -- in particular it erases the key of the
+		// edge being contracted, which is exactly the entry a live iterator into
+		// m_map_edges would point at, triggering the MSVC "cannot increment
+		// value-initialized map/set iterator" crash. The indices are stable
+		// handles into m_edges (contraction never grows that vector); edges that
+		// a contraction invalidates are skipped by the m_valid guard below, and
+		// relabelled edges keep the same index.
+		std::vector<int> edge_indices;
+		edge_indices.reserve (he_mesh->m_map_edges->size ());
 		for (std::map<std::pair<int,int>,int>::iterator ite=he_mesh->m_map_edges->begin ();
 		     ite != he_mesh->m_map_edges->end ();
 		     ite++)
+			edge_indices.push_back (ite->second);
+
+		for (size_t k=0; k<edge_indices.size (); k++)
 		{
-			int he_idx = ite->second;
+			int he_idx = edge_indices[k];
 			Che_edge &he = he_mesh->edge(he_idx);
 			if (!he.m_valid)
+				continue;
+
+			// Cheap candidate test FIRST. Only edges with a near-zero error are
+			// ever contracted, so reject the rest before the costly border /
+			// near-border / validity queries (which walk the one-ring through
+			// std::map). edata is null for edges the quadric pass skipped
+			// (degenerate / border) -- treat those as non-candidates.
+			edge_data_t *edata = (edge_data_t*)he.m_data;
+			if (!edata || edata->m_error > EPSILON)
 				continue;
 
 			if (he_mesh->is_border(he.m_v_begin) || he_mesh->is_border(he.m_v_end))
 				continue;
 
-			edge_data_t *edata = (edge_data_t*)he.m_data;
-			bool bContract = true;
-
 			int v1 = he.m_v_begin;
 			int v2 = he.m_v_end;
 			if (he_mesh->vertex_is_near_border (v1) || he_mesh->vertex_is_near_border (v2))
-				bContract = false;
+				continue;
 
-			if (bContract
-			    && edata->m_error <= EPSILON //0.0000005
-			    && he_mesh->is_edge_contract2_valid (he_idx))
+			if (he_mesh->is_edge_contract2_valid (he_idx))
 			{
 				bAgain = true;
 				vec3 vnew;
@@ -334,10 +365,7 @@ static void tandem_simplify (mc_triangulation_t *pTri)
 				//
 				std::map<int,int>::iterator it = he_mesh->map_edges_vertex->find (v1);
 				if (it == he_mesh->map_edges_vertex->end())
-				{
-					printf (":S\n");
-					continue;
-				}
+					continue; // v1 unexpectedly missing after contraction; skip
 
 				int e_idx = it->second;
 
@@ -424,16 +452,6 @@ static void export_tandem (mc_triangulation_t *pTri, char *filename)
 	fclose (ptr);
 }
 
-static void tandem_end_layer (void *data)
-{
-	mc_triangulation_t *pTri = (mc_triangulation_t*)data;
-
-	// Simplify the iso-surface incrementally, one layer at a time (the whole
-	// point of the "in tandem" algorithm). The debug export to a hard-coded
-	// OBJ file and the exit(0) that used to live here have been removed so the
-	// class is usable as a library and testable.
-	tandem_simplify (pTri);
-}
 //
 // tandem
 //
@@ -451,7 +469,11 @@ ImplicitSurfaceTandem::ImplicitSurfaceTandem ()
 	: ImplicitSurface ()
 {
 	face_completed_func = new_face_completed;
-	layer_completed_func = tandem_end_layer;
+	// NOTE: simplification is run ONCE in get_triangulation_post() over the
+	// complete mesh, not per Z-layer. The half-edge mesh accumulates the whole
+	// surface anyway (completed layers are never flushed), so re-simplifying it
+	// on every layer was redundant work scaling with the layer count. A genuine
+	// streaming variant would flush+simplify finalized layers here instead.
 }
 
 ImplicitSurfaceTandem::~ImplicitSurfaceTandem ()
@@ -484,11 +506,93 @@ void ImplicitSurfaceTandem::get_triangulation_pre (void)
 void ImplicitSurfaceTandem::get_triangulation_post (int *nvertices, float **vertices, int *nfaces, unsigned int **faces)
 {
 	mc_triangulation_t *tri = (mc_triangulation_t*)data;
-	*nvertices = tri->nvertices;
-	*vertices = tri->vertices;
-	*nfaces = tri->nfaces;
-	*faces = tri->faces;
+	Che_mesh *he_mesh = tri->he_mesh;
 
-	free (tri);
+	// Simplify the whole iso-surface once, now that extraction has built the
+	// complete half-edge mesh (see the constructor note on why this is not done
+	// per-layer).
+	tandem_simplify (tri);
+
+	// Rebuild compact output buffers from the *simplified* half-edge mesh.
+	// tandem_simplify() decimated he_mesh in place (contracting edges and
+	// updating the surviving vertex positions in tri->vertices); the surviving
+	// triangles are exactly the entries of map_edges_face, and contracted-away
+	// vertices are simply no longer referenced. We gather the still-used
+	// vertices, remap them to a dense range, and emit remapped triangles -- so
+	// the public API returns the decimated mesh instead of the raw MC faces.
+	const int oldNV = tri->nvertices;
+	std::vector<int> remap(oldNV, -1);
+	std::vector<unsigned int> outFaces;
+	outFaces.reserve(3 * he_mesh->map_edges_face->size());
+	int newNV = 0;
+
+	for (std::map<int,int>::iterator it = he_mesh->map_edges_face->begin();
+	     it != he_mesh->map_edges_face->end(); ++it)
+	{
+		int he_idx = it->second;
+		Che_edge &he = he_mesh->edge(he_idx);
+		if (!he.m_valid)
+			continue;
+
+		const int v1 = he.m_v_begin;
+		const int v2 = he.m_v_end;
+		const int v3 = he_mesh->edge(he.m_he_next).m_v_end;
+
+		// skip out-of-range or degenerate triangles defensively
+		if (v1 < 0 || v2 < 0 || v3 < 0 || v1 >= oldNV || v2 >= oldNV || v3 >= oldNV)
+			continue;
+		if (v1 == v2 || v2 == v3 || v1 == v3)
+			continue;
+
+		const int tv[3] = { v1, v2, v3 };
+		for (int k = 0; k < 3; k++)
+		{
+			if (remap[tv[k]] == -1)
+				remap[tv[k]] = newNV++;
+			outFaces.push_back((unsigned int)remap[tv[k]]);
+		}
+	}
+
+	// compacted vertices (allocate at least 1 element to keep free() simple)
+	float *outVerts = (float*)malloc(3 * (newNV > 0 ? newNV : 1) * sizeof(float));
+	for (int v = 0; v < oldNV; v++)
+		if (remap[v] >= 0)
+		{
+			outVerts[3*remap[v]]   = tri->vertices[3*v];
+			outVerts[3*remap[v]+1] = tri->vertices[3*v+1];
+			outVerts[3*remap[v]+2] = tri->vertices[3*v+2];
+		}
+
+	const int outNF = (int)outFaces.size() / 3;
+	unsigned int *outFacesArr =
+		(unsigned int*)malloc(3 * (outNF > 0 ? outNF : 1) * sizeof(unsigned int));
+	for (size_t i = 0; i < outFaces.size(); i++)
+		outFacesArr[i] = outFaces[i];
+
+	*nvertices = newNV;
+	*vertices  = outVerts;
+	*nfaces    = outNF;
+	*faces     = outFacesArr;
+
+	// release the intermediate extraction buffers and the half-edge mesh.
+	// edge_data_t blocks are shared between an edge and its pair (see
+	// tandem_update_edge_quadric), so free each unique pointer once.
+	std::set<void*> freed;
+	for (size_t e = 0; e < he_mesh->m_edges.size(); e++)
+	{
+		void *d = he_mesh->m_edges[e].m_data;
+		if (d && freed.insert(d).second)
+			free(d);
+		he_mesh->m_edges[e].m_data = nullptr;
+	}
+	delete he_mesh;
+
+	free(tri->vertices);
+	free(tri->faces);
+	free(tri->farea);
+	free(tri->fplane);
+	free(tri->varea);
+	free(tri->q);
+	free(tri);
 	data = nullptr;
 }

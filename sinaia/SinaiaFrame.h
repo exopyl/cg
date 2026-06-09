@@ -120,6 +120,7 @@ class MyFrame : public wxFrame
 	ID_GEOMETRY_NEW_PARAM_BORROMEAN_RINGS,
 	ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE,
 	ID_GEOMETRY_NEW_PARAM_SVG,
+	ID_GEOMETRY_NEW_PARAM_IMPLICIT,
 	ID_GEOMETRY_CUBE,
 	ID_GEOMETRY_SPHERE,
 	ID_GEOMETRY_SPHERE_LAT,
@@ -214,6 +215,7 @@ private:
     void OnNewGeometry(wxCommandEvent& evt);
     void OnNewParameterizedGeometry(wxCommandEvent& evt);
     void OnNewParameterizedSvg(wxCommandEvent& evt);
+    void OnNewParameterizedImplicit(wxCommandEvent& evt);
     void OnParameterChanged();
     void OnSettings(wxCommandEvent& evt);
     void ApplyPanelSettings(const struct PanelSettings& panel);

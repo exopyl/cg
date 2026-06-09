@@ -26,12 +26,12 @@ void update_time (float fNewTime)
         sSourcePoint[2].fZ *= fOffset;
 }
 
-float fSample0(float fX, float fY, float fZ)
+float fSample0(float fX, float fY, float fZ, void*)
 {
         return .5*sqrt(fX*fX + fY*fY + fZ*fZ);
 }
 
-float fSample1(float fX, float fY, float fZ)
+float fSample1(float fX, float fY, float fZ, void*)
 {
 	double fResult = 0.0;
         double fDx, fDy, fDz;
@@ -56,7 +56,7 @@ float fSample1(float fX, float fY, float fZ)
 }
 
 //fSample2 finds the distance of (fX, fY, fZ) from three moving lines
-float fSample2(float fX, float fY, float fZ)
+float fSample2(float fX, float fY, float fZ, void*)
 {
         double fResult = 0.0;
         double fDx, fDy, fDz;
@@ -76,7 +76,7 @@ float fSample2(float fX, float fY, float fZ)
 }
 
 //fSample3 defines a height field by plugging the distance from the center into the sin and cos functions
-float fSample3(float fX, float fY, float fZ)
+float fSample3(float fX, float fY, float fZ, void*)
 {
         float fHeight = 20.0*(fTime + sqrt((0.5-fX)*(0.5-fX) + (0.5-fY)*(0.5-fY)));
         fHeight = 1.5 + 0.1*(sinf(fHeight) + cosf(fHeight));
@@ -88,7 +88,7 @@ float fSample3(float fX, float fY, float fZ)
 static vec3f sSourcePoints[10];
 static float sWeightPoints[10];
 static int sample4initialized = 0;
-float fSample4(float fX, float fY, float fZ)
+float fSample4(float fX, float fY, float fZ, void*)
 {
 	if (!sample4initialized)
 	{
@@ -120,7 +120,7 @@ float fSample4(float fX, float fY, float fZ)
         return fResult;
 }
 
-float fSample5(float fX, float fY, float fZ)
+float fSample5(float fX, float fY, float fZ, void*)
 {
         double fResult = 0.;
         double fDx = 0., fDy = 0., fDz = 0.;
@@ -137,7 +137,7 @@ float fSample5(float fX, float fY, float fZ)
         return fResult;
 }
 
-float fSample6(float fX, float fY, float fZ)
+float fSample6(float fX, float fY, float fZ, void*)
 {
 	int nsp = 8;
 	float r = 1.f;
@@ -166,7 +166,7 @@ float fSample6(float fX, float fY, float fZ)
         return fResult;
 }
 
-float fSample7(float fX, float fY, float fZ)
+float fSample7(float fX, float fY, float fZ, void*)
 {
 	return exp (fZ) * cos (fX) - cos(fY);
 }

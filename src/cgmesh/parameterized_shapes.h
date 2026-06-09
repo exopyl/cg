@@ -1,6 +1,7 @@
 #pragma once
 #include "parameterized.h"
 #include "mesh.h"
+#include "surface_implicit_pointcloud.h"
 
 //
 // Common base for parameterized objects that own a Mesh*. Handles
@@ -336,4 +337,27 @@ private:
 	std::string m_filename;
 	float       m_height     = 0.2f;
 	float       m_flattenTol = 0.5f;
+};
+
+// ---------------------------------------------------------------------------
+// Implicit surface from a point cloud
+// ---------------------------------------------------------------------------
+
+// Loads a point cloud (PLY) and reconstructs an implicit "blobby" surface from
+// it via marching cubes. The filename is set at construction (typically from a
+// wxFileDialog) and is NOT exposed as a Parameter -- only the marching-cubes
+// resolution and the iso-surface offset distance are user-editable.
+class ParameterizedImplicitFromPoints : public ParameterizedMesh
+{
+public:
+	explicit ParameterizedImplicitFromPoints(const std::string& plyPath);
+	std::vector<Parameter> GetParameters() override;
+	void Regenerate() override;
+	std::string GetName() const override { return "Implicit (point cloud)"; }
+private:
+	std::string     m_filename;
+	PointCloudField m_field;
+	int             m_resolution  = 32;
+	float           m_isoDistance = 0.05f;
+	bool            m_simplify    = false; // use the tandem extractor (decimated output)
 };

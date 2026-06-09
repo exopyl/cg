@@ -26,6 +26,10 @@ public:
 	// Allows the host frame to refresh the 3D view.
 	void SetOnChanged(std::function<void()> cb) { m_onChanged = std::move(cb); }
 
+	// Wall-clock duration (milliseconds) of the most recent Regenerate() call
+	// triggered by a parameter edit. Read by the host frame to report timing.
+	double GetLastRegenMs() const { return m_lastRegenMs; }
+
 private:
 	void OnPropertyChanged(wxPropertyGridEvent &event);
 	void Rebuild();
@@ -34,6 +38,7 @@ private:
 	IParameterized *m_pBound = nullptr;
 	std::vector<Parameter> m_params;  // cached copy for the bound object
 	std::function<void()> m_onChanged;
+	double m_lastRegenMs = 0.0;
 
 	wxDECLARE_EVENT_TABLE();
 };

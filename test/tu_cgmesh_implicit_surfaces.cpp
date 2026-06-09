@@ -43,7 +43,7 @@ struct Triangulation
 static float g_sphere_radius = 0.5f;
 static float g_sphere_cx = 0.f, g_sphere_cy = 0.f, g_sphere_cz = 0.f;
 
-static float eval_sphere(float x, float y, float z)
+static float eval_sphere(float x, float y, float z, void*)
 {
 	const float dx = x - g_sphere_cx;
 	const float dy = y - g_sphere_cy;
@@ -52,7 +52,7 @@ static float eval_sphere(float x, float y, float z)
 }
 
 static float g_const_value = 0.f;
-static float eval_const(float, float, float)
+static float eval_const(float, float, float, void*)
 {
 	return g_const_value;
 }
@@ -376,7 +376,7 @@ TEST(TEST_cgmesh_implicit_surface, value_getter_returns_stored_isovalue)
 // Sample fields: each demo field must produce a finite, valid mesh
 //
 namespace {
-struct SampleCase { const char* name; float (*fn)(float, float, float); float iso; };
+struct SampleCase { const char* name; float (*fn)(float, float, float, void*); float iso; };
 }
 
 TEST(TEST_cgmesh_implicit_surface, sample_fields_produce_valid_meshes)
@@ -418,7 +418,7 @@ TEST(TEST_cgmesh_implicit_surface, sample_fields_produce_valid_meshes)
 // Image-driven field (kept from the original suite, now with assertions)
 //
 static Img* g_img = nullptr;
-static float eval_image(float x, float y, float)
+static float eval_image(float x, float y, float, void*)
 {
 	unsigned char r = g_img->get_r((int)x, (int)y);
 	if (((int)x) % 2 == 0)
@@ -473,17 +473,14 @@ TEST(TEST_cgmesh_implicit_surface_tandem, construct_and_destroy)
 	SUCCEED();
 }
 
-// KNOWN BUG -- DISABLED.
-// Running the tandem extraction crashes inside tandem_simplify() with
-// "cannot increment value-initialized map/set iterator" (a half-edge/quadric
-// edge-contraction bug). This is a pre-existing latent defect: the simplify
-// path was never exercised because the code used to exit(0) after two layers
-// and no test ever ran it. Removing exit(0) exposed it.
-// Re-enable (drop the DISABLED_ prefix) once the contraction bug is fixed.
-//
 // End-to-end stability: the tandem extraction + per-layer simplification must
 // run to completion and return a usable buffer (no crash, no process exit).
-TEST(TEST_cgmesh_implicit_surface_tandem, DISABLED_runs_and_returns_valid_buffers)
+//
+// This used to crash inside tandem_simplify() with "cannot increment
+// value-initialized map/set iterator": the contraction loop iterated over
+// m_map_edges while edge_contract2() erased entries from it. Fixed by
+// snapshotting the edge indices before contracting; this test guards it.
+TEST(TEST_cgmesh_implicit_surface_tandem, runs_and_returns_valid_buffers)
 {
 	g_sphere_radius = 0.5f;
 	g_sphere_cx = g_sphere_cy = g_sphere_cz = 0.f;
@@ -509,16 +506,11 @@ TEST(TEST_cgmesh_implicit_surface_tandem, DISABLED_runs_and_returns_valid_buffer
 		EXPECT_TRUE(std::isfinite(t.vertices[i])) << "tandem coord " << i;
 }
 
-// Architectural pin-down: get_triangulation() on the tandem surface returns the
-// RAW marching-cubes arrays. The simplification happens only inside the private
-// half-edge mesh, which the public API discards (and leaks). So the returned
-// face count equals the plain ImplicitSurface output. This test documents that
-// limitation so any future API that exposes the simplified mesh is a conscious
-// change.
-//
-// DISABLED for the same reason as above: the tandem extraction currently
-// crashes in tandem_simplify(). Re-enable once that bug is fixed.
-TEST(TEST_cgmesh_implicit_surface_tandem, DISABLED_public_api_returns_unsimplified_faces)
+// The public API now returns the *simplified* mesh: get_triangulation() on the
+// tandem surface rebuilds compact buffers from the decimated half-edge mesh.
+// The result must be a valid mesh with no more faces than the raw marching
+// cubes output (edge contraction can only remove or keep triangles).
+TEST(TEST_cgmesh_implicit_surface_tandem, public_api_returns_simplified_mesh)
 {
 	g_sphere_radius = 0.5f;
 	g_sphere_cx = g_sphere_cy = g_sphere_cz = 0.f;
@@ -531,7 +523,7 @@ TEST(TEST_cgmesh_implicit_surface_tandem, DISABLED_public_api_returns_unsimplifi
 		baseFaces = t.nfaces;
 	}
 
-	int tandemFaces;
+	int tandemFaces, tandemVerts;
 	{
 		ImplicitSurfaceTandem* mc = new ImplicitSurfaceTandem();
 		mc->set_bbox(-1., -1., -1., 1., 1., 1.);
@@ -540,10 +532,108 @@ TEST(TEST_cgmesh_implicit_surface_tandem, DISABLED_public_api_returns_unsimplifi
 		mc->set_eval_func(eval_sphere);
 		mc->set_value(g_sphere_radius);
 		Triangulation t(mc);
-		delete mc;
+
 		tandemFaces = t.nfaces;
+		tandemVerts = t.nvertices;
+
+		// the rebuilt buffer must be self-consistent
+		ASSERT_GT(t.nfaces, 0);
+		ASSERT_GT(t.nvertices, 0);
+		for (int f = 0; f < t.nfaces; f++)
+		{
+			unsigned int a = t.faces[3*f], b = t.faces[3*f+1], c = t.faces[3*f+2];
+			EXPECT_LT((int)a, t.nvertices);
+			EXPECT_LT((int)b, t.nvertices);
+			EXPECT_LT((int)c, t.nvertices);
+			EXPECT_FALSE(a == b || b == c || a == c) << "degenerate face " << f;
+		}
+		for (int i = 0; i < 3 * t.nvertices; i++)
+			EXPECT_TRUE(std::isfinite(t.vertices[i])) << "tandem coord " << i;
+
+		delete mc;
 	}
 
-	EXPECT_EQ(tandemFaces, baseFaces)
-		<< "public API unexpectedly reflects simplification";
+	// tandem must actually decimate (fewer faces than the raw extraction)
+	EXPECT_LT(tandemFaces, baseFaces) << "simplification did not reduce the mesh";
+	// closed triangle mesh: V - E + F = 2 with E = 3F/2  =>  V = F/2 + 2 < F
+	EXPECT_LT(tandemVerts, tandemFaces) << "vertex count inconsistent with a surface";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//
+// PointCloudField: blobby implicit surface reconstructed from a point cloud
+//
+
+// Deterministic (RNG-free) Fibonacci-spiral sampling of a sphere surface.
+static std::vector<float> make_sphere_cloud(int n, float radius)
+{
+	std::vector<float> pts;
+	pts.reserve(3 * n);
+	const float golden = 2.399963f; // golden angle in radians
+	for (int i = 0; i < n; i++)
+	{
+		const float t = (n > 1) ? (float)i / (float)(n - 1) : 0.f;
+		const float z = 1.f - 2.f * t;
+		float s = 1.f - z * z;
+		if (s < 0.f) s = 0.f;
+		const float r = sqrtf(s);
+		const float phi = i * golden;
+		pts.push_back(radius * r * cosf(phi));
+		pts.push_back(radius * r * sinf(phi));
+		pts.push_back(radius * z);
+	}
+	return pts;
+}
+
+TEST(TEST_cgmesh_implicit_pointcloud, blobby_sphere_produces_valid_mesh)
+{
+	std::vector<float> cloud = make_sphere_cloud(300, 0.5f);
+
+	PointCloudField field;
+	field.Build(cloud.data(), (int)cloud.size() / 3);
+	field.SetIsoDistance(0.1f);
+
+	float vmin[3], vmax[3];
+	field.GetPaddedAABB(vmin, vmax);
+
+	ImplicitSurface mc;
+	mc.set_bbox(vmin[0], vmin[1], vmin[2], vmax[0], vmax[1], vmax[2]);
+	mc.set_resolution_per_unit(24);
+	mc.set_orientation(1);
+	mc.set_eval_func(&PointCloudField::Eval);
+	mc.set_eval_data(&field);
+	mc.set_value(field.GetIsoLevel());
+
+	Triangulation t(&mc);
+
+	ASSERT_GT(t.nfaces, 0);
+	ASSERT_GT(t.nvertices, 0);
+
+	for (int f = 0; f < t.nfaces; f++)
+		for (int c = 0; c < 3; c++)
+			EXPECT_LT((int)t.faces[3 * f + c], t.nvertices);
+
+	for (int i = 0; i < 3 * t.nvertices; i++)
+		EXPECT_TRUE(std::isfinite(t.vertices[i]));
+}
+
+// The field's context travels through the eval user-data pointer, so two
+// independent fields must not interfere -- this pins down the reentrancy that
+// the void* user_data refactor buys (no file-static globals).
+TEST(TEST_cgmesh_implicit_pointcloud, eval_uses_user_data_not_globals)
+{
+	std::vector<float> a = { 0.f, 0.f, 0.f };       // single point at the origin
+	std::vector<float> b = { 10.f, 10.f, 10.f };    // single point far away
+
+	PointCloudField fa; fa.Build(a.data(), 1); fa.SetIsoDistance(0.1f);
+	PointCloudField fb; fb.Build(b.data(), 1); fb.SetIsoDistance(0.1f);
+
+	// At the origin, field A peaks at its own Gaussian centre (~1) while field
+	// B contributes nothing (its point is far beyond the cutoff radius).
+	const float va = PointCloudField::Eval(0.f, 0.f, 0.f, &fa);
+	const float vb = PointCloudField::Eval(0.f, 0.f, 0.f, &fb);
+
+	EXPECT_NEAR(va, 1.0f, 1e-3f);
+	EXPECT_NEAR(vb, 0.0f, 1e-3f);
+	EXPECT_GT(va, vb);
 }

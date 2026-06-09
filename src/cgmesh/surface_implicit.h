@@ -3,10 +3,15 @@
 
 struct vec3f { float fX, fY, fZ; };
 
-typedef float (*mc_eval_func_t)   (float, float, float);
-typedef void  (*mc_color_func_t)  (float, float, float);
+// The field-side callbacks (eval/color/normal) receive an opaque user-data
+// pointer set via set_eval_data(). This lets a field carry its own context
+// (e.g. a point cloud + octree) instead of relying on file-static globals,
+// and makes the class reentrant. It is distinct from the triangulation
+// "data" pointer used by the vertex/face/layer callbacks below.
+typedef float (*mc_eval_func_t)   (float, float, float, void*);
+typedef void  (*mc_color_func_t)  (float, float, float, void*);
 typedef bool  (*mc_vertex_func_t) (float, float, float, int, void*);
-typedef void  (*mc_normal_func_t) (float, float, float);
+typedef void  (*mc_normal_func_t) (float, float, float, void*);
 typedef void  (*mc_face_completed_func_t) (void*);
 typedef void  (*mc_layer_completed_func_t) (void*);
 
@@ -14,7 +19,7 @@ class ImplicitSurface
 {
 public:
 	ImplicitSurface ();
-	~ImplicitSurface () {};
+	virtual ~ImplicitSurface () {};
 
 	inline void set_bbox (float minx, float miny, float minz, float maxx, float maxy, float maxz)
 		{
@@ -52,6 +57,7 @@ public:
 			}
 		};
 	inline void set_eval_func (mc_eval_func_t _eval_func) { eval_func = _eval_func; };
+	inline void set_eval_data (void *_eval_data) { eval_data = _eval_data; };
 	inline void set_color_func (mc_color_func_t _color_func) { color_func = _color_func; };
 	inline void set_normal_func (mc_normal_func_t _normal_func) { normal_func = _normal_func; };
 	inline void set_vertex_func (mc_vertex_func_t _vertex_func) { vertex_func = _vertex_func; };
@@ -84,6 +90,7 @@ private:
 	mc_color_func_t color_func;
 	mc_vertex_func_t vertex_func;
 	mc_normal_func_t normal_func;
+	void *eval_data; // opaque context passed to eval/color/normal callbacks
 
 	// temporary variables used in mc_compute
 	float *fValueCached;

@@ -8,6 +8,7 @@
 #include <wx/propgrid/propgrid.h>
 #include <wx/busyinfo.h>
 #include <vector>
+#include <chrono>
 
 #include "sample.xpm"
 
@@ -110,6 +111,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_BORROMEAN_RINGS, MyFrame::OnNewParameterizedGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE, MyFrame::OnNewParameterizedGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_SVG,           MyFrame::OnNewParameterizedSvg)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_IMPLICIT,      MyFrame::OnNewParameterizedImplicit)
     EVT_MENU(ID_Settings, MyFrame::OnSettings)
     EVT_MENU(wxID_EXIT, MyFrame::OnExit)
     EVT_MENU(wxID_ABOUT, MyFrame::OnAbout)
@@ -318,12 +320,16 @@ MyFrame::MyFrame(wxWindow* parent,
     wxMenu* svg_shapes_menu = new wxMenu;
     svg_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_SVG, wxT("SVG extrusion..."));
 
+    wxMenu* pointcloud_shapes_menu = new wxMenu;
+    pointcloud_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_IMPLICIT, wxT("Implicit surface (PLY)..."));
+
     wxMenu* create_menu = new wxMenu;
     create_menu->AppendSubMenu(basic_shapes_menu, wxT("Basic Shapes"));
     create_menu->AppendSubMenu(parametric_surfaces_menu, wxT("Parametric Surfaces"));
     create_menu->AppendSubMenu(knots_menu, wxT("Knots"));
     create_menu->AppendSubMenu(fractal_shapes_menu, wxT("Fractal Shapes"));
     create_menu->AppendSubMenu(svg_shapes_menu, wxT("From SVG"));
+    create_menu->AppendSubMenu(pointcloud_shapes_menu, wxT("From Point Cloud"));
 
     wxMenu* geometry_menu = new wxMenu;
     geometry_menu->AppendSubMenu(new_geometry_menu, wxT("New"));
@@ -1533,6 +1539,53 @@ void MyFrame::OnNewParameterizedSvg(wxCommandEvent& WXUNUSED(event))
 }
 
 //
+// Implicit surface from a point cloud: open a file dialog, instantiate
+// ParameterizedImplicitFromPoints with the chosen PLY, and bind it to the
+// Properties panel exactly like the SVG extrusion. The two editable
+// parameters are the marching-cubes resolution and the iso-surface distance.
+//
+void MyFrame::OnNewParameterizedImplicit(wxCommandEvent& WXUNUSED(event))
+{
+	wxFileDialog dlg(this, _("Select a point cloud (PLY)"), wxEmptyString, wxEmptyString,
+	                 wxT("PLY point clouds (*.ply)|*.ply|All files (*.*)|*.*"),
+	                 wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+	if (dlg.ShowModal() != wxID_OK)
+		return;
+
+	const std::string path = std::string(dlg.GetPath().mb_str(wxConvUTF8));
+
+	// The constructor loads the cloud and runs the first Regenerate(); time it.
+	auto t0 = std::chrono::high_resolution_clock::now();
+	auto pParam = std::make_unique<ParameterizedImplicitFromPoints>(path);
+	auto t1 = std::chrono::high_resolution_clock::now();
+	const double buildMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+	Mesh* pMesh = pParam->TakeMesh();
+	if (!pMesh)
+	{
+		wxMessageBox(_("Failed to load point cloud (file unreadable or no points)."),
+		             _("Point cloud import error"), wxOK | wxICON_ERROR, this);
+		return;
+	}
+
+	Log(wxString::Format(_T("Implicit surface from %s built in %.1f ms (%u faces, %u vertices)"),
+	                     dlg.GetFilename(), buildMs, pMesh->GetNFaces(), pMesh->GetNVertices()));
+
+	MyGLCanvas* pCanvas = new MyGLCanvas(m_pCtrl, m_pWndLogging,
+	                                     (int*)MyGLCanvas::GetDefaultAttributes());
+	auto* pVMeshes = new VMeshes();
+	pVMeshes->AddMesh(pMesh);
+	pCanvas->SetVMeshes(pVMeshes);
+	m_pCtrl->AddPage(pCanvas, dlg.GetFilename(), true);
+
+	IParameterized* pRaw = pParam.get();
+	m_paramByCanvas[pCanvas] = std::move(pParam);
+	m_pParamPanel->Bind(pRaw);
+
+	UpdatePropertiesGrid();
+}
+
+//
 // Called by PropertyPanel after a parameter edit has triggered
 // IParameterized::Regenerate(). Builds a fresh VMeshes around the newly
 // generated mesh and installs it on the active canvas. SetVMeshes()
@@ -1541,6 +1594,9 @@ void MyFrame::OnNewParameterizedSvg(wxCommandEvent& WXUNUSED(event))
 //
 void MyFrame::OnParameterChanged()
 {
+	// Regenerate() already ran inside the panel; report how long it took.
+	const double regenMs = m_pParamPanel ? m_pParamPanel->GetLastRegenMs() : 0.0;
+
 	int sel = m_pCtrl->GetSelection();
 	if (sel < 0)
 		return;
@@ -1552,13 +1608,24 @@ void MyFrame::OnParameterChanged()
 	if (it == m_paramByCanvas.end())
 		return;
 
+	const wxString name(it->second->GetName());
+
 	Mesh *pNewMesh = it->second->TakeMesh();
 	if (!pNewMesh)
+	{
+		Log(wxString::Format(_T("%s regenerated in %.1f ms"), name, regenMs));
 		return;  // param object does not produce a mesh (e.g. Menger sponge)
+	}
+
+	const unsigned int nf = pNewMesh->GetNFaces();
+	const unsigned int nv = pNewMesh->GetNVertices();
 
 	auto *pNewVMeshes = new VMeshes();
 	pNewVMeshes->AddMesh(pNewMesh);
 	pCanvas->SetVMeshes(pNewVMeshes);  // deletes old VMeshes, normalizes, refreshes
+
+	Log(wxString::Format(_T("%s regenerated in %.1f ms (%u faces, %u vertices)"),
+	                     name, regenMs, nf, nv));
 }
 
 //

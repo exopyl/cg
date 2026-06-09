@@ -30,6 +30,7 @@ ImplicitSurface::ImplicitSurface ()
 	face_completed_func = nullptr;
 	layer_completed_func = nullptr;
 	data = nullptr;
+	eval_data = nullptr;
 	fValueCached = nullptr;
 	fIndicesCached = nullptr;
 	iCurrentVertex = -1;
@@ -188,9 +189,9 @@ static void vGetColor(vec3f &rfColor, vec3f &rfPosition, vec3f &rfNormal)
 // This gradient can be used as a very accurate vertex normal for lighting calculations
 void ImplicitSurface::get_normal (vec3f &pt, vec3f &normal)
 {
-	normal.fX = eval_func (pt.fX-0.01, pt.fY, pt.fZ) - eval_func(pt.fX+0.01, pt.fY, pt.fZ);
-	normal.fY = eval_func (pt.fX, pt.fY-0.01, pt.fZ) - eval_func(pt.fX, pt.fY+0.01, pt.fZ);
-	normal.fZ = eval_func (pt.fX, pt.fY, pt.fZ-0.01) - eval_func(pt.fX, pt.fY, pt.fZ+0.01);
+	normal.fX = eval_func (pt.fX-0.01, pt.fY, pt.fZ, eval_data) - eval_func(pt.fX+0.01, pt.fY, pt.fZ, eval_data);
+	normal.fY = eval_func (pt.fX, pt.fY-0.01, pt.fZ, eval_data) - eval_func(pt.fX, pt.fY+0.01, pt.fZ, eval_data);
+	normal.fZ = eval_func (pt.fX, pt.fY, pt.fZ-0.01, eval_data) - eval_func(pt.fX, pt.fY, pt.fZ+0.01, eval_data);
 
 	float fLength = sqrtf( (normal.fX * normal.fX) + (normal.fY * normal.fY) + (normal.fZ * normal.fZ) );
 
@@ -252,7 +253,7 @@ void ImplicitSurface::compute_cube (unsigned int iX, unsigned int iY, unsigned i
 		for(iVertex = 0; iVertex < 8; iVertex++)
 			afCubeValue[iVertex] = eval_func (fX + a2fVertexOffset[iVertex][0]*fStepX,
 							  fY + a2fVertexOffset[iVertex][1]*fStepY,
-							  fZ + a2fVertexOffset[iVertex][2]*fStepZ);
+							  fZ + a2fVertexOffset[iVertex][2]*fStepZ, eval_data);
 
     // Find which vertices are inside of the surface and which are outside
     iFlagIndex = 0;
@@ -307,10 +308,10 @@ void ImplicitSurface::compute_cube (unsigned int iX, unsigned int iY, unsigned i
 				{
 					vGetColor(sColor, asEdgeVertex[iVertex], asEdgeNorm[iVertex]);
 					if (color_func)
-						color_func (sColor.fX, sColor.fY, sColor.fZ);
+						color_func (sColor.fX, sColor.fY, sColor.fZ, eval_data);
 				}
 				if (normal_func)
-					normal_func (asEdgeNorm[iVertex].fX, asEdgeNorm[iVertex].fY, asEdgeNorm[iVertex].fZ);
+					normal_func (asEdgeNorm[iVertex].fX, asEdgeNorm[iVertex].fY, asEdgeNorm[iVertex].fZ, eval_data);
 				bool bNewTriangle = vertex_func (asEdgeVertex[iVertex].fX, asEdgeVertex[iVertex].fY, asEdgeVertex[iVertex].fZ, fIndicesCached[indexEdge], data);
 				if (bNewTriangle && face_completed_func)
 					face_completed_func (data);
@@ -370,7 +371,7 @@ void ImplicitSurface::compute (int bUsecache)
 							index = k*Zoffset + j*(resolution[0]+1) + i;
 							fValueCached[index] = eval_func (min[0]+i*step[0],
 											 min[1]+j*step[1],
-											 min[2]+k*step[2]);
+											 min[2]+k*step[2], eval_data);
 
 							if (bBoundary)
 							{
@@ -398,7 +399,7 @@ void ImplicitSurface::compute (int bUsecache)
 						// update next layer
 						fValueCached[Zoffset + XYoffset] = eval_func (min[0]+i*step[0],
 											      min[1]+j*step[1],
-											      min[2]+(iZ+1)*step[2]);
+											      min[2]+(iZ+1)*step[2], eval_data);
 						if (bBoundary)
 						{
 							if (iZ==0 || iZ==resolution[2]-1 || j==0 || j==resolution[1] || i==0 || i==resolution[0])

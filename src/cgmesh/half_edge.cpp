@@ -514,10 +514,7 @@ void Che_mesh::edge_contract (int ei)
 int Che_mesh::is_edge_contract2_valid (int ei)
 {
 	if (!m_edges[ei].m_valid)
-	{
-		printf ("invalid edge : [%d] : %d -> %d\n", ei, m_edges[ei].m_v_begin, m_edges[ei].m_v_end);
 		return 0;
-	}
 
 	if (m_edges[ei].m_pair < 0)
 		return 0;

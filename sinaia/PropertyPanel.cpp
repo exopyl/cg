@@ -1,5 +1,7 @@
 #include "PropertyPanel.h"
 
+#include <chrono>
+
 #include <wx/sizer.h>
 #include <wx/propgrid/advprops.h>
 
@@ -114,7 +116,11 @@ void PropertyPanel::OnPropertyChanged(wxPropertyGridEvent &event)
 		break;
 	}
 
+	auto t0 = std::chrono::high_resolution_clock::now();
 	m_pBound->Regenerate();
+	auto t1 = std::chrono::high_resolution_clock::now();
+	m_lastRegenMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
 	if (m_onChanged)
 		m_onChanged();
 }
