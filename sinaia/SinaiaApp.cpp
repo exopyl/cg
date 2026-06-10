@@ -4,6 +4,7 @@
 #include "SinaiaApp.h"
 #include "SinaiaFrame.h"
 #include "RemoteConsole.h"
+#include "sample.xpm"
 
 
 bool MyApp::OnInit()
@@ -15,7 +16,9 @@ bool MyApp::OnInit()
                                  wxDefaultPosition,
                                  wxSize(800, 600));
     SetTopWindow(frame);
-    frame->SetIcon(wxIcon(wxT("open.xpm")));
+    wxIcon icon;
+    icon.CopyFromBitmap(wxBitmap((const char**)sample_xpm));
+    frame->SetIcon(icon);
 
     frame->Show();
 
