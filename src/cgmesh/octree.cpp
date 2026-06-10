@@ -133,6 +133,7 @@ int Octree::Build (float *pPoints, int nPoints,
 		free (_pPoints);
 	}
 
+	delete[] codes;
 	return 0;
 }
 
@@ -167,7 +168,11 @@ int Octree::BuildWithIndices (float *pPoints, int nPoints,
 		pIndices = (unsigned int*)malloc(nIndices*sizeof(unsigned int));
 		for (int i=0; i<nIndices; i++)
 			pIndices[i] = i;
-		return BuildWithIndices (pPoints, nPoints, maxPoints, maxDepth, pIndices, nIndices, currentDepth);
+		// The leaves copy the indices they keep; this generated array is only
+		// read, so free it once the (re-entrant) build returns.
+		const int r = BuildWithIndices (pPoints, nPoints, maxPoints, maxDepth, pIndices, nIndices, currentDepth);
+		free (pIndices);
+		return r;
 	}
 	
 	// compute the bounding values
@@ -285,44 +290,28 @@ int Octree::BuildForTriangles (float *pPoints, int nPoints,
 	memset(childTriangleCounts, 0, 8*sizeof(unsigned int));
 	int *codes = new int[nTriangles];
 	memset (codes, 0, nTriangles*sizeof(int));
+
+	// The 8 child boxes are identical for every triangle in this node -> build
+	// them once, outside the loop (they depend only on the node bounds).
+	AABox aabox0 (center[0], center[1], center[2]); aabox0.AddVertex (m_vecMin[0], m_vecMin[1], m_vecMin[2]);
+	AABox aabox1 (center[0], center[1], center[2]); aabox1.AddVertex (m_vecMin[0], m_vecMax[1], m_vecMin[2]);
+	AABox aabox2 (center[0], center[1], center[2]); aabox2.AddVertex (m_vecMax[0], m_vecMin[1], m_vecMin[2]);
+	AABox aabox3 (center[0], center[1], center[2]); aabox3.AddVertex (m_vecMax[0], m_vecMax[1], m_vecMin[2]);
+	AABox aabox4 (center[0], center[1], center[2]); aabox4.AddVertex (m_vecMin[0], m_vecMin[1], m_vecMax[2]);
+	AABox aabox5 (center[0], center[1], center[2]); aabox5.AddVertex (m_vecMin[0], m_vecMax[1], m_vecMax[2]);
+	AABox aabox6 (center[0], center[1], center[2]); aabox6.AddVertex (m_vecMax[0], m_vecMin[1], m_vecMax[2]);
+	AABox aabox7 (center[0], center[1], center[2]); aabox7.AddVertex (m_vecMax[0], m_vecMax[1], m_vecMax[2]);
+
+	// One reused Triangle. Default-constructed, it keeps m_pAABox == nullptr,
+	// so filling its vertices directly (instead of Triangle::Init) avoids a
+	// per-triangle heap allocation — the box tests read only m_v.
+	Triangle tri;
 	for (int i=0; i<nTriangles; i++)
     {
-		// get the current triangle
-		Triangle tri;
-		tri.Init (pPoints[3*pTriangles[3*i]], pPoints[3*pTriangles[3*i]+1], pPoints[3*pTriangles[3*i]+2],
-				pPoints[3*pTriangles[3*i+1]], pPoints[3*pTriangles[3*i+1]+1], pPoints[3*pTriangles[3*i+1]+2],
-				pPoints[3*pTriangles[3*i+2]], pPoints[3*pTriangles[3*i+2]+1], pPoints[3*pTriangles[3*i+2]+2]);
-
-		AABox aabox0 (center[0], center[1], center[2]);
-		aabox0.AddVertex (m_vecMin[0], m_vecMin[1], m_vecMin[2]);
-
-		AABox aabox1 (center[0], center[1], center[2]);
-		aabox1.AddVertex (m_vecMin[0], m_vecMax[1], m_vecMin[2]);
-
-		AABox aabox2 (center[0], center[1], center[2]);
-		aabox2.AddVertex (m_vecMax[0], m_vecMin[1], m_vecMin[2]);
-
-		AABox aabox3 (center[0], center[1], center[2]);
-		aabox3.AddVertex (m_vecMax[0], m_vecMax[1], m_vecMin[2]);
-
-		AABox aabox4 (center[0], center[1], center[2]);
-		aabox4.AddVertex (m_vecMin[0], m_vecMin[1], m_vecMax[2]);
-
-		AABox aabox5 (center[0], center[1], center[2]);
-		aabox5.AddVertex (m_vecMin[0], m_vecMax[1], m_vecMax[2]);
-
-		AABox aabox6 (center[0], center[1], center[2]);
-		aabox6.AddVertex (m_vecMax[0], m_vecMin[1], m_vecMax[2]);
-
-		AABox aabox7 (center[0], center[1], center[2]);
-		aabox7.AddVertex (m_vecMax[0], m_vecMax[1], m_vecMax[2]);
-
-		float xmin = MIN3 (pPoints[3*pTriangles[3*i]], pPoints[3*pTriangles[3*i+1]], pPoints[3*pTriangles[3*i+2]]);
-		float ymin = MIN3 (pPoints[3*pTriangles[3*i]+1], pPoints[3*pTriangles[3*i+1]+1], pPoints[3*pTriangles[3*i+2]+1]);
-		float zmin = MIN3 (pPoints[3*pTriangles[3*i]+2], pPoints[3*pTriangles[3*i+1]+2], pPoints[3*pTriangles[3*i+2]+2]);
-		float xmax = MAX3 (pPoints[3*pTriangles[3*i]], pPoints[3*pTriangles[3*i+1]], pPoints[3*pTriangles[3*i+2]]);
-		float ymax = MAX3 (pPoints[3*pTriangles[3*i]+1], pPoints[3*pTriangles[3*i+1]+1], pPoints[3*pTriangles[3*i+2]+1]);
-		float zmax = MAX3 (pPoints[3*pTriangles[3*i]+2], pPoints[3*pTriangles[3*i+1]+2], pPoints[3*pTriangles[3*i+2]+2]);
+		const unsigned int a = pTriangles[3*i], b = pTriangles[3*i+1], c = pTriangles[3*i+2];
+		vec3_init (tri.m_v[0], pPoints[3*a], pPoints[3*a+1], pPoints[3*a+2]);
+		vec3_init (tri.m_v[1], pPoints[3*b], pPoints[3*b+1], pPoints[3*b+2]);
+		vec3_init (tri.m_v[2], pPoints[3*c], pPoints[3*c+1], pPoints[3*c+2]);
 
 		if (aabox0.contains (tri) || aabox0.intersection (tri)) { codes[i] |= 1;   childTriangleCounts[0]++; }
 		if (aabox1.contains (tri) || aabox1.intersection (tri)) { codes[i] |= 2;   childTriangleCounts[1]++; }
@@ -333,6 +322,26 @@ int Octree::BuildForTriangles (float *pPoints, int nPoints,
 		if (aabox6.contains (tri) || aabox6.intersection (tri)) { codes[i] |= 64;  childTriangleCounts[6]++; }
 		if (aabox7.contains (tri) || aabox7.intersection (tri)) { codes[i] |= 128; childTriangleCounts[7]++; }
     }
+
+	// Anti-degeneration guard. If the split barely shrank the largest child
+	// (triangles straddle the cut planes and are duplicated into nearly every
+	// octant — typical on thin / anisotropic meshes), recursing would only
+	// deepen the tree and multiply duplication without improving query pruning.
+	// Stop here and make this node a leaf instead.
+	{
+		unsigned int maxChild = 0;
+		for (int i = 0; i < 8; i++)
+			if (childTriangleCounts[i] > maxChild) maxChild = childTriangleCounts[i];
+
+		if (maxChild >= (unsigned int)(0.90f * (float)nTriangles))
+		{
+			delete[] codes;
+			m_nTriangles = nTriangles;
+			m_pTriangles = new unsigned int[3*nTriangles];
+			memcpy (m_pTriangles, pTriangles, 3*nTriangles*sizeof(unsigned int));
+			return 0;
+		}
+	}
 
 	// call Build for each child
     for (int i=0; i<8; i++)
@@ -364,6 +373,7 @@ int Octree::BuildForTriangles (float *pPoints, int nPoints,
 		free (_pTriangles);
 	}
 
+	delete[] codes;
 	return 0;
 }
 
@@ -418,10 +428,12 @@ int Octree::GetClosestPoints (vec3 pt, float distance, float **pNeighbours, unsi
 			vec3_init (tmp, m_pPoints[3*i], m_pPoints[3*i+1], m_pPoints[3*i+2]);
 			if (vec3_distance (pt, tmp) < distance)
 			{
-				if (*pNeighbours)
-					(*pNeighbours) = (float*)malloc(3*(*nNeighbours)*sizeof(float));
-				else
-					(*pNeighbours) = (float*)realloc((*pNeighbours), 3*(*nNeighbours)*sizeof(float));
+				// Grow the output buffer by one point. realloc(nullptr, n) acts
+				// as malloc, so this handles both the first and later points;
+				// the size is (*nNeighbours + 1) — the previous code allocated
+				// one short (and had the malloc/realloc branches inverted),
+				// overflowing the buffer on every collected point.
+				*pNeighbours = (float*)realloc (*pNeighbours, 3*((*nNeighbours)+1)*sizeof(float));
 				(*pNeighbours)[3*(*nNeighbours)]   = tmp[0];
 				(*pNeighbours)[3*(*nNeighbours)+1] = tmp[1];
 				(*pNeighbours)[3*(*nNeighbours)+2] = tmp[2];
@@ -461,11 +473,11 @@ int Octree::GetClosestIndicesPoints (float *pVertices, vec3 pt, float distance, 
 			vec3_init (tmp, pVertices[3*vi], pVertices[3*vi+1], pVertices[3*vi+2]);
 			if (vec3_distance (pt, tmp) < distance)
 			{
-				if (*pNeighbours)
-					(*pNeighbours) = (unsigned int*)realloc((*pNeighbours), ((*nNeighbours)+1)*sizeof(unsigned int));
-				else
-					(*pNeighbours) = (unsigned int*)malloc((*nNeighbours)*sizeof(unsigned int));
-				(*pNeighbours)[(*nNeighbours)] = vi;
+				// Grow by one index. realloc(nullptr,..) == malloc; the previous
+				// code's else-branch did malloc((*nNeighbours)) — i.e. malloc(0)
+				// on the first hit — then wrote index 0 out of bounds.
+				*pNeighbours = (unsigned int*)realloc (*pNeighbours, ((*nNeighbours)+1)*sizeof(unsigned int));
+				(*pNeighbours)[*nNeighbours] = vi;
 				(*nNeighbours)++;
 				res++;
 			}

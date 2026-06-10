@@ -83,6 +83,43 @@ namespace
 		}
 		return makeMesh(verts, faces);
 	}
+
+	// Same box, but laid out in a COMPACT n×n×n 3D grid (spacing 10) instead of
+	// a 1D row — a much more isotropic distribution, representative of a real
+	// part and benign for the octree (vs the elongated row).
+	Mesh* makeBoxGrid(unsigned int n)
+	{
+		const float baseV[27] = {
+			0,0,0,   4,0,0,   4,4,0,   0,4,0,
+			0,0,1,   4,0,1,   4,4,1,   0,4,1,
+			1.5f,2,0
+		};
+		const unsigned int baseF[42] = {
+			8,1,0,  8,2,1,  8,3,2,  8,0,3,
+			4,5,6,  4,6,7,
+			0,1,5,  0,5,4,
+			1,2,6,  1,6,5,
+			2,3,7,  2,7,6,
+			3,0,4,  3,4,7
+		};
+		std::vector<float> verts;
+		std::vector<unsigned int> faces;
+		unsigned int box = 0;
+		for (unsigned int ix = 0; ix < n; ++ix)
+		for (unsigned int iy = 0; iy < n; ++iy)
+		for (unsigned int iz = 0; iz < n; ++iz) {
+			const float dx = 10.0f*ix, dy = 10.0f*iy, dz = 10.0f*iz;
+			for (int i = 0; i < 9; ++i) {
+				verts.push_back(baseV[3*i]   + dx);
+				verts.push_back(baseV[3*i+1] + dy);
+				verts.push_back(baseV[3*i+2] + dz);
+			}
+			for (int i = 0; i < 42; ++i)
+				faces.push_back(baseF[i] + 9u * box);
+			++box;
+		}
+		return makeMesh(verts, faces);
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -207,6 +244,70 @@ TEST(TEST_cgmesh_thickness, OctreeMultiLeafReplicatedBoxes)
 		EXPECT_EQ(defined[bc], (char)1) << "box " << k << " bottom-centre undefined";
 		EXPECT_NEAR(thick[bc], 1.0f, 1e-3f) << "box " << k;
 	}
+	delete m;
+}
+
+// ---------------------------------------------------------------------------
+// BVH traversal on a dense, compact mesh (many nodes)
+// ---------------------------------------------------------------------------
+
+TEST(TEST_cgmesh_thickness, BvhCompactGridCorrect)
+{
+	// 6×6×6 = 216 boxes packed in 3D -> a deep, many-node BVH. Each box's
+	// off-centre bottom vertex must still measure its own gap (1.0): validates
+	// BVH traversal + pruning find the same nearest hit as a full scan.
+	const unsigned int N = 6, BOXES = N * N * N;
+	Mesh *m = makeBoxGrid(N);
+
+	std::vector<float> t; std::vector<char> d;
+	ASSERT_TRUE(MeshAlgoThickness::ComputeWallThickness(*m, t, d));
+
+	for (unsigned int box = 0; box < BOXES; ++box) {
+		const unsigned int bc = 8u + 9u * box;
+		EXPECT_EQ(d[bc], (char)1) << "box " << box;
+		EXPECT_NEAR(t[bc], 1.0f, 1e-3f) << "box " << box;
+	}
+	delete m;
+}
+
+// ---------------------------------------------------------------------------
+// Parallel path (std::thread) — meshes above the parallelisation threshold
+// ---------------------------------------------------------------------------
+
+TEST(TEST_cgmesh_thickness, ParallelWallThicknessLargeMesh)
+{
+	// 300 boxes -> 2700 vertices, above the 2000 single-ray threshold, so the
+	// per-vertex loop runs on multiple threads. Every box's bottom-centre must
+	// still measure the gap (1.0) — proving disjoint writes, no data race.
+	const unsigned int K = 300;
+	Mesh *m = makeReplicatedBoxes(K);
+
+	std::vector<float> t; std::vector<char> d;
+	ASSERT_TRUE(MeshAlgoThickness::ComputeWallThickness(*m, t, d));
+
+	for (unsigned int k = 0; k < K; ++k) {
+		const unsigned int bc = 8u + 9u * k;
+		EXPECT_EQ(d[bc], (char)1) << "box " << k;
+		EXPECT_NEAR(t[bc], 1.0f, 1e-3f) << "box " << k;
+	}
+	delete m;
+}
+
+TEST(TEST_cgmesh_thickness, ParallelSdfDeterministicLargeMesh)
+{
+	// 60 boxes -> 540 vertices, above the 500 SDF threshold (multi-threaded).
+	// Two runs must be bit-identical (per-vertex independence, per-thread
+	// scratch) — guards against races corrupting the shared scratch.
+	const unsigned int K = 60;
+	Mesh *m = makeReplicatedBoxes(K);
+
+	std::vector<float> a, b; std::vector<char> ad, bd;
+	ASSERT_TRUE(MeshAlgoThickness::ComputeShapeDiameter(*m, a, ad, 16, 60.f, 1));
+	ASSERT_TRUE(MeshAlgoThickness::ComputeShapeDiameter(*m, b, bd, 16, 60.f, 1));
+
+	ASSERT_EQ(a.size(), b.size());
+	for (size_t i = 0; i < a.size(); ++i)
+		EXPECT_FLOAT_EQ(a[i], b[i]) << "vertex " << i;
 	delete m;
 }
 

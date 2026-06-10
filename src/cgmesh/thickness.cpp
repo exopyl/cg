@@ -1,131 +1,15 @@
 #include "thickness.h"
 #include "mesh.h"
-#include "octree.h"
-#include "../cgmath/aabox.h"
-#include "../cgmath/ray.h"
+#include "bvh.h"
 #include "../cgimg/color.h"
 
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
+#include <thread>
 #include <vector>
 
 namespace
 {
-	// Möller–Trumbore ray/triangle intersection WITHOUT back-face culling.
-	// orig/dir define the ray (dir is assumed normalised, so the returned t
-	// is the Euclidean distance). Hits at t <= tMin are rejected — this skips
-	// the faces incident to the start vertex (distance ~0). Returns true and
-	// writes *tOut on a valid hit.
-	bool intersectRayTriangleNoCull (vec3 orig, vec3 dir,
-	                                 const float *v0f, const float *v1f, const float *v2f,
-	                                 float tMin, float *tOut)
-	{
-		vec3 v0, v1, v2, e1, e2, h, s, q;
-		vec3_init (v0, v0f[0], v0f[1], v0f[2]);
-		vec3_init (v1, v1f[0], v1f[1], v1f[2]);
-		vec3_init (v2, v2f[0], v2f[1], v2f[2]);
-
-		vec3_subtraction (e1, v1, v0);
-		vec3_subtraction (e2, v2, v0);
-
-		vec3_cross_product (h, dir, e2);
-		float a = vec3_dot_product (e1, h);
-		if (fabs (a) < 1e-12f)
-			return false;                 // ray parallel to triangle plane
-
-		float invA = 1.f / a;
-		vec3_subtraction (s, orig, v0);
-		float u = invA * vec3_dot_product (s, h);
-		if (u < 0.f || u > 1.f)
-			return false;
-
-		vec3_cross_product (q, s, e1);
-		float v = invA * vec3_dot_product (dir, q);
-		if (v < 0.f || u + v > 1.f)
-			return false;
-
-		float t = invA * vec3_dot_product (e2, q);
-		if (t <= tMin)
-			return false;                 // behind origin / self-intersection
-
-		*tOut = t;
-		return true;
-	}
-
-	// Recursively find the nearest opposite-face hit of the ray under `node`,
-	// WITHOUT back-face culling (so an inward ray on an outward-oriented mesh
-	// still registers the opposite wall — which Mesh::GetIntersectionWithRay,
-	// being a culling rendering primitive, would discard). Leaves test their
-	// triangles; internal nodes are pruned by an exact ray/AABB slab test and
-	// by the current best distance. `*best` holds the nearest distance so far
-	// (-1 if none); `verts` is the shared vertex array, `nv` its vertex count.
-	void octreeNearestNoCull (Octree *node, vec3 orig, vec3 dir,
-	                          const float *verts, unsigned int nv,
-	                          float tMin, float *best)
-	{
-		if (node->IsLeaf ())
-		{
-			const unsigned int  n    = node->GetNTriangles ();
-			const unsigned int *tris = node->GetTriangles ();
-			for (unsigned int i = 0; i < n; ++i)
-			{
-				const unsigned int a = tris[3*i], b = tris[3*i+1], c = tris[3*i+2];
-				if (a >= nv || b >= nv || c >= nv)
-					continue;             // corrupt index -> skip (no OOB read)
-				float t;
-				if (intersectRayTriangleNoCull (orig, dir,
-				        &verts[3*a], &verts[3*b], &verts[3*c], tMin, &t))
-				{
-					if (*best < 0.f || t < *best)
-						*best = t;
-				}
-			}
-			return;
-		}
-
-		// Recursion depth is bounded by the octree's build-time maxDepth, so
-		// no explicit depth counter is needed here.
-		Octree **children = node->GetChildren ();
-		Ray ray (orig[0], orig[1], orig[2], dir[0], dir[1], dir[2]);
-		for (int i = 0; i < 8; ++i)
-		{
-			Octree *child = children[i];
-			if (!child)
-				continue;
-			float mn[3], mx[3];
-			child->GetMinMax (mn, mx);
-			AABox box (mn[0], mn[1], mn[2]);
-			box.AddVertex (mx[0], mx[1], mx[2]);
-			// Prune any node farther than the nearest hit found so far.
-			const float tFar = (*best >= 0.f) ? *best : 1e30f;
-			if (box.intersection (ray, tMin, tFar))
-				octreeNearestNoCull (child, orig, dir, verts, nv, tMin, best);
-		}
-	}
-
-	// Build a triangle octree over the mesh's current geometry. Vertex
-	// positions are referenced from mesh.m_pVertices (stable); the triangle
-	// index list is copied into the octree, so the malloc'd temporary from
-	// GetTriangles() is freed right after the build.
-	void buildTriangleOctree (Mesh &mesh, Octree &octree)
-	{
-		unsigned int *tris = mesh.GetTriangles ();
-		octree.BuildForTriangles (mesh.m_pVertices.data (), mesh.GetNVertices (),
-		                          /*maxTriangles*/ 32, /*maxDepth*/ 8,
-		                          tris, mesh.GetNFaces ());
-		free (tris);
-	}
-
-	// Nearest opposite-face distance along (P, dir); -1 if the ray escapes.
-	float castNearest (Octree &octree, vec3 P, vec3 dir,
-	                   const float *verts, unsigned int nv, float tMin)
-	{
-		float best = -1.f;
-		octreeNearestNoCull (&octree, P, dir, verts, nv, tMin, &best);
-		return best;
-	}
-
 	// Orthonormal basis (t, b) spanning the plane perpendicular to unit `axis`.
 	void makeBasis (vec3 axis, vec3 t, vec3 b)
 	{
@@ -217,6 +101,42 @@ namespace
 		}
 	}
 
+	// Run worker(begin, end) over [0, n) split into contiguous chunks across
+	// the hardware threads. Falls back to a single serial call below
+	// `minParallel`, or when hardware concurrency is unknown/1. Each worker
+	// invocation owns its own scratch, so no shared mutable state crosses
+	// threads; the read-only inputs (BVH, vertices) are shared safely.
+	template <class Worker>
+	void parallelChunks (unsigned int n, unsigned int minParallel, Worker worker)
+	{
+		const unsigned int hw = std::thread::hardware_concurrency ();
+		const unsigned int nThreads = (n < minParallel || hw <= 1u)
+		                            ? 1u : std::min (hw, n);
+		if (nThreads <= 1u) { worker (0u, n); return; }
+
+		const unsigned int chunk = (n + nThreads - 1u) / nThreads;
+		std::vector<std::thread> pool;
+		pool.reserve (nThreads - 1u);
+		// RAII join: guarantees every spawned thread is joined on scope exit,
+		// including if the calling-thread chunk below throws (a joinable
+		// std::thread destructor would otherwise call std::terminate).
+		struct JoinGuard {
+			std::vector<std::thread> &p;
+			~JoinGuard () { for (auto &th : p) if (th.joinable ()) th.join (); }
+		} guard { pool };
+
+		for (unsigned int t = 0; t + 1u < nThreads; ++t)
+		{
+			const unsigned int b = t * chunk;
+			const unsigned int e = std::min (n, b + chunk);
+			if (b >= e) break;
+			pool.emplace_back ([=]{ worker (b, e); });
+		}
+		// Process the last chunk on the calling thread (pool joined by guard).
+		const unsigned int blast = (nThreads - 1u) * chunk;
+		if (blast < n) worker (blast, n);
+	}
+
 	// Colour a per-vertex scalar field as a Moreland cool-warm heatmap with the
 	// manufacturing convention THIN = warm/red, THICK = cool/blue. The field is
 	// normalised over [lo, hi] (values clamped); when hi <= lo the actual
@@ -289,33 +209,38 @@ bool MeshAlgoThickness::ComputeWallThickness (Mesh &mesh,
 	outThickness.assign (nv, 0.f);
 	outDefined.assign (nv, (char)0);
 
-	// Triangle octree over the CURRENT geometry accelerates ray casting
-	// (~O(V*log F) instead of the former O(V*F) brute force).
-	Octree octree;
-	buildTriangleOctree (mesh, octree);
+	// BVH over the CURRENT geometry accelerates ray casting (~O(V*log F)
+	// instead of the former O(V*F) brute force), robust to thin/elongated meshes.
+	BVH bvh;
+	bvh.build (mesh);
 
+	// Per-vertex ray casting is independent: BVH + vertices are read-only,
+	// writes hit disjoint indices. Parallelise across hardware threads.
 	const float *verts = mesh.m_pVertices.data ();
-	for (unsigned int vi = 0; vi < nv; ++vi)
+	parallelChunks (nv, /*minParallel*/ 2000u, [&](unsigned int begin, unsigned int end)
 	{
-		vec3 P, nrm, dir;
-		vec3_init (P,
-		           verts[3*vi], verts[3*vi+1], verts[3*vi+2]);
-		vec3_init (nrm,
-		           mesh.m_pVertexNormals[3*vi], mesh.m_pVertexNormals[3*vi+1], mesh.m_pVertexNormals[3*vi+2]);
-
-		if (vec3_length (nrm) < 1e-12f)
-			continue;                     // no usable normal -> undefined
-
-		vec3_scale (dir, nrm, -1.f);
-		vec3_normalize (dir);             // normalised -> t == Euclidean distance
-
-		const float d = castNearest (octree, P, dir, verts, nv, tMin);
-		if (d >= 0.f)
+		for (unsigned int vi = begin; vi < end; ++vi)
 		{
-			outThickness[vi] = d;
-			outDefined[vi]   = 1;
+			vec3 P, nrm, dir;
+			vec3_init (P,
+			           verts[3*vi], verts[3*vi+1], verts[3*vi+2]);
+			vec3_init (nrm,
+			           mesh.m_pVertexNormals[3*vi], mesh.m_pVertexNormals[3*vi+1], mesh.m_pVertexNormals[3*vi+2]);
+
+			if (vec3_length (nrm) < 1e-12f)
+				continue;                 // no usable normal -> undefined
+
+			vec3_scale (dir, nrm, -1.f);
+			vec3_normalize (dir);         // normalised -> t == Euclidean distance
+
+			const float d = bvh.nearest (P, dir, tMin);
+			if (d >= 0.f)
+			{
+				outThickness[vi] = d;
+				outDefined[vi]   = 1;
+			}
 		}
-	}
+	});
 
 	return true;
 }
@@ -353,60 +278,66 @@ bool MeshAlgoThickness::ComputeShapeDiameter (Mesh &mesh,
 	outThickness.assign (nv, 0.f);
 	outDefined.assign (nv, (char)0);
 
-	Octree octree;
-	buildTriangleOctree (mesh, octree);
+	BVH bvh;
+	bvh.build (mesh);
 
+	// Per-vertex cone casting is independent. Parallelise across hardware
+	// threads; each thread keeps its own dists/weights scratch (the former
+	// single shared buffer would otherwise be a data race). Lower threshold
+	// than the single-ray method since each vertex does numRays× the work.
 	const float *verts = mesh.m_pVertices.data ();
-	std::vector<float> dists, weights;
-	dists.reserve (numRays);
-	weights.reserve (numRays);
-
-	for (unsigned int vi = 0; vi < nv; ++vi)
+	parallelChunks (nv, /*minParallel*/ 500u, [&](unsigned int begin, unsigned int end)
 	{
-		vec3 P, nrm, axis, tb, bb;
-		vec3_init (P,   verts[3*vi], verts[3*vi+1], verts[3*vi+2]);
-		vec3_init (nrm, mesh.m_pVertexNormals[3*vi], mesh.m_pVertexNormals[3*vi+1], mesh.m_pVertexNormals[3*vi+2]);
-		if (vec3_length (nrm) < 1e-12f)
-			continue;
+		std::vector<float> dists, weights;     // per-thread scratch
+		dists.reserve (numRays);
+		weights.reserve (numRays);
 
-		vec3_scale (axis, nrm, -1.f);     // inward
-		vec3_normalize (axis);
-		makeBasis (axis, tb, bb);
-
-		dists.clear ();
-		weights.clear ();
-		for (int k = 0; k < numRays; ++k)
+		for (unsigned int vi = begin; vi < end; ++vi)
 		{
-			// Even cone coverage: angle from axis grows as sqrt(k) (area-fair),
-			// azimuth advances by the golden angle.
-			const float a  = (numRays == 1) ? 0.f
-			                 : coneHalf * std::sqrt ((float)k / (float)(numRays - 1));
-			const float az = GOLDEN * (float)k;
-			const float ca = cos (a), sa = sin (a);
-			const float caz = cos (az), saz = sin (az);
+			vec3 P, nrm, axis, tb, bb;
+			vec3_init (P,   verts[3*vi], verts[3*vi+1], verts[3*vi+2]);
+			vec3_init (nrm, mesh.m_pVertexNormals[3*vi], mesh.m_pVertexNormals[3*vi+1], mesh.m_pVertexNormals[3*vi+2]);
+			if (vec3_length (nrm) < 1e-12f)
+				continue;
 
-			// dir = cos(a)*axis + sin(a)*radial, with radial a unit vector in
-			// the plane ⟂ axis (tb,bb orthonormal) -> dir is already unit, no
-			// normalisation needed.
-			vec3 dir;
-			for (int c = 0; c < 3; ++c)
-				dir[c] = ca * axis[c] + sa * (caz * tb[c] + saz * bb[c]);
+			vec3_scale (axis, nrm, -1.f);     // inward
+			vec3_normalize (axis);
+			makeBasis (axis, tb, bb);
 
-			const float d = castNearest (octree, P, dir, verts, nv, tMin);
-			if (d >= 0.f)
+			dists.clear ();
+			weights.clear ();
+			for (int k = 0; k < numRays; ++k)
 			{
-				dists.push_back (d);
-				weights.push_back (ca);   // cosine weight: near-axis rays count more
+				// Even cone coverage: angle from axis grows as sqrt(k)
+				// (area-fair), azimuth advances by the golden angle.
+				const float a  = (numRays == 1) ? 0.f
+				                 : coneHalf * std::sqrt ((float)k / (float)(numRays - 1));
+				const float az = GOLDEN * (float)k;
+				const float ca = cos (a), sa = sin (a);
+				const float caz = cos (az), saz = sin (az);
+
+				// dir = cos(a)*axis + sin(a)*radial, with radial a unit vector
+				// in the plane ⟂ axis (tb,bb orthonormal) -> already unit.
+				vec3 dir;
+				for (int c = 0; c < 3; ++c)
+					dir[c] = ca * axis[c] + sa * (caz * tb[c] + saz * bb[c]);
+
+				const float d = bvh.nearest (P, dir, tMin);
+				if (d >= 0.f)
+				{
+					dists.push_back (d);
+					weights.push_back (ca);   // cosine weight: near-axis rays count more
+				}
+			}
+
+			const float val = robustAggregate (dists, weights);
+			if (val >= 0.f)
+			{
+				outThickness[vi] = val;
+				outDefined[vi]   = 1;
 			}
 		}
-
-		const float val = robustAggregate (dists, weights);
-		if (val >= 0.f)
-		{
-			outThickness[vi] = val;
-			outDefined[vi]   = 1;
-		}
-	}
+	});
 
 	smoothField (mesh, outThickness, outDefined, smoothIterations);
 	return true;

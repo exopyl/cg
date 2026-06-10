@@ -18,6 +18,12 @@ source_group("glutess" FILES ${GLUTESS_HEADER_FILES} ${GLUTESS_SRC_FILES})
 target_include_directories(cgmesh PUBLIC ${PROJECT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../../extern)
 target_link_libraries(cgmesh cgimg)
 
+# std::thread (thickness parallelisation) needs pthread on Linux; Threads::Threads
+# is a no-op on MSVC. Plain signature (matching the cgimg link above) propagates
+# transitively, so consumers like the test exe link it too.
+find_package(Threads REQUIRED)
+target_link_libraries(cgmesh Threads::Threads)
+
 if (ENABLE_OPENNURBS)
     if (NOT EXTERN_OPENNURBS AND DEFINED ENV{EXTERN_OPENNURBS})
         set(EXTERN_OPENNURBS "$ENV{EXTERN_OPENNURBS}")
