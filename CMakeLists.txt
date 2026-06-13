@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(ENABLE_COVERAGE Off CACHE BOOL "Enable coverage.")
 set(ENABLE_SINAIA Off CACHE BOOL "Enable sinaia.")
 set(ENABLE_CGNET_DEMO Off CACHE BOOL "Build the cgnet_demo executable.")
-set(ENABLE_QMLVIEWER Off CACHE BOOL "Compile qmlviewer (Qt 6 + Vulkan, via cgre2).")
+set(ENABLE_SULINA Off CACHE BOOL "Compile sulina (Qt 6 + Vulkan, via cgre2).")
 set(ENABLE_OPENNURBS On CACHE BOOL "Enable openNURBS (.3dm) import.")
 set(EXTERN_OPENNURBS "" CACHE PATH "Path to openNURBS directory.")
 
@@ -67,11 +67,11 @@ if ( ENABLE_CGNET_DEMO AND WIN32 )
 	add_subdirectory(cgnet_demo)
 endif ()
 
-# qmlviewer (Qt 6 + Vulkan): pulls in the cgre2 render lib and the Qt app.
+# sulina (Qt 6 + Vulkan): pulls in the cgre2 render lib and the Qt app.
 # Needs Qt 6.11 (CMAKE_PREFIX_PATH) and the Vulkan SDK (VULKAN_SDK).
-if ( ENABLE_QMLVIEWER )
+if ( ENABLE_SULINA )
 	add_subdirectory(src/cgre2)
-	add_subdirectory(qmlviewer)
+	add_subdirectory(sulina)
 endif ()
 
 if ( ENABLE_COVERAGE )

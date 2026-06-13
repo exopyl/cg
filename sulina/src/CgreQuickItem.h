@@ -25,7 +25,7 @@ class VertexBuffer;
 class IndexBuffer;
 }
 
-namespace qmlviewer {
+namespace sulina {
 
 class QtDeviceAdapter;
 
@@ -229,4 +229,4 @@ private:
     QVector3D m_anchorPoint;    // distance "first point", in mesh coordinates
 };
 
-} // namespace qmlviewer
+} // namespace sulina

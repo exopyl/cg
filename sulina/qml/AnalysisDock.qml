@@ -1,5 +1,5 @@
 import QtQuick
-import QmlViewer
+import Sulina
 
 // Floating tool dock, centred at the top of the viewport. Two groups:
 // real view controls (fit / orbit / grid) and the analysis-tool toggles

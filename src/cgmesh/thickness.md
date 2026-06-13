@@ -7,7 +7,7 @@
 > **Cadrage retenu avec l'utilisateur :**
 > - Définition d'« épaisseur » : **cartographier les familles** (SDF, paroi, axe médian) puis comparer.
 > - Visualisation : **color map dans le viewer** *et* **export de mesh coloré**.
-> - Périmètre faisabilité : **`src/cgmesh` seul** ; la color-map viewer est traitée comme « ce que cgmesh doit exposer + point d'accroche », sans audit profond de `qmlviewer`.
+> - Périmètre faisabilité : **`src/cgmesh` seul** ; la color-map viewer est traitée comme « ce que cgmesh doit exposer + point d'accroche », sans audit profond de `sulina`.
 
 ---
 
@@ -205,7 +205,7 @@ Sources : [GeomCaliper whitepaper](https://geomcaliper.geometricglobal.com/files
 3. **Pas de colormap perceptuelle** — **vérifié** : seul `color_jet` existe (`cgimg/color.cpp:230`). `InitVertexColorsFromArray` appelle `color_jet` en dur (`mesh.cpp:245`). ⇒ V1 « propre » impose d'ajouter `color_viridis` (table 256 entrées) dans `cgimg/color.*` et de rendre la colormap paramétrable.
 4. **Robustesse aux pré-requis** (M1/M2) — *hypothèse à valider par exécution* : sur maillage non watertight ou normales mal orientées, le rayon « fuit » → valeurs aberrantes. La détection existe (`GetTopologicIssues`, `is_border`) mais **le garde-fou n'est pas branché** sur un futur calcul d'épaisseur. À router vers `debugger` si comportement anormal observé.
 5. **Famille C (M3)** — **largement manquante** : ni EDT 3D, ni Voronoï/MAT. Coût d'implémentation élevé et hors périmètre raisonnable d'un MVP ; à considérer seulement comme extension.
-6. **Barre de couleur / légende & isolignes** — non examiné côté viewer (périmètre `src/cgmesh` seul). **Déclaré non examiné** : le rendu de la légende et des isolignes relève de `qmlviewer`/`scene` et n'a pas été audité.
+6. **Barre de couleur / légende & isolignes** — non examiné côté viewer (périmètre `src/cgmesh` seul). **Déclaré non examiné** : le rendu de la légende et des isolignes relève de `sulina`/`scene` et n'a pas été audité.
 
 ## 3. Plan d'implémentation incrémental (MVP → cible)
 
@@ -213,7 +213,7 @@ Sources : [GeomCaliper whitepaper](https://geomcaliper.geometricglobal.com/files
 
 - **Étape 1 — MVP (M2 + V1) — ✅ RÉALISÉE** : module `thickness.{h,cpp}` (`MeshAlgoThickness`). `ComputeWallThickness(Mesh&, std::vector<float>& out, std::vector<char>& defined)` : pour chaque sommet, 1 rayon le long de −n ; `defined[i]=0` si pas d'intersection. `ColorizeWallThickness(...)` enchaîne avec `InitVertexColorsFromArray` (rendu viewer immédiat). Tests : `test/tu_cgmesh_thickness.cpp` (8 cas, dont épaisseur exacte sur boîte fermée, garde anti-auto-intersection, fuite→indéfini, octree multi-feuilles). **Écart vs conception** : `GetIntersectionWithRay` n'a **pas** pu être réutilisé (voir note culling) ; l'intersection rayon-triangle est faite par un Möller–Trumbore **sans culling**.
   - **Accélération (réalisée)** : la force brute O(V·F) initiale a été remplacée par une **traversée octree** (`Octree::BuildForTriangles` + traversée maison sans culling, pruning AABB) → ~**O(V·log F)**. Octree construit une fois par appel sur la géométrie courante. Corrige au passage une fuite de `~Octree` (`m_pTriangles` non libéré + `delete`→`delete[]`).
-  - **Câblage viewer (réalisé)** : mode « Épaisseur » branché dans `qmlviewer` (`CgreQuickItem::evaluateThickness`, outil QML `evaluable`).
+  - **Câblage viewer (réalisé)** : mode « Épaisseur » branché dans `sulina` (`CgreQuickItem::evaluateThickness`, outil QML `evaluable`).
 - **Étape 2 — SDF robuste (M1) — ✅ RÉALISÉE** : `MeshAlgoThickness::ComputeShapeDiameter(...)` — **cône de K rayons** (échantillonnage déterministe : angle ∝ √k, azimut par angle d'or) autour de −n, réutilisant la traversée octree no-cull ; **agrégation robuste** (médiane + rejet à 1σ + moyenne pondérée par cos de l'angle) ; **lissage 1-anneau** (Laplacien sur adjacence dérivée des faces, restreint aux sommets définis). Paramètres : `numRays=16`, `coneHalfAngleDeg=60`, `smoothIterations=1`. Dégénère exactement vers M2 si `numRays=1, cône=0, lissage=0` (testé). Câblé dans le viewer (`evaluateThickness("SDF (cône)")`, méthode par défaut du select). Tests : 5 cas SDF (équivalence M2, bornes du cône, déterminisme, lissage, gardes).
 - **Étape 3 — V1 propre — ✅ RÉALISÉE** : palette perceptuelle **cool-warm de Moreland** ajoutée dans `cgimg/color.*` (`color_coolwarm`), utilisée **inversée** → **rouge = mince, bleu = épais** (convention fabrication, cf. SOLIDWORKS/netfabb ; remplace le `jet` trompeur). Colorisation dédiée `colorizeThicknessField` dans `thickness.cpp` (n'altère plus `InitVertexColorsFromArray`, donc les courbures gardent leur palette). **Échelle paramétrable** : `Colorize*` acceptent `scaleMin/scaleMax` (auto = min/max réel si non fournis ; sinon écrêtage sur [min,max]). Viewer : toggle « Échelle automatique » (défaut) + sliders min/max ; légende rouge→bleu alignée sur le rendu. Tests : sens couleur (mince=rouge/épais=bleu) + clamp d'échelle.
 - **Étape 4 — V2 export** : étendre `Mesh::export_ply` pour écrire `red/green/blue` (uchar) depuis `m_pVertexColors` + une propriété `float thickness` depuis le tableau scalaire. PLY = format recommandé ; OBJ `v x y z r g b` en option seulement si demandé.

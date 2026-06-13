@@ -6,7 +6,7 @@
 
 #include <stdexcept>
 
-namespace qmlviewer {
+namespace sulina {
 
 QtDeviceAdapter::QtDeviceAdapter(QQuickWindow *window)
 {
@@ -46,4 +46,4 @@ QtDeviceAdapter::QtDeviceAdapter(QQuickWindow *window)
 
 QtDeviceAdapter::~QtDeviceAdapter() = default;
 
-} // namespace qmlviewer
+} // namespace sulina

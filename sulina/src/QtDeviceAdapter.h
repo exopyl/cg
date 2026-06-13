@@ -6,7 +6,7 @@
 
 class QQuickWindow;
 
-namespace qmlviewer {
+namespace sulina {
 
 /// Adapter that pulls Vulkan handles from a QQuickWindow whose scene
 /// graph was initialized with QSGRendererInterface::Vulkan, and exposes
@@ -36,4 +36,4 @@ private:
     std::unique_ptr<cgre2::DeviceContext> m_context;
 };
 
-} // namespace qmlviewer
+} // namespace sulina

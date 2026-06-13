@@ -1,5 +1,5 @@
 import QtQuick
-import QmlViewer
+import Sulina
 
 // Bottom-left legend for the active tool (mockup `.legend-card`). Two
 // shapes: a heatmap colour scale, or a single readout value.

@@ -7,7 +7,7 @@
 
 Le projet utilise CMake. Cette section documente les commandes **exactes** validées
 sur la machine de dev Windows pour compiler les quatre cibles : **tests (TU)**,
-**Sinaia**, **qmlviewer** et **vecna**.
+**Sinaia**, **sulina** et **vecna**.
 
 ### Environnement (Windows)
 
@@ -16,9 +16,9 @@ Les outils et dépendances ne sont **pas** dans le `PATH` — on utilise des che
 - **CMake 4.2.0** : `C:\home\bin\cmake-4.2.0-windows-x86_64\bin\cmake.exe`
 - **Générateur** : `Visual Studio 18 2026` (MSVC v14.5x). Multi-config : on choisit
   `Debug`/`Release` au moment du build via `--config`, pas à la configuration.
-- **Qt** : `C:/Qt/6.11.1/msvc2022_64` (pour qmlviewer)
+- **Qt** : `C:/Qt/6.11.1/msvc2022_64` (pour sulina)
 - **Vulkan SDK** : `C:/VulkanSDK/1.4.309.0` — la variable d'environnement `VULKAN_SDK`
-  doit être définie (fournit `Vulkan::Vulkan` et `glslc`) pour qmlviewer et vecna.
+  doit être définie (fournit `Vulkan::Vulkan` et `glslc`) pour sulina et vecna.
 
 Dépendances pré-compilées sous `C:\home\devthirdparties\` :
 
@@ -70,19 +70,19 @@ OpenNURBS et OCCT sont copiées à côté de l'exécutable par les étapes post-
 > `EXTERN_WXWIDGETS`, mais il faut garder `EXTERN_OPENNURBS` (OpenNURBS est activé
 > par défaut et `cgmesh` échoue sinon), ou passer `-DENABLE_OPENNURBS=OFF`.
 
-### 2. qmlviewer (Qt 6 + Vulkan)
+### 2. sulina (Qt 6 + Vulkan)
 
-Piloté par le projet racine via `ENABLE_QMLVIEWER=ON` (ajoute `src/cgre2` et `qmlviewer`).
+Piloté par le projet racine via `ENABLE_SULINA=ON` (ajoute `src/cgre2` et `sulina`).
 Nécessite Qt 6.11 et le Vulkan SDK. OpenNURBS/OCCT ne sont pas requis pour cette cible.
 
 ```powershell
 & $cmake -G "Visual Studio 18 2026" -A x64 `
-  -DENABLE_QMLVIEWER=ON `
+  -DENABLE_SULINA=ON `
   -DENABLE_OPENNURBS=OFF `
   -DCMAKE_PREFIX_PATH=C:/Qt/6.11.1/msvc2022_64 `
-  -S C:/home/perso/cg -B C:/home/perso/cg/build_qmlviewer
+  -S C:/home/perso/cg -B C:/home/perso/cg/build_sulina
 
-& $cmake --build C:/home/perso/cg/build_qmlviewer --config Release --target qmlviewer
+& $cmake --build C:/home/perso/cg/build_sulina --config Release --target sulina
 ```
 
 ### 3. vecna (Vulkan)
@@ -122,7 +122,7 @@ New-Item -ItemType Junction -Path "$layout\bin"     -Target "$root\win64\vc14\bi
 | Option              | Description                                          | Par défaut |
 | :------------------ | :--------------------------------------------------- | :--------- |
 | `ENABLE_SINAIA`     | Compile l'application Sinaia (wxWidgets + OpenGL)    | `OFF`      |
-| `ENABLE_QMLVIEWER`  | Compile qmlviewer (Qt 6 + Vulkan, via `cgre2`)       | `OFF`      |
+| `ENABLE_SULINA`     | Compile sulina (Qt 6 + Vulkan, via `cgre2`)          | `OFF`      |
 | `ENABLE_OPENNURBS`  | Import `.3dm` (requiert `EXTERN_OPENNURBS`)          | `ON`       |
 | `ENABLE_OCCT`       | Import STEP/IGES (requiert `EXTERN_OCCT`)            | `OFF`      |
 | `ENABLE_CGNET_DEMO` | Compile l'exécutable de démo cgnet (Windows)         | `OFF`      |

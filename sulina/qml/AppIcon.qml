@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
-import QmlViewer
+import Sulina
 
 // Crisp 24px line icon, ported from the mockup's <HIcon>. Strokes an SVG
 // path (looked up by name in Theme.icons) with round caps/joins. The path

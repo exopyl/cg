@@ -40,10 +40,10 @@ set(sources
     Vertex.cpp
 )
 
-# cgre2 can be consumed by multiple top-level builds (vecna, qmlviewer).
+# cgre2 can be consumed by multiple top-level builds (vecna, sulina).
 # Vecna pre-creates `vma` (INTERFACE) and `spirv_reflect` (STATIC) targets
 # via its FetchDependencies.cmake. When we are built outside vecna (e.g.
-# from the qmlviewer build), we fetch those deps ourselves.
+# from the sulina build), we fetch those deps ourselves.
 if(NOT TARGET vma)
     include(FetchContent)
     FetchContent_Declare(

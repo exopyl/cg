@@ -17,8 +17,8 @@
 
 #include <string_view>
 
-#ifndef QMLVIEWER_DATA_DIR
-#  define QMLVIEWER_DATA_DIR ""
+#ifndef SULINA_DATA_DIR
+#  define SULINA_DATA_DIR ""
 #endif
 
 namespace {
@@ -56,13 +56,13 @@ int main(int argc, char *argv[])
 
     // Debug/automation channels — enabled by a CLI flag (optionally with an
     // explicit port) or the matching env var, else off:
-    //   --log-port [PORT]      / QMLVIEWER_LOG_PORT      (default 7777)
-    //   --control-port [PORT]  / QMLVIEWER_CONTROL_PORT  (default 7778)
+    //   --log-port [PORT]      / SULINA_LOG_PORT      (default 7777)
+    //   --control-port [PORT]  / SULINA_CONTROL_PORT  (default 7778)
     const QStringList cliArgs = app.arguments();
     const quint16 logPort  = resolvePort(cliArgs, QStringLiteral("--log-port"),
-                                         "QMLVIEWER_LOG_PORT", 7777);
+                                         "SULINA_LOG_PORT", 7777);
     const quint16 ctrlPort = resolvePort(cliArgs, QStringLiteral("--control-port"),
-                                         "QMLVIEWER_CONTROL_PORT", 7778);
+                                         "SULINA_CONTROL_PORT", 7778);
 
     // Optional TCP log stream: mirrors cgre2::Logger output (renderer +
     // Viewer logs) to TCP clients on 127.0.0.1:<logPort> — lets a remote
@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
 
     engine.rootContext()->setContextProperty(
         QStringLiteral("dataDir"),
-        QString::fromUtf8(QMLVIEWER_DATA_DIR));
+        QString::fromUtf8(SULINA_DATA_DIR));
 
     // Frameless-window helper for the custom title bar (native move/resize).
     auto *winCtrl = new WindowController(&app);
@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
         []() { QCoreApplication::exit(-1); },
         Qt::QueuedConnection);
 
-    engine.loadFromModule("QmlViewer", "Main");
+    engine.loadFromModule("Sulina", "Main");
 
     // Hand the loaded window to the controller so QML can drive native
     // move/resize through it; also wire the control server to the window

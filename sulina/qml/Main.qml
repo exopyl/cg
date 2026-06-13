@@ -4,14 +4,14 @@ import QtQuick.Window
 import QtQuick.Dialogs
 import Qt.labs.folderlistmodel
 import QtQml.Models
-import QmlViewer
+import Sulina
 
 ApplicationWindow {
     id: root
     width: 1280
     height: 800
     visible: true
-    title: "QmlViewer — Vulkan / cgre2"
+    title: "Sulina — Vulkan / cgre2"
     color: Theme.bg
 
     // Frameless: we draw our own dark title bar (see `titleBar` below)
@@ -196,7 +196,7 @@ ApplicationWindow {
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "QmlViewer"
+                    text: "Sulina"
                     color: Theme.text
                     font.family: Theme.fontSans
                     font.pixelSize: 13

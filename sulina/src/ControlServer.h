@@ -9,7 +9,7 @@ class QQuickWindow;
 class MeshModel;
 
 /// Tiny line-based control channel on 127.0.0.1:<port>, enabled only when
-/// QMLVIEWER_CONTROL_PORT is set. Lets a local client drive the viewer for
+/// SULINA_CONTROL_PORT is set. Lets a local client drive the viewer for
 /// debugging/automation without the GUI. All slots run on the GUI thread
 /// (where this object lives), so MeshModel / QQuickWindow are touched
 /// directly — no marshaling needed.

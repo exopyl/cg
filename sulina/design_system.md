@@ -1,6 +1,6 @@
-# QmlViewer — Design System
+# Sulina — Design System
 
-Système de design de l'interface QmlViewer (Qt Quick). Adapté de la maquette
+Système de design de l'interface Sulina (Qt Quick). Adapté de la maquette
 HTML/React `Design/Dock complet - Détaillé(.html)` (sources `hifi-app.jsx`,
 `hifi-icons.jsx`, `tweaks-panel.jsx`).
 
@@ -24,8 +24,8 @@ HTML/React `Design/Dock complet - Détaillé(.html)` (sources `hifi-app.jsx`,
 | Carte de légende (heatmap / lecture de valeur) | `qml/LegendCard.qml` |
 | Composition, chrome, overlays viewport | `qml/Main.qml` |
 
-`Theme` est un singleton : on y accède via `import QmlViewer` puis `Theme.<token>`.
-Il est déclaré singleton dans `qmlviewer/CMakeLists.txt`
+`Theme` est un singleton : on y accède via `import Sulina` puis `Theme.<token>`.
+Il est déclaré singleton dans `sulina/CMakeLists.txt`
 (`set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)`).
 
 ---
@@ -222,7 +222,7 @@ Propriétés : `tool`, `params`. Entrée en fondu (220 ms).
 
 ```
 ┌──────────────── barre de titre (frameless) ──────────────────┐
-│ ◆ QmlViewer  File               QmlViewer…          _ ▢ ✕    │
+│ ◆ Sulina  File               Sulina…          _ ▢ ✕    │
 ├───────┬────────────────────────────────────┬─────────────────┤
 │ arbre │        [ dock ]          [⤴ ⚙]     │  Fiche technique │
 │  📂   │                                    │  ───────────────  │

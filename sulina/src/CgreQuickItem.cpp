@@ -36,8 +36,8 @@
 
 namespace {
 
-constexpr const char *kTexturedVertSpv = QMLVIEWER_SHADER_DIR "/textured.vert.spv";
-constexpr const char *kTexturedFragSpv = QMLVIEWER_SHADER_DIR "/textured.frag.spv";
+constexpr const char *kTexturedVertSpv = SULINA_SHADER_DIR "/textured.vert.spv";
+constexpr const char *kTexturedFragSpv = SULINA_SHADER_DIR "/textured.frag.spv";
 
 // textured.vert pushes 2 mat4 = 128 bytes via push constants.
 struct PushConstants {
@@ -63,7 +63,7 @@ CurvatureType curvatureIdFromLabel(const QString &type)
 
 } // namespace
 
-namespace qmlviewer {
+namespace sulina {
 
 CgreQuickItem::CgreQuickItem(QQuickItem *parent)
     : QQuickItem(parent)
@@ -1044,4 +1044,4 @@ void CgreQuickItem::releaseGpuResources()
     m_uploadedMeshes = nullptr;
 }
 
-} // namespace qmlviewer
+} // namespace sulina

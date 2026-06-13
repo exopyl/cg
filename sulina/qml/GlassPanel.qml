@@ -1,5 +1,5 @@
 import QtQuick
-import QmlViewer
+import Sulina
 
 // Frosted floating surface used by the dock, parameter panel, legend and
 // stats card. True backdrop blur isn't available cheaply over the Vulkan
