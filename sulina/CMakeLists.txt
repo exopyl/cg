@@ -121,3 +121,28 @@ if (WIN32 AND TARGET Qt6::windeployqt)
         COMMENT "windeployqt: deploying Qt runtime next to sulina.exe"
         VERBATIM)
 endif()
+
+# --- Redistributable bundle: `cmake --build . --config Release --target dist`
+# Stages a clean, self-contained copy of the app into <repo>/dist/sulina:
+# the exe + the windeployqt'd Qt runtime, minus the dev-only artifacts
+# (.lib/.exp/.pdb), plus the MSVC runtime DLLs so it runs without vc_redist.
+# The result is ready to zip and ship. Build it in Release for distribution.
+if (WIN32)
+    set(SULINA_DIST_DIR "${CMAKE_SOURCE_DIR}/dist/sulina")
+
+    # Populate CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS (vcruntime140.dll, msvcp140.dll
+    # …) without registering install() rules — we copy them ourselves below.
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP ON)
+    include(InstallRequiredSystemLibraries)
+
+    add_custom_target(dist
+        COMMAND ${CMAKE_COMMAND}
+                -DSRC_DIR=$<TARGET_FILE_DIR:sulina>
+                -DDIST_DIR=${SULINA_DIST_DIR}
+                "-DMSVC_RUNTIME_LIBS=$<JOIN:${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS},$<SEMICOLON>>"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MakeDist.cmake"
+        COMMENT "dist: staging redistributable bundle into ${SULINA_DIST_DIR}"
+        VERBATIM)
+    # Ensure the app (and its windeployqt POST_BUILD step) is built first.
+    add_dependencies(dist sulina)
+endif()
