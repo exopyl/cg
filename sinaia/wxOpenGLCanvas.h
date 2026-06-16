@@ -46,6 +46,14 @@ public:
 	void SetSmooth (bool bSmooth) { m_bSmooth = bSmooth; Refresh(false); };
 	bool GetSmooth (void) { return m_bSmooth; };
 
+	// Width (in pixels) of the wireframe / edge lines drawn in the 3D view.
+	void SetLineWidth (float w) { prop.linesize = w; Refresh(false); };
+	float GetLineWidth (void) { return prop.linesize; };
+
+	// Size (in pixels) of the points drawn in the 3D view (point cloud mode).
+	void SetPointSize (float s) { prop.pointsize = s; Refresh(false); };
+	float GetPointSize (void) { return prop.pointsize; };
+
 	void ChangeFill (void);
 	bool GetFill (void);
 

@@ -10,12 +10,15 @@
 // alignment bits wxAUI_NB_TOP / wxAUI_NB_BOTTOM). notebookTheme selects the
 // tab art provider: 0 = glossy (default), 1 = simple.
 //
-// Note: the FPS overlay and the 3D view background colour remain in the
-// "Options > 3D Panel" menu (they are properties of the 3D view, not of the
-// notebook), so they are deliberately not part of this struct.
+// The first two fields drive the notebook ("2D Panel" tab). The last two are
+// 3D view properties edited from the "3D Panel" tab: the wireframe/edge line
+// width and the point size, both in pixels. The FPS overlay and the 3D view
+// background colour remain in the "Options > 3D Panel" menu.
 //
 struct PanelSettings
 {
-    long notebookStyle = 0;       // wxAUI_NB_* flags applied to all notebooks
-    int  notebookTheme = 0;       // 0 = glossy (default), 1 = simple
+    long  notebookStyle = 0;      // wxAUI_NB_* flags applied to all notebooks
+    int   notebookTheme = 0;      // 0 = glossy (default), 1 = simple
+    float lineWidth     = 1.0f;   // 3D view wireframe/edge line width (pixels)
+    float pointSize     = 1.0f;   // 3D view point size (pixels)
 };

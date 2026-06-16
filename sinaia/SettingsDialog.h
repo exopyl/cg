@@ -4,6 +4,8 @@
 #include <wx/notebook.h>
 #include <wx/checkbox.h>
 #include <wx/radiobox.h>
+#include <wx/slider.h>
+#include <wx/stattext.h>
 #include <wx/sizer.h>
 #include <wx/aui/auibook.h>
 
@@ -63,6 +65,9 @@ public:
         // --- 2D Panel tab ---
         notebook->AddPage(BuildPanelPage(notebook, panel), _("2D Panel"));
 
+        // --- 3D Panel tab ---
+        notebook->AddPage(BuildViewPage(notebook, panel), _("3D Panel"));
+
         // --- notebook + OK/Cancel ---
         wxBoxSizer* topSizer = new wxBoxSizer(wxVERTICAL);
         topSizer->Add(notebook, 1, wxEXPAND | wxALL, 5);
@@ -121,6 +126,10 @@ public:
 
         p.notebookStyle = style;
         p.notebookTheme = m_theme->GetSelection();
+
+        // 3D Panel tab: line width / point size (integer pixels).
+        p.lineWidth = static_cast<float>(m_lineWidth->GetValue());
+        p.pointSize = static_cast<float>(m_pointSize->GetValue());
         return p;
     }
 
@@ -128,6 +137,47 @@ private:
     static void SetFlag(long& style, long flag, bool on)
     {
         if (on) style |= flag; else style &= ~flag;
+    }
+
+    static int ClampInt(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
+    static wxString PxLabel(int v) { return wxString::Format(wxT("%d px"), v); }
+
+    // 3D Panel tab: two sliders driving the 3D view line width and point size.
+    // Live-applied like the 2D Panel controls.
+    wxPanel* BuildViewPage(wxWindow* parent, const PanelSettings& panel)
+    {
+        wxPanel* page = new wxPanel(parent, wxID_ANY);
+
+        m_lineWidth = new wxSlider(page, wxID_ANY,
+                                   ClampInt(static_cast<int>(panel.lineWidth + 0.5f), 1, 10),
+                                   1, 10, wxDefaultPosition, wxDefaultSize,
+                                   wxSL_HORIZONTAL | wxSL_AUTOTICKS);
+        m_lineWidthLabel = new wxStaticText(page, wxID_ANY, PxLabel(m_lineWidth->GetValue()));
+
+        m_pointSize = new wxSlider(page, wxID_ANY,
+                                   ClampInt(static_cast<int>(panel.pointSize + 0.5f), 1, 20),
+                                   1, 20, wxDefaultPosition, wxDefaultSize,
+                                   wxSL_HORIZONTAL | wxSL_AUTOTICKS);
+        m_pointSizeLabel = new wxStaticText(page, wxID_ANY, PxLabel(m_pointSize->GetValue()));
+
+        // label | slider (grows) | value
+        wxFlexGridSizer* grid = new wxFlexGridSizer(2, 3, 8, 10);
+        grid->AddGrowableCol(1, 1);
+        grid->Add(new wxStaticText(page, wxID_ANY, _("Line width")), 0, wxALIGN_CENTER_VERTICAL);
+        grid->Add(m_lineWidth, 1, wxEXPAND);
+        grid->Add(m_lineWidthLabel, 0, wxALIGN_CENTER_VERTICAL);
+        grid->Add(new wxStaticText(page, wxID_ANY, _("Point size")), 0, wxALIGN_CENTER_VERTICAL);
+        grid->Add(m_pointSize, 1, wxEXPAND);
+        grid->Add(m_pointSizeLabel, 0, wxALIGN_CENTER_VERTICAL);
+
+        wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+        sizer->Add(grid, 0, wxEXPAND | wxALL, 10);
+        page->SetSizer(sizer);
+
+        m_lineWidth->Bind(wxEVT_SLIDER, &SettingsDialog::OnViewChanged, this);
+        m_pointSize->Bind(wxEVT_SLIDER, &SettingsDialog::OnViewChanged, this);
+
+        return page;
     }
 
     wxPanel* BuildPanelPage(wxWindow* parent, const PanelSettings& panel)
@@ -214,6 +264,17 @@ private:
         event.Skip();
     }
 
+    // Push the current 3D Panel slider values to the frame for immediate
+    // preview, and refresh the px readouts next to the sliders.
+    void OnViewChanged(wxCommandEvent& event)
+    {
+        m_lineWidthLabel->SetLabel(PxLabel(m_lineWidth->GetValue()));
+        m_pointSizeLabel->SetLabel(PxLabel(m_pointSize->GetValue()));
+        if (m_onPanelChanged)
+            m_onPanelChanged(GetPanelSettings());
+        event.Skip();
+    }
+
     // Cancel: roll the live preview back to the settings on open, then close.
     void OnCancel(wxCommandEvent& WXUNUSED(event))
     {
@@ -260,4 +321,10 @@ private:
     wxCheckBox*         m_scrollButtons;
     wxCheckBox*         m_windowList;
     wxCheckBox*         m_fixedWidth;
+
+    // 3D Panel tab.
+    wxSlider*           m_lineWidth;
+    wxSlider*           m_pointSize;
+    wxStaticText*       m_lineWidthLabel;
+    wxStaticText*       m_pointSizeLabel;
 };

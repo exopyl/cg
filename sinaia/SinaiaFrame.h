@@ -330,6 +330,11 @@ private:
 
     bool m_bShowFps = false;
 
+    // 3D view appearance edited via the "3D Panel" tab of the Settings dialog,
+    // applied to every open canvas and to tabs created afterwards.
+    float m_lineWidth = 1.0f;   // wireframe/edge line width (pixels)
+    float m_pointSize = 1.0f;   // point size (pixels)
+
     // Operations applied to a model on import (edited via File > Settings).
     ImportSettings m_importSettings;
 

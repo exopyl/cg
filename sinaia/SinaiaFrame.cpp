@@ -1095,6 +1095,11 @@ void MyFrame::OnNotebookPageChanged(wxAuiNotebookEvent& event)
         pGLCanvas->ResetProjectionMode();
         //pGLCanvas->DrawGL();
 
+        // Apply the current 3D-view line/point size to this tab (covers tabs
+        // freshly created, which fire PAGE_CHANGED via AddPage).
+        pGLCanvas->SetLineWidth(m_lineWidth);
+        pGLCanvas->SetPointSize(m_pointSize);
+
         // Synchronize toolbar button states
         wxAuiToolBarItem* p;
 
@@ -1717,6 +1722,8 @@ void MyFrame::OnSettings(wxCommandEvent& WXUNUSED(event))
 	PanelSettings panel;
 	panel.notebookStyle = m_notebook_style;
 	panel.notebookTheme = static_cast<int>(m_notebook_theme);
+	panel.lineWidth     = m_lineWidth;
+	panel.pointSize     = m_pointSize;
 
 	// The 2D Panel options are applied live as the user edits them; the dialog
 	// calls back into ApplyPanelSettings on every change and restores this
@@ -1740,6 +1747,23 @@ void MyFrame::ApplyPanelSettings(const PanelSettings& panel)
 {
 	m_notebook_style = panel.notebookStyle;
 	m_notebook_theme = panel.notebookTheme;
+
+	// 3D view line/point size: remember as the app default and push to every
+	// open canvas (new tabs pick it up via OnNotebookPageChanged).
+	m_lineWidth = panel.lineWidth;
+	m_pointSize = panel.pointSize;
+	if (m_pCtrl)
+	{
+		for (size_t i = 0, n = m_pCtrl->GetPageCount(); i < n; ++i)
+		{
+			MyGLCanvas* pCanvas = (MyGLCanvas*)m_pCtrl->GetPage(i);
+			if (pCanvas)
+			{
+				pCanvas->SetLineWidth(m_lineWidth);
+				pCanvas->SetPointSize(m_pointSize);
+			}
+		}
+	}
 
 	wxAuiPaneInfoArray& all_panes = m_mgr.GetAllPanes();
 	for (size_t i = 0, count = all_panes.GetCount(); i < count; ++i)
