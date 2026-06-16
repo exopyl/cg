@@ -10,12 +10,17 @@
 
 #include <memory>
 #include <unordered_map>
+#include <vector>
+
+#include "../src/cgmesh/DiffParamEvaluator.h"  // TensorMethodId, CurvatureType
 
 class wxPropertyGrid;
 class wxGenericDirCtrl;
 class wxListCtrl;
 class PropertyPanel;
+class CurvaturePanel;
 class IParameterized;
+class MyGLCanvas;
 
 //
 //
@@ -156,6 +161,7 @@ class MyFrame : public wxFrame
 	ID_ShowMaterials,
 	ID_ShowLogging,
 	ID_ShowExplorer,
+	ID_ShowCurvature,
 
         ID_FirstPerspective = ID_CreatePerspective+1000
     };
@@ -264,9 +270,6 @@ private:
 	void OnTreatmentSubdivisionLoop(wxCommandEvent& evt);
 	void OnTreatmentSubdivisionKarbacher(wxCommandEvent& evt);
 	void OnTreatmentSubdivisionSqrt3(wxCommandEvent& evt);
-	void OnTreatmentCurvaturesTaubin(wxCommandEvent& evt);
-	void OnTreatmentCurvaturesDesbrun(wxCommandEvent& evt);
-	void OnTreatmentCurvaturesHamann(wxCommandEvent& evt);
 
     void OnGradient(wxCommandEvent& evt);
     void OnManagerFlag(wxCommandEvent& evt);
@@ -280,6 +283,25 @@ private:
 private:
     void OpenDocument(const wxString& filename);
     void UpdatePropertiesGrid();
+
+    // Adaptive docking: show only the side panes relevant to the active tab.
+    // The Parameters pane is shown iff the active canvas drives a
+    // parameterized object; the Curvature pane is shown iff curvature
+    // visualization is active for it. Called on every tab switch and whenever
+    // a tab is created, loaded, closed or its visualization changes.
+    void UpdateContextualPanes();
+
+    // Curvature visualization. ApplyCurvature() (re)computes the tensor field
+    // for the active canvas with the given method, stores the per-canvas
+    // selection, colours the mesh and reveals the Curvature pane.
+    // RecolorCurvature() re-derives the colour for a different curvature type
+    // from the already-computed tensors (no recompute).
+    void ApplyCurvature(MyGLCanvas* pCanvas, TensorMethodId method, CurvatureType type);
+    void RecolorCurvature(MyGLCanvas* pCanvas, CurvatureType type);
+    // Turn the curvature colour map on/off for the canvas (the "Apply
+    // visualization" checkbox): re-colours from the stored tensors when on,
+    // restores the captured original colours when off.
+    void SetCurvatureEnabled(MyGLCanvas* pCanvas, bool enabled);
 
     void Log(const wxString& text) const;
 
@@ -315,6 +337,24 @@ private:
     // associated with the currently active tab. One entry per tab.
     PropertyPanel* m_pParamPanel = nullptr;
     std::unordered_map<MyGLCanvas*, std::unique_ptr<IParameterized>> m_paramByCanvas;
+
+    // Curvature: the panel lets the user pick the curvature shown on the
+    // active tab. One CurvatureState per canvas that has curvature active,
+    // remembering the chosen method and curvature type so the right pane and
+    // selection are restored when switching back to that tab.
+    struct CurvatureState
+    {
+        TensorMethodId method  = TENSOR_TAUBIN;
+        CurvatureType  type    = CurvatureType::Mean;
+        bool           enabled = false;  // "Apply visualization" checkbox
+        bool           savedValid = false;  // savedColors captured?
+        // Per-mesh vertex colours captured before the curvature map was first
+        // applied, restored when the visualization is turned off (parallel to
+        // VMeshes::GetMeshes() order at apply time).
+        std::vector<std::vector<float>> savedColors;
+    };
+    CurvaturePanel* m_pCurvaturePanel = nullptr;
+    std::unordered_map<MyGLCanvas*, CurvatureState> m_curvatureByCanvas;
 
     //
     wxPropertyGrid* m_propertiesGrid = nullptr;

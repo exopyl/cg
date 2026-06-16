@@ -149,6 +149,16 @@ public:
 	void MarkTensorsComputed();
 	bool AreTensorsValid() const;
 
+	// Replace this mesh's per-vertex curvature tensors with a deep copy of
+	// src's, and stamp them valid against the current geometry revision.
+	// Used to bring tensors computed on a Mesh_half_edge working copy back
+	// onto the rendered mesh, so the curvature colour can later be re-derived
+	// (InitVertexColorsFromCurvatures) for a different CurvatureType without
+	// recomputing the tensor field. src must share this mesh's vertex order
+	// and count (it is the half-edge copy of *this*); on a size mismatch the
+	// tensors are cleared instead of copied.
+	void AdoptTensorsFrom(const Mesh& src);
+
 	// Getters / Setters
 	unsigned int* GetTriangles (void);
 

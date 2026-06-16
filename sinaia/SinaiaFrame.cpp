@@ -26,6 +26,7 @@
 #include "SettingsPanel.h"
 #include "SettingsDialog.h"
 #include "PropertyPanel.h"
+#include "CurvaturePanel.h"
 
 #include "../src/cgmesh/smoothing_taubin.h"
 #include "../src/cgmesh/smoothing_laplacian.h"
@@ -175,19 +176,18 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_TREATMENT_SUBDIVISION_LOOP, MyFrame::OnTreatmentSubdivisionLoop)
     EVT_MENU(ID_TREATMENT_SUBDIVISION_KARBACHER, MyFrame::OnTreatmentSubdivisionKarbacher)
     EVT_MENU(ID_TREATMENT_SUBDIVISION_SQRT3, MyFrame::OnTreatmentSubdivisionSqrt3)
-    EVT_MENU(ID_TREATMENT_CURVATURES_TAUBIN, MyFrame::OnTreatmentCurvaturesTaubin)
-    EVT_MENU(ID_TREATMENT_CURVATURES_DESBRUN, MyFrame::OnTreatmentCurvaturesDesbrun)
-    EVT_MENU(ID_TREATMENT_CURVATURES_HAMANN, MyFrame::OnTreatmentCurvaturesHamann)
     EVT_MENU(ID_ShowProperties, MyFrame::OnShowWindow)
     EVT_MENU(ID_ShowMeshes, MyFrame::OnShowWindow)
     EVT_MENU(ID_ShowMaterials, MyFrame::OnShowWindow)
     EVT_MENU(ID_ShowLogging, MyFrame::OnShowWindow)
     EVT_MENU(ID_ShowExplorer, MyFrame::OnShowWindow)
+    EVT_MENU(ID_ShowCurvature, MyFrame::OnShowWindow)
     EVT_UPDATE_UI(ID_ShowProperties, MyFrame::OnUpdateUI)
     EVT_UPDATE_UI(ID_ShowMeshes, MyFrame::OnUpdateUI)
     EVT_UPDATE_UI(ID_ShowMaterials, MyFrame::OnUpdateUI)
     EVT_UPDATE_UI(ID_ShowLogging, MyFrame::OnUpdateUI)
     EVT_UPDATE_UI(ID_ShowExplorer, MyFrame::OnUpdateUI)
+    EVT_UPDATE_UI(ID_ShowCurvature, MyFrame::OnUpdateUI)
     EVT_AUITOOLBAR_TOOL_DROPDOWN(ID_DropDownToolbarItem, MyFrame::OnDropDownToolbarItem)
     EVT_AUI_PANE_CLOSE(MyFrame::OnPaneClose)
     EVT_AUINOTEBOOK_ALLOW_DND(wxID_ANY, MyFrame::OnAllowNotebookDnD)
@@ -352,6 +352,7 @@ MyFrame::MyFrame(wxWindow* parent,
     windows_menu->AppendCheckItem(ID_ShowMaterials, _("Materials"));
     windows_menu->AppendCheckItem(ID_ShowLogging, _("Logging Window"));
     windows_menu->AppendCheckItem(ID_ShowExplorer, _("Explorer"));
+    windows_menu->AppendCheckItem(ID_ShowCurvature, _("Curvature"));
     options_menu->AppendSubMenu(windows_menu, wxT("Windows"));
 
     wxMenu* help_menu = new wxMenu;
@@ -371,12 +372,6 @@ MyFrame::MyFrame(wxWindow* parent,
     subdivision_menu->Append(ID_TREATMENT_SUBDIVISION_KARBACHER, _("Karbacher"));
     subdivision_menu->Append(ID_TREATMENT_SUBDIVISION_SQRT3, _("Sqrt(3)"));
     treatments_menu->AppendSubMenu(subdivision_menu, _("Subdivision"));
-
-    wxMenu* curvatures_menu = new wxMenu;
-    curvatures_menu->Append(ID_TREATMENT_CURVATURES_TAUBIN, _("Taubin"));
-    curvatures_menu->Append(ID_TREATMENT_CURVATURES_DESBRUN, _("Desbrun"));
-    curvatures_menu->Append(ID_TREATMENT_CURVATURES_HAMANN, _("Hamann"));
-    treatments_menu->AppendSubMenu(curvatures_menu, _("Curvatures"));
 
     mb->Append(file_menu, _("File"));
     mb->Append(geometry_menu, _("Geometry"));
@@ -560,10 +555,38 @@ MyFrame::MyFrame(wxWindow* parent,
 
     m_mgr.AddPane(m_propertiesGrid, wxAuiPaneInfo().Name(wxT("Properties")).Caption(wxT("Properties")).Right().BestSize(250, -1).MinSize(200, -1));
 
-    // Parameters panel: live-edits the active parameterized geometry
+    // Parameters panel: live-edits the active parameterized geometry. Hidden
+    // by default; UpdateContextualPanes() reveals it only when the active tab
+    // drives a parameterized object.
     m_pParamPanel = new PropertyPanel(this);
     m_pParamPanel->SetOnChanged([this]() { this->OnParameterChanged(); });
-    m_mgr.AddPane(m_pParamPanel, wxAuiPaneInfo().Name(wxT("Parameters")).Caption(wxT("Parameters")).Right().BestSize(250, -1).MinSize(200, -1));
+    m_mgr.AddPane(m_pParamPanel, wxAuiPaneInfo().Name(wxT("Parameters")).Caption(wxT("Parameters")).Right().BestSize(250, -1).MinSize(200, -1).Hide());
+
+    // Curvature panel: lets the user choose which curvature to display. Hidden
+    // until curvature visualization is active for the current tab. The
+    // callbacks recompute (method change) or recolour (type change) the model.
+    m_pCurvaturePanel = new CurvaturePanel(this);
+    m_pCurvaturePanel->SetOnMethodChanged([this](TensorMethodId method) {
+        MyGLCanvas* pCanvas = m_pCtrl ? (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection()) : nullptr;
+        if (!pCanvas) return;
+        CurvatureState& st = m_curvatureByCanvas[pCanvas];
+        st.method = method;
+        // Only recompute/recolour when the visualization is on; otherwise the
+        // method is just remembered for when "Apply visualization" is checked.
+        if (st.enabled)
+            ApplyCurvature(pCanvas, method, st.type);
+    });
+    m_pCurvaturePanel->SetOnTypeChanged([this](CurvatureType type) {
+        MyGLCanvas* pCanvas = m_pCtrl ? (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection()) : nullptr;
+        if (!pCanvas) return;
+        m_curvatureByCanvas[pCanvas];  // ensure an entry exists to store the type
+        RecolorCurvature(pCanvas, type);
+    });
+    m_pCurvaturePanel->SetOnEnableChanged([this](bool enabled) {
+        MyGLCanvas* pCanvas = m_pCtrl ? (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection()) : nullptr;
+        if (pCanvas) SetCurvatureEnabled(pCanvas, enabled);
+    });
+    m_mgr.AddPane(m_pCurvaturePanel, wxAuiPaneInfo().Name(wxT("Curvature")).Caption(wxT("Curvature")).Right().BestSize(250, -1).MinSize(200, -1).Hide());
 
 
     m_hierarchyMeshes = CreateHierarchyMeshesTreeCtrl();
@@ -883,6 +906,9 @@ void MyFrame::OnUpdateUI(wxUpdateUIEvent& event)
         case ID_ShowExplorer:
             event.Check(m_mgr.GetPane(wxT("Explorer")).IsShown());
             break;
+        case ID_ShowCurvature:
+            event.Check(m_mgr.GetPane(wxT("Curvature")).IsShown());
+            break;
     }
 }
 
@@ -896,6 +922,7 @@ void MyFrame::OnShowWindow(wxCommandEvent& evt)
         case ID_ShowMaterials:  paneName = wxT("Materials"); break;
         case ID_ShowLogging:    paneName = wxT("Logging Window"); break;
         case ID_ShowExplorer:   paneName = wxT("Explorer"); break;
+        case ID_ShowCurvature:  paneName = wxT("Curvature"); break;
         default: return;
     }
 
@@ -932,7 +959,8 @@ void MyFrame::OnRestorePerspective(wxCommandEvent& evt)
 void MyFrame::OnNotebookPageClose(wxAuiNotebookEvent& evt)
 {
     wxAuiNotebook* ctrl = (wxAuiNotebook*)evt.GetEventObject();
-    if (ctrl->GetPage(evt.GetSelection())->IsKindOf(CLASSINFO(wxHtmlWindow)))
+    wxWindow* page = ctrl->GetPage(evt.GetSelection());
+    if (page->IsKindOf(CLASSINFO(wxHtmlWindow)))
     {
         int res = wxMessageBox(wxT("Are you sure you want to close/hide this notebook page?"),
                        wxT("wxAUI"),
@@ -940,7 +968,23 @@ void MyFrame::OnNotebookPageClose(wxAuiNotebookEvent& evt)
                        this);
         if (res != wxYES)
             evt.Veto();
+        return;
     }
+
+    // Drop the per-canvas state tied to the page being closed so a future
+    // canvas allocated at the same address cannot inherit stale associations.
+    MyGLCanvas* pCanvas = (MyGLCanvas*)page;
+    if (m_pParamPanel)
+    {
+        auto it = m_paramByCanvas.find(pCanvas);
+        if (it != m_paramByCanvas.end())
+        {
+            // Unbind the panel if it is currently showing this object.
+            m_pParamPanel->Bind(nullptr);
+            m_paramByCanvas.erase(it);
+        }
+    }
+    m_curvatureByCanvas.erase(pCanvas);
 }
 
 void MyFrame::OnAllowNotebookDnD(wxAuiNotebookEvent& evt)
@@ -1090,8 +1134,26 @@ void MyFrame::OnNotebookPageChanged(wxAuiNotebookEvent& event)
             auto it = m_paramByCanvas.find(pGLCanvas);
             m_pParamPanel->Bind(it != m_paramByCanvas.end() ? it->second.get() : nullptr);
         }
+
+        // Reflect this tab's stored curvature selection in the panel (or the
+        // defaults if curvature was never configured for this tab).
+        if (m_pCurvaturePanel)
+        {
+            auto it = m_curvatureByCanvas.find(pGLCanvas);
+            if (it != m_curvatureByCanvas.end())
+            {
+                m_pCurvaturePanel->SetSelection(it->second.method, it->second.type);
+                m_pCurvaturePanel->SetEnabled(it->second.enabled);
+            }
+            else
+            {
+                m_pCurvaturePanel->SetSelection(TENSOR_TAUBIN, CurvatureType::Mean);
+                m_pCurvaturePanel->SetEnabled(false);
+            }
+        }
     }
     UpdatePropertiesGrid();
+    UpdateContextualPanes();
 }
 
 void MyFrame::OnTabAlignment(wxCommandEvent &evt)
@@ -1188,6 +1250,8 @@ void MyFrame::OpenDocument(const wxString& strFilename)
     p->SetSticky(b);
 
     m_pToolBar2->Refresh();
+
+    UpdateContextualPanes();
 }
 
 void MyFrame::UpdatePropertiesGrid()
@@ -1431,6 +1495,7 @@ void MyFrame::OnNewGeometry(wxCommandEvent& event)
 	m_pCtrl->AddPage(pGLCanvas, title, true);
 
 	UpdatePropertiesGrid();
+	UpdateContextualPanes();
 }
 
 //
@@ -1498,6 +1563,7 @@ void MyFrame::OnNewParameterizedGeometry(wxCommandEvent& event)
 	m_pParamPanel->Bind(pRaw);
 
 	UpdatePropertiesGrid();
+	UpdateContextualPanes();
 }
 
 //
@@ -1536,6 +1602,7 @@ void MyFrame::OnNewParameterizedSvg(wxCommandEvent& WXUNUSED(event))
 	m_pParamPanel->Bind(pRaw);
 
 	UpdatePropertiesGrid();
+	UpdateContextualPanes();
 }
 
 //
@@ -1583,6 +1650,7 @@ void MyFrame::OnNewParameterizedImplicit(wxCommandEvent& WXUNUSED(event))
 	m_pParamPanel->Bind(pRaw);
 
 	UpdatePropertiesGrid();
+	UpdateContextualPanes();
 }
 
 //
@@ -1623,6 +1691,15 @@ void MyFrame::OnParameterChanged()
 	auto *pNewVMeshes = new VMeshes();
 	pNewVMeshes->AddMesh(pNewMesh);
 	pCanvas->SetVMeshes(pNewVMeshes);  // deletes old VMeshes, normalizes, refreshes
+
+	// The mesh was rebuilt: any curvature colouring is gone and its tensors no
+	// longer apply. Drop the curvature state and reset the panel for this tab
+	// (it is the active one).
+	if (m_curvatureByCanvas.erase(pCanvas) > 0 && m_pCurvaturePanel)
+	{
+		m_pCurvaturePanel->SetSelection(TENSOR_TAUBIN, CurvatureType::Mean);
+		m_pCurvaturePanel->SetEnabled(false);
+	}
 
 	Log(wxString::Format(_T("%s regenerated in %.1f ms (%u faces, %u vertices)"),
 	                     name, regenMs, nf, nv));
@@ -2547,86 +2624,166 @@ void MyFrame::OnTreatmentSubdivisionSqrt3(wxCommandEvent& WXUNUSED(event))
 	*m_pWndLogging << _T("Subdivision Sqrt(3) applied\n");
 }
 
-void MyFrame::OnTreatmentCurvaturesDesbrun(wxCommandEvent& WXUNUSED(event))
+//
+// Adaptive docking & curvature visualization
+//
+
+//
+// Show only the side panes relevant to the active tab. Currently this drives
+// the "Parameters" pane, shown iff the active canvas drives a parameterized
+// object. The "Curvature" pane is a regular tool window toggled from
+// Options > Windows, not a contextual one.
+//
+void MyFrame::UpdateContextualPanes()
 {
-	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
-	if (!pGLCanvas)
-		return;
+	MyGLCanvas* pCanvas = nullptr;
+	if (m_pCtrl && m_pCtrl->GetSelection() != wxNOT_FOUND)
+		pCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
 
-    VMeshes*pVMeshes = pGLCanvas->GetVMeshes();
-	if (!pVMeshes)
-		return;
+	const bool showParams = pCanvas && m_paramByCanvas.count(pCanvas) > 0;
 
-	for (auto& pMesh : pVMeshes->GetMeshes())
+	wxAuiPaneInfo& paramPane = m_mgr.GetPane(wxT("Parameters"));
+	if (paramPane.IsOk() && paramPane.IsShown() != showParams)
 	{
-		Mesh_half_edge *pMeshHE = MeshDataManager::GetInstance().GetHalfEdge(pMesh);
-
-		MeshAlgoTensorEvaluator algo;
-		algo.Init(pMeshHE);
-		algo.Evaluate(TENSOR_DESBRUN);
-		algo.EvaluateColors(CurvatureType::Mean);
-
-		// Copy colors back to original mesh
-		pMesh->InitVertexColors();
-		memcpy(pMesh->m_pVertexColors.data(), pMeshHE->m_pMesh->m_pVertexColors.data(), 3 * pMesh->m_nVertices * sizeof(float));
+		paramPane.Show(showParams);
+		m_mgr.Update();
 	}
-
-	pGLCanvas->Refresh();
-	*m_pWndLogging << _T("Curvatures Desbrun (mean) applied\n");
 }
 
-void MyFrame::OnTreatmentCurvaturesTaubin(wxCommandEvent& WXUNUSED(event))
+// Colour each mesh from its stored curvature tensors for `type`. The VBO only
+// re-uploads its colour buffer when the mesh revision changes, so bump it;
+// the geometry is untouched, so re-stamp the tensors as still valid.
+static void colorizeCurvatureMeshes(VMeshes* pVMeshes, CurvatureType type)
 {
-	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
-	if (!pGLCanvas)
-		return;
-
-    VMeshes*pVMeshes = pGLCanvas->GetVMeshes();
-	if (!pVMeshes)
-		return;
-
 	for (auto& pMesh : pVMeshes->GetMeshes())
 	{
-		Mesh_half_edge *pMeshHE = MeshDataManager::GetInstance().GetHalfEdge(pMesh);
-
-		MeshAlgoTensorEvaluator algo;
-		algo.Init(pMeshHE);
-		algo.Evaluate(TENSOR_TAUBIN);
-		algo.EvaluateColors(CurvatureType::Mean);
-
-		// Copy colors back to original mesh
-		pMesh->InitVertexColors();
-		memcpy(pMesh->m_pVertexColors.data(), pMeshHE->m_pMesh->m_pVertexColors.data(), 3 * pMesh->m_nVertices * sizeof(float));
+		pMesh->InitVertexColorsFromCurvatures(type);
+		pMesh->IncrementRevision();
+		pMesh->MarkTensorsComputed();
 	}
-
-	pGLCanvas->Refresh();
-	*m_pWndLogging << _T("Curvatures Taubin (mean) applied\n");
 }
 
-void MyFrame::OnTreatmentCurvaturesHamann(wxCommandEvent& WXUNUSED(event))
+// Put back the vertex colours captured before the curvature map was applied
+// (empty vector => the mesh had none, so it renders with its material again).
+static void restoreCurvatureColors(VMeshes* pVMeshes, const std::vector<std::vector<float>>& saved)
 {
-	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
-	if (!pGLCanvas)
+	std::vector<Mesh*>& meshes = pVMeshes->GetMeshes();
+	for (size_t i = 0; i < meshes.size(); i++)
+	{
+		meshes[i]->m_pVertexColors = (i < saved.size()) ? saved[i] : std::vector<float>();
+		meshes[i]->IncrementRevision();
+		meshes[i]->MarkTensorsComputed();
+	}
+}
+
+//
+// (Re)compute the curvature tensor field on the active canvas with `method`,
+// store the per-canvas selection, colour the mesh for `type` and reveal the
+// Curvature pane. The tensors are computed on a half-edge working copy then
+// adopted onto the rendered mesh, so a later type change only re-derives the
+// colour (RecolorCurvature) without recomputing the field.
+//
+void MyFrame::ApplyCurvature(MyGLCanvas* pCanvas, TensorMethodId method, CurvatureType type)
+{
+	if (!pCanvas)
 		return;
 
-    VMeshes*pVMeshes = pGLCanvas->GetVMeshes();
+	VMeshes* pVMeshes = pCanvas->GetVMeshes();
 	if (!pVMeshes)
 		return;
 
+	CurvatureState& state = m_curvatureByCanvas[pCanvas];
+
+	// Snapshot the meshes' colours once, before the curvature map overwrites
+	// them, so "Apply visualization" off can restore the original look.
+	if (!state.savedValid)
+	{
+		state.savedColors.clear();
+		for (auto& pMesh : pVMeshes->GetMeshes())
+			state.savedColors.push_back(pMesh->m_pVertexColors);
+		state.savedValid = true;
+	}
+
+	// (Re)compute the tensor field and adopt it onto the rendered meshes.
 	for (auto& pMesh : pVMeshes->GetMeshes())
 	{
-		Mesh_half_edge *pMeshHE = MeshDataManager::GetInstance().GetHalfEdge(pMesh);
+		Mesh_half_edge* pMeshHE = MeshDataManager::GetInstance().GetHalfEdge(pMesh);
 
 		MeshAlgoTensorEvaluator algo;
 		algo.Init(pMeshHE);
-		algo.Evaluate(TENSOR_HAMANN);
-		algo.EvaluateColors(CurvatureType::Mean);
+		algo.Evaluate(method);
 
-		// Copy colors back to original mesh
-		pMesh->InitVertexColors();
-		memcpy(pMesh->m_pVertexColors.data(), pMeshHE->m_pMesh->m_pVertexColors.data(), 3 * pMesh->m_nVertices * sizeof(float));
+		// Bring the freshly computed tensors back onto the rendered mesh so
+		// the curvature colour can be re-derived per type without recompute.
+		pMesh->AdoptTensorsFrom(*pMeshHE->m_pMesh);
 	}
 
-	pGLCanvas->Refresh();
-	*m_pWndLogging << _T("Curvatures Hamann (mean) applied\n");
+	state.method  = method;
+	state.type    = type;
+	state.enabled = true;
+
+	if (m_pCurvaturePanel)
+	{
+		m_pCurvaturePanel->SetSelection(method, type);
+		m_pCurvaturePanel->SetEnabled(true);
+	}
+
+	colorizeCurvatureMeshes(pVMeshes, type);
+	pCanvas->Refresh();
+
+	*m_pWndLogging << _T("Curvatures applied\n");
+}
+
+//
+// Re-derive the per-vertex curvature colour for a different curvature type
+// from the tensors already stored on the mesh (no tensor recompute). The type
+// is remembered even while the visualization is off, so it applies on re-enable.
+//
+void MyFrame::RecolorCurvature(MyGLCanvas* pCanvas, CurvatureType type)
+{
+	if (!pCanvas)
+		return;
+
+	auto it = m_curvatureByCanvas.find(pCanvas);
+	if (it == m_curvatureByCanvas.end())
+		return;  // curvature not active for this tab
+
+	it->second.type = type;
+
+	VMeshes* pVMeshes = pCanvas->GetVMeshes();
+	if (!pVMeshes || !it->second.enabled)
+		return;  // off: keep the new type but leave the mesh as-is
+
+	colorizeCurvatureMeshes(pVMeshes, type);
+	pCanvas->Refresh();
+}
+
+//
+// "Apply visualization" toggle: re-colour from the stored tensors when turned
+// on, restore the captured original colours when turned off. The Curvature
+// pane stays visible either way so the user can flip it back.
+//
+void MyFrame::SetCurvatureEnabled(MyGLCanvas* pCanvas, bool enabled)
+{
+	if (!pCanvas)
+		return;
+
+	VMeshes* pVMeshes = pCanvas->GetVMeshes();
+	if (!pVMeshes)
+		return;
+
+	CurvatureState& state = m_curvatureByCanvas[pCanvas];
+
+	if (enabled)
+	{
+		// Compute the tensor field (if not already) and colour the mesh for
+		// the stored method/type. ApplyCurvature flips state.enabled to true.
+		ApplyCurvature(pCanvas, state.method, state.type);
+		return;
+	}
+
+	state.enabled = false;
+	if (state.savedValid)
+		restoreCurvatureColors(pVMeshes, state.savedColors);
+	pCanvas->Refresh();
 }

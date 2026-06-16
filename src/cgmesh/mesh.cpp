@@ -382,6 +382,28 @@ bool Mesh::AreTensorsValid() const
 	return !m_pTensors.empty() && m_tensorsRevision == m_revision;
 }
 
+void Mesh::AdoptTensorsFrom(const Mesh& src)
+{
+	// Vertex order/count must match: src is the half-edge copy of *this*.
+	if (src.m_pTensors.size() != (size_t)m_nVertices)
+	{
+		m_pTensors.clear();
+		return;
+	}
+
+	m_pTensors.clear();
+	m_pTensors.resize(m_nVertices);
+	for (unsigned int i = 0; i < m_nVertices; i++)
+	{
+		// nullptr slots (border / non-manifold vertices) stay null; Tensor is
+		// a value type, so a copy is a plain deep copy.
+		if (src.m_pTensors[i])
+			m_pTensors[i] = std::make_unique<Tensor>(*src.m_pTensors[i]);
+	}
+
+	MarkTensorsComputed();
+}
+
 unsigned int* Mesh::GetTriangles (void)
 {
 	unsigned int *pFaces = (unsigned int*)malloc(3*m_nFaces*sizeof(unsigned int));

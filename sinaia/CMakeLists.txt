@@ -13,6 +13,7 @@ include_directories(${PROJECT_SOURCE_DIR})
 include_directories(../src/cgre)
 
 set(srcs
+        CurvaturePanel.cpp
         DrawingArea.cpp
         Managers.cpp
         PropertyPanel.cpp
