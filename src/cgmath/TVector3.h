@@ -1,7 +1,6 @@
 #pragma once
-#include <math.h>
+#include <cmath>
 #include <iostream>
-using namespace std;
 
 template <class TValue>
 class TVector3
@@ -21,37 +20,34 @@ public:
 	//
 	// Operators
 	//
-	inline TVector3<TValue> &operator = (const TVector3<TValue> &right)
-	{
-		x = (TValue)right.x;
-		y = (TValue)right.y;
-		z = (TValue)right.z;
-		return *this;
-	}
+	// No user-declared copy assignment on purpose: the rule of zero keeps
+	// TVector3 trivially copyable (required to malloc/realloc/memcpy arrays of
+	// Vector3) and restores the implicit move. Cross-type assignment still works
+	// through the converting constructor above.
 
-	inline TVector3<TValue> operator + (const TVector3<TValue> &right)
+	inline TVector3<TValue> operator + (const TVector3<TValue> &right) const
 	{
 		return TVector3(x + (TValue)right.x, y + (TValue)right.y, z + (TValue)right.z);
 	}
 
-	inline TVector3<TValue> operator - (const TVector3<TValue> &right)
+	inline TVector3<TValue> operator - (const TVector3<TValue> &right) const
 	{
 		return TVector3<TValue>(x - (TValue)right.x, y - (TValue)right.y, z - (TValue)right.z);
 	}
 
-	inline TVector3<TValue> operator * (const TValue s)
+	inline TVector3<TValue> operator * (const TValue s) const
 	{
 		return TVector3<TValue>(x*s, y*s, z*s);
 	}
 
 	// dot product
 	template <class S>
-	inline TValue operator * (const TVector3<S> &right)
+	inline TValue operator * (const TVector3<S> &right) const
 	{
 		return (x*(TValue)right.x + y*(TValue)right.y + z*(TValue)right.z);
 	}
 
-	inline TVector3<TValue>  operator / (const TValue s)
+	inline TVector3<TValue>  operator / (const TValue s) const
 	{
 		return s ? TVector3<TValue>(x/s, y/s, z/s) : TVector3<TValue>(0, 0, 0);
 	}
@@ -111,11 +107,11 @@ public:
 	}
 
 	template <class S>
-	bool operator == (const TVector3<S> &right)
+	bool operator == (const TVector3<S> &right) const
 	{ return (x == right.x && y == right.y && z == right.z); }
 
 	template <class S>
-	bool operator != (const TVector3<S> &right)
+	bool operator != (const TVector3<S> &right) const
 	{ return !(x == right.x && y == right.y && z == right.z); }
 
 	inline operator const TValue*() const { return &x; }
@@ -141,11 +137,12 @@ public:
 	// Utils
 	//
 
-	inline void Clamp(TValue min, TValue max)
+	inline TVector3<TValue> &Clamp(TValue min, TValue max)
 	{
 		x = (x > max)? max : (x < min)? min : x;
 		y = (y > max)? max : (y < min)? min : y;
 		z = (z > max)? max : (z < min)? min : z;
+		return *this;
 	}
 
 	inline TVector3<TValue> &Normalize()
@@ -174,7 +171,7 @@ public:
 
 	inline const TValue getLength() const
 	{
-		return sqrt(getLength2());
+		return std::sqrt(getLength2());
 	}
 
 	template <class S>
@@ -190,7 +187,7 @@ public:
 	}
 
 	template <class S>
-	inline TVector3<TValue> operator ^(const TVector3<S> &t)
+	inline TVector3<TValue> operator ^(const TVector3<S> &t) const
 	{
 		return TVector3<TValue>(
 					y   * t.z  -  z   * t.y,
@@ -227,10 +224,41 @@ public:
 		return TVector3<TValue>( val1, val2, val3 );
 	}
 
-	template <class S>
-	inline const TValue getDistance(const TVector3<S> &v2)  const 
+	//
+	// Triangle helpers (replacements for vec3_triangle_normal / vec3_triangle_area)
+	//
+	// Unnormalized normal of the triangle (v1, v2, v3): n = (v2 - v1) x (v3 - v1).
+	// Differences and cross product are accumulated in double then cast back, to
+	// reproduce vec3_triangle_normal bit-for-bit on TVector3<float>.
+	static inline TVector3<TValue> evaluate_triangle_normal (const TVector3<TValue> &v1,
+								 const TVector3<TValue> &v2,
+								 const TVector3<TValue> &v3)
 	{
-		return sqrt(
+		const double ux = (double)v2.x - (double)v1.x;
+		const double uy = (double)v2.y - (double)v1.y;
+		const double uz = (double)v2.z - (double)v1.z;
+
+		const double vx = (double)v3.x - (double)v1.x;
+		const double vy = (double)v3.y - (double)v1.y;
+		const double vz = (double)v3.z - (double)v1.z;
+
+		return TVector3<TValue>( (TValue)(uy * vz - uz * vy),
+					 (TValue)(uz * vx - ux * vz),
+					 (TValue)(ux * vy - uy * vx) );
+	}
+
+	// Area of the triangle (v1, v2, v3) = 0.5 * length of its unnormalized normal.
+	static inline TValue evaluate_triangle_area (const TVector3<TValue> &v1,
+						     const TVector3<TValue> &v2,
+						     const TVector3<TValue> &v3)
+	{
+		return (TValue)(0.5) * evaluate_triangle_normal(v1, v2, v3).getLength();
+	}
+
+	template <class S>
+	inline const TValue getDistance(const TVector3<S> &v2)  const
+	{
+		return std::sqrt(
 				(v2.x - x) * (v2.x - x) +
 				(v2.y - y) * (v2.y - y) +
 				(v2.z - z) * (v2.z - z)
@@ -238,17 +266,15 @@ public:
 	}
 
 	template <class S>
-	inline const TValue getAngle(const TVector3<S> &v2)  const 
-	{             
-		return acos( DotProduct(v2) / (getLength() * v2.getLength()));
-	}
-
-	inline TVector3<TValue> &clamp(TValue min, TValue max)
+	inline const TValue getAngle(const TVector3<S> &v2)  const
 	{
-		x = (x > max) ? max : (x < min) ? min  : x;
-		y = (y > max) ? max : (y < min) ? min  : y;
-		z = (z > max) ? max : (z < min) ? min  : z;
-		return *this;
+		const TValue denom = getLength() * v2.getLength();
+		if (denom == (TValue)0) return (TValue)0;
+		// Clamp to [-1,1]: rounding can push the ratio slightly out of acos' domain.
+		TValue c = DotProduct(v2) / denom;
+		if (c < (TValue)-1) c = (TValue)-1;
+		else if (c > (TValue)1) c = (TValue)1;
+		return std::acos(c);
 	}
 
 	template <class S>
@@ -264,12 +290,12 @@ public:
 	// IOstream
 	//
 
-	friend ostream & operator << ( ostream & out, const TVector3<TValue> &right)
+	friend std::ostream & operator << ( std::ostream & out, const TVector3<TValue> &right)
 	{
 		return out << "( " << right.x << " , " << right.y << " , " << right.z <<" )";
 	}
 
-	friend istream & operator >> (istream & in, TVector3<TValue> &right)
+	friend std::istream & operator >> (std::istream & in, TVector3<TValue> &right)
 	{
 		return in >> right.x >> right.y >> right.z;
 	}

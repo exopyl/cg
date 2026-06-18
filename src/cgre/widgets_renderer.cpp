@@ -260,7 +260,7 @@ void draw_teapot ()
 /**************/
 /*** points ***/
 /**************/
-void draw_point (vec3 pt)
+void draw_point (const Vector3& pt)
 {
   glPushAttrib (GL_ALL_ATTRIB_BITS);
   glDisable (GL_LIGHTING);
@@ -273,7 +273,7 @@ void draw_point (vec3 pt)
   glPopAttrib ();
 }
 
-void draw_point (vec3 pt, float r, float g, float b)
+void draw_point (const Vector3& pt, float r, float g, float b)
 {
   glPushAttrib (GL_ALL_ATTRIB_BITS);
   glDisable (GL_LIGHTING);
@@ -286,7 +286,7 @@ void draw_point (vec3 pt, float r, float g, float b)
   glPopAttrib ();
 }
 
-int draw_point (vec3 pt, int id)
+int draw_point (const Vector3& pt, int id)
 {
   glPushAttrib (GL_ALL_ATTRIB_BITS);
   glDisable (GL_LIGHTING);
@@ -305,7 +305,7 @@ int draw_point (vec3 pt, int id)
 /**************/
 /*** vector ***/
 /**************/
-void draw_vector (vec3 v, vec3 n, float r, float g, float b)
+void draw_vector (const Vector3& v, const Vector3& n, float r, float g, float b)
 {
   glPushAttrib (GL_ALL_ATTRIB_BITS);
   glColor3f (r, g, b);
@@ -319,7 +319,7 @@ void draw_vector (vec3 v, vec3 n, float r, float g, float b)
 /***************/
 /*** segment ***/
 /***************/
-void draw_segment (vec3 v1, vec3 v2, float r, float g, float b)
+void draw_segment (const Vector3& v1, const Vector3& v2, float r, float g, float b)
 {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
   glDisable(GL_LIGHTING);
@@ -346,7 +346,7 @@ void draw_segment (vec3 v1, vec3 v2, float r, float g, float b)
 /*** lines ***/
 /*************/
 void
-draw_line (vec3 begin, vec3 end, float r, float g, float b)
+draw_line (const Vector3& begin, const Vector3& end, float r, float g, float b)
 {
   glPushAttrib (GL_ALL_ATTRIB_BITS);
   glDisable (GL_LIGHTING);
@@ -373,7 +373,7 @@ draw_line (vec3 begin, vec3 end, float r, float g, float b)
 
 /* with identification on each extremity */
 int
-draw_line (vec3 begin, vec3 end, int id)
+draw_line (const Vector3& begin, const Vector3& end, int id)
 {
   glPushAttrib (GL_ALL_ATTRIB_BITS);
   
@@ -406,7 +406,7 @@ draw_line (vec3 begin, vec3 end, int id)
 /**************/
 /*** planes ***/
 /**************/
-void draw_plane (vec3 pt, vec3 normale)
+void draw_plane (const Vector3& pt, const Vector3& normale)
 {
   glPushAttrib (GL_ALL_ATTRIB_BITS);
   glDisable (GL_LIGHTING);
@@ -427,7 +427,7 @@ void draw_plane (vec3 pt, vec3 normale)
 }
 
 int
-draw_plane (vec3 pt, vec3 normale, int id)
+draw_plane (const Vector3& pt, const Vector3& normale, int id)
 {
   glPushAttrib (GL_ALL_ATTRIB_BITS);
   glDisable (GL_LIGHTING);

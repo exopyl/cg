@@ -24,23 +24,23 @@ extern void draw_sphere (float r = 2.);
 extern void draw_teapot ();
 
 // points
-extern void draw_point (vec3 pt);
-extern void draw_point (vec3 pt, float r, float g, float b);
-extern int  draw_point (vec3 pt, int id);
+extern void draw_point (const Vector3& pt);
+extern void draw_point (const Vector3& pt, float r, float g, float b);
+extern int  draw_point (const Vector3& pt, int id);
 
 // vector
-extern void draw_vector (vec3 v, vec3 n, float r = 0.0, float g = 0.0, float b = 0.0);
+extern void draw_vector (const Vector3& v, const Vector3& n, float r = 0.0, float g = 0.0, float b = 0.0);
 
 // segment
-extern void draw_segment (vec3 v1, vec3 v2, float r = 0.0, float g = 0.0, float b = 0.0);
+extern void draw_segment (const Vector3& v1, const Vector3& v2, float r = 0.0, float g = 0.0, float b = 0.0);
 
 // lines
-extern void draw_line (vec3 begin, vec3 end, float r, float g, float b);
-extern int  draw_line (vec3 begin, vec3 end, int id); /* with id on extremities */
+extern void draw_line (const Vector3& begin, const Vector3& end, float r, float g, float b);
+extern int  draw_line (const Vector3& begin, const Vector3& end, int id); /* with id on extremities */
 
 // planes
-extern void draw_plane (vec3 pt, vec3 normale);
-extern int  draw_plane (vec3 pt, vec3 normale, int id);
+extern void draw_plane (const Vector3& pt, const Vector3& normale);
+extern int  draw_plane (const Vector3& pt, const Vector3& normale, int id);
 
 // circles
 #define N_SLICES 100
