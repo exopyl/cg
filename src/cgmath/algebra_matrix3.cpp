@@ -2,7 +2,7 @@
 
 #include "common.h"
 #include "algebra_matrix3.h"
-#include "algebra_quaternion.h"
+#include "TQuaternion.h"
 
 int mat3_init (mat3 m,
 	       float m00, float m01, float m02,
@@ -58,7 +58,6 @@ int mat3_init_rotation_from_vec3_to_vec3 (mat3 m, vec3 vDir1, vec3 vDir2)
 	}
 	else
 	{
-		quaternion q;
 		vec3_normalize (axis);
 		float cosangle = vec3_dot_product (vDir1, vDir2);
 		if (cosangle > 1.)
@@ -66,9 +65,13 @@ int mat3_init_rotation_from_vec3_to_vec3 (mat3 m, vec3 vDir1, vec3 vDir2)
 		if (cosangle < -1.)
 			cosangle = -1.;
 		float angle = acos (cosangle);
-		quaternion_init_axis_angle (q, axis, angle);
-		quaternion_normalize (q);
-		quaternion_convert_to_matrix3 (q, m);
+		Quaternionf q (Vector3f (axis[0], axis[1], axis[2]), angle);
+		q.Normalize ();
+		float r[16];
+		q.get_matrix_rotation (r); // row-major: r[4*i+j] = R[i][j]
+		for (int i=0; i<3; i++)
+			for (int j=0; j<3; j++)
+				m[i][j] = r[4*i+j];
 	}
 	return 0;
 }

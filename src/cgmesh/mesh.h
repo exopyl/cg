@@ -390,7 +390,6 @@ public:
 	void translate (float tx, float ty, float tz);
 	void transform (float mrot[9]);
 	void transform (mat3 m);
-	void transform4 (mat4 m);
 
 	//
 	unsigned int CountEdges (void);

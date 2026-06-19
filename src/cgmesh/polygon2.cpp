@@ -355,10 +355,9 @@ Polygon2::apply_PCA (void)
 			yy += (m_pPoints[j][2*i+1]-yc)*(m_pPoints[j][2*i+1]-yc);
 		}
 	
-	mat2 m2;
-	mat2_init (m2, xx, xy, xy, yy);
-	vec2 ev1, ev2, evalues;
-	mat2_solve_eigensystem (m2, ev1, ev2, evalues);
+	Matrix2f m2 (xx, xy, xy, yy);
+	Vector2f ev1, ev2, evalues;
+	m2.SolveEigensystem (ev1, ev2, evalues);
 	float xmax = ev1[0];
 	float ymax = ev1[1];
 	

@@ -2,6 +2,10 @@
 
 #include "../cgmath/cgmath.h"
 
+// Row-major 4x4 so the raw on-disk layout (R[0..2] = first row, ...) read by
+// Bundle::Load/Load2 maps directly onto at(row, col).
+using CameraMatrix = TMatrix4<float, StorageOrder::RowMajor>;
+
 class BundleCamera
 {
 	friend class Bundle;
@@ -25,9 +29,9 @@ public:
 	float k1, k2;
 
 	// external geometry
-	mat4 R;
+	CameraMatrix R;
 	vec3 T;
-	mat4 Rinv; // inverse R, directly updated from R
+	CameraMatrix Rinv; // inverse R, directly updated from R
 	vec3 d; // direction of the camera, directly update from R
 	vec3 pos; // position of the camera directly updated from Rinv
 };

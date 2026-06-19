@@ -24,7 +24,7 @@ typedef struct _mc_triangulation_
 	float *farea;
 	float *varea;
 	quadric_t *q;
-	vec4 *fplane;
+	plane_t *fplane;
 } mc_triangulation_t;
 
 
@@ -122,7 +122,6 @@ static int tandem_update_vertex_quadric (mc_triangulation_t *pTri, int vi)
 */
 		if (pTri->farea[f] > EPSILON)
 		{
-			vec4 plane_eq;
 			quadric_t qf;
 
 			plane_quadric(pTri->fplane[f], qf);
@@ -495,7 +494,7 @@ void ImplicitSurfaceTandem::get_triangulation_pre (void)
 
 	// tandem specific
 	tri->farea = (float*)malloc(tri->nfacesmax*sizeof(float));
-	tri->fplane = (vec4*)malloc(tri->nfacesmax*sizeof(vec4));
+	tri->fplane = (plane_t*)malloc(tri->nfacesmax*sizeof(plane_t));
 	tri->varea = (float*)malloc(tri->nverticesmax*sizeof(float));
 	tri->q = (quadric_t*)malloc(tri->nverticesmax*sizeof(quadric_t));
 	tri->he_mesh = new Che_mesh ();

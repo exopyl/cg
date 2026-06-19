@@ -82,17 +82,3 @@ void Mesh::transform (mat3 m)
 	}
 	IncrementRevision();
 }
-
-void Mesh::transform4 (mat4 m)
-{
-	vec4 vtmp;
-	for (unsigned int i=0; i<m_nVertices; i++)
-	{
-		vec4_init (vtmp, m_pVertices[3*i], m_pVertices[3*i+1], m_pVertices[3*i+2], 1.);
-		mat4_transform (vtmp, m, vtmp);
-		m_pVertices[3*i]   = vtmp[0];
-		m_pVertices[3*i+1] = vtmp[1];
-		m_pVertices[3*i+2] = vtmp[2];
-	}
-	IncrementRevision();
-}

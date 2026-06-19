@@ -406,8 +406,7 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 		}
 		
 		// solve the eigensystem
-		mat2 m2;
-		mat2_init (m2, a, b, b, c);
+		Matrix2f m2 (a, b, b, c);
 		vec2 evector1, evector2, evalues;
 		//m2.SolveEigensystem (evector1, evector2, evalues);
 		

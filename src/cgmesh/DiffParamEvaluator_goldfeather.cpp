@@ -47,8 +47,7 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 		vec3_init (axis, n[1], -n[0], 0.0);
 		//axis.normalize ();
 		float theta = acos (n[2]);
-		quaternion rot;
-		quaternion_init_axis_angle (rot, axis, theta);
+		Quaternionf rot (Vector3f (axis[0], axis[1], axis[2]), theta);
 
 		// allocate memory for the matrices
 		int n_neighbours = m_pModel->get_n_neighbours (i);
@@ -84,7 +83,10 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 			
 			vec3 ni;
 			vec3_init (ni, vn[3*index], vn[3*index+1], vn[3*index+2]);
-			quaternion_rotate (rot, ni, ni);
+			Vector3f niv (ni[0], ni[1], ni[2]);
+			Vector3f nrot;
+			rot.rotate (nrot, niv);
+			vec3_init (ni, nrot.x, nrot.y, nrot.z);
 			float nxi = ni[0];
 			float nyi = ni[1];
 			float nzi = ni[2];
@@ -225,11 +227,9 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 			//
 			// principal directions
 			//
-			mat2 m;
-			mat2_init (m, a, b, b, c);
-			vec2 evector1, evector2;
-			vec2 evalues;
-			mat2_solve_eigensystem (m, evector1, evector2, evalues);
+			Matrix2f m (a, b, b, c);
+			Vector2f evector1, evector2, evalues;
+			m.SolveEigensystem (evector1, evector2, evalues);
 			vec3 d1, d2;
 			if (evalues[0] < evalues[1])
 			{

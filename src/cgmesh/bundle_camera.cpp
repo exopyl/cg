@@ -15,8 +15,8 @@ BundleCamera::BundleCamera ()
 	k1 = 0.;
 	k2 = 0.;
 
-	mat4_set_identity (R);
-	mat4_set_identity (Rinv);
+	R.SetIdentity ();
+	Rinv.SetIdentity ();
 	vec3_init (T, 0., 0., 0.);
 	vec3_init (d, 0., 0., 0.);
 	vec3_init (pos, 0., 0., 0.);
@@ -34,13 +34,13 @@ void BundleCamera::Dump ()
 	printf ("[camera] CCD height : %f (mm)\n", CCDHeight_mm);
 	printf ("[camera] radial distoriont coefficients : %f %f\n", k1, k2);
 	printf ("[camera] rotation :\n %f %f %f\n %f %f %f\n %f %f %f\n",
-		R[0], R[1], R[2],
-		R[4], R[5], R[6],
-		R[8], R[9], R[10]);
+		R.at(0,0), R.at(0,1), R.at(0,2),
+		R.at(1,0), R.at(1,1), R.at(1,2),
+		R.at(2,0), R.at(2,1), R.at(2,2));
 	printf ("[camera] rotation inv :\n %f %f %f\n %f %f %f\n %f %f %f\n",
-		Rinv[0], Rinv[1], Rinv[2],
-		Rinv[4], Rinv[5], Rinv[6],
-		Rinv[8], Rinv[9], Rinv[10]);
+		Rinv.at(0,0), Rinv.at(0,1), Rinv.at(0,2),
+		Rinv.at(1,0), Rinv.at(1,1), Rinv.at(1,2),
+		Rinv.at(2,0), Rinv.at(2,1), Rinv.at(2,2));
 	printf ("[camera] translation : %f %f %f\n", T[0], T[1], T[2]);
 	printf ("[camera] direction : %f %f %f\n", d[0], d[1], d[2]);
 }

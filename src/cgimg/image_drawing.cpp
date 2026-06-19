@@ -1,7 +1,7 @@
 #include <stdlib.h>
 
 #include "image.h"
-#include "../cgmath/algebra_matrix2.h"
+#include "../cgmath/algebra_vector2.h"
 
 //
 // drawing

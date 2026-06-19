@@ -690,15 +690,11 @@ Polygon2* Rosace::Generate (void)
 	for (int i=1; i<m_nFoils; i++)
 	{
 		float theta = i * alpha;
-		mat2 rot;
-		mat2_init (rot,
-			   cos (theta), -sin (theta),
-			   sin (theta),  cos (theta));
+		Matrix2f rot (cos (theta), -sin (theta),
+			      sin (theta),  cos (theta));
 		for (int j=0; j<resolution; j++)
 		{
-			vec2 v;
-			vec2_init (v, p[2*j], p[2*j+1]);
-			mat2_transform (v, rot, v);
+			Vector2f v = rot * Vector2f (p[2*j], p[2*j+1]);
 			p[2*resolution*i + 2*j]   = v[0];
 			p[2*resolution*i + 2*j+1] = v[1];
 		}

@@ -3,6 +3,21 @@
 
 #include "bundle.h"
 
+//
+// Apply the rotation stored in a (row-major) camera matrix to a vec3.
+// The camera matrices are pure rotations (translation column = 0, bottom row =
+// identity), so this reproduces the former mat4_transform semantics, which
+// dropped the translation and divided by a w that was always 1. Reading the
+// three inputs into the Vector4f before writing makes it safe for in == out.
+//
+static void apply_rotation (const CameraMatrix &m, const float *in, float *out)
+{
+	Vector4f r = m * Vector4f (in[0], in[1], in[2], 1.f);
+	out[0] = r.x;
+	out[1] = r.y;
+	out[2] = r.z;
+}
+
 Bundle::Bundle ()
 {
 	cameras_n = 0;
@@ -48,10 +63,10 @@ int Bundle::Load (char *filename)
 		fscanf (file, "%f %f %f\n", &cam->f_pxl, &cam->k1, &cam->k2);
 		cam->f_mm = 5.4*cam->f_pxl/640.;
 
-		fscanf (file, "%f %f %f\n", &cam->R[0], &cam->R[1], &cam->R[2]);
-		fscanf (file, "%f %f %f\n", &cam->R[4], &cam->R[5], &cam->R[6]);
-		fscanf (file, "%f %f %f\n", &cam->R[8], &cam->R[9], &cam->R[10]);
-		mat4_get_inverse (cam->R, cam->R);
+		fscanf (file, "%f %f %f\n", &cam->R.at(0,0), &cam->R.at(0,1), &cam->R.at(0,2));
+		fscanf (file, "%f %f %f\n", &cam->R.at(1,0), &cam->R.at(1,1), &cam->R.at(1,2));
+		fscanf (file, "%f %f %f\n", &cam->R.at(2,0), &cam->R.at(2,1), &cam->R.at(2,2));
+		cam->R.SetInverse ();
 
 		fscanf (file, "%f %f %f\n", &cam->T[0], &cam->T[1], &cam->T[2]);
 
@@ -152,17 +167,17 @@ int Bundle::Load2 (char *bundlefilename, char *imageslistfilename, char *rootpat
 		if (1)//allinfo)
 			camera->f_mm = camera->CCDWidth_mm*camera->f_pxl/camera->w;
 
-		fscanf (bundlefile, "%f %f %f\n", &camera->R[0], &camera->R[1], &camera->R[2]);
-		fscanf (bundlefile, "%f %f %f\n", &camera->R[4], &camera->R[5], &camera->R[6]);
-		fscanf (bundlefile, "%f %f %f\n", &camera->R[8], &camera->R[9], &camera->R[10]);
+		fscanf (bundlefile, "%f %f %f\n", &camera->R.at(0,0), &camera->R.at(0,1), &camera->R.at(0,2));
+		fscanf (bundlefile, "%f %f %f\n", &camera->R.at(1,0), &camera->R.at(1,1), &camera->R.at(1,2));
+		fscanf (bundlefile, "%f %f %f\n", &camera->R.at(2,0), &camera->R.at(2,1), &camera->R.at(2,2));
 		//fmat4_dump (camera->R);
 
 		// update Rinv & d with R
 		if (1)//allinfo)
 		{
-			mat4_get_inverse (camera->Rinv, camera->R);
+			camera->R.GetInverse (camera->Rinv);
 			vec3_init (camera->d, 0., 0., -1.);
-			mat4_transform (camera->d, camera->Rinv, camera->d);
+			apply_rotation (camera->Rinv, camera->d, camera->d);
 		}
 
 		fscanf (bundlefile, "%f %f %f\n", &camera->T[0], &camera->T[1], &camera->T[2]);
@@ -170,7 +185,7 @@ int Bundle::Load2 (char *bundlefilename, char *imageslistfilename, char *rootpat
 		if (1)//allinfo)
 		{
 			vec3_scale (camera->pos, camera->T, -1.);
-			mat4_transform (camera->pos, camera->Rinv, camera->pos);
+			apply_rotation (camera->Rinv, camera->pos, camera->pos);
 		}
 
 		if (camera->T[0] == 0. && camera->T[1] == 0. && camera->T[2] == 0.)
@@ -323,7 +338,7 @@ static void project_texture_coordinates_on_vertex (Mesh *mesh, unsigned int vi, 
 	vec3 pt;
 	
 	mesh->GetVertex (vi, pt);
-	mat4_transform (pt, camera->R, pt);
+	apply_rotation (camera->R, pt, pt);
 	vec3_addition (pt, pt, camera->T);
 	
 	*u = .5 + pt[0]*camera->f_mm / (-pt[2]*camera->CCDWidth_mm);

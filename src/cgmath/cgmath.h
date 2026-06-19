@@ -11,13 +11,8 @@
 //
 #include "algebra_vector2.h"
 #include "algebra_vector3.h"
-#include "algebra_vector4.h"
 
-#include "algebra_matrix2.h"
 #include "algebra_matrix3.h"
-#include "algebra_matrix4.h"
-
-#include "algebra_quaternion.h"
 
 #include "quadric.h"
 #include "polynomial.h"

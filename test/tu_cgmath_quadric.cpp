@@ -82,7 +82,7 @@ TEST(TEST_cgmath_quadric, ScaleZero)
 TEST(TEST_cgmath_quadric, PlaneQuadric)
 {
 	// context - plane equation (1, 0, 0, 0) => normal along x
-	vec4 plane = {1.f, 0.f, 0.f, 0.f};
+	plane_t plane = {1.f, 0.f, 0.f, 0.f};
 
 	// action
 	quadric_t q;
@@ -98,7 +98,7 @@ TEST(TEST_cgmath_quadric, PlaneQuadric)
 TEST(TEST_cgmath_quadric, PlaneQuadricGeneral)
 {
 	// context - plane (1, 2, 3, 4)
-	vec4 plane = {1.f, 2.f, 3.f, 4.f};
+	plane_t plane = {1.f, 2.f, 3.f, 4.f};
 
 	// action
 	quadric_t q;
@@ -120,7 +120,7 @@ TEST(TEST_cgmath_quadric, PlaneQuadricGeneral)
 TEST(TEST_cgmath_quadric, EvalAtOrigin)
 {
 	// context - quadric from plane (0, 0, 1, -5) evaluated at origin
-	vec4 plane = {0.f, 0.f, 1.f, -5.f};
+	plane_t plane = {0.f, 0.f, 1.f, -5.f};
 	quadric_t q;
 	plane_quadric(plane, q);
 	vec3 v = {0.f, 0.f, 0.f};
@@ -135,7 +135,7 @@ TEST(TEST_cgmath_quadric, EvalAtOrigin)
 TEST(TEST_cgmath_quadric, EvalOnPlane)
 {
 	// context - quadric from plane z=0 evaluated at point on plane
-	vec4 plane = {0.f, 0.f, 1.f, 0.f};
+	plane_t plane = {0.f, 0.f, 1.f, 0.f};
 	quadric_t q;
 	plane_quadric(plane, q);
 	vec3 v = {3.f, 4.f, 0.f};
@@ -165,7 +165,7 @@ TEST(TEST_cgmath_quadric, MinimizeSingular)
 TEST(TEST_cgmath_quadric, Minimize2Fallback)
 {
 	// context - two vertices, quadric from single plane
-	vec4 plane = {0.f, 0.f, 1.f, 0.f};
+	plane_t plane = {0.f, 0.f, 1.f, 0.f};
 	quadric_t q;
 	plane_quadric(plane, q);
 	vec3 v0 = {0.f, 0.f, 1.f};
@@ -186,9 +186,9 @@ TEST(TEST_cgmath_quadric, MinimizeEdge)
 {
 	// context - three orthogonal planes, minimize along edge
 	quadric_t q1, q2, q3, qtotal, qtmp;
-	vec4 p1 = {1.f, 0.f, 0.f, -1.f};
-	vec4 p2 = {0.f, 1.f, 0.f, -2.f};
-	vec4 p3 = {0.f, 0.f, 1.f, -3.f};
+	plane_t p1 = {1.f, 0.f, 0.f, -1.f};
+	plane_t p2 = {0.f, 1.f, 0.f, -2.f};
+	plane_t p3 = {0.f, 0.f, 1.f, -3.f};
 	plane_quadric(p1, q1);
 	plane_quadric(p2, q2);
 	plane_quadric(p3, q3);

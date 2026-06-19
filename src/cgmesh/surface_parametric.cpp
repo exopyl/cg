@@ -250,12 +250,10 @@ Tensor* ParametricSurface::EvaluateTensor (diff_s diff)
 	kappa2 = kappa_mean - temp;
 
 	// principal directions
-	mat2 m;
-	mat2_init (m,
-		   _l*_g - _f*_m, _e*_m - _f*_l,
-		   _g*_m - _f*_n, _e*_n - _f*_m);
-	vec2 ev1, ev2, evalues;
-	mat2_solve_eigensystem (m, ev1, ev2, evalues);
+	Matrix2f m (_l*_g - _f*_m, _e*_m - _f*_l,
+		    _g*_m - _f*_n, _e*_n - _f*_m);
+	Vector2f ev1, ev2, evalues;
+	m.SolveEigensystem (ev1, ev2, evalues);
 
 	/*
 	 * evalues[0] should be equal to kappa1

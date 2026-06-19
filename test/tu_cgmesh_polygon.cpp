@@ -1533,3 +1533,34 @@ TEST(TEST_cgmesh_polygon, Area_InvariantUnderRotation)
 	// expectations
 	EXPECT_NEAR(areaAfter, areaBefore, 1e-3f);
 }
+
+// Characterization of Polygon2::apply_PCA. After PCA the principal axes of the
+// point cloud align with x/y, so the xy cross-covariance vanishes and the
+// spread is largest along x. The eigensolver behind apply_PCA changes from the
+// C mat2 to TMatrix2; this pins the observable result. Points are centered at
+// the origin so the (known) centering quirk in apply_PCA does not interfere.
+TEST(TEST_cgmesh_polygon, ApplyPCA_DiagonalizesCovariance)
+{
+	float pts[] = { 2.f, 1.f,  -2.f, -1.f,   1.f, 0.4f,
+	               -1.f, -0.4f, 0.6f, 0.3f, -0.6f, -0.3f };
+	const int n = 6;
+	Polygon2 pol;
+	pol.add_contour(0, n, pts);
+
+	pol.apply_PCA();
+
+	float* out = pol.get_points(0);
+	float mx = 0.f, my = 0.f;
+	for (int i = 0; i < n; ++i) { mx += out[2*i]; my += out[2*i+1]; }
+	mx /= n; my /= n;
+
+	float cxx = 0.f, cyy = 0.f, cxy = 0.f;
+	for (int i = 0; i < n; ++i)
+	{
+		float dx = out[2*i] - mx, dy = out[2*i+1] - my;
+		cxx += dx*dx; cyy += dy*dy; cxy += dx*dy;
+	}
+
+	EXPECT_NEAR(cxy, 0.f, 1e-2f);  // principal axes aligned to x/y
+	EXPECT_GT(cxx, cyy);           // largest spread along the principal (x) axis
+}
