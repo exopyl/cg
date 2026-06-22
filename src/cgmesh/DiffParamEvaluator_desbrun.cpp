@@ -407,14 +407,14 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 		
 		// solve the eigensystem
 		Matrix2f m2 (a, b, b, c);
-		vec2 evector1, evector2, evalues;
-		//m2.SolveEigensystem (evector1, evector2, evalues);
-		
-		vec2 evector;
+		Vector2f evector1, evector2, evalues;
+		m2.SolveEigensystem (evector1, evector2, evalues);
+
+		Vector2f evector;
 		if (1 || evalues[0] > evalues[1])
-			vec2_init (evector, evector1[0], evector1[1]);
+			evector = evector1;
 		else
-			vec2_init (evector, evector2[0], evector2[1]);
+			evector = evector2;
 		
 #if 0
 		float err1 = 0.0;

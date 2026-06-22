@@ -397,7 +397,15 @@ TEST(TEST_cgmesh_architecture, rosace)
 	r->SetNFoils (6);
 	Polygon2 *pol_rosace = r->Generate ();
 	EXPECT_NE(pol_rosace, nullptr);
-	
+
+	// Characterization: pins the `center`-based first foil point across the
+	// vec2 -> TVector2 migration. With 6 foils, resolution 20: 120 points, and
+	// the first point is (center_x, 0) = ((1-1/3)cos(30deg), 0).
+	EXPECT_EQ(pol_rosace->get_n_points(0), 120);
+	float* rpts = pol_rosace->get_points(0);
+	EXPECT_NEAR(rpts[0], 0.57735f, 1e-3f);
+	EXPECT_NEAR(rpts[1], 0.0f, 1e-3f);
+
 	polygon2_tesselation_export (pol_rosace, "architecture_rosace.obj");
 
 	delete pol_rosace;
@@ -411,6 +419,12 @@ TEST(TEST_cgmesh_architecture, arc_brise)
 	pArcBrise->SetSecondArc (0., 200., 200.);
 	Polygon2 *pol = pArcBrise->Generate ();
 	EXPECT_NE(pol, nullptr);
+	// Characterization: 3*npts points (npts=32), and the first arc point comes
+	// from create_arc_brise's center C -> (m_fWidth/2, m_fAltitude) = (330, 0).
+	EXPECT_EQ(pol->get_n_points(0), 96);
+	float* apts = pol->get_points(0);
+	EXPECT_NEAR(apts[0], 330.f, 1e-2f);
+	EXPECT_NEAR(apts[1], 0.f, 1e-2f);
 	delete pol;
 	delete pArcBrise;
 }

@@ -1,7 +1,7 @@
 #include <stdlib.h>
 
 #include "image.h"
-#include "../cgmath/algebra_vector2.h"
+#include "../cgmath/TVector2.h"
 
 //
 // drawing
@@ -200,8 +200,7 @@ int Img::smooth_transition (int l)
 			if (m_pPixels[4*(j*m_iWidth+i)] == 255) // current pixel is white
 			{
 				float d=l+1;
-				vec2 p, t;
-				vec2_init (p, (float)i, (float)j);
+				Vector2f p ((float)i, (float)j);
 				for (int kj=-l; kj<l; kj++)
 					for (int ki=-l; ki<l; ki++)
 					{
@@ -211,8 +210,8 @@ int Img::smooth_transition (int l)
 							if (m_pPixels[4*index] == 0) // pixel is black
 							{
 								// get the distance
-								vec2_init (t, (float)(i+ki), (float)(j+kj));
-								float dt = vec2_distance (p, t);
+								Vector2f t ((float)(i+ki), (float)(j+kj));
+								float dt = p.getDistance (t);
 								if (d > dt)
 									d = dt;
 							}

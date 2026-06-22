@@ -363,8 +363,7 @@ Mesh* CreateArch2 (void)
 	float fTop = 4.;
 	float fRadius = 4.;
 	
-	vec2 vCenter;
-	vec2_init (vCenter, -fWidth/4., -fTop/2.);
+	Vector2f vCenter (-fWidth/4., -fTop/2.);
 
 	unsigned int vn=0;
 	for (unsigned int i=0; i<360; i++)
@@ -403,8 +402,7 @@ int create_arc_brise (float a, float b, unsigned int npts, float **p, float **tg
 	a += offset;
 	b += offset;
 
-	vec2 C;
-	vec2_init (C, (a*a - b*b)/(2.*a), 0.);
+	Vector2f C ((a*a - b*b)/(2.*a), 0.);
 	float r = a-C[0];
 	float alpha_max = atan (-b/C[0]);
 	//printf ("[create_arc_brise] %f %f / %f\n", C[0], C[1], r);
@@ -437,20 +435,18 @@ int create_arc_accolade (float a, float b, float e, unsigned int npts, float **p
 	b = 3.; // Oy
 	e = 0.3; // 0. (0) -> 1. (A)
 
-	vec2 A, B, E, O1, O2;
-	vec2_init (A, a, 0.);
-	vec2_init (B, 0., b);
-	vec2_init (E, a*e, b*(1.-e));
-	vec2_init (O1, a*e, 0.5*(b*b-a*a)*(1-e)/b);
-	vec2_init (O2, a*e, 0.5*(a*a-b*b)*e/b+b);
-	
-	vec2 O1A, O1E, O2E, O2B;
-	vec2_subtraction (O1A, A, O1);
-	vec2_subtraction (O1E, E, O1);
-	vec2_subtraction (O2E, E, O2);
-	vec2_subtraction (O2B, B, O2);
-	float r1 = vec2_length (O1E);
-	float r2 = vec2_length (O2E);
+	Vector2f A (a, 0.);
+	Vector2f B (0., b);
+	Vector2f E (a*e, b*(1.-e));
+	Vector2f O1 (a*e, 0.5*(b*b-a*a)*(1-e)/b);
+	Vector2f O2 (a*e, 0.5*(a*a-b*b)*e/b+b);
+
+	Vector2f O1A = A - O1;
+	Vector2f O1E = E - O1;
+	Vector2f O2E = E - O2;
+	Vector2f O2B = B - O2;
+	float r1 = O1E.getLength ();
+	float r2 = O2E.getLength ();
 
 	float alpha;
 	float alpha1 = -atan (O1[1]/a);
@@ -482,11 +478,9 @@ int create_arc_anse_de_panier (float a, float e, unsigned int npts, float **p, f
 	float *_p = *p;
 	float *_n = *n;
 
-	vec2 O0, O1, O2;
-
-	vec2_init (O1,  a*e, 0.);
-	vec2_init (O2, -a*e, 0.);
-	vec2_init (O0, 0., -a*e*tan(3.14159/3.));
+	Vector2f O1 ( a*e, 0.);
+	Vector2f O2 (-a*e, 0.);
+	Vector2f O0 (0., -a*e*tan(3.14159/3.));
 	float r = a*(1.-e);
 	float rc = r+a*e*sqrt(1+tan(3.14159/3.)*tan(3.14159/3.));
 
@@ -547,9 +541,8 @@ int create_arc_rampant (float a, float t, unsigned int npts, float **p, float **
 	a = 1.;
 	t = 0.6;
 
-	vec2 O1, O2;
-	vec2_init (O1,  0., 0.);
-	vec2_init (O2,  0., t*a);
+	Vector2f O1 (0., 0.);
+	Vector2f O2 (0., t*a);
 	
 	int nh = npts/2;
 	int vi = 0;
@@ -673,10 +666,7 @@ Polygon2* Rosace::Generate (void)
 	float alpha = 2.*M_PI/m_nFoils;
 	float halpha = M_PI/m_nFoils;
 	float radius = sin(halpha) / (1. + sin(halpha));
-	vec2 center;
-	vec2_init (center,
-		   (1.-radius)*cos(halpha),
-		   radius);
+	Vector2f center ((1.-radius)*cos(halpha), radius);
 
 	for (int i=0; i<resolution; i++)
 	{
@@ -748,32 +738,29 @@ Polygon2* ArcBrise::Generate (void)
 	float a, b;
 	a = m_fWidth/2.;
 	b = m_fHeight;
-	vec2 c_principal;
-	vec2_init (c_principal, (a*a - b*b)/(2.*a), m_fAltitude);
+	Vector2f c_principal ((a*a - b*b)/(2.*a), m_fAltitude);
 	float r_principal = a-c_principal[0];
 	//printf ("principal : %f %f - %f\n", c_principal[0], c_principal[1], r_principal);
 
 	// second circle
-	vec2 c_second;
+	Vector2f c_second;
 	a = m_fWidth2/2.;
 	b = m_fHeight2;
-	vec2_init (c_second, (a*a - b*b)/(2.*a), m_fAltitude2);
+	c_second.Set ((a*a - b*b)/(2.*a), m_fAltitude2);
 	float r_second = a-c_second[0];
 	c_second[0] -= m_fWidth/4.;
 	//printf ("second : %f %f - %f\n", c_second[0], c_second[1], r_second);
 	
 	// middle
-	vec2 c_mid;
-	vec2_addition (c_mid, c_principal, c_second);
-	vec2_scalar (c_mid, c_mid, .5);
+	Vector2f c_mid = c_principal + c_second;
+	c_mid = c_mid * 0.5f;
 	//printf ("middle : %f %f\n", c_mid[0], c_mid[1]);
 
 	// ellipse equation : x^2/a^2 + y^2/b^2 = 1 (centered on c_mid)
 	a = (r_principal + r_second) / 2.;
 
-	vec2 tmp;
-	vec2_subtraction (tmp, c_principal, c_second);
-	float l = vec2_length (tmp)/2.;
+	Vector2f tmp = c_principal - c_second;
+	float l = tmp.getLength ()/2.;
 	b = sqrt (a*a - l*l);
 	//printf ("ellipse : a = %f    b = %f\n", a, b);
 
@@ -786,13 +773,13 @@ Polygon2* ArcBrise::Generate (void)
 	printf ("rosace_y = %f\n", rosace_y);
 
 	// check the solution
-	vec2_init (tmp, c_principal[0], c_principal[1]-rosace_y);
-	float rosace_radius = r_principal - vec2_length (tmp);
+	tmp.Set (c_principal[0], c_principal[1]-rosace_y);
+	float rosace_radius = r_principal - tmp.getLength ();
 	//printf ("rosace_radius = %f\n", rosace_radius);
 
 	// alternate
-	vec2_init (tmp, c_second[0], c_second[1]-rosace_y);
-	rosace_radius = vec2_length (tmp) - r_second;
+	tmp.Set (c_second[0], c_second[1]-rosace_y);
+	rosace_radius = tmp.getLength () - r_second;
 	//printf ("rosace_radius = %f\n", rosace_radius);
 
 /*

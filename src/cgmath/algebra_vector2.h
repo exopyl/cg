@@ -69,10 +69,3 @@ inline void vec2_dump (vec2 v)
 {
 	printf ("vec2 : %f %f\n", v[0], v[1]);
 }
-
-// 2d segment
-typedef struct seg2
-{
-	vec2 vs;
-	vec2 ve;
-} seg2;

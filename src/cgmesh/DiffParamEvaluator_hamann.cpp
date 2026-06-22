@@ -154,9 +154,8 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 		// principal directions
 		//
 		Matrix2f m (a, b, b, c);
-		vec2 evector1, evector2;
-		vec2 evalues;
-		//m.SolveEigensystem (evector1, evector2, evalues);
+		Vector2f evector1, evector2, evalues;
+		m.SolveEigensystem (evector1, evector2, evalues);
 		vec3 d1, d2;
 		if (evalues[0] < evalues[1])
 		{
