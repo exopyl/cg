@@ -16,7 +16,6 @@
 
 #include "quadric.h"
 #include "polynomial.h"
-#include "nnls.h"
 
 //
 // templates
