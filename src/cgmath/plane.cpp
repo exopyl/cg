@@ -26,7 +26,7 @@ Plane::Plane (Vector3f v1, Vector3f v2, Vector3f v3)
 {
   normale.Set (v1.y*(v2.z-v3.z)+v2.y*(v3.z-v1.z)+v3.y*(v1.z-v2.z),
 		v1.z*(v2.x-v3.x)+v2.z*(v3.x-v1.x)+v3.z*(v1.x-v2.x),
-		v1.x*(v2.y-v3.y)+v2.x*(v3.y-v1.y)+v3.x*(v1.z-v2.y));
+		v1.x*(v2.y-v3.y)+v2.x*(v3.y-v1.y)+v3.x*(v1.y-v2.y));
   normale.Normalize ();
   
   distance = -normale.x*v1.x - normale.y*v1.y - normale.z*v1.z;
@@ -121,7 +121,6 @@ void Plane::fitting (Vector3f *array, int n)
   p.x /= n;
   p.y /= n;
   p.z /= n;
-  distance = sqrt (p*p);
 
   // sums of products
   vector_walk.Set (0.0, 0.0, 0.0);
@@ -144,6 +143,9 @@ void Plane::fitting (Vector3f *array, int n)
   m.SolveEigensystem (e1, e2, e3, v);
   normale = e3;
   normale.Normalize ();
+
+  // the fitted plane passes through the centroid p
+  distance = -(normale * p);
 
   /* the minimum energy */
   // return eigen value (2);

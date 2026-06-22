@@ -1,20 +1,5 @@
 #include "berstein.h"
 
-// factorials until 20!
-//long factorials[21] = {1, 1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800,
-//					39916800, 479001600, 6227020800, 87178291200, 1307674368000, 20922789888000, 355687428096000,
-//					6402373705728000, 121645100408832000, 2432902008176640000};
-long factorials[11] = {1, 1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800};
-
-/**
-* factorial
-*/
-double
-factorial (unsigned int n)
-{
-	return (n >= 21)? (factorial(n) * factorial(n-1)) : factorials[n];
-}
-
 // binomial coefficient (n,k) with n>=k. If n<k, the coefficient is invalid => returns -1.0
 static int binomialCoefficients[21][21] = {{1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 {1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},

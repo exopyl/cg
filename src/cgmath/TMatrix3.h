@@ -683,11 +683,10 @@ void decreasingsort (TValue diag[3], TValue subd[3])
 */
 int SolveEigensystem (TVector3<TValue>& e1, TVector3<TValue>& e2, TVector3<TValue>& e3, TVector3<TValue>& v)
 {
-  if (Determinant() == 0)
-  {
-	  return false;
-  }
-
+  // NOTE: a singular (det == 0) symmetric matrix is still diagonalizable — its
+  // smallest eigenvalue is simply 0. This is precisely the case of a perfectly
+  // planar point set in least-squares plane fitting, so we must NOT bail out on
+  // det == 0 (doing so left the eigenvectors uninitialized for callers).
   if (isSymmetric ())
   {
 	  TMatrix3<TValue> tmp (*this);

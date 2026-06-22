@@ -45,6 +45,9 @@ public:
 	// dump
 	virtual void dump (void) = 0;
 
+	// polymorphic base: required so `delete` through a LineImpl* is well-defined
+	virtual ~LineImpl () = default;
+
 protected:
 	LineImpl (){};
 };
@@ -159,6 +162,11 @@ public:
 	*/
 	//@{
 	Line (line_type par_type = LINE_POINT_DIRECTION);//!< constructor
+	~Line ();//!< destructor: frees m_lineImpl
+	// Owns m_lineImpl via a raw pointer; the default copy would shallow-copy it
+	// and double-free. Line is only used by reference/pointer -> forbid copy.
+	Line (const Line &) = delete;
+	Line &operator= (const Line &) = delete;
 	//@}
 
 	/**

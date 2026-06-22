@@ -104,7 +104,7 @@ int CurveBezier::eval_on_x (float x, vec3 pt)
 }
 
 /**
-* compute nPoints along the Bézier curve
+* compute nPoints along the Bï¿½zier curve
 *
 * /return 1 if the new control point is correctly added, 0 otherwise
 */
@@ -138,7 +138,7 @@ CurveBezier::computeInterpolation (int par_nPoints, vec3 **par_points)
 }
 
 /**
-* compute nPoints along the Bézier curve (quadratic curve, ie 3 control points, ie degree = 2)
+* compute nPoints along the Bï¿½zier curve (quadratic curve, ie 3 control points, ie degree = 2)
 *
 * /return 1 if the new control point is correctly added, 0 otherwise
 */
@@ -172,7 +172,7 @@ CurveBezier::computeInterpolation3 (int par_nPoints, vec3 **par_points)
 }
 
 /**
-* compute nPoints along the Bézier curve (cubic curve, ie 4 control points, ie degree = 3)
+* compute nPoints along the Bï¿½zier curve (cubic curve, ie 4 control points, ie degree = 3)
 *
 * /return 1 if the new control point is correctly added, 0 otherwise
 */
@@ -364,7 +364,7 @@ CurveBezier::computeInterpolationRecursiveFlatness3 (float tolerance, int &par_n
 		right->addControlPoint (r4);
 		int rightNPoints;
 		vec3 *rightPoints;
-		left->computeInterpolationRecursiveFlatness3 (tolerance, rightNPoints, &rightPoints);
+		right->computeInterpolationRecursiveFlatness3 (tolerance, rightNPoints, &rightPoints);
 		printf ("rightNPoints : %d\n", rightNPoints);
 		delete right;
 

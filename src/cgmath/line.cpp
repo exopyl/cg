@@ -19,6 +19,11 @@ Line::Line (line_type par_type)
 	}
 }
 
+Line::~Line ()
+{
+	delete m_lineImpl;
+}
+
 /**
 * Convert a representation to another one
 */

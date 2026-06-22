@@ -70,7 +70,7 @@ CurveNURBS::addControlPoint (float x, float y, float z, float weight)
 		m_nMaxControlPoints *= 2;
 		m_controlPoints = (vec3*)realloc((void*)m_controlPoints, m_nMaxControlPoints*sizeof(vec3));
 		if (m_controlPoints == nullptr) return 0;
-		m_weights = (float*)realloc((void*)m_weights, m_nMaxControlPoints*sizeof(vec3));
+		m_weights = (float*)realloc((void*)m_weights, m_nMaxControlPoints*sizeof(float));
 		if (m_weights == nullptr) return 0;
 	}
 	m_controlPoints[m_nControlPoints][0] = x;

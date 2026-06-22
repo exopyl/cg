@@ -513,7 +513,7 @@ int Torus::GetIntersectionWithRay (vec3 vOrig, vec3 vDirection, float *_t, vec3 
 	float gamma = vec3_dot_product (vOrig, vOrig) - r2 - R2;
 	float gamma2 = gamma * gamma;
 
-	double c[5], s[4], err[4];
+	double c[5], s[4];
 	c[4] = alpha2;
 	c[3] = 2*alpha*beta;
 	c[2] = beta2 + 2*alpha*gamma + 4*R2*dz2;
@@ -522,22 +522,8 @@ int Torus::GetIntersectionWithRay (vec3 vOrig, vec3 vDirection, float *_t, vec3 
 
 	//printf ("%f %f %f %f %f\n", c[0], c[1], c[2], c[3], c[4]);
 
-	int num, num1, num2;
+	int num, num1;
 	num1 = SolveQuartic (c, s);
-	num2 = quartic (c[3]/c[4], c[2]/c[4], c[1]/c[4], c[0]/c[4], s, err);
-
-	if (0 && num1 != num2)
-	{
-		num1 = SolveQuartic (c, s);
-		if (1 || num1 > 0)
-			printf ("  -%d-> %f %f %f %f\n", num1, s[0], s[1], s[2], s[3]);
-		num2 = quartic (c[3]/c[4], c[2]/c[4], c[1]/c[4], c[0]/c[4], s, err);
-		if (1 || num2 > 0)
-		{
-			printf ("  -%d-> %f %f %f %f\n", num2, s[0], s[1], s[2], s[3]);
-			printf ("\n");
-		}
-	}
 
 	num = num1;
 	if (1 || num > 0)// && s[1]<=0. && s[2]<=0. && s[3]<=0.)
