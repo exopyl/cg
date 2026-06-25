@@ -173,6 +173,74 @@ float BVH::nearest (vec3 orig, vec3 dir, float tMin) const
 	return best;
 }
 
+namespace
+{
+	// Squared distance from point p to an AABB (0 if inside). Lower bound on the
+	// distance to anything in the node -> used to prune the closest-point descent.
+	float aabbDist2 (const float bmin[3], const float bmax[3], vec3 p)
+	{
+		float d2 = 0.f;
+		for (int d = 0; d < 3; ++d)
+		{
+			const float v = p[d];
+			if (v < bmin[d]) { const float e = bmin[d] - v; d2 += e * e; }
+			else if (v > bmax[d]) { const float e = v - bmax[d]; d2 += e * e; }
+		}
+		return d2;
+	}
+}
+
+float BVH::closest_distance2 (vec3 p, vec3 closest_out) const
+{
+	if (m_nodes.empty ()) return -1.f;
+
+	float best2 = 1e30f;
+	vec3 bestPt = { 0.f, 0.f, 0.f };
+
+	std::array<int, 64> stack;
+	int sp = 0;
+	stack[sp++] = 0;
+	while (sp > 0)
+	{
+		const Node &nd = m_nodes[stack[--sp]];
+		if (aabbDist2 (nd.bmin, nd.bmax, p) >= best2)
+			continue;                               // whole node is farther than best
+
+		if (nd.left < 0)
+		{
+			const int e = nd.start + nd.count;
+			for (int i = nd.start; i < e; ++i)
+			{
+				const unsigned int f = m_order[i];
+				const unsigned int a = m_tri[3*f], b = m_tri[3*f+1], c = m_tri[3*f+2];
+				if (a >= m_nv || b >= m_nv || c >= m_nv) continue;
+				vec3 cl;
+				const float d2 = point_triangle_distance2 (p, &m_verts[3*a], &m_verts[3*b], &m_verts[3*c], cl);
+				if (d2 < best2) { best2 = d2; bestPt[0]=cl[0]; bestPt[1]=cl[1]; bestPt[2]=cl[2]; }
+			}
+		}
+		else
+		{
+			// Visit the nearer child first (push it last) so best2 shrinks early
+			// and prunes the farther subtree harder.
+			const Node &L = m_nodes[nd.left];
+			const Node &R = m_nodes[nd.right];
+			const float dl = aabbDist2 (L.bmin, L.bmax, p);
+			const float dr = aabbDist2 (R.bmin, R.bmax, p);
+			assert (sp + 2 <= (int)stack.size () && "BVH closest-point stack overflow");
+			if (sp + 2 <= (int)stack.size ())
+			{
+				if (dl < dr) { stack[sp++] = nd.right; stack[sp++] = nd.left; }
+				else         { stack[sp++] = nd.left;  stack[sp++] = nd.right; }
+			}
+		}
+	}
+
+	if (best2 >= 1e30f) return -1.f;
+	if (closest_out) { closest_out[0]=bestPt[0]; closest_out[1]=bestPt[1]; closest_out[2]=bestPt[2]; }
+	return best2;
+}
+
 // Robust ray/AABB slab test on [t0, t1]; handles dir component == 0 (ray
 // parallel to an axis) without producing a 0*inf NaN.
 bool BVH::slabHit (const Node &nd, vec3 o, vec3 dir, float t0, float t1)

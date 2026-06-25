@@ -27,6 +27,7 @@
 #include "SettingsDialog.h"
 #include "PropertyPanel.h"
 #include "CurvaturePanel.h"
+#include "DecimationPanel.h"
 
 #include "../src/cgmesh/smoothing_taubin.h"
 #include "../src/cgmesh/smoothing_laplacian.h"
@@ -34,6 +35,7 @@
 #include "../src/cgmesh/DiffParamEvaluator.h"
 #include "../src/cgmesh/mesh_data_manager.h"
 #include "../src/cgmesh/parameterized_shapes.h"
+#include "../src/cgmesh/normals.h"
 
 // control ids
 enum
@@ -176,18 +178,19 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_TREATMENT_SUBDIVISION_LOOP, MyFrame::OnTreatmentSubdivisionLoop)
     EVT_MENU(ID_TREATMENT_SUBDIVISION_KARBACHER, MyFrame::OnTreatmentSubdivisionKarbacher)
     EVT_MENU(ID_TREATMENT_SUBDIVISION_SQRT3, MyFrame::OnTreatmentSubdivisionSqrt3)
-    EVT_MENU(ID_ShowProperties, MyFrame::OnShowWindow)
-    EVT_MENU(ID_ShowMeshes, MyFrame::OnShowWindow)
-    EVT_MENU(ID_ShowMaterials, MyFrame::OnShowWindow)
+    // Treatments dock: one method combo + Apply per tab. The Apply handlers
+    // dispatch to the per-method handlers based on the combo selection.
+    EVT_BUTTON(ID_TREATMENT_SMOOTHING_APPLY, MyFrame::OnTreatmentApplySmoothing)
+    EVT_BUTTON(ID_TREATMENT_SUBDIVISION_APPLY, MyFrame::OnTreatmentApplySubdivision)
+    EVT_BUTTON(ID_TREATMENT_NORMALS_APPLY, MyFrame::OnTreatmentApplyNormals)
+    EVT_MENU(ID_ShowInformation, MyFrame::OnShowWindow)
+    EVT_MENU(ID_ShowTreatments, MyFrame::OnShowWindow)
+    EVT_UPDATE_UI(ID_ShowTreatments, MyFrame::OnUpdateUI)
     EVT_MENU(ID_ShowLogging, MyFrame::OnShowWindow)
     EVT_MENU(ID_ShowExplorer, MyFrame::OnShowWindow)
-    EVT_MENU(ID_ShowCurvature, MyFrame::OnShowWindow)
-    EVT_UPDATE_UI(ID_ShowProperties, MyFrame::OnUpdateUI)
-    EVT_UPDATE_UI(ID_ShowMeshes, MyFrame::OnUpdateUI)
-    EVT_UPDATE_UI(ID_ShowMaterials, MyFrame::OnUpdateUI)
+    EVT_UPDATE_UI(ID_ShowInformation, MyFrame::OnUpdateUI)
     EVT_UPDATE_UI(ID_ShowLogging, MyFrame::OnUpdateUI)
     EVT_UPDATE_UI(ID_ShowExplorer, MyFrame::OnUpdateUI)
-    EVT_UPDATE_UI(ID_ShowCurvature, MyFrame::OnUpdateUI)
     EVT_AUITOOLBAR_TOOL_DROPDOWN(ID_DropDownToolbarItem, MyFrame::OnDropDownToolbarItem)
     EVT_AUI_PANE_CLOSE(MyFrame::OnPaneClose)
     EVT_AUINOTEBOOK_ALLOW_DND(wxID_ANY, MyFrame::OnAllowNotebookDnD)
@@ -347,31 +350,21 @@ MyFrame::MyFrame(wxWindow* parent,
     options_menu->AppendSubMenu(panel_menu, wxT("3D Panel"));
 
     wxMenu* windows_menu = new wxMenu;
-    windows_menu->AppendCheckItem(ID_ShowProperties, _("Properties"));
-    windows_menu->AppendCheckItem(ID_ShowMeshes, _("Meshes"));
-    windows_menu->AppendCheckItem(ID_ShowMaterials, _("Materials"));
+    windows_menu->AppendCheckItem(ID_ShowInformation, _("Information"));
+    windows_menu->AppendCheckItem(ID_ShowTreatments, _("Treatments"));
     windows_menu->AppendCheckItem(ID_ShowLogging, _("Logging Window"));
     windows_menu->AppendCheckItem(ID_ShowExplorer, _("Explorer"));
-    windows_menu->AppendCheckItem(ID_ShowCurvature, _("Curvature"));
     options_menu->AppendSubMenu(windows_menu, wxT("Windows"));
 
     wxMenu* help_menu = new wxMenu;
     help_menu->Append(wxID_ABOUT, _("About..."));
 
+    // Smoothing / Subdivision / Decimation now live as tabs of the "Treatments"
+    // dock (Options > Windows > Treatments), each with a method combo + Apply.
     wxMenu* treatments_menu = new wxMenu;
     treatments_menu->Append(ID_TREATMENT_MAKE_TRIANGLES, _("Make triangles"));
     treatments_menu->Append(ID_TREATMENT_MERGE_VERTICES, _("Merge vertices"));
     treatments_menu->Append(ID_TREATMENT_NORMALIZE, _("Normalize"));
-    wxMenu* smoothing_menu = new wxMenu;
-    smoothing_menu->Append(ID_TREATMENT_SMOOTHING_TAUBIN, _("Taubin"));
-    smoothing_menu->Append(ID_TREATMENT_SMOOTHING_LAPLACIAN, _("Laplacian"));
-    treatments_menu->AppendSubMenu(smoothing_menu, _("Smoothing"));
-
-    wxMenu* subdivision_menu = new wxMenu;
-    subdivision_menu->Append(ID_TREATMENT_SUBDIVISION_LOOP, _("Loop"));
-    subdivision_menu->Append(ID_TREATMENT_SUBDIVISION_KARBACHER, _("Karbacher"));
-    subdivision_menu->Append(ID_TREATMENT_SUBDIVISION_SQRT3, _("Sqrt(3)"));
-    treatments_menu->AppendSubMenu(subdivision_menu, _("Subdivision"));
 
     mb->Append(file_menu, _("File"));
     mb->Append(geometry_menu, _("Geometry"));
@@ -553,7 +546,7 @@ MyFrame::MyFrame(wxWindow* parent,
         property->ChangeFlag(wxPG_PROP_READONLY, true);
     }
 
-    m_mgr.AddPane(m_propertiesGrid, wxAuiPaneInfo().Name(wxT("Properties")).Caption(wxT("Properties")).Right().BestSize(250, -1).MinSize(200, -1));
+    // m_propertiesGrid is added below, grouped into the "Information" notebook.
 
     // Parameters panel: live-edits the active parameterized geometry. Hidden
     // by default; UpdateContextualPanes() reveals it only when the active tab
@@ -586,14 +579,96 @@ MyFrame::MyFrame(wxWindow* parent,
         MyGLCanvas* pCanvas = m_pCtrl ? (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection()) : nullptr;
         if (pCanvas) SetCurvatureEnabled(pCanvas, enabled);
     });
-    m_mgr.AddPane(m_pCurvaturePanel, wxAuiPaneInfo().Name(wxT("Curvature")).Caption(wxT("Curvature")).Right().BestSize(250, -1).MinSize(200, -1).Hide());
+    // m_pCurvaturePanel is added below as the "Curvature" tab of the Treatments dock.
+
+    // Decimation parameters panel — added below as the "Decimation" tab of the
+    // Treatments dock. Apply runs ApplyDecimation() on the active canvas.
+    m_pDecimationPanel = new DecimationPanel(this);
+    m_pDecimationPanel->SetOnApply([this]() { ApplyDecimation(); });
 
 
     m_hierarchyMeshes = CreateHierarchyMeshesTreeCtrl();
-    m_mgr.AddPane(m_hierarchyMeshes, wxAuiPaneInfo().Name(wxT("Meshes")).Caption(wxT("Meshes")).Right().BestSize(250, -1).MinSize(200, -1));
-
     m_hierarchyMaterials = CreateHierarchyMaterialsTreeCtrl();
-    m_mgr.AddPane(m_hierarchyMaterials, wxAuiPaneInfo().Name(wxT("Materials")).Caption(wxT("Materials")).Right().BestSize(250, -1).MinSize(200, -1));
+
+    // Group Properties / Meshes / Materials as tabs of a single dockable
+    // "Information" pane (saves dock space vs three stacked panes). The controls
+    // are reparented into an AUI notebook. No close buttons / no external tab
+    // move, so the frame's catch-all notebook close/DND handlers never fire on
+    // it, and PAGE_CHANGED is bound to the main notebook id only.
+    m_pInfoNotebook = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                        wxAUI_NB_TOP | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS);
+    m_propertiesGrid->Reparent(m_pInfoNotebook);
+    m_hierarchyMeshes->Reparent(m_pInfoNotebook);
+    m_hierarchyMaterials->Reparent(m_pInfoNotebook);
+    m_pInfoNotebook->AddPage(m_propertiesGrid,    _("Properties"));
+    m_pInfoNotebook->AddPage(m_hierarchyMeshes,   _("Meshes"));
+    m_pInfoNotebook->AddPage(m_hierarchyMaterials, _("Materials"));
+    m_mgr.AddPane(m_pInfoNotebook, wxAuiPaneInfo().Name(wxT("Information")).Caption(wxT("Information")).Right().BestSize(280, 500).MinSize(220, 200));
+
+    // "Treatments" dock: Smoothing / Subdivision / Normals / Decimation tabs.
+    // Each operation tab is a method combo + Apply, applied to the active model.
+    m_pTreatmentsNotebook = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                              wxAUI_NB_TOP | wxAUI_NB_SCROLL_BUTTONS);
+    {
+        wxPanel *page = new wxPanel(m_pTreatmentsNotebook, wxID_ANY);
+        page->SetBackgroundColour(*wxWHITE);
+        wxBoxSizer *s = new wxBoxSizer(wxVERTICAL);
+        s->Add(new wxStaticText(page, wxID_ANY, _("Method")), 0, wxLEFT | wxRIGHT | wxTOP, 6);
+        wxArrayString methods;
+        methods.Add(_("Taubin"));
+        methods.Add(_("Laplacian"));
+        m_pSmoothingMethodCombo = new wxComboBox(page, wxID_ANY, methods[0], wxDefaultPosition,
+                                                 wxDefaultSize, methods, wxCB_READONLY);
+        m_pSmoothingMethodCombo->SetSelection(0);
+        s->Add(m_pSmoothingMethodCombo, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+        s->Add(new wxButton(page, ID_TREATMENT_SMOOTHING_APPLY, _("Apply smoothing")), 0, wxEXPAND | wxALL, 6);
+        page->SetSizer(s);
+        m_pTreatmentsNotebook->AddPage(page, _("Smoothing"));
+    }
+    {
+        wxPanel *page = new wxPanel(m_pTreatmentsNotebook, wxID_ANY);
+        page->SetBackgroundColour(*wxWHITE);
+        wxBoxSizer *s = new wxBoxSizer(wxVERTICAL);
+        s->Add(new wxStaticText(page, wxID_ANY, _("Method")), 0, wxLEFT | wxRIGHT | wxTOP, 6);
+        wxArrayString methods;
+        methods.Add(_("Loop"));
+        methods.Add(_("Karbacher"));
+        methods.Add(_("Sqrt(3)"));
+        m_pSubdivisionMethodCombo = new wxComboBox(page, wxID_ANY, methods[0], wxDefaultPosition,
+                                                   wxDefaultSize, methods, wxCB_READONLY);
+        m_pSubdivisionMethodCombo->SetSelection(0);
+        s->Add(m_pSubdivisionMethodCombo, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+        s->Add(new wxButton(page, ID_TREATMENT_SUBDIVISION_APPLY, _("Apply subdivision")), 0, wxEXPAND | wxALL, 6);
+        page->SetSizer(s);
+        m_pTreatmentsNotebook->AddPage(page, _("Subdivision"));
+    }
+    {
+        wxPanel *page = new wxPanel(m_pTreatmentsNotebook, wxID_ANY);
+        page->SetBackgroundColour(*wxWHITE);
+        wxBoxSizer *s = new wxBoxSizer(wxVERTICAL);
+        s->Add(new wxStaticText(page, wxID_ANY, _("Method")), 0, wxLEFT | wxRIGHT | wxTOP, 6);
+        wxArrayString methods;
+        methods.Add(_("Gouraud (equal weight)"));
+        methods.Add(_("Thurmer (angle weighted)"));
+        methods.Add(_("Max (Nelson Max)"));
+        m_pNormalsMethodCombo = new wxComboBox(page, wxID_ANY, methods[1], wxDefaultPosition,
+                                               wxDefaultSize, methods, wxCB_READONLY);
+        m_pNormalsMethodCombo->SetSelection(1); // default: Thurmer (angle-weighted)
+        s->Add(m_pNormalsMethodCombo, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+        s->Add(new wxButton(page, ID_TREATMENT_NORMALS_APPLY, _("Apply normals")), 0, wxEXPAND | wxALL, 6);
+        page->SetSizer(s);
+        m_pTreatmentsNotebook->AddPage(page, _("Normals"));
+    }
+    // Curvature tab: live curvature-visualization panel (method + type +
+    // "Apply visualization"), reparented into the notebook.
+    m_pCurvaturePanel->Reparent(m_pTreatmentsNotebook);
+    m_pTreatmentsNotebook->AddPage(m_pCurvaturePanel, _("Curvature"));
+
+    // Decimation tab: the full parameters panel, reparented into the notebook.
+    m_pDecimationPanel->Reparent(m_pTreatmentsNotebook);
+    m_pTreatmentsNotebook->AddPage(m_pDecimationPanel, _("Decimation"));
+
+    m_mgr.AddPane(m_pTreatmentsNotebook, wxAuiPaneInfo().Name(wxT("Treatments")).Caption(wxT("Treatments")).Right().BestSize(280, 360).MinSize(220, 180));
 
 
     m_dcDirectory = new wxGenericDirCtrl(this, ID_DIRCTRL, wxT(""), wxDefaultPosition, wxSize(142, 120), wxSIMPLE_BORDER | wxDIRCTRL_DIR_ONLY, wxT("All files (*.*)|*.*"), 0);
@@ -891,23 +966,17 @@ void MyFrame::OnUpdateUI(wxUpdateUIEvent& event)
             event.Check(m_notebook_style == 1);
             break;
 
-        case ID_ShowProperties:
-            event.Check(m_mgr.GetPane(wxT("Properties")).IsShown());
+        case ID_ShowInformation:
+            event.Check(m_mgr.GetPane(wxT("Information")).IsShown());
             break;
-        case ID_ShowMeshes:
-            event.Check(m_mgr.GetPane(wxT("Meshes")).IsShown());
-            break;
-        case ID_ShowMaterials:
-            event.Check(m_mgr.GetPane(wxT("Materials")).IsShown());
+        case ID_ShowTreatments:
+            event.Check(m_mgr.GetPane(wxT("Treatments")).IsShown());
             break;
         case ID_ShowLogging:
             event.Check(m_mgr.GetPane(wxT("Logging Window")).IsShown());
             break;
         case ID_ShowExplorer:
             event.Check(m_mgr.GetPane(wxT("Explorer")).IsShown());
-            break;
-        case ID_ShowCurvature:
-            event.Check(m_mgr.GetPane(wxT("Curvature")).IsShown());
             break;
     }
 }
@@ -917,12 +986,10 @@ void MyFrame::OnShowWindow(wxCommandEvent& evt)
     wxString paneName;
     switch (evt.GetId())
     {
-        case ID_ShowProperties: paneName = wxT("Properties"); break;
-        case ID_ShowMeshes:     paneName = wxT("Meshes"); break;
-        case ID_ShowMaterials:  paneName = wxT("Materials"); break;
+        case ID_ShowInformation: paneName = wxT("Information"); break;
+        case ID_ShowTreatments:  paneName = wxT("Treatments"); break;
         case ID_ShowLogging:    paneName = wxT("Logging Window"); break;
         case ID_ShowExplorer:   paneName = wxT("Explorer"); break;
-        case ID_ShowCurvature:  paneName = wxT("Curvature"); break;
         default: return;
     }
 
@@ -2572,6 +2639,18 @@ static void ReplaceMeshGeometry (Mesh *pMesh, Mesh *pNewMesh)
 	pMesh->SetVertices (pNewMesh->m_nVertices, pNewMesh->m_pVertices.data());
 	pMesh->SetFaces (pNewMesh->m_nFaces, 3, faces.data());
 	pMesh->ComputeNormals ();
+
+	// Carry per-vertex appearance attributes when the new mesh provides them
+	// vertex-parallel (e.g. attribute-preserving decimation). Colours/UVs are
+	// otherwise lost; normals are recomputed above.
+	if (pNewMesh->m_pVertexColors.size() == 3u * (size_t)pNewMesh->m_nVertices)
+		pMesh->m_pVertexColors = pNewMesh->m_pVertexColors;
+	if (pNewMesh->m_pTextureCoordinates.size() == 2u * (size_t)pNewMesh->m_nVertices)
+	{
+		pMesh->m_pTextureCoordinates = pNewMesh->m_pTextureCoordinates;
+		pMesh->m_nTextureCoordinates = pNewMesh->m_nTextureCoordinates;
+	}
+
 	pMesh->IncrementRevision ();
 }
 
@@ -2646,6 +2725,167 @@ void MyFrame::OnTreatmentSubdivisionSqrt3(wxCommandEvent& WXUNUSED(event))
 
 	pGLCanvas->Refresh();
 	*m_pWndLogging << _T("Subdivision Sqrt(3) applied\n");
+}
+
+// Apply the smoothing method picked in the Treatments > Smoothing tab. Reuses
+// the per-method handlers (which read the active canvas and refresh).
+void MyFrame::OnTreatmentApplySmoothing(wxCommandEvent& WXUNUSED(event))
+{
+	wxCommandEvent dummy;
+	const int sel = m_pSmoothingMethodCombo ? m_pSmoothingMethodCombo->GetSelection() : 0;
+	if (sel == 1) OnTreatmentSmoothingLaplacian(dummy);
+	else          OnTreatmentSmoothingTaubin(dummy);
+}
+
+// Apply the subdivision method picked in the Treatments > Subdivision tab.
+void MyFrame::OnTreatmentApplySubdivision(wxCommandEvent& WXUNUSED(event))
+{
+	wxCommandEvent dummy;
+	const int sel = m_pSubdivisionMethodCombo ? m_pSubdivisionMethodCombo->GetSelection() : 0;
+	if (sel == 2)      OnTreatmentSubdivisionSqrt3(dummy);
+	else if (sel == 1) OnTreatmentSubdivisionKarbacher(dummy);
+	else               OnTreatmentSubdivisionLoop(dummy);
+}
+
+// Recompute vertex normals on the active model with the method picked in the
+// Treatments > Normals tab, then refresh. Angle-weighted estimators (Thurmer/
+// Max) avoid the shading discontinuities of the equal-weight average.
+void MyFrame::OnTreatmentApplyNormals(wxCommandEvent& WXUNUSED(event))
+{
+	MyGLCanvas* pGLCanvas = GetActiveCanvas();
+	if (!pGLCanvas)
+	{
+		*m_pWndLogging << _T("Normals: no active model\n");
+		return;
+	}
+	VMeshes* pVMeshes = pGLCanvas->GetVMeshes();
+	if (!pVMeshes)
+		return;
+
+	const int sel = m_pNormalsMethodCombo ? m_pNormalsMethodCombo->GetSelection() : 1;
+	Normals::MethodId method = Normals::THURMER;
+	switch (sel)
+	{
+		case 0: method = Normals::GOURAUD;  break;
+		case 1: method = Normals::THURMER;  break;
+		case 2: method = Normals::MAX;      break;
+	}
+
+	Normals algo;
+	for (auto& pMesh : pVMeshes->GetMeshes())
+	{
+		if (sel == 0)
+		{
+			// Equal-weight average: robust on any face topology, no half-edge.
+			pMesh->ComputeNormals();
+		}
+		else
+		{
+			Mesh_half_edge* pMeshHE = MeshDataManager::GetInstance().GetHalfEdge(pMesh);
+			if (!pMeshHE || !pMeshHE->m_pMesh)
+				continue;
+			algo.EvalOnVertices(pMeshHE, method);
+			// Same vertex order/count as pMesh; copy the unit normals back.
+			if (pMeshHE->m_pMesh->m_pVertexNormals.size() == pMesh->m_pVertexNormals.size())
+				pMesh->m_pVertexNormals = pMeshHE->m_pMesh->m_pVertexNormals;
+		}
+		pMesh->IncrementRevision();
+	}
+
+	pGLCanvas->Refresh();
+	*m_pWndLogging << wxString::Format(_T("Normals recomputed (method %d)\n"), sel);
+}
+
+// Open (and raise) the Decimation parameters panel.
+void MyFrame::OnTreatmentDecimation(wxCommandEvent& WXUNUSED(event))
+{
+	wxAuiPaneInfo& pane = m_mgr.GetPane(wxT("Decimation"));
+	if (!pane.IsOk())
+		return;
+	pane.Show(true);
+	m_mgr.Update();
+}
+
+// Run QEM decimation on the active canvas's meshes with the panel parameters.
+void MyFrame::ApplyDecimation(void)
+{
+	if (!m_pDecimationPanel)
+		return;
+
+	MyGLCanvas* pGLCanvas = GetActiveCanvas();
+	if (!pGLCanvas)
+	{
+		*m_pWndLogging << _T("Decimation: no active model\n");
+		return;
+	}
+
+	VMeshes* pVMeshes = pGLCanvas->GetVMeshes();
+	if (!pVMeshes)
+		return;
+
+	// QEM edge-collapse decimation assumes a MANIFOLD mesh. On a non-manifold
+	// mesh (typical of welded STLs with overlapping/internal parts) the
+	// half-edge edge-pairing is ill-defined and collapses corrupt the
+	// connectivity (holes, flipped triangles). Warn before producing garbage.
+	size_t nonManifold = 0;
+	for (auto& pMesh : pVMeshes->GetMeshes())
+		nonManifold += MeshDataManager::GetInstance().GetTopologicIssues(pMesh).nonManifoldEdges.size();
+	if (nonManifold > 0)
+	{
+		wxString msg = wxString::Format(
+			_("This model has %zu non-manifold edges.\n\n"
+			  "QEM edge-collapse decimation assumes a manifold mesh; on a "
+			  "non-manifold one it will likely corrupt the result (holes, "
+			  "flipped triangles). Repair/remesh the model to a watertight "
+			  "manifold first.\n\nDecimate anyway?"), nonManifold);
+		if (wxMessageBox(msg, _("Non-manifold mesh"), wxYES_NO | wxICON_WARNING, this) != wxYES)
+		{
+			*m_pWndLogging << wxString::Format(_T("Decimation cancelled: mesh has %zu non-manifold edges\n"), nonManifold);
+			return;
+		}
+	}
+
+	const float ratio = m_pDecimationPanel->GetTargetRatio();
+	Mesh_half_edge::SimplifyOptions opt;
+	opt.preserve_features   = m_pDecimationPanel->GetPreserveFeatures();
+	opt.feature_angle_deg   = m_pDecimationPanel->GetFeatureAngleDeg();
+	opt.preserve_attributes = m_pDecimationPanel->GetPreserveAttributes();
+	opt.attribute_metric    = m_pDecimationPanel->GetAttributeMetric();
+	opt.attribute_weight    = m_pDecimationPanel->GetAttributeWeight();
+	opt.preserve_uv         = m_pDecimationPanel->GetPreserveUV();
+	opt.max_error           = m_pDecimationPanel->GetMaxError();
+	opt.exact_error         = m_pDecimationPanel->GetExactError();
+
+	for (auto& pMesh : pVMeshes->GetMeshes())
+	{
+		const unsigned int facesBefore = pMesh->GetNFaces();
+
+		Mesh_half_edge* pMeshHE = MeshDataManager::GetInstance().GetHalfEdge(pMesh);
+		if (!pMeshHE || !pMeshHE->m_pMesh)
+			continue;
+
+		// The half-edge copy drops colours/UV; sync the rendered mesh's
+		// vertex-parallel attributes so decimation can preserve them. (Same
+		// vertex order/count as pMesh at this point.)
+		Mesh* src = pMeshHE->m_pMesh;
+		if (pMesh->m_pVertexColors.size() == 3u * (size_t)src->m_nVertices)
+			src->m_pVertexColors = pMesh->m_pVertexColors;
+		if (pMesh->m_pTextureCoordinates.size() == 2u * (size_t)src->m_nVertices)
+		{
+			src->m_pTextureCoordinates = pMesh->m_pTextureCoordinates;
+			src->m_nTextureCoordinates = pMesh->m_nTextureCoordinates;
+		}
+
+		pMeshHE->simplify(ratio, opt);
+		ReplaceMeshGeometry(pMesh, pMeshHE->m_pMesh);
+
+		*m_pWndLogging << wxString::Format(_T("Decimation: %u -> %u faces\n"),
+		                                   facesBefore, pMesh->GetNFaces());
+	}
+
+	pGLCanvas->UpdateTopologicIssues();
+	pGLCanvas->Refresh();
+	UpdatePropertiesGrid();
 }
 
 //

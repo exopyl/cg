@@ -5,6 +5,77 @@
 #include "common.h"
 #include "polynomial.h"
 
+// Closest point on a triangle to p (Ericson, "Real-Time Collision Detection",
+// section 5.1.5). Returns the squared distance; writes the closest point to
+// closest_out when provided. Implemented with plain scalar math so it accepts
+// const inputs and has no side effects.
+float point_triangle_distance2 (const vec3 p, const vec3 a, const vec3 b, const vec3 c,
+                                vec3 closest_out)
+{
+	const float ab[3] = { b[0]-a[0], b[1]-a[1], b[2]-a[2] };
+	const float ac[3] = { c[0]-a[0], c[1]-a[1], c[2]-a[2] };
+	const float ap[3] = { p[0]-a[0], p[1]-a[1], p[2]-a[2] };
+
+	auto dot = [](const float u[3], const float v[3]) {
+		return u[0]*v[0] + u[1]*v[1] + u[2]*v[2];
+	};
+
+	float cl[3];
+
+	const float d1 = dot(ab, ap), d2 = dot(ac, ap);
+	if (d1 <= 0.f && d2 <= 0.f)                       // vertex region A
+	{
+		cl[0]=a[0]; cl[1]=a[1]; cl[2]=a[2];
+	}
+	else
+	{
+		const float bp[3] = { p[0]-b[0], p[1]-b[1], p[2]-b[2] };
+		const float d3 = dot(ab, bp), d4 = dot(ac, bp);
+		const float cp[3] = { p[0]-c[0], p[1]-c[1], p[2]-c[2] };
+		const float d5 = dot(ab, cp), d6 = dot(ac, cp);
+		const float vc = d1*d4 - d3*d2;
+		const float vb = d5*d2 - d1*d6;
+		const float va = d3*d6 - d5*d4;
+
+		if (d3 >= 0.f && d4 <= d3)                    // vertex region B
+		{
+			cl[0]=b[0]; cl[1]=b[1]; cl[2]=b[2];
+		}
+		else if (d6 >= 0.f && d5 <= d6)               // vertex region C
+		{
+			cl[0]=c[0]; cl[1]=c[1]; cl[2]=c[2];
+		}
+		else if (vc <= 0.f && d1 >= 0.f && d3 <= 0.f) // edge AB
+		{
+			const float v = d1 / (d1 - d3);
+			for (int i=0;i<3;i++) cl[i] = a[i] + v*ab[i];
+		}
+		else if (vb <= 0.f && d2 >= 0.f && d6 <= 0.f) // edge AC
+		{
+			const float w = d2 / (d2 - d6);
+			for (int i=0;i<3;i++) cl[i] = a[i] + w*ac[i];
+		}
+		else if (va <= 0.f && (d4 - d3) >= 0.f && (d5 - d6) >= 0.f) // edge BC
+		{
+			const float w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+			for (int i=0;i<3;i++) cl[i] = b[i] + w*(c[i] - b[i]);
+		}
+		else                                          // interior face region
+		{
+			const float denom = 1.f / (va + vb + vc);
+			const float v = vb * denom, w = vc * denom;
+			for (int i=0;i<3;i++) cl[i] = a[i] + ab[i]*v + ac[i]*w;
+		}
+	}
+
+	if (closest_out)
+	{
+		closest_out[0]=cl[0]; closest_out[1]=cl[1]; closest_out[2]=cl[2];
+	}
+	const float dx=p[0]-cl[0], dy=p[1]-cl[1], dz=p[2]-cl[2];
+	return dx*dx + dy*dy + dz*dz;
+}
+
 Geometry::Geometry()
 {
 	m_pAABox = nullptr;

@@ -14,6 +14,7 @@ include_directories(../src/cgre)
 
 set(srcs
         CurvaturePanel.cpp
+        DecimationPanel.cpp
         DrawingArea.cpp
         Managers.cpp
         PropertyPanel.cpp

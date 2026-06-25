@@ -47,6 +47,11 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 		glEnable(GL_CLIP_PLANE0);
 	}
 
+	// Renormalise normals on the GPU unconditionally: a safety net so lighting
+	// stays correct whatever the vertex-normal magnitude or the modelview scale
+	// (per-vertex normals are also unit-normalised at compute time now).
+	glEnable(GL_NORMALIZE);
+
 	// normalize the model
 	if (prop.normalized)
 	{
@@ -56,7 +61,6 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 
 		glPushMatrix ();
 		glScalef (scale, scale, scale);
-		glEnable(GL_NORMALIZE);
 	}
 
 	// points
@@ -328,8 +332,8 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 	if (prop.normalized)
 	{
 		glPopMatrix ();
-		glDisable(GL_NORMALIZE);
 	}
+	glDisable(GL_NORMALIZE);
 
 	if (prop.clipping_plane_active)
 	{
@@ -484,7 +488,7 @@ void MeshRenderer::Draw (int id)
 		{
 			// One draw call per material run (handles single- and
 			// multi-material meshes); activates each material in turn.
-			m_vboManager->DrawMaterialGroups (el.id, GetMaterialRendererIds(id));
+			m_vboManager->DrawMaterialGroups (el.id, GetMaterialRendererIds(id), !el.properties.smooth);
 		}
 
 		// Overlays (wireframe, points, vertex normals, warnings) still go

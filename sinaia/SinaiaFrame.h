@@ -19,6 +19,7 @@ class wxGenericDirCtrl;
 class wxListCtrl;
 class PropertyPanel;
 class CurvaturePanel;
+class DecimationPanel;
 class IParameterized;
 class MyGLCanvas;
 
@@ -152,16 +153,15 @@ class MyFrame : public wxFrame
 	ID_TREATMENT_SUBDIVISION_LOOP,
 	ID_TREATMENT_SUBDIVISION_KARBACHER,
 	ID_TREATMENT_SUBDIVISION_SQRT3,
-	ID_TREATMENT_CURVATURES_TAUBIN,
-	ID_TREATMENT_CURVATURES_DESBRUN,
-	ID_TREATMENT_CURVATURES_HAMANN,
+	ID_TREATMENT_DECIMATION,
+	ID_TREATMENT_NORMALS_APPLY,
+	ID_TREATMENT_SMOOTHING_APPLY,
+	ID_TREATMENT_SUBDIVISION_APPLY,
 
-	ID_ShowProperties,
-	ID_ShowMeshes,
-	ID_ShowMaterials,
+	ID_ShowInformation,
+	ID_ShowTreatments,
 	ID_ShowLogging,
 	ID_ShowExplorer,
-	ID_ShowCurvature,
 
         ID_FirstPerspective = ID_CreatePerspective+1000
     };
@@ -270,6 +270,13 @@ private:
 	void OnTreatmentSubdivisionLoop(wxCommandEvent& evt);
 	void OnTreatmentSubdivisionKarbacher(wxCommandEvent& evt);
 	void OnTreatmentSubdivisionSqrt3(wxCommandEvent& evt);
+	void OnTreatmentDecimation(wxCommandEvent& evt);
+	void OnTreatmentApplyNormals(wxCommandEvent& evt);
+	void OnTreatmentApplySmoothing(wxCommandEvent& evt);
+	void OnTreatmentApplySubdivision(wxCommandEvent& evt);
+	// Run QEM decimation on the active canvas's meshes with the parameters
+	// gathered by the Decimation panel, then refresh.
+	void ApplyDecimation(void);
 
     void OnGradient(wxCommandEvent& evt);
     void OnManagerFlag(wxCommandEvent& evt);
@@ -359,6 +366,7 @@ private:
         std::vector<std::vector<float>> savedColors;
     };
     CurvaturePanel* m_pCurvaturePanel = nullptr;
+    DecimationPanel* m_pDecimationPanel = nullptr;
     std::unordered_map<MyGLCanvas*, CurvatureState> m_curvatureByCanvas;
 
     //
@@ -371,6 +379,15 @@ private:
 
     wxTreeCtrl* CreateHierarchyMaterialsTreeCtrl();
     wxTreeCtrl* m_hierarchyMaterials = nullptr;
+
+	// "Information" dock: Properties / Meshes / Materials grouped as tabs.
+	wxAuiNotebook* m_pInfoNotebook = nullptr;
+
+	// "Treatments" dock: Smoothing / Subdivision / Normals tabs.
+	wxAuiNotebook* m_pTreatmentsNotebook = nullptr;
+	wxComboBox* m_pNormalsMethodCombo = nullptr;
+	wxComboBox* m_pSmoothingMethodCombo = nullptr;
+	wxComboBox* m_pSubdivisionMethodCombo = nullptr;
 
     DECLARE_EVENT_TABLE()
 };

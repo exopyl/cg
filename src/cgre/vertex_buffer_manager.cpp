@@ -192,7 +192,7 @@ void VBOManager::releaseBuffers(vboInfo& info)
 	info.iboIndices   = 0;
 }
 
-void VBOManager::uploadMesh(Mesh* mesh, vboInfo& info)
+void VBOManager::uploadMesh(Mesh* mesh, vboInfo& info, bool flat)
 {
 	info.pMesh = mesh;
 
@@ -201,7 +201,7 @@ void VBOManager::uploadMesh(Mesh* mesh, vboInfo& info)
 	// faces do NOT share corners — this is what guarantees uniform shading
 	// within each polygon and eliminates fan-diagonal kinks on non-planar
 	// n-gons.
-	const Mesh::PolygonRenderData rd = mesh->BuildPolygonRenderData();
+	const Mesh::PolygonRenderData rd = mesh->BuildPolygonRenderData(flat);
 
 	info.hasNormals   = !rd.normals.empty();
 	info.hasColors    = !rd.colors.empty();
@@ -274,6 +274,7 @@ void VBOManager::uploadMesh(Mesh* mesh, vboInfo& info)
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
 	info.revision = mesh->GetRevision();
+	info.flat = flat;
 	(void)nRenderVerts;
 }
 
@@ -282,7 +283,7 @@ int VBOManager::addMesh (Mesh *mesh)
 	if (!mesh) return -1;
 
 	vboInfo info{};
-	uploadMesh(mesh, info);
+	uploadMesh(mesh, info, false); // smooth by default; re-uploaded on demand
 	if (info.iboIndices == 0)
 		return -1;
 
@@ -298,9 +299,10 @@ void VBOManager::Draw (int id)
 		return;
 	vboInfo& info = it->second;
 
-	// Pick up in-place mesh mutations (e.g. RemoteConsole `flip`).
+	// Pick up in-place mesh mutations (e.g. RemoteConsole `flip`), preserving
+	// the current shading mode.
 	if (info.pMesh && info.pMesh->GetRevision() != info.revision)
-		uploadMesh(info.pMesh, info);
+		uploadMesh(info.pMesh, info, info.flat);
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glBindBuffer(GL_ARRAY_BUFFER, info.vboPositions);
@@ -347,12 +349,18 @@ void VBOManager::Draw (int id)
 	glDisableClientState(GL_VERTEX_ARRAY);
 }
 
-void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds)
+void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds, bool flat)
 {
 	auto it = m_mapVBO.find(id);
 	if (it == m_mapVBO.end())
 		return;
 	vboInfo& info = it->second;
+
+	// Re-upload if the geometry changed (revision) OR the shading mode changed
+	// (flat vs smooth uses a different vertex/normal layout). Done first so the
+	// material-less fallback below also sees the up-to-date buffers.
+	if (info.pMesh && (info.pMesh->GetRevision() != info.revision || info.flat != flat))
+		uploadMesh(info.pMesh, info, flat);
 
 	// No per-material grouping available: fall back to a single draw (the
 	// caller is expected to have activated the material already).
@@ -361,9 +369,6 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 		Draw(id);
 		return;
 	}
-
-	if (info.pMesh && info.pMesh->GetRevision() != info.revision)
-		uploadMesh(info.pMesh, info);
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glBindBuffer(GL_ARRAY_BUFFER, info.vboPositions);

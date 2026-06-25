@@ -7,6 +7,13 @@
 #include "aabox.h"
 #include "TVector2.h"
 
+// Squared Euclidean distance from point p to the triangle (a, b, c), i.e. to
+// its closest point (interior, edge or vertex). Pure geometry primitive
+// (Ericson, Real-Time Collision Detection), reusable by any proximity /
+// distance query. If `closest_out` is non-null it receives the closest point.
+float point_triangle_distance2 (const vec3 p, const vec3 a, const vec3 b, const vec3 c,
+                                vec3 closest_out = nullptr);
+
 //
 // Geometry
 //

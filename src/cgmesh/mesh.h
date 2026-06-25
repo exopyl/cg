@@ -202,7 +202,11 @@ public:
 		                                     // grouped by material
 		std::vector<MaterialRange> materialRanges; // one run per material
 	};
-	PolygonRenderData BuildPolygonRenderData();
+	// flat=false (smooth): triangles share topology slots and use per-vertex
+	// normals. flat=true: every face (triangles included) is expanded into its
+	// own non-shared corners carrying the face normal, so each triangle is
+	// uniformly shaded (true flat shading, independent of vertex welding).
+	PolygonRenderData BuildPolygonRenderData(bool flat = false);
 
 	// Replace every N-gon face (N>=4) with (N-2) triangle Face objects
 	// (fan for convex, glutess for concave). Triangles are kept as-is.
@@ -265,6 +269,16 @@ public:
 
 	// edit
 	int DeleteVertices (funcptr_v func);
+
+	// Split vertices along UV seams so that UVs become VERTEX-PARALLEL (one UV
+	// per vertex, m_pTextureCoordinates sized 2*m_nVertices). A topological
+	// vertex carrying several UVs (a seam / "wedge") is duplicated into one
+	// vertex per distinct UV; positions (and per-vertex colours/normals) are
+	// copied, faces are reindexed. This is the standard "explode UV wedges"
+	// operation — general-purpose (rendering, decimation that must carry UVs,
+	// export). No-op if the mesh has no UVs or its UVs are already
+	// vertex-parallel. Bumps the geometry revision.
+	void SplitVerticesByUVSeams (void);
 	// Weld vertices closer than `tolerance`. The weld is geometric: vertex
 	// normals are NOT a criterion (callers recompute them afterwards), so all
 	// coincident vertices weld — including across facet boundaries of an STL —

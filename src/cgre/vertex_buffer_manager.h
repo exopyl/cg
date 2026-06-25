@@ -53,6 +53,7 @@ typedef struct vboInfo
 {
 	Mesh*     pMesh;        // kept for revision-based re-upload
 	uint64_t  revision;     // last uploaded mesh revision
+	bool      flat;         // last uploaded shading mode (flat vs smooth normals)
 
 	GLuint    vboPositions; // GL_ARRAY_BUFFER — vec3 per vertex
 	GLuint    vboNormals;   // 0 if absent
@@ -83,10 +84,10 @@ public:
 	// activating the matching renderer material in between. rendererIds maps a
 	// mesh material index to a MaterialRenderer id (see
 	// MeshRenderer::GetMaterialRendererIds).
-	void DrawMaterialGroups (int id, const std::vector<int>& rendererIds);
+	void DrawMaterialGroups (int id, const std::vector<int>& rendererIds, bool flat = false);
 
 private:
-	void uploadMesh(Mesh* mesh, vboInfo& info);
+	void uploadMesh(Mesh* mesh, vboInfo& info, bool flat);
 	void releaseBuffers(vboInfo& info);
 
 	int m_idCurrent;

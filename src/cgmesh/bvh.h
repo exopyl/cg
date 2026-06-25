@@ -30,6 +30,13 @@ public:
 	// start vertex). const + member-read-only -> safe to call concurrently.
 	float nearest (vec3 orig, vec3 dir, float tMin) const;
 
+	// Squared distance from p to the closest point on the mesh surface (any
+	// triangle), found by an AABB-distance-pruned descent. Returns -1 if the
+	// BVH is empty. If closest_out is non-null it receives the closest point.
+	// Read-only -> safe to call concurrently. General-purpose proximity query
+	// (used by Hausdorff distance, signed-distance fields, snapping, ...).
+	float closest_distance2 (vec3 p, vec3 closest_out = nullptr) const;
+
 private:
 	struct Node
 	{

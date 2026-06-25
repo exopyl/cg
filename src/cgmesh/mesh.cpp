@@ -679,7 +679,7 @@ void computeNewellNormal(Face* face, Mesh& mesh, float outN[3])
 
 } // namespace
 
-Mesh::PolygonRenderData Mesh::BuildPolygonRenderData()
+Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
 {
     PolygonRenderData out;
 
@@ -687,13 +687,18 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData()
     const bool hasUV      = !m_pTextureCoordinates.empty();
     const bool hasColors  = !m_pVertexColors.empty();
 
-    // Seed the output with the shared topology layout. Triangle faces will
-    // reference these slots directly (smooth shading preserved). Only
-    // N>=4 polygons append fresh slots below.
-    out.positions.assign(m_pVertices.begin(),           m_pVertices.end());
-    if (hasNormals) out.normals.assign  (m_pVertexNormals.begin(),       m_pVertexNormals.end());
-    if (hasUV)      out.texCoords.assign(m_pTextureCoordinates.begin(),  m_pTextureCoordinates.end());
-    if (hasColors)  out.colors.assign   (m_pVertexColors.begin(),        m_pVertexColors.end());
+    // Smooth shading: seed the output with the shared topology layout; triangle
+    // faces reference these slots directly (per-vertex normals preserved); only
+    // N>=4 polygons append fresh slots below. Flat shading: seed nothing —
+    // EVERY face (triangles included) is expanded into its own corners carrying
+    // the face normal, so no slot is shared and each triangle is uniform.
+    if (!flat)
+    {
+        out.positions.assign(m_pVertices.begin(),           m_pVertices.end());
+        if (hasNormals) out.normals.assign  (m_pVertexNormals.begin(),       m_pVertexNormals.end());
+        if (hasUV)      out.texCoords.assign(m_pTextureCoordinates.begin(),  m_pTextureCoordinates.end());
+        if (hasColors)  out.colors.assign   (m_pVertexColors.begin(),        m_pVertexColors.end());
+    }
     out.indices.reserve(3u * m_nFaces);
 
     // Group triangle indices by material so the VBO path can draw one run per
@@ -712,17 +717,18 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData()
         const unsigned int matId = (unsigned int)face->GetMaterialId();
         std::vector<unsigned int>& bucket = buckets[matId];
 
-        if (n == 3)
+        if (n == 3 && !flat)
         {
-            // Triangle: index directly into the shared topology slots.
+            // Smooth triangle: index directly into the shared topology slots.
             bucket.push_back((unsigned int)face->GetVertex(0));
             bucket.push_back((unsigned int)face->GetVertex(1));
             bucket.push_back((unsigned int)face->GetVertex(2));
             continue;
         }
 
-        // N>=4: append N fresh render-vertices carrying the polygon's
-        // Newell normal uniformly.
+        // Flat triangles AND all N>=4 polygons: append N fresh render-vertices
+        // carrying the face's (Newell) normal uniformly — for a triangle this is
+        // its own face normal, giving true flat shading.
         float fn[3];
         computeNewellNormal(face, *this, fn);
 
@@ -1119,11 +1125,21 @@ void Mesh::ComputeNormals (void)
 		}
 	}
 
+	// Normalise the per-vertex normal to UNIT length. Averaging incident unit
+	// face normals yields a non-unit vector (e.g. ~0.58 at a convex corner,
+	// ~1 on a flat region); leaving it non-unit makes lighting intensity vary
+	// with the magnitude — visible as shading discontinuities between triangles
+	// when GL_NORMALIZE is off. (Dividing by the face count is unnecessary once
+	// we normalise — it only scales the vector.) Guard the zero vector
+	// (isolated vertex, or opposite faces cancelling) to avoid NaNs.
 	for (int i=0; i<m_nVertices; i++)
 	{
-		m_pVertexNormals[3*i]   /= nfaces[i];
-		m_pVertexNormals[3*i+1] /= nfaces[i];
-		m_pVertexNormals[3*i+2] /= nfaces[i];
+		float *vn = &m_pVertexNormals[3*i];
+		float len = sqrtf(vn[0]*vn[0] + vn[1]*vn[1] + vn[2]*vn[2]);
+		if (len > 1e-12f)
+		{
+			vn[0] /= len; vn[1] /= len; vn[2] /= len;
+		}
 	}
 
 	// cleaning
@@ -1540,6 +1556,80 @@ void* Mesh::GetMaterial (void)
 }
 
 //
+// Split vertices along UV seams -> vertex-parallel UVs (see header).
+void Mesh::SplitVerticesByUVSeams (void)
+{
+	if (m_nTextureCoordinates == 0)
+		return;                                            // no UV pool: nothing to do
+	if (m_pTextureCoordinates.size() == 2u * (size_t)m_nVertices)
+		return;                                            // already vertex-parallel
+
+	const bool hasC = m_pVertexColors.size()  == 3u * (size_t)m_nVertices;
+	const bool hasN = m_pVertexNormals.size() == 3u * (size_t)m_nVertices;
+	const unsigned int NO_UV = 0xFFFFFFFFu;                // sentinel for corners without UV
+
+	std::map<std::pair<unsigned int, unsigned int>, unsigned int> remap; // (vertex, uvIndex) -> new vertex
+	std::vector<float> newV, newUV, newC, newN;
+	unsigned int newNv = 0;
+
+	for (unsigned int f = 0; f < m_nFaces; f++)
+	{
+		Face *face = m_pFaces[f];
+		if (!face) continue;
+		const bool faceUV = face->m_bUseTextureCoordinates && face->m_pTextureCoordinatesIndices;
+
+		for (unsigned int c = 0; c < face->m_nVertices; c++)
+		{
+			const unsigned int vi = face->m_pVertices[c];
+			const unsigned int ti = faceUV ? face->m_pTextureCoordinatesIndices[c] : NO_UV;
+
+			auto key = std::make_pair(vi, ti);
+			auto it = remap.find(key);
+			unsigned int ni;
+			if (it == remap.end())
+			{
+				ni = newNv++;
+				remap[key] = ni;
+
+				newV.push_back(m_pVertices[3*vi]);
+				newV.push_back(m_pVertices[3*vi+1]);
+				newV.push_back(m_pVertices[3*vi+2]);
+
+				if (faceUV && ti < m_nTextureCoordinates)
+				{
+					newUV.push_back(m_pTextureCoordinates[2*ti]);
+					newUV.push_back(m_pTextureCoordinates[2*ti+1]);
+				}
+				else
+				{
+					newUV.push_back(0.f);
+					newUV.push_back(0.f);
+				}
+
+				if (hasC) { newC.push_back(m_pVertexColors[3*vi]); newC.push_back(m_pVertexColors[3*vi+1]); newC.push_back(m_pVertexColors[3*vi+2]); }
+				if (hasN) { newN.push_back(m_pVertexNormals[3*vi]); newN.push_back(m_pVertexNormals[3*vi+1]); newN.push_back(m_pVertexNormals[3*vi+2]); }
+			}
+			else
+			{
+				ni = it->second;
+			}
+
+			face->m_pVertices[c] = ni;
+			if (face->m_pTextureCoordinatesIndices)
+				face->m_pTextureCoordinatesIndices[c] = ni; // UV index now == vertex index
+		}
+	}
+
+	m_pVertices = std::move(newV);
+	m_nVertices = newNv;
+	m_pTextureCoordinates = std::move(newUV);
+	m_nTextureCoordinates = newNv;                         // vertex-parallel: one UV per vertex
+	if (hasC) m_pVertexColors  = std::move(newC);
+	if (hasN) m_pVertexNormals = std::move(newN);
+
+	IncrementRevision();
+}
+
 // MergeVertices
 // Merge vertices that are closer than the given tolerance.
 // Face indices are remapped accordingly. Degenerate faces are removed.
