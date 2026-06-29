@@ -127,8 +127,14 @@ public:
 	// Simplification (QEM edge-collapse decimation).
 	// target_ratio in [0,1]: fraction of the original face count to keep
 	// (0.5 -> halve the faces). Replaces m_pMesh with a compacted result.
-	void simplify (float target_ratio = 0.5f,
-	               const SimplifyOptions &options = SimplifyOptions());
+	// Deux surcharges plutôt qu'un argument par défaut `= SimplifyOptions()` :
+	// GCC refuse l'usage des initialiseurs de membres par défaut d'une struct
+	// imbriquée dans un argument par défaut avant la fin de la classe englobante
+	// (MSVC le tolère). Le corps inline ci-dessous est en « contexte de classe
+	// complète », où SimplifyOptions() est valide.
+	void simplify (float target_ratio, const SimplifyOptions &options);
+	void simplify (float target_ratio = 0.5f)
+	               { simplify (target_ratio, SimplifyOptions()); }
 
 	// Dijkstra
 public:
