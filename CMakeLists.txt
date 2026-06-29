@@ -8,6 +8,19 @@ set(CMAKE_CXX_STANDARD 17)
 set(ENABLE_COVERAGE Off CACHE BOOL "Enable coverage.")
 set(ENABLE_SINAIA Off CACHE BOOL "Enable sinaia.")
 set(ENABLE_CGNET_DEMO Off CACHE BOOL "Build the cgnet_demo executable.")
+set(ENABLE_CGONNX_DEMO Off CACHE BOOL "Build the ONNX Runtime depth demo.")
+set(ENABLE_ONNX Off CACHE BOOL "Enable the ONNX depth source in cgmesh (links ONNX Runtime).")
+set(EXTERN_ONNXRUNTIME "" CACHE PATH "Path to ONNX Runtime prebuilt dir.")
+if (NOT EXTERN_ONNXRUNTIME AND DEFINED ENV{EXTERN_ONNXRUNTIME})
+    set(EXTERN_ONNXRUNTIME "$ENV{EXTERN_ONNXRUNTIME}")
+endif()
+# Le demo ONNX s'appuie sur la couche ONNX de cgmesh : l'activer l'implique.
+if (ENABLE_CGONNX_DEMO)
+    set(ENABLE_ONNX On)
+endif()
+
+set(ENABLE_POISSON Off CACHE BOOL "Enable Poisson surface reconstruction in cgmesh (vendored PoissonRecon).")
+set(POISSONRECON_DIR "${CMAKE_SOURCE_DIR}/extern/PoissonRecon-18.76" CACHE PATH "Path to the vendored PoissonRecon source tree.")
 set(ENABLE_SULINA Off CACHE BOOL "Compile sulina (Qt 6 + Vulkan, via cgre2).")
 set(ENABLE_OPENNURBS On CACHE BOOL "Enable openNURBS (.3dm) import.")
 set(EXTERN_OPENNURBS "" CACHE PATH "Path to openNURBS directory.")
@@ -65,6 +78,10 @@ endif ()
 
 if ( ENABLE_CGNET_DEMO AND WIN32 )
 	add_subdirectory(cgnet_demo)
+endif ()
+
+if ( ENABLE_CGONNX_DEMO )
+	add_subdirectory(reconstruction-cli)
 endif ()
 
 # sulina (Qt 6 + Vulkan): pulls in the cgre2 render lib and the Qt app.

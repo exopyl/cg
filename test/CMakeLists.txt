@@ -58,6 +58,16 @@ if (WIN32 AND ENABLE_OCCT)
     )
 endif()
 
+# cgmesh importe onnxruntime.dll sous ENABLE_ONNX -> l'exe de test en a besoin.
+if (WIN32 AND ENABLE_ONNX)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${EXTERN_ONNXRUNTIME}/lib/onnxruntime.dll"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        COMMENT "Copying onnxruntime.dll to $<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    )
+endif()
+
 if (WIN32 AND EXTERN_GOOGLETEST)
     add_subdirectory(${EXTERN_GOOGLETEST} gtest)
     target_link_libraries(${PROJECT_NAME} GTest::gtest_main)

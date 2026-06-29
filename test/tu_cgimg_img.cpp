@@ -579,6 +579,41 @@ TEST(TEST_cgimg_img, resize_pixel)
     EXPECT_EQ(img.height(), 20);
 }
 
+// Régression : en bilinéaire (mode 1), resize() lisait hors du buffer source sur
+// la dernière colonne/ligne (x1=x0+1 / y1=y0+1 atteignant m_iWidth/m_iHeight) ->
+// segfault sur de grandes images. Scénario qui crashait : 541x800 -> 518x518.
+TEST(TEST_cgimg_img, resize_large_bilinear_no_oob)
+{
+    Img img(541, 800);
+    img.init_color(120, 130, 140, 255);
+
+    img.resize(518, 518, 1 /*bilinear*/);
+
+    EXPECT_EQ(img.width(), 518u);
+    EXPECT_EQ(img.height(), 518u);
+    // Dernier pixel : ne doit pas lire hors-bornes ; image uniforme -> couleur conservée.
+    unsigned char r, g, b, a;
+    img.get_pixel(517, 517, &r, &g, &b, &a);
+    EXPECT_EQ(r, 120);
+    EXPECT_EQ(g, 130);
+    EXPECT_EQ(b, 140);
+}
+
+// Mode 1 = vraie interpolation bilinéaire (et non plus-proche-voisin) : un
+// dégradé horizontal 0->200 sur 2x2, agrandi en 3x3, doit donner ~100 au centre.
+TEST(TEST_cgimg_img, resize_bilinear_interpolates)
+{
+    Img img(2, 2);
+    img.set_pixel(0, 0, 0, 0, 0, 255);     img.set_pixel(1, 0, 200, 200, 200, 255);
+    img.set_pixel(0, 1, 0, 0, 0, 255);     img.set_pixel(1, 1, 200, 200, 200, 255);
+
+    img.resize(3, 3, 1 /*bilinear*/);
+
+    unsigned char r, g, b, a;
+    img.get_pixel(1, 1, &r, &g, &b, &a);   // centre : moyenne gauche/droite
+    EXPECT_NEAR(r, 100, 2);                // nearest aurait donné 0 ou 200
+}
+
 TEST(TEST_cgimg_img, copy)
 {
     // Context

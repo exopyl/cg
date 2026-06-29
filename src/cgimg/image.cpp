@@ -593,12 +593,22 @@ int Img::resize (unsigned int width, unsigned int height, int mode)
 		for (unsigned int j=0; j<height; j++)
 			for (unsigned int i=0; i<width; i++)
 			{
-				float x = i*(m_iWidth-1)/(width-1);
-				float y = j*(m_iHeight-1)/(height-1);
+				// Arithmétique flottante explicite : sinon i*(m_iWidth-1)/(width-1)
+				// est une division ENTIÈRE (operandes unsigned) -> partie
+				// fractionnaire nulle -> le « bilinéaire » dégénérait en
+				// plus-proche-voisin.
+				float x = (float)i * (m_iWidth-1)  / (width-1);
+				float y = (float)j * (m_iHeight-1) / (height-1);
 				int x0 = (int)x;
 				int y0 = (int)y;
 				int x1 = x0 + 1;
 				int y1 = y0 + 1;
+				// Clamp : sur la dernière colonne/ligne, x1/y1 atteindraient
+				// m_iWidth/m_iHeight et liraient hors du buffer source (segfault
+				// sur grandes images). Les voisins clampés ont ici un poids nul
+				// (x-x0 = y-y0 = 0), donc le résultat est inchangé.
+				if (x1 >= (int)m_iWidth)  x1 = (int)m_iWidth  - 1;
+				if (y1 >= (int)m_iHeight) y1 = (int)m_iHeight - 1;
 				x = x - x0;
 				y = y - y0;
 				//

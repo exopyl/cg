@@ -131,4 +131,42 @@ if (ENABLE_OCCT)
     endif()
 endif()
 
+if (ENABLE_ONNX)
+    if (NOT EXTERN_ONNXRUNTIME AND DEFINED ENV{EXTERN_ONNXRUNTIME})
+        set(EXTERN_ONNXRUNTIME "$ENV{EXTERN_ONNXRUNTIME}")
+    endif()
+    if (NOT EXTERN_ONNXRUNTIME)
+        message(FATAL_ERROR "ENABLE_ONNX is ON but EXTERN_ONNXRUNTIME is not defined.")
+    endif()
+    if (NOT EXISTS "${EXTERN_ONNXRUNTIME}/include")
+        message(FATAL_ERROR "EXTERN_ONNXRUNTIME/include does not exist at ${EXTERN_ONNXRUNTIME}/include")
+    endif()
+
+    # CG_HAS_ONNX (PUBLIC) : la classe recon::OnnxDepthSource n'existe que sous ce
+    # define ; PUBLIC pour que les consommateurs (reconstruction-cli) la voient aussi.
+    target_compile_definitions(cgmesh PUBLIC CG_HAS_ONNX)
+    target_include_directories(cgmesh PUBLIC ${EXTERN_ONNXRUNTIME}/include)
+    if (WIN32)
+        target_link_libraries(cgmesh ${EXTERN_ONNXRUNTIME}/lib/onnxruntime.lib)
+    elseif (UNIX)
+        target_link_libraries(cgmesh ${EXTERN_ONNXRUNTIME}/lib/libonnxruntime.so)
+    endif()
+endif()
+
+if (ENABLE_POISSON)
+    if (NOT EXISTS "${POISSONRECON_DIR}/Src/Reconstructors.h")
+        message(FATAL_ERROR "ENABLE_POISSON: Reconstructors.h introuvable dans ${POISSONRECON_DIR}/Src")
+    endif()
+    # CG_HAS_POISSON (PUBLIC) : recon::PoissonReconstructor n'existe que sous ce define.
+    # Les en-têtes PoissonRecon restent PRIVATE (cachés dans recon_surface_poisson.cpp).
+    target_compile_definitions(cgmesh PUBLIC CG_HAS_POISSON)
+    target_include_directories(cgmesh PRIVATE "${POISSONRECON_DIR}/Src")
+    if (MSVC)
+        # _HAS_STD_BYTE=0 : PoissonRecon fait `using namespace std` + inclut des en-têtes
+        # Windows -> std::byte vs byte du SDK = "symbole ambigu". On désactive std::byte.
+        target_compile_definitions(cgmesh PRIVATE _USE_MATH_DEFINES NOMINMAX _HAS_STD_BYTE=0)
+        target_compile_options(cgmesh PRIVATE /bigobj)   # templates FEMTree volumineux
+    endif()
+endif()
+
 install(TARGETS cgmesh DESTINATION .)
