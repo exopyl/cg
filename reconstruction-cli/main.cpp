@@ -30,6 +30,19 @@
 #include <string>
 #include <vector>
 
+// Affiche la géométrie interne (intrinsèques) des caméras lorsqu'elle est évaluée
+// (fx>0). cx/cy/k1/k2 viennent du SfM (COLMAP -> bundle.out), parsés par BundleSource.
+static void print_camera_intrinsics(const std::vector<recon::CameraView>& cams)
+{
+    for (size_t i = 0; i < cams.size(); ++i)
+    {
+        const recon::CameraView& c = cams[i];
+        if (c.fx <= 0.f) { std::cout << "  cam " << i << ": intrinseques non evaluees\n"; continue; }
+        std::printf("  cam %zu: %dx%d  fx=%.3f fy=%.3f cx=%.3f cy=%.3f k1=%.5f k2=%.5f\n",
+                    i, c.w, c.h, c.fx, c.fy, c.cx, c.cy, c.k1, c.k2);
+    }
+}
+
 static int run_single(const std::string& model, const std::string& imgPath, int size)
 {
     Img img;
@@ -228,6 +241,7 @@ int main(int argc, char** argv)
         std::vector<recon::CameraView> cams; recon::PointCloud sparse;
         if (!pose.estimate(imagePaths, cams, sparse)) { std::cerr << "pose load failed\n"; return 1; }
         std::cout << "cameras: " << cams.size() << "\n";
+        print_camera_intrinsics(cams);
 
         recon::ProjectiveTexturer tex;
         tex.texture(mesh, imagePaths, cams);

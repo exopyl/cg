@@ -5,8 +5,8 @@
 #include "palette.h"
 
 
-//#define JPEGLIB
 #define PNG
+#define JPG       // JPEG import via stb_image (header-only, sans dépendance libjpeg)
 
 class Img
 {
@@ -159,9 +159,8 @@ private:
 	int import_png (const char *filename);
 	int export_png (const char *filename);
 #endif
-#ifdef JPEGLIB
-	int import_jpg (const char *filename);
-	int export_jpg (const char *filename);
+#ifdef JPG
+	int import_jpg (const char *filename);   // stb : import seul (pas d'encodeur)
 #endif
 
 public:

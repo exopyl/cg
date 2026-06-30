@@ -73,3 +73,18 @@ TEST(TEST_cgimg_io, png_rgba)
     EXPECT_EQ(img.width(), 512);
     EXPECT_EQ(img.height(), 512);
 }
+
+TEST(TEST_cgimg_io, jpg_rgb)
+{
+    // context
+    Img img;
+
+    // action: JPEG RGB (décodage stb)
+    auto res = img.load("./test/data/jpg/Nicolae_Grigorescu_005.jpg");
+
+    // expectations
+    EXPECT_EQ(res, 0);
+    EXPECT_EQ(img.width(), 1576);
+    EXPECT_EQ(img.height(), 2186);
+    EXPECT_EQ(img.get_a(0, 0), 255);   // source RGB : alpha forcé opaque à l'import
+}

@@ -8,14 +8,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(ENABLE_COVERAGE Off CACHE BOOL "Enable coverage.")
 set(ENABLE_SINAIA Off CACHE BOOL "Enable sinaia.")
 set(ENABLE_CGNET_DEMO Off CACHE BOOL "Build the cgnet_demo executable.")
-set(ENABLE_CGONNX_DEMO Off CACHE BOOL "Build the ONNX Runtime depth demo.")
+set(ENABLE_RECONSTRUCTION_CLI Off CACHE BOOL "Build the reconstruction-cli executable (image-based 3D reconstruction; links ONNX Runtime).")
 set(ENABLE_ONNX Off CACHE BOOL "Enable the ONNX depth source in cgmesh (links ONNX Runtime).")
 set(EXTERN_ONNXRUNTIME "" CACHE PATH "Path to ONNX Runtime prebuilt dir.")
 if (NOT EXTERN_ONNXRUNTIME AND DEFINED ENV{EXTERN_ONNXRUNTIME})
     set(EXTERN_ONNXRUNTIME "$ENV{EXTERN_ONNXRUNTIME}")
 endif()
-# Le demo ONNX s'appuie sur la couche ONNX de cgmesh : l'activer l'implique.
-if (ENABLE_CGONNX_DEMO)
+# reconstruction-cli s'appuie sur la couche ONNX de cgmesh : l'activer l'implique.
+if (ENABLE_RECONSTRUCTION_CLI)
     set(ENABLE_ONNX On)
 endif()
 
@@ -80,7 +80,7 @@ if ( ENABLE_CGNET_DEMO AND WIN32 )
 	add_subdirectory(cgnet_demo)
 endif ()
 
-if ( ENABLE_CGONNX_DEMO )
+if ( ENABLE_RECONSTRUCTION_CLI )
 	add_subdirectory(reconstruction-cli)
 endif ()
 

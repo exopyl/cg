@@ -26,8 +26,8 @@ int Img::load (char const *filename, char const *path)
 	if (ext == ".png")
 	     return import_png (fullPath.string().c_str());
 #endif
-#ifdef JPEGLIB
-	if (ext == ".jpg")
+#ifdef JPG
+	if (ext == ".jpg" || ext == ".jpeg")
 	     return import_jpg (fullPath.string().c_str());
 #endif
 	if (ext == ".bmp")
@@ -51,10 +51,7 @@ int Img::save (char const *filename)
 	if (ext == ".png")
 	     return export_png (filename);
 #endif
-#ifdef JPEGLIB
-	if (ext == ".jpg")
-	     return export_jpg (filename);
-#endif
+	// Pas d'export JPEG : stb ne fournit que le décodeur (cf. export_png).
 	if (ext == ".bmp")
 	     return export_bmp (filename);
 	if (ext == ".tga")
