@@ -118,7 +118,8 @@ jobs:
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DENABLE_OPENNURBS=On \
             -DEXTERN_OPENNURBS="$GITHUB_WORKSPACE/.deps/cg_binaries/opennurbs-v8.27.26019.16021" \
-            -DENABLE_OCCT=On
+            -DENABLE_OCCT=On \
+            -DENABLE_POISSON=On
           ./build-wrapper-linux-x86/build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build build/
 
       - name: Download sonar-scanner
