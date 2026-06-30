@@ -22,6 +22,7 @@ public:
 	};
 	Img (unsigned int w=0, unsigned int h=0, bool use_palette=false);
 	Img (const Img &img);
+	Img &operator= (const Img &img);   // règle des 3/5 : copie profonde (cf. ~Img/copie)
 	~Img ();
 
 	int load (char const *filename, char const *path = nullptr);
@@ -142,6 +143,7 @@ public:
 	int smooth_transition (int l);
 
 private:
+	void copyFrom (const Img &img);   // copie profonde partagée (ctor de copie + operator=)
 	int resize_memory (unsigned int width, unsigned int height, bool use_palette=false);
 
 	int import_bmp (const char *filename);

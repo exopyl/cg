@@ -11,7 +11,7 @@ using namespace std;
 
 int Img::AreIdentical (Img *pImg1, Img *pImg2)
 {
-	if (pImg1->m_iWidth != pImg2->m_iWidth && pImg1->m_iHeight != pImg2->m_iHeight)
+	if (pImg1->m_iWidth != pImg2->m_iWidth || pImg1->m_iHeight != pImg2->m_iHeight)
 		return -1;
 
 	int nDifferentPixels = 0;
@@ -63,27 +63,48 @@ Img::Img (unsigned int w, unsigned int h, bool use_palette)
 	resize_memory (w,h, use_palette);
 }
 
-Img::Img (const Img &img)
+// Copie partagée par le ctor de copie et operator=. Conserve la sémantique
+// HISTORIQUE : le résultat est toujours une image RGBA (une source à palette est
+// « aplatie » en RGBA). Des appelants en dépendent (p. ex. la vectorisation de
+// cgmesh). Suppose *this sans ressource possédée (ctor de copie, ou après
+// libération par operator=). Remet d'abord les dimensions à 0 pour que
+// resize_memory (qui court-circuite si les tailles coïncident) réalloue bien.
+void Img::copyFrom (const Img &img)
 {
-	m_iWidth = 0;
-	m_iHeight = 0;
-	m_pPixels = nullptr;
-	resize_memory (img.m_iWidth, img.m_iHeight, false);
+	m_iWidth    = 0;
+	m_iHeight   = 0;
+	m_pPixels   = nullptr;
+	bUsePalette = false;
+	m_pPalette  = nullptr;
+	resize_memory (img.m_iWidth, img.m_iHeight, false);   // toujours RGBA
+	if (!m_pPixels || !img.m_pPixels)
+		return;
+
 	if (!img.bUsePalette)
-		memcpy (m_pPixels, img.m_pPixels, 4*m_iWidth*m_iHeight*sizeof(unsigned char));
+		memcpy (m_pPixels, img.m_pPixels, (size_t)4*m_iWidth*m_iHeight*sizeof(unsigned char));
 	else
-	{
-		for(unsigned int y=0;y<m_iHeight;y++)
-			for(unsigned int x=0;x<m_iWidth;x++)
+		for (unsigned int y=0; y<m_iHeight; y++)
+			for (unsigned int x=0; x<m_iWidth; x++)
 			{
 				unsigned char r, g, b, a;
-				img.get_pixel(x,y, &r, &g, &b, &a);
-				set_pixel(x,y, r, g, b, a);
+				img.get_pixel (x, y, &r, &g, &b, &a);
+				set_pixel (x, y, r, g, b, a);
 			}
-	}
+}
 
-	bUsePalette = 0;
-	m_pPalette = nullptr;
+Img::Img (const Img &img)
+{
+	copyFrom (img);
+}
+
+Img &Img::operator= (const Img &img)
+{
+	if (this == &img)
+		return *this;
+	if (m_pPixels)  { free (m_pPixels);  m_pPixels = nullptr; }
+	if (m_pPalette) { delete m_pPalette; m_pPalette = nullptr; }
+	copyFrom (img);
+	return *this;
 }
 
 Img::~Img ()

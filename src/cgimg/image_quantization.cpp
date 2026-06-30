@@ -223,9 +223,15 @@ int Img::quant_kmean (float threshold)
 	//for (int i=0; i<nclusters; i++)
 	//	printf ("%d %d %d\n", pPalette[3*i], pPalette[3*i+1], pPalette[3*i+2]);
 
-	// cleaning
-	//free (pPixels);
-	//delete pOctree;
+	// cleaning : libère tous les buffers alloués (étaient tous fuités)
+	free (pPixels);
+	free (pClusters);
+	free (pInCluster1);
+	free (pInCluster2);
+	free (pAccum);
+	free (pPopulation);
+	free (pClustersDistances);
+	free (pPalette);
 
 	return 0;
 }

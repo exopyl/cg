@@ -6,6 +6,8 @@ class Palette
 {
 public:
 	Palette ();
+	Palette (const Palette &p);              // copie profonde de m_pColors
+	Palette &operator= (const Palette &p);   // idem (règle des 3/5 : dtor libère m_pColors)
 	~Palette ();
 
 	unsigned int AddColor (unsigned char r, unsigned char g, unsigned char b, unsigned char a);

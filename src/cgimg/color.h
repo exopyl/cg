@@ -16,8 +16,8 @@ class Color
 public:
 	Color ();
 	Color (unsigned char r, unsigned char g, unsigned char b);
-	Color(const Color& color) { *this = color; };
-	~Color ();
+	// Règle de zéro : `c[4]` est trivialement copiable, les copie/affectation/
+	// destruction implicites sont correctes (pas de ressource à gérer).
 
 	void SetRGB (unsigned char r, unsigned char g, unsigned char b);
 	void SetRGBA (unsigned char r, unsigned char g, unsigned char b, unsigned char a);

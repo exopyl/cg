@@ -127,46 +127,38 @@ int Img::bin_otsu (void)
 
 int Img::bin_floyd_steinberg (void)
 {
-	unsigned int i, j, error, threshold=255;
+	const int w = (int)m_iWidth, h = (int)m_iHeight;
+	const int threshold = 128;
 
-	unsigned int *buffer = (unsigned int*)malloc(m_iWidth*m_iHeight*sizeof(unsigned int));
+	// Tampon de travail signé : accumule l'erreur diffusée, qui peut sortir de [0,255].
+	float *buffer = (float*)malloc((size_t)w*h*sizeof(float));
+	if (!buffer)
+		return -1;
+	for (int j=0; j<h; j++)
+		for (int i=0; i<w; i++)
+			buffer[w*j+i] = (float)m_pPixels[4*(j*w+i)];   // canal rouge (image supposée en gris)
 
-	for (j=0; j<m_iHeight; j++)
-		for (i=0; i<m_iWidth; i++)
-			buffer[m_iWidth*j+i] = m_pPixels[4*(j*m_iWidth+i)];
-
-	memset (m_pPixels, 0, 4*m_iWidth*m_iHeight*sizeof(unsigned char));
-
-	for (i=0; i<m_iWidth; i++)
-		for (j=0; j<m_iHeight; j++)
+	// Balayage raster (ligne par ligne, gauche->droite) : seuillage + diffusion
+	// d'erreur Floyd-Steinberg (7/16 droite, 3/16 bas-gauche, 5/16 bas, 1/16 bas-droite),
+	// avec contrôle des bornes pour ne pas écrire hors du tampon.
+	for (int j=0; j<h; j++)
+		for (int i=0; i<w; i++)
 		{
-			unsigned int value = buffer[m_iWidth*j+i];
-			if (value < threshold){
-				set_pixel (i, j, 0, 0, 0, 255);
-				error=value;
-			}
-			else {
-				set_pixel (i, j, 255, 255, 255, 255);
-				error=value-threshold;
-			}
-			
-#if 0
-			// error diffusion
-			if (j != m_iHeight-1)
+			const float         oldv = buffer[w*j+i];
+			const unsigned char newv = (oldv < threshold) ? 0 : 255;
+			set_pixel (i, j, newv, newv, newv, 255);
+			const float err = oldv - (float)newv;
+
+			if (i+1 < w)         buffer[w*j     + (i+1)] += err * 7.f/16.f;
+			if (j+1 < h)
 			{
-				buffer[(j)*m_iWidth+(i+1)]   += (int)(error*7./16.);
-				buffer[(j+1)*m_iWidth+(i-1)] += (int)(error*3./16.);
-				buffer[(j+1)*m_iWidth+(i)]   += (int)(error*5./16.);
-				buffer[(j+1)*m_iWidth+(i+1)] += (int)(error/16.);
+				if (i > 0)       buffer[w*(j+1) + (i-1)] += err * 3.f/16.f;
+				                 buffer[w*(j+1) +  i   ] += err * 5.f/16.f;
+				if (i+1 < w)     buffer[w*(j+1) + (i+1)] += err * 1.f/16.f;
 			}
-			else if (i != m_iWidth-1)
-				buffer[(j)*m_iWidth+(i+1)]   += (int)(error);	
-#endif	
 		}
 
-	// cleaning
 	free (buffer);
-
 	return 0;
 }
 

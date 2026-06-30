@@ -177,7 +177,7 @@ int Img::import_tga (const char *filename)
 	FILE *ptr;
 	int w, h;
 	int i,j;
-	unsigned char *color_map;
+	unsigned char *color_map = nullptr;
 
 	if ((ptr = fopen (filename, "rb")) == nullptr)
 	{
@@ -212,7 +212,7 @@ int Img::import_tga (const char *filename)
 	unsigned char  image_descriptor;
 	unsigned char  image_origin;
 	unsigned char  alpha_channel_bits;
-	unsigned char  *id;
+	unsigned char  *id = nullptr;
 
 	fread (&x_origin, sizeof(unsigned short), 1, ptr);
 	fread (&y_origin, sizeof(unsigned short), 1, ptr);
@@ -228,6 +228,8 @@ int Img::import_tga (const char *filename)
 	{
 		id = (unsigned char*)malloc((id_length+1)*sizeof(unsigned char));
 		fread (id, sizeof(unsigned char), id_length, ptr);
+		free (id);   // l'identifiant n'est pas exploité ensuite : libéré aussitôt
+		id = nullptr;
 	}
   
 	// image data
@@ -345,8 +347,14 @@ int Img::import_tga (const char *filename)
 	default:
 	  printf ("WARNING!!! bad \"image origin\" (%d)\n", image_origin);
 	  fclose (ptr);
+	  delete[] color_map;            // était fuité sur ce chemin d'erreur
 	  return -1;
 	}
+
+      // Palette TGA : allouée sous color_map_type, utilisée uniquement par ce
+      // bloc MAPPED. Libérée ici (chemin nominal) — était fuitée.
+      delete[] color_map;
+      color_map = nullptr;
     }
 
   /***********************/

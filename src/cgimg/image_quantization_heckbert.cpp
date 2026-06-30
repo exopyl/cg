@@ -258,7 +258,7 @@ int compare(const void * a1, const void * a2)
          C1 = GREEN(color1), C2 = GREEN(color2);
          break;
       case 2:
-         C1 = BLUE(color2), C2 = BLUE(color2);
+         C1 = BLUE(color1), C2 = BLUE(color2);
          break;
    }
    return ((int)(C1-C2));

@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "palette.h"
 
@@ -7,6 +9,29 @@ Palette::Palette ()
 	m_nMaxColors = 256;
 	m_nColors = 0;
 	m_pColors = (Color*)malloc(m_nMaxColors*sizeof(Color));
+}
+
+Palette::Palette (const Palette &p)
+{
+	m_nMaxColors = p.m_nMaxColors;
+	m_nColors    = p.m_nColors;
+	m_pColors    = (Color*)malloc(m_nMaxColors*sizeof(Color));
+	if (m_pColors && p.m_pColors)
+		memcpy (m_pColors, p.m_pColors, m_nMaxColors*sizeof(Color));   // Color trivialement copiable
+}
+
+Palette &Palette::operator= (const Palette &p)
+{
+	if (this == &p)
+		return *this;
+	if (m_pColors)
+		free (m_pColors);
+	m_nMaxColors = p.m_nMaxColors;
+	m_nColors    = p.m_nColors;
+	m_pColors    = (Color*)malloc(m_nMaxColors*sizeof(Color));
+	if (m_pColors && p.m_pColors)
+		memcpy (m_pColors, p.m_pColors, m_nMaxColors*sizeof(Color));
+	return *this;
 }
 
 Palette::~Palette ()

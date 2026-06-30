@@ -473,5 +473,8 @@ int MedianCut_Wu(unsigned char *pPixels, int iSize, int ncolors)
 		pPixels[4*i+2] = lut_b[Qadd[i]];
 	}
 
+	free (tag);    // alloués dans cette fonction / Hist3d, jamais libérés
+	free (Qadd);
+	Qadd = nullptr;
 	return 0;
 }

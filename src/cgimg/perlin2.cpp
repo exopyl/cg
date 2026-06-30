@@ -56,6 +56,12 @@ Cperlin2::Cperlin2 ()
   fclose (ptr);
 }
 
+Cperlin2::~Cperlin2 ()
+{
+  if (image)
+    free (image);
+}
+
 float
 Cperlin2::Interpolate (float a,float b,float x)
 {

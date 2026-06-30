@@ -10,10 +10,6 @@ Color::Color (unsigned char r, unsigned char g, unsigned char b)
 	SetRGBA (r, g, b, 255);
 }
 
-Color::~Color ()
-{
-}
-
 void Color::SetRGB (unsigned char r, unsigned char g, unsigned char b)
 {
 	SetRGBA (r, g, b, 255);

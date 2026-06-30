@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <filesystem>
 #include <string>
@@ -7,6 +8,10 @@
 
 int Img::load (char const *filename, char const *path)
 {
+	// Libère l'éventuel contenu précédent (load sur un Img déjà chargé) avant de
+	// repartir de zéro — sinon l'ancien buffer/palette fuit.
+	if (m_pPixels)  free (m_pPixels);
+	if (m_pPalette) { delete m_pPalette; m_pPalette = nullptr; }
 	m_iWidth = 0;
 	m_iHeight = 0;
 	m_pPixels = nullptr;
