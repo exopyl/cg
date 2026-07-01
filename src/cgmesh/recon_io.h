@@ -25,4 +25,12 @@ bool savePointCloudPly(const std::string& path, const PointCloud& cloud);
 std::size_t removeDominantPlane(PointCloud& cloud, float distThreshRel = 0.015f,
                                 int iterations = 300);
 
+// Détecte le MÊME plan dominant que removeDominantPlane (RANSAC) mais, au lieu de le
+// retirer, applique à TOUT le nuage une transformation RIGIDE (rotation propre +
+// translation) qui aligne ce plan sur le plan Oxy (z=0), la scène se retrouvant du
+// côté z >= 0. Positions ET normales transformées ; aucun point supprimé. Renvoie
+// false si aucun plan dominant. Mêmes paramètres RANSAC que removeDominantPlane.
+bool orientSceneWithPlane(PointCloud& cloud, float distThreshRel = 0.015f,
+                          int iterations = 300);
+
 } // namespace recon

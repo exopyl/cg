@@ -193,14 +193,24 @@ int main(int argc, char** argv)
     // Reconstruction Poisson directe d'un nuage dense (ex. fused.ply de COLMAP MVS).
     if (argc > 1 && std::string(argv[1]) == "--poisson-ply")
     {
-        if (argc < 3) { std::cerr << "usage: reconstruction-cli --poisson-ply <cloud.ply> [depth] [trimQuantile] [removePlane 0/1]\n"; return 1; }
+        if (argc < 3) { std::cerr << "usage: reconstruction-cli --poisson-ply <cloud.ply> [depth] [trimQuantile] [removePlane 0/1] [orientPlane 0/1]\n"; return 1; }
 #ifdef CG_HAS_POISSON
-        const int   depth   = (argc > 3) ? std::stoi(argv[3]) : 8;
-        const float trim    = (argc > 4) ? std::stof(argv[4]) : 0.f;
-        const bool  rmPlane = (argc > 5) ? (std::stoi(argv[5]) != 0) : false;
+        const int   depth       = (argc > 3) ? std::stoi(argv[3]) : 8;
+        const float trim        = (argc > 4) ? std::stof(argv[4]) : 0.f;
+        const bool  rmPlane     = (argc > 5) ? (std::stoi(argv[5]) != 0) : false;
+        const bool  orientPlane = (argc > 6) ? (std::stoi(argv[6]) != 0) : false;
         recon::PointCloud cloud;
         if (!recon::loadPointCloudPly(argv[2], cloud)) { std::cerr << "load failed: " << argv[2] << "\n"; return 1; }
         std::cout << "dense cloud: " << cloud.size() << " pts, normals=" << cloud.hasNormals() << "\n";
+        if (orientPlane)
+        {
+            // Aligne le plan dominant sur Oxy AVANT un éventuel retrait (retirer le
+            // plan d'abord empêcherait de le détecter pour l'orientation).
+            if (recon::orientSceneWithPlane(cloud))
+                std::cout << "scene orientee: plan dominant aligne sur Oxy\n";
+            else
+                std::cout << "orientSceneWithPlane: aucun plan dominant\n";
+        }
         if (rmPlane)
         {
             const size_t r = recon::removeDominantPlane(cloud);

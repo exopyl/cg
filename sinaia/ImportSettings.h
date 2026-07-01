@@ -7,7 +7,7 @@
 //
 struct ImportSettings
 {
-    bool normalize     = true;   // center + scale the model to a unit bbox
+    bool normalize     = false;  // center + scale the model to a unit bbox (off par défaut)
     bool triangulate   = false;  // split polygonal faces into triangles
     bool mergeVertices = false;  // weld coincident vertices
 };

@@ -12,9 +12,73 @@
 #include "SinaiaFrame.h"
 #include <wx/statusbr.h>
 #include <wx/image.h>
+#include <wx/dnd.h>
+#include <wx/filename.h>
 #include <cstring>
 #include <cmath>
 #include <algorithm>
+
+// Cible de glisser-déposer du canvas, deux formats :
+//  - format INTERNE SinaiaModelPathFormat (glisser depuis le panneau des fichiers)
+//    -> AJOUT à la vue courante (AppendModel) ;
+//  - format FICHIER de l'OS (glisser depuis l'explorateur Windows)
+//    -> OUVERTURE dans une NOUVELLE vue (onglet), via MyFrame::LoadModelFile.
+// GetReceivedFormat() indique lequel a été déposé.
+namespace {
+class ModelDropTarget : public wxDropTarget
+{
+public:
+	explicit ModelDropTarget(MyGLCanvas* canvas) : m_canvas(canvas)
+	{
+		wxDataObjectComposite* composite = new wxDataObjectComposite();
+		m_internal = new wxCustomDataObject(SinaiaModelPathFormat());
+		m_files    = new wxFileDataObject();
+		composite->Add(m_internal, true);   // format préféré
+		composite->Add(m_files);
+		m_composite = composite;
+		SetDataObject(composite);           // le drop target en prend possession
+	}
+
+	wxDragResult OnData(wxCoord, wxCoord, wxDragResult def) override
+	{
+		if (!GetData())
+			return wxDragNone;
+
+		MyFrame* frame = dynamic_cast<MyFrame*>(wxGetTopLevelParent(m_canvas));
+
+		if (m_composite->GetReceivedFormat() == SinaiaModelPathFormat())
+		{
+			// Glisser interne (panneau des fichiers) -> ajout à la vue courante.
+			const wxString path = wxString::FromUTF8(
+				static_cast<const char*>(m_internal->GetData()), m_internal->GetSize());
+			if (path.empty() || !m_canvas->AppendModel(path))
+				return wxDragNone;
+			if (frame)
+				frame->OnSceneChanged();
+			return def;
+		}
+
+		// Dépôt de fichiers de l'OS -> chaque fichier ouvert dans une nouvelle vue.
+		const wxArrayString files = m_files->GetFilenames();
+		if (!frame || files.empty())
+			return wxDragNone;
+		for (const auto& f : files)
+			frame->LoadModelFile(f);
+		return def;
+	}
+
+private:
+	MyGLCanvas*            m_canvas;
+	wxDataObjectComposite* m_composite;
+	wxCustomDataObject*    m_internal;
+	wxFileDataObject*      m_files;
+};
+} // namespace
+
+wxDataFormat SinaiaModelPathFormat()
+{
+	return wxDataFormat(wxT("sinaia/model-path"));
+}
 
 BEGIN_EVENT_TABLE(MyGLCanvas, wxGLCanvas)
     EVT_SIZE(MyGLCanvas::OnSize)
@@ -74,6 +138,9 @@ MyGLCanvas::MyGLCanvas(wxWindow *parent, wxTextCtrl* pCtrlLog, int *args)
 	m_fWindowHeight = 0.f;
 	m_fNear = 0.001f;
 	m_fFar = 100.0f;
+
+	// Accepte le glisser-déposer de fichiers : chaque fichier lâché est ajouté à la scène.
+	SetDropTarget(new ModelDropTarget(this));
 }
 
 //
@@ -81,17 +148,18 @@ MyGLCanvas::MyGLCanvas(wxWindow *parent, wxTextCtrl* pCtrlLog, int *args)
 //
 MyGLCanvas::~MyGLCanvas()
 {
-	if (m_pVMeshes)
+	if (m_pVModels)
 	{
-		for (auto* mesh : m_pVMeshes->GetMeshes())
-			if (mesh) MeshRenderer::getInstance()->RemoveMesh(mesh);
+		for (auto& mdl : m_pVModels->GetModels())
+			for (auto* mesh : mdl->m_meshes.GetMeshes())
+				if (mesh) MeshRenderer::getInstance()->RemoveMesh(mesh);
 	}
 
 	delete m_pMesh;
 	m_pMesh = nullptr;
 
-	delete m_pVMeshes;
-	m_pVMeshes = nullptr;
+	delete m_pVModels;
+	m_pVModels = nullptr;
 
 	delete m_context;
 /*
@@ -124,40 +192,61 @@ void MyGLCanvas::SetMesh(Mesh *pMesh)
 
 VMeshes* MyGLCanvas::GetVMeshes(void)
 {
-	return m_pVMeshes;
+	// Fichier actif = premier Model de la scène (comportement mono-fichier conservé).
+	if (m_pVModels && m_pVModels->GetNModels() > 0)
+		return &m_pVModels->GetModels()[0]->m_meshes;
+	return nullptr;
 };
 
 void MyGLCanvas::SetVMeshes(VMeshes* pObject, bool normalize)
 {
-	if (m_pVMeshes)
+	// Détache l'ancienne scène du renderer puis la détruit.
+	if (m_pVModels)
 	{
-		for (auto* mesh : m_pVMeshes->GetMeshes())
-			if (mesh) MeshRenderer::getInstance()->RemoveMesh(mesh);
+		for (auto& mdl : m_pVModels->GetModels())
+			for (auto* mesh : mdl->m_meshes.GetMeshes())
+				if (mesh) MeshRenderer::getInstance()->RemoveMesh(mesh);
 	}
-	delete m_pVMeshes;
+	delete m_pVModels;
+	m_hoveredModel = nullptr;    // l'ancienne scène est détruite -> plus de survol valide
+	m_selectedModel = nullptr;   // idem sélection
 
-	m_pVMeshes = pObject;
+	// Nouvelle scène : un unique Model qui ADOPTE les maillages de pObject
+	// (échange de vecteurs), après quoi pObject vidé est détruit.
+	m_pVModels = new VModels();
+	Model* mdl = m_pVModels->Add("");
+	if (pObject)
+	{
+		mdl->m_meshes.GetMeshes().swap(pObject->GetMeshes());
+		delete pObject;
+	}
+	m_selectedModel = mdl;   // sélection initiale = le modèle chargé
 
-    ApplyNormalization(normalize);
+    ApplyNormalization(normalize);   // géométrie finale (après normalisation éventuelle)
+
+	// BVH pour le picking surface, construit UNE fois sur la géométrie définitive.
+	if (m_pVModels->GetNModels() > 0)
+		m_pVModels->GetModels()[0]->BuildBVH();
 }
 
 void MyGLCanvas::ApplyNormalization(bool normalize)
 {
-	if (!m_pVMeshes) return;
+	VMeshes* vm = GetVMeshes();
+	if (!vm) return;
 
-	for (const auto& mesh : m_pVMeshes->GetMeshes())
+	for (const auto& mesh : vm->GetMeshes())
 	{
 		mesh->ComputeNormals();
 	}
 
 	if (normalize)
 	{
-		m_pVMeshes->Normalize(); // This method now re-centers and re-scales meshes and updates their individual bboxes
+		vm->Normalize(); // This method now re-centers and re-scales meshes and updates their individual bboxes
 	}
 
 	// Always compute the aggregate bounding box for all meshes AFTER potential normalization
 	BoundingBox aggregateBbox;
-	for (const auto& mesh : m_pVMeshes->GetMeshes())
+	for (const auto& mesh : vm->GetMeshes())
 	{
 		mesh->computebbox(); // Ensure individual mesh bboxes are up-to-date
 		aggregateBbox.AddBoundingBox(mesh->bbox());
@@ -176,7 +265,7 @@ void MyGLCanvas::ApplyNormalization(bool normalize)
 	// A face-less model (point cloud: .ply/.pset/.pts/.asc with only vertices)
 	// has no surface to fill, so the default fill/VBO path draws nothing — the
 	// model loads invisible. Switch to point display so it is visible on import.
-	if (m_pVMeshes->GetNVertices() > 0 && m_pVMeshes->GetNFaces() == 0)
+	if (vm->GetNVertices() > 0 && vm->GetNFaces() == 0)
 	{
 		prop.display_points = true;
 		prop.display_fill   = false;
@@ -222,6 +311,161 @@ void MyGLCanvas::FrameCamera(const BoundingBox& bbox)
 	m_pTrackball->set_scene_radius(radius);
 }
 
+namespace {
+
+// Inverse d'une matrice 4x4 (col-major, convention OpenGL). false si singulière.
+bool invert4x4(const float m[16], float inv[16])
+{
+	inv[0]  =  m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15] + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10];
+	inv[4]  = -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15] - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10];
+	inv[8]  =  m[4]*m[9]*m[15]  - m[4]*m[11]*m[13] - m[8]*m[5]*m[15] + m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9];
+	inv[12] = -m[4]*m[9]*m[14]  + m[4]*m[10]*m[13] + m[8]*m[5]*m[14] - m[8]*m[6]*m[13] - m[12]*m[5]*m[10] + m[12]*m[6]*m[9];
+	inv[1]  = -m[1]*m[10]*m[15] + m[1]*m[11]*m[14] + m[9]*m[2]*m[15] - m[9]*m[3]*m[14] - m[13]*m[2]*m[11] + m[13]*m[3]*m[10];
+	inv[5]  =  m[0]*m[10]*m[15] - m[0]*m[11]*m[14] - m[8]*m[2]*m[15] + m[8]*m[3]*m[14] + m[12]*m[2]*m[11] - m[12]*m[3]*m[10];
+	inv[9]  = -m[0]*m[9]*m[15]  + m[0]*m[11]*m[13] + m[8]*m[1]*m[15] - m[8]*m[3]*m[13] - m[12]*m[1]*m[11] + m[12]*m[3]*m[9];
+	inv[13] =  m[0]*m[9]*m[14]  - m[0]*m[10]*m[13] - m[8]*m[1]*m[14] + m[8]*m[2]*m[13] + m[12]*m[1]*m[10] - m[12]*m[2]*m[9];
+	inv[2]  =  m[1]*m[6]*m[15]  - m[1]*m[7]*m[14]  - m[5]*m[2]*m[15] + m[5]*m[3]*m[14] + m[13]*m[2]*m[7]  - m[13]*m[3]*m[6];
+	inv[6]  = -m[0]*m[6]*m[15]  + m[0]*m[7]*m[14]  + m[4]*m[2]*m[15] - m[4]*m[3]*m[14] - m[12]*m[2]*m[7]  + m[12]*m[3]*m[6];
+	inv[10] =  m[0]*m[5]*m[15]  - m[0]*m[7]*m[13]  - m[4]*m[1]*m[15] + m[4]*m[3]*m[13] + m[12]*m[1]*m[7]  - m[12]*m[3]*m[5];
+	inv[14] = -m[0]*m[5]*m[14]  + m[0]*m[6]*m[13]  + m[4]*m[1]*m[14] - m[4]*m[2]*m[13] - m[12]*m[1]*m[6]  + m[12]*m[2]*m[5];
+	inv[3]  = -m[1]*m[6]*m[11]  + m[1]*m[7]*m[10]  + m[5]*m[2]*m[11] - m[5]*m[3]*m[10] - m[9]*m[2]*m[7]   + m[9]*m[3]*m[6];
+	inv[7]  =  m[0]*m[6]*m[11]  - m[0]*m[7]*m[10]  - m[4]*m[2]*m[11] + m[4]*m[3]*m[10] + m[8]*m[2]*m[7]   - m[8]*m[3]*m[6];
+	inv[11] = -m[0]*m[5]*m[11]  + m[0]*m[7]*m[9]   + m[4]*m[1]*m[11] - m[4]*m[3]*m[9]  - m[8]*m[1]*m[7]   + m[8]*m[3]*m[5];
+	inv[15] =  m[0]*m[5]*m[10]  - m[0]*m[6]*m[9]   - m[4]*m[1]*m[10] + m[4]*m[2]*m[9]  + m[8]*m[1]*m[6]   - m[8]*m[2]*m[5];
+
+	float det = m[0]*inv[0] + m[1]*inv[4] + m[2]*inv[8] + m[3]*inv[12];
+	if (std::fabs(det) < 1e-20f)
+		return false;
+	det = 1.0f / det;
+	for (int i = 0; i < 16; i++)
+		inv[i] *= det;
+	return true;
+}
+
+// out = M * v  (M col-major 4x4).
+void matVec4(const float M[16], const float v[4], float out[4])
+{
+	for (int r = 0; r < 4; r++)
+		out[r] = M[r]*v[0] + M[r+4]*v[1] + M[r+8]*v[2] + M[r+12]*v[3];
+}
+
+// Intersection rayon (o + t*d) / AABB [mn,mx] (slab). Renvoie true et t d'entrée
+// (>= 0 ; 0 si l'origine est dans la boîte) si intersection devant l'origine.
+bool rayAabb(const float o[3], const float d[3], const float mn[3], const float mx[3], float& tHit)
+{
+	float t0 = -1e30f, t1 = 1e30f;
+	for (int a = 0; a < 3; a++)
+	{
+		if (std::fabs(d[a]) < 1e-12f)
+		{
+			if (o[a] < mn[a] || o[a] > mx[a]) return false;   // parallèle et hors slab
+		}
+		else
+		{
+			float inv = 1.0f / d[a];
+			float ta = (mn[a] - o[a]) * inv;
+			float tb = (mx[a] - o[a]) * inv;
+			if (ta > tb) std::swap(ta, tb);
+			if (ta > t0) t0 = ta;
+			if (tb < t1) t1 = tb;
+			if (t0 > t1) return false;
+		}
+	}
+	if (t1 < 0.0f) return false;      // boîte entièrement derrière
+	tHit = (t0 >= 0.0f) ? t0 : 0.0f;  // origine dans la boîte -> 0
+	return true;
+}
+
+} // namespace
+
+bool MyGLCanvas::ScreenToRay(int x, int y, float orig[3], float dir[3])
+{
+	SetCurrent(*m_context);
+
+	float mv[16], pr[16];
+	GLint vp[4];
+	glGetFloatv(GL_MODELVIEW_MATRIX, mv);
+	glGetFloatv(GL_PROJECTION_MATRIX, pr);
+	glGetIntegerv(GL_VIEWPORT, vp);
+	if (vp[2] <= 0 || vp[3] <= 0)
+		return false;
+
+	// combiné = PR * MV, puis son inverse (clip -> monde).
+	float pm[16], inv[16];
+	for (int c = 0; c < 4; c++)
+		for (int r = 0; r < 4; r++)
+			pm[c*4 + r] = pr[0*4+r]*mv[c*4+0] + pr[1*4+r]*mv[c*4+1] + pr[2*4+r]*mv[c*4+2] + pr[3*4+r]*mv[c*4+3];
+	if (!invert4x4(pm, inv))
+		return false;
+
+	// NDC : y écran (haut=0) -> y GL (bas=0).
+	const float nx = 2.0f * (float)(x - vp[0]) / (float)vp[2] - 1.0f;
+	const float ny = 2.0f * (float)((vp[3] - y) - vp[1]) / (float)vp[3] - 1.0f;
+
+	float pNear[4], pFar[4];
+	const float cNear[4] = { nx, ny, -1.0f, 1.0f };
+	const float cFar[4]  = { nx, ny,  1.0f, 1.0f };
+	matVec4(inv, cNear, pNear);
+	matVec4(inv, cFar,  pFar);
+	if (std::fabs(pNear[3]) < 1e-20f || std::fabs(pFar[3]) < 1e-20f)
+		return false;
+	for (int i = 0; i < 3; i++) { pNear[i] /= pNear[3]; pFar[i] /= pFar[3]; }
+
+	orig[0] = pNear[0]; orig[1] = pNear[1]; orig[2] = pNear[2];
+	float dx = pFar[0]-pNear[0], dy = pFar[1]-pNear[1], dz = pFar[2]-pNear[2];
+	const float len = std::sqrt(dx*dx + dy*dy + dz*dz);
+	if (len < 1e-12f) return false;
+	dir[0] = dx/len; dir[1] = dy/len; dir[2] = dz/len;
+	return true;
+}
+
+Model* MyGLCanvas::PickModel(int x, int y)
+{
+	if (!m_pVModels)
+		return nullptr;
+	float o[3], d[3];
+	if (!ScreenToRay(x, y, o, d))
+		return nullptr;
+
+	Model* best = nullptr;
+	float  bestT = 1e30f;
+	for (auto& mdl : m_pVModels->GetModels())
+	{
+		if (!mdl->m_visible)
+			continue;
+		mdl->ComputeBBox();
+		if (mdl->m_bbox.IsEmpty())
+			continue;
+
+		// 1) Filtre AABB : rejet rapide si le rayon manque la boîte englobante.
+		float mn[3], mx[3], tBox;
+		mdl->m_bbox.GetMinMax(mn, mx);
+		if (!rayAabb(o, d, mn, mx, tBox))
+			continue;
+
+		// 2) Départage par la SURFACE (BVH triangles) si le modèle en a une ;
+		//    sinon (nuage de points sans faces) repli sur la distance d'entrée AABB.
+		float t;
+		if (mdl->HasSurface())
+		{
+			t = mdl->RayNearestSurface(o, d);
+			if (t < 0.f)
+				continue;   // boîte touchée mais aucune face -> pas un survol réel
+		}
+		else
+		{
+			t = tBox;
+		}
+
+		if (t < bestT)
+		{
+			bestT = t;
+			best = mdl.get();
+		}
+	}
+	return best;
+}
+
 //
 //
 //
@@ -253,11 +497,16 @@ void MyGLCanvas::LoadModel(const wxString& filename, const ImportSettings& setti
 	// model. Import operations then run on the resulting mesh — the same state
 	// the Treatments menu operates on — so Merge vertices is effective at unit
 	// scale rather than a no-op on raw (large) coordinates.
-	SetVMeshes(meshes, settings.normalize);
+	SetVMeshes(meshes, settings.normalize);   // adopte les maillages de `meshes` et le détruit
+
+	// Nomme le Model actif d'après le fichier (affiché dans l'arbre d'info).
+	if (VModels* scene = GetVModels())
+		if (scene->GetNModels() > 0)
+			scene->GetModels()[0]->m_name = std::string(wxFileName(filename).GetFullName().ToUTF8().data());
 
 	if (settings.triangulate || settings.mergeVertices)
 	{
-		for (auto& pMesh : meshes->GetMeshes())
+		for (auto& pMesh : GetVMeshes()->GetMeshes())   // `meshes` a été consommé -> fichier actif
 		{
 			if (settings.triangulate)
 			{
@@ -297,6 +546,57 @@ void MyGLCanvas::LoadModel(const wxString& filename, const ImportSettings& setti
 */
 }
 
+Model* MyGLCanvas::AppendModel(const wxString& filename)
+{
+	if (!m_pVModels)
+		m_pVModels = new VModels();
+
+	const std::string path = filename.ToUTF8().data();
+	const std::string base = std::string(wxFileName(filename).GetFullName().ToUTF8().data());
+
+	Model* mdl = m_pVModels->Add(base);
+	if (!mdl->m_meshes.load(path.c_str()) || mdl->m_meshes.GetNMeshes() == 0)
+	{
+		m_pVModels->Remove(m_pVModels->GetNModels() - 1);   // retire le Model vide
+		if (m_CtrlLog) *m_CtrlLog << wxString::Format(_T("Echec de chargement: %s\n"), filename);
+		return nullptr;
+	}
+
+	for (auto* mesh : mdl->m_meshes.GetMeshes())
+		if (mesh) mesh->ComputeNormals();
+
+	mdl->BuildBVH();   // picking surface (géométrie statique après chargement)
+	if (!m_selectedModel)   // 1er contenu d'un canvas vide -> sélection par défaut
+		m_selectedModel = mdl;
+
+	// PAS de normalisation : on garde le repère monde pour que les fichiers ajoutés
+	// se superposent correctement (comparaison de reconstructions). On recadre juste
+	// la caméra sur la bbox agrégée de la scène visible.
+	m_pTrackball->ResetTransformations();
+	BoundingBox bb = m_pVModels->AggregateBBox(true);
+	bb.AddPoint( 2.f,  2.f,  1.f);
+	bb.AddPoint(-2.f, -2.f, -1.f);
+	FrameCamera(bb);
+
+	// Nuage de points pur (sommets mais aucune face, ex. fused.ply) : le mode « fill »
+	// ne dessine rien -> bascule en affichage points pour qu'il soit visible. On ne le
+	// fait que si TOUTE la scène est sans faces (prop est global au canvas ; ne pas
+	// forcer le mode points quand un maillage est déjà affiché).
+	if (m_pVModels->GetNVertices() > 0 && m_pVModels->GetNFaces() == 0)
+	{
+		prop.display_points = true;
+		prop.display_fill   = false;
+	}
+
+	UpdateTopologicIssues();
+	Refresh(false);
+
+	if (m_CtrlLog)
+		*m_CtrlLog << wxString::Format(_T("Ajoute: %s (%zu maillages)\n"),
+		                               filename, mdl->m_meshes.GetNMeshes());
+	return mdl;
+}
+
 void MyGLCanvas::SaveModel(const wxString& filename)
 {
 #ifdef LINUX
@@ -308,7 +608,8 @@ void MyGLCanvas::SaveModel(const wxString& filename)
 	//cout << ((filename).mb_str(wxConvUTF8)) << endl;
 	//printf ("%s\n", (char*) ((filename).mb_str(wxConvUTF8)).data());
 
-	m_pVMeshes->save((char*)((filename).mb_str(wxConvUTF8)).data());
+	if (VMeshes* vm = GetVMeshes())
+		vm->save((char*)((filename).mb_str(wxConvUTF8)).data());
 }
 
 //
@@ -353,21 +654,64 @@ void MyGLCanvas::DrawGL()
 		repere_draw ();
 	if (prop.display_grid)
 		draw_grid();
-	for (const auto& mesh : m_pVMeshes->GetMeshes())
+	// Parcourt les fichiers (Model) VISIBLES, puis leurs maillages. Le renderer
+	// indexe par Mesh* (GetMeshId), donc rien d'autre à gérer côté ids.
+	if (m_pVModels)
+	for (const auto& mdl : m_pVModels->GetModels())
 	{
-		// CG_RENDERING_VBO: server-side buffers (positions, normals, UVs,
-		// colors, indices) bound once and re-drawn from VRAM. Avoids the
-		// per-frame CPU->GPU push of CG_RENDERING_VERTEX_ARRAY. VBOManager
-		// re-uploads automatically when Mesh::GetRevision() changes, so
-		// RemoteConsole edits like `flip` stay visible.
-		// The overlays (wireframe, vertex normals, points) are still drawn
-		// by mesh_draw inside MeshRenderer::Draw.
-		int id = MeshRenderer::getInstance()->GetMeshId(mesh, CG_RENDERING_VBO);
+		if (!mdl->m_visible) continue;
+		for (const auto& mesh : mdl->m_meshes.GetMeshes())
+		{
+			// CG_RENDERING_VBO: server-side buffers (positions, normals, UVs,
+			// colors, indices) bound once and re-drawn from VRAM. Avoids the
+			// per-frame CPU->GPU push of CG_RENDERING_VERTEX_ARRAY. VBOManager
+			// re-uploads automatically when Mesh::GetRevision() changes, so
+			// RemoteConsole edits like `flip` stay visible.
+			// The overlays (wireframe, vertex normals, points) are still drawn
+			// by mesh_draw inside MeshRenderer::Draw.
+			int id = MeshRenderer::getInstance()->GetMeshId(mesh, CG_RENDERING_VBO);
 
-		// Update rendering properties from the canvas prop
-		MeshRenderer::getInstance()->SetProperties(id, prop);
+			// Update rendering properties from the canvas prop
+			MeshRenderer::getInstance()->SetProperties(id, prop);
 
-		MeshRenderer::getInstance()->Draw(id);
+			MeshRenderer::getInstance()->Draw(id);
+		}
+	}
+
+	// Surbrillance du Model survolé : arêtes de son AABB en jaune (12 arêtes).
+	if (m_hoveredModel && m_hoveredModel->m_visible)
+	{
+		m_hoveredModel->ComputeBBox();
+		if (!m_hoveredModel->m_bbox.IsEmpty())
+		{
+			float mn[3], mx[3];
+			m_hoveredModel->m_bbox.GetMinMax(mn, mx);
+			// Sauve l'état GL : sinon glColor(jaune)/glLineWidth « fuient » vers les
+			// frames suivantes et le mesh (rendu sans matériau) apparaît jaune.
+			glPushAttrib(GL_CURRENT_BIT | GL_LINE_BIT | GL_ENABLE_BIT);
+			glDisable(GL_LIGHTING);
+			glColor3f(1.0f, 0.85f, 0.1f);
+			glLineWidth(2.0f);
+			const float x0=mn[0], y0=mn[1], z0=mn[2], x1=mx[0], y1=mx[1], z1=mx[2];
+			glBegin(GL_LINES);
+			// bas
+			glVertex3f(x0,y0,z0); glVertex3f(x1,y0,z0);
+			glVertex3f(x1,y0,z0); glVertex3f(x1,y1,z0);
+			glVertex3f(x1,y1,z0); glVertex3f(x0,y1,z0);
+			glVertex3f(x0,y1,z0); glVertex3f(x0,y0,z0);
+			// haut
+			glVertex3f(x0,y0,z1); glVertex3f(x1,y0,z1);
+			glVertex3f(x1,y0,z1); glVertex3f(x1,y1,z1);
+			glVertex3f(x1,y1,z1); glVertex3f(x0,y1,z1);
+			glVertex3f(x0,y1,z1); glVertex3f(x0,y0,z1);
+			// montants
+			glVertex3f(x0,y0,z0); glVertex3f(x0,y0,z1);
+			glVertex3f(x1,y0,z0); glVertex3f(x1,y0,z1);
+			glVertex3f(x1,y1,z0); glVertex3f(x1,y1,z1);
+			glVertex3f(x0,y1,z0); glVertex3f(x0,y1,z1);
+			glEnd();
+			glPopAttrib();   // restaure couleur / épaisseur / lighting
+		}
 	}
 /*
 	else
@@ -569,15 +913,41 @@ void MyGLCanvas::OnEraseBackground(wxEraseEvent& WXUNUSED(event))
 void MyGLCanvas::OnMouse(wxMouseEvent& event)
 {
 	if (event.ButtonDown())
+	{
 		SetFocus();
+		// Début d'une interaction caméra (rotation/zoom) : on annule la surbrillance
+		// de survol, sinon la bbox jaune resterait affichée pendant tout le drag.
+		if (m_hoveredModel)
+		{
+			m_hoveredModel = nullptr;
+			if (auto* frame = dynamic_cast<MyFrame*>(wxGetTopLevelParent(this)))
+				frame->HighlightModelRow(-1);
+			Refresh(false);
+		}
+	}
 
 	if (event.LeftDown())
 	{
+		m_pressX = event.GetX(); m_pressY = event.GetY();   // pour distinguer clic / glisser
 		m_pTrackball->mouse_press (LEFT_BUTTON, PRESSED, event.GetX(), event.GetY());
 	}
 	else if (event.LeftUp())
 	{
 		m_pTrackball->mouse_press (LEFT_BUTTON, RELEASED, event.GetX(), event.GetY());
+
+		// Clic (déplacement négligeable depuis l'enfoncement) sur un modèle -> le
+		// sélectionner ; un glisser (rotation de la vue) ne sélectionne pas.
+		const int dx = event.GetX() - m_pressX, dy = event.GetY() - m_pressY;
+		if (dx*dx + dy*dy <= 9)   // seuil 3 px
+		{
+			Model* hit = PickModel(event.GetX(), event.GetY());
+			if (hit && hit != m_selectedModel)
+			{
+				m_selectedModel = hit;
+				if (auto* frame = dynamic_cast<MyFrame*>(wxGetTopLevelParent(this)))
+					frame->RefreshModelSelection();
+			}
+		}
 	}
 	else if (event.RightDown())
 	{
@@ -599,9 +969,30 @@ void MyGLCanvas::OnMouse(wxMouseEvent& event)
 	{
 		wxSize sz(GetClientSize());
 		m_pTrackball->mouse_move (event.GetX(), event.GetY());
-		
+
 		// orientation has changed, redraw mesh
 		Refresh(false);
+	}
+	else if (event.Moving())   // déplacement SANS bouton -> survol (picking fichier)
+	{
+		Model* hit = PickModel(event.GetX(), event.GetY());
+		if (hit != m_hoveredModel)
+		{
+			m_hoveredModel = hit;
+			// Synchronise la surbrillance de la ligne correspondante dans "Models".
+			if (auto* frame = dynamic_cast<MyFrame*>(wxGetTopLevelParent(this)))
+			{
+				int idx = -1;
+				if (hit && m_pVModels)
+				{
+					int k = 0;
+					for (auto& mdl : m_pVModels->GetModels())
+					{ if (mdl.get() == hit) { idx = k; break; } ++k; }
+				}
+				frame->HighlightModelRow(idx);
+			}
+			Refresh(false);
+		}
 	}
 }
 
@@ -890,14 +1281,15 @@ void MyGLCanvas::UpdateTopologicIssues()
 {
 	prop.nonManifoldEdges.clear();
 	prop.borders.clear();
-	if (m_pVMeshes)
+	if (m_pVModels)
 	{
-		for (const auto& mesh : m_pVMeshes->GetMeshes())
-		{
-            const auto& issues = MeshDataManager::GetInstance().GetTopologicIssues(mesh);
-			prop.nonManifoldEdges.insert(std::make_pair(mesh, issues.nonManifoldEdges));
-			prop.borders.insert(std::make_pair(mesh, issues.borders));
-		}
+		for (const auto& mdl : m_pVModels->GetModels())
+			for (const auto& mesh : mdl->m_meshes.GetMeshes())
+			{
+				const auto& issues = MeshDataManager::GetInstance().GetTopologicIssues(mesh);
+				prop.nonManifoldEdges.insert(std::make_pair(mesh, issues.nonManifoldEdges));
+				prop.borders.insert(std::make_pair(mesh, issues.borders));
+			}
 	}
 }
 

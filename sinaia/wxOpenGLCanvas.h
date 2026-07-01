@@ -2,14 +2,22 @@
 
 #include "../src/cgre/gl_wrapper.h"
 #include "wx/glcanvas.h"
+#include <wx/dataobj.h>
 #include <chrono>
 #include <list>
 #include "../src/cgre/cgre.h"
+#include "../src/cgmesh/vmodels.h"
 #include "ImportSettings.h"
 
 
 class Mesh;
 class BoundingBox;
+
+// Format de glisser-déposer INTERNE : un chemin de modèle issu du panneau des
+// fichiers de sinaia. Le canvas n'accepte QUE ce format — les dépôts de fichiers
+// venus de l'OS (explorateur) sont donc ignorés, si bien que l'ajout d'un modèle
+// à la vue courante ne se produit QUE via un glisser depuis ce panneau.
+wxDataFormat SinaiaModelPathFormat();
 
 //
 // ref : http://wiki.wxwidgets.org/WxGLCanvas
@@ -26,15 +34,34 @@ public:
 	virtual ~MyGLCanvas();
 	
 	void LoadModel(const wxString& filename, const ImportSettings& settings = ImportSettings());
+	// Ajoute un fichier à la scène COURANTE (nouveau Model) sans remplacer la vue ni
+	// renormaliser (repère monde conservé) ; recadre sur la scène. nullptr si échec.
+	Model* AppendModel(const wxString& filename);
 	void SaveModel(const wxString& filename);
 
 	Mesh* GetMesh(void);
 	void  SetMesh(Mesh *pMesh);
 
+	// Scène multi-fichiers (nouveau modèle). Le canvas en est propriétaire.
+	VModels* GetVModels(void) { return m_pVModels; }
+
+	// Survol : Model actuellement sous le curseur (nullptr si aucun). Pointeur stable
+	// (VModels stocke des unique_ptr). Réinitialisé quand la scène change.
+	Model* GetHoveredModel(void) const { return m_hoveredModel; }
+	void   ClearHoveredModel(void) { m_hoveredModel = nullptr; }
+
+	// Sélection : Model dont les propriétés sont affichées dans "Model information"
+	// (piloté par un clic dans le panneau "Models"). Pointeur stable ; réinitialisé
+	// quand la scène change.
+	Model* GetSelectedModel(void) const { return m_selectedModel; }
+	void   SetSelectedModel(Model* m) { m_selectedModel = m; }
+	// Compat : renvoie le VMeshes du fichier ACTIF (le premier Model) — la plupart
+	// des traitements historiques opèrent encore sur « le » VMeshes de la vue.
 	VMeshes* GetVMeshes(void);
 	// normalize: when true (default), the meshes are centered and scaled to a
 	// unit bounding box. File import passes the user's "Normalisation" import
-	// option here; geometry-creation callers keep the default.
+	// option here; geometry-creation callers keep the default. La scène devient
+	// un unique Model qui adopte les maillages de pVMeshes (qui est ensuite détruit).
 	void SetVMeshes(VMeshes* pVMeshes, bool normalize = true);
 
 	void SetBackgroundColor (unsigned char r, unsigned char g, unsigned char b);
@@ -115,6 +142,13 @@ private:
 	// model bounding box fits in view, whatever its native scale/position.
 	void FrameCamera(const BoundingBox& bbox);
 
+	// Construit le rayon monde (origine + direction) passant par le pixel (x,y) à
+	// partir des matrices GL courantes. false si non inversibles.
+	bool ScreenToRay(int x, int y, float orig[3], float dir[3]);
+	// Model dont l'AABB est traversée en PREMIER par le rayon souris (picking au
+	// niveau FICHIER), ou nullptr. N'inspecte que les Model visibles.
+	Model* PickModel(int x, int y);
+
 	bool m_bInitialized;
 
 	// rendering modes
@@ -131,7 +165,10 @@ private:
 
 	Mesh *m_pMesh = nullptr;
 	//Mesh_half_edge *m_pMesh = nullptr;
-	VMeshes *m_pVMeshes = nullptr;
+	VModels *m_pVModels = nullptr;   // scène = liste de Model (un par fichier)
+	Model   *m_hoveredModel = nullptr;    // Model survolé (surbrillance bbox)
+	Model   *m_selectedModel = nullptr;   // Model sélectionné (-> Model information)
+	int      m_pressX = 0, m_pressY = 0;  // position du clic gauche (clic vs glisser)
 
 
 	// viewport

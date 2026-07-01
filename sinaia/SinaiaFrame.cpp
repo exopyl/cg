@@ -4,6 +4,11 @@
 #include <wx/dir.h>
 #include <wx/dirctrl.h>
 #include <wx/listctrl.h>
+#include <wx/dnd.h>
+#include <wx/scrolwin.h>
+#include <wx/bmpbuttn.h>
+#include <wx/dcmemory.h>
+#include <wx/stattext.h>
 #include "wx/mimetype.h"
 #include <wx/propgrid/propgrid.h>
 #include <wx/busyinfo.h>
@@ -135,6 +140,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
 
     EVT_DIRCTRL_SELECTIONCHANGED(ID_DIRCTRL, MyFrame::OnDirCtrlSelectionChanged)
     EVT_LIST_ITEM_ACTIVATED(ID_FILESCTRL, MyFrame::OnFilesCtrlListItemActivated)
+    EVT_LIST_BEGIN_DRAG(ID_FILESCTRL, MyFrame::OnFilesCtrlBeginDrag)
 
     EVT_AUINOTEBOOK_PAGE_CHANGED(ID_NOTEBOOK_MAIN, MyFrame::OnNotebookPageChanged)
 
@@ -590,6 +596,12 @@ MyFrame::MyFrame(wxWindow* parent,
     m_hierarchyMeshes = CreateHierarchyMeshesTreeCtrl();
     m_hierarchyMaterials = CreateHierarchyMaterialsTreeCtrl();
 
+    // Panneau "Models" : liste défilante, une ligne par Model (nom + œil + poubelle).
+    BuildModelsIcons();
+    m_modelsPanel = new wxScrolledWindow(this, ID_OPENFILESLIST);
+    m_modelsPanel->SetScrollRate(0, 10);
+    m_modelsPanel->SetSizer(new wxBoxSizer(wxVERTICAL));
+
     // Group Properties / Meshes / Materials as tabs of a single dockable
     // "Information" pane (saves dock space vs three stacked panes). The controls
     // are reparented into an AUI notebook. No close buttons / no external tab
@@ -603,7 +615,14 @@ MyFrame::MyFrame(wxWindow* parent,
     m_pInfoNotebook->AddPage(m_propertiesGrid,    _("Properties"));
     m_pInfoNotebook->AddPage(m_hierarchyMeshes,   _("Meshes"));
     m_pInfoNotebook->AddPage(m_hierarchyMaterials, _("Materials"));
-    m_mgr.AddPane(m_pInfoNotebook, wxAuiPaneInfo().Name(wxT("Information")).Caption(wxT("Information")).Right().BestSize(280, 500).MinSize(220, 200));
+    // Empilés à droite dans la même rangée : "Models" AU-DESSUS (Position 0), puis
+    // "Model information" en dessous (Position 1).
+    m_mgr.AddPane(m_modelsPanel, wxAuiPaneInfo().Name(wxT("Models")).Caption(wxT("Models"))
+                  .Right().Layer(1).Row(0).Position(0).BestSize(280, 110).MinSize(160, 70));
+    // Name interne inchangé ("Information" : référencé par le menu Affichage et la
+    // persistance de layout) ; seul le libellé visible passe à "Model information".
+    m_mgr.AddPane(m_pInfoNotebook, wxAuiPaneInfo().Name(wxT("Information")).Caption(wxT("Model information"))
+                  .Right().Layer(1).Row(0).Position(1).BestSize(280, 500).MinSize(220, 200));
 
     // "Treatments" dock: Smoothing / Subdivision / Normals / Decimation tabs.
     // Each operation tab is a method combo + Apply, applied to the active model.
@@ -668,7 +687,9 @@ MyFrame::MyFrame(wxWindow* parent,
     m_pDecimationPanel->Reparent(m_pTreatmentsNotebook);
     m_pTreatmentsNotebook->AddPage(m_pDecimationPanel, _("Decimation"));
 
-    m_mgr.AddPane(m_pTreatmentsNotebook, wxAuiPaneInfo().Name(wxT("Treatments")).Caption(wxT("Treatments")).Right().BestSize(280, 360).MinSize(220, 180));
+    // Empilé à droite, sous "Model information" (Position 2 dans la même rangée).
+    m_mgr.AddPane(m_pTreatmentsNotebook, wxAuiPaneInfo().Name(wxT("Treatments")).Caption(wxT("Treatments"))
+                  .Right().Layer(1).Row(0).Position(2).BestSize(280, 360).MinSize(220, 180));
 
 
     m_dcDirectory = new wxGenericDirCtrl(this, ID_DIRCTRL, wxT(""), wxDefaultPosition, wxSize(142, 120), wxSIMPLE_BORDER | wxDIRCTRL_DIR_ONLY, wxT("All files (*.*)|*.*"), 0);
@@ -1133,6 +1154,8 @@ void MyFrame::OnDirCtrlSelectionChanged(wxTreeEvent& WXUNUSED(event))
             m_filesCtrl->InsertItem(index++, filename.GetName() + _T(".") + filename.GetExt(), 2);
         else if (ext == _T("gltf") || ext == _T("glb"))
             m_filesCtrl->InsertItem(index++, filename.GetName() + _T(".") + filename.GetExt(), 2); // use 3ds icon for now
+        else if (ext == _T("ply"))
+            m_filesCtrl->InsertItem(index++, filename.GetName() + _T(".") + filename.GetExt(), 0); // nuages/maillages PLY (recon)
     }
 }
 
@@ -1152,6 +1175,29 @@ void MyFrame::OnFilesCtrlListItemActivated(wxListEvent& WXUNUSED(event))
         Log(strFilename);
         OpenDocument(strFilename);
     }
+}
+
+void MyFrame::OnFilesCtrlBeginDrag(wxListEvent& event)
+{
+    const long item = event.GetIndex();
+    if (item < 0)
+        return;
+
+    wxListItem info;
+    info.SetId(item);
+    info.SetMask(wxLIST_MASK_TEXT);
+    if (!m_filesCtrl->GetItem(info))
+        return;
+
+    // Chemin complet = dossier de l'Explorer + nom du fichier (même reconstruction
+    // que le double-clic). On glisse au format INTERNE SinaiaModelPathFormat (et NON
+    // wxFileDataObject) : seul le canvas reconnaît ce format et appelle AppendModel.
+    const wxString path = m_dcDirectory->GetPath() + wxT("\\") + info.m_text;
+    const wxScopedCharBuffer utf8 = path.ToUTF8();
+    wxCustomDataObject data(SinaiaModelPathFormat());
+    data.SetData(utf8.length(), utf8.data());
+    wxDropSource source(data, m_filesCtrl);
+    source.DoDragDrop(wxDrag_CopyOnly);
 }
 
 void MyFrame::OnNotebookPageChanged(wxAuiNotebookEvent& event)
@@ -1326,13 +1372,194 @@ void MyFrame::OpenDocument(const wxString& strFilename)
     UpdateContextualPanes();
 }
 
+void MyFrame::OnSceneChanged()
+{
+    UpdatePropertiesGrid();
+    UpdateContextualPanes();
+}
+
+// Dessine les icônes œil / œil barré / poubelle (16x16) une seule fois. Fond blanc
+// rendu transparent par un masque -> s'intègre aux boutons quel que soit le thème.
+void MyFrame::BuildModelsIcons()
+{
+    auto make = [](void(*draw)(wxMemoryDC&)) -> wxBitmap {
+        wxBitmap bmp(16, 16);
+        wxMemoryDC dc(bmp);
+        dc.SetBackground(*wxWHITE_BRUSH);
+        dc.Clear();
+        dc.SetPen(*wxBLACK_PEN);
+        dc.SetBrush(*wxTRANSPARENT_BRUSH);
+        draw(dc);
+        dc.SelectObject(wxNullBitmap);
+        bmp.SetMask(new wxMask(bmp, *wxWHITE));
+        return bmp;
+    };
+    m_iconEye = make([](wxMemoryDC& dc) {                 // œil ouvert
+        dc.DrawEllipse(1, 4, 14, 8);
+        dc.SetBrush(*wxBLACK_BRUSH);
+        dc.DrawCircle(8, 8, 2);
+    });
+    m_iconEyeOff = make([](wxMemoryDC& dc) {              // œil barré (masqué)
+        dc.DrawEllipse(1, 4, 14, 8);
+        dc.SetBrush(*wxBLACK_BRUSH);
+        dc.DrawCircle(8, 8, 2);
+        dc.DrawLine(2, 13, 14, 3);
+    });
+    m_iconTrash = make([](wxMemoryDC& dc) {               // poubelle
+        dc.DrawLine(3, 4, 13, 4);                         // couvercle
+        dc.DrawLine(6, 2, 10, 2);                         // poignée
+        dc.DrawRectangle(4, 5, 8, 9);                     // bac
+        dc.DrawLine(7, 7, 7, 12);                         // stries
+        dc.DrawLine(9, 7, 9, 12);
+    });
+}
+
+void MyFrame::UpdateModelsList()
+{
+    if (!m_modelsPanel)
+        return;
+    m_modelsPanel->DestroyChildren();
+    m_modelRowLabels.clear();
+    wxSizer* sizer = m_modelsPanel->GetSizer();
+    sizer->Clear();
+
+    MyGLCanvas* pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+    VModels* scene = pGLCanvas ? pGLCanvas->GetVModels() : nullptr;
+    if (scene)
+    {
+        // Pas d'auto-sélection : la sélection est posée à l'ouverture (SetVMeshes) et
+        // par les clics ; retirer le Model sélectionné la laisse VIDE (info vidée).
+        const Model* selected = pGLCanvas->GetSelectedModel();
+
+        // Une ligne par Model (indices stables : ligne i == Model i). Les boutons
+        // capturent i ; toute modif de la scène rappelle UpdateModelsList -> réindex.
+        int idx = 0;
+        for (auto& mdl : scene->GetModels())
+        {
+            const int i = idx++;
+            wxString label = mdl->m_name.empty() ? wxString::Format("model %d", i)
+                                                 : wxString(mdl->m_name);
+
+            wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
+            wxStaticText* lbl = new wxStaticText(m_modelsPanel, wxID_ANY, label);
+            m_modelRowLabels.push_back(lbl);   // pour la surbrillance au survol
+            // Ligne sélectionnée en GRAS (le survol, lui, ne change que la couleur).
+            if (mdl.get() == selected)
+            {
+                wxFont f = lbl->GetFont(); f.MakeBold(); lbl->SetFont(f);
+            }
+            // Clic sur le libellé -> sélectionne ce Model (met à jour Model information).
+            lbl->Bind(wxEVT_LEFT_DOWN, [this, i](wxMouseEvent&){ SelectModelRow(i); });
+            row->Add(lbl, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
+
+            wxBitmapButton* eye = new wxBitmapButton(m_modelsPanel, wxID_ANY,
+                mdl->m_visible ? m_iconEye : m_iconEyeOff, wxDefaultPosition,
+                wxDefaultSize, wxBU_EXACTFIT | wxBORDER_NONE);
+            eye->SetToolTip(_("Afficher / masquer"));
+            eye->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&){ ToggleModelVisibility(i); });
+            row->Add(eye, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
+
+            wxBitmapButton* trash = new wxBitmapButton(m_modelsPanel, wxID_ANY,
+                m_iconTrash, wxDefaultPosition, wxDefaultSize,
+                wxBU_EXACTFIT | wxBORDER_NONE);
+            trash->SetToolTip(_("Supprimer"));
+            trash->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&){ RemoveModelAt(i); });
+            row->Add(trash, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+
+            sizer->Add(row, 0, wxEXPAND | wxTOP, 2);
+        }
+    }
+    m_modelsPanel->FitInside();
+    m_modelsPanel->Layout();
+}
+
+void MyFrame::HighlightModelRow(int index)
+{
+    const wxColour normal = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
+    const wxColour hi(200, 120, 0);   // orange = ligne survolée dans la vue 3D
+    for (int i = 0; i < (int)m_modelRowLabels.size(); ++i)
+    {
+        wxStaticText* lbl = m_modelRowLabels[i];
+        if (!lbl) continue;
+        lbl->SetForegroundColour(i == index ? hi : normal);
+        lbl->Refresh();
+    }
+}
+
+void MyFrame::SelectModelRow(int index)
+{
+    MyGLCanvas* canvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+    if (!canvas || !canvas->GetVModels())
+        return;
+    Model* mdl = canvas->GetVModels()->GetModel((size_t)index);
+    if (!mdl)
+        return;
+    canvas->SetSelectedModel(mdl);
+    UpdateModelsList();       // restyle (gras sur la ligne sélectionnée)
+    UpdatePropertiesGrid();   // Model information suit la sélection
+}
+
+void MyFrame::ToggleModelVisibility(int index)
+{
+    MyGLCanvas* canvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+    if (!canvas || !canvas->GetVModels())
+        return;
+    Model* mdl = canvas->GetVModels()->GetModel((size_t)index);
+    if (!mdl)
+        return;
+    mdl->m_visible = !mdl->m_visible;
+    canvas->Refresh(false);
+    UpdateModelsList();   // met à jour l'icône œil / œil barré
+}
+
+void MyFrame::RemoveModelAt(int index)
+{
+    MyGLCanvas* canvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+    if (!canvas || !canvas->GetVModels())
+        return;
+
+    // Détache les maillages du renderer avant destruction (le MeshRenderer indexe
+    // par Mesh* : un pointeur détruit resté indexé provoquerait un accès invalide).
+    Model* mdl = canvas->GetVModels()->GetModel((size_t)index);
+    if (mdl)
+        for (auto* mesh : mdl->m_meshes.GetMeshes())
+            if (mesh) MeshRenderer::getInstance()->RemoveMesh(mesh);
+
+    canvas->ClearHoveredModel();   // le Model survolé peut être celui qu'on retire
+    if (canvas->GetSelectedModel() == mdl)
+        canvas->SetSelectedModel(nullptr);   // évite un pointeur pendouillant
+    canvas->GetVModels()->Remove((size_t)index);
+    canvas->Refresh(false);
+    OnSceneChanged();     // reconstruit la liste + panneaux
+}
+
 void MyFrame::UpdatePropertiesGrid()
 {
     MyGLCanvas* pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
     if (!pGLCanvas)
         return;
 
-    auto pObject = pGLCanvas->GetVMeshes();
+    // Reconstruit d'abord le panneau "Models" (qui auto-sélectionne le 1er Model si
+    // aucun ne l'est encore).
+    UpdateModelsList();
+
+    // Panneau "Model information" : infos du Model SÉLECTIONNÉ dans "Models". Si rien
+    // n'est sélectionné (ex. le Model sélectionné vient d'être supprimé) -> infos VIDES.
+    Model* selected = pGLCanvas->GetSelectedModel();
+    if (!selected)
+    {
+        m_propertiesGrid->ChangePropertyValue("Vertices",           wxVariant(0));
+        m_propertiesGrid->ChangePropertyValue("Faces",              wxVariant(0));
+        m_propertiesGrid->ChangePropertyValue("Meshes",             wxVariant(0));
+        m_propertiesGrid->ChangePropertyValue("Triangle mesh",      wxVariant(wxString()));
+        m_propertiesGrid->ChangePropertyValue("Borders",            wxVariant(0));
+        m_propertiesGrid->ChangePropertyValue("Non manifold edges", wxVariant(0));
+        if (m_hierarchyMeshes)    m_hierarchyMeshes->DeleteAllItems();
+        if (m_hierarchyMaterials) m_hierarchyMaterials->DeleteAllItems();
+        return;
+    }
+    VMeshes* pObject = &selected->m_meshes;
+
     m_propertiesGrid->ChangePropertyValue("Vertices", wxVariant(static_cast<int>(pObject->GetNVertices())));
     m_propertiesGrid->ChangePropertyValue("Faces", wxVariant(static_cast<int>(pObject->GetNFaces())));
     m_propertiesGrid->ChangePropertyValue("Meshes", wxVariant(static_cast<int>(pObject->GetNMeshes())));
@@ -1341,7 +1568,6 @@ void MyFrame::UpdatePropertiesGrid()
 
     m_propertiesGrid->ChangePropertyValue("Borders", wxVariant(static_cast<int>(pGLCanvas->GetNBorders())));
     m_propertiesGrid->ChangePropertyValue("Non manifold edges", wxVariant(static_cast<int>(pGLCanvas->GetNNonManifoldEdges())));
-
 
     char n[64];
     if (m_hierarchyMeshes)

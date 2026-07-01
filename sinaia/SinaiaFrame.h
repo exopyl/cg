@@ -7,6 +7,7 @@
 #include "wx/radiobut.h"
 #include "wx/spinctrl.h"
 #include "wx/listbase.h"
+#include "wx/bitmap.h"
 
 #include <memory>
 #include <unordered_map>
@@ -17,6 +18,8 @@
 class wxPropertyGrid;
 class wxGenericDirCtrl;
 class wxListCtrl;
+class wxScrolledWindow;
+class wxStaticText;
 class PropertyPanel;
 class CurvaturePanel;
 class DecimationPanel;
@@ -93,6 +96,7 @@ class MyFrame : public wxFrame
     ID_PROPERTIESCTRL,
     ID_DIRCTRL,
 	ID_FILESCTRL,
+	ID_OPENFILESLIST,          // panneau "Models" (wxScrolledWindow)
 
     ID_FILE_EXPORT_IMAGE,
 
@@ -188,6 +192,18 @@ public:
     // Load a model file into a new tab. Used by the remote console ('open').
     void LoadModelFile(const wxString& filename) { OpenDocument(filename); }
 
+    // Rafraîchit les panneaux dépendant de la scène (arbre d'info à deux niveaux,
+    // panneaux contextuels) — appelé par la cible de glisser-déposer après un ajout.
+    void OnSceneChanged();
+
+    // Surligne la ligne du panneau "Models" correspondant au Model survolé dans la
+    // vue 3D (index, ou -1 pour aucun). Appelé par le canvas au changement de survol.
+    void HighlightModelRow(int index);
+
+    // Rafraîchit "Models" (restyle la sélection) + "Model information", après que le
+    // canvas a changé le Model sélectionné (clic sur un modèle dans la vue 3D).
+    void RefreshModelSelection() { UpdatePropertiesGrid(); }
+
 private:
     wxTextCtrl* CreateTextCtrl(const wxString& text = wxEmptyString);
     wxGrid* CreateGrid();
@@ -231,6 +247,9 @@ private:
 
     void OnDirCtrlSelectionChanged(wxTreeEvent& evt);
     void OnFilesCtrlListItemActivated(wxListEvent& evt);
+    // Démarre un glisser du fichier sélectionné dans le panneau des fichiers ; le
+    // canvas (ModelDropTarget) l'ajoute alors à la scène courante via AppendModel.
+    void OnFilesCtrlBeginDrag(wxListEvent& evt);
 
     void OnNotebookPageChanged(wxAuiNotebookEvent& event);
 
@@ -290,6 +309,8 @@ private:
 private:
     void OpenDocument(const wxString& filename);
     void UpdatePropertiesGrid();
+    // Peuple le panneau "Models" (une ligne par Model de la vue courante, case = visible).
+    void UpdateModelsList();
 
     // Adaptive docking: show only the side panes relevant to the active tab.
     // The Parameters pane is shown iff the active canvas drives a
@@ -373,6 +394,16 @@ private:
     wxPropertyGrid* m_propertiesGrid = nullptr;
     wxGenericDirCtrl* m_dcDirectory = nullptr;
     wxListCtrl* m_filesCtrl = nullptr;
+
+    // Panneau "Models" : une ligne par Model de la vue courante = nom + bouton œil
+    // (visibilité) + bouton poubelle (suppression). Reconstruit par UpdateModelsList.
+    wxScrolledWindow* m_modelsPanel = nullptr;
+    std::vector<wxStaticText*> m_modelRowLabels;   // libellés des lignes (surbrillance survol)
+    wxBitmap m_iconEye, m_iconEyeOff, m_iconTrash;
+    void BuildModelsIcons();          // dessine les icônes une fois
+    void ToggleModelVisibility(int index);   // œil : bascule Model::m_visible
+    void RemoveModelAt(int index);           // poubelle : retire le Model de VModels
+    void SelectModelRow(int index);          // clic ligne : sélectionne -> Model information
 
     wxTreeCtrl* CreateHierarchyMeshesTreeCtrl();
     wxTreeCtrl* m_hierarchyMeshes = nullptr;

@@ -125,10 +125,17 @@ bool savePointCloudPly(const std::string& path, const PointCloud& cloud)
     return (bool)f;
 }
 
-std::size_t removeDominantPlane(PointCloud& cloud, float distThreshRel, int iterations)
+namespace {
+
+// RANSAC : ajuste le plus grand plan du nuage. Renvoie true si un plan dominant
+// existe (>= n/10 inliers), en remplissant la normale unitaire n_out[3], l'offset
+// d_out (plan : n·x + d = 0) et le seuil d'inlier absolu thr_out. Utilisé à la fois
+// par removeDominantPlane (filtrage) et orientSceneWithPlane (mise à niveau).
+bool fitDominantPlane(const PointCloud& cloud, float distThreshRel, int iterations,
+                      float n_out[3], float& d_out, float& thr_out)
 {
     const std::size_t n = cloud.size();
-    if (n < 3) return 0;
+    if (n < 3) return false;
     const float* P = cloud.positions.data();
     auto at = [&](std::size_t i, int a) { return P[3*i + a]; };
 
@@ -139,7 +146,7 @@ std::size_t removeDominantPlane(PointCloud& cloud, float distThreshRel, int iter
         { float v = at(i,a); if (v<mn[a]) mn[a]=v; if (v>mx[a]) mx[a]=v; }
     const float diag = std::sqrt((mx[0]-mn[0])*(mx[0]-mn[0]) + (mx[1]-mn[1])*(mx[1]-mn[1]) + (mx[2]-mn[2])*(mx[2]-mn[2]));
     const float thr = distThreshRel * diag;
-    if (thr <= 0.f) return 0;
+    if (thr <= 0.f) return false;
 
     std::mt19937 rng(12345);
     std::uniform_int_distribution<std::size_t> U(0, n - 1);
@@ -162,8 +169,22 @@ std::size_t removeDominantPlane(PointCloud& cloud, float distThreshRel, int iter
             if (std::fabs(nx*at(i,0)+ny*at(i,1)+nz*at(i,2)+d) < thr) ++cnt;
         if (cnt > best) { best=cnt; bn[0]=nx; bn[1]=ny; bn[2]=nz; bd=d; }
     }
-    if (best < n / 10) return 0;   // pas de plan vraiment dominant
+    if (best < n / 10) return false;   // pas de plan vraiment dominant
+    n_out[0]=bn[0]; n_out[1]=bn[1]; n_out[2]=bn[2]; d_out=bd; thr_out=thr;
+    return true;
+}
 
+} // namespace
+
+std::size_t removeDominantPlane(PointCloud& cloud, float distThreshRel, int iterations)
+{
+    float bn[3], bd, thr;
+    if (!fitDominantPlane(cloud, distThreshRel, iterations, bn, bd, thr))
+        return 0;
+
+    const std::size_t n = cloud.size();
+    const float* P = cloud.positions.data();
+    auto at = [&](std::size_t i, int a) { return P[3*i + a]; };
     const bool hn = cloud.hasNormals(), hc = cloud.hasColors();
     PointCloud out;
     out.positions.reserve(cloud.positions.size());
@@ -179,6 +200,63 @@ std::size_t removeDominantPlane(PointCloud& cloud, float distThreshRel, int iter
     const std::size_t removed = n - out.size();
     cloud = std::move(out);
     return removed;
+}
+
+bool orientSceneWithPlane(PointCloud& cloud, float distThreshRel, int iterations)
+{
+    float pn[3], pd, thr;
+    if (!fitDominantPlane(cloud, distThreshRel, iterations, pn, pd, thr))
+        return false;
+
+    const std::size_t N = cloud.size();
+    auto pos = [&](std::size_t i, int a) -> float& { return cloud.positions[3*i + a]; };
+
+    // Oriente la normale du plan vers le côté « objet » (points HORS plan) pour que la
+    // scène se retrouve du côté z >= 0 après transformation. Sans ça, le signe issu du
+    // RANSAC est arbitraire et l'objet pourrait se retrouver sous Oxy.
+    double side = 0.0;
+    for (std::size_t i = 0; i < N; ++i)
+    {
+        const float sd = pn[0]*pos(i,0)+pn[1]*pos(i,1)+pn[2]*pos(i,2)+pd;
+        if (std::fabs(sd) >= thr) side += sd;
+    }
+    if (side < 0.0) { pn[0]=-pn[0]; pn[1]=-pn[1]; pn[2]=-pn[2]; pd=-pd; }
+
+    // Base orthonormée directe (u, v, pn). La rotation R = lignes(u; v; pn) envoie pn
+    // sur +Z (et le plan sur un plan horizontal). u obtenu par Gram-Schmidt à partir
+    // d'un axe non colinéaire à pn ; v = pn × u. det(R)=+1 (rotation propre).
+    float u[3];
+    if (std::fabs(pn[0]) < 0.9f) { u[0]=1.f; u[1]=0.f; u[2]=0.f; }
+    else                        { u[0]=0.f; u[1]=1.f; u[2]=0.f; }
+    const float un = u[0]*pn[0]+u[1]*pn[1]+u[2]*pn[2];
+    u[0]-=un*pn[0]; u[1]-=un*pn[1]; u[2]-=un*pn[2];
+    const float ul = std::sqrt(u[0]*u[0]+u[1]*u[1]+u[2]*u[2]);
+    if (ul < 1e-12f) return false;
+    u[0]/=ul; u[1]/=ul; u[2]/=ul;
+    float v[3] = { pn[1]*u[2]-pn[2]*u[1], pn[2]*u[0]-pn[0]*u[2], pn[0]*u[1]-pn[1]*u[0] };
+
+    // Rotation puis translation z = pd : après R, un point du plan a z' = pn·x = -pd
+    // (car pn·x + pd = 0), donc z'' = z' + pd = 0 -> le plan tombe exactement sur Oxy ;
+    // un point objet garde z'' = pn·x + pd = sa distance signée au plan (> 0).
+    auto rotate = [&](float x, float y, float z, float& ox, float& oy, float& oz) {
+        ox = u[0]*x + u[1]*y + u[2]*z;
+        oy = v[0]*x + v[1]*y + v[2]*z;
+        oz = pn[0]*x + pn[1]*y + pn[2]*z;
+    };
+    for (std::size_t i = 0; i < N; ++i)
+    {
+        float ox, oy, oz;
+        rotate(pos(i,0), pos(i,1), pos(i,2), ox, oy, oz);
+        pos(i,0) = ox; pos(i,1) = oy; pos(i,2) = oz + pd;
+    }
+    if (cloud.hasNormals())
+        for (std::size_t i = 0; i < N; ++i)
+        {
+            float ox, oy, oz;
+            rotate(cloud.normals[3*i], cloud.normals[3*i+1], cloud.normals[3*i+2], ox, oy, oz);
+            cloud.normals[3*i]=ox; cloud.normals[3*i+1]=oy; cloud.normals[3*i+2]=oz;
+        }
+    return true;
 }
 
 } // namespace recon

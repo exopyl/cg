@@ -14,6 +14,7 @@
 #include "../src/cgmesh/recon_depth_scaler.h"
 #include "../src/cgmesh/recon_pose_bundle.h"
 #include "../src/cgmesh/recon_evaluate.h"
+#include "../src/cgmesh/recon_io.h"
 #include "../src/cgmesh/mesh_metrics.h"
 #include "../src/cgmesh/icp.h"
 #include "../src/cgmesh/mesh.h"
@@ -637,6 +638,49 @@ TEST(TEST_cgmesh_recon, evaluate_relative_zero_on_degenerate_bbox)
 
     EXPECT_FLOAT_EQ(m.hausdorffRelative, 0.f);   // diagonale(mesh) = 0 -> garde
     EXPECT_GT(m.hausdorff, 0.f);                 // point à l'origine vs surface du cube
+}
+
+// === recon_io : orientation de la scène sur le plan dominant (mise à niveau Oxy) ===
+// Plan incliné synthétique NE passant pas par l'origine + points « objet » au-dessus.
+// Après orientSceneWithPlane : le plan tombe sur z=0 (normale -> +Z) et l'objet reste
+// au-dessus (z>0), à sa distance signée d'origine.
+TEST(TEST_cgmesh_recon, orient_scene_with_plane)
+{
+    const float n0[3] = { 0.3f, 0.2f, 1.0f };
+    const float nl = std::sqrt(n0[0]*n0[0]+n0[1]*n0[1]+n0[2]*n0[2]);
+    const float N[3] = { n0[0]/nl, n0[1]/nl, n0[2]/nl };
+    const float B[3] = { 1.f, 1.f, 3.f };                 // point du plan (hors origine)
+    float e1[3] = { N[1], -N[0], 0.f };                   // base in-plane (e1 ⟂ N)
+    const float e1l = std::sqrt(e1[0]*e1[0]+e1[1]*e1[1]+e1[2]*e1[2]);
+    e1[0]/=e1l; e1[1]/=e1l; e1[2]/=e1l;
+    const float e2[3] = { N[1]*e1[2]-N[2]*e1[1], N[2]*e1[0]-N[0]*e1[2], N[0]*e1[1]-N[1]*e1[0] };
+
+    recon::PointCloud pc;
+    const int G = 11;
+    size_t nPlane = 0;
+    for (int gx=-G; gx<=G; ++gx) for (int gy=-G; gy<=G; ++gy)
+    {
+        for (int k=0;k<3;++k) pc.positions.push_back(B[k] + gx*0.2f*e1[k] + gy*0.2f*e2[k]);
+        for (int k=0;k<3;++k) pc.normals.push_back(N[k]);
+        ++nPlane;
+    }
+    for (int i=0;i<20;++i)                                 // objet : +0.5 le long de N
+    {
+        const float s = -1.f + 0.1f*i;
+        for (int k=0;k<3;++k) pc.positions.push_back(B[k] + 0.5f*N[k] + s*0.3f*e1[k]);
+        for (int k=0;k<3;++k) pc.normals.push_back(N[k]);
+    }
+    ASSERT_TRUE(pc.hasNormals());
+
+    ASSERT_TRUE(recon::orientSceneWithPlane(pc));
+
+    for (size_t i=0;i<nPlane;++i)                          // plan -> Oxy, normale -> +Z
+    {
+        EXPECT_NEAR(pc.positions[3*i+2], 0.f, 0.02f);
+        EXPECT_GT(pc.normals[3*i+2], 0.98f);
+    }
+    for (size_t i=nPlane;i<pc.size();++i)                  // objet -> au-dessus (~0.5)
+        EXPECT_NEAR(pc.positions[3*i+2], 0.5f, 0.05f);
 }
 
 // === Étape [10] : texturation projective (ProjectiveTexturer) ===
