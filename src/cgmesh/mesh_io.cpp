@@ -137,8 +137,22 @@ int Mesh::import_mtl (const char *filename, const char *path)
 		else if (sscanf(line, " Tf %f %f %f", &r, &g, &b) == 3 && mat) {} // transmissive
 		else if (sscanf(line, " d %f", &a) == 1) {} // ...
 		else if (sscanf(line, " Tr %f", &a) == 1) {} // ...
-		else if (sscanf(line, " Ns %f Ni %f", &r, &g) == 2) {} // ...
-		else if (sscanf(line, " Ns %f", &r) == 1) {} // ...
+		// OBJ Ns is a Phong specular exponent (0..1000). GL_SHININESS caps at
+		// 128, and ActivateMaterial multiplies the stored value by 128, so we
+		// store a 0..1 fraction. Without this the exponent stays at the default
+		// 0, which makes pow(N.H, 0) == 1 everywhere: the full Ks specular is
+		// then added to every lit fragment and any Ks>0 material saturates to
+		// white ("all-white with grey shadow zones").
+		else if (sscanf(line, " Ns %f Ni %f", &r, &g) == 2 && mat)
+		{
+			float e = r; if (e < 0.f) e = 0.f; if (e > 128.f) e = 128.f;
+			mat->SetShininess (e / 128.f);
+		}
+		else if (sscanf(line, " Ns %f", &r) == 1 && mat)
+		{
+			float e = r; if (e < 0.f) e = 0.f; if (e > 128.f) e = 128.f;
+			mat->SetShininess (e / 128.f);
+		}
 		else if (sscanf(line, " Ni %f", &r) == 1) {} // ...
 		else if (sscanf(line, " illum %d", &dummy) == 1) {} // ...
 		else if (sscanf(line, " map_Kd %s", name) == 1) { // diffuse texture
