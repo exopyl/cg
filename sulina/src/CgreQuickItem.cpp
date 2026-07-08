@@ -38,6 +38,8 @@ namespace {
 
 constexpr const char *kTexturedVertSpv = SULINA_SHADER_DIR "/textured.vert.spv";
 constexpr const char *kTexturedFragSpv = SULINA_SHADER_DIR "/textured.frag.spv";
+constexpr const char *kUnlitVertSpv    = SULINA_SHADER_DIR "/unlit.vert.spv";
+constexpr const char *kUnlitFragSpv    = SULINA_SHADER_DIR "/unlit.frag.spv";
 
 // textured.vert pushes 2 mat4 = 128 bytes via push constants.
 struct PushConstants {
@@ -625,10 +627,42 @@ void CgreQuickItem::ensurePipeline()
 
         m_pipeline = std::make_unique<cgre2::Pipeline>(dctx, info);
         cgre2::Logger::info("Viewer", "pipeline built against Qt render pass");
+
+        // Line + point pipelines: unlit shaders (no sampler → no descriptor
+        // sets), same VertexPBR vertex layout, different primitive topology.
+        // They draw Mesh::m_pLines / m_pPoints as part of the mesh.
+        cgre2::ShaderModule &uvert = m_shaderManager->load(kUnlitVertSpv, VK_SHADER_STAGE_VERTEX_BIT);
+        cgre2::ShaderModule &ufrag = m_shaderManager->load(kUnlitFragSpv, VK_SHADER_STAGE_FRAGMENT_BIT);
+        m_unlitDescriptorLayouts = std::make_unique<cgre2::DescriptorLayouts>(
+            dctx, std::vector<const cgre2::ShaderModule *>{ &uvert, &ufrag });
+
+        cgre2::PipelineCreateInfo unlitInfo{};
+        unlitInfo.renderPass           = renderPass;
+        unlitInfo.vertexShader         = &uvert;
+        unlitInfo.fragmentShader       = &ufrag;
+        unlitInfo.vertexLayout         = &m_vertexLayout;
+        unlitInfo.descriptorSetLayouts = m_unlitDescriptorLayouts->getSetLayouts();
+        unlitInfo.pushConstantRanges   = m_unlitDescriptorLayouts->getPushConstantRanges();
+        unlitInfo.cullMode             = VK_CULL_MODE_NONE;
+        unlitInfo.depthTest            = true;
+        unlitInfo.depthWrite           = true;
+        unlitInfo.depthCompareOp       = VK_COMPARE_OP_LESS;
+
+        cgre2::PipelineCreateInfo lineInfo = unlitInfo;
+        lineInfo.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+        m_linePipeline = std::make_unique<cgre2::Pipeline>(dctx, lineInfo);
+
+        cgre2::PipelineCreateInfo pointInfo = unlitInfo;
+        pointInfo.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+        m_pointPipeline = std::make_unique<cgre2::Pipeline>(dctx, pointInfo);
+        cgre2::Logger::info("Viewer", "line + point pipelines built");
     } catch (const std::exception &e) {
         cgre2::Logger::error("Viewer", std::string("pipeline build failed: ") + e.what());
         m_pipeline.reset();
+        m_linePipeline.reset();
+        m_pointPipeline.reset();
         m_descriptorLayouts.reset();
+        m_unlitDescriptorLayouts.reset();
         m_shaderManager.reset();
     }
 }
@@ -747,12 +781,20 @@ void CgreQuickItem::rebuildMeshBuffers()
         m_indexCounts.clear();
         m_materialSets.clear();
         m_submeshTextures.clear();
+        m_lineVertexBuffers.clear();
+        m_lineIndexBuffers.clear();
+        m_lineIndexCounts.clear();
+        m_pointVertexBuffers.clear();
+        m_pointIndexBuffers.clear();
+        m_pointIndexCounts.clear();
         m_uploadedMeshes = nullptr;
         return;
     }
 
-    // Idempotency: same VMeshes pointer + already populated → no-op.
-    if (meshes == m_uploadedMeshes && !m_vertexBuffers.empty())
+    // Idempotency: same VMeshes pointer + already populated → no-op. A pure
+    // lines/points mesh has no surface VBOs, so also check the primitive ones.
+    if (meshes == m_uploadedMeshes &&
+        (!m_vertexBuffers.empty() || !m_lineVertexBuffers.empty() || !m_pointVertexBuffers.empty()))
         return;
 
     m_vertexBuffers.clear();
@@ -760,6 +802,12 @@ void CgreQuickItem::rebuildMeshBuffers()
     m_indexCounts.clear();
     m_materialSets.clear();
     m_submeshTextures.clear();
+    m_lineVertexBuffers.clear();
+    m_lineIndexBuffers.clear();
+    m_lineIndexCounts.clear();
+    m_pointVertexBuffers.clear();
+    m_pointIndexBuffers.clear();
+    m_pointIndexCounts.clear();
 
     cgre2::DeviceContext &dctx = m_adapter->context();
     std::size_t totalVerts = 0, totalIndices = 0;
@@ -774,6 +822,49 @@ void CgreQuickItem::rebuildMeshBuffers()
         for (Mesh *mesh : meshes->GetMeshes()) {
             if (!mesh || mesh->GetNVertices() == 0)
                 continue;
+
+            // Line ('l') and point ('p') primitives belong to the mesh and are
+            // built first — a lines/points-only mesh has no faces, so the
+            // surface path below `continue`s and would otherwise emit nothing.
+            // They index the raw mesh vertices, so they get their own VBO built
+            // straight from m_pVertices (flat colour; the 0.5 grey placeholder
+            // Mesh::Init writes into m_pVertexColors is not a usable colour).
+            {
+                const unsigned int nV = mesh->GetNVertices();
+                auto buildPrim = [&](const std::vector<unsigned int> &idx,
+                                     float r, float g, float b,
+                                     std::vector<std::unique_ptr<cgre2::VertexBuffer>> &vbs,
+                                     std::vector<std::unique_ptr<cgre2::IndexBuffer>> &ibs,
+                                     std::vector<uint32_t> &counts) {
+                    if (idx.empty())
+                        return;
+                    std::vector<uint32_t> indices;
+                    indices.reserve(idx.size());
+                    for (unsigned int v : idx)
+                        if (v < nV) indices.push_back(v);   // defensive range check
+                    if (indices.empty())
+                        return;
+                    std::vector<cgre2::VertexPBR> verts(nV);
+                    for (unsigned int i = 0; i < nV; ++i) {
+                        verts[i] = cgre2::VertexPBR{};
+                        verts[i].position[0] = mesh->m_pVertices[3 * i + 0];
+                        verts[i].position[1] = mesh->m_pVertices[3 * i + 1];
+                        verts[i].position[2] = mesh->m_pVertices[3 * i + 2];
+                        verts[i].normal[1]   = 1.0f;   // unused by the unlit shader
+                        verts[i].color[0] = r; verts[i].color[1] = g; verts[i].color[2] = b;
+                    }
+                    vbs.push_back(std::make_unique<cgre2::VertexBuffer>(
+                        dctx, verts.data(),
+                        static_cast<VkDeviceSize>(verts.size() * sizeof(cgre2::VertexPBR)),
+                        static_cast<uint32_t>(verts.size())));
+                    ibs.push_back(std::make_unique<cgre2::IndexBuffer>(dctx, indices));
+                    counts.push_back(static_cast<uint32_t>(indices.size()));
+                };
+                buildPrim(mesh->m_pLines, 0.15f, 0.45f, 0.85f,
+                          m_lineVertexBuffers, m_lineIndexBuffers, m_lineIndexCounts);
+                buildPrim(mesh->m_pPoints, 0.90f, 0.20f, 0.20f,
+                          m_pointVertexBuffers, m_pointIndexBuffers, m_pointIndexCounts);
+            }
 
             // Build the polygon-preserving render data (handles n-gons,
             // shared normals where possible). Shares the same path the
@@ -891,6 +982,12 @@ void CgreQuickItem::rebuildMeshBuffers()
         m_indexCounts.clear();
         m_materialSets.clear();
         m_submeshTextures.clear();
+        m_lineVertexBuffers.clear();
+        m_lineIndexBuffers.clear();
+        m_lineIndexCounts.clear();
+        m_pointVertexBuffers.clear();
+        m_pointIndexBuffers.clear();
+        m_pointIndexCounts.clear();
         m_uploadedMeshes = nullptr;
     }
 }
@@ -923,7 +1020,11 @@ void CgreQuickItem::onBeforeRenderPassRecording()
         return;
 
     ensurePipeline();
-    if (!m_pipeline || m_vertexBuffers.empty())
+    if (!m_pipeline)
+        return;
+    // A pure lines/points mesh has no surface VBOs but still has primitives.
+    if (m_vertexBuffers.empty() &&
+        m_lineVertexBuffers.empty() && m_pointVertexBuffers.empty())
         return;
 
     // Allocate one material descriptor set per sub-mesh on first use (and
@@ -1019,6 +1120,32 @@ void CgreQuickItem::onBeforeRenderPassRecording()
         }
         vkCmdDrawIndexed(cmd, m_indexCounts[i], 1, 0, 0, 0);
     }
+
+    // Line + point primitives (mesh 'l' / 'p'). Unlit pipelines, same camera
+    // push constants, no descriptor sets. Drawn after the surface.
+    auto drawPrims = [&](cgre2::Pipeline *pipe,
+                         const std::vector<std::unique_ptr<cgre2::VertexBuffer>> &vbs,
+                         const std::vector<std::unique_ptr<cgre2::IndexBuffer>> &ibs,
+                         const std::vector<uint32_t> &counts) {
+        if (!pipe || vbs.empty())
+            return;
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe->getPipeline());
+        vkCmdSetViewport(cmd, 0, 1, &vp);
+        vkCmdSetScissor (cmd, 0, 1, &scissor);
+        // Unlit shaders declare only mvp (first 64 bytes of PushConstants).
+        vkCmdPushConstants(cmd, pipe->getPipelineLayout(),
+                           VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           static_cast<uint32_t>(sizeof(pc.mvp)), &pc);
+        for (std::size_t i = 0; i < vbs.size(); ++i) {
+            VkBuffer     vbo    = vbs[i]->getBuffer();
+            VkDeviceSize offset = 0;
+            vkCmdBindVertexBuffers(cmd, 0, 1, &vbo, &offset);
+            vkCmdBindIndexBuffer  (cmd, ibs[i]->getBuffer(), 0, VK_INDEX_TYPE_UINT32);
+            vkCmdDrawIndexed(cmd, counts[i], 1, 0, 0, 0);
+        }
+    };
+    drawPrims(m_linePipeline.get(),  m_lineVertexBuffers,  m_lineIndexBuffers,  m_lineIndexCounts);
+    drawPrims(m_pointPipeline.get(), m_pointVertexBuffers, m_pointIndexBuffers, m_pointIndexCounts);
 }
 
 void CgreQuickItem::onSceneGraphInvalidated()
@@ -1033,8 +1160,17 @@ void CgreQuickItem::releaseGpuResources()
     m_indexCounts.clear();
     m_materialSets.clear();
     m_submeshTextures.clear();
+    m_lineVertexBuffers.clear();
+    m_lineIndexBuffers.clear();
+    m_lineIndexCounts.clear();
+    m_pointVertexBuffers.clear();
+    m_pointIndexBuffers.clear();
+    m_pointIndexCounts.clear();
+    m_linePipeline.reset();
+    m_pointPipeline.reset();
     m_pipeline.reset();
     m_descriptorLayouts.reset();
+    m_unlitDescriptorLayouts.reset();
     m_shaderManager.reset();
     // Pool + textures hold a DeviceContext& — drop them before the adapter
     // that owns the context.

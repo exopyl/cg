@@ -267,7 +267,15 @@ void MyGLCanvas::ApplyNormalization(bool normalize)
 	// model loads invisible. Switch to point display so it is visible on import.
 	if (vm->GetNVertices() > 0 && vm->GetNFaces() == 0)
 	{
-		prop.display_points = true;
+		// If the model carries explicit line ('l') / point ('p') primitives,
+		// they draw themselves (with their configurable line/point colours). The
+		// all-vertices point overlay would then draw duplicate points on top and,
+		// winning the equal-depth test, mask the point colour — so only enable it
+		// for a genuine vertex-only cloud.
+		bool hasPrimitives = false;
+		for (auto* m : vm->GetMeshes())
+			if (m && (m->GetNLines() > 0 || m->GetNPoints() > 0)) { hasPrimitives = true; break; }
+		prop.display_points = !hasPrimitives;
 		prop.display_fill   = false;
 	}
 
@@ -502,7 +510,10 @@ void MyGLCanvas::LoadModel(const wxString& filename, const ImportSettings& setti
 	// Nomme le Model actif d'après le fichier (affiché dans l'arbre d'info).
 	if (VModels* scene = GetVModels())
 		if (scene->GetNModels() > 0)
+		{
 			scene->GetModels()[0]->m_name = std::string(wxFileName(filename).GetFullName().ToUTF8().data());
+			scene->GetModels()[0]->m_path = std::string(filename.ToUTF8().data());
+		}
 
 	if (settings.triangulate || settings.mergeVertices)
 	{
@@ -555,6 +566,7 @@ Model* MyGLCanvas::AppendModel(const wxString& filename)
 	const std::string base = std::string(wxFileName(filename).GetFullName().ToUTF8().data());
 
 	Model* mdl = m_pVModels->Add(base);
+	mdl->m_path = path;
 	if (!mdl->m_meshes.load(path.c_str()) || mdl->m_meshes.GetNMeshes() == 0)
 	{
 		m_pVModels->Remove(m_pVModels->GetNModels() - 1);   // retire le Model vide
@@ -584,7 +596,17 @@ Model* MyGLCanvas::AppendModel(const wxString& filename)
 	// forcer le mode points quand un maillage est déjà affiché).
 	if (m_pVModels->GetNVertices() > 0 && m_pVModels->GetNFaces() == 0)
 	{
-		prop.display_points = true;
+		// Explicit line/point primitives render themselves (with their own
+		// colours); only fall back to the all-vertices point overlay for a pure
+		// vertex cloud, else it draws duplicate points that mask point_color.
+		bool hasPrimitives = false;
+		for (const auto& mdl : m_pVModels->GetModels())
+		{
+			for (const auto& m : mdl->m_meshes.GetMeshes())
+				if (m && (m->GetNLines() > 0 || m->GetNPoints() > 0)) { hasPrimitives = true; break; }
+			if (hasPrimitives) break;
+		}
+		prop.display_points = !hasPrimitives;
 		prop.display_fill   = false;
 	}
 
@@ -595,6 +617,65 @@ Model* MyGLCanvas::AppendModel(const wxString& filename)
 		*m_CtrlLog << wxString::Format(_T("Ajoute: %s (%zu maillages)\n"),
 		                               filename, mdl->m_meshes.GetNMeshes());
 	return mdl;
+}
+
+bool MyGLCanvas::ReloadModel(Model* mdl)
+{
+	if (!mdl || mdl->m_path.empty() || !m_pVModels)
+		return false;
+
+	const wxString path = wxString::FromUTF8(mdl->m_path.c_str());
+	if (!wxFileName::FileExists(path))
+	{
+		if (m_CtrlLog)
+			*m_CtrlLog << wxString::Format(_T("Rafraichissement impossible, fichier introuvable: %s\n"), path);
+		return false;
+	}
+
+	// Détache les anciens maillages du renderer AVANT de les détruire (le
+	// MeshRenderer indexe par Mesh* : un pointeur détruit resté indexé
+	// provoquerait un accès invalide au prochain rendu).
+	for (auto* mesh : mdl->m_meshes.GetMeshes())
+		if (mesh) MeshRenderer::getInstance()->RemoveMesh(mesh);
+
+	// Le Model survolé peut être celui qu'on recharge.
+	if (m_hoveredModel == mdl)
+		ClearHoveredModel();
+
+	// Cas à distinguer : seul dans la scène -> on recadre comme à un chargement ;
+	// superposé à d'autres -> on préserve la vue pour ne pas perturber les autres.
+	const bool sole = (m_pVModels->GetNModels() == 1);
+
+	// Recharge en place depuis le fichier d'origine.
+	mdl->m_meshes.clean();
+	if (!mdl->m_meshes.load(mdl->m_path.c_str()) || mdl->m_meshes.GetNMeshes() == 0)
+	{
+		if (m_CtrlLog)
+			*m_CtrlLog << wxString::Format(_T("Echec du rafraichissement: %s\n"), path);
+		return false;   // le Model est désormais vide
+	}
+
+	for (auto* mesh : mdl->m_meshes.GetMeshes())
+		if (mesh) mesh->ComputeNormals();
+	mdl->BuildBVH();     // picking surface (géométrie statique après rechargement)
+	mdl->ComputeBBox();
+
+	if (sole)
+	{
+		m_pTrackball->ResetTransformations();
+		BoundingBox bb = m_pVModels->AggregateBBox(true);
+		bb.AddPoint( 2.f,  2.f,  1.f);
+		bb.AddPoint(-2.f, -2.f, -1.f);
+		FrameCamera(bb);
+	}
+
+	UpdateTopologicIssues();
+	Refresh(false);
+
+	if (m_CtrlLog)
+		*m_CtrlLog << wxString::Format(_T("Rafraichi: %s (%zu maillages)\n"),
+		                               path, mdl->m_meshes.GetNMeshes());
+	return true;
 }
 
 void MyGLCanvas::SaveModel(const wxString& filename)

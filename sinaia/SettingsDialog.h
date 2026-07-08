@@ -7,6 +7,7 @@
 #include <wx/slider.h>
 #include <wx/stattext.h>
 #include <wx/sizer.h>
+#include <wx/clrpicker.h>
 #include <wx/aui/auibook.h>
 
 #include <functional>
@@ -127,9 +128,12 @@ public:
         p.notebookStyle = style;
         p.notebookTheme = m_theme->GetSelection();
 
-        // 3D Panel tab: line width / point size (integer pixels).
-        p.lineWidth = static_cast<float>(m_lineWidth->GetValue());
-        p.pointSize = static_cast<float>(m_pointSize->GetValue());
+        // 3D Panel tab: line width / point size (integer pixels) and the
+        // colours used to draw the mesh's line ('l') / point ('p') primitives.
+        p.lineWidth  = static_cast<float>(m_lineWidth->GetValue());
+        p.pointSize  = static_cast<float>(m_pointSize->GetValue());
+        p.lineColor  = m_lineColor->GetColour();
+        p.pointColor = m_pointColor->GetColour();
         return p;
     }
 
@@ -160,8 +164,12 @@ private:
                                    wxSL_HORIZONTAL | wxSL_AUTOTICKS);
         m_pointSizeLabel = new wxStaticText(page, wxID_ANY, PxLabel(m_pointSize->GetValue()));
 
-        // label | slider (grows) | value
-        wxFlexGridSizer* grid = new wxFlexGridSizer(2, 3, 8, 10);
+        // Separate colours for the mesh's line ('l') and point ('p') primitives.
+        m_lineColor  = new wxColourPickerCtrl(page, wxID_ANY, panel.lineColor);
+        m_pointColor = new wxColourPickerCtrl(page, wxID_ANY, panel.pointColor);
+
+        // label | control (grows) | value
+        wxFlexGridSizer* grid = new wxFlexGridSizer(0, 3, 8, 10);
         grid->AddGrowableCol(1, 1);
         grid->Add(new wxStaticText(page, wxID_ANY, _("Line width")), 0, wxALIGN_CENTER_VERTICAL);
         grid->Add(m_lineWidth, 1, wxEXPAND);
@@ -169,6 +177,12 @@ private:
         grid->Add(new wxStaticText(page, wxID_ANY, _("Point size")), 0, wxALIGN_CENTER_VERTICAL);
         grid->Add(m_pointSize, 1, wxEXPAND);
         grid->Add(m_pointSizeLabel, 0, wxALIGN_CENTER_VERTICAL);
+        grid->Add(new wxStaticText(page, wxID_ANY, _("Line color")), 0, wxALIGN_CENTER_VERTICAL);
+        grid->Add(m_lineColor, 0, wxALIGN_CENTER_VERTICAL);
+        grid->AddSpacer(0);
+        grid->Add(new wxStaticText(page, wxID_ANY, _("Point color")), 0, wxALIGN_CENTER_VERTICAL);
+        grid->Add(m_pointColor, 0, wxALIGN_CENTER_VERTICAL);
+        grid->AddSpacer(0);
 
         wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
         sizer->Add(grid, 0, wxEXPAND | wxALL, 10);
@@ -176,6 +190,8 @@ private:
 
         m_lineWidth->Bind(wxEVT_SLIDER, &SettingsDialog::OnViewChanged, this);
         m_pointSize->Bind(wxEVT_SLIDER, &SettingsDialog::OnViewChanged, this);
+        m_lineColor->Bind(wxEVT_COLOURPICKER_CHANGED, &SettingsDialog::OnViewChanged, this);
+        m_pointColor->Bind(wxEVT_COLOURPICKER_CHANGED, &SettingsDialog::OnViewChanged, this);
 
         return page;
     }
@@ -327,4 +343,6 @@ private:
     wxSlider*           m_pointSize;
     wxStaticText*       m_lineWidthLabel;
     wxStaticText*       m_pointSizeLabel;
+    wxColourPickerCtrl* m_lineColor;
+    wxColourPickerCtrl* m_pointColor;
 };

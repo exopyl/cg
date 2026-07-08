@@ -362,6 +362,8 @@ private:
     // applied to every open canvas and to tabs created afterwards.
     float m_lineWidth = 1.0f;   // wireframe/edge line width (pixels)
     float m_pointSize = 1.0f;   // point size (pixels)
+    wxColour m_lineColor  = wxColour(38, 115, 217);  // line ('l') primitive colour
+    wxColour m_pointColor = wxColour(230, 51, 51);   // point ('p') primitive colour
 
     // Operations applied to a model on import (edited via File > Settings).
     ImportSettings m_importSettings;
@@ -399,10 +401,11 @@ private:
     // (visibilité) + bouton poubelle (suppression). Reconstruit par UpdateModelsList.
     wxScrolledWindow* m_modelsPanel = nullptr;
     std::vector<wxStaticText*> m_modelRowLabels;   // libellés des lignes (surbrillance survol)
-    wxBitmap m_iconEye, m_iconEyeOff, m_iconTrash;
+    wxBitmap m_iconEye, m_iconEyeOff, m_iconTrash, m_iconRefresh;
     void BuildModelsIcons();          // dessine les icônes une fois
     void ToggleModelVisibility(int index);   // œil : bascule Model::m_visible
     void RemoveModelAt(int index);           // poubelle : retire le Model de VModels
+    void RefreshModelAt(int index);          // recharge le Model depuis son fichier
     void SelectModelRow(int index);          // clic ligne : sélectionne -> Model information
 
     wxTreeCtrl* CreateHierarchyMeshesTreeCtrl();

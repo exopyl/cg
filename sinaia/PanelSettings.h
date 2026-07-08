@@ -1,5 +1,7 @@
 #pragma once
 
+#include <wx/colour.h>
+
 //
 // Appearance options for the application's notebook panels, edited via the
 // "2D Panel" tab of the Settings dialog. These used to live in the
@@ -21,4 +23,8 @@ struct PanelSettings
     int   notebookTheme = 0;      // 0 = glossy (default), 1 = simple
     float lineWidth     = 1.0f;   // 3D view wireframe/edge line width (pixels)
     float pointSize     = 1.0f;   // 3D view point size (pixels)
+    // Colours of the mesh's line ('l') and point ('p') primitives. Defaults are
+    // the steel blue / red the renderer used before they became configurable.
+    wxColour lineColor  = wxColour(38, 115, 217);
+    wxColour pointColor = wxColour(230, 51, 51);
 };

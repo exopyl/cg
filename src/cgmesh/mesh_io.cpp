@@ -187,6 +187,37 @@ int Mesh::import_mtl (const char *filename, const char *path)
 	return 0;
 }
 
+// Parse the next whitespace-delimited index token of an OBJ 'l' / 'p' element
+// line, starting at *s. Reads the leading integer (the vertex reference; any
+// "/vt/vn" suffix is ignored, as those elements only need positions), resolves
+// OBJ's 1-based / negative indexing against the running vertex count, and
+// range-checks it. Advances *s past the token.
+// Returns false once the line holds no more tokens; otherwise returns true and
+// sets `out` to the resolved 0-based index, or -1 if the token was malformed or
+// out of range (caller skips those but keeps scanning the rest of the line).
+static bool nextObjElementIndex (char *&s, int runningCount, unsigned int nVertices, int &out)
+{
+	while (*s && isspace ((unsigned char)*s)) s++;
+	if (*s == '\0')
+		return false;
+
+	char *tok = s;
+	while (*s && !isspace ((unsigned char)*s)) s++;
+
+	out = -1;
+	int idx = 0;
+	if (sscanf (tok, "%d", &idx) == 1)
+	{
+		if (idx < 0)
+			idx = runningCount + idx;   // -1 => most recently declared vertex
+		else
+			idx--;                      // 1-based -> 0-based
+		if (idx >= 0 && (unsigned int) idx < nVertices)
+			out = idx;
+	}
+	return true;
+}
+
 int Mesh::import_obj (const char *filename)
 {
 	if (filename == nullptr)
@@ -399,6 +430,39 @@ int Mesh::import_obj (const char *filename)
 			m_pFaces[iface] = pFace;
 			iface++;
 		}
+		else if (strcmp (prefix, "l") == 0)
+		{
+			// Polyline: N vertex refs -> N-1 segments. Skip past the 'l'
+			// token (tolerating leading whitespace) and consume refs.
+			char *s = buffer;
+			while (*s && isspace ((unsigned char)*s)) s++;
+			while (*s && !isspace ((unsigned char)*s)) s++;
+
+			int prev = -1, idx;
+			while (nextObjElementIndex (s, ipoint, m_nVertices, idx))
+			{
+				if (idx < 0)
+					continue;   // malformed / out-of-range ref, skip
+				if (prev >= 0)
+				{
+					m_pLines.push_back ((unsigned int) prev);
+					m_pLines.push_back ((unsigned int) idx);
+				}
+				prev = idx;
+			}
+		}
+		else if (strcmp (prefix, "p") == 0)
+		{
+			// Point element: one or more vertex refs, one point each.
+			char *s = buffer;
+			while (*s && isspace ((unsigned char)*s)) s++;
+			while (*s && !isspace ((unsigned char)*s)) s++;
+
+			int idx;
+			while (nextObjElementIndex (s, ipoint, m_nVertices, idx))
+				if (idx >= 0)
+					m_pPoints.push_back ((unsigned int) idx);
+		}
 	}
 	fclose (file);
 
@@ -516,7 +580,15 @@ int Mesh::export_obj (const char *filename)
 		}
 		fprintf (fp, "\n");
 	}
-	
+
+	//
+	// line segments ('l') and points ('p') — indices are 1-based in OBJ
+	//
+	for (i = 0; i < GetNLines(); i++)
+		fprintf (fp, "l %u %u\n", 1 + m_pLines[2*i], 1 + m_pLines[2*i+1]);
+	for (i = 0; i < GetNPoints(); i++)
+		fprintf (fp, "p %u\n", 1 + m_pPoints[i]);
+
 	fclose (fp);
 
 	//

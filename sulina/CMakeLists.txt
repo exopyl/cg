@@ -28,6 +28,8 @@ file(MAKE_DIRECTORY ${SULINA_SHADER_DIR})
 set(SULINA_SHADER_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/shaders/textured.vert
     ${CMAKE_CURRENT_SOURCE_DIR}/shaders/textured.frag
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/unlit.vert
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/unlit.frag
 )
 
 set(_sulina_spirv "")

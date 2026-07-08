@@ -169,6 +169,14 @@ private:
     std::unique_ptr<cgre2::DescriptorLayouts> m_descriptorLayouts;
     std::unique_ptr<cgre2::Pipeline>          m_pipeline;
 
+    // Unlit pipelines for the mesh's line ('l') and point ('p') primitives
+    // (Mesh::m_pLines / m_pPoints). Same VertexPBR buffer layout as the
+    // surface, different primitive topology, no descriptor sets (the unlit
+    // shaders sample no texture).
+    std::unique_ptr<cgre2::DescriptorLayouts> m_unlitDescriptorLayouts;
+    std::unique_ptr<cgre2::Pipeline>          m_linePipeline;
+    std::unique_ptr<cgre2::Pipeline>          m_pointPipeline;
+
     // Texture cache + descriptor pool for per-sub-mesh material sets. In
     // the minimal scope every set binds the 1x1 white fallback (see
     // ensureMaterialSets); m_materialSets is aligned with m_vertexBuffers.
@@ -185,6 +193,16 @@ private:
     std::vector<std::unique_ptr<cgre2::VertexBuffer>> m_vertexBuffers;
     std::vector<std::unique_ptr<cgre2::IndexBuffer>>  m_indexBuffers;
     std::vector<uint32_t>                              m_indexCounts;
+
+    // Line / point primitive buffers, one entry per sub-mesh that carries
+    // m_pLines / m_pPoints. These index the raw mesh vertices (not the
+    // triangle-expanded surface vertices), so they need their own VBOs.
+    std::vector<std::unique_ptr<cgre2::VertexBuffer>> m_lineVertexBuffers;
+    std::vector<std::unique_ptr<cgre2::IndexBuffer>>  m_lineIndexBuffers;
+    std::vector<uint32_t>                              m_lineIndexCounts;
+    std::vector<std::unique_ptr<cgre2::VertexBuffer>> m_pointVertexBuffers;
+    std::vector<std::unique_ptr<cgre2::IndexBuffer>>  m_pointIndexBuffers;
+    std::vector<uint32_t>                              m_pointIndexCounts;
 
     // Pipeline needs a stable VertexLayout pointer for the duration of
     // the ctor call — keep it as a member so the lifetime is well-defined.

@@ -17,6 +17,10 @@ public:
 
 	void AddMesh (Mesh *pMesh) { m_Meshes.push_back (pMesh); };
 
+	// Détruit tous les Mesh* possédés et vide la liste (utile avant un
+	// rechargement en place depuis le fichier d'origine).
+	void clean (void);
+
 	std::vector<Mesh*>& GetMeshes (void) { return m_Meshes; };
 
 	unsigned int GetNVertices() const;
@@ -28,8 +32,6 @@ public:
 
 protected:
 	// import / export
-	void clean (void);
-
 	bool export_obj(const char* filename);
 	bool export_stl(const char* filename);          // ASCII STL : one solid block per Mesh
 	bool export_stl_binary(const char* filename);   // Binary STL : single concatenated solid

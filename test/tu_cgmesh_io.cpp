@@ -90,6 +90,41 @@ TEST(TEST_cgmesh_io, obj_negative_indices)
     std::remove(path);
 }
 
+TEST(TEST_cgmesh_io, obj_lines_and_points)
+{
+    // The tree asset is built purely from OBJ 'l' (segments) and 'p' (points)
+    // elements sharing one vertex list — it has no faces. Pins down the l/p
+    // parser and its export round-trip.
+    Mesh* m = new Mesh();
+    m->load("./test/data/obj/lines_and_points.obj");
+
+    EXPECT_EQ(m->GetNVertices(), 42u);
+    EXPECT_EQ(m->GetNFaces(),     0u);
+    EXPECT_EQ(m->GetNLines(),    41u);
+    EXPECT_EQ(m->GetNPoints(),   42u);
+
+    // Every segment / point index must reference a real vertex.
+    for (unsigned int i = 0; i < m->GetNLines(); ++i)
+    {
+        EXPECT_LT(m->m_pLines[2*i],   m->GetNVertices());
+        EXPECT_LT(m->m_pLines[2*i+1], m->GetNVertices());
+    }
+    for (unsigned int i = 0; i < m->GetNPoints(); ++i)
+        EXPECT_LT(m->m_pPoints[i], m->GetNVertices());
+
+    // Round-trip: l/p must survive export_obj + reload.
+    ASSERT_EQ(m->save("./exported_lines_and_points.obj"), 0);
+
+    Mesh* r = new Mesh();
+    r->load("./exported_lines_and_points.obj");
+    EXPECT_EQ(r->GetNVertices(), 42u);
+    EXPECT_EQ(r->GetNLines(),    41u);
+    EXPECT_EQ(r->GetNPoints(),   42u);
+
+    delete r;
+    delete m;
+}
+
 TEST(TEST_cgmesh_io, off)
 {
     // context

@@ -44,6 +44,7 @@ public:
 
 public:
 	std::string m_name;            // basename du fichier (liste / survol)
+	std::string m_path;            // chemin complet du fichier d'origine (infobulle)
 	VMeshes     m_meshes;          // maillages de CE fichier (possédés)
 	bool        m_visible = true;  // rendu ignoré si false
 	BoundingBox m_bbox;            // bbox agrégée (cadrage + surbrillance au survol)

@@ -347,6 +347,8 @@ public:
 
 	unsigned int GetNVertices() const;
 	unsigned int GetNFaces() const;
+	unsigned int GetNLines()  const { return (unsigned int)(m_pLines.size() / 2); }
+	unsigned int GetNPoints() const { return (unsigned int)m_pPoints.size(); }
 	bool IsTriangleMesh() const;
 
 	// triangulation
@@ -420,6 +422,12 @@ public:
 	std::vector<float> m_pFaceNormals;
 	unsigned int m_nTextureCoordinates;
 	std::vector<float> m_pTextureCoordinates;
+	// OBJ line ('l') and point ('p') elements. They index into m_pVertices and
+	// carry no face topology, so the face-based render/analysis paths ignore
+	// them. m_pLines stores two vertex indices per segment (flat, so a polyline
+	// of N vertices becomes N-1 segments); m_pPoints stores one index per point.
+	std::vector<unsigned int> m_pLines;
+	std::vector<unsigned int> m_pPoints;
 	std::vector<std::unique_ptr<Material>> m_pMaterials;
 	std::vector<std::unique_ptr<Tensor>>   m_pTensors;
 

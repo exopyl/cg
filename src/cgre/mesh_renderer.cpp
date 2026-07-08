@@ -23,6 +23,8 @@ void rendering_properties_init (rendering_properties_s &prop)
 	prop.normalized = 0;
 	prop.pointsize = 1.;
 	prop.linesize = 1.;
+	prop.line_color[0]  = 0.15f; prop.line_color[1]  = 0.45f; prop.line_color[2]  = 0.85f;
+	prop.point_color[0] = 0.90f; prop.point_color[1] = 0.20f; prop.point_color[2] = 0.20f;
 	prop.display_warning = 0;
 	prop.clipping_plane_active = 0;
 	prop.clipping_plane_z = 0.0f;
@@ -288,6 +290,53 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 			}
 		}
 		glEnd ();
+		glPopAttrib ();
+	}
+
+	// OBJ line ('l') and point ('p') elements are intrinsic mesh geometry
+	// (Mesh::m_pLines / m_pPoints), not an optional overlay: they belong to the
+	// mesh and are drawn with it whenever present. A lines/points file has no
+	// faces, and the fast face managers (VBO / vertex array) don't know about
+	// these primitives, so the immediate-mode path is the only place that can
+	// emit them — hence they draw unconditionally here, alongside the surface.
+	if (!mesh->m_pLines.empty() || !mesh->m_pPoints.empty())
+	{
+		glPushAttrib (GL_ALL_ATTRIB_BITS);
+		glDisable (GL_LIGHTING);
+
+		if (!mesh->m_pLines.empty())
+		{
+			glEnable (GL_LINE_SMOOTH);
+			glLineWidth (prop.linesize > 0.f ? prop.linesize : 1.f);
+			glColor3f (prop.line_color[0], prop.line_color[1], prop.line_color[2]);
+			glBegin (GL_LINES);
+			const size_t nIdx = mesh->m_pLines.size();
+			for (size_t k = 0; k + 1 < nIdx; k += 2)
+			{
+				unsigned int a = mesh->m_pLines[k];
+				unsigned int b = mesh->m_pLines[k+1];
+				if (a >= mesh->m_nVertices || b >= mesh->m_nVertices)
+					continue;
+				glVertex3f (mesh->m_pVertices[3*a], mesh->m_pVertices[3*a+1], mesh->m_pVertices[3*a+2]);
+				glVertex3f (mesh->m_pVertices[3*b], mesh->m_pVertices[3*b+1], mesh->m_pVertices[3*b+2]);
+			}
+			glEnd ();
+		}
+
+		if (!mesh->m_pPoints.empty())
+		{
+			glPointSize (prop.pointsize > 0.f ? prop.pointsize : 1.f);
+			glColor3f (prop.point_color[0], prop.point_color[1], prop.point_color[2]);
+			glBegin (GL_POINTS);
+			for (unsigned int idx : mesh->m_pPoints)
+			{
+				if (idx >= mesh->m_nVertices)
+					continue;
+				glVertex3f (mesh->m_pVertices[3*idx], mesh->m_pVertices[3*idx+1], mesh->m_pVertices[3*idx+2]);
+			}
+			glEnd ();
+		}
+
 		glPopAttrib ();
 	}
 

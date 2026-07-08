@@ -134,6 +134,8 @@ void Mesh::Init ()
 	m_pMaterials.clear();
 	m_nTextureCoordinates = 0;
 	m_pTextureCoordinates.clear();
+	m_pLines.clear();
+	m_pPoints.clear();
 	m_pTensors.clear();
 	m_pOctree = nullptr;
 	m_revision = 0;

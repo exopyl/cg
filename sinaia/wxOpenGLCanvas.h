@@ -37,6 +37,13 @@ public:
 	// Ajoute un fichier à la scène COURANTE (nouveau Model) sans remplacer la vue ni
 	// renormaliser (repère monde conservé) ; recadre sur la scène. nullptr si échec.
 	Model* AppendModel(const wxString& filename);
+
+	// Recharge un Model depuis son fichier d'origine (Model::m_path), en place.
+	// Détache les anciens maillages du renderer, relit le fichier, recalcule
+	// normales / BVH / bbox. Recadre la caméra UNIQUEMENT si ce Model est le seul
+	// de la scène ; s'il coexiste avec d'autres, la vue courante est préservée.
+	// false si m_path est vide, le fichier est introuvable, ou le rechargement échoue.
+	bool ReloadModel(Model* mdl);
 	void SaveModel(const wxString& filename);
 
 	Mesh* GetMesh(void);
@@ -80,6 +87,12 @@ public:
 	// Size (in pixels) of the points drawn in the 3D view (point cloud mode).
 	void SetPointSize (float s) { prop.pointsize = s; Refresh(false); };
 	float GetPointSize (void) { return prop.pointsize; };
+
+	// Colours (0..1 RGB) of the mesh's line ('l') and point ('p') primitives.
+	void SetLineColor (float r, float g, float b)
+		{ prop.line_color[0] = r; prop.line_color[1] = g; prop.line_color[2] = b; Refresh(false); };
+	void SetPointColor (float r, float g, float b)
+		{ prop.point_color[0] = r; prop.point_color[1] = g; prop.point_color[2] = b; Refresh(false); };
 
 	void ChangeFill (void);
 	bool GetFill (void);

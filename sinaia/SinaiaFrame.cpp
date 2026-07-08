@@ -538,13 +538,23 @@ MyFrame::MyFrame(wxWindow* parent,
         wxPG_DEFAULT_STYLE);
 
     m_propertiesGrid->SetSortFunction(PropertiesSortFunction);
+    // Show property help strings as tooltips — used to surface the full source
+    // path when hovering the "File" row (its value is only the file basename).
+    m_propertiesGrid->SetExtraStyle(m_propertiesGrid->GetExtraStyle() | wxPG_EX_HELP_AS_TOOLTIPS);
     g_properties = {
+        new wxStringProperty("File"),
         new wxStringProperty("Meshes"),
         new wxStringProperty("Vertices"),
         new wxStringProperty("Faces") ,
         new wxStringProperty("Triangle mesh"),
         new wxStringProperty("Borders"),
         new wxStringProperty("Non manifold edges"),
+        new wxStringProperty("Bounding box X"),
+        new wxStringProperty("Bounding box Y"),
+        new wxStringProperty("Bounding box Z"),
+        new wxStringProperty("Size X"),
+        new wxStringProperty("Size Y"),
+        new wxStringProperty("Size Z"),
     };
     for (auto& property : g_properties)
     {
@@ -1212,6 +1222,12 @@ void MyFrame::OnNotebookPageChanged(wxAuiNotebookEvent& event)
         // freshly created, which fire PAGE_CHANGED via AddPage).
         pGLCanvas->SetLineWidth(m_lineWidth);
         pGLCanvas->SetPointSize(m_pointSize);
+        pGLCanvas->SetLineColor (m_lineColor.Red()   / 255.0f,
+                                 m_lineColor.Green() / 255.0f,
+                                 m_lineColor.Blue()  / 255.0f);
+        pGLCanvas->SetPointColor(m_pointColor.Red()   / 255.0f,
+                                 m_pointColor.Green() / 255.0f,
+                                 m_pointColor.Blue()  / 255.0f);
 
         // Synchronize toolbar button states
         wxAuiToolBarItem* p;
@@ -1412,6 +1428,12 @@ void MyFrame::BuildModelsIcons()
         dc.DrawLine(7, 7, 7, 12);                         // stries
         dc.DrawLine(9, 7, 9, 12);
     });
+    m_iconRefresh = make([](wxMemoryDC& dc) {             // flèche circulaire (recharger)
+        dc.DrawEllipticArc(3, 3, 10, 10, 55, 340);        // cercle ouvert en haut-droite
+        dc.SetBrush(*wxBLACK_BRUSH);
+        wxPoint head[3] = { wxPoint(9, 2), wxPoint(14, 3), wxPoint(11, 7) };  // pointe de flèche
+        dc.DrawPolygon(3, head);
+    });
 }
 
 void MyFrame::UpdateModelsList()
@@ -1458,6 +1480,18 @@ void MyFrame::UpdateModelsList()
             eye->SetToolTip(_("Afficher / masquer"));
             eye->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&){ ToggleModelVisibility(i); });
             row->Add(eye, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
+
+            // Bouton « recharger » : uniquement pour les Model issus d'un fichier
+            // (m_path renseigné) ; les géométries générées n'ont rien à relire.
+            if (!mdl->m_path.empty())
+            {
+                wxBitmapButton* refresh = new wxBitmapButton(m_modelsPanel, wxID_ANY,
+                    m_iconRefresh, wxDefaultPosition, wxDefaultSize,
+                    wxBU_EXACTFIT | wxBORDER_NONE);
+                refresh->SetToolTip(_("Recharger depuis le fichier"));
+                refresh->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&){ RefreshModelAt(i); });
+                row->Add(refresh, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
+            }
 
             wxBitmapButton* trash = new wxBitmapButton(m_modelsPanel, wxID_ANY,
                 m_iconTrash, wxDefaultPosition, wxDefaultSize,
@@ -1533,6 +1567,24 @@ void MyFrame::RemoveModelAt(int index)
     OnSceneChanged();     // reconstruit la liste + panneaux
 }
 
+void MyFrame::RefreshModelAt(int index)
+{
+    MyGLCanvas* canvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+    if (!canvas || !canvas->GetVModels())
+        return;
+    Model* mdl = canvas->GetVModels()->GetModel((size_t)index);
+    if (!mdl)
+        return;
+
+    // ReloadModel détache les anciens Mesh* du renderer, relit le fichier en
+    // place (le Model* et donc la sélection restent valides) et recadre la
+    // caméra seulement si ce Model est seul dans la scène.
+    canvas->ReloadModel(mdl);
+
+    // Reconstruit la liste + Model information (counts, bbox, etc. ont changé).
+    OnSceneChanged();
+}
+
 void MyFrame::UpdatePropertiesGrid()
 {
     MyGLCanvas* pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
@@ -1548,17 +1600,31 @@ void MyFrame::UpdatePropertiesGrid()
     Model* selected = pGLCanvas->GetSelectedModel();
     if (!selected)
     {
+        m_propertiesGrid->ChangePropertyValue("File",               wxVariant(wxString()));
+        if (wxPGProperty* fileProp = m_propertiesGrid->GetProperty("File"))
+            fileProp->SetHelpString(wxString());
         m_propertiesGrid->ChangePropertyValue("Vertices",           wxVariant(0));
         m_propertiesGrid->ChangePropertyValue("Faces",              wxVariant(0));
         m_propertiesGrid->ChangePropertyValue("Meshes",             wxVariant(0));
         m_propertiesGrid->ChangePropertyValue("Triangle mesh",      wxVariant(wxString()));
         m_propertiesGrid->ChangePropertyValue("Borders",            wxVariant(0));
         m_propertiesGrid->ChangePropertyValue("Non manifold edges", wxVariant(0));
+        m_propertiesGrid->ChangePropertyValue("Bounding box X",     wxVariant(wxString()));
+        m_propertiesGrid->ChangePropertyValue("Bounding box Y",     wxVariant(wxString()));
+        m_propertiesGrid->ChangePropertyValue("Bounding box Z",     wxVariant(wxString()));
+        m_propertiesGrid->ChangePropertyValue("Size X",             wxVariant(wxString()));
+        m_propertiesGrid->ChangePropertyValue("Size Y",             wxVariant(wxString()));
+        m_propertiesGrid->ChangePropertyValue("Size Z",             wxVariant(wxString()));
         if (m_hierarchyMeshes)    m_hierarchyMeshes->DeleteAllItems();
         if (m_hierarchyMaterials) m_hierarchyMaterials->DeleteAllItems();
         return;
     }
     VMeshes* pObject = &selected->m_meshes;
+
+    // Source file: value = basename, full path shown as tooltip (help string).
+    m_propertiesGrid->ChangePropertyValue("File", wxVariant(wxString::FromUTF8(selected->m_name.c_str())));
+    if (wxPGProperty* fileProp = m_propertiesGrid->GetProperty("File"))
+        fileProp->SetHelpString(wxString::FromUTF8(selected->m_path.c_str()));
 
     m_propertiesGrid->ChangePropertyValue("Vertices", wxVariant(static_cast<int>(pObject->GetNVertices())));
     m_propertiesGrid->ChangePropertyValue("Faces", wxVariant(static_cast<int>(pObject->GetNFaces())));
@@ -1568,6 +1634,36 @@ void MyFrame::UpdatePropertiesGrid()
 
     m_propertiesGrid->ChangePropertyValue("Borders", wxVariant(static_cast<int>(pGLCanvas->GetNBorders())));
     m_propertiesGrid->ChangePropertyValue("Non manifold edges", wxVariant(static_cast<int>(pGLCanvas->GetNNonManifoldEdges())));
+
+    // Bounding box of the selected model: one "[ min , max ]" row per axis, plus
+    // a separate size row per axis.
+    const BoundingBox& bbox = selected->ComputeBBox();
+    if (bbox.IsEmpty())
+    {
+        m_propertiesGrid->ChangePropertyValue("Bounding box X", wxVariant(wxString()));
+        m_propertiesGrid->ChangePropertyValue("Bounding box Y", wxVariant(wxString()));
+        m_propertiesGrid->ChangePropertyValue("Bounding box Z", wxVariant(wxString()));
+        m_propertiesGrid->ChangePropertyValue("Size X",         wxVariant(wxString()));
+        m_propertiesGrid->ChangePropertyValue("Size Y",         wxVariant(wxString()));
+        m_propertiesGrid->ChangePropertyValue("Size Z",         wxVariant(wxString()));
+    }
+    else
+    {
+        float mn[3], mx[3];
+        bbox.GetMinMax(mn, mx);
+        auto rangeText = [](float lo, float hi) {
+            return wxString::Format(wxT("[ %.4g , %.4g ]"), lo, hi);
+        };
+        auto sizeText = [](float lo, float hi) {
+            return wxString::Format(wxT("%.4g"), hi - lo);
+        };
+        m_propertiesGrid->ChangePropertyValue("Bounding box X", wxVariant(rangeText(mn[0], mx[0])));
+        m_propertiesGrid->ChangePropertyValue("Bounding box Y", wxVariant(rangeText(mn[1], mx[1])));
+        m_propertiesGrid->ChangePropertyValue("Bounding box Z", wxVariant(rangeText(mn[2], mx[2])));
+        m_propertiesGrid->ChangePropertyValue("Size X",         wxVariant(sizeText(mn[0], mx[0])));
+        m_propertiesGrid->ChangePropertyValue("Size Y",         wxVariant(sizeText(mn[1], mx[1])));
+        m_propertiesGrid->ChangePropertyValue("Size Z",         wxVariant(sizeText(mn[2], mx[2])));
+    }
 
     char n[64];
     if (m_hierarchyMeshes)
@@ -2017,6 +2113,8 @@ void MyFrame::OnSettings(wxCommandEvent& WXUNUSED(event))
 	panel.notebookTheme = static_cast<int>(m_notebook_theme);
 	panel.lineWidth     = m_lineWidth;
 	panel.pointSize     = m_pointSize;
+	panel.lineColor     = m_lineColor;
+	panel.pointColor    = m_pointColor;
 
 	// The 2D Panel options are applied live as the user edits them; the dialog
 	// calls back into ApplyPanelSettings on every change and restores this
@@ -2045,6 +2143,8 @@ void MyFrame::ApplyPanelSettings(const PanelSettings& panel)
 	// open canvas (new tabs pick it up via OnNotebookPageChanged).
 	m_lineWidth = panel.lineWidth;
 	m_pointSize = panel.pointSize;
+	m_lineColor  = panel.lineColor;
+	m_pointColor = panel.pointColor;
 	if (m_pCtrl)
 	{
 		for (size_t i = 0, n = m_pCtrl->GetPageCount(); i < n; ++i)
@@ -2054,6 +2154,12 @@ void MyFrame::ApplyPanelSettings(const PanelSettings& panel)
 			{
 				pCanvas->SetLineWidth(m_lineWidth);
 				pCanvas->SetPointSize(m_pointSize);
+				pCanvas->SetLineColor (m_lineColor.Red()   / 255.0f,
+				                       m_lineColor.Green() / 255.0f,
+				                       m_lineColor.Blue()  / 255.0f);
+				pCanvas->SetPointColor(m_pointColor.Red()   / 255.0f,
+				                       m_pointColor.Green() / 255.0f,
+				                       m_pointColor.Blue()  / 255.0f);
 			}
 		}
 	}

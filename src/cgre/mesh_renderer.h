@@ -31,6 +31,8 @@ typedef struct rendering_properties
 	int normalized;
 	float pointsize;
 	float linesize;
+	float line_color[3];    // colour of the mesh's line ('l') primitives
+	float point_color[3];   // colour of the mesh's point ('p') primitives
 	int clipping_plane_active;
 	float clipping_plane_z;
 
