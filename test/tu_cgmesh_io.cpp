@@ -57,6 +57,70 @@ TEST(TEST_cgmesh_io, obj_texcoords_per_face)
     std::remove(path);
 }
 
+TEST(TEST_cgmesh_io, obj_cube_tex_texture)
+{
+    // cube-tex.obj carries a complete texture setup: mtllib -> cube.mtl
+    // (map_Kd texture.png) and per-face-corner UVs (f v/vt/vn) — 8 shared
+    // vertices but 14 distinct texture coordinates, so a vertex maps to
+    // DIFFERENT UVs depending on the face. Verifies the OBJ importer:
+    //   (1) decodes and attaches the diffuse texture image,
+    //   (2) keeps all 14 texture coordinates (with the V flip),
+    //   (3) preserves the PER-CORNER texcoord indices instead of collapsing
+    //       them onto the vertex index — the bug that rendered the cube grey.
+    Mesh* m = new Mesh();
+    m->load("./test/data/obj/cube-tex.obj");
+
+    ASSERT_EQ(m->GetNVertices(), 8u);
+    ASSERT_EQ(m->GetNFaces(),    12u);
+
+    // (1) Diffuse texture image loaded (requires PNG decoding in cgimg).
+    ASSERT_EQ(m->GetNMaterials(), 1u);
+    MaterialTexture* tex = dynamic_cast<MaterialTexture*>(m->GetMaterial(0));
+    ASSERT_NE(tex, nullptr);
+    EXPECT_EQ(tex->GetType(), MATERIAL_TEXTURE);
+    EXPECT_NE(tex->GetImage(), nullptr)
+        << "texture.png was not decoded (is PNG support enabled in cgimg?)";
+
+    // (2) 14 texture coordinates, stored as (u, 1-v). vt #1 = "0.25 1.00" ->
+    // (0.25, 0.0); vt #10 = "0.75 0.50" -> (0.75, 0.50).
+    EXPECT_EQ(m->m_nTextureCoordinates, 14u);
+    ASSERT_EQ(m->m_pTextureCoordinates.size(), 28u);
+    EXPECT_FLOAT_EQ(m->m_pTextureCoordinates[0],       0.25f);
+    EXPECT_FLOAT_EQ(m->m_pTextureCoordinates[1],       0.0f);
+    EXPECT_FLOAT_EQ(m->m_pTextureCoordinates[2*9],     0.75f);
+    EXPECT_FLOAT_EQ(m->m_pTextureCoordinates[2*9 + 1], 0.50f);
+
+    // (3) Per-corner texcoord indices. First face is
+    //   f 3/10/1 7/6/1 8/5/1  ->  vertices {2,6,7}, texcoords {9,5,4} (0-based).
+    Face* f0 = m->m_pFaces[0];
+    ASSERT_TRUE(f0->m_bUseTextureCoordinates);
+    ASSERT_NE(f0->m_pTextureCoordinatesIndices, nullptr);
+    ASSERT_EQ(f0->GetNVertices(), 3);
+    EXPECT_EQ(f0->GetVertex(0), 2);
+    EXPECT_EQ(f0->GetVertex(1), 6);
+    EXPECT_EQ(f0->GetVertex(2), 7);
+    EXPECT_EQ(f0->m_pTextureCoordinatesIndices[0], 9u);
+    EXPECT_EQ(f0->m_pTextureCoordinatesIndices[1], 5u);
+    EXPECT_EQ(f0->m_pTextureCoordinatesIndices[2], 4u);
+
+    // The texcoord index differs from the vertex index -> the mapping is truly
+    // per-corner, not the per-vertex collapse that scrambled the UVs.
+    EXPECT_NE(f0->m_pTextureCoordinatesIndices[0], (unsigned int)f0->GetVertex(0));
+
+    // Every corner of every textured face must reference an in-range UV.
+    for (unsigned int fi = 0; fi < m->GetNFaces(); ++fi)
+    {
+        Face* f = m->m_pFaces[fi];
+        if (!f->m_bUseTextureCoordinates || !f->m_pTextureCoordinatesIndices)
+            continue;
+        for (int k = 0; k < f->GetNVertices(); ++k)
+            EXPECT_LT(2u * f->m_pTextureCoordinatesIndices[k] + 1u,
+                      (unsigned int)m->m_pTextureCoordinates.size());
+    }
+
+    delete m;
+}
+
 TEST(TEST_cgmesh_io, obj_negative_indices)
 {
     // OBJ negative indices count back from the most recently declared vertex.
@@ -441,42 +505,57 @@ TEST(TEST_cgmesh_io, step_4pinplug)
     delete pVMeshes;
 }
 
-// IGES import via OpenCASCADE.
+// IGES import via OpenCASCADE — WIREFRAME files.
 //
-// The three sample files in test/data/ (ex1.iges, ex2.iges, ex3.iges)
-// turn out to be WIREFRAME IGES — they hold only type-106 copious-data
-// curves plus subfigures/groups (ex1 is even labelled "INTEGRATED
-// CIRCUIT SEMICUSTOM CELL", i.e. a 2D PCB layout). They contain zero
-// TopoDS_Face entities after OCCT translation, so there is nothing to
-// tessellate.
+// The three sample files (ex1.iges, ex2.iges, ex3.iges) are wireframe /
+// 2D-drafting IGES: they hold curves (types 100/104/106/110) and drawing
+// structure, but no surface (128/143/144) or solid (186) entities, so there
+// is nothing to tessellate into faces.
 //
-// The contract this test pins down is therefore: when given a
-// wireframe-only IGES, import_iges parses successfully, finds no
-// triangulatable surface, and refuses gracefully (returns false from
-// VMeshes::load) instead of crashing or producing empty Meshes that
-// would later surprise the renderer / bbox code.
-//
-// Replace these files with surface-bearing IGES (types 128/143/144)
-// when one becomes available and flip the expectations to ASSERT_TRUE
-// + non-zero mesh counts.
+// tessellateAndAppend now imports the FREE wireframe (edges that bound no
+// face -> discretised polyline segments; standalone vertices -> explicit
+// points), so such a file loads as a face-less line/point mesh instead of
+// being refused. The contract pinned here: load succeeds, produces meshes
+// with line segments and NO faces. (Exact segment counts depend on OCCT's
+// discretisation and which drafting entities its IGES reader transfers to
+// TopoDS, so we assert qualitatively.)
 class TEST_cgmesh_io_iges_wireframe : public ::testing::TestWithParam<std::string> {};
 
-TEST_P(TEST_cgmesh_io_iges_wireframe, load_returns_false_no_meshes)
+TEST_P(TEST_cgmesh_io_iges_wireframe, imports_free_wireframe)
 {
     const std::string filename = std::string("./test/data/") + GetParam();
 
     VMeshes* pVMeshes = new VMeshes();
+    const bool ok = pVMeshes->load(filename.c_str());
 
-    // load returns false: VMeshes::import_iges parsed the file and
-    // ran the IGES → TopoDS_Shape transfer, but tessellateAndAppend
-    // found no TopAbs_FACE and emitted zero Meshes.
-    EXPECT_FALSE(pVMeshes->load(filename.c_str()))
-        << "wireframe IGES " << filename << " should not produce meshes";
+    unsigned int nLines = 0, nPoints = 0, nFaces = 0;
+    for (Mesh* m : pVMeshes->GetMeshes())
+    {
+        nLines  += m->GetNLines();
+        nPoints += m->GetNPoints();
+        nFaces  += m->GetNFaces();
+    }
+    std::cout << "[wireframe] " << GetParam() << " load=" << ok
+              << " meshes=" << pVMeshes->GetMeshes().size()
+              << " lines=" << nLines << " points=" << nPoints
+              << " faces=" << nFaces << std::endl;
 
-    // And no leftover Meshes were pushed onto the vector before the
-    // refusal — important so callers that ignore the bool return still
-    // see a clean state.
-    EXPECT_EQ(pVMeshes->GetMeshes().size(), 0u);
+    EXPECT_TRUE(ok) << "wireframe IGES " << filename << " should now import as polylines";
+    EXPECT_GT(nLines, 0u) << "expected polyline segments from the free curves";
+    EXPECT_EQ(nFaces, 0u) << "these files carry no surface, so no faces";
+
+    // Every segment / point index must reference a real vertex (line vertices
+    // live in m_pVertices, same convention as the OBJ l/p path).
+    for (Mesh* m : pVMeshes->GetMeshes())
+    {
+        for (unsigned int i = 0; i < m->GetNLines(); ++i)
+        {
+            EXPECT_LT(m->m_pLines[2*i],     m->GetNVertices());
+            EXPECT_LT(m->m_pLines[2*i + 1], m->GetNVertices());
+        }
+        for (unsigned int i = 0; i < m->GetNPoints(); ++i)
+            EXPECT_LT(m->m_pPoints[i], m->GetNVertices());
+    }
 
     delete pVMeshes;
 }

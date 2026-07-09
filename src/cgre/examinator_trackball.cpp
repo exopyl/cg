@@ -37,14 +37,25 @@ Ctrackball::Ctrackball ()
 void
 Ctrackball::tbPointToVector(int x, int y, float v[3])
 {
-  float d, a;
-
-  // project x, y onto a hemi-sphere centered within width, height
-  v[0] = (2.0 * x - gl_window_width) / gl_window_width;
+  // Map the cursor to a point on the virtual trackball (Bell/Shoemake): a
+  // sphere near the centre, smoothly continued by a hyperbolic sheet toward the
+  // edges. Both the value AND its first derivative are continuous at the
+  // sphere/hyperbola seam, so the rotation speed stays uniform across the whole
+  // window. (The previous cos() mapping had zero slope at the centre and a peak
+  // near the edge, so a slow 1-pixel move near a border produced an outsized
+  // rotation jump — the "saccadé" reported when dragging near the edges.)
+  v[0] = (2.0 * x - gl_window_width)  / gl_window_width;
   v[1] = (gl_window_height - 2.0 * y) / gl_window_height;
-  d = sqrt(v[0] * v[0] + v[1] * v[1]);
-  v[2] = cos((3.14159265 / 2.0) * ((d < 1.0) ? d : 1.0));
-  a = 1.0 / sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+
+  const double r  = 1.0;             // trackball radius (in the normalised plane)
+  const double d2 = v[0] * v[0] + v[1] * v[1];
+
+  if (d2 <= r * r * 0.5)             // inside the sphere: project onto it
+    v[2] = sqrt(r * r - d2);
+  else                              // outside: fall onto the hyperbolic sheet
+    v[2] = (r * r * 0.5) / sqrt(d2);
+
+  const double a = 1.0 / sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
   v[0] *= a;
   v[1] *= a;
   v[2] *= a;

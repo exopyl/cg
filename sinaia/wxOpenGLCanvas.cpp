@@ -222,11 +222,7 @@ void MyGLCanvas::SetVMeshes(VMeshes* pObject, bool normalize)
 	}
 	m_selectedModel = mdl;   // sélection initiale = le modèle chargé
 
-    ApplyNormalization(normalize);   // géométrie finale (après normalisation éventuelle)
-
-	// BVH pour le picking surface, construit UNE fois sur la géométrie définitive.
-	if (m_pVModels->GetNModels() > 0)
-		m_pVModels->GetModels()[0]->BuildBVH();
+    ApplyNormalization(normalize);   // géométrie finale + BVH picking (voir ApplyNormalization)
 }
 
 void MyGLCanvas::ApplyNormalization(bool normalize)
@@ -278,6 +274,13 @@ void MyGLCanvas::ApplyNormalization(bool normalize)
 		prop.display_points = !hasPrimitives;
 		prop.display_fill   = false;
 	}
+
+	// (Re)construit le BVH de picking sur la géométrie DÉFINITIVE. Indispensable
+	// après une normalisation (recentrage/mise à l'échelle) : sans ce rebuild, le
+	// BVH référencerait les positions d'avant, RayNearestSurface raterait tous les
+	// triangles et le survol (bbox jaune) disparaîtrait. Couvre aussi le chargement.
+	if (m_pVModels && m_pVModels->GetNModels() > 0)
+		m_pVModels->GetModels()[0]->BuildBVH();
 
 	Refresh(false);
 }
@@ -771,7 +774,12 @@ void MyGLCanvas::DrawGL()
 			// frames suivantes et le mesh (rendu sans matériau) apparaît jaune.
 			glPushAttrib(GL_CURRENT_BIT | GL_LINE_BIT | GL_ENABLE_BIT);
 			glDisable(GL_LIGHTING);
-			glColor3f(1.0f, 0.85f, 0.1f);
+			// Sur un modèle texturé, la texture encore liée modulerait la couleur des
+			// arêtes (-> jaune assombri/teinté) ; le blending la mélangerait au fond.
+			// On les désactive pour un jaune pur et constant quel que soit le modèle.
+			glDisable(GL_TEXTURE_2D);
+			glDisable(GL_BLEND);
+			glColor3f(1.0f, 1.0f, 0.0f);
 			glLineWidth(2.0f);
 			const float x0=mn[0], y0=mn[1], z0=mn[2], x1=mx[0], y1=mx[1], z1=mx[2];
 			glBegin(GL_LINES);

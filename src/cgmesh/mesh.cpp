@@ -689,12 +689,40 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
     const bool hasUV      = !m_pTextureCoordinates.empty();
     const bool hasColors  = !m_pVertexColors.empty();
 
+    // Per-corner UVs (OBJ f v/vt/vn): a shared vertex carries DIFFERENT UVs in
+    // different faces, so the UV cannot be stored per vertex. Such a mesh keeps
+    // face->m_pTextureCoordinatesIndices where at least one corner's UV index
+    // differs from its vertex index. When present, every face must be expanded
+    // into its own corners (no shared slot can hold two UVs) and the UV sourced
+    // through those indices. Formats with genuine per-vertex UVs (3DS/3DM set
+    // index == vertex index via InitTexCoord) do NOT trigger this and keep the
+    // fast shared-slot path unchanged.
+    bool perCornerUV = false;
+    if (hasUV)
+    {
+        for (unsigned int fi = 0; fi < m_nFaces && !perCornerUV; ++fi)
+        {
+            Face* f = m_pFaces[fi];
+            if (!f || !f->m_bUseTextureCoordinates || !f->m_pTextureCoordinatesIndices)
+                continue;
+            const unsigned int n = f->GetNVertices();
+            for (unsigned int i = 0; i < n; ++i)
+                if (f->m_pTextureCoordinatesIndices[i] != (unsigned int)f->GetVertex(i))
+                {
+                    perCornerUV = true;
+                    break;
+                }
+        }
+    }
+
     // Smooth shading: seed the output with the shared topology layout; triangle
     // faces reference these slots directly (per-vertex normals preserved); only
     // N>=4 polygons append fresh slots below. Flat shading: seed nothing —
     // EVERY face (triangles included) is expanded into its own corners carrying
     // the face normal, so no slot is shared and each triangle is uniform.
-    if (!flat)
+    // Per-corner UVs force the same full expansion (seed nothing) so positions /
+    // normals / texCoords / colors stay parallel as each face appends its corners.
+    if (!flat && !perCornerUV)
     {
         out.positions.assign(m_pVertices.begin(),           m_pVertices.end());
         if (hasNormals) out.normals.assign  (m_pVertexNormals.begin(),       m_pVertexNormals.end());
@@ -719,7 +747,7 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
         const unsigned int matId = (unsigned int)face->GetMaterialId();
         std::vector<unsigned int>& bucket = buckets[matId];
 
-        if (n == 3 && !flat)
+        if (n == 3 && !flat && !perCornerUV)
         {
             // Smooth triangle: index directly into the shared topology slots.
             bucket.push_back((unsigned int)face->GetVertex(0));
@@ -734,6 +762,12 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
         float fn[3];
         computeNewellNormal(face, *this, fn);
 
+        // Normal choice for the appended corners: the face (Newell) normal for
+        // flat shading and for N>=4 polygons (unchanged — avoids fan-diagonal
+        // kinks on non-planar n-gons); the per-vertex normal for a triangle that
+        // is only expanded because of per-corner UVs, so smooth shading survives.
+        const bool useFaceNormal = flat || (n >= 4);
+
         const unsigned int base = (unsigned int)(out.positions.size() / 3);
 
         for (unsigned int i = 0; i < n; ++i)
@@ -746,17 +780,32 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
 
             if (hasNormals)
             {
-                out.normals.push_back(fn[0]);
-                out.normals.push_back(fn[1]);
-                out.normals.push_back(fn[2]);
+                if (useFaceNormal || 3*vi + 2 >= m_pVertexNormals.size())
+                {
+                    out.normals.push_back(fn[0]);
+                    out.normals.push_back(fn[1]);
+                    out.normals.push_back(fn[2]);
+                }
+                else
+                {
+                    out.normals.push_back(m_pVertexNormals[3*vi + 0]);
+                    out.normals.push_back(m_pVertexNormals[3*vi + 1]);
+                    out.normals.push_back(m_pVertexNormals[3*vi + 2]);
+                }
             }
 
             if (hasUV)
             {
-                if (2*vi + 1 < m_pTextureCoordinates.size())
+                // Per-corner UV index when the face carries one (OBJ), else the
+                // vertex index (per-vertex UVs: 3DS/3DM, scalar-field colouring).
+                unsigned int uvIdx = vi;
+                if (face->m_bUseTextureCoordinates && face->m_pTextureCoordinatesIndices)
+                    uvIdx = face->m_pTextureCoordinatesIndices[i];
+
+                if (2*uvIdx + 1 < m_pTextureCoordinates.size())
                 {
-                    out.texCoords.push_back(m_pTextureCoordinates[2*vi + 0]);
-                    out.texCoords.push_back(m_pTextureCoordinates[2*vi + 1]);
+                    out.texCoords.push_back(m_pTextureCoordinates[2*uvIdx + 0]);
+                    out.texCoords.push_back(m_pTextureCoordinates[2*uvIdx + 1]);
                 }
                 else
                 {

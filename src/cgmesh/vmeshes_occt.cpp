@@ -39,13 +39,20 @@
 #include <BRepBndLib.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRep_Tool.hxx>
+#include <BRepAdaptor_Curve.hxx>
+#include <GCPnts_UniformDeflection.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Standard_Failure.hxx>
+#include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopLoc_Location.hxx>
 #include <TopoDS.hxx>
+#include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
+#include <TopoDS_Vertex.hxx>
+#include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
+#include <TopTools_ListOfShape.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Trsf.hxx>
@@ -55,9 +62,13 @@
 
 namespace {
 
-// Common post-read pipeline: tessellate a freshly-imported OCCT shape
-// and emit one cgmesh Mesh per TopoDS_Face into `out`. Returns the count
-// of meshes appended (0 if the shape carried no usable triangulation).
+// Common post-read pipeline for a freshly-imported OCCT shape. Emits:
+//   - one cgmesh Mesh per TopoDS_Face (tessellated surface), then
+//   - one extra Mesh gathering the FREE wireframe — edges that bound no face
+//     (discretised into polyline segments) and standalone vertices (explicit
+//     points) — so a file mixing solids and curves imports BOTH forms.
+// Returns the count of meshes appended (0 if the shape carried neither a
+// usable triangulation nor any free curve/point).
 //
 // Shared by STEP and IGES importers — only the reader-specific lines
 // (the few that produce the TopoDS_Shape from a filename) live in the
@@ -147,6 +158,85 @@ int tessellateAndAppend(const TopoDS_Shape& shape, std::vector<Mesh*>& out)
         }
 
         out.push_back(m);
+        ++producedMeshes;
+    }
+
+    // --- Wireframe geometry --------------------------------------------------
+    //
+    // Besides surfaces, a CAD file can carry free wireframe: IGES polylines /
+    // lines / arcs / splines (types 106/110/100/104...) and standalone points
+    // (type 116) that bound no surface. These survive as free TopoDS_Edge /
+    // TopoDS_Vertex in the shape. We collect them into ONE extra Mesh so a file
+    // that mixes solids and curves imports BOTH — surfaces as face meshes above,
+    // curves/points as this wireframe mesh.
+    //
+    // "Free" is the key filter: an edge that bounds a face, or a vertex that is
+    // an edge endpoint, is already covered by the surface / its own curve and
+    // must be excluded (otherwise we would redraw every surface's boundary).
+    // MapShapesAndAncestors gives each edge its owner faces (empty list => free)
+    // and each vertex its owner edges (empty list => explicit point).
+    //
+    // Line vertices go into m_pVertices (indexed by m_pLines); only genuinely
+    // standalone points go into m_pPoints — same convention as the OBJ l/p path.
+    std::vector<float>        wireVerts;   // xyz, flat
+    std::vector<unsigned int> wireLines;   // two vertex indices per segment
+    std::vector<unsigned int> wirePoints;  // one vertex index per explicit point
+
+    TopTools_IndexedDataMapOfShapeListOfShape edgeFaces;
+    TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, edgeFaces);
+    for (Standard_Integer i = 1; i <= edgeFaces.Extent(); ++i)
+    {
+        if (!edgeFaces(i).IsEmpty()) continue;   // boundary of a face -> skip
+        const TopoDS_Edge edge = TopoDS::Edge(edgeFaces.FindKey(i));
+
+        Standard_Real first = 0., last = 0.;
+        if (BRep_Tool::Curve(edge, first, last).IsNull()) continue;  // no 3D curve
+
+        BRepAdaptor_Curve curve(edge);
+        GCPnts_UniformDeflection discretizer(curve, linearDeflection);
+        if (!discretizer.IsDone() || discretizer.NbPoints() < 2) continue;
+
+        const unsigned int base = static_cast<unsigned int>(wireVerts.size() / 3);
+        for (Standard_Integer k = 1; k <= discretizer.NbPoints(); ++k)
+        {
+            const gp_Pnt p = discretizer.Value(k);
+            wireVerts.push_back(static_cast<float>(p.X()));
+            wireVerts.push_back(static_cast<float>(p.Y()));
+            wireVerts.push_back(static_cast<float>(p.Z()));
+        }
+        for (Standard_Integer k = 0; k < discretizer.NbPoints() - 1; ++k)
+        {
+            wireLines.push_back(base + k);
+            wireLines.push_back(base + k + 1);
+        }
+    }
+
+    TopTools_IndexedDataMapOfShapeListOfShape vertexEdges;
+    TopExp::MapShapesAndAncestors(shape, TopAbs_VERTEX, TopAbs_EDGE, vertexEdges);
+    for (Standard_Integer i = 1; i <= vertexEdges.Extent(); ++i)
+    {
+        if (!vertexEdges(i).IsEmpty()) continue;   // edge endpoint -> not explicit
+        const TopoDS_Vertex v = TopoDS::Vertex(vertexEdges.FindKey(i));
+        const gp_Pnt p = BRep_Tool::Pnt(v);
+
+        wirePoints.push_back(static_cast<unsigned int>(wireVerts.size() / 3));
+        wireVerts.push_back(static_cast<float>(p.X()));
+        wireVerts.push_back(static_cast<float>(p.Y()));
+        wireVerts.push_back(static_cast<float>(p.Z()));
+    }
+
+    if (!wireLines.empty() || !wirePoints.empty())
+    {
+        const unsigned int nv = static_cast<unsigned int>(wireVerts.size() / 3);
+        Mesh* w = new Mesh();
+        w->Init(nv, 0);   // 0 faces: a pure wireframe / point mesh
+        for (size_t k = 0; k < wireVerts.size(); ++k)
+            w->m_pVertices[k] = wireVerts[k];
+        w->m_pLines  = std::move(wireLines);
+        w->m_pPoints = std::move(wirePoints);
+        w->computebbox();
+
+        out.push_back(w);
         ++producedMeshes;
     }
 

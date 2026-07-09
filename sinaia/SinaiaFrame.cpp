@@ -24,6 +24,7 @@
 #include "open.xpm"
 #include "save.xpm"
 #include "icons.h"
+#include "SupportedFormats.h"
 
 #include "SinaiaFrame.h"
 #include "wxOpenGLCanvas.h"
@@ -1155,17 +1156,11 @@ void MyFrame::OnDirCtrlSelectionChanged(wxTreeEvent& WXUNUSED(event))
     for (auto& file : files)
     {
         wxFileName filename(file);// ::GetName()
-        wxString ext = filename.GetExt();
-        if (ext == _T("obj"))
-            m_filesCtrl->InsertItem(index++, filename.GetName()+_T(".")+ filename.GetExt(), 0);
-        else if (ext == _T("stl"))
-            m_filesCtrl->InsertItem(index++, filename.GetName() + _T(".") + filename.GetExt(), 1);
-        else if (ext == _T("3ds"))
-            m_filesCtrl->InsertItem(index++, filename.GetName() + _T(".") + filename.GetExt(), 2);
-        else if (ext == _T("gltf") || ext == _T("glb"))
-            m_filesCtrl->InsertItem(index++, filename.GetName() + _T(".") + filename.GetExt(), 2); // use 3ds icon for now
-        else if (ext == _T("ply"))
-            m_filesCtrl->InsertItem(index++, filename.GetName() + _T(".") + filename.GetExt(), 0); // nuages/maillages PLY (recon)
+        // Le filtre et l'icône dérivent du catalogue central (SupportedFormats.h),
+        // partagé avec le wildcard du wxFileDialog. -1 => format non importable.
+        const int icon = sinaia::IconForExtension(filename.GetExt());
+        if (icon >= 0)
+            m_filesCtrl->InsertItem(index++, filename.GetName() + _T(".") + filename.GetExt(), icon);
     }
 }
 
@@ -1315,17 +1310,8 @@ void MyFrame::OnTabAlignment(wxCommandEvent &evt)
 //
 void MyFrame::OnOpen(wxCommandEvent& WXUNUSED(event))
 {
-    wxString wildcard = wxT("All supported formats|*.obj;*.stl;*.3ds;*.3dm;*.gltf;*.glb;*.step;*.stp;*.iges;*.igs;*.ply;*.pset;*.npts;*.pts;*.asc;*.off|")
-                        wxT("Wavefront OBJ (*.obj)|*.obj|")
-                        wxT("STL (*.stl)|*.stl|")
-                        wxT("3D Studio (*.3ds)|*.3ds|")
-                        wxT("Rhino 3DM (*.3dm)|*.3dm|")
-                        wxT("glTF (*.gltf;*.glb)|*.gltf;*.glb|")
-                        wxT("STEP (*.step;*.stp)|*.step;*.stp|")
-                        wxT("IGES (*.iges;*.igs)|*.iges;*.igs|")
-                        wxT("Point clouds (*.ply;*.pset;*.npts;*.pts;*.asc)|*.ply;*.pset;*.npts;*.pts;*.asc|")
-                        wxT("OFF (*.off)|*.off|")
-                        wxT("All files (*.*)|*.*");
+    // Dérivé du catalogue central (SupportedFormats.h), partagé avec le panneau "Files".
+    const wxString wildcard = sinaia::BuildOpenWildcard();
 
     wxFileDialog fd(this, wxT("Open 3D Model"), wxEmptyString, wxEmptyString, wildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
