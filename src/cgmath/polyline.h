@@ -1,10 +1,18 @@
 #pragma once
 
-class CurveDiscrete
+//
+// ProfilePolyline : a discrete list of 3D points.
+//
+// This is NOT a parametric curve (no eval(t)); it is a profile used to
+// generate revolution surfaces and frames, and to import/export OBJ point
+// lists. It was formerly named CurveDiscrete and has been reclassified out of
+// the curve hierarchy.
+//
+class ProfilePolyline
 {
 public:
-	CurveDiscrete ();
-	~CurveDiscrete ();
+	ProfilePolyline ();
+	~ProfilePolyline ();
 
 	int init (int nVertices);
 	int set_position (int pi, float x, float y, float z);

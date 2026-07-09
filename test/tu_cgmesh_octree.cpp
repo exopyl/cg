@@ -138,7 +138,7 @@ TEST(TEST_cgmesh_octree, KNeighboursRadiusCount)
 	Octree oct;
 	oct.Build(p.data(), 27, 2, 10);        // forces subdivision -> tests recursion
 
-	float pt[3] = { 1.f, 1.f, 1.f };
+	Vector3f pt = { 1.f, 1.f, 1.f };
 	// Within radius 1.1 of the centre: the centre itself + the 6 axis neighbours
 	// at distance 1 (the 12 edge neighbours are at sqrt(2) ~ 1.41).
 	EXPECT_EQ(oct.GetKNeighbours(pt, 1.1f), 7);
@@ -154,7 +154,7 @@ TEST(TEST_cgmesh_octree, GetClosestPointsCollectsWithinRadius)
 	Octree oct;
 	oct.Build(p.data(), 27, 2, 10);
 
-	float pt[3] = { 1.f, 1.f, 1.f };
+	Vector3f pt = { 1.f, 1.f, 1.f };
 	float *out = nullptr; unsigned int n = 0;
 	const int res = oct.GetClosestPoints(pt, 1.1f, &out, &n);
 
@@ -175,8 +175,8 @@ TEST(TEST_cgmesh_octree, GetSumNeighboursAccumulates)
 	Octree oct;
 	oct.Build(p.data(), 27, 2, 10);
 
-	float pt[3] = { 1.f, 1.f, 1.f };
-	float accum[3] = { 0.f, 0.f, 0.f };
+	Vector3f pt = { 1.f, 1.f, 1.f };
+	Vector3f accum = { 0.f, 0.f, 0.f };
 	const int count = oct.GetSumNeighbours(pt, 1.1f, accum);
 
 	EXPECT_EQ(count, 7);
@@ -209,7 +209,7 @@ TEST(TEST_cgmesh_octree, GetClosestIndicesPointsWithinRadius)
 	Octree oct;
 	oct.BuildWithIndices(p.data(), 27, 2, 10, nullptr, 0);
 
-	float pt[3] = { 1.f, 1.f, 1.f };
+	Vector3f pt = { 1.f, 1.f, 1.f };
 	unsigned int *out = nullptr; unsigned int n = 0;
 	const int res = oct.GetClosestIndicesPoints(p.data(), pt, 1.1f, &out, &n);
 
@@ -238,7 +238,7 @@ TEST(TEST_cgmesh_octree, MaxDepthZeroGivesSingleLeaf)
 
 	EXPECT_EQ(oct.GetMaxDepth(), 0);
 	EXPECT_EQ(oct.GetNLeaves(), 1);
-	float pt[3] = { 1.f, 1.f, 1.f };
+	Vector3f pt = { 1.f, 1.f, 1.f };
 	EXPECT_EQ(oct.GetKNeighbours(pt, 1.1f), 7);   // single-leaf query still works
 }
 
@@ -248,9 +248,9 @@ TEST(TEST_cgmesh_octree, SinglePoint)
 	Octree oct;
 	oct.Build(p.data(), 1, 1, 5);
 
-	float pt[3] = { 1.f, 1.f, 1.f };
+	Vector3f pt = { 1.f, 1.f, 1.f };
 	EXPECT_EQ(oct.GetKNeighbours(pt, 0.5f), 1);
-	float far[3] = { 9.f, 9.f, 9.f };
+	Vector3f far = { 9.f, 9.f, 9.f };
 	EXPECT_EQ(oct.GetKNeighbours(far, 0.5f), 0);
 }
 
@@ -265,6 +265,6 @@ TEST(TEST_cgmesh_octree, CoincidentPointsTerminateAtMaxDepth)
 	oct.Build(p.data(), 5, /*maxPoints*/1, /*maxDepth*/4);
 
 	EXPECT_EQ(oct.GetMaxDepth(), 4);
-	float pt[3] = { 1.f, 1.f, 1.f };
+	Vector3f pt = { 1.f, 1.f, 1.f };
 	EXPECT_EQ(oct.GetKNeighbours(pt, 0.5f), 5);
 }

@@ -24,25 +24,25 @@ class Cperlin2
   float PerlinNoise_1D (float x);
   float PerlinNoise_2D (float x, float y);
 
-  void multiplication (vec3 &c, float f);
+  void multiplication (float *c, float f);
   float noise (float s);
   float noise (float s, float t);
-  void noise (vec3 res, vec3 p);
-  float vvvvnoise (vec3 p);
+  void noise (float *res, float *p);
+  float vvvvnoise (float *p);
   float clamp (float v,float min,float max);
   float smoothstep (float min,float max,float val);
-  void mix (vec3 res, vec3 min, vec3 max, float val);
-  void lisse (vec3 res, vec3 t1, vec3 t2, vec3 t3, vec3 t4, float t, matrice m);
-  void spline(vec3 res, float csp, vec3 c1, vec3 c2, vec3 c3, vec3 c4, vec3 c5, vec3 c6,
-	      vec3 c7, vec3 c8, vec3 c9, vec3 c10, vec3 c11, vec3 c12, vec3 c13);
+  void mix (float *res, float *min, float *max, float val);
+  void lisse (float *res, float *t1, float *t2, float *t3, float *t4, float t, matrice m);
+  void spline(float *res, float csp, float *c1, float *c2, float *c3, float *c4, float *c5, float *c6,
+	      float *c7, float *c8, float *c9, float *c10, float *c11, float *c12, float *c13);
   
  private:
   float persistence;
   int   n_octaves;
 
   float du, dv;
-  vec3 N, I;
-  vec3 Ci, Oi, Cs, Os;
+  float N[3], I[3];
+  float Ci[3], Oi[3], Cs[3], Os[3];
 
   unsigned char *image;
   int w, h;

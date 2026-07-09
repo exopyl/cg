@@ -12,11 +12,11 @@ public:
 	unsigned int GetNContours (void) { return m_nContours; };
 	unsigned int GetNPoints (unsigned int i) { return m_nPoints[i]; };
 	float* GetPoints (unsigned int i) { return m_pPoints[i]; };
-	inline void GetPoint (unsigned int ci, unsigned int vi, vec3 pt)
+	inline void GetPoint (unsigned int ci, unsigned int vi, Vector3f &pt)
 		{
-			vec3_init (pt, m_pPoints[ci][3*vi], m_pPoints[ci][3*vi+1], m_pPoints[ci][3*vi+2]);
+			pt.Set (m_pPoints[ci][3*vi], m_pPoints[ci][3*vi+1], m_pPoints[ci][3*vi+2]);
 		};
-	void GetBBox (vec3 min, vec3 max);
+	void GetBBox (Vector3f &min, Vector3f &max);
 
 	void Dump (void);
 

@@ -180,25 +180,25 @@ bool AABox::intersection (Triangle &tri) const
   /*    2) normal of the triangle */
   /*    3) crossproduct(edge from tri, {x,y,z}-directin) */
   /*       this gives 3x3=9 more tests */
-   vec3 v0,v1,v2;
+   Vector3f v0,v1,v2;
    float min,max,p0,p1,p2,rad,fex,fey,fez;
-   vec3 normal,e0,e1,e2;
+   Vector3f normal,e0,e1,e2;
 
    // redefine the aabox
-   vec3 boxcenter, boxhalfsize;
-   vec3_init (boxcenter, .5*(parameters[0].x+parameters[1].x), .5*(parameters[0].y+parameters[1].y), .5*(parameters[0].z+parameters[1].z));
-   vec3_init (boxhalfsize, .5*(parameters[1].x-parameters[0].x), .5*(parameters[1].y-parameters[0].y), .5*(parameters[1].z-parameters[0].z));
+   Vector3f boxcenter, boxhalfsize;
+   boxcenter.Set (.5*(parameters[0].x+parameters[1].x), .5*(parameters[0].y+parameters[1].y), .5*(parameters[0].z+parameters[1].z));
+   boxhalfsize.Set (.5*(parameters[1].x-parameters[0].x), .5*(parameters[1].y-parameters[0].y), .5*(parameters[1].z-parameters[0].z));
 
    /* This is the fastest branch on Sun */
    /* move everything so that the boxcenter is in (0,0,0) */
-   vec3_subtraction (v0, tri.m_v[0], boxcenter);
-   vec3_subtraction (v1, tri.m_v[1], boxcenter);
-   vec3_subtraction (v2, tri.m_v[2], boxcenter);
+   v0 = tri.m_v[0] - boxcenter;
+   v1 = tri.m_v[1] - boxcenter;
+   v2 = tri.m_v[2] - boxcenter;
 
    /* compute triangle edges */
-   vec3_subtraction (e0,v1,v0);      /* tri edge 0 */
-   vec3_subtraction (e1,v2,v1);      /* tri edge 1 */
-   vec3_subtraction (e2,v0,v2);      /* tri edge 2 */
+   e0 = v1 - v0;      /* tri edge 0 */
+   e1 = v2 - v1;      /* tri edge 1 */
+   e2 = v0 - v2;      /* tri edge 2 */
 
    /* Bullet 3:  */
    /*  test the 9 tests first (this was faster) */

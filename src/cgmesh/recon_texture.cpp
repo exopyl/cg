@@ -71,9 +71,8 @@ void ProjectiveTexturer::texture(Mesh&                           mesh,
         const float dx=camC[3*ci]-bx, dy=camC[3*ci+1]-by, dz=camC[3*ci+2]-bz;
         const float dist=std::sqrt(dx*dx+dy*dy+dz*dz);
         if (dist < tEps) return false;
-        vec3 o, d;
-        vec3_init(o, bx, by, bz);
-        vec3_init(d, dx/dist, dy/dist, dz/dist);
+        Vector3f o (bx, by, bz);
+        Vector3f d (dx/dist, dy/dist, dz/dist);
         const float t = bvh.nearest(o, d, tEps);   // tEps saute la face d'origine
         return (t >= 0.f && t < dist - tEps);       // un hit AVANT la caméra -> occultée
     };

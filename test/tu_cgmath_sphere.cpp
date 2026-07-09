@@ -18,8 +18,8 @@ TEST(TEST_cgmath_sphere, DefaultConstructorInitializesBoundingBox)
 TEST(TEST_cgmath_sphere, DefaultBoundingBoxRejectsFarRay)
 {
     Sphere sphere;
-    vec3 origin = {5.f, 5.f, 5.f};
-    vec3 direction = {1.f, 0.f, 0.f};
+    Vector3f origin = {5.f, 5.f, 5.f};
+    Vector3f direction = {1.f, 0.f, 0.f};
 
     EXPECT_FALSE(sphere.GetIntersectionBboxWithRay(origin, direction));
 }

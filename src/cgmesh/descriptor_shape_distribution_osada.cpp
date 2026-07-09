@@ -56,25 +56,25 @@ Cshape_distribution_osada::compute_distribution_a3 (int _n_bins)
 		for (j=i+1; j<n_selected_points-1; j++)
 			for (k=j+1; k<n_selected_points; k++)
 			{
-				vec3 v1;
-				vec3 v2;
-				vec3 v3;
-				vec3_init (v1, selected_points[3*i], selected_points[3*i+1], selected_points[3*i+2]);
-				vec3_init (v2, selected_points[3*j], selected_points[3*j+1], selected_points[3*j+2]);
-				vec3_init (v3, selected_points[3*k], selected_points[3*k+1], selected_points[3*k+2]);
+				Vector3f v1;
+				Vector3f v2;
+				Vector3f v3;
+				v1.Set (selected_points[3*i], selected_points[3*i+1], selected_points[3*i+2]);
+				v2.Set (selected_points[3*j], selected_points[3*j+1], selected_points[3*j+2]);
+				v3.Set (selected_points[3*k], selected_points[3*k+1], selected_points[3*k+2]);
 				
-				vec3 u, v;
-				vec3_subtraction (u, v2, v1);
-				vec3_subtraction (v, v3, v1);
-				angles[l++] = acos (vec3_dot_product(u,v) / (vec3_length (u)*vec3_length (v)));
+				Vector3f u, v;
+				u = v2 - v1;
+				v = v3 - v1;
+				angles[l++] = acos ((u).DotProduct (v) / ((u).getLength ()*(v).getLength ()));
 				
-				vec3_subtraction (u, v1, v2);
-				vec3_subtraction (v, v3, v2);
-				angles[l++] = acos (vec3_dot_product (u,v) / (vec3_length (u)*vec3_length (v)));
+				u = v1 - v2;
+				v = v3 - v2;
+				angles[l++] = acos ((u).DotProduct (v) / ((u).getLength ()*(v).getLength ()));
 				
-				vec3_subtraction (u, v1, v3);
-				vec3_subtraction (v, v2, v3);
-				angles[l++] = acos (vec3_dot_product(u,v) / (vec3_length (u)*vec3_length (v)));
+				u = v1 - v3;
+				v = v2 - v3;
+				angles[l++] = acos ((u).DotProduct (v) / ((u).getLength ()*(v).getLength ()));
 			}
 	
 	// compute histogram
@@ -110,13 +110,13 @@ Cshape_distribution_osada::compute_distribution_d1 (int _n_bins)
   float *distances = (float*)malloc(n*sizeof(float));
 
   // centroid
-  vec3 centroid;
-  vec3_init (centroid, 0.0, 0.0, 0.0);
+  Vector3f centroid;
+  centroid.Set (0.0, 0.0, 0.0);
   for (i=0; i<nv; i++)
     {
-	    vec3 walk;
-	    vec3_init (walk, v[3*i], v[3*i+1], v[3*i+2]);
-	    vec3_addition (centroid, centroid, walk);
+	    Vector3f walk;
+	    walk.Set (v[3*i], v[3*i+1], v[3*i+2]);
+	    centroid = centroid + walk;
     }
   centroid[0] /= nv;
   centroid[1] /= nv;
@@ -124,10 +124,10 @@ Cshape_distribution_osada::compute_distribution_d1 (int _n_bins)
 
   for (i=0; i<n_selected_points; i++)
     {
-	    vec3 walk;
-	    vec3_init (walk, selected_points[3*i], selected_points[3*i+1], selected_points[3*i+2]);
-	    vec3_subtraction (walk, walk, centroid);
-	    distances[i] = vec3_length (walk);
+	    Vector3f walk;
+	    walk.Set (selected_points[3*i], selected_points[3*i+1], selected_points[3*i+2]);
+	    walk = walk - centroid;
+	    distances[i] = (walk).getLength ();
     }
 
   // compute histogram
@@ -165,10 +165,10 @@ Cshape_distribution_osada::compute_distribution_d2 (int _n_bins)
   for (i=0; i<n_selected_points-1; i++)
     for (j=i+1; j<n_selected_points; j++)
       {
-	      vec3 v1, v2;
-	      vec3_init (v1, selected_points[3*i], selected_points[3*i+1], selected_points[3*i+2]);
-	      vec3_init (v2, selected_points[3*j], selected_points[3*j+1], selected_points[3*j+2]);
-	      distances[k++] = vec3_distance (v1, v2);
+	      Vector3f v1, v2;
+	      v1.Set (selected_points[3*i], selected_points[3*i+1], selected_points[3*i+2]);
+	      v2.Set (selected_points[3*j], selected_points[3*j+1], selected_points[3*j+2]);
+	      distances[k++] = (v1).getDistance (v2);
       }
 
   // compute histogram
@@ -207,12 +207,12 @@ Cshape_distribution_osada::compute_distribution_d3 (int _n_bins)
     for (j=i+1; j<n_selected_points-1; j++)
       for (k=j+1; k<n_selected_points; k++)
       {
-	      vec3 v1, v2, v3;
-	      vec3_init (v1, selected_points[3*i], selected_points[3*i+1], selected_points[3*i+2]);
-	      vec3_init (v2, selected_points[3*j], selected_points[3*j+1], selected_points[3*j+2]);
-	      vec3_init (v3, selected_points[3*k], selected_points[3*k+1], selected_points[3*k+2]);
+	      Vector3f v1, v2, v3;
+	      v1.Set (selected_points[3*i], selected_points[3*i+1], selected_points[3*i+2]);
+	      v2.Set (selected_points[3*j], selected_points[3*j+1], selected_points[3*j+2]);
+	      v3.Set (selected_points[3*k], selected_points[3*k+1], selected_points[3*k+2]);
 
-	      areas[l++] = sqrt (vec3_triangle_area (v1, v2, v3));
+	      areas[l++] = sqrt (Vector3f::evaluate_triangle_area (v1, v2, v3));
       }
 
   /* compute histogram */
@@ -252,20 +252,20 @@ Cshape_distribution_osada::compute_distribution_d4 (int _n_bins)
       for (k=j+1; k<n_selected_points-1; k++)
 		for (l=k+1; l<n_selected_points; l++)
 	  {
-		  vec3 v1, v2, v3, v4;
-	    vec3_init (v1, selected_points[3*i], selected_points[3*i+1], selected_points[3*i+2]);
-	    vec3_init (v2, selected_points[3*j], selected_points[3*j+1], selected_points[3*j+2]);
-	    vec3_init (v3, selected_points[3*k], selected_points[3*k+1], selected_points[3*k+2]);
-	    vec3_init (v4, selected_points[3*l], selected_points[3*l+1], selected_points[3*l+2]);
+		  Vector3f v1, v2, v3, v4;
+	    v1.Set (selected_points[3*i], selected_points[3*i+1], selected_points[3*i+2]);
+	    v2.Set (selected_points[3*j], selected_points[3*j+1], selected_points[3*j+2]);
+	    v3.Set (selected_points[3*k], selected_points[3*k+1], selected_points[3*k+2]);
+	    v4.Set (selected_points[3*l], selected_points[3*l+1], selected_points[3*l+2]);
 	    
-	    vec3 a, b, c;
-	    vec3_subtraction (a, v2, v1);
-	    vec3_subtraction (b, v3, v1);
-	    vec3_subtraction (c, v4, v1);
+	    Vector3f a, b, c;
+	    a = v2 - v1;
+	    b = v3 - v1;
+	    c = v4 - v1;
 
-		vec3 tmp;
-		vec3_cross_product (tmp, b, c);
-		float volume = fabs (vec3_dot_product (a, tmp)) / 6;
+		Vector3f tmp;
+		tmp = (b).CrossProduct (c);
+		float volume = fabs ((a).DotProduct (tmp)) / 6;
 	    //volume = cbrt (volume);
 		volume = pow ((double)volume, (double)1.0/3.0);
 	    volumes[m++] = volume;
@@ -336,14 +336,14 @@ Cshape_distribution_osada::evaluate_distribution_a3 (int n_data, int _n_bins)
   int i;
   for (i=0; i<n_data; i++)
   {
-		vec3 v1, v2, v3, u, v;
+		Vector3f v1, v2, v3, u, v;
 		select_random_point (v1);
 		select_random_point (v2);
 		select_random_point (v3);
 
-		vec3_subtraction (u, v2, v1);
-		vec3_subtraction (v, v3, v1);
-		angles[i] = acos (vec3_dot_product (u,v) / (vec3_length (u)*vec3_length(v)));
+		u = v2 - v1;
+		v = v3 - v1;
+		angles[i] = acos ((u).DotProduct (v) / ((u).getLength ()*(v).getLength ()));
   }
 
   // compute histogram
@@ -374,13 +374,13 @@ Cshape_distribution_osada::evaluate_distribution_d1 (int n_data, int _n_bins)
   float *distances = (float*)malloc(n_data*sizeof(float));
 
   /* centroid */
-  vec3 centroid;
-  vec3_init (centroid, 0.0, 0.0, 0.0);
+  Vector3f centroid;
+  centroid.Set (0.0, 0.0, 0.0);
   for (i=0; i<nv; i++)
     {
-      vec3 walk;
-      vec3_init (walk, v[3*i], v[3*i+1], v[3*i+2]);
-      vec3_addition (centroid, centroid, walk);
+      Vector3f walk;
+      walk.Set (v[3*i], v[3*i+1], v[3*i+2]);
+      centroid = centroid + walk;
     }
   centroid[0] /= nv;
   centroid[1] /= nv;
@@ -388,9 +388,9 @@ Cshape_distribution_osada::evaluate_distribution_d1 (int n_data, int _n_bins)
 
   for (i=0; i<n_data; i++)
     {
-      vec3 walk;
+      Vector3f walk;
       select_random_point (walk);
-      distances[i] = vec3_distance (walk, centroid);
+      distances[i] = (walk).getDistance (centroid);
     }
 
   /* compute histogram */
@@ -422,10 +422,10 @@ Cshape_distribution_osada::evaluate_distribution_d2 (int n_data, int _n_bins)
   float *distances = (float*)malloc(n_data*sizeof(float));
   for (i=0; i<n_data; i++)
   {
-	  vec3 v1, v2, v1v2;
+	  Vector3f v1, v2, v1v2;
 	  select_random_point (v1);
 	  select_random_point (v2);
-	  distances[i] = vec3_distance (v1, v2);
+	  distances[i] = (v1).getDistance (v2);
   }
 
   /* compute histogram */
@@ -456,11 +456,11 @@ Cshape_distribution_osada::evaluate_distribution_d3 (int n_data, int _n_bins)
   int i;
   for (i=0; i<n_data; i++)
   {
-	vec3 v1, v2, v3;
+	Vector3f v1, v2, v3;
 	select_random_point (v1);
 	select_random_point (v2);
 	select_random_point (v3);
-	areas[i] = sqrt (vec3_triangle_area (v1, v2, v3));
+	areas[i] = sqrt (Vector3f::evaluate_triangle_area (v1, v2, v3));
   }
 
   /* compute histogram */
@@ -491,19 +491,19 @@ Cshape_distribution_osada::evaluate_distribution_d4 (int n_data, int _n_bins)
   int i;
   for (i=0; i<n_data; i++)
   {
-	 vec3 v1, v2, v3, v4, a, b, c;
+	 Vector3f v1, v2, v3, v4, a, b, c;
 	select_random_point (v1);
 	select_random_point (v2);
 	select_random_point (v3);
 	select_random_point (v4);
 	    
-	vec3_subtraction (a, v2, v1);
-	vec3_subtraction (b, v3, v1);
-	vec3_subtraction (c, v4, v1);
+	a = v2 - v1;
+	b = v3 - v1;
+	c = v4 - v1;
 
-	vec3 tmp;
-	vec3_cross_product (tmp, b, c);
-	float volume = fabs (vec3_dot_product (a, tmp)) / 6;
+	Vector3f tmp;
+	tmp = (b).CrossProduct (c);
+	float volume = fabs ((a).DotProduct (tmp)) / 6;
 	//volume = cbrt (volume);
 	volume = pow ((double)volume, (double)1.0/3.0);
 	volumes[i] = volume;
@@ -597,11 +597,11 @@ Cshape_distribution_osada::compute_cumulative_areas (void)
       b = f[3*i+1];
       c = f[3*i+2];
 
-      vec3 v1, v2, v3;
-      vec3_init (v1, v[3*a], v[3*a+1], v[3*a+2]);
-      vec3_init (v2, v[3*b], v[3*b+1], v[3*b+2]);
-      vec3_init (v3, v[3*c], v[3*c+1], v[3*c+2]);
-      cumulative_areas[i] = vec3_triangle_area (v1, v2, v3);
+      Vector3f v1, v2, v3;
+      v1.Set (v[3*a], v[3*a+1], v[3*a+2]);
+      v2.Set (v[3*b], v[3*b+1], v[3*b+2]);
+      v3.Set (v[3*c], v[3*c+1], v[3*c+2]);
+      cumulative_areas[i] = Vector3f::evaluate_triangle_area (v1, v2, v3);
     }
   for (i=1; i<nf; i++)
     {
@@ -621,7 +621,7 @@ Cshape_distribution_osada::select_points (int _n_points)
 
   for (i=0; i<n_selected_points; i++)
     {
-      vec3 point;
+      Vector3f point;
       select_random_point (point);
       selected_points[3*i]   = point[0];
       selected_points[3*i+1] = point[1];
@@ -643,7 +643,7 @@ Cshape_distribution_osada::find_area_position (float random_area, int istart, in
 }
 
 int
-Cshape_distribution_osada::select_random_point (vec3 &point)
+Cshape_distribution_osada::select_random_point (Vector3f &point)
 {
   int i; // index of the random face
   float random_area = (total_area*rand()/(RAND_MAX+1.0));
@@ -651,10 +651,10 @@ Cshape_distribution_osada::select_random_point (vec3 &point)
   // look for the random face
   i = find_area_position (random_area, 0, n_cumulative_areas-1);
 
-  vec3 v1, v2, v3;
-  vec3_init (v1, v[3*f[3*i]], v[3*f[3*i]+1], v[3*f[3*i]+2]);
-  vec3_init (v2, v[3*f[3*i+1]], v[3*f[3*i+1]+1], v[3*f[3*i+1]+2]);
-  vec3_init (v3, v[3*f[3*i+2]], v[3*f[3*i+2]+1], v[3*f[3*i+2]+2]);
+  Vector3f v1, v2, v3;
+  v1.Set (v[3*f[3*i]], v[3*f[3*i]+1], v[3*f[3*i]+2]);
+  v2.Set (v[3*f[3*i+1]], v[3*f[3*i+1]+1], v[3*f[3*i+1]+2]);
+  v3.Set (v[3*f[3*i+2]], v[3*f[3*i+2]+1], v[3*f[3*i+2]+2]);
   
   float r1 = rand()/(RAND_MAX+1.0);
   float r2 = rand()/(RAND_MAX+1.0);
@@ -662,7 +662,7 @@ Cshape_distribution_osada::select_random_point (vec3 &point)
   float x = (1-sr1)*v1[0] + sr1*(1-r2)*v2[0] + sr1*r2*v3[0];
   float y = (1-sr1)*v1[1] + sr1*(1-r2)*v2[1] + sr1*r2*v3[1];
   float z = (1-sr1)*v1[2] + sr1*(1-r2)*v2[2] + sr1*r2*v3[2];
-  vec3_init (point, x, y, z);
+  point.Set (x, y, z);
 
   return i;
 }

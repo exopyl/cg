@@ -1,7 +1,6 @@
 #include <math.h>
 
 #include "geometry.h"
-#include "algebra_vector3.h"
 #include "common.h"
 #include "polynomial.h"
 
@@ -9,8 +8,8 @@
 // section 5.1.5). Returns the squared distance; writes the closest point to
 // closest_out when provided. Implemented with plain scalar math so it accepts
 // const inputs and has no side effects.
-float point_triangle_distance2 (const vec3 p, const vec3 a, const vec3 b, const vec3 c,
-                                vec3 closest_out)
+float point_triangle_distance2 (const float *p, const float *a, const float *b, const float *c,
+                                float *closest_out)
 {
 	const float ab[3] = { b[0]-a[0], b[1]-a[1], b[2]-a[2] };
 	const float ac[3] = { c[0]-a[0], c[1]-a[1], c[2]-a[2] };
@@ -83,7 +82,7 @@ Geometry::Geometry()
 
 //
 //
-bool Geometry::GetIntersectionBboxWithRay (vec3 o, vec3 d)
+bool Geometry::GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d)
 {
 	if (m_pAABox)
 	{
@@ -486,17 +485,17 @@ std::vector<Vector2d> Arc::tessellateAdaptive (double maxAngleRad) const
 //
 
 // Refernce : http://wiki.cgsociety.org/index.php/Ray_Sphere_Intersection
-int Sphere::GetIntersectionWithRay (vec3 o, vec3 d, float *_t, vec3 i, vec3 n)
+int Sphere::GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n)
 {
-	vec3 vCO;
+	Vector3f vCO;
 	vCO[0] = o[0] - m_vCenter[0];
 	vCO[1] = o[1] - m_vCenter[1];
 	vCO[2] = o[2] - m_vCenter[2];
 
 	//Compute A, B and C coefficients
-	float a =      vec3_dot_product (d, d);
-	float b = 2. * vec3_dot_product (d, vCO);
-	float c =      vec3_dot_product (vCO, vCO) - (m_fRadius * m_fRadius);
+	float a =      (d).DotProduct (d);
+	float b = 2. * (d).DotProduct (vCO);
+	float c =      (vCO).DotProduct (vCO) - (m_fRadius * m_fRadius);
 	
 	//Find discriminant
 	float disc = b*b - 4*a*c;
@@ -551,14 +550,14 @@ int Sphere::GetIntersectionWithRay (vec3 o, vec3 d, float *_t, vec3 i, vec3 n)
 	return 1;
 }
 
-int Sphere::GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n)
+int Sphere::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n)
 {
-	vec3 vDirection;
+	Vector3f vDirection;
 	vDirection[0] = vEnd[0] - vStart[0];
 	vDirection[1] = vEnd[1] - vStart[1];
 	vDirection[2] = vEnd[2] - vStart[2];
-	float l = sqrt (vec3_dot_product (vDirection, vDirection));
-	vec3_normalize (vDirection);
+	float l = sqrt ((vDirection).DotProduct (vDirection));
+	(vDirection).Normalize ();
 	unsigned int res = GetIntersectionWithRay (vStart, vDirection, _t, i, n);
 	return (res && *_t < l);
 }
@@ -568,7 +567,7 @@ int Sphere::GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 
 //
 // Torus
 //
-int Torus::GetIntersectionWithRay (vec3 vOrig, vec3 vDirection, float *_t, vec3 i, vec3 n)
+int Torus::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirection, float *_t, Vector3f &i, Vector3f &n)
 {
 	float r2 = r*r;
 	float R2 = R*R;
@@ -577,11 +576,11 @@ int Torus::GetIntersectionWithRay (vec3 vOrig, vec3 vDirection, float *_t, vec3 
 	float dz = vDirection[2];
 	float dz2 = dz*dz;
 
-	float alpha = vec3_dot_product (vDirection, vDirection);
+	float alpha = (vDirection).DotProduct (vDirection);
 	float alpha2 = alpha * alpha;
-	float beta = 2. * vec3_dot_product (vOrig, vDirection);
+	float beta = 2. * (vOrig).DotProduct (vDirection);
 	float beta2 = beta * beta;
-	float gamma = vec3_dot_product (vOrig, vOrig) - r2 - R2;
+	float gamma = (vOrig).DotProduct (vOrig) - r2 - R2;
 	float gamma2 = gamma * gamma;
 
 	double c[5], s[4];
@@ -616,28 +615,28 @@ int Torus::GetIntersectionWithRay (vec3 vOrig, vec3 vDirection, float *_t, vec3 
 		i[1] = vOrig[1] + t*vDirection[1];
 		i[2] = vOrig[2] + t*vDirection[2];
 
-		float v[3];
+		Vector3f v;
 		v[0] = i[0];
 		v[1] = i[1];
 		v[2] = 0.;
-		vec3_normalize (v);
+		(v).Normalize ();
 		v[0] *= R;
 		v[1] *= R;
 
 		n[0] = (i[0] - v[0]);
 		n[1] = (i[1] - v[1]);
 		n[2] = i[2];
-		vec3_normalize (n);
+		(n).Normalize ();
 		return 1;
 	}
 	else
 		return 0;
 }
 
-int Torus::GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n)
+int Torus::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n)
 {
-	vec3 vDirection;
-	vec3_subtraction (vDirection, vEnd, vStart);
+	Vector3f vDirection;
+	vDirection = vEnd - vStart;
 	unsigned int res = GetIntersectionWithRay (vStart, vDirection, _t, i, n);
 	return (res && *_t < 1.);
 }
@@ -647,23 +646,23 @@ int Torus::GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i
 //
 
 // Reference : http://geomalgorithms.com/a06-_intersect-2.html
-int Triangle::GetIntersectionWithRay (vec3 vO, vec3 vD, float *_t, vec3 i, vec3 n)
+int Triangle::GetIntersectionWithRay (const Vector3f &vO, const Vector3f &vD, float *_t, Vector3f &i, Vector3f &n)
 {
-    vec3  u, v;        // triangle vectors
-    vec3  w0, w;       // ray vectors
+    Vector3f u, v;        // triangle vectors
+    Vector3f w0, w;       // ray vectors
     float r, a, b;     // params to calc ray-plane intersect
 
     // get triangle edge vectors and plane normal
-	vec3_subtraction (u, m_v[1], m_v[0]);
-	vec3_subtraction (v, m_v[2], m_v[0]);
-	vec3_cross_product (n, u, v);
-    if (vec3_length (n) == 0.)      // triangle is degenerate
+	u = m_v[1] - m_v[0];
+	v = m_v[2] - m_v[0];
+	n = (u).CrossProduct (v);
+    if ((n).getLength () == 0.)      // triangle is degenerate
         return -1;                  // do not deal with this case
-	vec3_normalize (n);
+	(n).Normalize ();
 
-	vec3_subtraction (w0, vO,  m_v[0]);
-	a = -vec3_dot_product (n, w0);
-	b =  vec3_dot_product (n, vD);
+	w0 = vO -  m_v[0];
+	a = -(n).DotProduct (w0);
+	b =  (n).DotProduct (vD);
     if (fabs(b) < 0.000001)
 	{								// ray is  parallel to triangle plane
         if (a == 0)                 // ray lies in triangle plane
@@ -680,19 +679,19 @@ int Triangle::GetIntersectionWithRay (vec3 vO, vec3 vD, float *_t, vec3 i, vec3 
     // for a segment, also test if (r > 1.0) => no intersect
 
 	// intersect point of ray and plane
-	vec3_init (i,
+	i.Set (
 		vO[0] + r * vD[0],
 		vO[1] + r * vD[1],
 		vO[2] + r * vD[2]);
 
     // is I inside T?
     float uu, uv, vv, wu, wv, D;
-    uu = vec3_dot_product (u,u);
-    uv = vec3_dot_product (u,v);
-    vv = vec3_dot_product (v,v);
-	vec3_subtraction (w, i, m_v[0]);
-    wu = vec3_dot_product (w,u);
-    wv = vec3_dot_product (w,v);
+    uu = (u).DotProduct (u);
+    uv = (u).DotProduct (v);
+    vv = (v).DotProduct (v);
+	w = i - m_v[0];
+    wu = (w).DotProduct (u);
+    wv = (w).DotProduct (v);
     D = uv * uv - uu * vv;
 
     // get and test parametric coords
@@ -709,10 +708,10 @@ int Triangle::GetIntersectionWithRay (vec3 vO, vec3 vD, float *_t, vec3 i, vec3 
     return 1;                       // I is in T
 }
 
-int Triangle::GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n)
+int Triangle::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n)
 {
-	vec3 vDirection;
-	vec3_subtraction (vDirection, vEnd, vStart);
+	Vector3f vDirection;
+	vDirection = vEnd - vStart;
 	unsigned int res = GetIntersectionWithRay (vStart, vDirection, _t, i, n);
 	return (res == 1 && *_t < 1.);
 }

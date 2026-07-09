@@ -19,35 +19,33 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 			continue;
 		}
 
-		vec3 v_current, n;
-		vec3_init (v_current, v[3*i], v[3*i+1], v[3*i+2]);
-		vec3_init (n, vn[3*i], vn[3*i+1], vn[3*i+2]);
-		vec3_normalize (n);
-		float D = - vec3_dot_product (v_current, n);
+		Vector3f v_current (v[3*i], v[3*i+1], v[3*i+2]);
+		Vector3f n (vn[3*i], vn[3*i+1], vn[3*i+2]);
+		n.Normalize ();
+		float D = - v_current.DotProduct (n);
 
 		// local basis
-		vec3_init (n, vn[3*i], vn[3*i+1], vn[3*i+2]);
-		vec3_normalize (n);
+		n.Set (vn[3*i], vn[3*i+1], vn[3*i+2]);
+		n.Normalize ();
 
-		vec3 b1, b2;
+		Vector3f b1, b2;
 		if (n[0])
-			vec3_init (b1, -(n[1]+n[2])/n[0], 1, 1);
+			b1.Set (-(n[1]+n[2])/n[0], 1, 1);
 		else
 		{
 			if (n[1])
-				vec3_init (b1, 1, -(n[0]+n[2])/n[1], 1);
+				b1.Set (1, -(n[0]+n[2])/n[1], 1);
 			else
-				vec3_init (b1, 1, 1, -(n[0]+n[1])/n[2]);
+				b1.Set (1, 1, -(n[0]+n[1])/n[2]);
 		}
-		vec3_normalize (b1);
-		vec3_cross_product (b2, n, b1);
+		b1.Normalize ();
+		b2 = n.CrossProduct (b1);
 
 		// compute the rotation we will apply on the normales
-		vec3 axis;
-		vec3_init (axis, n[1], -n[0], 0.0);
+		Vector3f axis (n[1], -n[0], 0.0);
 		//axis.normalize ();
 		float theta = acos (n[2]);
-		Quaternionf rot (Vector3f (axis[0], axis[1], axis[2]), theta);
+		Quaternionf rot (axis, theta);
 
 		// allocate memory for the matrices
 		int n_neighbours = m_pModel->get_n_neighbours (i);
@@ -65,31 +63,25 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 			int index = ew.m_v_end;
 			if (m_pModel->m_border[index]) break;
 			
-			vec3 v_walk;
-			vec3_init (v_walk, v[3*index], v[3*index+1], v[3*index+2]);
-			
-			float d_walk = vec3_dot_product (v_walk, n) + D;
-			
-			vec3 v_proj;
-			vec3_init (v_proj, v_walk[0]-d_walk*n[0], v_walk[1]-d_walk*n[1], v_walk[2]-d_walk*n[2]);
-			vec3 v_local;
-			vec3_subtraction (v_local, v_proj, v_current);
-			float ui = vec3_dot_product (v_local, b1);
-			float vi = vec3_dot_product (v_local, b2);
-			
+			Vector3f v_walk (v[3*index], v[3*index+1], v[3*index+2]);
+
+			float d_walk = v_walk.DotProduct (n) + D;
+
+			Vector3f v_proj (v_walk[0]-d_walk*n[0], v_walk[1]-d_walk*n[1], v_walk[2]-d_walk*n[2]);
+			Vector3f v_local = v_proj - v_current;
+			float ui = v_local.DotProduct (b1);
+			float vi = v_local.DotProduct (b2);
+
 			float xi  = ui;
 			float yi  = vi;
 			float zi  = d_walk;
-			
-			vec3 ni;
-			vec3_init (ni, vn[3*index], vn[3*index+1], vn[3*index+2]);
-			Vector3f niv (ni[0], ni[1], ni[2]);
+
+			Vector3f ni (vn[3*index], vn[3*index+1], vn[3*index+2]);
 			Vector3f nrot;
-			rot.rotate (nrot, niv);
-			vec3_init (ni, nrot.x, nrot.y, nrot.z);
-			float nxi = ni[0];
-			float nyi = ni[1];
-			float nzi = ni[2];
+			rot.rotate (nrot, ni);
+			float nxi = nrot.x;
+			float nyi = nrot.y;
+			float nzi = nrot.z;
 			
 			// fill A
 			A[21*iwalk]    = xi*xi/2.0;
@@ -230,35 +222,31 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 			Matrix2f m (a, b, b, c);
 			Vector2f evector1, evector2, evalues;
 			m.SolveEigensystem (evector1, evector2, evalues);
-			vec3 d1, d2;
+			Vector3f d1, d2;
 			if (evalues[0] < evalues[1])
 			{
 				//kappa1 = evalues[1];
 				//kappa2 = evalues[0];
-				vec3_init (d1,
-					   evector2[0]*b1[0]+evector2[1]*b2[0],
-					   evector2[0]*b1[1]+evector2[1]*b2[1],
-					   evector2[0]*b1[2]+evector2[1]*b2[2]);
-				vec3_init (d2,
-					   evector1[0]*b1[0]+evector1[1]*b2[0],
-					   evector1[0]*b1[1]+evector1[1]*b2[1],
-					   evector1[0]*b1[2]+evector1[1]*b2[2]);
+				d1.Set (evector2[0]*b1[0]+evector2[1]*b2[0],
+					evector2[0]*b1[1]+evector2[1]*b2[1],
+					evector2[0]*b1[2]+evector2[1]*b2[2]);
+				d2.Set (evector1[0]*b1[0]+evector1[1]*b2[0],
+					evector1[0]*b1[1]+evector1[1]*b2[1],
+					evector1[0]*b1[2]+evector1[1]*b2[2]);
 			}
 			else
 			{
 				//kappa1 = evalues[0];
 				//kappa2 = evalues[1];
-				vec3_init (d1,
-					   evector1[0]*b1[0]+evector1[1]*b2[0],
-					   evector1[0]*b1[1]+evector1[1]*b2[1],
-					   evector1[0]*b1[2]+evector1[1]*b2[2]);
-				vec3_init (d2,
-					   evector2[0]*b1[0]+evector2[1]*b2[0],
-					   evector2[0]*b1[1]+evector2[1]*b2[1],
-					   evector2[0]*b1[2]+evector2[1]*b2[2]);
+				d1.Set (evector1[0]*b1[0]+evector1[1]*b2[0],
+					evector1[0]*b1[1]+evector1[1]*b2[1],
+					evector1[0]*b1[2]+evector1[1]*b2[2]);
+				d2.Set (evector2[0]*b1[0]+evector2[1]*b2[0],
+					evector2[0]*b1[1]+evector2[1]*b2[1],
+					evector2[0]*b1[2]+evector2[1]*b2[2]);
 			}
-			vec3_normalize (d1);
-			vec3_normalize (d2);
+			d1.Normalize ();
+			d2.Normalize ();
 			
 			Tensor *pDiffParam_walk = new Tensor ();
 			pDiffParam_walk->SetKappaMax (kappa1);

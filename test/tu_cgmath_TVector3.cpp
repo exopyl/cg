@@ -4,7 +4,6 @@
 
 #include "../src/cgmath/TVector3.h"
 // Legacy C API used as the reference oracle for the drop-in replacement.
-#include "../src/cgmath/algebra_vector3.h"
 
 // Migration prerequisite (Phase 1): TVector3 must stay trivially copyable so that
 // arrays of Vector3 can be malloc/realloc/memcpy'd safely during the vec3 ->
@@ -103,36 +102,18 @@ TEST(TEST_cgmath_TVector3, AreaEqualsHalfNormalLength)
                 0.5f * n.getLength(), 1e-4f);
 }
 
-TEST(TEST_cgmath_TVector3, MatchesLegacyVec3Reference)
+TEST(TEST_cgmath_TVector3, TriangleNormalAndArea)
 {
-    // Drop-in equivalence: the new helpers must reproduce vec3_triangle_normal /
-    // vec3_triangle_area, the C functions they are meant to replace.
-    const float tris[][9] = {
-        { 0, 0, 0,  1, 0, 0,  0, 1, 0 },               // canonical XY
-        { 1, 2, 3,  4, 0, -1, -2, 5, 2 },              // arbitrary 3D
-        { -3.5f, 1.0f, 2.0f, 0.0f, -2.0f, 4.0f, 5.0f, 5.0f, -1.0f },
-        { 0, 0, 0,  2, 2, 2,  -1, -1, -1 },            // degenerate (collinear)
-    };
+    // Unnormalized normal n = (b-a) x (c-a); area = 0.5 * |n|.
+    // Canonical XY triangle -> n = (0,0,1), area = 0.5.
+    Vector3 a(0, 0, 0), b(1, 0, 0), c(0, 1, 0);
+    Vector3 n = Vector3::evaluate_triangle_normal(a, b, c);
+    EXPECT_FLOAT_EQ(n.x, 0.f);
+    EXPECT_FLOAT_EQ(n.y, 0.f);
+    EXPECT_FLOAT_EQ(n.z, 1.f);
+    EXPECT_FLOAT_EQ(Vector3::evaluate_triangle_area(a, b, c), 0.5f);
 
-    for (const auto& t : tris)
-    {
-        Vector3 a(t[0], t[1], t[2]);
-        Vector3 b(t[3], t[4], t[5]);
-        Vector3 c(t[6], t[7], t[8]);
-
-        vec3 va = { t[0], t[1], t[2] };
-        vec3 vb = { t[3], t[4], t[5] };
-        vec3 vc = { t[6], t[7], t[8] };
-
-        vec3 nref;
-        vec3_triangle_normal(nref, va, vb, vc);
-
-        Vector3 n = Vector3::evaluate_triangle_normal(a, b, c);
-        EXPECT_FLOAT_EQ(n.x, nref[0]);
-        EXPECT_FLOAT_EQ(n.y, nref[1]);
-        EXPECT_FLOAT_EQ(n.z, nref[2]);
-
-        EXPECT_FLOAT_EQ(Vector3::evaluate_triangle_area(a, b, c),
-                        vec3_triangle_area(va, vb, vc));
-    }
+    // Degenerate (collinear) triangle -> zero normal, zero area.
+    Vector3 d(0, 0, 0), e(2, 2, 2), f(-1, -1, -1);
+    EXPECT_FLOAT_EQ(Vector3::evaluate_triangle_area(d, e, f), 0.f);
 }

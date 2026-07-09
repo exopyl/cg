@@ -35,18 +35,18 @@ public:
 	void SetKappaMax (float kappa) { kappa_max = kappa; };
 	void SetKappaMin (float kappa) { kappa_min = kappa; };
 
-	void SetNormal (float x, float y, float z) { vec3_init (normal, x, y, z);  };
-	void SetNormal (vec3 n) { vec3_copy (normal, n); };
-	void SetDirectionMax (float x, float y, float z) { vec3_init (direction_max, x, y, z);  };
-	void SetDirectionMax (vec3 dmax) { vec3_copy (direction_max, dmax); };
-	void SetDirectionMin (float x, float y, float z) { vec3_init (direction_min, x, y, z);  };
-	void SetDirectionMin (vec3 dmin) { vec3_copy (direction_min, dmin); };
+	void SetNormal (float x, float y, float z) { normal.Set (x, y, z);  };
+	void SetNormal (const float *n) { normal.Set (n[0], n[1], n[2]); };
+	void SetDirectionMax (float x, float y, float z) { direction_max.Set (x, y, z);  };
+	void SetDirectionMax (const float *dmax) { direction_max.Set (dmax[0], dmax[1], dmax[2]); };
+	void SetDirectionMin (float x, float y, float z) { direction_min.Set (x, y, z);  };
+	void SetDirectionMin (const float *dmin) { direction_min.Set (dmin[0], dmin[1], dmin[2]); };
 
-	void  GetNormal (vec3 n) { vec3_copy (n, normal); };
+	void  GetNormal (float *n) { n[0]=normal.x; n[1]=normal.y; n[2]=normal.z; };
 	float GetKappaMax (void) { return kappa_max; };
 	float GetKappaMin (void) { return kappa_min; };
-	void  GetDirectionMax (vec3 dmax) { vec3_copy (dmax, direction_max); };
-	void  GetDirectionMin (vec3 dmin) { vec3_copy (dmin, direction_min); };
+	void  GetDirectionMax (float *dmax) { dmax[0]=direction_max.x; dmax[1]=direction_max.y; dmax[2]=direction_max.z; };
+	void  GetDirectionMin (float *dmin) { dmin[0]=direction_min.x; dmin[1]=direction_min.y; dmin[2]=direction_min.z; };
 
 	//
 	// derived curvatures
@@ -83,8 +83,8 @@ public:
 	
 	
 private:
-	vec3 normal;
+	Vector3f normal;
 	float kappa_max, kappa_min;
-	vec3 direction_max;
-	vec3 direction_min;
+	Vector3f direction_max;
+	Vector3f direction_min;
 };

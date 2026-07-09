@@ -94,8 +94,8 @@ void CreateScene (Scene *pScene, int id)
 		Mesh *pMesh = new Mesh ();
 		pMesh->load ("./test/data/BunnyLowPoly.stl");
 		pMesh->FlipFaces();
-		mat3 m;
-		mat3_init_rotation_from_euler_angles (m, 0., 0., M_PI/2.);
+		Matrix3f m;
+		m.SetRotation_Z (M_PI/2.);
 		pMesh->transform (m);
 		pMesh->centerize ();
 		pMesh->scale (1./5.);

@@ -1059,13 +1059,13 @@ float Mesh::GetFaceArea (unsigned int fi)
 	unsigned int vi1 = 3*m_pFaces[fi]->m_pVertices[0];
 	unsigned int vi2 = 3*m_pFaces[fi]->m_pVertices[1];
 	unsigned int vi3 = 3*m_pFaces[fi]->m_pVertices[2];
-	vec3 v1, v2, v3;
+	Vector3f v1, v2, v3;
 
-	vec3_init (v1, m_pVertices[vi1], m_pVertices[vi1+1], m_pVertices[vi1+2]);
-	vec3_init (v2, m_pVertices[vi2], m_pVertices[vi2+1], m_pVertices[vi2+2]);
-	vec3_init (v3, m_pVertices[vi3], m_pVertices[vi3+1], m_pVertices[vi3+2]);
+	v1.Set (m_pVertices[vi1], m_pVertices[vi1+1], m_pVertices[vi1+2]);
+	v2.Set (m_pVertices[vi2], m_pVertices[vi2+1], m_pVertices[vi2+2]);
+	v3.Set (m_pVertices[vi3], m_pVertices[vi3+1], m_pVertices[vi3+2]);
 	
-	return vec3_triangle_area (v1, v2, v3);
+	return Vector3f::evaluate_triangle_area (v1, v2, v3);
 }
 
 float Mesh::GetArea (void)
@@ -1149,17 +1149,17 @@ void Mesh::ComputeNormals (void)
 		int k1 = pFace->m_pVertices[0];
 		int k2 = pFace->m_pVertices[1];
 		int k3 = pFace->m_pVertices[2];
-		vec3 p1p2, p1p3, n;
-		vec3_init (p1p2,
+		Vector3f p1p2, p1p3, n;
+		p1p2.Set (
 			   m_pVertices[3*k2]   - m_pVertices[3*k1],
 			   m_pVertices[3*k2+1] - m_pVertices[3*k1+1],
 			   m_pVertices[3*k2+2] - m_pVertices[3*k1+2]);
-		vec3_init (p1p3,
+		p1p3.Set (
 			   m_pVertices[3*k3]   - m_pVertices[3*k1],
 			   m_pVertices[3*k3+1] - m_pVertices[3*k1+1],
 			   m_pVertices[3*k3+2] - m_pVertices[3*k1+2]);
-		vec3_cross_product (n, p1p2, p1p3);
-		vec3_normalize (n);
+		n = (p1p2).CrossProduct (p1p3);
+		(n).Normalize ();
 		m_pFaceNormals[3*i]   = n[0];
 		m_pFaceNormals[3*i+1] = n[1];
 		m_pFaceNormals[3*i+2] = n[2];
@@ -1299,13 +1299,13 @@ bool Mesh::ColorizeVerticesDensity_Traverse (Octree &o, void *_data)
 	if (o.m_nIndices)
 	{
 		float *data = (float*)_data;
-		vec3 v0, v;
-		vec3_init (v0, data[0], data[1], data[2]);
+		Vector3f v0, v;
+		v0.Set (data[0], data[1], data[2]);
 		float k = data[3];
 		for (int i=0; i<o.m_nIndices; i++)
 		{
 			GetVertex (i, v);
-			if (vec3_distance (v0, v) < k)
+			if ((v0).getDistance (v) < k)
 				data[4+i]++;
 		}
 		
@@ -1323,7 +1323,7 @@ int Mesh::ColorizeVerticesDensity (float k)
 	//unsigned int neighbours[m_nVertices];
 	memset (neighbours, 0, m_nVertices*sizeof(unsigned int));
 /*
-	vec3 v, vtmp;
+	Vector3f v, vtmp;
 	for (int i=0; i<m_nVertices; i++)
 	{
 		printf ("%d / %d\n", i, m_nVertices);
@@ -1331,7 +1331,7 @@ int Mesh::ColorizeVerticesDensity (float k)
 		for (int j=0; j<m_nVertices; j++)
 		{
 			GetVertex (j, vtmp);
-			if (vec3_distance (v, vtmp) < k)
+			if ((v).getDistance (vtmp) < k)
 				neighbours[i]++;
 		}
 	}
@@ -1339,7 +1339,7 @@ int Mesh::ColorizeVerticesDensity (float k)
 
 	Octree *pOctree = new Octree ();
 	pOctree->Build (m_pVertices.data(), m_nVertices, 200, 20);
-	vec3 pt;
+	Vector3f pt;
 	for (int i=0; i<m_nVertices; i++)
 	{
 		//printf ("%d %d\n", i, m_nVertices);
@@ -1376,8 +1376,8 @@ void Mesh::add_gaussian_noise (float variance)
 	for (int i=0; i<m_nVertices; i++)
 	{
 		static long idum = -247;
-		vec3 disp;
-		vec3_init (disp, gasdev(&idum), gasdev(&idum), gasdev(&idum));
+		Vector3f disp;
+		disp.Set (gasdev(&idum), gasdev(&idum), gasdev(&idum));
 		m_pVertices[3*i]   += variance*disp[0];
 		m_pVertices[3*i+1] += variance*disp[1];
 		m_pVertices[3*i+2] += variance*disp[2];
@@ -1455,7 +1455,7 @@ void Mesh::GetTopologicIssues(vector<unsigned int>& nonManifoldEdges, vector<uns
 //
 // from class Geometry
 //
-bool Mesh::GetIntersectionBboxWithRay (vec3 o, vec3 d)
+bool Mesh::GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d)
 {
 	float bbox_min[3];
 	float bbox_max[3];
@@ -1471,7 +1471,7 @@ bool Mesh::GetIntersectionBboxWithRay (vec3 o, vec3 d)
 		return true;
 }
 
-int Mesh::GetIntersectionWithRayInOctree (vec3 vOrig, vec3 vDirection, float *_t, vec3 vIntersection, vec3 vNormal, Octree *pOctree)
+int Mesh::GetIntersectionWithRayInOctree (const Vector3f &vOrig, const Vector3f &vDirection, float *_t, Vector3f &vIntersection, Vector3f &vNormal, Octree *pOctree)
 {
 	if (pOctree->IsLeaf ())
 	{
@@ -1481,7 +1481,7 @@ int Mesh::GetIntersectionWithRayInOctree (vec3 vOrig, vec3 vDirection, float *_t
 		Triangle tri;
 		for (unsigned int i=0; i<nTriangles; i++)
 		{
-			float vIntersectionCurrent[3], vNormalCurrent[3];
+			Vector3f vIntersectionCurrent, vNormalCurrent;
 
 			unsigned int vi1, vi2, vi3;
 			vi1 = 3*pTriangles[3*i];
@@ -1495,8 +1495,8 @@ int Mesh::GetIntersectionWithRayInOctree (vec3 vOrig, vec3 vDirection, float *_t
 				if (fT < 0. || fTCurrent < fT)
 				{
 					fT = fTCurrent;
-					vec3_copy (vIntersection, vIntersectionCurrent);
-					vec3_copy (vNormal, vNormalCurrent);
+					vIntersection = vIntersectionCurrent;
+					vNormal = vNormalCurrent;
 				}
 			}
 		}
@@ -1517,14 +1517,14 @@ int Mesh::GetIntersectionWithRayInOctree (vec3 vOrig, vec3 vDirection, float *_t
 			AABox.AddVertex (pChild->m_vecMax[0], pChild->m_vecMax[1], pChild->m_vecMax[2]);
 			if (AABox.intersection (ray, 0., 10000.))
 			{
-				vec3 vIntersectionCurrent, vNormalCurrent; 
+				Vector3f vIntersectionCurrent, vNormalCurrent; 
 				if (GetIntersectionWithRayInOctree (vOrig, vDirection, &fTCurrent, vIntersectionCurrent, vNormalCurrent, pChild))
 				{
 					if (fT < 0. || fTCurrent < fT)
 					{
 						fT = fTCurrent;
-						vec3_copy (vIntersection, vIntersectionCurrent);
-						vec3_copy (vNormal, vNormalCurrent);
+						vIntersection = vIntersectionCurrent;
+						vNormal = vNormalCurrent;
 					}
 				}
 			}
@@ -1534,7 +1534,7 @@ int Mesh::GetIntersectionWithRayInOctree (vec3 vOrig, vec3 vDirection, float *_t
 	}
 }
 
-int Mesh::GetIntersectionWithRay (vec3 vOrig, vec3 vDirection, float *_t, vec3 vIntersection, vec3 vNormal)
+int Mesh::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirection, float *_t, Vector3f &vIntersection, Vector3f &vNormal)
 {
 	/*
 	// test the bbox
@@ -1562,7 +1562,7 @@ int Mesh::GetIntersectionWithRay (vec3 vOrig, vec3 vDirection, float *_t, vec3 v
 		Triangle *pTri = new Triangle ();
 		for (unsigned int i=0; i<m_nFaces; i++)
 		{
-			float vIntersectionCurrent[3], vNormalCurrent[3];
+			Vector3f vIntersectionCurrent, vNormalCurrent;
 
 			unsigned int vi1, vi2, vi3;
 			vi1 = 3*m_pFaces[i]->GetVertex (0);
@@ -1576,8 +1576,8 @@ int Mesh::GetIntersectionWithRay (vec3 vOrig, vec3 vDirection, float *_t, vec3 v
 				if (fT < 0. || fTCurrent < fT)
 				{
 					fT = fTCurrent;
-					vec3_copy (vIntersection, vIntersectionCurrent);
-					vec3_copy (vNormal, vNormalCurrent);
+					vIntersection = vIntersectionCurrent;
+					vNormal = vNormalCurrent;
 				}
 			}
 		}
@@ -1587,7 +1587,7 @@ int Mesh::GetIntersectionWithRay (vec3 vOrig, vec3 vDirection, float *_t, vec3 v
 	}
 }
 
-int Mesh::GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n)
+int Mesh::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n)
 {
 	return 0;
 }

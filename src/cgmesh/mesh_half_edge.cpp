@@ -350,11 +350,10 @@ float Mesh_half_edge::edge_length (int par_edge)
 
 	int iv1 = GetCheMesh()->edge(par_edge).m_v_begin;
 	int iv2 = GetCheMesh()->edge(par_edge).m_v_end;
-	vec3 loc_v1, loc_v2, loc_v1v2;
-	vec3_init (loc_v1, m_pMesh->m_pVertices[3*iv1], m_pMesh->m_pVertices[3*iv1+1], m_pMesh->m_pVertices[3*iv1+2]);
-	vec3_init (loc_v2, m_pMesh->m_pVertices[3*iv2], m_pMesh->m_pVertices[3*iv2+1], m_pMesh->m_pVertices[3*iv2+2]);
-	vec3_subtraction (loc_v1v2, loc_v2, loc_v1);
-	return vec3_length (loc_v1v2);
+	Vector3f loc_v1 (m_pMesh->m_pVertices[3*iv1], m_pMesh->m_pVertices[3*iv1+1], m_pMesh->m_pVertices[3*iv1+2]);
+	Vector3f loc_v2 (m_pMesh->m_pVertices[3*iv2], m_pMesh->m_pVertices[3*iv2+1], m_pMesh->m_pVertices[3*iv2+2]);
+	Vector3f loc_v1v2 = loc_v2 - loc_v1;
+	return loc_v1v2.getLength ();
 }
 
 /**
@@ -424,10 +423,10 @@ int Mesh_half_edge::get_n_neighbours (int par_ivertex)
 
 // "Discrete differential-geometry operators for triangulated 2-manifolds"
 // M Meyer, M Desbrun, P Schroder, AH Barr
-static double cotan (vec3 v1, vec3 v2)
+static double cotan (const Vector3f &v1, const Vector3f &v2)
 {
-	double v1dotv2 = vec3_dot_product (v1, v2);
-	double denom = sqrt (vec3_dot_product(v1,v1)*vec3_dot_product(v2,v2) - v1dotv2*v1dotv2);
+	double v1dotv2 = v1.DotProduct (v2);
+	double denom = sqrt (v1.DotProduct(v1)*v2.DotProduct(v2) - v1dotv2*v1dotv2);
 
 	return (denom == 0.0)? 0.0 : v1dotv2/denom;
 }
@@ -435,7 +434,7 @@ static double cotan (vec3 v1, vec3 v2)
 double Mesh_half_edge::cotangent_weight_formula(int ei)
 {
 	double cotangents = 0.;
-	vec3 v_begin, v_end, v1, v2, tmp1, tmp2;
+	Vector3f v_begin, v_end, v1, v2, tmp1, tmp2;
 
 	assert (ei >= 0 && GetCheMesh()->edge(ei).m_pair >= 0);
 
@@ -448,12 +447,12 @@ double Mesh_half_edge::cotangent_weight_formula(int ei)
 	m_pMesh->GetVertex(GetCheMesh()->edge(e.m_he_next).m_v_end, v1);
 	m_pMesh->GetVertex(GetCheMesh()->edge(ep.m_he_next).m_v_end, v2);
 
-	vec3_subtraction (tmp1, v_end, v1);
-	vec3_subtraction (tmp2, v_begin, v1);
+	tmp1 = v_end - v1;
+	tmp2 = v_begin - v1;
 	cotangents += cotan(tmp1, tmp2);
 
-	vec3_subtraction (tmp1, v_end, v2);
-	vec3_subtraction (tmp2, v_begin, v2);
+	tmp1 = v_end - v2;
+	tmp2 = v_begin - v2;
 	cotangents += cotan(tmp1, tmp2);
 
 	return .5*cotangents;

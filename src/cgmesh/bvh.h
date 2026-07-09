@@ -28,14 +28,14 @@ public:
 	// hits nothing. dir must be normalised so the result is a Euclidean
 	// distance. Hits at t <= tMin are rejected (skips the faces incident to a
 	// start vertex). const + member-read-only -> safe to call concurrently.
-	float nearest (vec3 orig, vec3 dir, float tMin) const;
+	float nearest (const Vector3f &orig, const Vector3f &dir, float tMin) const;
 
 	// Squared distance from p to the closest point on the mesh surface (any
 	// triangle), found by an AABB-distance-pruned descent. Returns -1 if the
 	// BVH is empty. If closest_out is non-null it receives the closest point.
 	// Read-only -> safe to call concurrently. General-purpose proximity query
 	// (used by Hausdorff distance, signed-distance fields, snapping, ...).
-	float closest_distance2 (vec3 p, vec3 closest_out = nullptr) const;
+	float closest_distance2 (const Vector3f &p, Vector3f *closest_out = nullptr) const;
 
 private:
 	struct Node
@@ -46,7 +46,7 @@ private:
 	};
 
 	int         buildRange (unsigned int begin, unsigned int end);
-	static bool slabHit (const Node &nd, vec3 o, vec3 dir, float t0, float t1);
+	static bool slabHit (const Node &nd, const Vector3f &o, const Vector3f &dir, float t0, float t1);
 
 	static constexpr unsigned int LEAF = 4u;       // target triangles per leaf
 

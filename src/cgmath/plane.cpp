@@ -165,7 +165,7 @@ void Plane::fitting (Vector3f *array, int n)
 //
 //
 //
-int Plane::GetIntersectionWithRay (vec3 vO, vec3 vD, float *_t, vec3 i, vec3 n)
+int Plane::GetIntersectionWithRay (const Vector3f &vO, const Vector3f &vD, float *_t, Vector3f &i, Vector3f &n)
 {
 	float a = normale[0];
 	float b = normale[1];
@@ -188,14 +188,14 @@ int Plane::GetIntersectionWithRay (vec3 vO, vec3 vD, float *_t, vec3 i, vec3 n)
 	return 1;
 }
 
-int Plane::GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n)
+int Plane::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n)
 {
-	vec3 vDirection;
+	Vector3f vDirection;
 	vDirection[0] = vEnd[0] - vStart[0];
 	vDirection[1] = vEnd[1] - vStart[1];
 	vDirection[2] = vEnd[2] - vStart[2];
-	float l = sqrt (vec3_dot_product (vDirection, vDirection));
-	vec3_normalize (vDirection);
+	float l = sqrt ((vDirection).DotProduct (vDirection));
+	(vDirection).Normalize ();
 	unsigned int res = GetIntersectionWithRay (vStart, vDirection, _t, i, n);
 	return (res && *_t < l);
 }

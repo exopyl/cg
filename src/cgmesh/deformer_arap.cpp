@@ -185,9 +185,9 @@ void DeformerARAP::Deform(int nIterations)
 		// cf Equation (8)
 		for (int i=0; i<m_pMesh->m_pMesh->m_nVertices; i++)
 		{
-			vec3 v;
+			Vector3f v;
 			m_pMesh->m_pMesh->GetVertex(i, v);
-			Eigen::Vector3d p (v[0], v[1], v[2]);
+			Eigen::Vector3d p (v.x, v.y, v.z);
 
 			if(!isFixed[i])
 			{
@@ -235,9 +235,9 @@ void DeformerARAP::Deform(int nIterations)
 	{
 		if (isFixed[i])
 			continue;
-		vec3 p;
+		Vector3f p;
 		m_pMesh->m_pMesh->GetVertex(i, p);
-		printf ("%.3f %.3f %.3f -> %.3f %.3f %.3f\n", p[0], p[1], p[2], xyz[0][i], xyz[1][i], xyz[2][i]);
+		printf ("%.3f %.3f %.3f -> %.3f %.3f %.3f\n", p.x, p.y, p.z, xyz[0][i], xyz[1][i], xyz[2][i]);
 		m_pMesh->m_pMesh->SetVertex(i, xyz[0][i], xyz[1][i], xyz[2][i]);
 	}
 }

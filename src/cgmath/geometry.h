@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "algebra_vector3.h"
+#include "TVector3.h"
 #include "ray.h"
 #include "aabox.h"
 #include "TVector2.h"
@@ -11,8 +11,8 @@
 // its closest point (interior, edge or vertex). Pure geometry primitive
 // (Ericson, Real-Time Collision Detection), reusable by any proximity /
 // distance query. If `closest_out` is non-null it receives the closest point.
-float point_triangle_distance2 (const vec3 p, const vec3 a, const vec3 b, const vec3 c,
-                                vec3 closest_out = nullptr);
+float point_triangle_distance2 (const float *p, const float *a, const float *b, const float *c,
+                                float *closest_out = nullptr);
 
 //
 // Geometry
@@ -22,10 +22,10 @@ class Geometry
 public:
 	Geometry();
 
-	virtual bool GetIntersectionBboxWithRay (vec3 o, vec3 d);
+	virtual bool GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d);
 
-	virtual int GetIntersectionWithRay (vec3 o, vec3 d, float *_t, vec3 i, vec3 n) = 0;
-	virtual int GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n) = 0;
+	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) = 0;
+	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) = 0;
 
 	virtual void* GetMaterial (void) = 0;
 
@@ -64,8 +64,8 @@ public:
 	void fitting (Vector3f *array, int n);
 
 	// intersections
-	virtual int GetIntersectionWithRay (vec3 o, vec3 d, float *_t, vec3 i, vec3 n);
-	virtual int GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n);
+	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
+	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
 
 	virtual void* GetMaterial (void) { return nullptr; };
 
@@ -284,8 +284,8 @@ public:
 	};
 
 	// intersections
-	virtual int GetIntersectionWithRay (vec3 o, vec3 d, float *_t, vec3 i, vec3 n);
-	virtual int GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n);
+	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
+	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
 
 	virtual void* GetMaterial (void) { return nullptr; };
 
@@ -312,8 +312,8 @@ public:
 	~Torus () { if (m_pAABox) delete m_pAABox; };
 
 	// intersections
-	virtual int GetIntersectionWithRay (vec3 o, vec3 d, float *_t, vec3 i, vec3 n);
-	virtual int GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n);
+	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
+	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
 
 	virtual void* GetMaterial (void) { return nullptr; };
 
@@ -329,14 +329,14 @@ class Triangle : public Geometry
 public:
 	Triangle () {
 		for (int i=0; i<3; i++)
-			vec3_init (m_v[i], 0., 0., 0.);
+			m_v[i].Set (0., 0., 0.);
 		m_pAABox = nullptr;
 	};
 	~Triangle () { if (m_pAABox) delete m_pAABox; };
 
 	inline void SetVertex (int i, float x, float y, float z)
 	{
-		vec3_init (m_v[i], x, y, z);
+		m_v[i].Set (x, y, z);
 		if (m_pAABox)
 			m_pAABox->AddVertex (x, y, z);
 		else
@@ -346,9 +346,9 @@ public:
 			   float x2, float y2, float z2,
 			   float x3, float y3, float z3)
 	{
-		vec3_init (m_v[0], x1, y1, z1);
-		vec3_init (m_v[1], x2, y2, z2);
-		vec3_init (m_v[2], x3, y3, z3);
+		m_v[0].Set (x1, y1, z1);
+		m_v[1].Set (x2, y2, z2);
+		m_v[2].Set (x3, y3, z3);
 		if (m_pAABox)
 			delete m_pAABox;
 		m_pAABox = new AABox (x1, y1, z1);
@@ -357,11 +357,11 @@ public:
 	}
 
 	// intersections
-	virtual int GetIntersectionWithRay (vec3 o, vec3 d, float *_t, vec3 i, vec3 n);
-	virtual int GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n);
+	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
+	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
 
 	virtual void* GetMaterial (void) { return nullptr; };
 
 public:
-	vec3 m_v[3];
+	Vector3f m_v[3];
 };

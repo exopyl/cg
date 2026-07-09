@@ -17,9 +17,9 @@ BundleCamera::BundleCamera ()
 
 	R.SetIdentity ();
 	Rinv.SetIdentity ();
-	vec3_init (T, 0., 0., 0.);
-	vec3_init (d, 0., 0., 0.);
-	vec3_init (pos, 0., 0., 0.);
+	T.Set (0., 0., 0.);
+	d.Set (0., 0., 0.);
+	pos.Set (0., 0., 0.);
 }
 
 BundleCamera::~BundleCamera ()

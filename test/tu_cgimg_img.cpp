@@ -2,6 +2,16 @@
 
 #include "../src/cgmesh/cgmesh.h"
 
+// Row-major 3x3 fill (replaces the removed C-API mat3_init for the filter kernels).
+static void set3x3 (float m[3][3], float a, float b, float c,
+		    float d, float e, float f,
+		    float g, float h, float i)
+{
+	m[0][0]=a; m[0][1]=b; m[0][2]=c;
+	m[1][0]=d; m[1][1]=e; m[1][2]=f;
+	m[2][0]=g; m[2][1]=h; m[2][2]=i;
+}
+
 TEST(TEST_cgimg_img, generations)
 {
 	Img *img = new Img ();
@@ -129,15 +139,15 @@ TEST(TEST_cgimg_img, filter)
 	Img* img = new Img();
 	img->init_test_grayscale2(50);
 
-	mat3 filter;
-	mat3_init (filter,
+	float filter[3][3];
+	set3x3 (filter,
 		   1., 1., 1.,
 		   1., 1., 1.,
 		   1., 1., 1.);
 
 	// passe haut
 	{
-		mat3_init (filter,
+		set3x3 (filter,
 			   0., -1., 0.,
 			   -1., 5., -1.,
 			   0., -1., 0.);
@@ -149,7 +159,7 @@ TEST(TEST_cgimg_img, filter)
 
 	// passe bas
 	{
-		mat3_init (filter,
+		set3x3 (filter,
 			   1., 1., 1.,
 			   1., 4., 1.,
 			   1., 1., 1.);
@@ -161,16 +171,16 @@ TEST(TEST_cgimg_img, filter)
 
 	// laplacian
 	{
-		mat3_init (filter,
+		set3x3 (filter,
 			   -1., -1., -1.,
 			   -1.,  8., -1.,
 			   -1., -1., -1.);
 /*
-		mat3_init (filter,
+		set3x3 (filter,
 			   0., -1.,  0.,
 			   -1.,  4., -1.,
 			   0., -1.,  0.);
-		mat3_init (filter,
+		set3x3 (filter,
 			   1., -2.,  1.,
 			   -2.,  4., -2.,
 			   1., -2.,  1.);
@@ -183,11 +193,11 @@ TEST(TEST_cgimg_img, filter)
 
 	// gradient
 	{
-		mat3_init (filter,
+		set3x3 (filter,
 			   -1., -1., -1.,
 			   1.,  1.,  1.,
 			   0.,  0.,  0.);
-		mat3_init (filter,
+		set3x3 (filter,
 			   -1., 1., 0.,
 			   -1., 1., 0.,
 			   -1., 1., 0.);

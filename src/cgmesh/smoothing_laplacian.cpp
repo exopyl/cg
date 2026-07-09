@@ -25,22 +25,20 @@ bool MeshAlgoSmoothingLaplacian::Apply (Mesh_half_edge *model)
 			continue;
 		}
 
-		vec3 v_mean, v_walk;
-		vec3_init (v_mean, 0.0, 0.0, 0.0);
+		Vector3f v_mean (0.f, 0.f, 0.f);
 		Citerator_half_edges_vertex he_ite (model->GetCheMesh(), i);
 		int n_neighbours = 0;
 		for (int he_walk = he_ite.first (); he_walk >= 0 && !he_ite.isLast (); he_walk = he_ite.next ())
 		{
 			int index = model->GetCheMesh()->edge(he_walk).m_v_end;
-			vec3_init (v_walk, v[3*index], v[3*index+1], v[3*index+2]);
-			vec3_addition (v_mean, v_mean, v_walk);
+			v_mean += Vector3f (v[3*index], v[3*index+1], v[3*index+2]);
 			n_neighbours++;
 		}
 		if (n_neighbours != 0)
 		{
-			vnew[3*i]   = v_mean[0] / n_neighbours;
-			vnew[3*i+1] = v_mean[1] / n_neighbours;
-			vnew[3*i+2] = v_mean[2] / n_neighbours;
+			vnew[3*i]   = v_mean.x / n_neighbours;
+			vnew[3*i+1] = v_mean.y / n_neighbours;
+			vnew[3*i+2] = v_mean.z / n_neighbours;
 		}
 		else
 		{

@@ -1,72 +1,40 @@
 #pragma once
 
-#include "curve.h"
-#include "algebra_vector3.h"
+#include <vector>
+
+#include "icurve.h"
 
 /**
-* TODO
-*
-* Implementer intersection avec droites
-* Faire inventaire des diff�rentes m�thodes d'interpolation
+* Bezier curve defined by its control points.
 */
-
-/**
-* Bezier curve
-*/
-class CurveBezier //: public Curve
+class CurveBezier : public ICurve
 {
 public:
-	CurveBezier ();
-	CurveBezier (const CurveBezier &par_curveBezier);
-	//CurveBezier* clone () { return new CurveBezier (*this); };
-	void dump (void);
-	void export_interpolated (char *filename, unsigned int n);
+	CurveBezier () = default;
 
-	// specific method
-	~CurveBezier ();
+	void dump () const;
+	void export_interpolated (const char *filename, unsigned int n) const;
 
-	int getDegree (void) { return m_nControlPoints-1; };
-	bool getControlPoint (int index, vec3 v)
+	int getDegree () const { return (int)m_controlPoints.size () - 1; }
+	bool getControlPoint (int index, Vector3f &v) const
 	{
-		if (index > m_nControlPoints)
+		if (index < 0 || index >= (int)m_controlPoints.size ())
 			return false;
-		
-		v[0] = m_controlPoints[index][0];
-		v[1] = m_controlPoints[index][1];
-		v[2] = m_controlPoints[index][2];
-
+		v = m_controlPoints[index];
 		return true;
 	}
 
 	// Construction of the Bezier curve
-	int addControlPoint (vec3 v);
+	int addControlPoint (const Vector3f &v);
 	int addControlPoint (float x, float y, float z);
-	
-	// eval
-	int eval (float t, vec3 pt);
-	int eval_on_x (float x, vec3 pt);
 
-	// Interpolation methods
-	int computeInterpolation (int par_nPoints, vec3 **par_points);
-	int computeInterpolation3 (int par_nPoints, vec3 **par_points);
-	int computeInterpolation4 (int par_nPoints, vec3 **par_points);
+	// ICurve
+	bool eval (float t, Vector3f &p) const override;
+	int tessellate (int nPoints, std::vector<Vector3f> &out) const override;
 
-	int computeInterpolationRecursive3 (int level, int &par_nPoints, vec3 **par_points);
-	int computeInterpolationRecursive3aux (int par_level, vec3 **points, int pos);
-
-	bool isSufficentlyFlat (float tolerance);
-	int computeInterpolationRecursiveFlatness3 (float tolerance, int &par_nPoints, vec3 **par_points);
-
-	// Normals
-
-	// Length
-	float length4 (void);
-
-	// Intersection with a line
-
+	// find the point on the curve whose x-coordinate is x (x assumed monotone)
+	bool eval_on_x (float x, Vector3f &p) const;
 
 private:
-	int m_nMaxControlPoints;
-	int m_nControlPoints;
-	vec3 *m_controlPoints;
+	std::vector<Vector3f> m_controlPoints;
 };

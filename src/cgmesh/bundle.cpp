@@ -10,12 +10,10 @@
 // dropped the translation and divided by a w that was always 1. Reading the
 // three inputs into the Vector4f before writing makes it safe for in == out.
 //
-static void apply_rotation (const CameraMatrix &m, const float *in, float *out)
+static void apply_rotation (const CameraMatrix &m, const Vector3f &in, Vector3f &out)
 {
-	Vector4f r = m * Vector4f (in[0], in[1], in[2], 1.f);
-	out[0] = r.x;
-	out[1] = r.y;
-	out[2] = r.z;
+	Vector4f r = m * Vector4f (in.x, in.y, in.z, 1.f);
+	out.Set (r.x, r.y, r.z);
 }
 
 Bundle::Bundle ()
@@ -176,7 +174,7 @@ int Bundle::Load2 (char *bundlefilename, char *imageslistfilename, char *rootpat
 		if (1)//allinfo)
 		{
 			camera->R.GetInverse (camera->Rinv);
-			vec3_init (camera->d, 0., 0., -1.);
+			camera->d.Set (0., 0., -1.);
 			apply_rotation (camera->Rinv, camera->d, camera->d);
 		}
 
@@ -184,7 +182,7 @@ int Bundle::Load2 (char *bundlefilename, char *imageslistfilename, char *rootpat
 		// update pos with T
 		if (1)//allinfo)
 		{
-			vec3_scale (camera->pos, camera->T, -1.);
+			camera->pos = (camera->T) * (-1.);
 			apply_rotation (camera->Rinv, camera->pos, camera->pos);
 		}
 
@@ -213,8 +211,8 @@ int Bundle::Load2 (char *bundlefilename, char *imageslistfilename, char *rootpat
 	for (int i=0; i<nPoints; i++)
 	{
 		fscanf (bundlefile, "%f %f %f\n", &x, &y, &z);
-		vec3 pt;
-		vec3_init (pt, x, y, z);
+		Vector3f pt;
+		pt.Set (x, y, z);
 
 		fscanf (bundlefile, "%d %d %d\n", &r, &g, &b);
 		fgets (buffer, 4096, bundlefile);
@@ -235,7 +233,7 @@ int Bundle::Load2 (char *bundlefilename, char *imageslistfilename, char *rootpat
 
 			//camera_t *camera = cameras[ci];
 			//fmat4_transform (pt, camera->R, pt);
-			//fvec3_addition (pt, pt, camera->T);
+			//fpt = pt + camera->T;
 
 			int a = atoi (pch);
 			pch = strtok (nullptr, " ");
@@ -289,7 +287,7 @@ int Bundle::DeleteRedundantCameras (void)
 		for (unsigned int j=0; j<res->n_cameras; j++)
 		{
 			float d = fvec3_distance_between_points (bundle->cameras[i]->pos, res->cameras[j]->pos);
-			float dot = fvec3_dot_product (bundle->cameras[i]->d, res->cameras[j]->d);
+			float dot = f(bundle->cameras[i]->d).DotProduct (res->cameras[j]->d);
 			if (d < threshold && dot > 0.9)
 			{
 				bRedundant = 1;
@@ -335,11 +333,11 @@ int Bundle::DeleteRedundantCameras (void)
 //
 static void project_texture_coordinates_on_vertex (Mesh *mesh, unsigned int vi, BundleCamera *camera, float *u, float *v)
 {
-	vec3 pt;
+	Vector3f pt;
 	
 	mesh->GetVertex (vi, pt);
 	apply_rotation (camera->R, pt, pt);
-	vec3_addition (pt, pt, camera->T);
+	pt = pt + camera->T;
 	
 	*u = .5 + pt[0]*camera->f_mm / (-pt[2]*camera->CCDWidth_mm);
 	*v = .5 + pt[1]*camera->f_mm / (-pt[2]*camera->CCDHeight_mm);
@@ -412,9 +410,9 @@ int Bundle::project_textures_naive (Mesh *mesh, char *bundleoutfilename, char *i
 
 	for (unsigned int j=0; j<mesh->m_nFaces; j++)
 	{
-		vec3 fnormal;
-		vec3_init (fnormal, mesh->m_pFaceNormals[3*j], mesh->m_pFaceNormals[3*j+1], mesh->m_pFaceNormals[3*j+2]);
-		vec3_normalize (fnormal);
+		Vector3f fnormal;
+		fnormal.Set (mesh->m_pFaceNormals[3*j], mesh->m_pFaceNormals[3*j+1], mesh->m_pFaceNormals[3*j+2]);
+		(fnormal).Normalize ();
 		float dot = 0.3;
 
 		int camera_selected = -1;
@@ -425,13 +423,13 @@ int Bundle::project_textures_naive (Mesh *mesh, char *bundleoutfilename, char *i
 			if (!camera)
 				continue;
 
-			vec3 ray, barycenter;
+			Vector3f ray, barycenter;
 			mesh->GetFaceBarycenter (j, barycenter);
-			vec3_subtraction (ray, camera->T, barycenter);
-			vec3_normalize (ray);
-			float dotcurrent = vec3_dot_product (ray, fnormal);
+			ray = camera->T - barycenter;
+			(ray).Normalize ();
+			float dotcurrent = (ray).DotProduct (fnormal);
 
-			//float dotcurrent = fvec3_dot_product (camera->d, fnormal);
+			//float dotcurrent = f(camera->d).DotProduct (fnormal);
 			// offset the barycenter
 			barycenter[0] += 0.001*fnormal[0];
 			barycenter[1] += 0.001*fnormal[1];
@@ -510,10 +508,10 @@ static int _smooth_cost_func (int fi1, int fi2, int ti1, int ti2, void *d)
 	project_texture_coordinates_on_vertex (mesh, vi1, c1, &u1_t2, &v1_t2);
 	project_texture_coordinates_on_vertex (mesh, vi2, c1, &u2_t2, &v2_t2);
 
-	vec3 pt1, pt2;
+	Vector3f pt1, pt2;
 	mesh->GetVertex (vi1, pt1);
 	mesh->GetVertex (vi2, pt2);
-	float l = vec3_distance (pt1, pt2);
+	float l = (pt1).getDistance (pt2);
 
 	unsigned int n = (unsigned int)(10000.*l);
 	int energy = 0;
@@ -579,7 +577,7 @@ int Bundle::project_textures_lempitsky07 (Mesh *mesh, char *bundleoutfilename, c
 		mesh_set_texture (mesh, i, texture);
 		texture_delete (texture);
 
-		//fvec3_normalize (camera->d);
+		//f(camera->d).Normalize ();
 		//mesh_set_color_index (mesh, i, camera->d[0], camera->d[1], camera->d[2]);
 	}
 	mesh_set_color_index (mesh, bundle->n_cameras, 1., 0., 0.); // color for the faces not reached by the cameras
@@ -614,11 +612,11 @@ int Bundle::project_textures_lempitsky07 (Mesh *mesh, char *bundleoutfilename, c
 	for (unsigned int i=0; i<mesh->fn; i++)
 	{
 		float dot = 0.3;
-		vec3 fnormal;
-		vec3_init (fnormal, mesh->fnormal[i][0], mesh->fnormal[i][1], mesh->fnormal[i][2]);
-		vec3_normalize (fnormal);
+		Vector3f fnormal;
+		fnormal.Set (mesh->fnormal[i][0], mesh->fnormal[i][1], mesh->fnormal[i][2]);
+		(fnormal).Normalize ();
 		
-		vec3 barycenter;
+		Vector3f barycenter;
 		mesh_face_barycenter (mesh, i, barycenter);
 
 		int camera_selected = -1;
@@ -638,9 +636,9 @@ int Bundle::project_textures_lempitsky07 (Mesh *mesh, char *bundleoutfilename, c
 			}
 
 			// is the face occluded by another face ?
-			vec3 ray;
-			vec3_subtraction (ray, barycenter, camera->pos);
-			vec3_normalize (ray);
+			Vector3f ray;
+			ray = barycenter - camera->pos;
+			(ray).Normalize ();
  			float thit;
 			if (mesh_kdtree_ray_intersect(mesh, camera->pos, ray, &thit) != i)
 			{
@@ -649,7 +647,7 @@ int Bundle::project_textures_lempitsky07 (Mesh *mesh, char *bundleoutfilename, c
 			}
 
 			// evaluate the weight
-			float dotcurrent = fvec3_dot_product (camera->d, fnormal);
+			float dotcurrent = f(camera->d).DotProduct (fnormal);
 			data_cost[i*bundle->n_cameras+j] = (dotcurrent>0.)?costmax:10;//90:100*(acos(dotcurrent));
 			if (dotcurrent > dot)
 			{

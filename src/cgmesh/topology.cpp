@@ -6,7 +6,7 @@
 
 typedef struct PointInfo
 {
-	vec3 point;
+	Vector3f point;
 	unsigned int index;
 	float dist2;
 } PointInfo;
@@ -17,10 +17,10 @@ static int _create_indexation_compare (const void * a, const void * b)
 	return iRes;
 }
 
-void create_indexation(vec3 *pTriangles, unsigned int nPoints,
+void create_indexation(Vector3f *pTriangles, unsigned int nPoints,
 		       unsigned int **pIndexation,
 		       double dVertexEpsilon,
-		       const vec3 *pNormal, double dNormalEpsilon)
+		       const Vector3f *pNormal, double dNormalEpsilon)
 {
 	if (nPoints == 0 || !pTriangles || !pIndexation)
 		return;
@@ -39,7 +39,7 @@ void create_indexation(vec3 *pTriangles, unsigned int nPoints,
 		pOk[i] = false;
 
 	// create a first point
-	vec3 firstPoint;
+	Vector3f firstPoint;
 	for (i=0; i<3; i++)
 		firstPoint[i] = .12*pTriangles[0][i] + .12;
 
@@ -48,7 +48,7 @@ void create_indexation(vec3 *pTriangles, unsigned int nPoints,
 		for (unsigned int j=0; j<3; j++)
 			pPoints[i].point[j] = pTriangles[i][j];
 		pPoints[i].index = i;
-		pPoints[i].dist2 = vec3_distance2 (pTriangles[i], firstPoint);
+		pPoints[i].dist2 = ((firstPoint) - (pTriangles[i])).getLength2 ();
 	}
 	qsort(pPoints, nPoints, sizeof(PointInfo), _create_indexation_compare);
 
@@ -68,11 +68,11 @@ void create_indexation(vec3 *pTriangles, unsigned int nPoints,
 			{
 				if(pOk[j] == false)
 				{
-					if(vec3_distance (pPoints[i].point, pPoints[j].point) < dVertexEpsilon)
+					if((pPoints[i].point).getDistance (pPoints[j].point) < dVertexEpsilon)
 					{
 						if(pNormal)
 						{
-							vec3 v; // pNormal[pPoints[i].index]^pNormal[pPoints[j].index]
+							Vector3f v; // pNormal[pPoints[i].index]^pNormal[pPoints[j].index]
 							v[0] = pNormal[pPoints[i].index][1] * pNormal[pPoints[j].index][2]
 								- pNormal[pPoints[i].index][2] * pNormal[pPoints[j].index][1];
 
@@ -82,7 +82,7 @@ void create_indexation(vec3 *pTriangles, unsigned int nPoints,
 							v[2] = pNormal[pPoints[i].index][1] * pNormal[pPoints[j].index][2]
 								- pNormal[pPoints[i].index][2] * pNormal[pPoints[j].index][1];
 
-							float fLength = vec3_length (v);
+							float fLength = (v).getLength ();
 							if(fLength < dNormalEpsilon)
 							{
 								(*pIndexation)[pPoints[j].index] = pPoints[i].index;
@@ -110,7 +110,7 @@ void create_indexation(vec3 *pTriangles, unsigned int nPoints,
 //
 //
 //
-void remove_unused_vertices (vec3 **pVertices, unsigned int *nVerticesNew, unsigned int **pIndexation, unsigned int nFaces)
+void remove_unused_vertices (Vector3f **pVertices, unsigned int *nVerticesNew, unsigned int **pIndexation, unsigned int nFaces)
 {
 	unsigned int i=0;
 	unsigned int nVertices = 3*nFaces;
@@ -143,7 +143,7 @@ void remove_unused_vertices (vec3 **pVertices, unsigned int *nVerticesNew, unsig
 			(*nVerticesNew)++;
 		}
 	}
-	*pVertices = (vec3*)realloc((*pVertices), 3*(*nVerticesNew)*sizeof(vec3*));
+	*pVertices = (Vector3f*)realloc((*pVertices), 3*(*nVerticesNew)*sizeof(Vector3f*));
 
 	// update the indexation with the new indices
 	for (i=0; i<3*nFaces; i++)

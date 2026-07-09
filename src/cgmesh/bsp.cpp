@@ -139,7 +139,7 @@ eClassification BSP::Classify_Polygon (Polygon3 *polygon)
 
 int BSP::Choose_Plane (list<Polygon3*> polygons)
 {
-	vec3 lmin, lmax, min, max;
+	Vector3f lmin, lmax, min, max;
 	std::list<Polygon3*>::iterator it = polygons.begin();
 	Polygon3 *polygon = *it;
 	polygon->GetBBox (lmin, lmax);

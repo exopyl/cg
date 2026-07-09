@@ -1,56 +1,44 @@
 #pragma once
 
-#include "algebra_vector3.h"
+#include <vector>
+
+#include "icurve.h"
 
 /**
-* Curve NURBS
+* Non-uniform rational B-spline (NURBS) curve.
 */
-class CurveNURBS
+class CurveNURBS : public ICurve
 {
 public:
-	CurveNURBS ();
-	CurveNURBS (const CurveNURBS &curveNURBS);
-	//CurveNURBS* clone () { return new CurveNURBS (*this); };
-	void dump (void);
+	CurveNURBS () = default;
 
-	// specific methods
-	~CurveNURBS ();
+	void dump () const;
 
 	int addControlPoint (float x, float y, float z, float weight);
-	int setKnots (float *knots, int size);
+	int setKnots (const float *knots, int size);
 	int normalizeKnots (void);
 
-	int nControlPoints (void) { return m_nControlPoints; };
-	bool getControlPoints (int index, vec3 &v)
+	int nControlPoints (void) const { return (int)m_controlPoints.size (); }
+	bool getControlPoints (int index, Vector3f &v) const
 	{
-		if (index > m_nControlPoints)
+		if (index < 0 || index >= (int)m_controlPoints.size ())
 			return false;
-		
-		v[0] = m_controlPoints[index][0];
-		v[1] = m_controlPoints[index][1];
-		v[2] = m_controlPoints[index][2];
-
+		v = m_controlPoints[index];
 		return true;
-	};
-	
-	float basisFunction (int i, int j, float u);
-	int computeInterpolation (int par_nPoints, vec3 **par_points);
-	
-	void dumpAllBasisFunctions (int nPoints);
-	void dumpBasisFunction (int index, int nPoints);
+	}
+
+	float basisFunction (int i, int j, float u) const;
+
+	// ICurve
+	bool eval (float t, Vector3f &p) const override;
+	int tessellate (int nPoints, std::vector<Vector3f> &out) const override;
+
+	void dumpAllBasisFunctions (int nPoints) const;
+	void dumpBasisFunction (int index, int nPoints) const;
 
 private:
-	int m_nMaxControlPoints;
-
-	// control points
-	int m_nControlPoints;
-	vec3 *m_controlPoints = nullptr;
-
-	// weights
-	float *m_weights = nullptr;
-
-	// knots
-	int m_degree;
-	int m_nKnots;
-	float *m_knots = nullptr;
+	std::vector<Vector3f> m_controlPoints;
+	std::vector<float> m_weights;
+	std::vector<float> m_knots;
+	int m_degree = 0;
 };

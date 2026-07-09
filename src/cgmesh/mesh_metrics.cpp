@@ -17,7 +17,7 @@ namespace
 
 		auto sample = [&](float x, float y, float z)
 		{
-			vec3 p; vec3_init (p, x, y, z);
+			Vector3f p (x, y, z);
 			float d2 = to.closest_distance2 (p);
 			if (d2 < 0.f) d2 = 0.f;
 			if (d2 > worst2) worst2 = d2;
@@ -92,7 +92,7 @@ std::vector<float> mesh_pointwise_distance (Mesh &from, Mesh &to)
 	std::vector<float> d (from.m_nVertices, 0.f);
 	for (unsigned int i = 0; i < from.m_nVertices; i++)
 	{
-		vec3 p; vec3_init (p, from.m_pVertices[3*i], from.m_pVertices[3*i+1], from.m_pVertices[3*i+2]);
+		Vector3f p (from.m_pVertices[3*i], from.m_pVertices[3*i+1], from.m_pVertices[3*i+2]);
 		float d2 = bvh.closest_distance2 (p);
 		d[i] = (d2 > 0.f) ? sqrtf (d2) : 0.f;
 	}

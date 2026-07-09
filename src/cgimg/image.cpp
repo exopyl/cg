@@ -439,15 +439,10 @@ void Img::histogram_equalization_bezier (CurveBezier *bezier)
 {
 	if (bezier == nullptr)
 		bezier = new CurveBezier();
-	vec3 v0, v1, v2, v3;
-	vec3_init (v0, 0., 255., 0.);
-	vec3_init (v1, 10., 0., 0.);
-	vec3_init (v2, 245., 0., 0.);
-	vec3_init (v3, 255., 255., 0.);
-	bezier->addControlPoint (v0);
-	bezier->addControlPoint (v1);
-	bezier->addControlPoint (v2);
-	bezier->addControlPoint (v3);
+	bezier->addControlPoint (0.f, 255.f, 0.f);
+	bezier->addControlPoint (10.f, 0.f, 0.f);
+	bezier->addControlPoint (245.f, 0.f, 0.f);
+	bezier->addControlPoint (255.f, 255.f, 0.f);
 
      // eval the histogram
      float histogram[256];
@@ -465,9 +460,9 @@ void Img::histogram_equalization_bezier (CurveBezier *bezier)
      float *bezier_interpolated = (float*)malloc(256*sizeof(float));
      for (int i=0; i<256; i++)
      {
-	     vec3 pt;
-	     bezier->eval_on_x (i, pt);
-	     bezier_interpolated[i] = pt[1];
+	     Vector3f pt;
+	     bezier->eval_on_x ((float)i, pt);
+	     bezier_interpolated[i] = pt.y;
      }
      output_1array (bezier_interpolated, 256, "output.dat");
 

@@ -79,7 +79,7 @@ public:
 	int multiply (Img *pImg);
 
 	// filters
-	int filter (mat3 m, float divide = 0., float decay = 0.);
+	int filter (float m[3][3], float divide = 0., float decay = 0.);
 	int filter_sobel (void);
 	int gaussian_blur (void);
 	int blur (void);

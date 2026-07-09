@@ -182,23 +182,23 @@ bool ParametricSurface::Generate(void)
 	return true;
 }
 
-bool ParametricSurface::EvaluateFundamentalForms (diff_s *diff, vec3 dfdu, vec3 dfdv, vec3 dfdudu, vec3 dfdudv, vec3 dfdvdv)
+bool ParametricSurface::EvaluateFundamentalForms (diff_s *diff, const Vector3f &dfdu, const Vector3f &dfdv, const Vector3f &dfdudu, const Vector3f &dfdudv, const Vector3f &dfdvdv)
 {
 	// first fundamental form
-	float e = vec3_dot_product (dfdu, dfdu);
-	float f = vec3_dot_product (dfdu, dfdv);
-	float g = vec3_dot_product (dfdv, dfdv);
-	vec3_init (diff->first_fundamental_form, e, f, g);
+	float e = (dfdu).DotProduct (dfdu);
+	float f = (dfdu).DotProduct (dfdv);
+	float g = (dfdv).DotProduct (dfdv);
+	diff->first_fundamental_form.Set (e, f, g);
 
 	// normal
-	vec3_cross_product (diff->normal, dfdu, dfdv);
-	vec3_normalize (diff->normal);
+	diff->normal = (dfdu).CrossProduct (dfdv);
+	(diff->normal).Normalize ();
 
 	// second fundamental form
-	float l = vec3_dot_product (dfdudu, diff->normal);
-	float m = vec3_dot_product (dfdudv, diff->normal);
-	float n = vec3_dot_product (dfdvdv, diff->normal);
-	vec3_init (diff->second_fundamental_form, l, m, n);
+	float l = (dfdudu).DotProduct (diff->normal);
+	float m = (dfdudv).DotProduct (diff->normal);
+	float n = (dfdvdv).DotProduct (diff->normal);
+	diff->second_fundamental_form.Set (l, m, n);
 
 	return true;
 }
@@ -327,17 +327,17 @@ bool ParametricSphere::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = cosv;
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, - sinu * sinv, cosu * sinv, 0.0f);
-	vec3_init (dfdv, cosu * cosv, sinu * cosv, - sinv);
+	Vector3f dfdu, dfdv;
+	dfdu.Set (- sinu * sinv, cosu * sinv, 0.0f);
+	dfdv.Set (cosu * cosv, sinu * cosv, - sinv);
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, - cosu * sinv, - sinu * sinv, 0.0f);
-	vec3_init (dfdudv, - sinu * cosv, cosu * cosv, 0.0f);
-	vec3_init (dfdvdv, - cosu * sinv, - sinu * sinv, - cosv);
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (- cosu * sinv, - sinu * sinv, 0.0f);
+	dfdudv.Set (- sinu * cosv, cosu * cosv, 0.0f);
+	dfdvdv.Set (- cosu * sinv, - sinu * sinv, - cosv);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -382,17 +382,17 @@ bool EllipticHelicoid::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = c * fu;
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, - a * fv * sinu, b * fv * cosu, c);
-	vec3_init (dfdv, a * cosu, b * sinu, 0.0f);
+	Vector3f dfdu, dfdv;
+	dfdu.Set (- a * fv * sinu, b * fv * cosu, c);
+	dfdv.Set (a * cosu, b * sinu, 0.0f);
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, - a * fv * cosu, - b * fv * sinu, 0.0f);
-	vec3_init (dfdudv, - a * sinu, b * cosu, 0.0f);
-	vec3_init (dfdvdv, 0.0f, 0.0f, 0.0f);
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (- a * fv * cosu, - b * fv * sinu, 0.0f);
+	dfdudv.Set (- a * sinu, b * cosu, 0.0f);
+	dfdvdv.Set (0.0f, 0.0f, 0.0f);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -433,17 +433,17 @@ bool SeaShell::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = 1.0f - expf (fu/(3.0f*(float)M_PI)) - sinf(fv) + expf (fu/(6.0f*(float)M_PI)) * sinf (fv);
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdv, 0.0f, 0.0f, 0.0f);
+	Vector3f dfdu, dfdv;
+	dfdu.Set (0.0f, 0.0f, 0.0f);
+	dfdv.Set (0.0f, 0.0f, 0.0f);
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdudv, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdvdv, 0.0f, 0.0f, 0.0f);
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (0.0f, 0.0f, 0.0f);
+	dfdudv.Set (0.0f, 0.0f, 0.0f);
+	dfdvdv.Set (0.0f, 0.0f, 0.0f);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -486,17 +486,17 @@ bool SeaShellVonSeggern::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = (b * fv) / (2.0f * (float)M_PI) + a * sinf (fu) * (1.0f - fv / (2.0f*(float)M_PI));
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdv, 0.0f, 0.0f, 0.0f);
+	Vector3f dfdu, dfdv;
+	dfdu.Set (0.0f, 0.0f, 0.0f);
+	dfdv.Set (0.0f, 0.0f, 0.0f);
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdudv, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdvdv, 0.0f, 0.0f, 0.0f);
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (0.0f, 0.0f, 0.0f);
+	dfdudv.Set (0.0f, 0.0f, 0.0f);
+	dfdvdv.Set (0.0f, 0.0f, 0.0f);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -558,17 +558,17 @@ bool CorkscrewSurface::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = a * sinf (fv) + b * fu;
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdv, 0.0f, 0.0f, 0.0f);
+	Vector3f dfdu, dfdv;
+	dfdu.Set (0.0f, 0.0f, 0.0f);
+	dfdv.Set (0.0f, 0.0f, 0.0f);
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdudv, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdvdv, 0.0f, 0.0f, 0.0f);
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (0.0f, 0.0f, 0.0f);
+	dfdudv.Set (0.0f, 0.0f, 0.0f);
+	dfdvdv.Set (0.0f, 0.0f, 0.0f);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -596,17 +596,17 @@ bool MobiusStrip::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = fu * sinf (fv/2.0f);
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdv, 0.0f, 0.0f, 0.0f);
+	Vector3f dfdu, dfdv;
+	dfdu.Set (0.0f, 0.0f, 0.0f);
+	dfdv.Set (0.0f, 0.0f, 0.0f);
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdudv, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdvdv, 0.0f, 0.0f, 0.0f);
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (0.0f, 0.0f, 0.0f);
+	dfdudv.Set (0.0f, 0.0f, 0.0f);
+	dfdvdv.Set (0.0f, 0.0f, 0.0f);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -650,17 +650,17 @@ bool RadialWave::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = h * cosf(f*sqrtf((fu*fu)+(fv*fv)));
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdv, 0.0f, 0.0f, 0.0f);
+	Vector3f dfdu, dfdv;
+	dfdu.Set (0.0f, 0.0f, 0.0f);
+	dfdv.Set (0.0f, 0.0f, 0.0f);
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdudv, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdvdv, 0.0f, 0.0f, 0.0f);
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (0.0f, 0.0f, 0.0f);
+	dfdudv.Set (0.0f, 0.0f, 0.0f);
+	dfdvdv.Set (0.0f, 0.0f, 0.0f);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -709,17 +709,17 @@ bool ParametricTorus::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = r2 * sinv;
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, -(r1 + r2 * cosv) * sinu, (r1 + r2 * cosv) * cosu, 0.0f);
-	vec3_init (dfdv, - r2 * sinv * cosu, - r2 * sinv * sinu, r2 * cosv);
+	Vector3f dfdu, dfdv;
+	dfdu.Set (-(r1 + r2 * cosv) * sinu, (r1 + r2 * cosv) * cosu, 0.0f);
+	dfdv.Set (- r2 * sinv * cosu, - r2 * sinv * sinu, r2 * cosv);
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, -(r1 + r2 * cosv) * cosu, - (r1 + r2 * cosv) * sinu, 0.0f);
-	vec3_init (dfdudv, r2 * sinv * sinu, - r2 * sinv * cosu, 0.0f);
-	vec3_init (dfdvdv, - r2 * cosv * cosu, - r2 * cosv * sinu, - r2 * sinv);
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (-(r1 + r2 * cosv) * cosu, - (r1 + r2 * cosv) * sinu, 0.0f);
+	dfdudv.Set (r2 * sinv * sinu, - r2 * sinv * cosu, 0.0f);
+	dfdvdv.Set (- r2 * cosv * cosu, - r2 * cosv * sinu, - r2 * sinv);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -759,7 +759,7 @@ bool TrefoilKnot1::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = sinf(fv) + 2.0f*cosf(1.5f*fu);
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	return true;
 }
@@ -798,7 +798,7 @@ bool TrefoilKnot2::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = sinf (fv) + 2.0f * cosf (fu*5.0f/3.0f); // sin(v)+2*cos(u*5/3)
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	return true;
 }
@@ -945,18 +945,18 @@ int parametric_surface_get_helix (float fU, float fV,
 
 	// tangent
 	fvec3 t;
-	fvec3_init (t, -r*sin(fu), r*cos(fu), elevation);
-	fvec3_normalize (t);
+	ft.Set (-r*sin(fu), r*cos(fu), elevation);
+	f(t).Normalize ();
 
 	// normal
 	fvec3 n;
-	fvec3_init (n, -r*cos(fu), -r*sin(fu), 0.);
-	fvec3_normalize (n);
+	fn.Set (-r*cos(fu), -r*sin(fu), 0.);
+	f(n).Normalize ();
 
 	// binormal (= T ^ N)
 	fvec3 b;
-	fvec3_cross_product (b, t, n);
-	fvec3_normalize (b);
+	fb = (t).CrossProduct (n);
+	f(b).Normalize ();
 
 
 	float fx = cx + rtube*(-n[0]*cos(fv) + b[0]*sin(fv));
@@ -1015,26 +1015,26 @@ bool BorromeanRing::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float cz = cosf(3.0f*fu) / 3.0f;
 
 	// tangent
-	vec3 t;
-	vec3_init (t, -sinf(fu), cosf(fu), -sinf(3.0f*fu));
-	vec3_normalize (t);
+	Vector3f t;
+	t.Set (-sinf(fu), cosf(fu), -sinf(3.0f*fu));
+	(t).Normalize ();
 
 	// normal
-	vec3 n;
-	vec3_init (n, -cosf(fu), -sinf(fu), -cosf(3.0f*fu));
-	vec3_normalize (n);
+	Vector3f n;
+	n.Set (-cosf(fu), -sinf(fu), -cosf(3.0f*fu));
+	(n).Normalize ();
 
 	// binormal (= T ^ N)
-	vec3 b;
-	vec3_cross_product (b, t, n);
-	vec3_normalize (b);
+	Vector3f b;
+	b = (t).CrossProduct (n);
+	(b).Normalize ();
 
 	float fx = cx + rtube*(-n[0]*cosf(fv) + b[0]*sinf(fv));
 	float fy = cy + rtube*(-n[1]*cosf(fv) + b[1]*sinf(fv));
 	float fz = cz + rtube*(-n[2]*cosf(fv) + b[2]*sinf(fv));
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	return true;
 }
@@ -1108,18 +1108,18 @@ int parametric_surface_get_borromean_elliptical_rings1 (float fU, float fV,
 
 	// tangent
 	fvec3 t;
-	fvec3_init (t, 0., -r1*sin(fu), r2*cos(fu));
-	fvec3_normalize (t);
+	ft.Set (0., -r1*sin(fu), r2*cos(fu));
+	f(t).Normalize ();
 
 	// normal
 	fvec3 n;
-	fvec3_init (n, 0., -r1*cos(fu), -r2*sin(fu));
-	fvec3_normalize (n);
+	fn.Set (0., -r1*cos(fu), -r2*sin(fu));
+	f(n).Normalize ();
 
 	// binormal (= T ^ N)
 	fvec3 b;
-	fvec3_cross_product (b, t, n);
-	fvec3_normalize (b);
+	fb = (t).CrossProduct (n);
+	f(b).Normalize ();
 
 
 	float fx = cx + rtube*(-n[0]*cos(fv) + b[0]*sin(fv));
@@ -1157,18 +1157,18 @@ int parametric_surface_get_borromean_elliptical_rings2 (float fU, float fV,
 
 	// tangent
 	fvec3 t;
-	fvec3_init (t, -r2*sin(fu), 0., r1*cos(fu));
-	fvec3_normalize (t);
+	ft.Set (-r2*sin(fu), 0., r1*cos(fu));
+	f(t).Normalize ();
 
 	// normal
 	fvec3 n;
-	fvec3_init (n, -r2*cos(fu), 0., -r1*sin(fu));
-	fvec3_normalize (n);
+	fn.Set (-r2*cos(fu), 0., -r1*sin(fu));
+	f(n).Normalize ();
 
 	// binormal (= T ^ N)
 	fvec3 b;
-	fvec3_cross_product (b, t, n);
-	fvec3_normalize (b);
+	fb = (t).CrossProduct (n);
+	f(b).Normalize ();
 
 
 	float fx = cx + rtube*(-n[0]*cos(fv) + b[0]*sin(fv));
@@ -1206,18 +1206,18 @@ int parametric_surface_get_borromean_elliptical_rings3 (float fU, float fV,
 
 	// tangent
 	fvec3 t;
-	fvec3_init (t, -r1*sin(fu), r2*cos(fu), 0.);
-	fvec3_normalize (t);
+	ft.Set (-r1*sin(fu), r2*cos(fu), 0.);
+	f(t).Normalize ();
 
 	// normal
 	fvec3 n;
-	fvec3_init (n, -r1*cos(fu), -r2*sin(fu), 0.);
-	fvec3_normalize (n);
+	fn.Set (-r1*cos(fu), -r2*sin(fu), 0.);
+	f(n).Normalize ();
 
 	// binormal (= T ^ N)
 	fvec3 b;
-	fvec3_cross_product (b, t, n);
-	fvec3_normalize (b);
+	fb = (t).CrossProduct (n);
+	f(b).Normalize ();
 
 
 	float fx = cx + rtube*(-n[0]*cos(fv) + b[0]*sin(fv));
@@ -1297,32 +1297,32 @@ bool TorusKnot::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float cz = cc*sinf(dd * fu);
 
 	// tangent
-	vec3 t;
-	vec3_init (t,
+	Vector3f t;
+	t.Set (
 		   -(bb*dd*sinf(dd*fu))*cosf(ee*fu) - (aa+bb*cosf(dd*fu))*ee*sinf(ee*fu),
 		   -(bb*dd*sinf(dd*fu))*sinf(ee*fu) + (aa+bb*cosf(dd*fu))*ee*cosf(ee*fu),
 		   cc*dd*cosf(dd*fu));
-	vec3_normalize (t);
+	(t).Normalize ();
 
 	// normal
-	vec3 n;
-	vec3_init (n,
+	Vector3f n;
+	n.Set (
 		   -bb*dd*dd*cosf(dd*fu)*cosf(ee*fu) + (bb*dd*sinf(dd*fu))*ee*sinf(ee*fu) - (-bb*dd*sinf(dd*fu)*ee*sinf(ee*fu) + (aa+bb*cosf(dd*fu))*ee*ee*cosf(ee*fu)),
 		   -bb*dd*dd*cosf(dd*fu)*sinf(ee*fu) - (bb*dd*sinf(dd*fu))*ee*cosf(ee*fu) + (-bb*dd*sinf(dd*fu)*ee*cosf(ee*fu) - (aa+bb*cosf(dd*fu))*ee*ee*sinf(ee*fu)),
 		   -cc*dd*dd*sinf(dd*fu));
-	vec3_normalize (n);
+	(n).Normalize ();
 
 	// binormal (= T ^ N)
-	vec3 b;
-	vec3_cross_product (b, t, n);
-	vec3_normalize (b);
+	Vector3f b;
+	b = (t).CrossProduct (n);
+	(b).Normalize ();
 
 	float fx = cx + rtube*(-n[0]*cosf(fv) + b[0]*sinf(fv));
 	float fy = cy + rtube*(-n[1]*cosf(fv) + b[1]*sinf(fv));
 	float fz = cz + rtube*(-n[2]*cosf(fv) + b[2]*sinf(fv));
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	return true;
 }
@@ -1369,32 +1369,32 @@ bool CinquefoilKnot::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float cz = -sinf(2.0f*fu/(2.0f*k + 1.0f));
 
 	// tangent
-	vec3 t;
-	vec3_init (t,
+	Vector3f t;
+	t.Set (
 		   -sinf(fu)*(2.0f-cosf(2.0f*fu/(2.0f*k+1.0f))) + cosf(fu)*sinf(2.0f*fu/(2.0f*k+1.0f))*2.0f/(2.0f*k+1.0f),
 		   cosf(fu)*(2.0f-cosf(2.0f*fu/(2.0f*k+1.0f))) + sinf(fu)*sinf(2.0f*fu/(2.0f*k+1.0f))*2.0f/(2.0f*k+1.0f),
 		   -cosf(2.0f*fu/(2.0f*k+1.0f))*2.0f/(2.0f*k+1.0f) );
-	vec3_normalize (t);
+	(t).Normalize ();
 
 	// normal
-	vec3 n;
-	vec3_init (n,
+	Vector3f n;
+	n.Set (
 		   -cosf(fu)*(2.0f-cosf(2.0f*fu/(2.0f*k+1.0f)))-sinf(fu)*sinf(2.0f*fu/(2.0f*k+1.0f))*2.0f/(2.0f*k+1.0f) - sinf(fu)*sinf(2.0f*fu/(2.0f*k+1.0f))*2.0f/(2.0f*k+1.0f)+cosf(fu)*cosf(2.0f*fu/(2.0f*k+1.0f))*4.0f/((2.0f*k+1.0f)*(2.0f*k+1.0f)),
 		   -sinf(fu)*(2.0f-cosf(2.0f*fu/(2.0f*k+1.0f)))+cosf(fu)*sinf(2.0f*fu/(2.0f*k+1.0f))*2.0f/(2.0f*k+1.0f) + cosf(fu)*sinf(2.0f*fu/(2.0f*k+1.0f))*2.0f/(2.0f*k+1.0f)+sinf(fu)*cosf(2.0f*fu/(2.0f*k+1.0f))*4.0f/((2.0f*k+1.0f)*(2.0f*k+1.0f)),
 		   -sinf(2.0f*fu/(2.0f*k+1.0f))*4.0f/((2.0f*k+1.0f)*(2.0f*k+1.0f)) );
-	vec3_normalize (n);
+	(n).Normalize ();
 	
 	// binormal (= T ^ N)
-	vec3 b;
-	vec3_cross_product (b, t, n);
-	vec3_normalize (b);
+	Vector3f b;
+	b = (t).CrossProduct (n);
+	(b).Normalize ();
 
 	float fx = cx + rtube*(-n[0]*cosf(fv) + b[0]*sinf(fv));
 	float fy = cy + rtube*(-n[1]*cosf(fv) + b[1]*sinf(fv));
 	float fz = cz + rtube*(-n[2]*cosf(fv) + b[2]*sinf(fv));
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	return true;
 }
@@ -1452,7 +1452,7 @@ bool Breather::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = 2.0f * w * coshf(aa * fu) * (-(w * sinf(fv) * cosf(w * fv)) + (cosf(fv) * sinf(w * fv))) / denom;
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	return true;
 }
@@ -1496,17 +1496,17 @@ bool HyperbolicParaboloid::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = amplitude*(fx*fx - fy*fy);
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 1.0f, 0.0f, 2.0f*amplitude*fx);
-	vec3_init (dfdv, 0.0f, 1.0f, -2.0f*amplitude*fy);
+	Vector3f dfdu, dfdv;
+	dfdu.Set (1.0f, 0.0f, 2.0f*amplitude*fx);
+	dfdv.Set (0.0f, 1.0f, -2.0f*amplitude*fy);
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0.0f, 0.0f, 2.0f*amplitude);
-	vec3_init (dfdudv, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdvdv, 0.0f, 0.0f, -2.0f*amplitude);
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (0.0f, 0.0f, 2.0f*amplitude);
+	dfdudv.Set (0.0f, 0.0f, 0.0f);
+	dfdvdv.Set (0.0f, 0.0f, -2.0f*amplitude);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -1551,17 +1551,17 @@ bool MonkeySaddle::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = amplitude*fx*(fx*fx - 3.0f*fy*fy);
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 1.0f, 0.0f, 3.0f*amplitude*fx*fx - 3.0f*amplitude*fy*fy);
-	vec3_init (dfdv, 0.0f, 1.0f, -6.0f*amplitude*fx*fy);
+	Vector3f dfdu, dfdv;
+	dfdu.Set (1.0f, 0.0f, 3.0f*amplitude*fx*fx - 3.0f*amplitude*fy*fy);
+	dfdv.Set (0.0f, 1.0f, -6.0f*amplitude*fx*fy);
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0.0f, 0.0f, 6.0f*amplitude*fx);
-	vec3_init (dfdudv, 0.0f, 0.0f, -6.0f*amplitude*fy);
-	vec3_init (dfdvdv, 0.0f, 0.0f, -6.0f*amplitude*fx);
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (0.0f, 0.0f, 6.0f*amplitude*fx);
+	dfdudv.Set (0.0f, 0.0f, -6.0f*amplitude*fy);
+	dfdvdv.Set (0.0f, 0.0f, -6.0f*amplitude*fx);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -1606,17 +1606,17 @@ bool Blobs::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = amplitude * sinf (fy) * cosf (fx);
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 1.0f, 0.0f, -amplitude*sinf(fy)*sinf(fx));
-	vec3_init (dfdv, 0.0f, 1.0f, amplitude*cosf(fy)*cosf(fx));
+	Vector3f dfdu, dfdv;
+	dfdu.Set (1.0f, 0.0f, -amplitude*sinf(fy)*sinf(fx));
+	dfdv.Set (0.0f, 1.0f, amplitude*cosf(fy)*cosf(fx));
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0.0f, 0.0f, -amplitude*sinf(fy)*cosf(fx));
-	vec3_init (dfdudv, 0.0f, 0.0f, -amplitude*cosf(fy)*sinf(fx));
-	vec3_init (dfdvdv, 0.0f, 0.0f, -amplitude*sinf(fy)*cosf(fx));
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (0.0f, 0.0f, -amplitude*sinf(fy)*cosf(fx));
+	dfdudv.Set (0.0f, 0.0f, -amplitude*cosf(fy)*sinf(fx));
+	dfdvdv.Set (0.0f, 0.0f, -amplitude*sinf(fy)*cosf(fx));
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -1662,22 +1662,22 @@ bool Drop::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = amplitude * sinf (w * sqrtf (1.0f + fx*fx + fy*fy));
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 1.0f, 0.0f, amplitude*w*fx*cosf(w*sqrtf(1.0f+fx*fx+fy*fy)) / (sqrtf(1.0f+fx*fx+fy*fy)));
-	vec3_init (dfdv, 0.0f, 1.0f, amplitude*w*fy*cosf(w*sqrtf(1.0f+fx*fx+fy*fy)) / (sqrtf(1.0f+fx*fx+fy*fy)));
+	Vector3f dfdu, dfdv;
+	dfdu.Set (1.0f, 0.0f, amplitude*w*fx*cosf(w*sqrtf(1.0f+fx*fx+fy*fy)) / (sqrtf(1.0f+fx*fx+fy*fy)));
+	dfdv.Set (0.0f, 1.0f, amplitude*w*fy*cosf(w*sqrtf(1.0f+fx*fx+fy*fy)) / (sqrtf(1.0f+fx*fx+fy*fy)));
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0.0f, 0.0f, amplitude*w*(1.0f+fx*fx+fy*fy-fx*fx*cosf(w*sqrtf(1.0f+fx*fx+fy*fy))/((1.0f+fx*fx+fy*fy)*sqrtf(1.0f+fx*fx+fy*fy))
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set ( 0.0f, 0.0f, amplitude*w*(1.0f+fx*fx+fy*fy-fx*fx*cosf(w*sqrtf(1.0f+fx*fx+fy*fy))/((1.0f+fx*fx+fy*fy)*sqrtf(1.0f+fx*fx+fy*fy))
 						-			      
 						amplitude*w*fx*fx*sinf(w*sqrtf(1.0f+fx*fx+fy*fy))/(1.0f+fx*fx+fy*fy)));
-	vec3_init (dfdudv, 0.0f, 0.0f, -(amplitude*w*w*fx*fy*sinf(w*sqrtf(1.0f+fx*fx+fy*fy))*sqrtf(1.0f+fx*fx+fy*fy)
+	dfdudv.Set ( 0.0f, 0.0f, -(amplitude*w*w*fx*fy*sinf(w*sqrtf(1.0f+fx*fx+fy*fy))*sqrtf(1.0f+fx*fx+fy*fy)
 				     +
 				     amplitude*w*fx*fy*cosf(w*sqrtf(1.0f+fx*fx+fy*fy)))
 		   / (1.0f+fx*fx+fy*fy));
-	vec3_init (dfdvdv, 0.0f, 0.0f, amplitude*w*(1.0f+fx*fx+fy*fy-fy*fy*cosf(w*sqrtf(1.0f+fx*fx+fy*fy))/((1.0f+fx*fx+fy*fy)*sqrtf(1.0f+fx*fx+fy*fy))
+	dfdvdv.Set ( 0.0f, 0.0f, amplitude*w*(1.0f+fx*fx+fy*fy-fy*fy*cosf(w*sqrtf(1.0f+fx*fx+fy*fy))/((1.0f+fx*fx+fy*fy)*sqrtf(1.0f+fx*fx+fy*fy))
 						-			      
 						amplitude*w*fy*fy*sinf(w*sqrtf(1.0f+fx*fx+fy*fy))/(1.0f+fx*fx+fy*fy)));
 	
@@ -1724,17 +1724,17 @@ bool Wave1::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = amplitude * sinf (fy*3.0f);
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 1.0f, 0.0f, 0.0f);
-	vec3_init (dfdv, 0.0f, 1.0f, 3.0f*amplitude*cosf(3.0f*fy));
+	Vector3f dfdu, dfdv;
+	dfdu.Set (1.0f, 0.0f, 0.0f);
+	dfdv.Set (0.0f, 1.0f, 3.0f*amplitude*cosf(3.0f*fy));
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdudv, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdvdv, 0.0f, 0.0f, -9.0f*amplitude*sinf(3.0f*fy));
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (0.0f, 0.0f, 0.0f);
+	dfdudv.Set (0.0f, 0.0f, 0.0f);
+	dfdvdv.Set (0.0f, 0.0f, -9.0f*amplitude*sinf(3.0f*fy));
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -1779,17 +1779,17 @@ bool Wave2::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = amplitude*sinf (2.0f*(fx+fy));
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 1.0f, 0.0f, 2.0f*amplitude*cosf(2.0f*(fx+fy)));
-	vec3_init (dfdv, 0.0f, 1.0f, 2.0f*amplitude*cosf(2.0f*(fx+fy)));
+	Vector3f dfdu, dfdv;
+	dfdu.Set (1.0f, 0.0f, 2.0f*amplitude*cosf(2.0f*(fx+fy)));
+	dfdv.Set (0.0f, 1.0f, 2.0f*amplitude*cosf(2.0f*(fx+fy)));
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0.0f, 0.0f, -4.0f*amplitude*sinf(2.0f*(fx+fy)));
-	vec3_init (dfdudv, 0.0f, 0.0f, -4.0f*amplitude*sinf(2.0f*(fx+fy)));
-	vec3_init (dfdvdv, 0.0f, 0.0f, -4.0f*amplitude*sinf(2.0f*(fx+fy)));
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (0.0f, 0.0f, -4.0f*amplitude*sinf(2.0f*(fx+fy)));
+	dfdudv.Set (0.0f, 0.0f, -4.0f*amplitude*sinf(2.0f*(fx+fy)));
+	dfdvdv.Set (0.0f, 0.0f, -4.0f*amplitude*sinf(2.0f*(fx+fy)));
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -1834,17 +1834,17 @@ bool Weight::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = amplitude * sqrtf (1.0f+fx*fx+fy*fy);
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, 1.0f, 0.0f, amplitude*fx/sqrtf(1.0f+fx*fx+fy*fy));
-	vec3_init (dfdv, 0.0f, 1.0f, amplitude*fy/sqrtf(1.0f+fx*fx+fy*fy));
+	Vector3f dfdu, dfdv;
+	dfdu.Set (1.0f, 0.0f, amplitude*fx/sqrtf(1.0f+fx*fx+fy*fy));
+	dfdv.Set (0.0f, 1.0f, amplitude*fy/sqrtf(1.0f+fx*fx+fy*fy));
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0.0f, 0.0f, amplitude*(1.0f+fy*fy)/((1.0f+fx*fx+fy*fy)*sqrtf(1.0f+fx*fx+fy*fy)));
-	vec3_init (dfdudv, 0.0f, 0.0f, -amplitude*fx*fy/(1.0f+fx*fx+fy*fy));
-	vec3_init (dfdvdv, 0.0f, 0.0f, amplitude*(1.0f+fx*fx)/((1.0f+fx*fx+fy*fy)*sqrtf(1.0f+fx*fx+fy*fy)));
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (0.0f, 0.0f, amplitude*(1.0f+fy*fy)/((1.0f+fx*fx+fy*fy)*sqrtf(1.0f+fx*fx+fy*fy)));
+	dfdudv.Set (0.0f, 0.0f, -amplitude*fx*fy/(1.0f+fx*fx+fy*fy));
+	dfdvdv.Set (0.0f, 0.0f, amplitude*(1.0f+fx*fx)/((1.0f+fx*fx+fy*fy)*sqrtf(1.0f+fx*fx+fy*fy)));
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 
@@ -1888,17 +1888,17 @@ bool Guimard::EvaluatePosition (float fU, float fV, diff_s *diff)
 	float fz = c * fU * sinf(fV) * sinf(fV);
 
 	// position
-	vec3_init (diff->position, fx, fy, fz);
+	diff->position.Set (fx, fy, fz);
 
 	// partial derivates
-	vec3 dfdu, dfdv;
-	vec3_init (dfdu, (b-a) * cosf(fV), b * sinf(fV), c * sinf(fV) * sinf(fV));
-	vec3_init (dfdv, -(a*(1.0f-fU) + b*fU) * sinf(fV), -b * fU * cosf(fV), 2.0f * c * fU * cosf(fV) * sinf(fV));
+	Vector3f dfdu, dfdv;
+	dfdu.Set ((b-a) * cosf(fV), b * sinf(fV), c * sinf(fV) * sinf(fV));
+	dfdv.Set (-(a*(1.0f-fU) + b*fU) * sinf(fV), -b * fU * cosf(fV), 2.0f * c * fU * cosf(fV) * sinf(fV));
 
-	vec3 dfdudu, dfdudv, dfdvdv;
-	vec3_init (dfdudu, 0.0f, 0.0f, 0.0f);
-	vec3_init (dfdudv, -(b-a) * sinf(fV), b * cosf(fV), 2.0f * c * cosf(fV) * sinf(fV));
-	vec3_init (dfdvdv, -(a*(1.0f-fU) + b*fU) * cosf(fV), b * fU * sinf(fV), 0.0f);
+	Vector3f dfdudu, dfdudv, dfdvdv;
+	dfdudu.Set (0.0f, 0.0f, 0.0f);
+	dfdudv.Set (-(b-a) * sinf(fV), b * cosf(fV), 2.0f * c * cosf(fV) * sinf(fV));
+	dfdvdv.Set (-(a*(1.0f-fU) + b*fU) * cosf(fV), b * fU * sinf(fV), 0.0f);
 
 	EvaluateFundamentalForms (diff, dfdu, dfdv, dfdudu, dfdudv, dfdvdv);
 

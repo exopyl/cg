@@ -11,17 +11,15 @@
 * 0 otherwise
 */
 static int
-is_obtuse (vec3 u, vec3 v, vec3 w)
+is_obtuse (const Vector3f &u, const Vector3f &v, const Vector3f &w)
 {
-	vec3 v1, v2;
-
-	vec3_subtraction (v1, v, u);
-	vec3_subtraction (v2, w, u);
-	return (vec3_dot_product(v1, v2) < 0.0);
+	Vector3f v1 = v - u;
+	Vector3f v2 = w - u;
+	return (v1.DotProduct(v2) < 0.0);
 }
 
 static int
-is_triangle_obtuse (vec3 a, vec3 b, vec3 c)
+is_triangle_obtuse (const Vector3f &a, const Vector3f &b, const Vector3f &c)
 {
 	return (is_obtuse (a, b, c) ||
 		is_obtuse (b, c, a) ||
@@ -29,49 +27,43 @@ is_triangle_obtuse (vec3 a, vec3 b, vec3 c)
 }
 
 static float
-cotan (vec3 u, vec3 v, vec3 w)
+cotan (const Vector3f &u, const Vector3f &v, const Vector3f &w)
 {
-	vec3 v1, v2;
-	float v1dotv2, denom;
-	vec3_subtraction (v1, v, u);
-	vec3_subtraction (v2, w, u);
-	v1dotv2 = vec3_dot_product (v1, v2);
-	denom = sqrt (vec3_dot_product(v1,v1)*vec3_dot_product(v2,v2) - v1dotv2*v1dotv2);
-	
+	Vector3f v1 = v - u;
+	Vector3f v2 = w - u;
+	float v1dotv2 = v1.DotProduct(v2);
+	float denom = sqrt (v1.DotProduct(v1)*v2.DotProduct(v2) - v1dotv2*v1dotv2);
+
 	return (denom == 0.0)? 0.0 : v1dotv2/denom;
 }
 
 static float
-angle_from_cotan (vec3 u, vec3 v, vec3 w)
+angle_from_cotan (const Vector3f &u, const Vector3f &v, const Vector3f &w)
 {
-	vec3 v1, v2;
-	float v1dotv2, denom;
+	Vector3f v1 = v - u;
+	Vector3f v2 = w - u;
+	float v1dotv2 = v1.DotProduct(v2);
+	float denom = sqrt (v1.DotProduct(v1)*v2.DotProduct(v2) - v1dotv2*v1dotv2);
 
-	vec3_subtraction (v1, v, u);
-	vec3_subtraction (v2, w, u);
-	v1dotv2 = vec3_dot_product (v1, v2);
-	denom = sqrt (vec3_dot_product(v1,v1)*vec3_dot_product(v2,v2) - v1dotv2*v1dotv2);
-	
 	return (fabs (atan2 (denom, v1dotv2)));
 }
 
 // area around a in the triangle abc
 static float
-region_area (vec3 a, vec3 b, vec3 c)
+region_area (const Vector3f &a, const Vector3f &b, const Vector3f &c)
 {
-	if (vec3_triangle_area (a, b, c) == 0.0) return 0.0;
-	
+	if (Vector3f::evaluate_triangle_area (a, b, c) == 0.0) return 0.0;
+
 	if (is_triangle_obtuse (a, b, c))
     {
-		if (is_obtuse (a, b, c)) return vec3_triangle_area (a, b, c) / 2.0;
-		else                     return vec3_triangle_area (a, b, c) / 4.0;
+		if (is_obtuse (a, b, c)) return Vector3f::evaluate_triangle_area (a, b, c) / 2.0;
+		else                     return Vector3f::evaluate_triangle_area (a, b, c) / 4.0;
     }
 	else
     {
-		vec3 u, v;
-		vec3_subtraction (u, b, a);
-		vec3_subtraction (v, c, a);
-		return (cotan (b, a, c)*vec3_dot_product(v,v)+cotan (c, a, b)*vec3_dot_product(u,u))/8.0;
+		Vector3f u = b - a;
+		Vector3f v = c - a;
+		return (cotan (b, a, c)*v.DotProduct(v)+cotan (c, a, b)*u.DotProduct(u))/8.0;
     }
 }
 
@@ -86,7 +78,7 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 	Face **faces = m_pModel->m_pMesh->m_pFaces;
 	float *vn = m_pModel->m_pMesh->m_pVertexNormals.data();
 	int i,a,b,c;
-	vec3 v1, v2, v3;
+	Vector3f v1, v2, v3;
 	Tensor *pDiffParam_walk;
 	int e, e_walk;
 	int n_neighbours;
@@ -106,8 +98,7 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 		float area = 0.0; // init the area around the vertex
 
 		// init for the mean curvature normal
-		vec3 mean_curvature_normal;
-		vec3_init (mean_curvature_normal, 0.0, 0.0, 0.0);
+		Vector3f mean_curvature_normal (0.0, 0.0, 0.0);
 
 		// init for the gaussian curvature
 		float angle_sum = 0.0;
@@ -142,9 +133,9 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 				continue;
 			}
 
-			vec3_init (v1, v[3*a], v[3*a+1], v[3*a+2]);
-			vec3_init (v2, v[3*b], v[3*b+1], v[3*b+2]);
-			vec3_init (v3, v[3*c], v[3*c+1], v[3*c+2]);
+			v1.Set (v[3*a], v[3*a+1], v[3*a+2]);
+			v2.Set (v[3*b], v[3*b+1], v[3*b+2]);
+			v3.Set (v[3*c], v[3*c+1], v[3*c+2]);
 
 			// compute the local area
 			area += region_area (v1, v2, v3);
@@ -172,7 +163,7 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 			int he_next = m_pModel->GetCheMesh()->edge(e_walk).m_he_next;
 			e_walk = m_pModel->GetCheMesh()->edge(m_pModel->GetCheMesh()->edge(he_next).m_he_next).m_pair;
 		} while (e_walk >= 0 && e_walk != e);
-		
+
 		if (area > 0.0)
 		{
 			mean_curvature_normal[0] /= 2*area;
@@ -181,10 +172,10 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 		}
 		else
 			printf ("!!! Pb with area nil\n");
-		
+
 		// mean curvature
-		float kappa_mean = vec3_length(mean_curvature_normal)/2.0;
-		
+		float kappa_mean = mean_curvature_normal.getLength()/2.0;
+
 		/* add on :
 		* mean_kappa is always positive according to the article
 		* because the surface is not supposed to be oriented.
@@ -192,19 +183,18 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 		* of the mean curvature normal and the normal traditionally
 		* computed on the current vertex.
 		*/
-		vec3 nnn;
-		vec3_init (nnn, vn[3*a], vn[3*a+1], vn[3*a+2]);
-		if (vec3_dot_product (mean_curvature_normal, nnn) < 0.0)
+		Vector3f nnn (vn[3*a], vn[3*a+1], vn[3*a+2]);
+		if (mean_curvature_normal.DotProduct (nnn) < 0.0)
 		{
 			kappa_mean *= -1.0;
 			mean_curvature_normal[0] *= -1.0;
 			mean_curvature_normal[1] *= -1.0;
 			mean_curvature_normal[2] *= -1.0;
 		}
-		
+
 		// gaussian curvature
 		float kappa_gaussian = (2.0*3.14159 - angle_sum)/area;
-		
+
 		//
 		// compute the principal curvatures
 		//
@@ -213,18 +203,18 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 		temp = sqrt (temp);
 		float kappa1 = kappa_mean + temp;
 		float kappa2 = kappa_mean - temp;
-		
+
 		//
 		// compute the principal directions
 		//
-		
+
 		// construct the local basis
-		vec3 basis1, basis2, basis3;
-		if (vec3_length (mean_curvature_normal))
-			vec3_copy (basis3, mean_curvature_normal);
+		Vector3f basis1, basis2, basis3;
+		if (mean_curvature_normal.getLength ())
+			basis3 = mean_curvature_normal;
 		else
 		{
-			vec3_init (basis3, 0.0, 0.0, 0.0);
+			basis3.Set (0.0, 0.0, 0.0);
 			e = m_pModel->GetCheMesh()->m_edges_vertex[i];
 			e_walk = e;
 			do
@@ -234,43 +224,41 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 				b = faces[ew.m_face]->GetVertex(1);
 				c = faces[ew.m_face]->GetVertex(2);
 
-				vec3 n_walk;
-				vec3_init (v1, v[3*a], v[3*a+1], v[3*a+2]);
-				vec3_init (v2, v[3*b], v[3*b+1], v[3*b+2]);
-				vec3_init (v3, v[3*c], v[3*c+1], v[3*c+2]);
-				vec3_triangle_normal (n_walk, v1, v2, v3);
-				vec3_normalize (n_walk);
-				vec3_addition (basis3, basis3, n_walk);
+				v1.Set (v[3*a], v[3*a+1], v[3*a+2]);
+				v2.Set (v[3*b], v[3*b+1], v[3*b+2]);
+				v3.Set (v[3*c], v[3*c+1], v[3*c+2]);
+				Vector3f n_walk = Vector3f::evaluate_triangle_normal (v1, v2, v3);
+				n_walk.Normalize ();
+				basis3 += n_walk;
 
 				// next
 				int he_next = m_pModel->GetCheMesh()->edge(e_walk).m_he_next;
 				e_walk = m_pModel->GetCheMesh()->edge(m_pModel->GetCheMesh()->edge(he_next).m_he_next).m_pair;
 			} while (e_walk >= 0 && e_walk != e);
 		}
-		vec3_normalize (basis3);
-		
-		vec3_init (basis1, 0.0, 0.0, 0.0);
+		basis3.Normalize ();
+
+		basis1.Set (0.0, 0.0, 0.0);
 		if (fabs(basis3[0]) > fabs(basis3[1]))
 			basis1[1] = 1;
 		else
 			basis1[0] = 1;
-		vec3_cross_product (basis2,  basis3, basis1);
-		vec3_normalize (basis2);
-		vec3_cross_product (basis1,  basis2, basis3);
-		vec3_normalize (basis1);
-		
+		basis2 = basis3.CrossProduct (basis1);
+		basis2.Normalize ();
+		basis1 = basis2.CrossProduct (basis3);
+		basis1.Normalize ();
+
 		// init the linear system in relation with the minimization
 		float m3[9];
 		m3[0]=m3[1]=m3[2]=m3[3]=m3[4]=m3[5]=m3[6]=m3[7]=m3[8]=0.0;
-		vec3 right;
-		vec3_init (right, 0.0, 0.0, 0.0);
-		
+		Vector3f right (0.0, 0.0, 0.0);
+
 		float *weights = (float*)malloc(n_neighbours*sizeof(float));
 		float *kappas  = (float*)malloc(n_neighbours*sizeof(float));
 		float *d1s     = (float*)malloc(n_neighbours*sizeof(float));
 		float *d2s     = (float*)malloc(n_neighbours*sizeof(float));
 		int n_neighbour_walk = 0;
-		
+
 		e = m_pModel->GetCheMesh()->m_edges_vertex[i];
 		e_walk = e;
 		do
@@ -302,60 +290,57 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 			}
 
 
-			vec3_init (v1, v[3*a], v[3*a+1], v[3*a+2]);
-			vec3_init (v2, v[3*b], v[3*b+1], v[3*b+2]);
-			vec3_init (v3, v[3*c], v[3*c+1], v[3*c+2]);
+			v1.Set (v[3*a], v[3*a+1], v[3*a+2]);
+			v2.Set (v[3*b], v[3*b+1], v[3*b+2]);
+			v3.Set (v[3*c], v[3*c+1], v[3*c+2]);
 
 			// current edge
-			vec3 edge;
-			vec3_subtraction (edge, v2, v1);
+			Vector3f edge = v2 - v1;
 
 			// curvature along the edge
-			float kappa_n = 2 * (vec3_dot_product(edge,basis3) / vec3_dot_product(edge,edge));
+			float kappa_n = 2 * (edge.DotProduct(basis3) / edge.DotProduct(edge));
 
 			// weight
 			float weight = 0.0;
 			if (!is_triangle_obtuse (v1, v2, v3))
 			{
-				weight += vec3_dot_product(edge,edge) * cotan (v3, v1, v2) / 8.0;
+				weight += edge.DotProduct(edge) * cotan (v3, v1, v2) / 8.0;
 			}
 			else
 			{
 				if (is_obtuse (v1, v2, v3))
-					weight += vec3_dot_product(edge,edge) * region_area (v1, v2, v3) / 4.0;
+					weight += edge.DotProduct(edge) * region_area (v1, v2, v3) / 4.0;
 				else
-					weight += vec3_dot_product(edge,edge) * region_area (v1, v2, v3) / 8.0;
+					weight += edge.DotProduct(edge) * region_area (v1, v2, v3) / 8.0;
 			}
 
 			// adjacent face
-			vec3 vv3;
 			int pair_idx = m_pModel->GetCheMesh()->edge(e_walk).m_pair;
 			int index = m_pModel->GetCheMesh()->edge(m_pModel->GetCheMesh()->edge(pair_idx).m_he_next).m_v_end;
-			vec3_init (vv3, v[3*index], v[3*index+1], v[3*index+2]);
+			Vector3f vv3 (v[3*index], v[3*index+1], v[3*index+2]);
 			if (!is_triangle_obtuse (v1, v2, vv3))
 			{
-				weight += vec3_dot_product(edge,edge) * cotan (vv3, v1, v2) / 8.0;
+				weight += edge.DotProduct(edge) * cotan (vv3, v1, v2) / 8.0;
 			}
 			else
 			{
 				if (is_obtuse (v1, v2, vv3))
-					weight += vec3_dot_product(edge,edge) * region_area (v1, v2, vv3) / 4.0;
+					weight += edge.DotProduct(edge) * region_area (v1, v2, vv3) / 4.0;
 				else
-					weight += vec3_dot_product(edge,edge) * region_area (v1, v2, vv3) / 8.0;
+					weight += edge.DotProduct(edge) * region_area (v1, v2, vv3) / 8.0;
 			}
 			//weight = 1.0;
 
 			// projection of the edge on the tangent plane
-			vec3 ve_tmp, ve_proj;
-			float vedotn = vec3_dot_product (edge, basis3);
-			vec3_init (ve_tmp, basis3[0]*vedotn, basis3[1]*vedotn, basis3[2]*vedotn);
-			vec3_subtraction (ve_proj, edge, ve_tmp);
-			vec3_normalize (ve_proj);
+			float vedotn = edge.DotProduct (basis3);
+			Vector3f ve_tmp (basis3[0]*vedotn, basis3[1]*vedotn, basis3[2]*vedotn);
+			Vector3f ve_proj = edge - ve_tmp;
+			ve_proj.Normalize ();
 
 			// move d to 2D basis
 			float d1, d2;
-			d1 = vec3_dot_product (ve_proj, basis1);
-			d2 = vec3_dot_product (ve_proj, basis2);
+			d1 = ve_proj.DotProduct (basis1);
+			d2 = ve_proj.DotProduct (basis2);
 
 			weights[n_neighbour_walk] = weight;
 			kappas[n_neighbour_walk]  = kappa_n;
@@ -378,18 +363,17 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 			int he_next = m_pModel->GetCheMesh()->edge(e_walk).m_he_next;
 			e_walk = m_pModel->GetCheMesh()->edge(m_pModel->GetCheMesh()->edge(he_next).m_he_next).m_pair;
 		} while (e_walk >= 0 && e_walk != e);
-		
+
 		// complete the linear system with  a+c = 2*kappa_mean
 		m3[6] = 1; m3[7] = 0; m3[8] = 1;
 		right[2] = 2*kappa_mean;
-		
+
 		// solve the linearsystem
-		vec3 result;
+		Vector3f result;
 		float a, b, c;
-		mat3 ls;
-		mat3_init_array (ls, m3);
-		if (mat3_solve_linearsystem (ls, right, result))
-		{      
+		Matrix3f ls (m3);
+		if (ls.SolveLinearSystem (right, result))
+		{
 			a = result[0];
 			b = result[1];
 			c = result[2];
@@ -397,14 +381,14 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 		else
 		{
 			pDiffParam_walk = new Tensor ();
-			pDiffParam_walk->SetNormal (basis3);   // normale
+			pDiffParam_walk->SetNormal (basis3.x, basis3.y, basis3.z);   // normale
 			pDiffParam_walk->SetKappaMax (kappa1); // maximal curvature
 			pDiffParam_walk->SetKappaMin (kappa2); // minimal curvature
 			pDiffParam_walk->SetDirectionMax (basis1[0], basis1[1], basis1[2]);
 			pDiffParam_walk->SetDirectionMin (basis2[0], basis2[1], basis2[2]);
 			Tensors ()[i].reset (pDiffParam_walk);
 		}
-		
+
 		// solve the eigensystem
 		Matrix2f m2 (a, b, b, c);
 		Vector2f evector1, evector2, evalues;
@@ -415,7 +399,7 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 			evector = evector1;
 		else
 			evector = evector2;
-		
+
 #if 0
 		float err1 = 0.0;
 		float err2 = 0.0;
@@ -431,21 +415,21 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 			float temp2 = fabs (evector[1]*d1 - evector[0]*d2);
 			temp2 *= temp2;
 			float temp3;
-			
+
 			/* err1 is for kappa1 associated to e1 */
 			temp3 = kappa1*temp1 + kappa2*temp2 - kappa;
 			err1 += weight*temp3*temp3;
-			
+
 			/* err2 is for kappa1 associated to e2 */
 			temp3 = kappa2*temp1 + kappa1*temp2 - kappa;
 			err2 += weight*temp3*temp3;
 		}
-		
+
 		free (weights);
 		free (kappas);
 		free (d1s);
 		free (d2s);
-		
+
 		/* rotate evector by a right angle if that would decrease the error */
 		if (err2 <= err1)
 		{
@@ -453,19 +437,17 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 			evector[0]   =  evector[1];
 			evector[1]   = -temp;
 		}
-#endif    
-		
-		vec3 principal_direction1, principal_direction2;
-		vec3_init (principal_direction1,
-			   evector[0] * basis1[0] + evector[1] * basis2[0],
-			   evector[0] * basis1[1] + evector[1] * basis2[1],
-			   evector[0] * basis1[2] + evector[1] * basis2[2]);
-		vec3_normalize (principal_direction1);
-		vec3_cross_product (principal_direction2, basis3, principal_direction1);
-		
+#endif
+
+		Vector3f principal_direction1 (evector[0] * basis1[0] + evector[1] * basis2[0],
+					       evector[0] * basis1[1] + evector[1] * basis2[1],
+					       evector[0] * basis1[2] + evector[1] * basis2[2]);
+		principal_direction1.Normalize ();
+		Vector3f principal_direction2 = basis3.CrossProduct (principal_direction1);
+
 		// fill the tensor
 		pDiffParam_walk = new Tensor ();
-		pDiffParam_walk->SetNormal (basis3);   // normale
+		pDiffParam_walk->SetNormal (basis3.x, basis3.y, basis3.z);   // normale
 		pDiffParam_walk->SetKappaMax (kappa1); // maximal curvature
 		pDiffParam_walk->SetKappaMin (kappa2); // minimal curvature
 		pDiffParam_walk->SetDirectionMax (principal_direction1[0], principal_direction1[1], principal_direction1[2]);

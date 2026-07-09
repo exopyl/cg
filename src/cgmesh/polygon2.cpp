@@ -290,11 +290,11 @@ Polygon2::area (int i1, int i2, int i3)
 	vec2_init (u2, m_pPoints[0][2*i2], m_pPoints[0][2*i2+1]);
 	vec2_init (u3, m_pPoints[0][2*i3], m_pPoints[0][2*i3+1]);
 
-	vec3 u1u2, u1u3, w;
-	vec3_init (u1u2, u2[0]-u1[0], u2[1]-u1[1], 0.);
-	vec3_init (u1u3, u3[0]-u1[0], u3[1]-u1[1], 0.);
-	vec3_cross_product (w, u1u2, u1u3);
-	float unsigned_area = 0.5*vec3_length (w);
+	Vector3f u1u2, u1u3, w;
+	u1u2.Set (u2[0]-u1[0], u2[1]-u1[1], 0.);
+	u1u3.Set (u3[0]-u1[0], u3[1]-u1[1], 0.);
+	w = (u1u2).CrossProduct (u1u3);
+	float unsigned_area = 0.5*(w).getLength ();
 	float sign = (w[2] > 0.0)? 1.0 : -1.0;
 	
 	return sign * unsigned_area;
@@ -371,11 +371,11 @@ Polygon2::apply_PCA (void)
   float ymax = es->get_eigenvector(0)[1];
   */
 
-	vec3 ox, v;
-	vec3_init (ox, 1.0, 0.0, 0.0);
-	vec3_init (v, xmax, ymax, 0.0);
-	vec3_normalize (v);
-	float c = vec3_dot_product (ox, v);
+	Vector3f ox, v;
+	ox.Set (1.0, 0.0, 0.0);
+	v.Set (xmax, ymax, 0.0);
+	(v).Normalize ();
+	float c = (ox).DotProduct (v);
 	float alpha = acos (c);
 	if (ymax < 0.0) alpha = 3.14159 - alpha;
 	
@@ -532,11 +532,11 @@ int Polygon2::is_trigonometric_order (void)
 
 static float cotangent (vec2 a, vec2 b, vec2 c)
 {
-	vec3 ba, bc, tmp;
-	vec3_init (ba, a[0]-b[0], a[1]-b[1], 0.);
-	vec3_init (bc, c[0]-b[0], c[1]-b[1], 0.);
-	vec3_cross_product(tmp, bc, ba);
-	return vec3_dot_product (bc, ba)/vec3_length (tmp);
+	Vector3f ba, bc, tmp;
+	ba.Set (a[0]-b[0], a[1]-b[1], 0.);
+	bc.Set (c[0]-b[0], c[1]-b[1], 0.);
+	tmp = bc.CrossProduct (ba);
+	return (bc).DotProduct (ba)/(tmp).getLength ();
 }
 
 int Polygon2::generalized_barycentric_coordinates (float pt[2], float *coords)

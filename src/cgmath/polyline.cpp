@@ -3,22 +3,22 @@
 #include <string.h>
 #include <math.h>
 
-#include "curve_discrete.h"
+#include "polyline.h"
 #include "common.h"
 
-CurveDiscrete::CurveDiscrete ()
+ProfilePolyline::ProfilePolyline ()
 {
 	m_nPoints = 0;
 	m_pPoints = nullptr;
 }
 
-CurveDiscrete::~CurveDiscrete ()
+ProfilePolyline::~ProfilePolyline ()
 {
 	if (m_pPoints)
 		free (m_pPoints);
 }
 
-int CurveDiscrete::init (int nPoints)
+int ProfilePolyline::init (int nPoints)
 {
 	if (m_pPoints)
 		free (m_pPoints);
@@ -35,7 +35,7 @@ int CurveDiscrete::init (int nPoints)
 	return 0;
 }
 
-int CurveDiscrete::set_position (int pi, float x, float y, float z)
+int ProfilePolyline::set_position (int pi, float x, float y, float z)
 {
 	if (!m_pPoints || pi < 0 || pi >= m_nPoints)
 		return -1;
@@ -47,7 +47,7 @@ int CurveDiscrete::set_position (int pi, float x, float y, float z)
 	return 0;
 }
 
-int CurveDiscrete::import_obj (char *filename)
+int ProfilePolyline::import_obj (char *filename)
 {
 	if (!filename)
 		return -1;
@@ -62,7 +62,7 @@ int CurveDiscrete::import_obj (char *filename)
 		printf ("Unable to open %s", filename);
 		return -1;
 	}
-	
+
 	unsigned int nPoints=0;
 	while (!feof (ptr))
 	{
@@ -92,7 +92,7 @@ int CurveDiscrete::import_obj (char *filename)
 	return 0;
 }
 
-int CurveDiscrete::export_obj (char *filename)
+int ProfilePolyline::export_obj (char *filename)
 {
 	FILE *ptr = fopen (filename, "w");
 	if (!ptr)
@@ -107,11 +107,11 @@ int CurveDiscrete::export_obj (char *filename)
 	return 0;
 }
 
-int CurveDiscrete::inverse_order (void)
+int ProfilePolyline::inverse_order (void)
 {
 	int i, j;
 	float tmp;
-	
+
 	for (i=0; i<m_nPoints/2; i++)
 	{
 		for (j=0; j<3; j++)
@@ -128,7 +128,7 @@ int CurveDiscrete::inverse_order (void)
 //
 //
 //
-int CurveDiscrete::generate_surface_revolution (unsigned int nSlices,
+int ProfilePolyline::generate_surface_revolution (unsigned int nSlices,
 						unsigned int *_nVertices, float **_pVertices, unsigned int *_nFaces, unsigned int **_pFaces)
 {
 	// count the number of vertices and faces
@@ -163,12 +163,6 @@ int CurveDiscrete::generate_surface_revolution (unsigned int nSlices,
 					pFaces[4*iface+1] = (nSlices) * j;
 					pFaces[4*iface+2] = 0;
 					pFaces[4*iface+3] = k;
-/*
-					pFaces[4*iface+0] = (nSlices) * j;
-					pFaces[4*iface+1] = (nSlices) * j + k;
-					pFaces[4*iface+2] = k;
-					pFaces[4*iface+3] = 0;
-*/
 				}
 				else
 				{
@@ -176,12 +170,6 @@ int CurveDiscrete::generate_surface_revolution (unsigned int nSlices,
 					pFaces[4*iface+1] = (nSlices) * j + k+1;
 					pFaces[4*iface+2] = k+1;
 					pFaces[4*iface+3] = k;
-/*
-					pFaces[4*iface+0] = (nSlices) * j + k+1;
-					pFaces[4*iface+1] = (nSlices) * j + k;
-					pFaces[4*iface+2] = k;
-					pFaces[4*iface+3] = k+1;
-*/
 				}
 			}
 			else
@@ -192,12 +180,6 @@ int CurveDiscrete::generate_surface_revolution (unsigned int nSlices,
 					pFaces[4*iface+1] = nSlices * j;
 					pFaces[4*iface+2] = nSlices * (j+1);
 					pFaces[4*iface+3] = nSlices * (j+1) + k;
-/*
-					pFaces[4*iface+0] = nSlices * j;
-					pFaces[4*iface+1] = nSlices * j + k;
-					pFaces[4*iface+2] = nSlices * (j+1) + k;
-					pFaces[4*iface+3] = nSlices * (j+1);
-*/
 				}
 				else
 				{
@@ -205,12 +187,6 @@ int CurveDiscrete::generate_surface_revolution (unsigned int nSlices,
 					pFaces[4*iface+1] = nSlices * j + k+1;
 					pFaces[4*iface+2] = nSlices * (j+1) + k+1;
 					pFaces[4*iface+3] = nSlices * (j+1) + k;
-/*
-					pFaces[4*iface+0] = nSlices * j + k+1;
-					pFaces[4*iface+1] = nSlices * j + k;
-					pFaces[4*iface+2] = nSlices * (j+1) + k;
-					pFaces[4*iface+3] = nSlices * (j+1) + k+1;
-*/
 				}
 			}
 			iface++;
@@ -225,7 +201,7 @@ int CurveDiscrete::generate_surface_revolution (unsigned int nSlices,
 	return 0;
 }
 
-int CurveDiscrete::generate_frame (float width, float height, unsigned int *_nVertices, float **_pVertices, unsigned int *_nFaces, unsigned int **_pFaces)
+int ProfilePolyline::generate_frame (float width, float height, unsigned int *_nVertices, float **_pVertices, unsigned int *_nFaces, unsigned int **_pFaces)
 {
 	// count the number of vertices and faces
 	unsigned int nVertices = 4*m_nPoints;
@@ -283,4 +259,3 @@ int CurveDiscrete::generate_frame (float width, float height, unsigned int *_nVe
 
 	return 0;
 }
-

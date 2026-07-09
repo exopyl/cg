@@ -23,12 +23,12 @@ Cperlin2::Cperlin2 ()
   
   du = 0.0;
   dv = 0.0;
-  vec3_init (N, 0.0, 0.0, 1.0);
-  vec3_init (I, 0.0, 0.0, -1.0);
-  vec3_init (Ci, 1.0, 1.0, 1.0);
-  vec3_init (Oi, 1.0, 1.0, 1.0);
-  vec3_init (Cs, 1.0, 1.0, 1.0);
-  vec3_init (Os, 1.0, 1.0, 1.0);
+  N[0] = 0.0; N[1] = 0.0; N[2] = 1.0;
+  I[0] = 0.0; I[1] = 0.0; I[2] = -1.0;
+  Ci[0] = 1.0; Ci[1] = 1.0; Ci[2] = 1.0;
+  Oi[0] = 1.0; Oi[1] = 1.0; Oi[2] = 1.0;
+  Cs[0] = 1.0; Cs[1] = 1.0; Cs[2] = 1.0;
+  Os[0] = 1.0; Os[1] = 1.0; Os[2] = 1.0;
   
   w = 240;
   h = 150;
@@ -157,7 +157,7 @@ Cperlin2::PerlinNoise_2D (float x, float y)
 }
 
 void
-Cperlin2::multiplication (vec3 &c, float f) /* c is a color */
+Cperlin2::multiplication (float *c, float f) /* c is a color */
 {
   c[0] *= f;
   c[1] *= f;
@@ -177,14 +177,14 @@ Cperlin2::noise (float s,float t)
 }
 
 void
-Cperlin2::noise (vec3 res, vec3 p)
+Cperlin2::noise (float *res, float *p)
 {
   res[0] = noise(p[0],p[1]);
   res[1] = noise(p[1],p[0]*2);
 }
 
 float
-Cperlin2::vvvvnoise(vec3 p)
+Cperlin2::vvvvnoise(float *p)
 {
   return(noise(p[0],p[1]));
 }
@@ -210,7 +210,7 @@ Cperlin2::smoothstep(float min,float max,float val)
 }
 
 void
-Cperlin2::mix(vec3 res, vec3 min, vec3 max, float val) /* colors */
+Cperlin2::mix(float *res, float *min, float *max, float val) /* colors */
 {
   res[0] = (1-val)*min[0]+val*max[0];
   res[1] = (1-val)*min[1]+val*max[1];
@@ -218,7 +218,7 @@ Cperlin2::mix(vec3 res, vec3 min, vec3 max, float val) /* colors */
 }
 
 void
-Cperlin2::lisse(vec3 res, vec3 t1, vec3 t2, vec3 t3, vec3 t4, float t, matrice m)
+Cperlin2::lisse(float *res, float *t1, float *t2, float *t3, float *t4, float t, matrice m)
 { 
   int j,k;
   float tt[4],ttt[4],x,y,z;
@@ -247,79 +247,79 @@ Cperlin2::lisse(vec3 res, vec3 t1, vec3 t2, vec3 t3, vec3 t4, float t, matrice m
   y += ttt[3] * t4[1];
   z += ttt[3] * t4[2];
 
-  vec3_init (res, x, y, z);
+  res[0] = x; res[1] = y; res[2] = z;
 }
 
 void
-Cperlin2::spline(vec3 res, float csp, vec3 c1, vec3 c2, vec3 c3, vec3 c4, vec3 c5, vec3 c6,
-		 vec3 c7, vec3 c8, vec3 c9, vec3 c10, vec3 c11, vec3 c12, vec3 c13)
+Cperlin2::spline(float *res, float csp, float *c1, float *c2, float *c3, float *c4, float *c5, float *c6,
+		 float *c7, float *c8, float *c9, float *c10, float *c11, float *c12, float *c13)
 {
   int p =(int) (csp*10) ;
   if ( p == 10 )
     p = 9;
   float tt = csp*10 - p ;
-  vec3 t1, t2, t3, t4;
+  float t1[3], t2[3], t3[3], t4[3];
   switch (p)
     {
     case 0:
-      vec3_copy (t1, c1);
-      vec3_copy (t2, c2);
-      vec3_copy (t3, c3);
-      vec3_copy (t4, c4);
+      t1[0] = c1[0]; t1[1] = c1[1]; t1[2] = c1[2];
+      t2[0] = c2[0]; t2[1] = c2[1]; t2[2] = c2[2];
+      t3[0] = c3[0]; t3[1] = c3[1]; t3[2] = c3[2];
+      t4[0] = c4[0]; t4[1] = c4[1]; t4[2] = c4[2];
       break;
     case 1:
-      vec3_copy (t1, c2);
-      vec3_copy (t2, c3);
-      vec3_copy (t3, c4);
-      vec3_copy (t4, c5);
+      t1[0] = c2[0]; t1[1] = c2[1]; t1[2] = c2[2];
+      t2[0] = c3[0]; t2[1] = c3[1]; t2[2] = c3[2];
+      t3[0] = c4[0]; t3[1] = c4[1]; t3[2] = c4[2];
+      t4[0] = c5[0]; t4[1] = c5[1]; t4[2] = c5[2];
       break;
     case 2:
-      vec3_copy (t1, c3);
-      vec3_copy (t2, c4);
-      vec3_copy (t3, c5);
-      vec3_copy (t4, c6);
+      t1[0] = c3[0]; t1[1] = c3[1]; t1[2] = c3[2];
+      t2[0] = c4[0]; t2[1] = c4[1]; t2[2] = c4[2];
+      t3[0] = c5[0]; t3[1] = c5[1]; t3[2] = c5[2];
+      t4[0] = c6[0]; t4[1] = c6[1]; t4[2] = c6[2];
       break;
     case 3:
-      vec3_copy (t1, c4);
-      vec3_copy (t2, c5);
-      vec3_copy (t3, c6);
-      vec3_copy (t4, c7);
+      t1[0] = c4[0]; t1[1] = c4[1]; t1[2] = c4[2];
+      t2[0] = c5[0]; t2[1] = c5[1]; t2[2] = c5[2];
+      t3[0] = c6[0]; t3[1] = c6[1]; t3[2] = c6[2];
+      t4[0] = c7[0]; t4[1] = c7[1]; t4[2] = c7[2];
       break;
     case 4:
-      vec3_copy (t1, c5);
-      vec3_copy (t2, c6);
-      vec3_copy (t3, c7);
-      vec3_copy (t4, c8);
+      t1[0] = c5[0]; t1[1] = c5[1]; t1[2] = c5[2];
+      t2[0] = c6[0]; t2[1] = c6[1]; t2[2] = c6[2];
+      t3[0] = c7[0]; t3[1] = c7[1]; t3[2] = c7[2];
+      t4[0] = c8[0]; t4[1] = c8[1]; t4[2] = c8[2];
       break;
     case 5:
-      vec3_copy (t1, c6);
-      vec3_copy (t2, c7);
-      vec3_copy (t3, c8);
-      vec3_copy (t4, c9);
+      t1[0] = c6[0]; t1[1] = c6[1]; t1[2] = c6[2];
+      t2[0] = c7[0]; t2[1] = c7[1]; t2[2] = c7[2];
+      t3[0] = c8[0]; t3[1] = c8[1]; t3[2] = c8[2];
+      t4[0] = c9[0]; t4[1] = c9[1]; t4[2] = c9[2];
       break;
     case 6:
-      vec3_copy (t1, c7);
-      vec3_copy (t2, c8);
-      vec3_copy (t3, c9);
-      vec3_copy (t4, c10);
+      t1[0] = c7[0]; t1[1] = c7[1]; t1[2] = c7[2];
+      t2[0] = c8[0]; t2[1] = c8[1]; t2[2] = c8[2];
+      t3[0] = c9[0]; t3[1] = c9[1]; t3[2] = c9[2];
+      t4[0] = c10[0]; t4[1] = c10[1]; t4[2] = c10[2];
       break ;
     case 7:
-      vec3_copy (t1, c8);
-      vec3_copy (t2, c9);
-      vec3_copy (t3, c10);
-      vec3_copy (t4, c11);
+      t1[0] = c8[0]; t1[1] = c8[1]; t1[2] = c8[2];
+      t2[0] = c9[0]; t2[1] = c9[1]; t2[2] = c9[2];
+      t3[0] = c10[0]; t3[1] = c10[1]; t3[2] = c10[2];
+      t4[0] = c11[0]; t4[1] = c11[1]; t4[2] = c11[2];
       break ;
     case 8:
-      vec3_copy (t1, c9);
-      vec3_copy (t2, c10);
-      vec3_copy (t3, c11);
-      vec3_copy (t4, c12);
+      t1[0] = c9[0]; t1[1] = c9[1]; t1[2] = c9[2];
+      t2[0] = c10[0]; t2[1] = c10[1]; t2[2] = c10[2];
+      t3[0] = c11[0]; t3[1] = c11[1]; t3[2] = c11[2];
+      t4[0] = c12[0]; t4[1] = c12[1]; t4[2] = c12[2];
       break ;
     case 9:
-      vec3_copy (t1, c10);
-      vec3_copy (t2, c11);
-      vec3_copy (t3, c12);
-      vec3_copy (t4, c13);
+      t1[0] = c10[0]; t1[1] = c10[1]; t1[2] = c10[2];
+      t2[0] = c11[0]; t2[1] = c11[1]; t2[2] = c11[2];
+      t3[0] = c12[0]; t3[1] = c12[1]; t3[2] = c12[2];
+      t4[0] = c13[0]; t4[1] = c13[1]; t4[2] = c13[2];
       break;
     }
   lisse (res, t1, t2, t3, t4, tt, m2);

@@ -35,14 +35,14 @@ public:
 	// deal with coordinates
 	unsigned int GetNPoints (void) { return m_nPoints; };
 	float* GetPoints (void) { return m_pPoints; };
-	int GetKNeighbours (vec3 pt, float distance);
-	int GetSumNeighbours (vec3 pt, float distance, vec3 accum);
-	int GetClosestPoints (vec3 pt, float distance, float **pNeighbours, unsigned int *nNeighbours);
+	int GetKNeighbours (const Vector3f &pt, float distance);
+	int GetSumNeighbours (const Vector3f &pt, float distance, Vector3f &accum);
+	int GetClosestPoints (const Vector3f &pt, float distance, float **pNeighbours, unsigned int *nNeighbours);
 
 	// deal with indices
 	unsigned int GetNIndices (void) { return m_nIndices; };
 	unsigned int* GetIndices (void) { return m_pIndices; };
-	int GetClosestIndicesPoints (float *pVertices, vec3 pt, float distance, unsigned int **pNeighbours, unsigned int *nNeighbours);
+	int GetClosestIndicesPoints (float *pVertices, const Vector3f &pt, float distance, unsigned int **pNeighbours, unsigned int *nNeighbours);
 
 	// deal with triangles
 	unsigned int GetNTriangles (void) { return m_nTriangles; };

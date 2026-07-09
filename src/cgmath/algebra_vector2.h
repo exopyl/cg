@@ -1,5 +1,10 @@
 #pragma once
 
+// ============================================================================
+// C-API GELEE (DEPRECATED) -- NE PAS ajouter de nouvel usage.
+// Remplacee par TVector2<T> (Vector2f). Migration algebre : voir debt_cgmath.md.
+// ============================================================================
+
 #include <stdio.h>
 #include <math.h>
 

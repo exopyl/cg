@@ -233,16 +233,16 @@ Cmesh_orientation_pca::compute_pca_weighted_vertices (void)
   // compute the areas of the triangles
   float *a = new float[nf];
   float atot = 0.0;
-  vec3 v1, v2, v3;
+  Vector3f v1, v2, v3;
   for (i=0; i<nf; i++)
     {
       // get the vertices of the current face
-	    vec3_init (v1, v[3*f[i]->GetVertex(0)], v[3*f[i]->GetVertex(0)+1], v[3*f[i]->GetVertex(0)+2]);
-	    vec3_init (v2, v[3*f[i]->GetVertex(1)], v[3*f[i]->GetVertex(1)+1], v[3*f[i]->GetVertex(1)+2]);
-	    vec3_init (v3, v[3*f[i]->GetVertex(2)], v[3*f[i]->GetVertex(2)+1], v[3*f[i]->GetVertex(2)+2]);
-      
+	    v1.Set (v[3*f[i]->GetVertex(0)], v[3*f[i]->GetVertex(0)+1], v[3*f[i]->GetVertex(0)+2]);
+	    v2.Set (v[3*f[i]->GetVertex(1)], v[3*f[i]->GetVertex(1)+1], v[3*f[i]->GetVertex(1)+2]);
+	    v3.Set (v[3*f[i]->GetVertex(2)], v[3*f[i]->GetVertex(2)+1], v[3*f[i]->GetVertex(2)+2]);
+
 	    // store the current area in a
-	  a[i] = vec3_triangle_area (v1, v2, v3);
+	  a[i] = Vector3f::evaluate_triangle_area (v1, v2, v3);
 	  atot += a[i];
     }
 
@@ -354,16 +354,16 @@ Cmesh_orientation_pca::compute_pca_barycenter (void)
   // compute the weights for the triangles
   float *w = new float[nf];
   float atot = 0.0;
-  vec3 v1, v2, v3, vb;
+  Vector3f v1, v2, v3, vb;
   for (i=0; i<nf; i++)
     {
       // get the vertices of the current face
-	    vec3_init (v1, v[3*f[i]->GetVertex(0)],   v[3*f[i]->GetVertex(0)+1],   v[3*f[i]->GetVertex(0)+2]);
-	    vec3_init (v2, v[3*f[i]->GetVertex(1)], v[3*f[i]->GetVertex(1)+1], v[3*f[i]->GetVertex(1)+2]);
-	    vec3_init (v3, v[3*f[i]->GetVertex(2)], v[3*f[i]->GetVertex(2)+1], v[3*f[i]->GetVertex(2)+2]);
+	    v1.Set (v[3*f[i]->GetVertex(0)],   v[3*f[i]->GetVertex(0)+1],   v[3*f[i]->GetVertex(0)+2]);
+	    v2.Set (v[3*f[i]->GetVertex(1)], v[3*f[i]->GetVertex(1)+1], v[3*f[i]->GetVertex(1)+2]);
+	    v3.Set (v[3*f[i]->GetVertex(2)], v[3*f[i]->GetVertex(2)+1], v[3*f[i]->GetVertex(2)+2]);
       
       // store the current area in a
-	  w[i] = vec3_triangle_area (v1, v2, v3);
+	  w[i] = Vector3f::evaluate_triangle_area (v1, v2, v3);
 	  atot += w[i];
     }
   for (i=0; i<nf; i++)
@@ -374,12 +374,12 @@ Cmesh_orientation_pca::compute_pca_barycenter (void)
   for (i=0; i<nf; i++)
     {
       // get the vertices of the current face
-	    vec3_init (v1, v[3*f[i]->GetVertex(0)],   v[3*f[i]->GetVertex(0)+1],   v[3*f[i]->GetVertex(0)+2]);
-	    vec3_init (v2, v[3*f[i]->GetVertex(1)], v[3*f[i]->GetVertex(1)+1], v[3*f[i]->GetVertex(1)+2]);
-	    vec3_init (v3, v[3*f[i]->GetVertex(2)], v[3*f[i]->GetVertex(2)+1], v[3*f[i]->GetVertex(2)+2]);
+	    v1.Set (v[3*f[i]->GetVertex(0)],   v[3*f[i]->GetVertex(0)+1],   v[3*f[i]->GetVertex(0)+2]);
+	    v2.Set (v[3*f[i]->GetVertex(1)], v[3*f[i]->GetVertex(1)+1], v[3*f[i]->GetVertex(1)+2]);
+	    v3.Set (v[3*f[i]->GetVertex(2)], v[3*f[i]->GetVertex(2)+1], v[3*f[i]->GetVertex(2)+2]);
 
       // compute the barycenter
-	    vec3_barycenter (vb, v1, v2, v3);
+	    vb.Barycenter (v1, v2, v3);
 
 	  // update the center
       center[0] += w[i]*vb[0];
@@ -401,12 +401,12 @@ Cmesh_orientation_pca::compute_pca_barycenter (void)
       //v1.Set (v[3*f[3*i]] - center[0], v[3*f[3*i]+1] - center[1], v[3*f[3*i]+2] - center[2]);
       //v2.Set (v[3*f[3*i+1]] - center[0], v[3*f[3*i+1]+1] - center[1], v[3*f[3*i+1]+2] - center[2]);
       //v3.Set (v[3*f[3*i+2]] - center[0], v[3*f[3*i+2]+1] - center[1], v[3*f[3*i+2]+2] - center[2]);
-	    vec3_init (v1, v[3*f[i]->GetVertex(0)], v[3*f[i]->GetVertex(0)+1], v[3*f[i]->GetVertex(0)+2]);
-	    vec3_init (v2, v[3*f[i]->GetVertex(1)], v[3*f[i]->GetVertex(1)+1], v[3*f[i]->GetVertex(1)+2]);
-	    vec3_init (v3, v[3*f[i]->GetVertex(2)], v[3*f[i]->GetVertex(2)+1], v[3*f[i]->GetVertex(2)+2]);
+	    v1.Set (v[3*f[i]->GetVertex(0)], v[3*f[i]->GetVertex(0)+1], v[3*f[i]->GetVertex(0)+2]);
+	    v2.Set (v[3*f[i]->GetVertex(1)], v[3*f[i]->GetVertex(1)+1], v[3*f[i]->GetVertex(1)+2]);
+	    v3.Set (v[3*f[i]->GetVertex(2)], v[3*f[i]->GetVertex(2)+1], v[3*f[i]->GetVertex(2)+2]);
 
       /* compute the barycenter */
-	    vec3_barycenter (vb, v1, v2, v3);
+	    vb.Barycenter (v1, v2, v3);
      
       x = w[i]*vb[0] - center[0];
       y = w[i]*vb[1] - center[1];
@@ -478,22 +478,22 @@ Cmesh_orientation_pca::compute_pca_continuous (void)
 
   // principal axes
   double xx, yy, zz, xy, xz, yz;
-  vec3 v1, v2, v3, w1, w2;
+  Vector3f v1, v2, v3, w1, w2;
   float a;
   xx = yy = zz = xy = xz = yz = 0.0;
   for (i=0; i<nf; i++)
     {
       // get the vertices of the current face
-	    vec3_init (v1, v[3*f[i]->GetVertex(0)] - center[0], v[3*f[i]->GetVertex(0)+1] - center[1], v[3*f[i]->GetVertex(0)+2] - center[2]);
-	    vec3_init (v2, v[3*f[i]->GetVertex(1)] - center[0], v[3*f[i]->GetVertex(1)+1] - center[1], v[3*f[i]->GetVertex(1)+2] - center[2]);
-	    vec3_init (v3, v[3*f[i]->GetVertex(2)] - center[0], v[3*f[i]->GetVertex(2)+1] - center[1], v[3*f[i]->GetVertex(2)+2] - center[2]);
+	    v1.Set (v[3*f[i]->GetVertex(0)] - center[0], v[3*f[i]->GetVertex(0)+1] - center[1], v[3*f[i]->GetVertex(0)+2] - center[2]);
+	    v2.Set (v[3*f[i]->GetVertex(1)] - center[0], v[3*f[i]->GetVertex(1)+1] - center[1], v[3*f[i]->GetVertex(1)+2] - center[2]);
+	    v3.Set (v[3*f[i]->GetVertex(2)] - center[0], v[3*f[i]->GetVertex(2)+1] - center[1], v[3*f[i]->GetVertex(2)+2] - center[2]);
 
       // get the basis
-	    vec3_subtraction (w1, v2, v1);
-	    vec3_subtraction (w2, v3, v1);
+	    w1 = v2 - v1;
+	    w2 = v3 - v1;
 
       // compute the element of the matrix
-	  a = 48 * vec3_triangle_area (v1, v2, v3);
+	  a = 48 * Vector3f::evaluate_triangle_area (v1, v2, v3);
       a = 1/a;
       xx += a * (4*w2[0]*w2[0] + 6*w1[0]*w2[0] + 4*w1[0]*w1[0]);
       yy += a * (4*w2[1]*w2[1] + 6*w1[1]*w2[1] + 4*w1[1]*w1[1]);

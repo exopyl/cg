@@ -309,9 +309,9 @@ int Octree::BuildForTriangles (float *pPoints, int nPoints,
 	for (int i=0; i<nTriangles; i++)
     {
 		const unsigned int a = pTriangles[3*i], b = pTriangles[3*i+1], c = pTriangles[3*i+2];
-		vec3_init (tri.m_v[0], pPoints[3*a], pPoints[3*a+1], pPoints[3*a+2]);
-		vec3_init (tri.m_v[1], pPoints[3*b], pPoints[3*b+1], pPoints[3*b+2]);
-		vec3_init (tri.m_v[2], pPoints[3*c], pPoints[3*c+1], pPoints[3*c+2]);
+		tri.m_v[0].Set (pPoints[3*a], pPoints[3*a+1], pPoints[3*a+2]);
+		tri.m_v[1].Set (pPoints[3*b], pPoints[3*b+1], pPoints[3*b+2]);
+		tri.m_v[2].Set (pPoints[3*c], pPoints[3*c+1], pPoints[3*c+2]);
 
 		if (aabox0.contains (tri) || aabox0.intersection (tri)) { codes[i] |= 1;   childTriangleCounts[0]++; }
 		if (aabox1.contains (tri) || aabox1.intersection (tri)) { codes[i] |= 2;   childTriangleCounts[1]++; }
@@ -385,16 +385,16 @@ void Octree::Dump (void)
 	printf ("max depth : %d\n", GetMaxDepth ());
 }
 
-int Octree::GetKNeighbours (vec3 pt, float distance)
+int Octree::GetKNeighbours (const Vector3f &pt, float distance)
 {
 	if (m_nPoints)
 	{
-		vec3 tmp;
+		Vector3f tmp;
 		int res = 0;
 		for (int i=0; i<m_nPoints; i++)
 		{
-			vec3_init (tmp, m_pPoints[3*i], m_pPoints[3*i+1], m_pPoints[3*i+2]);
-			if (vec3_distance (pt, tmp) < distance)
+			tmp.Set (m_pPoints[3*i], m_pPoints[3*i+1], m_pPoints[3*i+2]);
+			if ((pt).getDistance (tmp) < distance)
 				res++;
 		}
 		return res;
@@ -417,16 +417,16 @@ int Octree::GetKNeighbours (vec3 pt, float distance)
 	}
 }
 
-int Octree::GetClosestPoints (vec3 pt, float distance, float **pNeighbours, unsigned int *nNeighbours)
+int Octree::GetClosestPoints (const Vector3f &pt, float distance, float **pNeighbours, unsigned int *nNeighbours)
 {
 	if (m_nPoints)
 	{
-		vec3 tmp;
+		Vector3f tmp;
 		int res = 0;
 		for (int i=0; i<m_nPoints; i++)
 		{
-			vec3_init (tmp, m_pPoints[3*i], m_pPoints[3*i+1], m_pPoints[3*i+2]);
-			if (vec3_distance (pt, tmp) < distance)
+			tmp.Set (m_pPoints[3*i], m_pPoints[3*i+1], m_pPoints[3*i+2]);
+			if ((pt).getDistance (tmp) < distance)
 			{
 				// Grow the output buffer by one point. realloc(nullptr, n) acts
 				// as malloc, so this handles both the first and later points;
@@ -461,17 +461,17 @@ int Octree::GetClosestPoints (vec3 pt, float distance, float **pNeighbours, unsi
 	}
 }
 
-int Octree::GetClosestIndicesPoints (float *pVertices, vec3 pt, float distance, unsigned int **pNeighbours, unsigned int *nNeighbours)
+int Octree::GetClosestIndicesPoints (float *pVertices, const Vector3f &pt, float distance, unsigned int **pNeighbours, unsigned int *nNeighbours)
 {
 	if (m_nIndices)
 	{
-		vec3 tmp;
+		Vector3f tmp;
 		int res = 0;
 		for (int i=0; i<m_nIndices; i++)
 		{
 			unsigned int vi = m_pIndices[i];
-			vec3_init (tmp, pVertices[3*vi], pVertices[3*vi+1], pVertices[3*vi+2]);
-			if (vec3_distance (pt, tmp) < distance)
+			tmp.Set (pVertices[3*vi], pVertices[3*vi+1], pVertices[3*vi+2]);
+			if ((pt).getDistance (tmp) < distance)
 			{
 				// Grow by one index. realloc(nullptr,..) == malloc; the previous
 				// code's else-branch did malloc((*nNeighbours)) — i.e. malloc(0)
@@ -502,18 +502,18 @@ int Octree::GetClosestIndicesPoints (float *pVertices, vec3 pt, float distance, 
 	}
 }
 
-int Octree::GetSumNeighbours (vec3 pt, float distance, vec3 accum)
+int Octree::GetSumNeighbours (const Vector3f &pt, float distance, Vector3f &accum)
 {
 	if (m_nPoints)
 	{
-		vec3 tmp;
+		Vector3f tmp;
 		int res = 0;
 		for (int i=0; i<m_nPoints; i++)
 		{
-			vec3_init (tmp, m_pPoints[3*i], m_pPoints[3*i+1], m_pPoints[3*i+2]);
-			if (vec3_distance (pt, tmp) <= distance)
+			tmp.Set (m_pPoints[3*i], m_pPoints[3*i+1], m_pPoints[3*i+2]);
+			if ((pt).getDistance (tmp) <= distance)
 			{
-				vec3_addition (accum, accum, tmp);
+				accum = accum + tmp;
 				res++;
 			}
 		}

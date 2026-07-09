@@ -256,7 +256,7 @@ TEST(TEST_cgmesh_shapes, strange_attractors)
 
 TEST(TEST_cgmesh_shapes, frame)
 {
-	CurveDiscrete* profil = new CurveDiscrete();
+	ProfilePolyline* profil = new ProfilePolyline();
 	unsigned int nVertices;
 	float* pVertices;
 	unsigned int nFaces, * pFaces;
@@ -272,7 +272,7 @@ TEST(TEST_cgmesh_shapes, frame)
 
 TEST(TEST_cgmesh_shapes, revolution_surface)
 {
-	CurveDiscrete *profil = new CurveDiscrete ();
+	ProfilePolyline *profil = new ProfilePolyline ();
 	profil->import_obj ((char*)"./test/data/curve.obj");
 	float *pVertices;
 	unsigned int nVertices;

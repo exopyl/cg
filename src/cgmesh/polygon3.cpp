@@ -51,17 +51,17 @@ int Polygon3::add_contour (unsigned int index, unsigned int nPoints, float *pPoi
 	return 0;
 }
 
-void Polygon3::GetBBox (vec3 min, vec3 max)
+void Polygon3::GetBBox (Vector3f &min, Vector3f &max)
 {
-	vec3_init (min, m_pPoints[0][0], m_pPoints[0][1], m_pPoints[0][2]);
-	vec3_init (max, m_pPoints[0][0], m_pPoints[0][1], m_pPoints[0][2]);
+	min.Set (m_pPoints[0][0], m_pPoints[0][1], m_pPoints[0][2]);
+	max.Set (m_pPoints[0][0], m_pPoints[0][1], m_pPoints[0][2]);
 	for (int i=0; i<m_nContours; i++)
 	{
 		float *pPoints = m_pPoints[i];
 		for (int j=0; j<m_nPoints[i]; j++)
 		{
-			vec3 pt;
-			vec3_init (pt, m_pPoints[i][3*j], m_pPoints[i][3*j+1], m_pPoints[i][3*j+2]);
+			Vector3f pt;
+			pt.Set (m_pPoints[i][3*j], m_pPoints[i][3*j+1], m_pPoints[i][3*j+2]);
 			for (int k=0; k<3; k++)
 			{
 				if (pt[k] < min[k]) min[k] = pt[k];

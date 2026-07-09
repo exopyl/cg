@@ -9,8 +9,8 @@ public:
 
 	void AddObject (Geometry *pObject);
 
-	Geometry* GetIntersectionWithRay (vec3 vOrig, vec3 vDirection, vec3 vIntersection, vec3 vNormal);
-	Geometry* GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, vec3 vIntersection, vec3 vNormal);
+	Geometry* GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirection, Vector3f &vIntersection, Vector3f &vNormal);
+	Geometry* GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, Vector3f &vIntersection, Vector3f &vNormal);
 
 	void Dump (void);
 private:

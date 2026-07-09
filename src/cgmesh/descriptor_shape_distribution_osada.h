@@ -54,7 +54,7 @@ class Cshape_distribution_osada
   void compute_cumulative_areas (void);
   void select_points (int _n_points);
  public:
-  int select_random_point (vec3 &point); // return the id of the face containing the point
+  int select_random_point (Vector3f &point); // return the id of the face containing the point
 
  private:
   int nv, nf;

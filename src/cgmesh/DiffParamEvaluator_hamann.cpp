@@ -10,7 +10,7 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 	float *vn = m_pModel->m_pMesh->m_pVertexNormals.data();
 	int i;
 	float mat[9];
-	vec3 right, solution;
+	Vector3f right, solution;
 
 	for (i=0; i<nv; i++)
     {
@@ -28,7 +28,7 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 		tensor[i] = nullptr;
 		continue;
 		}
-		
+
 		  int n_neighbours = 0;
 		  Che *e_walk = e;
 		  do
@@ -42,34 +42,31 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 		  continue;
 		  }
 		*/
-		
+
 		// init linear system
 		// fitted surface : f(u,v) = (au^2 + 2buv + bv^2)/2
 		mat[0]=mat[1]=mat[2]=mat[3]=mat[4]=mat[5]=mat[6]=mat[7]=mat[8]=0.0;
-		vec3_init (right, 0.0, 0.0, 0.0);
-		
-		vec3 v_current;
-		vec3_init (v_current, v[3*i], v[3*i+1], v[3*i+2]);
-		vec3 n;
-		vec3_init (n, vn[3*i], vn[3*i+1], vn[3*i+2]);
-		vec3_normalize (n);
-		vec3 tmp;
-		float D = - vec3_dot_product (v_current, n);
-		
+		right.Set (0.0, 0.0, 0.0);
+
+		Vector3f v_current (v[3*i], v[3*i+1], v[3*i+2]);
+		Vector3f n (vn[3*i], vn[3*i+1], vn[3*i+2]);
+		n.Normalize ();
+		float D = - v_current.DotProduct (n);
+
 		// local basis
-		vec3 b1, b2;
+		Vector3f b1, b2;
 		if (n[0])
-			vec3_init (b1, -(n[1]+n[2])/n[0], 1, 1);
+			b1.Set (-(n[1]+n[2])/n[0], 1, 1);
 		else
 		{
 			if (n[1])
-				vec3_init (b1, 1, -(n[0]+n[2])/n[1], 1);
+				b1.Set (1, -(n[0]+n[2])/n[1], 1);
 			else
-				vec3_init (b1, 1, 1, -(n[0]+n[1])/n[2]);
+				b1.Set (1, 1, -(n[0]+n[1])/n[2]);
 		}
-		vec3_normalize (b1);
-		vec3_cross_product (b2, n, b1);
-		
+		b1.Normalize ();
+		b2 = n.CrossProduct (b1);
+
 		// method more stable when there are a lot of neighbours
 		//int n_neighbour = 0;
 		e_walk = e;
@@ -77,28 +74,24 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 		{
 			//n_neighbour++;
 			int index = m_pModel->GetCheMesh()->edge(e_walk).m_v_end;
-			
-			vec3 v_walk;
-			vec3_init (v_walk, v[3*index], v[3*index+1], v[3*index+2]);
-			float d_walk = vec3_dot_product (v_walk, n) + D;
-			vec3 v_proj;
-			vec3_init (v_proj,
-				   v_walk[0]-d_walk*n[0],
-				   v_walk[1]-d_walk*n[1],
-				   v_walk[2]-d_walk*n[2]);
-			vec3 v_local;
-			vec3_subtraction (v_local, v_proj, v_current);
-			float ui = vec3_dot_product (v_local, b1);
-			float vi = vec3_dot_product (v_local, b2);
-			
+
+			Vector3f v_walk (v[3*index], v[3*index+1], v[3*index+2]);
+			float d_walk = v_walk.DotProduct (n) + D;
+			Vector3f v_proj (v_walk[0]-d_walk*n[0],
+					 v_walk[1]-d_walk*n[1],
+					 v_walk[2]-d_walk*n[2]);
+			Vector3f v_local = v_proj - v_current;
+			float ui = v_local.DotProduct (b1);
+			float vi = v_local.DotProduct (b2);
+
 			// update the matrix
 			// fitting with (u,v,(au2+2buv+cv2)/2)
 			mat[0] +=   ui*ui*ui*ui;  mat[1] += 2*ui*ui*ui*vi;  mat[2] +=   ui*ui*vi*vi;
 			mat[3] += 2*ui*ui*ui*vi;  mat[4] += 4*ui*ui*vi*vi;  mat[5] += 2*ui*vi*vi*vi;
 			mat[6] +=   ui*ui*vi*vi;  mat[7] += 2*ui*vi*vi*vi;  mat[8] +=   vi*vi*vi*vi;
-			
+
 			right[0] += 2*ui*ui*d_walk;  right[1] += 2*2*ui*vi*d_walk;  right[2] += 2*vi*vi*d_walk;
-			
+
 			int he_next = m_pModel->GetCheMesh()->edge(e_walk).m_he_next;
 			e_walk = m_pModel->GetCheMesh()->edge(m_pModel->GetCheMesh()->edge(he_next).m_he_next).m_pair;
 		} while (e_walk >= 0 && e_walk != e);
@@ -109,12 +102,11 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 		continue;
 		}
 		*/
-		
+
 		// find the parameters of the interpolated surface
 		float a, b, c;
-		mat3 ls;
-		mat3_init_array (ls, mat);
-		if (mat3_solve_linearsystem (ls, right, solution))
+		Matrix3f ls (mat);
+		if (ls.SolveLinearSystem (right, solution))
 		{
 			a = solution[0];
 			b = solution[1];
@@ -130,7 +122,7 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 			Tensors ()[i].reset (pDiffParamWalk);
 			continue;
 		}
-		
+
 		//
 		// principal curvatures
 		//
@@ -149,24 +141,22 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 		temp = sqrt (temp);
 		float kappa1 = kappa_mean + temp;
 		float kappa2 = kappa_mean - temp;
-		
+
 		//
 		// principal directions
 		//
 		Matrix2f m (a, b, b, c);
 		Vector2f evector1, evector2, evalues;
 		m.SolveEigensystem (evector1, evector2, evalues);
-		vec3 d1, d2;
+		Vector3f d1, d2;
 		if (evalues[0] < evalues[1])
 		{
 			//kappa1 = evalues[1];
 			//kappa2 = evalues[0];
-			vec3_init (d1,
-				   evector2[0]*b1[0]+evector2[1]*b2[0],
+			d1.Set (evector2[0]*b1[0]+evector2[1]*b2[0],
 				evector2[0]*b1[1]+evector2[1]*b2[1],
 				evector2[0]*b1[2]+evector2[1]*b2[2]);
-			vec3_init (d2,
-				   evector1[0]*b1[0]+evector1[1]*b2[0],
+			d2.Set (evector1[0]*b1[0]+evector1[1]*b2[0],
 				evector1[0]*b1[1]+evector1[1]*b2[1],
 				evector1[0]*b1[2]+evector1[1]*b2[2]);
 		}
@@ -174,18 +164,16 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 		{
 			//kappa1 = evalues[0];
 			//kappa2 = evalues[1];
-			vec3_init (d1,
-				   evector1[0]*b1[0]+evector1[1]*b2[0],
+			d1.Set (evector1[0]*b1[0]+evector1[1]*b2[0],
 				evector1[0]*b1[1]+evector1[1]*b2[1],
 				evector1[0]*b1[2]+evector1[1]*b2[2]);
-			vec3_init (d2,
-				   evector2[0]*b1[0]+evector2[1]*b2[0],
+			d2.Set (evector2[0]*b1[0]+evector2[1]*b2[0],
 				evector2[0]*b1[1]+evector2[1]*b2[1],
 				evector2[0]*b1[2]+evector2[1]*b2[2]);
 		}
-		vec3_normalize (d1);
-		vec3_normalize (d2);
-		
+		d1.Normalize ();
+		d2.Normalize ();
+
 		Tensor *pDiffParamWalk = new Tensor ();
 		pDiffParamWalk->SetKappaMax (kappa1);
 		pDiffParamWalk->SetKappaMin (kappa2);

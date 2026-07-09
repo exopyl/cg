@@ -580,29 +580,24 @@ int extrude_moulure_along_curve (unsigned int npcurve, float *pcurve, float *tcu
 	unsigned int *_faces = *faces;
 	for (int i=0; i<npcurve; i++)
 	{
-		vec3 c;
-		vec3_init (c, pcurve[2*i], 0., pcurve[2*i+1]);
+		Vector3f c (pcurve[2*i], 0., pcurve[2*i+1]);
 		for (int j=0; j<npmoulure; j++)
 		{
 			float alpha = 2.*3.14159*j/npmoulure;
-			vec3 m;
-			vec3_init (m, pmoulure[2*i], pmoulure[2*i+1], 0.);
-			
+			Vector3f m (pmoulure[2*i], pmoulure[2*i+1], 0.);
+
 			// tangent
-			vec3 t;
-			vec3_init (t, tcurve[0], 0., tcurve[1]);
-			vec3_normalize (t);
-			
+			Vector3f t (tcurve[0], 0., tcurve[1]);
+			t.Normalize ();
+
 			// binormal (= T ^ N)
-			vec3 b;
-			vec3_init (b, 0., -1., 0.);
+			Vector3f b (0., -1., 0.);
 
 			// normal (= B ^ T)
-			vec3 n;
-			vec3_cross_product (n, b, t);
-			vec3_normalize (n);
-			
-			float r = vec3_length (m);
+			Vector3f n = b.CrossProduct (t);
+			n.Normalize ();
+
+			float r = m.getLength ();
 			
 			float x = c[0] + r*(-n[0]*cos(alpha) + b[0]*sin(alpha));
 			float y = c[1] + r*(-n[1]*cos(alpha) + b[1]*sin(alpha));

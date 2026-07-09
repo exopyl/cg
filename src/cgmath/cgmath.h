@@ -10,9 +10,7 @@
 // typedef
 //
 #include "algebra_vector2.h"
-#include "algebra_vector3.h"
 
-#include "algebra_matrix3.h"
 
 #include "quadric.h"
 #include "polynomial.h"
@@ -37,11 +35,12 @@
 // geometry
 ///////////////////////
 
+#include "icurve.h"
 #include "curve.h"
 #include "curve_bezier.h"
-#include "curve_discrete.h"
 #include "curve_kappatau.h"
 #include "curve_nurbs.h"
+#include "polyline.h"
 
 #include "geometry.h"
 #include "aabox.h"

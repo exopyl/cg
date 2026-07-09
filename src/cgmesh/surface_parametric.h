@@ -3,11 +3,11 @@
 #include "tensor.h"
 
 typedef struct diff_s {
-	vec3 position;
+	Vector3f position;
 	float dx, dy, dxx, dxy, dyy;
-	vec3 normal;
-	vec3 first_fundamental_form;
-	vec3 second_fundamental_form;
+	Vector3f normal;
+	Vector3f first_fundamental_form;
+	Vector3f second_fundamental_form;
 } diff_s;
 
 class ParametricSurface : public Mesh
@@ -19,7 +19,7 @@ public:
 public:
 	virtual bool EvaluatePosition (float u, float v, diff_s *diff) = 0;
 	bool Generate (void);
-	bool EvaluateFundamentalForms (diff_s *diff, vec3 dfdu, vec3 dfdv, vec3 dfdudu, vec3 dfdudv, vec3 dfdvdv);
+	bool EvaluateFundamentalForms (diff_s *diff, const Vector3f &dfdu, const Vector3f &dfdv, const Vector3f &dfdudu, const Vector3f &dfdudv, const Vector3f &dfdvdv);
 	Tensor* EvaluateTensor (diff_s diff);
 	
 	unsigned int iNU;

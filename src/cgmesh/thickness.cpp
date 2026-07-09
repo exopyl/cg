@@ -11,14 +11,14 @@
 namespace
 {
 	// Orthonormal basis (t, b) spanning the plane perpendicular to unit `axis`.
-	void makeBasis (vec3 axis, vec3 t, vec3 b)
+	void makeBasis (const Vector3f &axis, Vector3f &t, Vector3f &b)
 	{
-		vec3 up;
-		if (fabs (axis[0]) < 0.9f) vec3_init (up, 1.f, 0.f, 0.f);
-		else                       vec3_init (up, 0.f, 1.f, 0.f);
-		vec3_cross_product (t, axis, up);
-		vec3_normalize (t);
-		vec3_cross_product (b, axis, t);   // unit (axis ⟂ t, both unit)
+		Vector3f up;
+		if (fabs (axis[0]) < 0.9f) up.Set (1.f, 0.f, 0.f);
+		else                       up.Set (0.f, 1.f, 0.f);
+		t = axis.CrossProduct (up);
+		t.Normalize ();
+		b = axis.CrossProduct (t);   // unit (axis ⟂ t, both unit)
 	}
 
 	// Robust SDF aggregation: median + reject samples beyond one std dev from
@@ -221,17 +221,14 @@ bool MeshAlgoThickness::ComputeWallThickness (Mesh &mesh,
 	{
 		for (unsigned int vi = begin; vi < end; ++vi)
 		{
-			vec3 P, nrm, dir;
-			vec3_init (P,
-			           verts[3*vi], verts[3*vi+1], verts[3*vi+2]);
-			vec3_init (nrm,
-			           mesh.m_pVertexNormals[3*vi], mesh.m_pVertexNormals[3*vi+1], mesh.m_pVertexNormals[3*vi+2]);
+			Vector3f P (verts[3*vi], verts[3*vi+1], verts[3*vi+2]);
+			Vector3f nrm (mesh.m_pVertexNormals[3*vi], mesh.m_pVertexNormals[3*vi+1], mesh.m_pVertexNormals[3*vi+2]);
 
-			if (vec3_length (nrm) < 1e-12f)
+			if (nrm.getLength () < 1e-12f)
 				continue;                 // no usable normal -> undefined
 
-			vec3_scale (dir, nrm, -1.f);
-			vec3_normalize (dir);         // normalised -> t == Euclidean distance
+			Vector3f dir = nrm * (-1.f);
+			dir.Normalize ();             // normalised -> t == Euclidean distance
 
 			const float d = bvh.nearest (P, dir, tMin);
 			if (d >= 0.f)
@@ -294,14 +291,14 @@ bool MeshAlgoThickness::ComputeShapeDiameter (Mesh &mesh,
 
 		for (unsigned int vi = begin; vi < end; ++vi)
 		{
-			vec3 P, nrm, axis, tb, bb;
-			vec3_init (P,   verts[3*vi], verts[3*vi+1], verts[3*vi+2]);
-			vec3_init (nrm, mesh.m_pVertexNormals[3*vi], mesh.m_pVertexNormals[3*vi+1], mesh.m_pVertexNormals[3*vi+2]);
-			if (vec3_length (nrm) < 1e-12f)
+			Vector3f P (verts[3*vi], verts[3*vi+1], verts[3*vi+2]);
+			Vector3f nrm (mesh.m_pVertexNormals[3*vi], mesh.m_pVertexNormals[3*vi+1], mesh.m_pVertexNormals[3*vi+2]);
+			if (nrm.getLength () < 1e-12f)
 				continue;
 
-			vec3_scale (axis, nrm, -1.f);     // inward
-			vec3_normalize (axis);
+			Vector3f axis = nrm * (-1.f);     // inward
+			axis.Normalize ();
+			Vector3f tb, bb;
 			makeBasis (axis, tb, bb);
 
 			dists.clear ();
@@ -318,7 +315,7 @@ bool MeshAlgoThickness::ComputeShapeDiameter (Mesh &mesh,
 
 				// dir = cos(a)*axis + sin(a)*radial, with radial a unit vector
 				// in the plane ⟂ axis (tb,bb orthonormal) -> already unit.
-				vec3 dir;
+				Vector3f dir;
 				for (int c = 0; c < 3; ++c)
 					dir[c] = ca * axis[c] + sa * (caz * tb[c] + saz * bb[c]);
 

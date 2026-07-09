@@ -20,18 +20,18 @@ Polygon2::matching_arkin (Polygon2 *pol, int nn)
 	float *thetaB = (float*)malloc(nn*sizeof(float));
 	
 	/* init angle with resoect to axis 0x : angle0 in [0,2*Pi] */
-	vec3 ox, v;
-	vec3_init (ox, 1., 0., 0.);
-	vec3_init (v, pol1->m_pPoints[2*1] - pol1->m_pPoints[2*0], pol1->m_pPoints[2*1+1] - pol1->m_pPoints[2*0+1], 0.);
-	vec3_normalize (v);
+	Vector3f ox, v;
+	ox.Set (1., 0., 0.);
+	v.Set (pol1->m_pPoints[2*1] - pol1->m_pPoints[2*0], pol1->m_pPoints[2*1+1] - pol1->m_pPoints[2*0+1], 0.);
+	(v).Normalize ();
 	
-	float angle0 = acos (vec3_dot_product (ox, v));
+	float angle0 = acos ((ox).DotProduct (v));
 	if (v[1] < 0.0) angle0 = 2*3.14159 - angle0;
 	thetaA[0] = angle0;
 	
-	vec3_init (v, pol2->m_pPoints[2*1] - pol2->m_pPoints[2*0], pol2->m_pPoints[2*1+1] - pol2->m_pPoints[2*0+1], 0.0);
-	vec3_normalize (v);
-	angle0 = acos (vec3_dot_product (ox, v));
+	v.Set (pol2->m_pPoints[2*1] - pol2->m_pPoints[2*0], pol2->m_pPoints[2*1+1] - pol2->m_pPoints[2*0+1], 0.0);
+	(v).Normalize ();
+	angle0 = acos ((ox).DotProduct (v));
 	if (v[1] < 0.0) angle0 = 2*3.14159 - angle0;
 	thetaB[0] = angle0;
 	
@@ -40,24 +40,24 @@ Polygon2::matching_arkin (Polygon2 *pol, int nn)
 		/* fill the theta arrays with respect to deviation */
 		float deviation;
 		
-		vec3 v3;
-		vec3 v1;
-		vec3_init (v1, pol1->m_pPoints[2*((i+1)%nn)] - pol1->m_pPoints[2*i+1], pol1->m_pPoints[2*((i+1)%nn)+1] - pol1->m_pPoints[2*i+1], 0.0);
-		vec3 v2;
-		vec3_init (v2, pol1->m_pPoints[2*((i+2)%nn)] - pol1->m_pPoints[2*((i+1)%nn)], pol1->m_pPoints[2*((i+2)%nn)+1] - pol1->m_pPoints[2*((i+1)%nn)+1], 0.0);
-		vec3_normalize (v1);
-		vec3_normalize (v2);
-		deviation = acos (vec3_dot_product (v1, v2));
-		vec3_cross_product (v3, v1, v2);
+		Vector3f v3;
+		Vector3f v1;
+		v1.Set (pol1->m_pPoints[2*((i+1)%nn)] - pol1->m_pPoints[2*i+1], pol1->m_pPoints[2*((i+1)%nn)+1] - pol1->m_pPoints[2*i+1], 0.0);
+		Vector3f v2;
+		v2.Set (pol1->m_pPoints[2*((i+2)%nn)] - pol1->m_pPoints[2*((i+1)%nn)], pol1->m_pPoints[2*((i+2)%nn)+1] - pol1->m_pPoints[2*((i+1)%nn)+1], 0.0);
+		(v1).Normalize ();
+		(v2).Normalize ();
+		deviation = acos ((v1).DotProduct (v2));
+		v3 = (v1).CrossProduct (v2);
 		if (v3[2] >= 0.0) thetaA[i] = thetaA[i-1] + deviation;
 		else              thetaA[i] = thetaA[i-1] - deviation;
 		
-		vec3_init (v1, pol2->m_pPoints[2*((i+1)%nn)] - pol2->m_pPoints[2*i], pol2->m_pPoints[2*((i+1)%nn)+1] - pol2->m_pPoints[2*i+1], 0.0);
-		vec3_init (v2, pol2->m_pPoints[2*((i+2)%nn)] - pol2->m_pPoints[2*((i+1)%nn)], pol2->m_pPoints[2*((i+2)%nn)+1] - pol2->m_pPoints[2*((i+1)%nn)+1], 0.0);
-		vec3_normalize (v1);
-		vec3_normalize (v2);
-		deviation = acos (vec3_dot_product (v1, v2));
-		vec3_cross_product (v3, v1, v2);
+		v1.Set (pol2->m_pPoints[2*((i+1)%nn)] - pol2->m_pPoints[2*i], pol2->m_pPoints[2*((i+1)%nn)+1] - pol2->m_pPoints[2*i+1], 0.0);
+		v2.Set (pol2->m_pPoints[2*((i+2)%nn)] - pol2->m_pPoints[2*((i+1)%nn)], pol2->m_pPoints[2*((i+2)%nn)+1] - pol2->m_pPoints[2*((i+1)%nn)+1], 0.0);
+		(v1).Normalize ();
+		(v2).Normalize ();
+		deviation = acos ((v1).DotProduct (v2));
+		v3 = (v1).CrossProduct (v2);
 		if (v3[2] >= 0.0) thetaB[i] = thetaB[i-1] + deviation;
 		else              thetaB[i] = thetaB[i-1] - deviation;
 	}

@@ -31,7 +31,7 @@ public:
 	void export_statistics (const char *filename);
 
 private:
-	int GetColorWithRay (float vOrig[3], float vDirection[3], float color[3]);
+	int GetColorWithRay (const Vector3f &vOrig, const Vector3f &vDirection, float color[3]);
 
 private:
 	Camera *m_pCamera;      // camera

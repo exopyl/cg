@@ -2,6 +2,7 @@
 #include <stdexcept>
 
 #include "architecture_gothic.h"
+#include "common.h"   // M_PI (previously reached transitively via algebra_vector3.h)
 
 namespace
 {

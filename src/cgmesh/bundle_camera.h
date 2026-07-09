@@ -30,8 +30,8 @@ public:
 
 	// external geometry
 	CameraMatrix R;
-	vec3 T;
+	Vector3f T;
 	CameraMatrix Rinv; // inverse R, directly updated from R
-	vec3 d; // direction of the camera, directly update from R
-	vec3 pos; // position of the camera directly updated from Rinv
+	Vector3f d; // direction of the camera, directly update from R
+	Vector3f pos; // position of the camera directly updated from Rinv
 };

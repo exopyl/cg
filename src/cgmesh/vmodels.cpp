@@ -22,8 +22,8 @@ bool Model::HasSurface() const
 
 float Model::RayNearestSurface(const float orig[3], const float dir[3]) const
 {
-	float o[3] = { orig[0], orig[1], orig[2] };   // BVH::nearest prend vec3 (float*)
-	float d[3] = { dir[0],  dir[1],  dir[2]  };
+	Vector3f o (orig[0], orig[1], orig[2]);
+	Vector3f d (dir[0],  dir[1],  dir[2]);
 	float best = -1.f;
 	for (const auto& bvh : m_bvhs)
 	{

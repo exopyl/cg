@@ -14,35 +14,35 @@ namespace
 	// is the Euclidean distance). Hits at t <= tMin are rejected — this skips
 	// the faces incident to the start vertex (distance ~0). Returns true and
 	// writes *tOut on a valid hit.
-	bool intersectRayTriangleNoCull (vec3 orig, vec3 dir,
+	bool intersectRayTriangleNoCull (const Vector3f &orig, const Vector3f &dir,
 	                                 const float *v0f, const float *v1f, const float *v2f,
 	                                 float tMin, float *tOut)
 	{
-		vec3 v0, v1, v2, e1, e2, h, s, q;
-		vec3_init (v0, v0f[0], v0f[1], v0f[2]);
-		vec3_init (v1, v1f[0], v1f[1], v1f[2]);
-		vec3_init (v2, v2f[0], v2f[1], v2f[2]);
+		Vector3f v0, v1, v2, e1, e2, h, s, q;
+		v0.Set (v0f[0], v0f[1], v0f[2]);
+		v1.Set (v1f[0], v1f[1], v1f[2]);
+		v2.Set (v2f[0], v2f[1], v2f[2]);
 
-		vec3_subtraction (e1, v1, v0);
-		vec3_subtraction (e2, v2, v0);
+		e1 = v1 - v0;
+		e2 = v2 - v0;
 
-		vec3_cross_product (h, dir, e2);
-		float a = vec3_dot_product (e1, h);
+		h = (dir).CrossProduct (e2);
+		float a = (e1).DotProduct (h);
 		if (fabs (a) < 1e-12f)
 			return false;                 // ray parallel to triangle plane
 
 		float invA = 1.f / a;
-		vec3_subtraction (s, orig, v0);
-		float u = invA * vec3_dot_product (s, h);
+		s = orig - v0;
+		float u = invA * (s).DotProduct (h);
 		if (u < 0.f || u > 1.f)
 			return false;
 
-		vec3_cross_product (q, s, e1);
-		float v = invA * vec3_dot_product (dir, q);
+		q = (s).CrossProduct (e1);
+		float v = invA * (dir).DotProduct (q);
 		if (v < 0.f || u + v > 1.f)
 			return false;
 
-		float t = invA * vec3_dot_product (e2, q);
+		float t = invA * (e2).DotProduct (q);
 		if (t <= tMin)
 			return false;                 // behind origin / self-intersection
 
@@ -127,7 +127,7 @@ int BVH::buildRange (unsigned int begin, unsigned int end)
 	return idx;
 }
 
-float BVH::nearest (vec3 orig, vec3 dir, float tMin) const
+float BVH::nearest (const Vector3f &orig, const Vector3f &dir, float tMin) const
 {
 	if (m_nodes.empty ()) return -1.f;
 	float best = -1.f;
@@ -177,7 +177,7 @@ namespace
 {
 	// Squared distance from point p to an AABB (0 if inside). Lower bound on the
 	// distance to anything in the node -> used to prune the closest-point descent.
-	float aabbDist2 (const float bmin[3], const float bmax[3], vec3 p)
+	float aabbDist2 (const float bmin[3], const float bmax[3], const Vector3f &p)
 	{
 		float d2 = 0.f;
 		for (int d = 0; d < 3; ++d)
@@ -190,12 +190,12 @@ namespace
 	}
 }
 
-float BVH::closest_distance2 (vec3 p, vec3 closest_out) const
+float BVH::closest_distance2 (const Vector3f &p, Vector3f *closest_out) const
 {
 	if (m_nodes.empty ()) return -1.f;
 
 	float best2 = 1e30f;
-	vec3 bestPt = { 0.f, 0.f, 0.f };
+	Vector3f bestPt (0.f, 0.f, 0.f);
 
 	std::array<int, 64> stack;
 	int sp = 0;
@@ -214,7 +214,7 @@ float BVH::closest_distance2 (vec3 p, vec3 closest_out) const
 				const unsigned int f = m_order[i];
 				const unsigned int a = m_tri[3*f], b = m_tri[3*f+1], c = m_tri[3*f+2];
 				if (a >= m_nv || b >= m_nv || c >= m_nv) continue;
-				vec3 cl;
+				Vector3f cl;
 				const float d2 = point_triangle_distance2 (p, &m_verts[3*a], &m_verts[3*b], &m_verts[3*c], cl);
 				if (d2 < best2) { best2 = d2; bestPt[0]=cl[0]; bestPt[1]=cl[1]; bestPt[2]=cl[2]; }
 			}
@@ -237,13 +237,13 @@ float BVH::closest_distance2 (vec3 p, vec3 closest_out) const
 	}
 
 	if (best2 >= 1e30f) return -1.f;
-	if (closest_out) { closest_out[0]=bestPt[0]; closest_out[1]=bestPt[1]; closest_out[2]=bestPt[2]; }
+	if (closest_out) *closest_out = bestPt;
 	return best2;
 }
 
 // Robust ray/AABB slab test on [t0, t1]; handles dir component == 0 (ray
 // parallel to an axis) without producing a 0*inf NaN.
-bool BVH::slabHit (const Node &nd, vec3 o, vec3 dir, float t0, float t1)
+bool BVH::slabHit (const Node &nd, const Vector3f &o, const Vector3f &dir, float t0, float t1)
 {
 	for (int d = 0; d < 3; ++d)
 	{

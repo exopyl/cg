@@ -2,15 +2,14 @@
 #include <math.h>
 
 #include "quadric.h"
-#include "algebra_matrix3.h"
+#include "TMatrix3.h"
 #include "common.h"
 
 
-void plane_init(plane_t plane, vec3 v1, vec3 v2, vec3 v3)
+void plane_init(plane_t plane, const Vector3f &v1, const Vector3f &v2, const Vector3f &v3)
 {
-	vec3 n;
-	vec3_triangle_normal (n, v1, v2, v3);
-	vec3_normalize (n);
+	Vector3f n = Vector3f::evaluate_triangle_normal (v1, v2, v3);
+	n.Normalize ();
 	plane[0] = n[0];
 	plane[1] = n[1];
 	plane[2] = n[2];
@@ -73,7 +72,7 @@ void quadric_dump(quadric_t q)
 	printf ("%e %e %e %e\n", q[9], q[8], q[6], q[3]);
 }
 
-int quadric_minimize(quadric_t q, vec3 vnew, float *error)
+int quadric_minimize(quadric_t q, Vector3f &vnew, float *error)
 {
 	double fdet, finvdet;
 
@@ -121,7 +120,7 @@ int quadric_minimize(quadric_t q, vec3 vnew, float *error)
 	return 0;
 }
 
-double quadric_eval(quadric_t q, vec3 v)
+double quadric_eval(quadric_t q, const Vector3f &v)
 {
 	/* vAv + 2bv + c */
 	return v[0]*v[0]*q[0] + v[1]*v[1]*q[1] + v[2]*v[2]*q[2] +
@@ -130,52 +129,37 @@ double quadric_eval(quadric_t q, vec3 v)
 		q[3];
 }
 
-int quadric_minimize_edge(quadric_t q, vec3 vnew, float *error, vec3 v0, vec3 v1)
+int quadric_minimize_edge(quadric_t q, Vector3f &vnew, float *error, const Vector3f &v0, const Vector3f &v1)
 {
-	vec3 d;
+	Vector3f d = v0 - v1;
 
-	vec3_subtraction(d, v0, v1);
+	Matrix3f A (q[0], q[4], q[7],
+		    q[4], q[1], q[5],
+		    q[7], q[5], q[2]);
 
-	mat3 A;
-	A[0][0] = q[0];
-	A[0][1] = q[4];
-	A[0][2] = q[7];
-	A[1][0] = q[4];
-	A[1][1] = q[1];
-	A[1][2] = q[5];
-	A[2][0] = q[7];
-	A[2][1] = q[5];
-	A[2][2] = q[2];
+	Vector3f Av1 = A * v1;
+	Vector3f Ad  = A * d;
 
-	vec3 Av1;
-	mat3_transform(Av1, A, v1);
-
-	vec3 Ad;
-	mat3_transform(Ad, A, d);
-
-	double det = 2.0 * vec3_dot_product(d, Ad);
+	double det = 2.0 * d.DotProduct(Ad);
 	if (fabs(det) < EPSILON)
 		return -1;
 
 	if (isnan(det))
 		return -1;
 
-	vec3 qv;
-	qv[0] = q[9];
-	qv[1] = q[8];
-	qv[2] = q[6];
-	double a = -(2.0 * vec3_dot_product(qv, d) +
-		     vec3_dot_product(d, Av1) +
-		     vec3_dot_product(v1, Ad)) /
-		(2.0 * vec3_dot_product(d, Ad));
-	
+	Vector3f qv (q[9], q[8], q[6]);
+	double a = -(2.0 * qv.DotProduct(d) +
+		     d.DotProduct(Av1) +
+		     v1.DotProduct(Ad)) /
+		(2.0 * d.DotProduct(Ad));
+
 	if (a < 0.0)
 		a = 0.0;
 	else if(a > 1.0)
 		a = 1.0;
 
-	vec3_scale(vnew, d, a);
-	vec3_addition(vnew, vnew, v1);
+	vnew = d * (float)a;
+	vnew = vnew + v1;
 
 	/* vAv + 2bv + c */
 	*error = quadric_eval(q, vnew);
@@ -183,7 +167,7 @@ int quadric_minimize_edge(quadric_t q, vec3 vnew, float *error, vec3 v0, vec3 v1
 	return 0;
 }
 
-int quadric_minimize2(quadric_t q, vec3 vnew, float *error, vec3 v0, vec3 v1)
+int quadric_minimize2(quadric_t q, Vector3f &vnew, float *error, const Vector3f &v0, const Vector3f &v1)
 {
 	if (quadric_minimize(q, vnew, error) == 0)
 	{
@@ -198,10 +182,8 @@ int quadric_minimize2(quadric_t q, vec3 vnew, float *error, vec3 v0, vec3 v1)
 	}
 	//printf ("C\n");
 	
-	vec3 vm;
-
-	vec3_addition(vm, v0, v1);
-	vec3_scale(vm, vm, 0.5);
+	Vector3f vm = v0 + v1;
+	vm = vm * 0.5f;
 
 	double e0 = quadric_eval(q, v0);
 	double e1 = quadric_eval(q, v1);
@@ -213,21 +195,21 @@ int quadric_minimize2(quadric_t q, vec3 vnew, float *error, vec3 v0, vec3 v1)
 	if (e0 < e1) {
 		if (em < e0) {
 			*error = em;
-			vec3_copy(vnew, vm);
+			vnew = vm;
 			return 0;
 		} else {
 			*error = e0;
-			vec3_copy(vnew, v0);
+			vnew = v0;
 			return 0;
 		}
 	} else {
 		if (em < e1) {
 			*error = em;
-			vec3_copy(vnew, vm);
+			vnew = vm;
 			return 0;
 		} else {
 			*error = e1;
-			vec3_copy(vnew, v1);
+			vnew = v1;
 			return 0;
 		}
 	}

@@ -29,8 +29,8 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 			if (!mesh->is_manifold (i))
 				continue;
 
-			vec3 n;
-			vec3_init (n, 0.0, 0.0, 0.0);
+			Vector3f n;
+			n.Set (0.0, 0.0, 0.0);
 
 			Citerator_half_edges_vertex he_ite (mesh->GetCheMesh(), i);
 			int he;
@@ -44,21 +44,21 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 				b = f->GetVertex(1);
 				c = f->GetVertex(2);
 				
-				vec3 v1, v2, v3;
-				vec3_init (v1, v[3*a], v[3*a+1], v[3*a+2]);
-				vec3_init (v2, v[3*b], v[3*b+1], v[3*b+2]);
-				vec3_init (v3, v[3*c], v[3*c+1], v[3*c+2]);
+				Vector3f v1, v2, v3;
+				v1.Set (v[3*a], v[3*a+1], v[3*a+2]);
+				v2.Set (v[3*b], v[3*b+1], v[3*b+2]);
+				v3.Set (v[3*c], v[3*c+1], v[3*c+2]);
 
 				// evaluate the normal for the current face
-				vec3 ntmp;
-				vec3_triangle_normal (ntmp, v1, v2, v3);
-				//vec3_normalize (ntmp);
+				Vector3f ntmp;
+				ntmp = Vector3f::evaluate_triangle_normal (v1, v2, v3);
+				//(ntmp).Normalize ();
 
 				// update the normal for the current vertex
-				vec3_addition (n, n, ntmp);
+				n = n + ntmp;
 			}
 			
-			vec3_normalize (n);
+			(n).Normalize ();
 			mesh->m_pMesh->m_pVertexNormals[3*i]   = n[0];
 			mesh->m_pMesh->m_pVertexNormals[3*i+1] = n[1];
 			mesh->m_pMesh->m_pVertexNormals[3*i+2] = n[2];
@@ -67,8 +67,8 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 	case THURMER:
 		for (i=0; i<nv; i++)
 		{
-			vec3 n;
-			vec3_init (n, 0.0, 0.0, 0.0);
+			Vector3f n;
+			n.Set (0.0, 0.0, 0.0);
 
 			Citerator_half_edges_vertex he_ite (mesh->GetCheMesh(), i);
 			int he;
@@ -99,32 +99,32 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 				else
 					printf ("!!! state not supposed to be reached !!!\n");
 
-				vec3 v1, v2, v3;
-				vec3_init (v1, v[3*a], v[3*a+1], v[3*a+2]);
-				vec3_init (v2, v[3*b], v[3*b+1], v[3*b+2]);
-				vec3_init (v3, v[3*c], v[3*c+1], v[3*c+2]);
+				Vector3f v1, v2, v3;
+				v1.Set (v[3*a], v[3*a+1], v[3*a+2]);
+				v2.Set (v[3*b], v[3*b+1], v[3*b+2]);
+				v3.Set (v[3*c], v[3*c+1], v[3*c+2]);
 
 				// evaluate the normal for the current face
-				vec3 ntmp;
-				vec3_triangle_normal (ntmp, v1, v2, v3);
-				vec3_normalize (ntmp);
+				Vector3f ntmp;
+				ntmp = Vector3f::evaluate_triangle_normal (v1, v2, v3);
+				(ntmp).Normalize ();
 
 				// the weight associated to this direction is
 				// the angle between (v1,v2) and (v1,v3)
-				vec3 v1v2, v1v3;
-				vec3_subtraction (v1v2, v2, v1);
-				vec3_subtraction (v1v3, v3, v1);
-				vec3_normalize (v1v2);
-				vec3_normalize (v1v3);
-				float weight = acos (vec3_dot_product (v1v2, v1v3));
-				vec3_scale (ntmp, ntmp, weight);
+				Vector3f v1v2, v1v3;
+				v1v2 = v2 - v1;
+				v1v3 = v3 - v1;
+				(v1v2).Normalize ();
+				(v1v3).Normalize ();
+				float weight = acos ((v1v2).DotProduct (v1v3));
+				ntmp = (ntmp) * (weight);
 				
 				// update the normal for the current vertex
-				vec3_addition (n, n, ntmp);
+				n = n + ntmp;
 
 
 			}
-			vec3_normalize (n);
+			(n).Normalize ();
 			mesh->m_pMesh->m_pVertexNormals[3*i]   = n[0];
 			mesh->m_pMesh->m_pVertexNormals[3*i+1] = n[1];
 			mesh->m_pMesh->m_pVertexNormals[3*i+2] = n[2];
@@ -136,8 +136,8 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 		// vertex. Emphasises small/near triangles; good on irregular fans.
 		for (i=0; i<nv; i++)
 		{
-			vec3 n;
-			vec3_init (n, 0.0, 0.0, 0.0);
+			Vector3f n;
+			n.Set (0.0, 0.0, 0.0);
 
 			Citerator_half_edges_vertex he_ite (mesh->GetCheMesh(), i);
 			int he;
@@ -152,21 +152,21 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 				else if (f->GetVertex (2) == i) { a=f->GetVertex(2); b=f->GetVertex(0); c=f->GetVertex(1); }
 				else continue;
 
-				vec3 v1, v2, v3, e1, e2, cr;
-				vec3_init (v1, v[3*a], v[3*a+1], v[3*a+2]);
-				vec3_init (v2, v[3*b], v[3*b+1], v[3*b+2]);
-				vec3_init (v3, v[3*c], v[3*c+1], v[3*c+2]);
-				vec3_subtraction (e1, v2, v1);
-				vec3_subtraction (e2, v3, v1);
-				vec3_cross_product (cr, e1, e2);           // face normal, |cr| = 2*area
-				float denom = vec3_dot_product (e1, e1) * vec3_dot_product (e2, e2);
+				Vector3f v1, v2, v3, e1, e2, cr;
+				v1.Set (v[3*a], v[3*a+1], v[3*a+2]);
+				v2.Set (v[3*b], v[3*b+1], v[3*b+2]);
+				v3.Set (v[3*c], v[3*c+1], v[3*c+2]);
+				e1 = v2 - v1;
+				e2 = v3 - v1;
+				cr = (e1).CrossProduct (e2);           // face normal, |cr| = 2*area
+				float denom = (e1).DotProduct (e1) * (e2).DotProduct (e2);
 				if (denom > 1e-20f)
 				{
-					vec3_scale (cr, cr, 1.0f / denom);
-					vec3_addition (n, n, cr);
+					cr = (cr) * (1.0f / denom);
+					n = n + cr;
 				}
 			}
-			vec3_normalize (n);
+			(n).Normalize ();
 			mesh->m_pMesh->m_pVertexNormals[3*i]   = n[0];
 			mesh->m_pMesh->m_pVertexNormals[3*i+1] = n[1];
 			mesh->m_pMesh->m_pVertexNormals[3*i+2] = n[2];
@@ -208,14 +208,14 @@ int EvalOnFaces (Mesh_half_edge *mesh)
 		b = f->GetVertex(1);
 		c = f->GetVertex(2);
 		
-		vec3 v1, v2, v3;
-		vec3_init (v1, v[3*a], v[3*a+1], v[3*a+2]);
-		vec3_init (v2, v[3*b], v[3*b+1], v[3*b+2]);
-		vec3_init (v3, v[3*c], v[3*c+1], v[3*c+2]);
+		Vector3f v1, v2, v3;
+		v1.Set (v[3*a], v[3*a+1], v[3*a+2]);
+		v2.Set (v[3*b], v[3*b+1], v[3*b+2]);
+		v3.Set (v[3*c], v[3*c+1], v[3*c+2]);
 
-		vec3 n;
-		vec3_triangle_normal (n, v1, v2, v3);
-		vec3_normalize (n);
+		Vector3f n;
+		n = Vector3f::evaluate_triangle_normal (v1, v2, v3);
+		(n).Normalize ();
 
 		mesh->m_pMesh->m_pFaceNormals[3*i]   = n[0];
 		mesh->m_pMesh->m_pFaceNormals[3*i+1] = n[1];

@@ -7,37 +7,37 @@
 *
 */
 static float
-length_edge_in_sphere (vec3 v1, vec3 v2, vec3 center, float radius, vec3 intersection)
+length_edge_in_sphere (const Vector3f &v1, const Vector3f &v2, const Vector3f &center, float radius, Vector3f &intersection)
 {
-	vec3 tmp1, tmp2, orig, dir;
+	Vector3f tmp1, tmp2, orig, dir;
 	float l1, l2;
-	vec3_subtraction (tmp1, v1, center);
-	vec3_subtraction (tmp2, v2, center);
-	l1 = vec3_length (tmp1);
-	l2 = vec3_length (tmp2);
+	tmp1 = v1 - center;
+	tmp2 = v2 - center;
+	l1 = (tmp1).getLength ();
+	l2 = (tmp2).getLength ();
 	if (l1 <= radius && l2 <= radius)
     {
-	    vec3_subtraction (dir, v2, v1);
-		return vec3_length (dir);
+	    dir = v2 - v1;
+		return (dir).getLength ();
     }
 	if (l1 > radius && l2 > radius)
 		return 0.0;
 	if (l1 <= radius && l2 > radius)
     {
-	    vec3_copy (orig, v1);
-	    vec3_subtraction (dir, v2, v1);
+	    orig = v1;
+	    dir = v2 - v1;
     }
 	if (l1 > radius && l2 <= radius)
     {
-	    vec3_copy (orig, v2);
-	    vec3_subtraction (dir, v1, v2);
+	    orig = v2;
+	    dir = v1 - v2;
     }
-	vec3_normalize (dir);
+	(dir).Normalize ();
 	
-	vec3 tmp;
-	vec3_subtraction (tmp, orig, center);
-	float b = 2*vec3_dot_product (dir,tmp);
-	float c = vec3_dot_product(tmp,tmp) - radius*radius;
+	Vector3f tmp;
+	tmp = orig - center;
+	float b = 2*(dir).DotProduct (tmp);
+	float c = (tmp).DotProduct (tmp) - radius*radius;
 	float delta = (b*b-4*c)/2;
 	float t, t1, t2;
 	t1 = -b-sqrt(delta);
@@ -45,93 +45,93 @@ length_edge_in_sphere (vec3 v1, vec3 v2, vec3 center, float radius, vec3 interse
 	
 	t = (t1 >= 0.0)? t1 : t2;
 	
-	vec3_init (intersection, orig[0]+t*dir[0], orig[1]+t*dir[1], orig[2]+t*dir[2]);
+	intersection.Set (orig[0]+t*dir[0], orig[1]+t*dir[1], orig[2]+t*dir[2]);
 	return t;
 }
 
 /* area of a triangle included in sphere */
 static float
-_area_section (vec3 v1, vec3 v2, vec3 v3, vec3 center, float radius)
+_area_section (const Vector3f &v1, const Vector3f &v2, const Vector3f &v3, const Vector3f &center, float radius)
 {
 	return 0.0;
 	/* compute the normale to v1v2v3 */
-	vec3 v12, v13, n;
-	vec3_subtraction (v12, v2, v1);
-	vec3_subtraction (v13, v3, v1);
-	vec3_cross_product (n, v12, v13);
+	Vector3f v12, v13, n;
+	v12 = v2 - v1;
+	v13 = v3 - v1;
+	n = (v12).CrossProduct (v13);
 	
 	/* compute radius2 */
-	float h = vec3_dot_product(n,center) - vec3_dot_product(n,v1);
+	float h = (n).DotProduct (center) - (n).DotProduct (v1);
 	float radius2 = radius*radius - h*h;
 	radius2 = sqrt (radius2);
 	
 	/* compute center2 */
-	vec3 center2;
-	vec3_init (center2, center[0] - h*n[0], center[1] - h*n[1], center[2] - h*n[2]);
+	Vector3f center2;
+	center2.Set (center[0] - h*n[0], center[1] - h*n[1], center[2] - h*n[2]);
 	
 	/* compute theta */
-	vec3 v0v1, v0v2;
-	vec3_subtraction (v0v1, v1, center2);
-	vec3_subtraction (v0v2, v2, center2);
-	float theta = acos (vec3_dot_product (v0v1,v0v2));
+	Vector3f v0v1, v0v2;
+	v0v1 = v1 - center2;
+	v0v2 = v2 - center2;
+	float theta = acos ((v0v1).DotProduct (v0v2));
 	
 	/* area of the segment */
 	return radius2*radius2 * (theta - sin (theta)) / 2;
 }
 
 static float
-area_triangle_in_sphere (vec3 v1, vec3 v2, vec3 v3, vec3 center, float radius)
+area_triangle_in_sphere (const Vector3f &v1, const Vector3f &v2, const Vector3f &v3, const Vector3f &center, float radius)
 {
-	vec3 tmp1, tmp2, tmp3;
-	vec3_subtraction (tmp1, v1, center);
-	vec3_subtraction (tmp2, v2, center);
-	vec3_subtraction (tmp3, v3, center);
+	Vector3f tmp1, tmp2, tmp3;
+	tmp1 = v1 - center;
+	tmp2 = v2 - center;
+	tmp3 = v3 - center;
 	float l1, l2, l3;
-	l1 = vec3_length (tmp1);
-	l2 = vec3_length (tmp2);
-	l3 = vec3_length (tmp3);
+	l1 = (tmp1).getLength ();
+	l2 = (tmp2).getLength ();
+	l3 = (tmp3).getLength ();
 	
 	
-	vec3 i1, i2;
+	Vector3f i1, i2;
 	if (l1 <= radius && l2 <= radius && l2 <= radius)
-		return vec3_triangle_area (v1, v2, v3);
+		return Vector3f::evaluate_triangle_area (v1, v2, v3);
 	
 	if (l1 <= radius && l2 > radius && l3 > radius)
     {
 		length_edge_in_sphere (v1, v2, center, radius, i1);
 		length_edge_in_sphere (v1, v3, center, radius, i2);
-		return vec3_triangle_area (v1, i1, i2) + _area_section (v1, v2, v3, center, radius);
+		return Vector3f::evaluate_triangle_area (v1, i1, i2) + _area_section (v1, v2, v3, center, radius);
     }
 	if (l2 <= radius && l1 > radius && l3 > radius)
     {
 		length_edge_in_sphere (v2, v1, center, radius, i1);
 		length_edge_in_sphere (v2, v3, center, radius, i2);
-		return vec3_triangle_area (v2, i1, i2) + _area_section (v2, i1, i2, center, radius);
+		return Vector3f::evaluate_triangle_area (v2, i1, i2) + _area_section (v2, i1, i2, center, radius);
     }
 	if (l3 <= radius && l1 > radius && l2 > radius)
     {
 		length_edge_in_sphere (v3, v1, center, radius, i1);
 		length_edge_in_sphere (v3, v2, center, radius, i2);
-		return vec3_triangle_area (v3, i1, i2) + _area_section (v3, i1, i2, center, radius);
+		return Vector3f::evaluate_triangle_area (v3, i1, i2) + _area_section (v3, i1, i2, center, radius);
     }
 	
 	if (l1 <= radius && l2 <= radius && l3 > radius)
     {
 		length_edge_in_sphere (v1, v3, center, radius, i1);
 		length_edge_in_sphere (v2, v3, center, radius, i2);
-		return vec3_triangle_area (v1, i1, v2) + vec3_triangle_area (i1, v2, i2) + _area_section (v1, i1, i2, center, radius);
+		return Vector3f::evaluate_triangle_area (v1, i1, v2) + Vector3f::evaluate_triangle_area (i1, v2, i2) + _area_section (v1, i1, i2, center, radius);
     }
 	if (l1 <= radius && l3 <= radius && l2 > radius)
     {
 		length_edge_in_sphere (v1, v2, center, radius, i1);
 		length_edge_in_sphere (v3, v2, center, radius, i2);
-		return vec3_triangle_area (v1, i1, v3) + vec3_triangle_area (i1, v3, i2) + _area_section (v1, i1, i2, center, radius);
+		return Vector3f::evaluate_triangle_area (v1, i1, v3) + Vector3f::evaluate_triangle_area (i1, v3, i2) + _area_section (v1, i1, i2, center, radius);
     }
 	if (l2 <= radius && l3 <= radius && l1 > radius)
     {
 		length_edge_in_sphere (v2, v1, center, radius, i1);
 		length_edge_in_sphere (v3, v1, center, radius, i2);
-		return vec3_triangle_area (v2, i1, v3) + vec3_triangle_area (i1, v3, i2) + _area_section (v2, i1, i2, center, radius);
+		return Vector3f::evaluate_triangle_area (v2, i1, v3) + Vector3f::evaluate_triangle_area (i1, v3, i2) + _area_section (v2, i1, i2, center, radius);
     }
 	printf ("nothing\n");
 
@@ -183,13 +183,13 @@ void MeshAlgoTensorEvaluator::ApplySteinerAux (int index, float radius, int *_n_
 		int n_new_vertices = 0;
 		new_vertices[n_new_vertices++] = index;
 
-		vec3 v_current, v_walk, tmp;
-		vec3_init (v_current, v[3*index], v[3*index+1], v[3*index+2]);
+		Vector3f v_current, v_walk, tmp;
+		v_current.Set (v[3*index], v[3*index+1], v[3*index+2]);
 		for (j=0; j<n_new_vertices; j++)
 		{
-			vec3_init (v_walk, v[3*new_vertices[j]], v[3*new_vertices[j]+1], v[3*new_vertices[j]+2]);
-			vec3_subtraction (tmp, v_walk, v_current);
-			if (vec3_length (tmp) < radius)
+			v_walk.Set (v[3*new_vertices[j]], v[3*new_vertices[j]+1], v[3*new_vertices[j]+2]);
+			tmp = v_walk - v_current;
+			if ((tmp).getLength () < radius)
 			{
 				/* add the new edges */
 				int e = m_pModel->GetCheMesh()->m_edges_vertex[new_vertices[j]];
@@ -269,7 +269,7 @@ bool MeshAlgoTensorEvaluator::ApplySteiner (void)
 		float vx = v[3*i];
 		float vy = v[3*i+1];
 		float vz = v[3*i+2];
-		vec3 v_current (v[3*i], v[3*i+1], v[3*i+2]);
+		Vector3f v_current (v[3*i], v[3*i+1], v[3*i+2]);
 		
 		float m[9];
 		m[0] = m[1] = m[2] = m[3] = m[4] = m[5] = m[6] = m[7] = m[8] = 0.0;
@@ -291,7 +291,7 @@ bool MeshAlgoTensorEvaluator::ApplySteiner (void)
 			// area
 			if (!is_already_visited (face_index, visited_faces, n_visited_faces))
 			{
-				vec3 v1, v2, v3;
+				Vector3f v1, v2, v3;
 				int i1, i2, i3;
 				i1 = f[3*face_index];
 				i2 = f[3*face_index+1];
@@ -306,17 +306,17 @@ bool MeshAlgoTensorEvaluator::ApplySteiner (void)
 			}
 			
 			// length of the edge in the ball
-			vec3 v1,v2,ee;
+			Vector3f v1,v2,ee;
 			v1.Set (v[3*edges[j]->m_v_begin], v[3*edges[j]->m_v_begin+1], v[3*edges[j]->m_v_begin+2]);
 			v2.Set (v[3*edges[j]->m_v_end], v[3*edges[j]->m_v_end+1], v[3*edges[j]->m_v_end+2]);
 			ee = v2 - v1;
 			//float length_intersection = ee.length ();
-			vec3 intersection;
+			Vector3f intersection;
 			float length_intersection = length_edge_in_sphere (v1, v2, v_current, radius, intersection);
 			//printf ("%f -> %f (%f)\n", v3d_length (ee), length_intersection, radius);
 			
 			// angle between the normales
-			vec3 fn1, fn2;
+			Vector3f fn1, fn2;
 			fn1.Set (fn[3*edges[j]->m_face], fn[3*edges[j]->m_face+1], fn[3*edges[j]->m_face+2]);
 			fn2.Set (fn[3*edges[j]->m_pair->m_face], fn[3*edges[j]->m_pair->m_face+1], fn[3*edges[j]->m_pair->m_face+2]);
 			float fn1dotfn2 = fn1*fn2;
@@ -326,7 +326,7 @@ bool MeshAlgoTensorEvaluator::ApplySteiner (void)
 			// sign
 			float sign = 1.0;
 			ee.Normalize ();
-			vec3 cross = fn1 ^ fn2;
+			Vector3f cross = fn1 ^ fn2;
 			if ((cross*ee) < 0.0)
 				sign = -1.0;
 			
@@ -355,7 +355,7 @@ bool MeshAlgoTensorEvaluator::ApplySteiner (void)
 		float eigenvalues[3];
 		
 		Matrix3 es (m);
-		vec3 evector1, evector2, evector3, evalues;
+		Vector3f evector1, evector2, evector3, evalues;
 		es.SolveEigensystem (evector1, evector2, evector3, evalues);
 		eigenvectors[0][0] = evector1[0];
 		eigenvectors[1][0] = evector1[1];

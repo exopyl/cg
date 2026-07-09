@@ -2,322 +2,203 @@
 #include <math.h>
 
 #include "curve.h"
-#include "common.h"
 
-// T = v / |v|
-void Curve::GetUnitTangentVector (float t, float T[3])
+// finite-difference step in parameter space
+static const float kFdStep = 1.0e-3f;
+// full-turn parameter mapping for the analytic sample curves: t in [0,1] -> [0,2pi]
+static const float kTwoPi = 6.28318530718f;
+
+// evaluate position, clamping the parameter so finite-difference neighbours
+// stay inside [0,1]
+static Vector3f evalClamped (const IAnalyticCurve &c, float t)
 {
-	float v[3];
-	GetVelocity (t, v);
-	float s;
-	GetSpeed (t, &s);
-	T[0] = v[0] / s;
-	T[1] = v[1] / s;
-	T[2] = v[2] / s;
+	if (t < 0.f) t = 0.f;
+	if (t > 1.f) t = 1.f;
+	Vector3f p;
+	c.eval (t, p);
+	return p;
 }
 
-
-// B = v x a / |v x a|
-void Curve::GetUnitBinormalVector (float t, float B[3])
+// v = dP/dt (central difference)
+void IAnalyticCurve::velocity (float t, Vector3f &v) const
 {
-	float v[3], a[3];
-	GetVelocity (t, v);
-	GetAcceleration (t, a);
-	B[0] = v[1]*a[2] - v[2]*a[1];
-	B[1] = v[2]*a[0] - v[0]*a[2];
-	B[2] = v[0]*a[1] - v[1]*a[0];
-	float l = sqrt (B[0]*B[0] + B[1]*B[1] + B[2]*B[2]);
-	B[0] /= l;
-	B[1] /= l;
-	B[2] /= l;
+	const float h = kFdStep;
+	if (t < 2*h) t = 2*h;
+	if (t > 1.f - 2*h) t = 1.f - 2*h;
+	Vector3f pp = evalClamped (*this, t + h);
+	Vector3f pm = evalClamped (*this, t - h);
+	v = (pp - pm) * (1.0f / (2.0f * h));
 }
 
-// N = B X T
-void Curve::GetUnitPrincipalNormalVector (float t, float N[3])
+// a = d2P/dt2 (central difference)
+void IAnalyticCurve::acceleration (float t, Vector3f &a) const
 {
-	float B[3], T[3];
-	GetUnitBinormalVector (t, B);
-	GetUnitTangentVector (t, T);
-	N[0] = B[1]*T[2] - B[2]*T[1];
-	N[1] = B[2]*T[0] - B[0]*T[2];
-	N[2] = B[0]*T[1] - B[1]*T[0];
-	float l = sqrt (N[0]*N[0] + N[1]*N[1] + N[2]*N[2]);
-	N[0] /= l;
-	N[1] /= l;
-	N[2] /= l;
+	const float h = kFdStep;
+	if (t < 2*h) t = 2*h;
+	if (t > 1.f - 2*h) t = 1.f - 2*h;
+	Vector3f pp = evalClamped (*this, t + h);
+	Vector3f p0 = evalClamped (*this, t);
+	Vector3f pm = evalClamped (*this, t - h);
+	a = (pp - p0 * 2.0f + pm) * (1.0f / (h * h));
 }
 
-// export
-void Curve::Export (char *filename)
+// j = d3P/dt3 (central difference), used for torsion
+static Vector3f jerk (const IAnalyticCurve &c, float t)
+{
+	const float h = kFdStep;
+	if (t < 2*h) t = 2*h;
+	if (t > 1.f - 2*h) t = 1.f - 2*h;
+	Vector3f p2 = evalClamped (c, t + 2*h);
+	Vector3f p1 = evalClamped (c, t + h);
+	Vector3f m1 = evalClamped (c, t - h);
+	Vector3f m2 = evalClamped (c, t - 2*h);
+	return (p2 - p1 * 2.0f + m1 * 2.0f - m2) * (1.0f / (2.0f * h * h * h));
+}
+
+float IAnalyticCurve::speed (float t) const
+{
+	Vector3f v;
+	velocity (t, v);
+	return v.getLength ();
+}
+
+// T = v/|v| ; B = (v x a)/|v x a| ; N = B x T
+void IAnalyticCurve::frenetFrame (float t, Vector3f &T, Vector3f &N, Vector3f &B) const
+{
+	Vector3f v, a;
+	velocity (t, v);
+	acceleration (t, a);
+
+	T = v;
+	T.Normalize ();
+
+	B = v.CrossProduct (a);
+	B.Normalize ();
+
+	N = B.CrossProduct (T);
+	N.Normalize ();
+}
+
+// kappa = |v x a| / |v|^3
+float IAnalyticCurve::curvature (float t) const
+{
+	Vector3f v, a;
+	velocity (t, v);
+	acceleration (t, a);
+	float speed3 = v.getLength ();
+	speed3 = speed3 * speed3 * speed3;
+	if (speed3 < 1.0e-9f)
+		return 0.f;
+	return v.CrossProduct (a).getLength () / speed3;
+}
+
+// tau = (v x a) . j / |v x a|^2
+float IAnalyticCurve::torsion (float t) const
+{
+	Vector3f v, a;
+	velocity (t, v);
+	acceleration (t, a);
+	Vector3f vxa = v.CrossProduct (a);
+	float d = vxa.getLength2 ();
+	if (d < 1.0e-9f)
+		return 0.f;
+	return (vxa * jerk (*this, t)) / d;
+}
+
+int IAnalyticCurve::tessellate (int nPoints, std::vector<Vector3f> &out) const
+{
+	out.clear ();
+	if (nPoints < 2)
+		return 0;
+	out.reserve (nPoints);
+	for (int i = 0; i < nPoints; i++)
+	{
+		float t = (float)i / (float)(nPoints - 1);
+		Vector3f p;
+		if (!eval (t, p))
+			return 0;
+		out.push_back (p);
+	}
+	return (int)out.size ();
+}
+
+// tube mesh along the curve
+void IAnalyticCurve::Export (const char *filename) const
 {
 	FILE *ptr = fopen (filename, "w");
-	unsigned int npointscircle = 80;
+	if (!ptr)
+		return;
 
-	// vertices
+	const unsigned int npointscircle = 80;
+	const unsigned int nsteps = 200;
+	const float radius = 0.2f;
+
 	unsigned int nvertices = 0;
-	float p[3], normal[3], binormal[3], d[3];
-	for (float t=0; t<3.14159; t+=0.01)
+	for (unsigned int step = 0; step < nsteps; step++)
 	{
+		float t = (float)step / (float)(nsteps - 1);
+		Vector3f p, T, N, B;
+		eval (t, p);
+		frenetFrame (t, T, N, B);
 		nvertices++;
-		GetPosition (t, p);
-		GetUnitBinormalVector (t, binormal);
-		GetUnitPrincipalNormalVector (t, normal);
-		//printf ("binormal %f %f %f\n", binormal[0], binormal[1], binormal[2]);
-		//printf ("normal %f %f %f\n", normal[0], normal[1], normal[2]);
-		//printf ("\n");
 
-		float radius = 0.2;
-		for (unsigned int k=0; k<npointscircle; k++)
+		for (unsigned int k = 0; k < npointscircle; k++)
 		{
-			float angle = 2.*3.14159*k/npointscircle;
-			d[0] = radius*(cos(angle)*normal[0]+sin(angle)*binormal[0]);
-			d[1] = radius*(cos(angle)*normal[1]+sin(angle)*binormal[1]);
-			d[2] = radius*(cos(angle)*normal[2]+sin(angle)*binormal[2]);
-			
-			fprintf (ptr, "v %f %f %f\n", p[0]+d[0], p[1]+d[1], p[2]+d[2]);
+			float angle = kTwoPi * k / npointscircle;
+			Vector3f d = N * (radius * cosf (angle)) + B * (radius * sinf (angle));
+			fprintf (ptr, "v %f %f %f\n", p.x + d.x, p.y + d.y, p.z + d.z);
 		}
 	}
-	
-	// faces
+
 	unsigned int offset = 0;
-	for (unsigned int j=0; j<nvertices-1; j++)
+	for (unsigned int j = 0; j < nvertices - 1; j++)
 	{
-		unsigned int k=0;
-		for (k=0; k<npointscircle-1; k++)
-		{
-			// quad
+		unsigned int k = 0;
+		for (k = 0; k < npointscircle - 1; k++)
 			fprintf (ptr, "f %d %d %d %d\n",
-				 1+offset + npointscircle*j+k,
-				 1+offset + npointscircle*j+1+k,
-				 1+offset + npointscircle*(j+1)+1+k,
-				 1+offset + npointscircle*(j+1)+k);
-		}
-		
-		// quad
+				 1 + offset + npointscircle*j + k,
+				 1 + offset + npointscircle*j + 1 + k,
+				 1 + offset + npointscircle*(j+1) + 1 + k,
+				 1 + offset + npointscircle*(j+1) + k);
+
 		fprintf (ptr, "f %d %d %d %d\n",
-			 1+offset + npointscircle*j+k,
-			 1+offset + npointscircle*j,
-			 1+offset + npointscircle*(j+1),
-			 1+offset + npointscircle*(j+1)+k);
+			 1 + offset + npointscircle*j + k,
+			 1 + offset + npointscircle*j,
+			 1 + offset + npointscircle*(j+1),
+			 1 + offset + npointscircle*(j+1) + k);
 	}
-	
-	// fill extremities
-	for (unsigned int j=0; j<npointscircle-2; j++)
-	{
-		fprintf (ptr, "f %d %d %d\n",
-			 1+offset + 0,
-			 1+offset + j+1,
-			 1+offset + j+2);
-		
-		
-		fprintf (ptr, "f %d %d %d\n",
-			 1+offset+npointscircle*nvertices - (npointscircle),
-			 1+offset+npointscircle*nvertices - (npointscircle) +j+2,
-			 1+offset+npointscircle*nvertices - (npointscircle) +j+1);
-	}
-	
-	//offset+=npointscircle*stroke->npoints;
 
 	fclose (ptr);
 }
 
-
-
-
-
-
-void Curve01::GetPosition (float t, float p[3]) const
+//
+// Curve01
+//
+bool Curve01::eval (float t, Vector3f &p) const
 {
-	p[0] = m_r*cos(t);
-	p[1] = m_r*sin(t);
-	p[2] = m_a*cos (m_m*t);
-}
-
-// v = dr / dt
-void Curve01::GetVelocity (float t, float v[3]) const
-{
-	v[0] = -m_r * sin(t);
-	v[1] = m_r * cos(t);
-	v[2] = -m_a * m_m * sin(m_m * t);
-}
-
-// a = d^2r / dt^2
-void Curve01::GetAcceleration (float t, float a[3]) const
-{
-	a[0] = -m_r * cos(t);
-	a[1] = -m_r * sin(t);
-	a[2] = -m_a * m_m * m_m * cos(m_m * t);
-}
-
-// j = d^3r / dt^3
-void Curve01::GetJerk (float t, float j[3]) const
-{
-	j[0] = m_r * sin(t);
-	j[1] = -m_r * cos(t);
-	j[2] = m_a * m_m * m_m * m_m * sin(m_m * t);
-}
-
-// |v|
-void Curve01::GetSpeed (float t, float *s) const
-{
-	*s = sqrt (m_r*m_r + m_a*m_m*cos(m_m*t)*m_a*m_m*cos(m_m*t));
-}
-
-// \int_0^2\Pi |v|dt
-void Curve01::GetArclength (float t, float *s) const
-{
-	*s = 0.;
-}
-
-// k = |dT / ds| = aN / |v|^2 = |v x a| / |v|^3
-void Curve01::GetCurvature (float t, float *kappa) const
-{
-}
-
-// t = 
-void Curve01::GetTorsion (float t, float *nu) const
-{
-}
-
-// a_T = aT = d^2s / dt^2
-void Curve01::GetTangentialAcceleration (float t, float aT[3]) const
-{
-}
-
-// a_N = aN = kappa nu^2
-void Curve01::GetNormalAcceleration (float t, float aT[3]) const
-{
+	float a = kTwoPi * t;
+	p.Set (m_r * cosf (a), m_r * sinf (a), m_a * cosf (m_m * a));
+	return true;
 }
 
 //
 // CurveHelical
 //
-void CurveHelical::GetPosition (float t, float p[3]) const
+bool CurveHelical::eval (float t, Vector3f &p) const
 {
-	p[0] = cos(m*t);
-	p[1] = sin(m*t);
-	p[2] = n*t;
+	float a = kTwoPi * t;
+	p.Set (cosf (m * a), sinf (m * a), n * a);
+	return true;
 }
-
-// v = dr / dt
-void CurveHelical::GetVelocity (float t, float v[3]) const
-{
-	v[0] = -m*sin(m*t);
-	v[1] = m*cos(m*t);
-	v[2] = n;
-}
-
-// a = d^2r / dt^2
-void CurveHelical::GetAcceleration (float t, float a[3]) const
-{
-	a[0] = -m*m*cos(m*t);
-	a[1] = -m*m*sin(m*t);
-	a[2] = 0.;
-}
-
-// j = d^3r / dt^3
-void CurveHelical::GetJerk (float t, float j[3]) const
-{
-	j[0] = m*m*m*sin(m*t);
-	j[1] = -m*m*m*cos(m*t);
-	j[2] = 0.;
-}
-
-// |v|
-void CurveHelical::GetSpeed (float t, float *s) const
-{
-	*s = sqrt (m*m + n*n);
-}
-
-// \int_0^2\Pi |v|dt
-void CurveHelical::GetArclength (float t, float *s) const
-{
-	*s = 0.;
-}
-
-// k = |dT / ds| = aN / |v|^2 = |v x a| / |v|^3
-void CurveHelical::GetCurvature (float t, float *kappa) const
-{
-}
-
-// t = 
-void CurveHelical::GetTorsion (float t, float *nu) const
-{
-}
-
-// a_T = aT = d^2s / dt^2
-void CurveHelical::GetTangentialAcceleration (float t, float aT[3]) const
-{
-}
-
-// a_N = aN = kappa nu^2
-void CurveHelical::GetNormalAcceleration (float t, float aT[3]) const
-{
-}
-
 
 //
 // CurveWindingLineOnTorus
 //
-void CurveWindingLineOnTorus::GetPosition (float t, float r[3]) const
+bool CurveWindingLineOnTorus::eval (float t, Vector3f &r) const
 {
-	r[0] = (p + q*cos(n*t)) * cos(m*t);
-	r[1] = (p + q*cos(n*t)) * sin(m*t);
-	r[2] = q*sin(n*t);
-}
-
-// dr / dt
-void CurveWindingLineOnTorus::GetVelocity (float t, float v[3]) const
-{
-	v[0] = -q*n*sin(n*t)*cos(m*t) - (p + q*cos(n*t))*m*sin(m*t);
-	v[1] = -q*n*sin(n*t)*sin(m*t) + (p + q*cos(n*t))*m*cos(m*t);
-	v[2] = q*n*cos(n*t);
-}
-
-// d^2r / dt^2
-void CurveWindingLineOnTorus::GetAcceleration (float t, float a[3]) const
-{
-	a[0] = -q*n*n*cos(n*t)*cos(m*t) + 2*q*n*sin(n*t)*m*sin(m*t) - (p + q*cos(n*t))*m*m*cos(m*t);
-	a[1] = -q*n*n*cos(n*t)*sin(m*t) - 2*q*n*sin(n*t)*m*cos(m*t) - (p + q*cos(n*t))*m*m*sin(m*t);
-	a[2] = -q*n*n*sin(n*t);
-}
-
-// d^3r / dt^3
-void CurveWindingLineOnTorus::GetJerk (float t, float j[3]) const
-{
-	j[0] = 0.;
-	j[1] = 0.;
-	j[2] = 0.;
-}
-
-// |v|
-void CurveWindingLineOnTorus::GetSpeed (float t, float *s) const
-{
-	*s = sqrt (p*p*m*m + 2*m*m*p*q*cos(n*t) + m*m*q*q*cos(n*t)*cos(n*t) + q*q*n*n);
-}
-
-// \int_0^2\Pi |v|dt
-void CurveWindingLineOnTorus::GetArclength (float t, float *s) const
-{
-	
-}
-
-// k = |dT / ds| = aN / |v|^2 = |v x a| / |v|^3
-void CurveWindingLineOnTorus::GetCurvature (float t, float *kappa) const
-{
-}
-
-// t = 
-void CurveWindingLineOnTorus::GetTorsion (float t, float *nu) const
-{
-}
-
-// a_T = aT = d^2s / dt^2
-void CurveWindingLineOnTorus::GetTangentialAcceleration (float t, float aT[3]) const
-{
-}
-
-// a_N = aN = kappa nu^2
-void CurveWindingLineOnTorus::GetNormalAcceleration (float t, float aT[3]) const
-{
+	float a = kTwoPi * t;
+	r.Set ((p + q * cosf (n * a)) * cosf (m * a),
+	       (p + q * cosf (n * a)) * sinf (m * a),
+	       q * sinf (n * a));
+	return true;
 }

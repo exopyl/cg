@@ -386,6 +386,39 @@ public:
 		return d;
 	}
 
+	/*! Solve M x = right by Cramer's rule.
+	    Replacement for the C-API mat3_solve_linearsystem.
+	    \return false if the matrix is singular (det == 0), true otherwise.
+	*/
+	inline bool SolveLinearSystem (const TVector3<TValue> &right, TVector3<TValue> &res) const
+	{
+		auto det3 = [] (TValue a, TValue b, TValue c,
+				TValue d, TValue e, TValue f,
+				TValue g, TValue h, TValue i) -> TValue
+		{
+			return a*(e*i - f*h) - b*(d*i - f*g) + c*(d*h - e*g);
+		};
+
+		const TValue det = det3 (m_Mat[0][0], m_Mat[0][1], m_Mat[0][2],
+					 m_Mat[1][0], m_Mat[1][1], m_Mat[1][2],
+					 m_Mat[2][0], m_Mat[2][1], m_Mat[2][2]);
+		if (det == (TValue)0)
+			return false;
+		const TValue idet = (TValue)1 / det;
+
+		// Cramer's rule: replace column j by 'right'
+		res.x = det3 (right.x, m_Mat[0][1], m_Mat[0][2],
+			      right.y, m_Mat[1][1], m_Mat[1][2],
+			      right.z, m_Mat[2][1], m_Mat[2][2]) * idet;
+		res.y = det3 (m_Mat[0][0], right.x, m_Mat[0][2],
+			      m_Mat[1][0], right.y, m_Mat[1][2],
+			      m_Mat[2][0], right.z, m_Mat[2][2]) * idet;
+		res.z = det3 (m_Mat[0][0], m_Mat[0][1], right.x,
+			      m_Mat[1][0], m_Mat[1][1], right.y,
+			      m_Mat[2][0], m_Mat[2][1], right.z) * idet;
+		return true;
+	}
+
 	/*! Inverse the matrix
 	\return Returns FALSE if there is no inverse matrix.
 	*/

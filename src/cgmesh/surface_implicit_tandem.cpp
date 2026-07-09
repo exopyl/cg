@@ -37,7 +37,7 @@ typedef struct _edge_data_
 {
 	float m_error;
 	quadric_t q;
-	vec3 m_p;
+	Vector3f m_p;
 } edge_data_t;
 
 static void edge_data_dump (Che_edge &e)
@@ -58,12 +58,12 @@ static int tandem_update_face_info (mc_triangulation_t *pTri, int fi)
 	unsigned int iv2 = faces[3*fi+1];
 	unsigned int iv3 = faces[3*fi+2];
 
-	vec3 v1, v2, v3;
-	vec3_init (v1, vertices[3*iv1], vertices[3*iv1+1], vertices[3*iv1+2]);
-	vec3_init (v2, vertices[3*iv2], vertices[3*iv2+1], vertices[3*iv2+2]);
-	vec3_init (v3, vertices[3*iv3], vertices[3*iv3+1], vertices[3*iv3+2]);
+	Vector3f v1, v2, v3;
+	v1.Set (vertices[3*iv1], vertices[3*iv1+1], vertices[3*iv1+2]);
+	v2.Set (vertices[3*iv2], vertices[3*iv2+1], vertices[3*iv2+2]);
+	v3.Set (vertices[3*iv3], vertices[3*iv3+1], vertices[3*iv3+2]);
 	
-	pTri->farea[fi] = 2.*vec3_triangle_area (v1, v2, v3);
+	pTri->farea[fi] = 2.*Vector3f::evaluate_triangle_area (v1, v2, v3);
 	plane_init (pTri->fplane[fi], v1, v2, v3);
 
 	return 0;
@@ -153,15 +153,15 @@ static int tandem_update_edge_quadric (mc_triangulation_t *pTri, int he_idx, flo
 
 	unsigned int v0 = he.m_v_begin;
 	unsigned int v1 = he.m_v_end;
-	vec3 vec0, vec1, vnew;
+	Vector3f vec0, vec1, vnew;
 	quadric_t q0, q1, qe;
 	float error;
 
 	if (v0 == v1)
 		return -1;	
 
-	vec3_init (vec0, pTri->vertices[3*v0], pTri->vertices[3*v0+1], pTri->vertices[3*v0+2]);
-	vec3_init (vec1, pTri->vertices[3*v1], pTri->vertices[3*v1+1], pTri->vertices[3*v1+2]);
+	vec0.Set (pTri->vertices[3*v0], pTri->vertices[3*v0+1], pTri->vertices[3*v0+2]);
+	vec1.Set (pTri->vertices[3*v1], pTri->vertices[3*v1+1], pTri->vertices[3*v1+2]);
 	
 	quadric_scale (q0, pTri->q[v0], pTri->varea[v0]);
 	quadric_scale (q1, pTri->q[v1], pTri->varea[v1]);
@@ -190,13 +190,13 @@ static int tandem_update_edge_quadric (mc_triangulation_t *pTri, int he_idx, flo
 		//printf ("evaluate %d -> %d\n", v0, v1);
 		bool bFlip = false;
 		unsigned int vis[2] = {v0, v1};
-		vec3 vec0, vec1, vec2, n, nnew;
+		Vector3f vec0, vec1, vec2, n, nnew;
 		float *vertices = pTri->vertices;
 		for (int i=0; i<2; i++)
 		{
 			int vi0 = vis[i];
-			vec3_init (vec0, vertices[3*vi0], vertices[3*vi0+1], vertices[3*vi0+2]);
-			if (vec3_distance (vec0, vnew) < EPSILON)
+			vec0.Set (vertices[3*vi0], vertices[3*vi0+1], vertices[3*vi0+2]);
+			if ((vec0).getDistance (vnew) < EPSILON)
 				continue;
 			std::map<int,int>::iterator it = he_mesh->map_edges_vertex->find (vi0);
 			int eidx = it->second;
@@ -210,19 +210,19 @@ static int tandem_update_edge_quadric (mc_triangulation_t *pTri, int he_idx, flo
 					int vi2 = he_mesh->edge(ew.m_he_next).m_v_end;
 					if (vi1 != v0 && vi2 != v0 && vi1 != v1 && vi2 != v1)
 					{
-						vec3_init (vec1, vertices[3*vi1], vertices[3*vi1+1], vertices[3*vi1+2]);
-						vec3_init (vec2, vertices[3*vi2], vertices[3*vi2+1], vertices[3*vi2+2]);
+						vec1.Set (vertices[3*vi1], vertices[3*vi1+1], vertices[3*vi1+2]);
+						vec2.Set (vertices[3*vi2], vertices[3*vi2+1], vertices[3*vi2+2]);
 
 						// compare (v0 v1 v2) & (vnew v1 v2)
 						//printf ("%d %d %d vs %d %d %d\n", vi0, vi1, vi2, vi0, vi1, vi2);
-						vec3_triangle_normal (n, vec0, vec1, vec2);
-						vec3_normalize (n);
-						vec3_triangle_normal (nnew, vnew, vec1, vec2);
-						vec3_normalize (nnew);
+						n = Vector3f::evaluate_triangle_normal (vec0, vec1, vec2);
+						(n).Normalize ();
+						nnew = Vector3f::evaluate_triangle_normal (vnew, vec1, vec2);
+						(nnew).Normalize ();
 						//printf ("%f %f %f\n", n[0], n[1], n[2]);
 						//printf (" -> %f %f %f\n", nnew[0], nnew[1], nnew[2]);
-						//printf ("dot = %f\n", vec3_dot_product (n, nnew) );
-						if (vec3_length (n) < EPSILON || vec3_length (nnew) < EPSILON || vec3_dot_product (n, nnew) < 0.)
+						//printf ("dot = %f\n", (n).DotProduct (nnew) );
+						if ((n).getLength () < EPSILON || (nnew).getLength () < EPSILON || (n).DotProduct (nnew) < 0.)
 						{
 							bFlip = true;
 							break;
@@ -250,7 +250,7 @@ static int tandem_update_edge_quadric (mc_triangulation_t *pTri, int he_idx, flo
 	// store info
 	quadric_copy (edata->q, qe);
 	edata->m_error = error;
-	vec3_copy (edata->m_p, vnew);
+	edata->m_p = vnew;
 
 	// update errors range
 	if (error < errors_range[0])
@@ -343,8 +343,8 @@ static void tandem_simplify (mc_triangulation_t *pTri)
 			if (he_mesh->is_edge_contract2_valid (he_idx))
 			{
 				bAgain = true;
-				vec3 vnew;
-				vec3_copy (vnew, ((edge_data_t*)he.m_data)->m_p);
+				Vector3f vnew;
+				vnew = ((edge_data_t*)he.m_data)->m_p;
 
 				he_mesh->edge_contract2 (he_idx);
 /*

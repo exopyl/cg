@@ -123,7 +123,7 @@ TEST(TEST_cgmath_quadric, EvalAtOrigin)
 	plane_t plane = {0.f, 0.f, 1.f, -5.f};
 	quadric_t q;
 	plane_quadric(plane, q);
-	vec3 v = {0.f, 0.f, 0.f};
+	Vector3f v = {0.f, 0.f, 0.f};
 
 	// action
 	double val = quadric_eval(q, v);
@@ -138,7 +138,7 @@ TEST(TEST_cgmath_quadric, EvalOnPlane)
 	plane_t plane = {0.f, 0.f, 1.f, 0.f};
 	quadric_t q;
 	plane_quadric(plane, q);
-	vec3 v = {3.f, 4.f, 0.f};
+	Vector3f v = {3.f, 4.f, 0.f};
 
 	// action
 	double val = quadric_eval(q, v);
@@ -152,7 +152,7 @@ TEST(TEST_cgmath_quadric, MinimizeSingular)
 	// context - zero quadric => singular matrix
 	quadric_t q;
 	quadric_zero(q);
-	vec3 vnew;
+	Vector3f vnew;
 	float error;
 
 	// action
@@ -168,9 +168,9 @@ TEST(TEST_cgmath_quadric, Minimize2Fallback)
 	plane_t plane = {0.f, 0.f, 1.f, 0.f};
 	quadric_t q;
 	plane_quadric(plane, q);
-	vec3 v0 = {0.f, 0.f, 1.f};
-	vec3 v1 = {0.f, 0.f, -1.f};
-	vec3 vnew;
+	Vector3f v0 = {0.f, 0.f, 1.f};
+	Vector3f v1 = {0.f, 0.f, -1.f};
+	Vector3f vnew;
 	float error;
 
 	// action
@@ -195,7 +195,7 @@ TEST(TEST_cgmath_quadric, MinimizeEdge)
 	quadric_add(qtmp, q1, q2);
 	quadric_add(qtotal, qtmp, q3);
 
-	vec3 vnew;
+	Vector3f vnew;
 	float error;
 
 	// action

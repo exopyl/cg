@@ -131,8 +131,8 @@ ICPResult icp_align(const std::vector<float>& srcPts, Mesh& target, const ICPOpt
         // 1) correspondances closest-point
         for (size_t i=0;i<N;++i)
         {
-            float p[3]={(float)X[3*i],(float)X[3*i+1],(float)X[3*i+2]}, cp[3];
-            float dd=bvh.closest_distance2(p, cp);
+            Vector3f p((float)X[3*i],(float)X[3*i+1],(float)X[3*i+2]), cp;
+            float dd=bvh.closest_distance2(p, &cp);
             Q[3*i]=cp[0]; Q[3*i+1]=cp[1]; Q[3*i+2]=cp[2];
             d2[i]=(dd>=0.f)?dd:0.0;
         }
@@ -213,7 +213,7 @@ ICPResult icp_align(const std::vector<float>& srcPts, Mesh& target, const ICPOpt
         }
         for (size_t i=0;i<N;++i) if (keep[i])
         {
-            float p[3]={(float)X[3*i],(float)X[3*i+1],(float)X[3*i+2]};
+            Vector3f p((float)X[3*i],(float)X[3*i+1],(float)X[3*i+2]);
             float dd=bvh.closest_distance2(p, nullptr);
             sse += (dd>=0.f)?dd:0.0;
         }

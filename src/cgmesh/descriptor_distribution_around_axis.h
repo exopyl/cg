@@ -45,9 +45,9 @@ class Cdistribution_around_axis
   float total_area;
   void compute_cumulative_areas (void);
   int  find_area_position (float random_area, int istart, int iend);
-  int select_random_point (vec3 point); // return the id of the face containing the point
+  int select_random_point (Vector3f &point); // return the id of the face containing the point
 
-  void compute_length_dmean_variance_deviation (vec3 axis, float *_length, float *_dmean, float *_variance, float *_deviation);
+  void compute_length_dmean_variance_deviation (const Vector3f &axis, float *_length, float *_dmean, float *_variance, float *_deviation);
 
   Mesh_half_edge *model;
   int nv, nf;

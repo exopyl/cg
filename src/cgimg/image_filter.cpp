@@ -62,7 +62,7 @@ int Img::filter_sobel ()
 	return 0;
 }
 
-int Img::filter (mat3 m, float divide, float decay)
+int Img::filter (float m[3][3], float divide, float decay)
 {
 	unsigned char *pPixels = (unsigned char*)malloc(4*m_iWidth*m_iHeight*sizeof(unsigned char));
 	memset (pPixels, 0, 4*m_iWidth*m_iHeight*sizeof(unsigned char));
@@ -112,11 +112,9 @@ int Img::filter (mat3 m, float divide, float decay)
 
 int Img::blur (void)
 {
-	mat3 m;
-	mat3_init (m,
-		   1., 1., 1.,
-		   1., 1., 1.,
-		   1., 1., 1.);
+	float m[3][3] = {{1., 1., 1.},
+			 {1., 1., 1.},
+			 {1., 1., 1.}};
 	return filter (m);
 }
 

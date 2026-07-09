@@ -24,16 +24,16 @@ private:
 	public:
 		Patch ()
 		{
-			vec3_init (m_vPosition, 0., 0., 0.);
-			vec3_init (m_vNormale, 0., 0., 0.);
+			m_vPosition.Set (0., 0., 0.);
+			m_vNormale.Set (0., 0., 0.);
 			m_fArea = 0.;
 			m_fOcclusion = 0.;
 			m_fPrevOcclusion = 0.;
 		}
 		~Patch() {};
 
-		vec3 m_vPosition;
-		vec3 m_vNormale;
+		Vector3f m_vPosition;
+		Vector3f m_vNormale;
 		float m_fArea;
 		float m_fOcclusion;
 		float m_fPrevOcclusion;

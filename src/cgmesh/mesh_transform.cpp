@@ -69,16 +69,16 @@ void Mesh::transform (float mrot[9])
 	IncrementRevision();
 }
 
-void Mesh::transform (mat3 m)
+// Vector3f/Matrix3f-native transform (operator* is bit-for-bit mat3_transform).
+void Mesh::transform (const Matrix3f &m)
 {
-	vec3 vtmp;
 	for (unsigned int i=0; i<m_nVertices; i++)
 	{
-		vec3_init (vtmp, m_pVertices[3*i], m_pVertices[3*i+1], m_pVertices[3*i+2]);
-		mat3_transform (vtmp, m, vtmp);
-		m_pVertices[3*i]   = vtmp[0];
-		m_pVertices[3*i+1] = vtmp[1];
-		m_pVertices[3*i+2] = vtmp[2];
+		Vector3f v (m_pVertices[3*i], m_pVertices[3*i+1], m_pVertices[3*i+2]);
+		v = m * v;
+		m_pVertices[3*i]   = v.x;
+		m_pVertices[3*i+1] = v.y;
+		m_pVertices[3*i+2] = v.z;
 	}
 	IncrementRevision();
 }

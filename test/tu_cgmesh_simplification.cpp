@@ -429,8 +429,8 @@ TEST(TEST_cgmesh_simplification, exact_error_bounds_surface)
 	float worst_vertex = 0.f;
 	for (unsigned int i = 0; i < he->m_pMesh->m_nVertices; i++)
 	{
-		vec3 p;
-		vec3_init(p, he->m_pMesh->m_pVertices[3*i], he->m_pMesh->m_pVertices[3*i+1], he->m_pMesh->m_pVertices[3*i+2]);
+		Vector3f p;
+		p.Set ( he->m_pMesh->m_pVertices[3*i], he->m_pMesh->m_pVertices[3*i+1], he->m_pMesh->m_pVertices[3*i+2]);
 		float d = sqrtf(bref.closest_distance2(p));
 		if (d > worst_vertex) worst_vertex = d;
 	}

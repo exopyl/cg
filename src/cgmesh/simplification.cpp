@@ -38,7 +38,7 @@ typedef std::array<double, 10> Quadric;
 // flagged as a hypothesis in the feasibility study) must never spin forever.
 const int RING_WALK_MAX = 100000;
 
-inline void get_pos(const Mesh *m, int vi, vec3 p)
+inline void get_pos(const Mesh *m, int vi, Vector3f &p)
 {
 	p[0] = m->m_pVertices[3 * vi];
 	p[1] = m->m_pVertices[3 * vi + 1];
@@ -255,21 +255,21 @@ bool normal_would_flip(Mesh *mesh, Che_mesh *che, int u, int v, const float targ
 				bool hasV = (a == v || b == v || c == v);
 				if (!(hasU && hasV))
 				{
-					vec3 a0, b0, c0, a1, b1, c1, n0, n1;
+					Vector3f a0, b0, c0, a1, b1, c1, n0, n1;
 					get_pos(mesh, a, a0);
 					get_pos(mesh, b, b0);
 					get_pos(mesh, c, c0);
 
-					vec3_copy(a1, a0);
-					vec3_copy(b1, b0);
-					vec3_copy(c1, c0);
-					if (a == u || a == v) vec3_init(a1, target[0], target[1], target[2]);
-					if (b == u || b == v) vec3_init(b1, target[0], target[1], target[2]);
-					if (c == u || c == v) vec3_init(c1, target[0], target[1], target[2]);
+					a1 = a0;
+					b1 = b0;
+					c1 = c0;
+					if (a == u || a == v) a1.Set (target[0], target[1], target[2]);
+					if (b == u || b == v) b1.Set (target[0], target[1], target[2]);
+					if (c == u || c == v) c1.Set (target[0], target[1], target[2]);
 
-					vec3_triangle_normal(n0, a0, b0, c0);
-					vec3_triangle_normal(n1, a1, b1, c1);
-					if (vec3_dot_product(n0, n1) < 0.f)
+					n0 = Vector3f::evaluate_triangle_normal (a0, b0, c0);
+					n1 = Vector3f::evaluate_triangle_normal (a1, b1, c1);
+					if ((n0).DotProduct (n1) < 0.f)
 						return true;
 				}
 			}
@@ -292,12 +292,12 @@ const float FEATURE_WEIGHT = 1000.0f;
 // The constraint plane that contains the edge (pa -> pb) and is perpendicular
 // to a face of normal `face_n`. Penalising motion off this plane keeps the
 // feature line in place.
-void feature_plane(vec3 pa, vec3 pb, vec3 face_n, plane_t out)
+void feature_plane(const Vector3f &pa, const Vector3f &pb, const float *face_n, plane_t out)
 {
-	vec3 edir, cn;
-	vec3_subtraction(edir, pb, pa);
-	vec3_cross_product(cn, edir, face_n); // perpendicular to the face, along the edge
-	vec3_normalize(cn);
+	Vector3f edir = pb - pa;
+	Vector3f fn (face_n[0], face_n[1], face_n[2]);
+	Vector3f cn = edir.CrossProduct(fn); // perpendicular to the face, along the edge
+	cn.Normalize();
 	out[0] = cn[0];
 	out[1] = cn[1];
 	out[2] = cn[2];
@@ -305,7 +305,7 @@ void feature_plane(vec3 pa, vec3 pb, vec3 face_n, plane_t out)
 }
 
 // Add that constraint plane (weighted) to a vertex's 3D quadric.
-void add_feature_constraint(Quadric &q, vec3 pa, vec3 pb, vec3 face_n)
+void add_feature_constraint(Quadric &q, const Vector3f &pa, const Vector3f &pb, const float *face_n)
 {
 	plane_t pl;
 	feature_plane(pa, pb, face_n, pl);
@@ -625,7 +625,7 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 			int a = face->m_pVertices[0];
 			int b = face->m_pVertices[1];
 			int c = face->m_pVertices[2];
-			vec3 va, vb, vc;
+			Vector3f va, vb, vc;
 			get_pos(mesh, a, va);
 			get_pos(mesh, b, vb);
 			get_pos(mesh, c, vc);
@@ -654,12 +654,13 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 			Face *face = mesh->m_pFaces[f];
 			if (!face || face->m_nVertices < 3)
 				continue;
-			vec3 va, vb, vc;
+			Vector3f va, vb, vc;
 			get_pos(mesh, face->m_pVertices[0], va);
 			get_pos(mesh, face->m_pVertices[1], vb);
 			get_pos(mesh, face->m_pVertices[2], vc);
-			vec3_triangle_normal(&fn[3 * f], va, vb, vc);
-			vec3_normalize(&fn[3 * f]);
+			Vector3f nf = Vector3f::evaluate_triangle_normal(va, vb, vc);
+			nf.Normalize();
+			fn[3 * f] = nf[0]; fn[3 * f + 1] = nf[1]; fn[3 * f + 2] = nf[2];
 		}
 
 		const double PI = 3.14159265358979323846;
@@ -678,14 +679,14 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 			if (f1 < 0 || f2 < 0 || f1 >= (int)nf0 || f2 >= (int)nf0)
 				continue;
 
-			bool crease = vec3_dot_product(&fn[3 * f1], &fn[3 * f2]) < cos_thr;
+			bool crease = Vector3f(fn[3*f1], fn[3*f1+1], fn[3*f1+2]).DotProduct(Vector3f(fn[3*f2], fn[3*f2+1], fn[3*f2+2])) < cos_thr;
 			bool seam = (mesh->m_pFaces[f1]->m_iMaterialId != mesh->m_pFaces[f2]->m_iMaterialId);
 			if (!crease && !seam)
 				continue;
 
 			int a = ed.m_v_begin;
 			int b = ed.m_v_end;
-			vec3 pa, pb;
+			Vector3f pa, pb;
 			get_pos(mesh, a, pa);
 			get_pos(mesh, b, pb);
 
@@ -791,7 +792,7 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 		Quadric q;
 		quadric_add(q.data(), Q[u].data(), Q[v].data());
 
-		vec3 vu, vv, vnew;
+		Vector3f vu, vv, vnew;
 		get_pos(mesh, u, vu);
 		get_pos(mesh, v, vv);
 
@@ -871,7 +872,7 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 		// is not monotone in QEM-cost order.
 		if (exact)
 		{
-			float d2 = orig_bvh.closest_distance2(c.target);
+			float d2 = orig_bvh.closest_distance2(Vector3f(c.target[0], c.target[1], c.target[2]));
 			if (d2 >= 0.f && d2 > exact_thresh * exact_thresh)
 				continue;
 		}
@@ -887,19 +888,19 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 		float t = 0.f;
 		if (needs_t)
 		{
-			vec3 pu, pv;
+			Vector3f pu, pv;
 			get_pos(mesh, u, pu);
 			get_pos(mesh, v, pv);
-			vec3 e;
-			vec3_subtraction(e, pv, pu);
-			float len2 = vec3_dot_product(e, e);
+			Vector3f e;
+			e = pv - pu;
+			float len2 = (e).DotProduct (e);
 			if (len2 > 0.f)
 			{
-				vec3 d;
+				Vector3f d;
 				d[0] = c.target[0] - pu[0];
 				d[1] = c.target[1] - pu[1];
 				d[2] = c.target[2] - pu[2];
-				t = vec3_dot_product(d, e) / len2;
+				t = (d).DotProduct (e) / len2;
 				if (t < 0.f) t = 0.f;
 				else if (t > 1.f) t = 1.f;
 			}
@@ -916,10 +917,10 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 		// is forced false when use_nd, where they are recomputed instead).
 		if (have_normals)
 		{
-			vec3 n;
+			Vector3f n;
 			for (int k = 0; k < 3; k++)
 				n[k] = (1.f - t) * nrm[3 * u + k] + t * nrm[3 * v + k];
-			vec3_normalize(n);
+			(n).Normalize ();
 			nrm[3 * u] = n[0];
 			nrm[3 * u + 1] = n[1];
 			nrm[3 * u + 2] = n[2];

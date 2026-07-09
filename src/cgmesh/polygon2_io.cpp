@@ -351,14 +351,11 @@ static void _TreatCommand (char command, float *parameters, unsigned int nParame
 		curve->addControlPoint (parameters[2], parameters[3], 0.);
 		curve->addControlPoint (parameters[4], parameters[5], 0.);
 		
-		unsigned nPts = NPTS_CUBIC;
-		vec3 *pts = nullptr;
-		unsigned int res = curve->computeInterpolation (nPts, &pts);
-		if (res && pts)
+		std::vector<Vector3f> pts;
+		if (curve->tessellate (NPTS_CUBIC, pts))
 		{
-			for (unsigned int i=1; i<nPts; i++)
-				_AddPointToCurrentContour (pts[i][0], pts[i][1], pts[i][2]);
-			free (pts);
+			for (size_t i=1; i<pts.size(); i++)
+				_AddPointToCurrentContour (pts[i].x, pts[i].y, pts[i].z);
 		}
 		delete curve;
 
@@ -377,14 +374,11 @@ static void _TreatCommand (char command, float *parameters, unsigned int nParame
 		curve->addControlPoint (Xcurrent+parameters[2], Ycurrent+parameters[3], 0.);
 		curve->addControlPoint (Xcurrent+parameters[4], Ycurrent+parameters[5], 0.);
 		
-		unsigned nPts = NPTS_CUBIC;
-		vec3 *pts = nullptr;
-		unsigned int res = curve->computeInterpolation (nPts, &pts);
-		if (res && pts)
+		std::vector<Vector3f> pts;
+		if (curve->tessellate (NPTS_CUBIC, pts))
 		{
-			for (unsigned int i=1; i<nPts; i++)
-				_AddPointToCurrentContour (pts[i][0], pts[i][1], pts[i][2]);
-			free (pts);
+			for (size_t i=1; i<pts.size(); i++)
+				_AddPointToCurrentContour (pts[i].x, pts[i].y, pts[i].z);
 		}
 		delete curve;
 
@@ -406,14 +400,11 @@ static void _TreatCommand (char command, float *parameters, unsigned int nParame
 		curve->addControlPoint (parameters[0], parameters[1], 0.);
 		curve->addControlPoint (parameters[2], parameters[3], 0.);
 		
-		unsigned nPts = NPTS_CUBIC;
-		vec3 *pts = nullptr;
-		unsigned int res = curve->computeInterpolation (nPts, &pts);
-		if (res && pts)
+		std::vector<Vector3f> pts;
+		if (curve->tessellate (NPTS_CUBIC, pts))
 		{
-			for (unsigned int i=1; i<nPts; i++)
-				_AddPointToCurrentContour (pts[i][0], pts[i][1], pts[i][2]);
-			free (pts);
+			for (size_t i=1; i<pts.size(); i++)
+				_AddPointToCurrentContour (pts[i].x, pts[i].y, pts[i].z);
 		}
 		delete curve;
 
@@ -435,14 +426,11 @@ static void _TreatCommand (char command, float *parameters, unsigned int nParame
 		curve->addControlPoint (Xcurrent+parameters[0], Ycurrent+parameters[1], 0.);
 		curve->addControlPoint (Xcurrent+parameters[2], Ycurrent+parameters[3], 0.);
 		
-		unsigned nPts = NPTS_CUBIC;
-		vec3 *pts = nullptr;
-		unsigned int res = curve->computeInterpolation (nPts, &pts);
-		if (res && pts)
+		std::vector<Vector3f> pts;
+		if (curve->tessellate (NPTS_CUBIC, pts))
 		{
-			for (unsigned int i=1; i<nPts; i++)
-				_AddPointToCurrentContour (pts[i][0], pts[i][1], pts[i][2]);
-			free (pts);
+			for (size_t i=1; i<pts.size(); i++)
+				_AddPointToCurrentContour (pts[i].x, pts[i].y, pts[i].z);
 		}
 		delete curve;
 
@@ -460,15 +448,12 @@ static void _TreatCommand (char command, float *parameters, unsigned int nParame
 		curve->addControlPoint (parameters[0], parameters[1], 0.);
 		curve->addControlPoint (parameters[2], parameters[3], 0.);
 		
-		unsigned nPts = NPTS_QUADRIC;
-		vec3 *pts;
-		unsigned int res = curve->computeInterpolation (nPts+1, &pts);
-		if (res)
+		std::vector<Vector3f> pts;
+		if (curve->tessellate (NPTS_QUADRIC+1, pts))
 		{
-			for (unsigned int i=1; i<nPts; i++)
-				_AddPointToCurrentContour (pts[i][0], pts[i][1], pts[i][2]);
+			for (unsigned int i=1; i<NPTS_QUADRIC; i++)
+				_AddPointToCurrentContour (pts[i].x, pts[i].y, pts[i].z);
 		}
-		free (pts);
 		delete curve;
 
 		Xprevious = parameters[0];
@@ -485,15 +470,12 @@ static void _TreatCommand (char command, float *parameters, unsigned int nParame
 		curve->addControlPoint (Xcurrent+parameters[0], Ycurrent+parameters[1], 0.);
 		curve->addControlPoint (Xcurrent+parameters[2], Ycurrent+parameters[3], 0.);
 		
-		unsigned nPts = NPTS_QUADRIC;
-		vec3 *pts;
-		unsigned int res = curve->computeInterpolation (nPts+1, &pts);
-		if (res)
+		std::vector<Vector3f> pts;
+		if (curve->tessellate (NPTS_QUADRIC+1, pts))
 		{
-			for (unsigned int i=1; i<nPts; i++)
-				_AddPointToCurrentContour (pts[i][0], pts[i][1], pts[i][2]);
+			for (unsigned int i=1; i<NPTS_QUADRIC; i++)
+				_AddPointToCurrentContour (pts[i].x, pts[i].y, pts[i].z);
 		}
-		free (pts);
 		delete curve;
 		
 		Xprevious = Xcurrent+parameters[0];
@@ -520,14 +502,12 @@ static void _TreatCommand (char command, float *parameters, unsigned int nParame
 		curve->addControlPoint (parameters[0], parameters[1], 0.);
 		
 		unsigned nPts = (bPreviousValid)? NPTS_QUADRIC : 2;
-		vec3 *pts;
-		unsigned int res = curve->computeInterpolation (nPts, &pts);
-		if (res)
+		std::vector<Vector3f> pts;
+		if (curve->tessellate (nPts, pts))
 		{
 			for (unsigned int i=0; i<nPts; i++)
-				_AddPointToCurrentContour (pts[i][0], pts[i][1], pts[i][2]);
+				_AddPointToCurrentContour (pts[i].x, pts[i].y, pts[i].z);
 		}
-		free (pts);
 		delete curve;
 
 		Xprevious = 2 * Xcurrent - Xprevious;
@@ -555,14 +535,12 @@ static void _TreatCommand (char command, float *parameters, unsigned int nParame
 		curve->addControlPoint (Xcurrent+parameters[0], Ycurrent+parameters[1], 0.);
 		
 		unsigned nPts = (bPreviousValid)? NPTS_QUADRIC : 2;
-		vec3 *pts;
-		unsigned int res = curve->computeInterpolation (nPts, &pts);
-		if (res)
+		std::vector<Vector3f> pts;
+		if (curve->tessellate (nPts, pts))
 		{
 			for (unsigned int i=0; i<nPts; i++)
-				_AddPointToCurrentContour (pts[i][0], pts[i][1], pts[i][2]);
+				_AddPointToCurrentContour (pts[i].x, pts[i].y, pts[i].z);
 		}
-		free (pts);
 		delete curve;
 		
 		Xprevious = 2 * Xcurrent - Xprevious;

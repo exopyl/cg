@@ -116,10 +116,10 @@ public:
 	void Dump();
 
 	// from class Geometry
-	bool GetIntersectionBboxWithRay (vec3 o, vec3 d);
-	int GetIntersectionWithRayInOctree (vec3 o, vec3 d, float *_t, vec3 i, vec3 n, Octree *pOctree);
-	virtual int GetIntersectionWithRay (vec3 o, vec3 d, float *_t, vec3 i, vec3 n);
-	virtual int GetIntersectionWithSegment (vec3 vStart, vec3 vEnd, float *_t, vec3 i, vec3 n);
+	bool GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d);
+	int GetIntersectionWithRayInOctree (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n, Octree *pOctree);
+	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
+	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
 	virtual void* GetMaterial (void);
 
 private:
@@ -222,13 +222,20 @@ public:
 		v[2] = m_pVertices[i+2];
 		return 0;
 	};
+	// Vector3f overload (migration vers TVector3 ; la version vec3 reste le temps de la transition)
+	inline int GetVertex (unsigned int i, Vector3f &v) {
+		if (i>=m_nVertices) return -1;
+		i*=3;
+		v.Set (m_pVertices[i], m_pVertices[i+1], m_pVertices[i+2]);
+		return 0;
+	};
 	inline int GetFaceVertex (unsigned int fi, unsigned int vi) { return m_pFaces[fi]->GetVertex (vi); };
 
 	Face *GetFace (unsigned int fi) { return m_pFaces[fi]; };
 	inline int GetFaceNVertices (unsigned int fi) { return m_pFaces[fi]->GetNVertices (); };
 	inline int GetFaceMaterialId (unsigned int fi) { return m_pFaces[fi]->GetMaterialId (); };
 	inline void SetFaceMaterialId (unsigned int fi, unsigned int mi) { m_pFaces[fi]->SetMaterialId (mi); };
-	void GetFaceBarycenter (unsigned int fi, vec3 bar)
+	void GetFaceBarycenter (unsigned int fi, Vector3f &bar)
 		{
 			Face *f=m_pFaces[fi];
 			if (f->m_nVertices == 3)
@@ -236,7 +243,7 @@ public:
 				unsigned int a = f->m_pVertices[0];
 				unsigned int b = f->m_pVertices[1];
 				unsigned int c = f->m_pVertices[2];
-				vec3_init (bar,
+				bar.Set (
 					   (m_pVertices[3*a] + m_pVertices[3*b] + m_pVertices[3*c]) / 3.,
 					   (m_pVertices[3*a+1] + m_pVertices[3*b+1] + m_pVertices[3*c+1]) / 3.,
 					   (m_pVertices[3*a+2] + m_pVertices[3*b+2] + m_pVertices[3*c+2]) / 3. );
@@ -250,6 +257,8 @@ public:
 	//int SetTextureCoordinates (unsigned int nTextureCoordinates, float *pTextureCoordinates);
 
 	int SetVertex (unsigned int i, float x, float y, float z);
+	// Vector3f overload (migration vers TVector3 ; les versions scalaires restent)
+	inline int SetVertex (unsigned int i, const Vector3f &v) { return SetVertex (i, v.x, v.y, v.z); }
 	int SetFace (unsigned int i,
 		     unsigned int a, unsigned int b, unsigned int c);
 	int SetFace (unsigned int i,
@@ -405,7 +414,7 @@ public:
 	void scale_xyz (float sx, float sy, float sz);
 	void translate (float tx, float ty, float tz);
 	void transform (float mrot[9]);
-	void transform (mat3 m);
+	void transform (const Matrix3f &m);
 
 	//
 	unsigned int CountEdges (void);

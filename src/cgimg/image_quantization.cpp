@@ -117,12 +117,12 @@ int Img::quant_kmean (float threshold)
 		memset (pClustersDistances, 0, nclusters*sizeof(float));
 		for (int i=0; i<n; i++)
 		{
-			vec3 c, mean;
-			vec3_init (c, pPixels[3*i], pPixels[3*i+1], pPixels[3*i+2]);
+			Vector3f c, mean;
+			c.Set (pPixels[3*i], pPixels[3*i+1], pPixels[3*i+2]);
 			for (int j=0; j<nclusters; j++)
 			{
-				vec3_init (mean, pClusters[3*j], pClusters[3*j+1], pClusters[3*j+2]);
-				pClustersDistances[j] = vec3_distance (c, mean);
+				mean.Set (pClusters[3*j], pClusters[3*j+1], pClusters[3*j+2]);
+				pClustersDistances[j] = (c).getDistance (mean);
 
 			}
 			int ci = 0;
@@ -166,18 +166,18 @@ int Img::quant_kmean (float threshold)
 
 	for (int i=0; i<n; i++)
 	{
-		vec3 c, cnew;
+		Vector3f c, cnew;
 		float dmin;
-		vec3_init (c, pPixels[3*i], pPixels[3*i+1], pPixels[3*i+2]);
-		vec3_init (cnew, pClusters[0], pClusters[1], pClusters[2]);
-		dmin = vec3_distance (c, cnew);
+		c.Set (pPixels[3*i], pPixels[3*i+1], pPixels[3*i+2]);
+		cnew.Set (pClusters[0], pClusters[1], pClusters[2]);
+		dmin = (c).getDistance (cnew);
 		for (int j=1; j<nclusters; j++)
 		{
-			vec3 cwalk;
-			vec3_init (cwalk, pClusters[3*j], pClusters[3*j+1], pClusters[3*j+2]);
-			float d = vec3_distance (c, cwalk);
+			Vector3f cwalk;
+			cwalk.Set (pClusters[3*j], pClusters[3*j+1], pClusters[3*j+2]);
+			float d = (c).getDistance (cwalk);
 			if (d < dmin)
-				vec3_copy (cnew, cwalk);
+				cnew = cwalk;
 		}
 		m_pPixels[4*i]   = (int)255.*cnew[0];
 		m_pPixels[4*i+1] = (int)255.*cnew[1];

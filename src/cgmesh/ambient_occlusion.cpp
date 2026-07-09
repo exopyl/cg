@@ -43,8 +43,8 @@ public:
 		float center[3], min[3], max[3];
 		pOctree->GetMinMax (min, max);
 
-		vec3 tmp;
-		vec3 corners[8] = {
+		Vector3f tmp;
+		Vector3f corners[8] = {
 			{min[0], min[1], min[2]},
 			{max[0], min[1], min[2]},
 			{max[0], max[1], min[2]},
@@ -67,7 +67,7 @@ public:
 			float fShortestDistance = 0.;
 			for (int i=0; i<8; i++)
 			{
-				float fLength = vec3_distance (corners[i], pPatch.m_vPosition);
+				float fLength = (corners[i]).getDistance (pPatch.m_vPosition);
 				if (i==0 || fLength < fShortestDistance)
 					fShortestDistance = fLength;
 			}
@@ -78,8 +78,8 @@ public:
 		// is the patch facing the octree node ?
 		for (int i=0; i<8; i++)
 		{
-			vec3_subtraction (tmp, corners[i], pPatch.m_vPosition);
-			if (!bNodeFacingRightHemisphere && vec3_dot_product (pPatch.m_vNormale, tmp) > 0.)
+			tmp = corners[i] - pPatch.m_vPosition;
+			if (!bNodeFacingRightHemisphere && (pPatch.m_vNormale).DotProduct (tmp) > 0.)
 				bNodeFacingRightHemisphere = true;
 		}
 		if (!bNodeFacingRightHemisphere)
@@ -118,18 +118,18 @@ float MeshAlgoAmbientOcclusion::compute_occlusion (int index_receiver, int index
 		return 0.;
 
 	// vector between the two points
-	vec3 dir;
-	vec3_subtraction (dir, m_pPatches[index_receiver].m_vPosition, m_pPatches[index_occluder].m_vPosition);
+	Vector3f dir;
+	dir = m_pPatches[index_receiver].m_vPosition - m_pPatches[index_occluder].m_vPosition;
 
 	// discard the patch if it is too far
-	float dsquare = vec3_dot_product (dir, dir);
+	float dsquare = (dir).DotProduct (dir);
 	if (dsquare > 100.*m_pPatches[index_occluder].m_fArea)
 		return 0.;
 
 	// form factor contribution
-	vec3_normalize (dir);
-	float CosR = -vec3_dot_product (dir, m_pPatches[index_receiver].m_vNormale);
-	float CosE =  vec3_dot_product (dir, m_pPatches[index_occluder].m_vNormale);
+	(dir).Normalize ();
+	float CosR = -(dir).DotProduct (m_pPatches[index_receiver].m_vNormale);
+	float CosE =  (dir).DotProduct (m_pPatches[index_occluder].m_vNormale);
 
 	// discard the patch if the patches are not facing
 	if (CosE < 0.)
@@ -156,8 +156,8 @@ float* MeshAlgoAmbientOcclusion::Evaluate (int nPasses)
 	m_pPatches = new Patch[nVertices];
 	for (unsigned int i=0; i<nVertices; i++)
 	{
-		vec3_init (m_pPatches[i].m_vPosition, pVertices[3*i], pVertices[3*i+1], pVertices[3*i+2]);
-		vec3_init (m_pPatches[i].m_vNormale, pVertexNormals[3*i], pVertexNormals[3*i+1], pVertexNormals[3*i+2]);
+		m_pPatches[i].m_vPosition.Set (pVertices[3*i], pVertices[3*i+1], pVertices[3*i+2]);
+		m_pPatches[i].m_vNormale.Set (pVertexNormals[3*i], pVertexNormals[3*i+1], pVertexNormals[3*i+2]);
 		m_pPatches[i].m_fArea = 0.;
 		m_pPatches[i].m_fOcclusion = 0.;
 		m_pPatches[i].m_fPrevOcclusion = 1.;
@@ -205,7 +205,7 @@ float* MeshAlgoAmbientOcclusion::Evaluate (int nPasses)
 		{
 			for (unsigned int i=0; i<nVertices; i++)
 			{
-				vec3 tmp;
+				Vector3f tmp;
 				m_pMesh->GetVertex (i, tmp);
 				unsigned int *pClosestPoints = (unsigned int*)malloc(sizeof(unsigned int));
 				unsigned int nClosestPoints = 0;

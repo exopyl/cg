@@ -17,27 +17,27 @@
 
 TEST(TEST_cgmesh_metrics, point_triangle_distance)
 {
-	vec3 a, b, c;
-	vec3_init(a, 0.f, 0.f, 0.f);
-	vec3_init(b, 1.f, 0.f, 0.f);
-	vec3_init(c, 0.f, 1.f, 0.f);
+	Vector3f a, b, c;
+	a.Set ( 0.f, 0.f, 0.f);
+	b.Set ( 1.f, 0.f, 0.f);
+	c.Set ( 0.f, 1.f, 0.f);
 
 	// Point straight above the interior -> distance is the height.
-	vec3 p;
-	vec3_init(p, 0.25f, 0.25f, 2.f);
+	Vector3f p;
+	p.Set ( 0.25f, 0.25f, 2.f);
 	EXPECT_NEAR(point_triangle_distance2(p, a, b, c), 4.f, 1e-4f);
 
 	// Beyond vertex A -> closest is A.
-	vec3_init(p, -1.f, -1.f, 0.f);
+	p.Set ( -1.f, -1.f, 0.f);
 	EXPECT_NEAR(point_triangle_distance2(p, a, b, c), 2.f, 1e-4f);
 
 	// Off edge AB -> closest is on the edge.
-	vec3_init(p, 0.5f, -2.f, 0.f);
+	p.Set ( 0.5f, -2.f, 0.f);
 	EXPECT_NEAR(point_triangle_distance2(p, a, b, c), 4.f, 1e-4f);
 
 	// In-plane interior -> distance 0, and closest point returned.
-	vec3 cl;
-	vec3_init(p, 0.2f, 0.2f, 0.f);
+	Vector3f cl;
+	p.Set ( 0.2f, 0.2f, 0.f);
 	EXPECT_NEAR(point_triangle_distance2(p, a, b, c, cl), 0.f, 1e-5f);
 	EXPECT_NEAR(cl[0], 0.2f, 1e-5f);
 	EXPECT_NEAR(cl[1], 0.2f, 1e-5f);
@@ -76,13 +76,13 @@ TEST(TEST_cgmesh_metrics, bvh_closest_distance)
 	BVH bvh;
 	bvh.build(*m);
 
-	vec3 p;
-	vec3_init(p, 0.5f, 0.5f, 0.7f); // above the plane
+	Vector3f p;
+	p.Set ( 0.5f, 0.5f, 0.7f); // above the plane
 	EXPECT_NEAR(sqrtf(bvh.closest_distance2(p)), 0.7f, 1e-4f);
 
-	vec3 cl;
-	vec3_init(p, 0.3f, 0.4f, -0.25f);
-	float d = sqrtf(bvh.closest_distance2(p, cl));
+	Vector3f cl;
+	p.Set ( 0.3f, 0.4f, -0.25f);
+	float d = sqrtf(bvh.closest_distance2(p, &cl));
 	EXPECT_NEAR(d, 0.25f, 1e-4f);
 	EXPECT_NEAR(cl[2], 0.f, 1e-4f); // closest point lies on the z=0 plane
 

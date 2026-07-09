@@ -9,13 +9,13 @@ TEST(TEST_cgmath_triangle, GetIntersectionWithRay)
     tri.SetVertex(0, 0.f, 0.f, 0.f);
     tri.SetVertex(1, 1.f, 1.f, 0.f);
     tri.SetVertex(2, 1.f, 1.f, 2.f);
-    vec3 o = {.5f, 0.f, .5f};
-    vec3 d = {0.f, 1.f, 0.f};
+    Vector3f o = {.5f, 0.f, .5f};
+    Vector3f d = {0.f, 1.f, 0.f};
 
     // action
     float t = 0.f;
-    vec3 i = {0.f, 0.f, 0.f};
-    vec3 n = {0.f, 0.f, 0.f};
+    Vector3f i = {0.f, 0.f, 0.f};
+    Vector3f n = {0.f, 0.f, 0.f};
     tri.GetIntersectionWithRay(o, d, &t, i, n);
 
     // expectations

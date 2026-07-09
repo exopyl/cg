@@ -36,9 +36,9 @@ unsigned int Raytracer::AddLight (Light* pLight)
 // Phong shading
 // http://en.wikipedia.org/wiki/Phong_shading
 //
-int Raytracer::GetColorWithRay (vec3 vOrig, vec3 vDirection, float color[3])
+int Raytracer::GetColorWithRay (const Vector3f &vOrig, const Vector3f &vDirection, float color[3])
 {
-	vec3 vIntersection, vN;
+	Vector3f vIntersection, vN;
 	Ticker t;
 	color[0] = 0.;
 	color[1] = 0.;
@@ -67,7 +67,7 @@ int Raytracer::GetColorWithRay (vec3 vOrig, vec3 vDirection, float color[3])
 	//pMaterial->Init_From_Library (MaterialColorExt::EMERALD);
 	float Ia, Id, Is;
 
-	vec3_normalize (vN);
+	(vN).Normalize ();
 
 	for (unsigned int i=0; i<m_nLights; i++)
 	{
@@ -84,28 +84,28 @@ int Raytracer::GetColorWithRay (vec3 vOrig, vec3 vDirection, float color[3])
 				vLight[2] += 0.5*RAYTRACER_SHADOWS_LIGHT_POSITION_OFFSET*((float)rand()/(RAND_MAX+1.0));
 			}
 
-			vec3 vL; // intersection -> light
+			Vector3f vL; // intersection -> light
 			vL[0] = vLight[0] - vIntersection[0];
 			vL[1] = vLight[1] - vIntersection[1];
 			vL[2] = vLight[2] - vIntersection[2];
-			float fL2 = vec3_dot_product (vL, vL);
-			vec3_normalize (vL);
+			float fL2 = (vL).DotProduct (vL);
+			(vL).Normalize ();
 				
-			vec3 vR;
-			float fDotNL = vec3_dot_product (vN, vL);
+			Vector3f vR;
+			float fDotNL = (vN).DotProduct (vL);
 			if (fDotNL < 0.)
 				fDotNL = 0.;
 				
 			vR[0] = 2.*fDotNL*vN[0]-vL[0];
 			vR[1] = 2.*fDotNL*vN[1]-vL[1];
 			vR[2] = 2.*fDotNL*vN[2]-vL[2];
-			vec3_normalize (vR);
+			(vR).Normalize ();
 				
-			vec3 vV;
+			Vector3f vV;
 			vV[0] = -vDirection[0];
 			vV[1] = -vDirection[1];
 			vV[2] = -vDirection[2];
-			vec3_normalize (vV);
+			(vV).Normalize ();
 				
 			// todo : store the following parameters in the material
 			float m_fDiffuseReflectionConstant = 0.5;
@@ -114,7 +114,7 @@ int Raytracer::GetColorWithRay (vec3 vOrig, vec3 vDirection, float color[3])
 			float m_fShininess = 10.;
 			//
 
-			float fDotRV = vec3_dot_product (vR, vV);
+			float fDotRV = (vR).DotProduct (vV);
 			float fDotRValpha = (fDotRV < 0.)? 0. : pow ((float)(fDotRV), (float)(m_fShininess));
 			Ia = m_fAmbientReflectionConstant;
 			Id = m_fDiffuseReflectionConstant * fDotNL;
@@ -140,11 +140,11 @@ int Raytracer::GetColorWithRay (vec3 vOrig, vec3 vDirection, float color[3])
 			m_time_GetIntersectionWithRay += t.stop ();
 			if (pObject2)
 			{
-				vec3 vTmp;
+				Vector3f vTmp;
 				vTmp[0] = vIntersection2[0] - vIntersection[0];
 				vTmp[1] = vIntersection2[1] - vIntersection[1];
 				vTmp[2] = vIntersection2[2] - vIntersection[2];
-				float l2 = vec3_dot_product (vTmp, vTmp);
+				float l2 = (vTmp).DotProduct (vTmp);
 				if (pObject2 && l2 > fL2)
 				{
 					//float fIntensity = dot_product (vNormal, vL);
@@ -182,13 +182,13 @@ Img* Raytracer::Trace (unsigned int iWidth, unsigned int iHeight)
 		{
 			for (unsigned int i=0; i<iWidth; i++)
 			{
-				vec3 vD;
+				Vector3f vD;
 				vD[0] = 0.;
 				vD[1] = 0.4;
 				vD[2] = -0.1;
-				vec3_normalize (vD);
+				(vD).Normalize ();
 				
-				float vEye[3];
+				Vector3f vEye;
 				vEye[0] = -width/2. + i*width/iWidth;
 				vEye[1] = 0.;
 				vEye[2] = height/2. - j*height/iHeight;
@@ -218,13 +218,13 @@ Img* Raytracer::Trace (unsigned int iWidth, unsigned int iHeight)
 				float fPhi = height_aov/2. - j*height_aov/iHeight;
 				
 				// cartesian coordinates
-				vec3 vD;
+				Vector3f vD;
 				vD[0] = cos(fTheta)*cos(fPhi);
 				vD[1] = sin(fTheta)*cos(fPhi);
 				vD[2] = sin(fPhi);
-				vec3_normalize (vD);
+				(vD).Normalize ();
 				
-				float vEye[3];
+				Vector3f vEye;
 				vEye[0] = GetCamera()->m_vPosition[0];
 				vEye[1] = GetCamera()->m_vPosition[1];
 				vEye[2] = GetCamera()->m_vPosition[2];
