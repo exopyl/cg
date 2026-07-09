@@ -29,7 +29,10 @@ TEST(TEST_cgmesh_surface_basic, teapot)
     Mesh* mesh = CreateTeapot();
 
     // expectations
-    EXPECT_EQ(mesh->GetNVertices(), 1767);
+    // 1178 = sizeof(TeapotData_Vertex)/(3*sizeof(float)). The previous 1767 came
+    // from the buggy divisor sizeof(3*sizeof(float))==8 (1.5x), which over-read
+    // the 1178-element vertex array by 589 entries.
+    EXPECT_EQ(mesh->GetNVertices(), 1178);
     EXPECT_EQ(mesh->GetNFaces(), 2256);
 }
 

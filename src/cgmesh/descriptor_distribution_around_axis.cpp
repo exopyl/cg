@@ -95,7 +95,7 @@ Cdistribution_around_axis::compute_length_dmean_variance_deviation (const Vector
 void
 Cdistribution_around_axis::compute_first_order_distributions (orientation_type type)
 {
-  float *mrot = (float*)malloc(9*sizeof(float));
+  float *mrot = nullptr;   // aliases opca's internal rotation matrix (get_matrix_rotation); not owned
   Vector3f axis1, axis2, axis3;
 
   Cmesh_orientation_pca *opca = new Cmesh_orientation_pca (model);
@@ -138,7 +138,7 @@ Cdistribution_around_axis::compute_first_order_distributions (orientation_type t
 void
 Cdistribution_around_axis::compute_first_order_distributions_paquet (orientation_type type, int _npoints, int _nbins)
 {
-  float *mrot = (float*)malloc(9*sizeof(float));
+  float *mrot = nullptr;   // aliases opca's internal rotation matrix (get_matrix_rotation); not owned
   Vector3f axis1, axis2, axis3;
 
   Cmesh_orientation_pca *opca = new Cmesh_orientation_pca (model);
@@ -167,6 +167,8 @@ Cdistribution_around_axis::compute_first_order_distributions_paquet (orientation
   axis3.Set (mrot[6], mrot[7], mrot[8]);
 
   opca->apply_orientation ();
+
+  delete opca;
   model->m_pMesh->ComputeNormals ();
   int i, j;
 
@@ -260,7 +262,7 @@ Cdistribution_around_axis::compute_first_order_distributions_paquet (orientation
 void
 Cdistribution_around_axis::compute_second_order_distributions_paquet (orientation_type type, int _npoints, int _nbins)
 {
-  float *mrot = (float*)malloc(9*sizeof(float));
+  float *mrot = nullptr;   // aliases opca's internal rotation matrix (get_matrix_rotation); not owned
   Vector3f axis1, axis2, axis3;
   Vector3f v1, v2, v3;
   Vector3f nv1, nv2, nv3;
@@ -290,6 +292,8 @@ Cdistribution_around_axis::compute_second_order_distributions_paquet (orientatio
   axis3.Set (mrot[6], mrot[7], mrot[8]);
 
   opca->apply_orientation ();
+
+  delete opca;
   model->m_pMesh->ComputeNormals ();
   int i, j, nv = model->m_pMesh->m_nVertices;
   float *vn = model->m_pMesh->m_pVertexNormals.data();

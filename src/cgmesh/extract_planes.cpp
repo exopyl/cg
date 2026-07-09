@@ -27,7 +27,7 @@ void Cextract_planes::compute (float threshold, float percentage)
   float *v = model->m_pMesh->m_pVertices.data();
   int nv = model->m_pMesh->m_nVertices;
   //float *vc = model->get_vertices_colors ();
-  unsigned int *f = model->m_pMesh->GetTriangles ();
+  std::vector<unsigned int> f = model->m_pMesh->GetTriangles ();
   int nf = model->m_pMesh->m_nFaces;
 
   Cregions_faces *model3d_regions = new Cregions_faces (model);

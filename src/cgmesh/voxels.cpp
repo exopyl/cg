@@ -41,9 +41,9 @@ Voxels::~Voxels ()
 		{
 			delete [] m_pVoxels[i][j];
 		}
-		delete m_pVoxels[i];
+		delete [] m_pVoxels[i];
 	}
-	delete m_pVoxels;
+	delete [] m_pVoxels;
 }
 
 int Voxels::init (unsigned int _nx, unsigned int _ny, unsigned int _nz)

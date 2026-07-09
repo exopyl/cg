@@ -97,7 +97,7 @@ int Normals::EvalOnVertices (Mesh_half_edge *mesh, MethodId MethodId)
 					c = f->GetVertex (1);
 				}
 				else
-					printf ("!!! state not supposed to be reached !!!\n");
+					continue;   // vertex i not in this face: skip (avoids using uninitialized a,b,c)
 
 				Vector3f v1, v2, v3;
 				v1.Set (v[3*a], v[3*a+1], v[3*a+2]);

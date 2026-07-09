@@ -399,8 +399,11 @@ Cmesh_orientation_edges2::finalize_orientation (void)
   mrot[7] = m9_tmp2[6]*m9_tmp1[1] + m9_tmp2[7]*m9_tmp1[4] + m9_tmp2[8]*m9_tmp1[7];
   mrot[8] = m9_tmp2[6]*m9_tmp1[2] + m9_tmp2[7]*m9_tmp1[5] + m9_tmp2[8]*m9_tmp1[8];
 
-  for (i=0; i<9; i++)
-    ;//mrot[i] = m9_tmp1[i];
+  free (m9_tmp1);
+  free (m16);
+  free (m9_tmp2);
+  free (m9_final);
+  delete[] v;
 }
 
 void

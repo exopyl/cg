@@ -106,8 +106,8 @@ Cdifferential_parameters_distribution::compute_distribution (shape_function_type
 	  {
 	  Tensor *pDiffParam = pTensorEvaluator->GetDiffParam (i);
 	if (pDiffParam)
-	  data[i] = (fabs (pDiffParam->GetKappaMax ()) > fabs (pDiffParam->GetKappaMax ()))?
-	    fabs (pDiffParam->GetKappaMax ()) : fabs (pDiffParam->GetKappaMax ());
+	  data[i] = (fabs (pDiffParam->GetKappaMax ()) > fabs (pDiffParam->GetKappaMin ()))?
+	    fabs (pDiffParam->GetKappaMax ()) : fabs (pDiffParam->GetKappaMin ());
 	  }
       break;
     case MIN_CURVATURE:
@@ -115,8 +115,8 @@ Cdifferential_parameters_distribution::compute_distribution (shape_function_type
 	  {
 	  Tensor *pDiffParam = pTensorEvaluator->GetDiffParam (i);
 	if (pDiffParam)
-	  data[i] = (fabs (pDiffParam->GetKappaMax ()) < fabs (pDiffParam->GetKappaMax ()))?
-	    fabs (pDiffParam->GetKappaMax ()) : fabs (pDiffParam->GetKappaMax ());
+	  data[i] = (fabs (pDiffParam->GetKappaMax ()) < fabs (pDiffParam->GetKappaMin ()))?
+	    fabs (pDiffParam->GetKappaMax ()) : fabs (pDiffParam->GetKappaMin ());
 	  }
       break;
     case MPEG7:

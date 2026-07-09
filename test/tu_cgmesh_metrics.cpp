@@ -111,9 +111,8 @@ TEST(TEST_cgmesh_metrics, hausdorff_flat_decimation_is_small)
 	Mesh_half_edge *he = new Mesh_half_edge();
 	Mesh *ref = flat_grid(16, 0.f);
 	he->m_pMesh->SetVertices(ref->m_nVertices, ref->m_pVertices.data());
-	unsigned int *tris = ref->GetTriangles();
-	he->m_pMesh->SetFaces(ref->m_nFaces, 3, tris);
-	free(tris);
+	std::vector<unsigned int> tris = ref->GetTriangles();
+	he->m_pMesh->SetFaces(ref->m_nFaces, 3, tris.data());
 	he->create_half_edge();
 
 	he->simplify(0.3f, {false}); // geometry-only, features off

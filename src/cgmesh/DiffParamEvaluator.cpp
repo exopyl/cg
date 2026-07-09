@@ -151,18 +151,25 @@ bool MeshAlgoTensorEvaluator::GetCurvaturesHistogram (CurvatureType id, int nbin
 
 	if (nCurvatures == 0) return false;
 
-	// init
-	float *histogram = (float*)malloc(nCurvatures*sizeof(float));
-	if (histogram == nullptr) return false;
+	// init : the histogram has nbins bins (NOT nCurvatures)
+	float *histogram = (float*)malloc(nbins*sizeof(float));
+	if (histogram == nullptr) { if (curvatures) free (curvatures); return false; }
 	memset (histogram, 0, nbins*sizeof(float));
 
 	// fill
-	float findex;
-	int index;
+	const float range = max - min;
 	for (int i=0; i<nCurvatures; i++)
 	{
-		findex = (nbins-1) * (curvatures[i] - min) / (max - min);
-		index = (int) findex;
+		int index;
+		if (range <= 0.f)               // all curvatures equal : single bin
+			index = 0;
+		else
+		{
+			float findex = (nbins-1) * (curvatures[i] - min) / range;
+			index = (int) findex;
+			if (index < 0) index = 0;                 // clamp against fp noise / out-of-range
+			else if (index >= nbins) index = nbins-1;
+		}
 		histogram[index]++;
 	}
 
@@ -225,6 +232,11 @@ bool MeshAlgoTensorEvaluator::Evaluate (TensorMethodId tensorMethodId)
 	case TENSOR_GOLDFEATHER:
 		{
 			ApplyGoldfeather ();
+		}
+		break;
+	case TENSOR_HYBRID:
+		{
+			ApplyHybrid ();
 		}
 		break;
 	default:

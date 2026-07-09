@@ -74,22 +74,28 @@ int hr = 0;
 				case CHK3DS_B_POS_TRACK_TAG:
 					{
 						t3DSPositionTrack* positionTrack = (t3DSPositionTrack*)animation.track[j];
-						delete positionTrack->position;
+						delete [] positionTrack->position;
+						delete [] positionTrack->header.keyNumber;
+						delete [] positionTrack->header.accelerationDataPresent;
 						delete positionTrack;
 					}
 					break;
 				case CHK3DS_B_ROT_TRACK_TAG:
 					{
 						t3DSRotationTrack* rotationTrack = (t3DSRotationTrack*)animation.track[j];
-						delete rotationTrack->angle;
-						delete rotationTrack->axis;
+						delete [] rotationTrack->angle;
+						delete [] rotationTrack->axis;
+						delete [] rotationTrack->header.keyNumber;
+						delete [] rotationTrack->header.accelerationDataPresent;
 						delete rotationTrack;
 					}
 					break;
 				case CHK3DS_B_SCL_TRACK_TA:
 					{
 						t3DSScaleTrack* scaleTrack = (t3DSScaleTrack*)animation.track[j];
-						delete scaleTrack->size;
+						delete [] scaleTrack->size;
+						delete [] scaleTrack->header.keyNumber;
+						delete [] scaleTrack->header.accelerationDataPresent;
 						delete scaleTrack;
 					}
 					break;
@@ -1661,7 +1667,7 @@ void ReadObjectMaterial_3DS(t3DSModel *pModel, t3DSObject *pObject, t3DSChunk *p
 		}
 		*/
 	}
-	if (materialIDFound = FALSE)
+	if (!materialIDFound)
 	{
 		//problem
 		printf("No material ID found");

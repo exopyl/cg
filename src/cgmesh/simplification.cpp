@@ -549,9 +549,8 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 	if (exact)
 	{
 		orig_snapshot.SetVertices(nv, mesh->m_pVertices.data());
-		unsigned int *t = mesh->GetTriangles();
-		orig_snapshot.SetFaces(nf0, 3, t);
-		free(t);
+		std::vector<unsigned int> t = mesh->GetTriangles();
+		orig_snapshot.SetFaces(nf0, 3, t.data());
 		orig_bvh.build(orig_snapshot);
 	}
 

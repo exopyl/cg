@@ -57,9 +57,8 @@ void BVH::build (Mesh &mesh)
 	m_nv    = mesh.GetNVertices ();
 	const unsigned int nf = mesh.GetNFaces ();
 
-	unsigned int *t = mesh.GetTriangles ();   // malloc'd 3*nf
-	m_tri.assign (t, t + 3u * nf);
-	free (t);
+	std::vector<unsigned int> t = mesh.GetTriangles ();   // 3*nf indices
+	m_tri.assign (t.begin (), t.end ());
 
 	m_cmid.resize (3u * nf); m_tmin.resize (3u * nf); m_tmax.resize (3u * nf);
 	m_order.resize (nf);

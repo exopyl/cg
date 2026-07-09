@@ -139,6 +139,20 @@ CParticles_system::CParticles_system (int par_n)
 	m_delay = 0;
 }
 
+CParticles_system::~CParticles_system ()
+{
+	if (m_particles)
+	{
+		for (int i=0; i<m_n_particles; i++)
+			delete m_particles[i];
+		free (m_particles);
+	}
+}
+
+CParticle::~CParticle ()
+{
+}
+
 /**
 * Attach a texture to the particle system.
 * \param texture : identifier for the texture.

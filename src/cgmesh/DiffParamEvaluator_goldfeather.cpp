@@ -194,8 +194,9 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 			if (m2) free (m2);
 			if (A) free (A);
 			if (B) free (B);
-			delete sm;
-			
+			// NB: `sm` is a stack SquareMatrixf (line ~153); no delete (it would
+			// free its internal buffer via operator TValue*, then double-free at scope exit).
+
 			//
 			// principal curvatures
 			//

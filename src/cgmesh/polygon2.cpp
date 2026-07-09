@@ -544,8 +544,8 @@ int Polygon2::generalized_barycentric_coordinates (float pt[2], float *coords)
 	if (m_nContours != 1)
 		return -1;
 
-	if (coords == nullptr)
-		coords = (float*)malloc(m_nPoints[0]*sizeof(float));
+	if (coords == nullptr)   // caller must supply the output buffer (m_nPoints[0] floats) — no hidden allocation to leak
+		return -1;
 
 	float weightSum = 0.;
 	int n = m_nPoints[0];

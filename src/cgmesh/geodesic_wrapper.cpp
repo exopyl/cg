@@ -50,6 +50,9 @@ bool GeodesicWrapper::SetMesh (unsigned int _nvertices, float *_vertices, unsign
 
 bool GeodesicWrapper::ComputeDistances (float *distances, geodesic::GeodesicAlgorithmBase::AlgorithmType algorithmType, int subdivision_level)
 {
+	// avoid leaking the algorithm allocated by a previous call
+	if (m_algorithm) { delete m_algorithm; m_algorithm = nullptr; }
+
 	switch (algorithmType)
 	{
 	case geodesic::GeodesicAlgorithmBase::EXACT:
@@ -64,6 +67,9 @@ bool GeodesicWrapper::ComputeDistances (float *distances, geodesic::GeodesicAlgo
 	default:
 		break;
 	}
+
+	if (!m_algorithm)   // unknown / unsupported algorithm type
+		return false;
 
 	if (!distances)
 		return false;

@@ -1,3 +1,5 @@
+#include <vector>
+
 #include "DiffParamEvaluator.h"
 
 /**
@@ -253,10 +255,12 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 		m3[0]=m3[1]=m3[2]=m3[3]=m3[4]=m3[5]=m3[6]=m3[7]=m3[8]=0.0;
 		Vector3f right (0.0, 0.0, 0.0);
 
-		float *weights = (float*)malloc(n_neighbours*sizeof(float));
-		float *kappas  = (float*)malloc(n_neighbours*sizeof(float));
-		float *d1s     = (float*)malloc(n_neighbours*sizeof(float));
-		float *d2s     = (float*)malloc(n_neighbours*sizeof(float));
+		// RAII: released at the end of each vertex iteration (was malloc'd and
+		// only freed inside a dead #if 0 block => leaked once per vertex)
+		std::vector<float> weights (n_neighbours);
+		std::vector<float> kappas  (n_neighbours);
+		std::vector<float> d1s     (n_neighbours);
+		std::vector<float> d2s     (n_neighbours);
 		int n_neighbour_walk = 0;
 
 		e = m_pModel->GetCheMesh()->m_edges_vertex[i];
@@ -424,11 +428,6 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 			temp3 = kappa2*temp1 + kappa1*temp2 - kappa;
 			err2 += weight*temp3*temp3;
 		}
-
-		free (weights);
-		free (kappas);
-		free (d1s);
-		free (d2s);
 
 		/* rotate evector by a right angle if that would decrease the error */
 		if (err2 <= err1)

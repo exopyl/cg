@@ -30,10 +30,6 @@ int Mesh::load (const char *filename)
 		res = import_obj(filename);
 	else if (ext == ".stl")
 		res = import_stl(filename);
-	else if (ext == ".ifs")
-		res = import_ifs(filename);
-	else if (ext == ".lwo")
-		res = import_lwo(filename);
 	else if (ext == ".off")
 		res = import_off(filename);
 	else if (ext == ".pgm")
@@ -1054,220 +1050,6 @@ int Mesh::export_gts (const char *filename)
   return 0;
 }
 
-//
-// IFS
-//
-int Mesh::import_ifs (const char *filename)
-{
-	FILE *ptr = fopen (filename, "rb");
-	if (ptr == nullptr)
-	{
-		printf ("unable to open %s\n", filename);
-		return false;
-	}
-	
-	int length;
-	char *buffer[256];
-	
-	// magic number "IFS"
-	fread (&length, sizeof(unsigned int), 1, ptr);
-	fread (buffer, sizeof(char), length, ptr);
-	
-	// version "1.0"
-	float version;
-	fread (&version, sizeof(float), 1, ptr);
-	if (version != 1.0)
-	{
-		printf ("Bad Version: %f\n", version);
-		return false;
-	}
-  
-  // modelname
-  fread (&length, sizeof(unsigned int), 1, ptr);
-  fread (buffer, sizeof(char), length, ptr);
-  
-  // vertexheader "VERTICES"
-  fread (&length, sizeof(unsigned int), 1, ptr);
-  fread (buffer, sizeof(char), length, ptr);
-  
-  // vertices
-  fread (&m_nVertices, sizeof(unsigned int), 1, ptr);
-  InitVertices (m_nVertices);
-  fread (m_pVertices.data(), sizeof(float), 3*m_nVertices, ptr);
-  
-  // triangleheader "FACES"
-  fread (&length, sizeof(unsigned int), 1, ptr);
-  fread (buffer, sizeof(char), length, ptr);
-  
-  // faces
-  fread (&m_nFaces, sizeof(unsigned int), 1, ptr);
-  InitFaces (m_nFaces);
-  int *f = (int*)malloc(3*m_nFaces*sizeof(int));
-  fread (f, sizeof(float), 3*m_nFaces, ptr);
-  for (int i=0; i<m_nFaces; i++)
-  {
-	  Face *pFace = new Face ();
-	  pFace->SetTriangle (f[3*i], f[3*i+1], f[3*i+2]);
-	  m_pFaces[i] = pFace;
-  }
-  
-  fclose (ptr);
-
-  return 0;
-}
-
-//
-// import lwo
-//
-int Mesh::import_lwo (const char *filename)
-{
-  FILE *ptr = fopen (filename, "rb");
-  if (!ptr)
-    {
-      printf ("unable to open %s\n", filename);
-      return false;
-    }
-
-  char TagId[5];
-  memset (TagId, 0, 5*sizeof(char));
-  unsigned long TagSizeU4;
-  unsigned short TagSizeU2;
-  char TagName[256];
-
-
-  // FORM
-  fread (TagId, sizeof(unsigned char), 4, ptr);
-  if (strcmp ("FORM", TagId))
-  {
-	  return false;
-  }
-  fread (&TagSizeU4, sizeof(unsigned long), 1, ptr);
-  swap_endian_4 (&TagSizeU4);
-
-  // LWO2
-  fread (TagId, sizeof(unsigned char), 4, ptr);
-  if (strcmp ("LWO2", TagId))
-  {
-	  return false;
-  }
-
-  // TAGS
-  fread (TagId, sizeof(unsigned char), 4, ptr);
-  if (strcmp ("TAGS", TagId))
-  {
-	  return false;
-  }
-  fread (&TagSizeU4, sizeof(unsigned long), 1, ptr);
-  swap_endian_4 (&TagSizeU4);
-
-  fread (TagName, TagSizeU4*sizeof(char), 1, ptr);
-
-  // LAYR
-  fread (TagId, sizeof(unsigned char), 4, ptr);
-  if (strcmp ("LAYR", TagId))
-  {
-	  return false;
-  }
-
-  fread (&TagSizeU2, sizeof(unsigned short), 1, ptr);
-  swap_endian_2 (&TagSizeU2);
-  fread (&TagSizeU2, sizeof(unsigned short), 1, ptr);
-  swap_endian_2 (&TagSizeU2);
-
-
-  float pivot[3]={0.0, 0.0, 0.0};
-  fread (pivot, sizeof(float), 3, ptr);
-
-  fread (&TagSizeU4, sizeof(unsigned long), 1, ptr);
-  char Name[256];
-  memset (Name, 0, 256);
-  int NameSize=0;
-  do
-  {
-	  fread (&Name[NameSize], sizeof(char), 1, ptr);
-  } while (Name[NameSize++]!='\0');
-  printf ("%s\n", Name);
-
-  // PNTS
-  fread (TagId, sizeof(unsigned char), 4, ptr);
-  if (strcmp ("PNTS", TagId))
-  {
-	  return false;
-  }
-
-  fread (&TagSizeU4, sizeof(unsigned long), 1, ptr);
-  swap_endian_4 (&TagSizeU4);
-  int nVertices = TagSizeU4 / 12;
-
-
-	for (int i=0; i<nVertices; i++)
-	{
-	  float coord[3]={0.0, 0.0, 0.0};
-	  fread (&coord, 3*sizeof(float), 1, ptr);
-	  printf ("%f %f %f\n", coord[0], coord[1], coord[2]);
-	}
-
-  // BBOX
-  fread (TagId, sizeof(unsigned char), 4, ptr);
-  if (strcmp ("BBOX", TagId))
-  {
-	  return false;
-  }
-  fread (&TagSizeU4, sizeof(unsigned long), 1, ptr);
-  swap_endian_4 (&TagSizeU4);
-
-  float min[3], max[3];
-  fread (&min, sizeof(float), 3, ptr);
-  printf ("min : %f %f %f\n", min[0], min[1], min[2]);
-  fread (&max, sizeof(float), 3, ptr);
-  printf ("max : %f %f %f\n", max[0], max[1], max[2]);
-
-  // POLS
-  fread (TagId, sizeof(unsigned char), 4, ptr);
-  if (strcmp ("POLS", TagId))
-  {
-	  return false;
-  }
-  fread (&TagSizeU4, sizeof(unsigned long), 1, ptr);
-  swap_endian_4 (&TagSizeU4);
-
-  // FACE
-  fread (TagId, sizeof(unsigned char), 4, ptr);
-  if (strcmp ("FACE", TagId))
-  {
-	  return false;
-  }
-
-  for (int i=0; i<12; i++)
-  {
-	  unsigned short NbrVertices;
-	  unsigned short Index;
-	  fread (&NbrVertices, sizeof(unsigned short), 1, ptr);
-	  swap_endian_2 (&NbrVertices);
-	  printf ("%d : ", NbrVertices);
-	  for (int j=0; j<NbrVertices; j++)
-	  {
-		  fread (&Index, sizeof(unsigned short), 1, ptr);
-		  swap_endian_2 (&Index);
-		  printf ("%d ", Index);
-	  }
-	  printf ("\n");
-  }
-
-  // PTAG
-  fread (TagId, sizeof(unsigned char), 4, ptr);
-  if (strcmp ("PTAG", TagId))
-  {
-	  return false;
-  }
-  fread (&TagSizeU4, sizeof(unsigned long), 1, ptr);
-  swap_endian_4 (&TagSizeU4);
-
-
-  fclose (ptr);
-
-  return 0;
-}
 
 //
 // OFF
@@ -1319,16 +1101,12 @@ int Mesh::import_off (const char *filename)
       if (n_vertices_in_face != 3)
 	{
 	  printf ("illegal file\n");
-	  return false;
+	  fclose (ptr);
+	  return -1;
 	}
 
-      /*
-      fscanf_s (ptr, "%d %d %d %f %f %f",
-	      &f[3*i], &f[3*i+1], &f[3*i+2],
-	      &r_tmp, &g_tmp, &b_tmp);
-      */
-
-      Face *pFace = new Face ();
+      // write into the face already allocated by Init() (do NOT leak a new one)
+      Face *pFace = m_pFaces[i];
       fscanf (ptr, "%d %d %d",
 	      &pFace->m_pVertices[0], &pFace->m_pVertices[1], &pFace->m_pVertices[2]);
 
@@ -1419,31 +1197,40 @@ int Mesh::import_pgm (const char *filename)
     {
       printf ("couldn't open \"%s\"\n", filename);
       return -1;
-    char id[2] = {0, 0};
+    }
 
-    /* Get header information */
-    if (fscanf (ptr, "%c %c", &id[0], &id[1]) != 2)
-      {
-        printf ("Failed to read header from \"%s\"\n", filename);
-        fclose (ptr);
-        return -1;
-      }
+  /* Get header information */
+  if (fscanf (ptr, "%c %c", &id[0], &id[1]) != 2)
+    {
+      printf ("Failed to read header from \"%s\"\n", filename);
+      fclose (ptr);
+      return -1;
+    }
+  if (id[0] != 'P' || (id[1] != '2' && id[1] != '5'))
+    {
+      printf ("\"%s\" is not a valid PGM file\n", filename);
+      fclose (ptr);
+      return -1;
+    }
 
-    if (id[0] != 'P' || (id[1] != '2' && id[1] != '5'))
-      {
-        printf ("\"%s\" is not a valid PGM file\n", filename);
-        fclose (ptr);
-        return -1;
-      }
   _pgm_skip_spaces (ptr);
-  fscanf (ptr, "%d %d", &width, &height);
+  if (fscanf (ptr, "%d %d", &width, &height) != 2 || width <= 0 || height <= 0)
+    {
+      printf ("invalid PGM dimensions in \"%s\"\n", filename);
+      fclose (ptr);
+      return -1;
+    }
   _pgm_skip_spaces (ptr);
   fscanf (ptr, "%d", &levels);
   _pgm_skip_spaces (ptr);
 
   /* Create the data */
-  data = (unsigned char*)malloc(width*height*sizeof(unsigned char));
-  DASSERT (data);
+  data = (unsigned char*)malloc((size_t)width*height*sizeof(unsigned char));
+  if (data == nullptr)
+    {
+      fclose (ptr);
+      return -1;
+    }
 
   /* Get the data */
   if (id[1]=='2') /* ascii mode */
@@ -1469,8 +1256,9 @@ int Mesh::import_pgm (const char *filename)
       if (data[i] > max) max = data[i];
       if (data[i] < min) min = data[i];
     }    
-  for (i=0; i<width*height; i++)
-    data[i] = 255*(data[i]-min)/(max-min);
+  if (max > min)
+    for (i=0; i<width*height; i++)
+      data[i] = 255*(data[i]-min)/(max-min);
 
   // translation to center
   float x_trans = (1)? -width/2.0 : 0;
@@ -1493,19 +1281,17 @@ int Mesh::import_pgm (const char *filename)
   for (j=0; j<height-1; j++)
     for (i=0; i<width-1; i++)
 	{
-		Face *f1 = new Face ();
+		Face *f1 = m_pFaces[2*(j*(width-1)+i)];     // reuse faces allocated by Init (no leak)
 		f1->SetVertex (0, j*width+i);
 		f1->SetVertex (1, (j+1)*width+i);
 		f1->SetVertex (2, j*width+i+1);
-		Face *f2 = new Face ();
+		Face *f2 = m_pFaces[2*(j*(width-1)+i)+1];
 		f2->SetVertex (0, (j+1)*width+i+1);
 		f2->SetVertex (1, j*width+i+1);
 		f2->SetVertex (2, (j+1)*width+i);
-		m_pFaces[2*(j*(width-1)+i)]   = f1;
-		m_pFaces[2*(j*(width-1)+i)+1] = f2;
 	}
-}
 
+	free (data);
 	return 0;
 }
 

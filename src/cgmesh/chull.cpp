@@ -43,6 +43,28 @@ Chull3D::Chull3D (float *v, int n)
   faces = nullptr;
 }
 
+// The vertex/edge/face containers are circular doubly-linked lists (O'Rourke
+// ADD/DELETE macros). Walk each ring once and free every node allocated with
+// `new` by the constructor and construct_hull().
+Chull3D::~Chull3D ()
+{
+  if (vertices)
+  {
+    Chull3D_vertex *v = vertices;
+    do { Chull3D_vertex *nxt = v->next; delete v; v = nxt; } while (v != vertices);
+  }
+  if (edges)
+  {
+    Chull3D_edge *e = edges;
+    do { Chull3D_edge *nxt = e->next; delete e; e = nxt; } while (e != edges);
+  }
+  if (faces)
+  {
+    Chull3D_face *f = faces;
+    do { Chull3D_face *nxt = f->next; delete f; f = nxt; } while (f != faces);
+  }
+}
+
 void Chull3D::add_vertex    (Chull3D_vertex *v) { ADD (vertices, v); }
 void Chull3D::add_edge      (Chull3D_edge *e)   { ADD (edges, e); }
 void Chull3D::add_face      (Chull3D_face *f)   { ADD (faces, f); }

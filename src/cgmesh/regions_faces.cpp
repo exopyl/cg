@@ -26,9 +26,9 @@ Cregions_faces::Cregions_faces (Mesh_half_edge *_mesh_half_edge)
 
 Cregions_faces::~Cregions_faces ()
 {
-	delete data;
-	delete regions;
-	delete selected_region;
+	delete[] data;
+	delete[] regions;
+	delete[] selected_region;
 }
 
 /**
@@ -697,9 +697,9 @@ Plane* Cregions_faces::plane_fitting  (void)
 	Vector3f center (0.0, 0.0, 0.0);
 	Vector3f normale (0.0, 0.0, 0.0);
 	int i, n_selected_faces = 0;
-	float *v;
-	unsigned int *f;
-	float *fn;
+	float *v = nullptr;
+	std::vector<unsigned int> f;
+	float *fn = nullptr;
 
 	if (mesh_half_edge)
 	{

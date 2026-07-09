@@ -136,7 +136,7 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	pLSystemData->bClosed = false;
 	pLSystemData->nNberIterations = 6;
 	pLSystemData->pLSystem = t;
-	mapLSystems[LSYSTEM_DRAGON_CURVE] = pLSystemData;
+	mapLSystems[LSYSTEM_HEXAGONAL_GOSPER] = pLSystemData;
 
 	// Peano curve (LSYSTEM_PEANO_CURVE)
 	t = new LSystem ();

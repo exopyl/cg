@@ -160,7 +160,7 @@ public:
 	void AdoptTensorsFrom(const Mesh& src);
 
 	// Getters / Setters
-	unsigned int* GetTriangles (void);
+	std::vector<unsigned int> GetTriangles (void);
 
 	// Triangulation utility: returns a flat triangle-index list covering
 	// every face. Triangles emit as-is; quads fan-triangulate from vertex
@@ -314,8 +314,6 @@ private:
 	int export_dae (const char *filename);
 	int export_cpp (const char *filename);
 	int export_gts (const char *filename);
-	int import_ifs (const char *filename);
-	int import_lwo (const char *filename);
 	int import_off (const char *filename);
 	int export_off (const char *filename);
 	int import_pgm (const char *filename);

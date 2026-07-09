@@ -567,7 +567,7 @@ Mesh* CreateCapsule (unsigned int n, float height, float radius)
 #include "surface_teapot_data.h"
 Mesh* CreateTeapot (void)
 {
-	unsigned int nVertices = sizeof(TeapotData_Vertex)/sizeof(3*sizeof(float));
+	unsigned int nVertices = sizeof(TeapotData_Vertex)/(3*sizeof(float));
 	unsigned int nFaces = sizeof(TeapotData_Face)/(3*sizeof(int));
 
 	Mesh *mesh = new Mesh (nVertices, nFaces);

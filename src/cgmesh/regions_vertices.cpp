@@ -36,9 +36,9 @@ Cregions_vertices::Cregions_vertices (Mesh_half_edge *_mesh_half_edge)
 */
 Cregions_vertices::~Cregions_vertices ()
 {
-  delete datas;
-  delete regions;
-  delete selected_region;
+  delete[] datas;
+  delete[] regions;
+  delete[] selected_region;
 }
 
 /**

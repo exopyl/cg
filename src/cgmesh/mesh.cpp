@@ -406,16 +406,16 @@ void Mesh::AdoptTensorsFrom(const Mesh& src)
 	MarkTensorsComputed();
 }
 
-unsigned int* Mesh::GetTriangles (void)
+std::vector<unsigned int> Mesh::GetTriangles (void)
 {
-	unsigned int *pFaces = (unsigned int*)malloc(3*m_nFaces*sizeof(unsigned int));
+	std::vector<unsigned int> faces (3*m_nFaces);
 	for (unsigned int i=0; i<m_nFaces; i++)
 	{
-		pFaces[3*i]   = m_pFaces[i]->GetVertex(0);
-		pFaces[3*i+1] = m_pFaces[i]->GetVertex(1);
-		pFaces[3*i+2] = m_pFaces[i]->GetVertex(2);
+		faces[3*i]   = m_pFaces[i]->GetVertex(0);
+		faces[3*i+1] = m_pFaces[i]->GetVertex(1);
+		faces[3*i+2] = m_pFaces[i]->GetVertex(2);
 	}
-	return pFaces;
+	return faces;
 }
 
 // ----- Polygon triangulation ------------------------------------------------
@@ -975,7 +975,9 @@ int Mesh::SetVertexNormals(unsigned int nVertexNormals, float* pVertexNormals)
 
 int Mesh::SetFaces (unsigned int nFaces, unsigned int nVerticesPerFace, unsigned int *pFaces, unsigned int *pTextureCoordinates)
 {
-	if (m_pFaces) delete m_pFaces;
+	// NB: the caller owns/frees the individual Face* objects (see subdivision_*);
+	// SetFaces only (re)allocates the outer array. Fix the new[]/delete mismatch.
+	if (m_pFaces) delete[] m_pFaces;
 	m_pFaces = new Face*[nFaces];
 	m_nFaces = nFaces;
 	for (unsigned int i=0; i<nFaces; i++)
@@ -1541,10 +1543,11 @@ int Mesh::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirect
 	if (1 && !m_pOctree)
 	{
 		m_pOctree = new Octree ();
+		std::vector<unsigned int> tris = GetTriangles ();
 		m_pOctree->BuildForTriangles (m_pVertices.data(), m_nVertices,
 									  100, // maxTriangles
 									  5,  // maxDepth
-								      GetTriangles (), m_nFaces);
+								      tris.data(), m_nFaces);
 	}
 
 	if (m_pOctree)

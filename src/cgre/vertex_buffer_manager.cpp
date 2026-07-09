@@ -16,8 +16,8 @@ VertexBufferManager::~VertexBufferManager()
 
 int VertexBufferManager::addMesh (Mesh *mesh)
 {
-	unsigned int* pIndices = mesh->GetTriangles();
-	if (!pIndices)
+	std::vector<unsigned int> indices = mesh->GetTriangles();
+	if (indices.empty())
 		return -1;
 
 	int nVertices = mesh->m_nVertices;
@@ -35,8 +35,6 @@ int VertexBufferManager::addMesh (Mesh *mesh)
 		data[6*i+4] = pVertexNormals[3*i+1];
 		data[6*i+5] = pVertexNormals[3*i+2];
 	}
-	unsigned int* indices = mesh->GetTriangles();
-
 	GLuint id;
 	glGenVertexArrays(1, &id);
 	glBindVertexArray(id);
@@ -55,16 +53,13 @@ int VertexBufferManager::addMesh (Mesh *mesh)
 	glEnableVertexAttribArray(1);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_indicesBuf);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3*nTriangles*sizeof(unsigned int), indices, GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3*nTriangles*sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
 
 	glBindVertexArray(0);
 
 	// store info
 	vbInfo info = {id, 3*nTriangles};
 	m_mapVertexBuffer[m_idCurrent++] = info;
-
-	// clean
-	free (pIndices);
 
 	return m_idCurrent-1;
 }

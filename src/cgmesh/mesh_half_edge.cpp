@@ -97,7 +97,8 @@ Che_mesh* Mesh_half_edge::GetCheMesh()
 	if (!m_pCheMesh)
 	{
 		m_pCheMesh = std::make_unique<Che_mesh>();
-		m_pCheMesh->create_half_edge (m_pMesh->m_nVertices, m_pMesh->m_nFaces, m_pMesh->GetTriangles());
+		std::vector<unsigned int> tris = m_pMesh->GetTriangles();
+		m_pCheMesh->create_half_edge (m_pMesh->m_nVertices, m_pMesh->m_nFaces, tris.data());
 	}
 	return m_pCheMesh.get();
 }
@@ -140,7 +141,8 @@ Mesh_half_edge::Mesh_half_edge (Mesh *pMesh)
 
 	m_pMesh->SetVertices (pMesh->m_nVertices, pMesh->m_pVertices.data());
 	m_pMesh->SetVertexNormals(pMesh->m_nVertices, pMesh->m_pVertexNormals.data());
-	m_pMesh->SetFaces (pMesh->m_nFaces, 3, pMesh->GetTriangles());
+	std::vector<unsigned int> tris = pMesh->GetTriangles();
+	m_pMesh->SetFaces (pMesh->m_nFaces, 3, tris.data());
 	m_pMesh->InitVertexColors();
 }
 

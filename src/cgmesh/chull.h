@@ -50,7 +50,7 @@ class Chull3D
   friend class Chull3D_face;
  public:
   Chull3D (float *vertices, int n_vertices);
-  ~Chull3D () {};
+  ~Chull3D ();
 
   void compute        (void);
 

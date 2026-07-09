@@ -119,7 +119,7 @@ int Bundle::Load2 (char *bundlefilename, char *imageslistfilename, char *rootpat
 	cameras_n = nCameras;
 	n_points = nPoints;
 	cameras = new BundleCamera*[cameras_n];//(camera_t**)malloc(nCameras*sizeof(camera_t*));
-	pt_visible_from_cameras = (unsigned int**)malloc(nPoints*sizeof(unsigned int));
+	pt_visible_from_cameras = (unsigned int**)malloc(nPoints*sizeof(unsigned int*));
 	n_pt_visible_from_cameras = (unsigned int*)malloc(nPoints*sizeof(unsigned int));
 
 	// cameras
@@ -140,7 +140,7 @@ int Bundle::Load2 (char *bundlefilename, char *imageslistfilename, char *rootpat
 			imgfilename = strcat (imgfilename, buffer);
 		}
 		else
-			imgfilename = buffer;
+			strcpy (imgfilename, buffer);   // copy into the owned buffer (no dangling pointer to the local stack buffer, no leak of imgfilename)
 		camera->filename = imgfilename;
 		if (1)// allinfo)
 		{

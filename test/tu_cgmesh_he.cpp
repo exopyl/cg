@@ -268,9 +268,10 @@ static void evaluate_shape_descriptors (Mesh_half_edge *model)
 #endif /* VERTICES_DISTRIBUTION_PCA */
 	
 #ifdef HISTOGRAM_OSADA
+	std::vector<unsigned int> osada_tris = model->m_pMesh->GetTriangles ();
 	Cshape_distribution_osada *osada;
 	osada = new Cshape_distribution_osada (model->m_pMesh->m_nVertices, model->m_pMesh->m_pVertices.data(),
-					       model->m_pMesh->m_nFaces, model->m_pMesh->GetTriangles ());
+					       model->m_pMesh->m_nFaces, osada_tris.data());
 #endif /* HISTOGRAM_OSADA */
 	
 #ifdef VERTICES_DISTRIBUTION_PCA_PAQUET
@@ -399,10 +400,11 @@ static void evaluate_shape_descriptors (Mesh_half_edge *model)
 //
 static void evaluate_shape_distribution_osada (Mesh_half_edge *model, int nPoints, int nBins)
 {
+	std::vector<unsigned int> osada_tris = model->m_pMesh->GetTriangles ();
 	Cshape_distribution_osada *osada = new Cshape_distribution_osada (model->m_pMesh->m_nVertices,
 									  model->m_pMesh->m_pVertices.data(),
 									  model->m_pMesh->m_nFaces,
-									  model->m_pMesh->GetTriangles ());
+									  osada_tris.data());
 	
 	// A3
 	osada->evaluate_distribution (Cshape_distribution_osada::A3, nPoints, nBins);
