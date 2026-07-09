@@ -2,6 +2,7 @@
 #include <math.h>
 
 #include "curve_kappatau.h"
+#include "common.h"
 
 // total arc length spanned by the parameter t in [0,1]
 static const float kArcLength = 3.f * 3.14f;
@@ -91,7 +92,7 @@ void CurveKappaTau::Export (const char *filename) const
 		float radius = 0.01f;
 		for (unsigned int k = 0; k < npointscircle; k++)
 		{
-			float angle = 2.f*3.14159f*k/npointscircle;
+			float angle = 2.f*M_PI*k/npointscircle;
 			float d[3];
 			d[0] = radius*(cosf(angle)*N[0]+sinf(angle)*B[0]);
 			d[1] = radius*(cosf(angle)*N[1]+sinf(angle)*B[1]);

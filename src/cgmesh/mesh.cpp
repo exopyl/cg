@@ -1460,15 +1460,10 @@ bool Mesh::GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d)
 	float bbox_min[3];
 	float bbox_max[3];
 	m_bbox.GetMinMax(bbox_min, bbox_max);
-	AABox *m_pAABox = new AABox (bbox_min[0], bbox_min[1], bbox_min[2]);
-	if (m_pAABox)
-	{
-		m_pAABox->AddVertex (bbox_max[0], bbox_max[1], bbox_max[2]);
-		Ray r (Vector3 (o[0], o[1], o[2]), Vector3 (d[0], d[1], d[2]));
-		return m_pAABox->intersection (r, 0., 100.);
-	}
-	else
-		return true;
+	AABox box (bbox_min[0], bbox_min[1], bbox_min[2]);
+	box.AddVertex (bbox_max[0], bbox_max[1], bbox_max[2]);
+	Ray r (Vector3 (o[0], o[1], o[2]), Vector3 (d[0], d[1], d[2]));
+	return box.intersection (r, 0., 100.);
 }
 
 int Mesh::GetIntersectionWithRayInOctree (const Vector3f &vOrig, const Vector3f &vDirection, float *_t, Vector3f &vIntersection, Vector3f &vNormal, Octree *pOctree)
@@ -1559,7 +1554,7 @@ int Mesh::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirect
 	else // test alls the triangles
 	{
 		float fTCurrent, fT = -1.;
-		Triangle *pTri = new Triangle ();
+		Triangle tri;
 		for (unsigned int i=0; i<m_nFaces; i++)
 		{
 			Vector3f vIntersectionCurrent, vNormalCurrent;
@@ -1568,10 +1563,10 @@ int Mesh::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirect
 			vi1 = 3*m_pFaces[i]->GetVertex (0);
 			vi2 = 3*m_pFaces[i]->GetVertex (1);
 			vi3 = 3*m_pFaces[i]->GetVertex (2);
-			pTri->Init (m_pVertices[vi1], m_pVertices[vi1+1], m_pVertices[vi1+2],
+			tri.Init (m_pVertices[vi1], m_pVertices[vi1+1], m_pVertices[vi1+2],
 						m_pVertices[vi2], m_pVertices[vi2+1], m_pVertices[vi2+2],
 						m_pVertices[vi3], m_pVertices[vi3+1], m_pVertices[vi3+2]);
-			if (pTri->GetIntersectionWithRay (vOrig, vDirection, &fTCurrent, vIntersectionCurrent, vNormalCurrent))
+			if (tri.GetIntersectionWithRay (vOrig, vDirection, &fTCurrent, vIntersectionCurrent, vNormalCurrent))
 			{
 				if (fT < 0. || fTCurrent < fT)
 				{
@@ -1581,7 +1576,6 @@ int Mesh::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirect
 				}
 			}
 		}
-		delete pTri;
 		*_t = fT;
 		return (fT < 0.)? 0 : 1;
 	}

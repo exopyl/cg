@@ -208,7 +208,7 @@ public:
 	{
 		TValue length;
 		TValue c,s,t;
-		TValue theta = 3.14159*angle/180.;//RS_DEGTORAD(angle);
+		TValue theta = M_PI*angle/180.;//RS_DEGTORAD(angle);
 		
 		// Normalize
 		length = sqrtf(x*x + y*y + z*z);

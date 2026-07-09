@@ -143,7 +143,7 @@ int ProfilePolyline::generate_surface_revolution (unsigned int nSlices,
 	{
 		for (unsigned int j=0; j<nSlices; j++)
 		{
-			float angle = j*2*3.14159/(nSlices);
+			float angle = j*2*M_PI/(nSlices);
 			pVertices[3*ivertex+0] = m_pPoints[3*i]*cos(angle) - m_pPoints[3*i+1]*sin(angle);
 			pVertices[3*ivertex+1] = m_pPoints[3*i]*sin(angle) + m_pPoints[3*i+1]*cos(angle);
 			pVertices[3*ivertex+2] = m_pPoints[3*i+2];

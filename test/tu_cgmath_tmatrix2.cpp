@@ -12,7 +12,7 @@
 // equivalent of the removed mat2_solve_eigensystem.
 //
 
-TEST(TEST_cgmath_matrix2, SolveEigensystemDiagonal) {
+TEST(TEST_cgmath_TMatrix2, SolveEigensystemDiagonal) {
     Matrix2f m(2.f, 0.f, 0.f, 3.f);
     Vector2f ev1, ev2, evals;
     ASSERT_TRUE(m.SolveEigensystem(ev1, ev2, evals));
@@ -24,7 +24,7 @@ TEST(TEST_cgmath_matrix2, SolveEigensystemDiagonal) {
     EXPECT_FLOAT_EQ(ev2[1], 1.f);
 }
 
-TEST(TEST_cgmath_matrix2, SolveEigensystemSymmetric) {
+TEST(TEST_cgmath_TMatrix2, SolveEigensystemSymmetric) {
     // [[2,1],[1,2]] -> eigenvalues 3 and 1, eigenvectors (1,1) and (1,-1).
     Matrix2f m(2.f, 1.f, 1.f, 2.f);
     Vector2f ev1, ev2, evals;
@@ -38,7 +38,7 @@ TEST(TEST_cgmath_matrix2, SolveEigensystemSymmetric) {
     EXPECT_NEAR(ev2[1], -s, 1e-5f);
 }
 
-TEST(TEST_cgmath_matrix2, RotationTransform) {
+TEST(TEST_cgmath_TMatrix2, RotationTransform) {
     // +90 deg rotation maps (1,0) to (0,1) (same semantics as mat2_transform).
     const float th = 1.57079632679f;
     Matrix2f rot(cosf(th), -sinf(th), sinf(th), cosf(th));

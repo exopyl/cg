@@ -9,7 +9,6 @@
 //
 // typedef
 //
-#include "algebra_vector2.h"
 
 
 #include "quadric.h"
@@ -52,4 +51,3 @@
 
 #include "random_generator.h"
 
-#include "sqrt.h"

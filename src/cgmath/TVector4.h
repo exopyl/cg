@@ -122,7 +122,7 @@ public:
 		return *this;
 	}
 
-	inline TVector4<TValue> clamp(const TValue min, const TValue max)
+	inline TVector4<TValue> Clamp(const TValue min, const TValue max)
 	{
 		x = (x < min) ? min : (x > max) ? max : x;
 		y = (y < min) ? min : (y > max) ? max : y;

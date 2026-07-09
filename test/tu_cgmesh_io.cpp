@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdio>
+#include <cmath>
 
 #include "../src/cgmesh/cgmesh.h"
 
@@ -282,6 +283,79 @@ TEST(TEST_cgmesh_io, ply_points)
     // expectations
     EXPECT_EQ(mesh->m_pMesh->GetNVertices(), 8000);
     EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 0);
+}
+
+TEST(TEST_cgmesh_io, asc_points)
+{
+    // points_on_sphere.asc holds the same 8000-point cloud as the .ply, in the
+    // ASC layout consumed by Mesh::import_asc : one line per point,
+    // "x y z r g b nx ny nz" (r/g/b as 0-255 integers, normals synthesized as
+    // the normalized position since the points sit on the unit sphere).
+    Mesh* m = new Mesh();
+
+    // action : .asc dispatches to import_asc via Mesh::load
+    m->load("./test/data/ply/points_on_sphere.asc");
+
+    // a pure point cloud : 8000 vertices, no faces
+    ASSERT_EQ(m->GetNVertices(), 8000u);
+    EXPECT_EQ(m->GetNFaces(), 0u);
+
+    // positions match the first PLY row verbatim
+    ASSERT_EQ(m->m_pVertices.size(), 3u * 8000u);
+    EXPECT_NEAR(m->m_pVertices[0],  0.148893f, 1e-5f);
+    EXPECT_NEAR(m->m_pVertices[1], -0.981710f, 1e-5f);
+    EXPECT_NEAR(m->m_pVertices[2],  0.118643f, 1e-5f);
+
+    // per-vertex colors are decoded to [0,1] : first row was "146 2 142"
+    ASSERT_EQ(m->m_pVertexColors.size(), 3u * 8000u);
+    EXPECT_NEAR(m->m_pVertexColors[0], 146.f / 255.f, 1e-3f);
+    EXPECT_NEAR(m->m_pVertexColors[1],   2.f / 255.f, 1e-3f);
+    EXPECT_NEAR(m->m_pVertexColors[2], 142.f / 255.f, 1e-3f);
+
+    // every point lies on the unit sphere and its normal is unit-length
+    ASSERT_EQ(m->m_pVertexNormals.size(), 3u * 8000u);
+    for (unsigned int i = 0; i < m->GetNVertices(); ++i)
+    {
+        float x = m->m_pVertices[3*i], y = m->m_pVertices[3*i+1], z = m->m_pVertices[3*i+2];
+        EXPECT_NEAR(sqrtf(x*x + y*y + z*z), 1.f, 1e-3f);
+        float nx = m->m_pVertexNormals[3*i], ny = m->m_pVertexNormals[3*i+1], nz = m->m_pVertexNormals[3*i+2];
+        EXPECT_NEAR(sqrtf(nx*nx + ny*ny + nz*nz), 1.f, 1e-3f);
+    }
+
+    delete m;
+}
+
+TEST(TEST_cgmesh_io, pset_points)
+{
+    // points_on_sphere.pset holds the same 8000-point cloud in the PSET layout
+    // consumed by Mesh::import_pset : one line per point, "x y z nx ny nz"
+    // (position + normal, no color).
+    Mesh* m = new Mesh();
+
+    // action : .pset dispatches to import_pset via Mesh::load
+    m->load("./test/data/ply/points_on_sphere.pset");
+
+    // a pure point cloud : 8000 vertices, no faces
+    ASSERT_EQ(m->GetNVertices(), 8000u);
+    EXPECT_EQ(m->GetNFaces(), 0u);
+
+    // positions match the first PLY row verbatim
+    ASSERT_EQ(m->m_pVertices.size(), 3u * 8000u);
+    EXPECT_NEAR(m->m_pVertices[0],  0.148893f, 1e-5f);
+    EXPECT_NEAR(m->m_pVertices[1], -0.981710f, 1e-5f);
+    EXPECT_NEAR(m->m_pVertices[2],  0.118643f, 1e-5f);
+
+    // every point lies on the unit sphere and its normal is unit-length
+    ASSERT_EQ(m->m_pVertexNormals.size(), 3u * 8000u);
+    for (unsigned int i = 0; i < m->GetNVertices(); ++i)
+    {
+        float x = m->m_pVertices[3*i], y = m->m_pVertices[3*i+1], z = m->m_pVertices[3*i+2];
+        EXPECT_NEAR(sqrtf(x*x + y*y + z*z), 1.f, 1e-3f);
+        float nx = m->m_pVertexNormals[3*i], ny = m->m_pVertexNormals[3*i+1], nz = m->m_pVertexNormals[3*i+2];
+        EXPECT_NEAR(sqrtf(nx*nx + ny*ny + nz*nz), 1.f, 1e-3f);
+    }
+
+    delete m;
 }
 
 TEST(TEST_cgmesh_io, dae)

@@ -344,7 +344,6 @@ gamdev (int ia, long *idum)
 /************************/
 /*** Poisson deviates ***/
 /************************/
-#define PI 3.141592654
 
 /*
  * Returns as a floating-point number an integer value that is a random
@@ -380,7 +379,7 @@ poidev (float xm, long*idum)
     }
     do {
       do {             // y is a deviate from a Lorentzian comparison function
-	y=tan(PI*ran1(idum));
+	y=tan(M_PI*ran1(idum));
 	em=sq*y+xm;    // em is y, shifted and scaled
       } while (em < 0.0);   // reject if in regime of zero probability
       em=floor(em);         // the trick for integer-valued distributions
@@ -397,7 +396,6 @@ poidev (float xm, long*idum)
 /*************************/
 /*** Binomial deviates ***/
 /*************************/
-#define PI 3.141592654
 
 /*
  * Returns as a floating-point number an integer value that is a random
@@ -444,7 +442,7 @@ bnldev (float pp, int n, long *idum)
     sq=sqrt(2.0*am*pc);  // the following code should by now seem familiar
     do {                 // rejection method with a Lorentzian comparison function
       do {
-	angle=PI*ran1(idum);
+	angle=M_PI*ran1(idum);
 	y=tan(angle);
 	em=sq*y+am;
       } while (em < 0.0 || em >= (en+1.0));  // reject

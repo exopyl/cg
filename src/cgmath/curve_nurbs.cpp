@@ -4,6 +4,10 @@
 
 #include "curve_nurbs.h"
 
+// Tolerance guarding divisions by a near-zero denominator (knot span length,
+// rational weight sum). Below this the term is treated as null / skipped.
+static constexpr float NURBS_DENOM_EPSILON = 1e-5f;
+
 int
 CurveNURBS::addControlPoint (float x, float y, float z, float weight)
 {
@@ -30,7 +34,7 @@ CurveNURBS::normalizeKnots (void)
 	for (float k : m_knots)
 		length += k;
 
-	if (length >= 0.00001)
+	if (length >= NURBS_DENOM_EPSILON)
 	{
 		for (float &k : m_knots)
 			k /= length;
@@ -64,8 +68,8 @@ CurveNURBS::basisFunction (int i, int j, float u) const
 		float n2 = (m_knots[i+j+1] - u) * basisFunction (i+1, j-1, u);
 		float d2 = (m_knots[i+j+1] - m_knots[i+1]);
 		float a = 1.0, b = 1.0;
-		if (d1 > 0.00001) a = n1 / d1;
-		if (d2 > 0.00001) b = n2 / d2;
+		if (d1 > NURBS_DENOM_EPSILON) a = n1 / d1;
+		if (d2 > NURBS_DENOM_EPSILON) b = n2 / d2;
 		return a + b;
 	}
 }
@@ -94,7 +98,7 @@ CurveNURBS::eval (float t, Vector3f &p) const
 		p += m_controlPoints[i] * tmp;
 		denom += tmp;
 	}
-	if (denom > 0.00001f)
+	if (denom > NURBS_DENOM_EPSILON)
 		p /= denom;
 	return true;
 }

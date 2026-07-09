@@ -4,30 +4,23 @@
 
 Scene::Scene ()
 {
-	m_nObjects = 0;
-
 	// stats
 	m_i_GetIntersectionBboxWithRay_count = 0;
 	m_i_GetIntersectionWithRay_count = 0;
 }
 
-Scene::~Scene ()
-{
-	for (unsigned int i=0; i<m_nObjects; i++)
-		delete m_pObjects[i];
-	m_nObjects = 0;
-}
+Scene::~Scene () = default;
 
-void Scene::AddObject (Geometry *pObject)
+void Scene::AddObject (std::unique_ptr<Geometry> pObject)
 {
-	m_pObjects[m_nObjects++] = pObject;
+	m_pObjects.push_back (std::move (pObject));
 }
 
 Geometry* Scene::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirection, Vector3f &vIntersection, Vector3f &vNormal)
 {
 	float fT = 0.;
 	Geometry *pIntersectedObject = nullptr;
-	for (unsigned int i=0; i<m_nObjects; i++)
+	for (size_t i=0; i<m_pObjects.size(); i++)
 	{
 		float fTCurrent = 0.;
 		Vector3f vIntersectionCurrent, vNormalCurrent;
@@ -46,7 +39,7 @@ Geometry* Scene::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &
 			if ((!pIntersectedObject) ||
 			    (pIntersectedObject && fTCurrent < fT))
 			{
-				pIntersectedObject = m_pObjects[i];
+				pIntersectedObject = m_pObjects[i].get();
 				fT = fTCurrent;
 				vIntersection[0] = vIntersectionCurrent[0];
 				vIntersection[1] = vIntersectionCurrent[1];
@@ -69,7 +62,7 @@ Geometry* Scene::GetIntersectionWithSegment (const Vector3f &vStart, const Vecto
 	vDirection[1] = vEnd[1] - vStart[1];
 	vDirection[2] = vEnd[2] - vStart[2];
 	Geometry *pIntersectedObject = nullptr;
-	for (unsigned int i=0; i<m_nObjects; i++)
+	for (size_t i=0; i<m_pObjects.size(); i++)
 	{
 		float fTCurrent = 0.;
 		Vector3f vIntersectionCurrent, vNormalCurrent;
@@ -81,7 +74,7 @@ Geometry* Scene::GetIntersectionWithSegment (const Vector3f &vStart, const Vecto
 			if ((!pIntersectedObject) ||
 			    (pIntersectedObject && fTCurrent < fT))
 			{
-				pIntersectedObject = m_pObjects[i];
+				pIntersectedObject = m_pObjects[i].get();
 				fT = fTCurrent;
 				vIntersection[0] = vIntersectionCurrent[0];
 				vIntersection[1] = vIntersectionCurrent[1];

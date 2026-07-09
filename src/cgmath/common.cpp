@@ -56,7 +56,7 @@ interpolation_linear (float a, float b, float x)
 float
 interpolation_cosine (float a, float b, float x)
 {
-  float w = x*3.1415927;
+  float w = x*M_PI;
   float t = (1.0 - cos(w))*0.5;
   return a*(1.0 - t) + b*t;
 }

@@ -6,11 +6,11 @@ template <class TValue>
 class TVector3
 {
 public:
-	TVector3<TValue>(TValue _x = 0, TValue _y = 0, TValue _z = 0)
+	constexpr TVector3<TValue>(TValue _x = 0, TValue _y = 0, TValue _z = 0) noexcept
 	{ x = _x; y = _y; z = _z; }
 
 	template <class S>
-	TVector3<TValue>(const TVector3<S> &src)
+	constexpr TVector3<TValue>(const TVector3<S> &src) noexcept
 	{
 		x = (TValue)src.x;
 		y = (TValue)src.y;
@@ -25,35 +25,35 @@ public:
 	// Vector3) and restores the implicit move. Cross-type assignment still works
 	// through the converting constructor above.
 
-	inline TVector3<TValue> operator + (const TVector3<TValue> &right) const
+	inline constexpr TVector3<TValue> operator + (const TVector3<TValue> &right) const noexcept
 	{
 		return TVector3(x + (TValue)right.x, y + (TValue)right.y, z + (TValue)right.z);
 	}
 
-	inline TVector3<TValue> operator - (const TVector3<TValue> &right) const
+	inline constexpr TVector3<TValue> operator - (const TVector3<TValue> &right) const noexcept
 	{
 		return TVector3<TValue>(x - (TValue)right.x, y - (TValue)right.y, z - (TValue)right.z);
 	}
 
-	inline TVector3<TValue> operator * (const TValue s) const
+	inline constexpr TVector3<TValue> operator * (const TValue s) const noexcept
 	{
 		return TVector3<TValue>(x*s, y*s, z*s);
 	}
 
 	// dot product
 	template <class S>
-	inline TValue operator * (const TVector3<S> &right) const
+	inline constexpr TValue operator * (const TVector3<S> &right) const noexcept
 	{
 		return (x*(TValue)right.x + y*(TValue)right.y + z*(TValue)right.z);
 	}
 
-	inline TVector3<TValue>  operator / (const TValue s) const
+	inline constexpr TVector3<TValue>  operator / (const TValue s) const noexcept
 	{
 		return s ? TVector3<TValue>(x/s, y/s, z/s) : TVector3<TValue>(0, 0, 0);
 	}
 
 	template <class S>
-	inline TVector3<TValue> &operator += (const TVector3<S> &right)
+	inline constexpr TVector3<TValue> &operator += (const TVector3<S> &right) noexcept
 	{
 		x+=(TValue)right.x;
 		y+=(TValue)right.y;
@@ -61,7 +61,7 @@ public:
 		return *this;
 	}
 
-	inline TVector3<TValue> &operator += (const TValue xyz)
+	inline constexpr TVector3<TValue> &operator += (const TValue xyz) noexcept
 	{
 		x += xyz;
 		y += xyz;
@@ -70,7 +70,7 @@ public:
 	}
 
 	template <class S>
-	inline TVector3<TValue> &operator -= (const TVector3<S> &right)
+	inline constexpr TVector3<TValue> &operator -= (const TVector3<S> &right) noexcept
 	{
 		x-=(TValue)right.x;
 		y-=(TValue)right.y;
@@ -78,7 +78,7 @@ public:
 		return *this;
 	}
 
-	inline TVector3<TValue> &operator -= (const TValue xyz)
+	inline constexpr TVector3<TValue> &operator -= (const TValue xyz) noexcept
 	{
 		x -= xyz;
 		y -= xyz;
@@ -86,7 +86,7 @@ public:
 		return *this;
 	}
 
-	inline TVector3<TValue> &operator *= (const TValue s) 
+	inline constexpr TVector3<TValue> &operator *= (const TValue s) noexcept
 	{
 		x*=s;
 		y*=s;
@@ -94,9 +94,9 @@ public:
 		return *this;
 	}
 
-	inline TVector3<TValue> &operator /= (const TValue s)
+	inline constexpr TVector3<TValue> &operator /= (const TValue s) noexcept
 	{
-		if (s) 
+		if (s)
 		{
 			TValue t = 1./s;
 			x*=t;
@@ -107,37 +107,37 @@ public:
 	}
 
 	template <class S>
-	bool operator == (const TVector3<S> &right) const
+	constexpr bool operator == (const TVector3<S> &right) const noexcept
 	{ return (x == right.x && y == right.y && z == right.z); }
 
 	template <class S>
-	bool operator != (const TVector3<S> &right) const
+	constexpr bool operator != (const TVector3<S> &right) const noexcept
 	{ return !(x == right.x && y == right.y && z == right.z); }
 
-	inline operator const TValue*() const { return &x; }
-	inline operator TValue*() { return &x; }
-	inline const TValue operator[](int i) const { return ((TValue*)&x)[i]; }
-	inline TValue &operator[](int i) { return ((TValue*)&x)[i]; }
+	inline operator const TValue*() const noexcept { return &x; }
+	inline operator TValue*() noexcept { return &x; }
+	inline const TValue operator[](int i) const noexcept { return ((TValue*)&x)[i]; }
+	inline TValue &operator[](int i) noexcept { return ((TValue*)&x)[i]; }
 
 	//
 	// Set
 	//
 
-	inline void Set(const TValue _x, const TValue _y, const TValue _z)
+	inline constexpr void Set(const TValue _x, const TValue _y, const TValue _z) noexcept
 	{ x = _x; y = _y; z = _z; }
 
-	inline void Set(const TValue xyz)
+	inline constexpr void Set(const TValue xyz) noexcept
 	{ x = y = z = xyz; }
 
 	template <class S>
-	inline void Set(const TVector3<S> & t)
+	inline constexpr void Set(const TVector3<S> & t) noexcept
 	{ x = t.x; y = t.y; z = t.z; }
 
 	//
 	// Utils
 	//
 
-	inline TVector3<TValue> &Clamp(TValue min, TValue max)
+	inline constexpr TVector3<TValue> &Clamp(TValue min, TValue max) noexcept
 	{
 		x = (x > max)? max : (x < min)? min : x;
 		y = (y > max)? max : (y < min)? min : y;
@@ -145,7 +145,7 @@ public:
 		return *this;
 	}
 
-	inline TVector3<TValue> &Normalize()
+	inline TVector3<TValue> &Normalize() noexcept
 	{
 		TValue l = getLength();
 
@@ -164,40 +164,40 @@ public:
 		return *this;
 	}
 
-	inline const TValue getLength2() const
+	inline constexpr const TValue getLength2() const noexcept
 	{
 		return  x*x + y*y + z*z;
 	}
 
-	inline const TValue getLength() const
+	inline const TValue getLength() const noexcept
 	{
 		return std::sqrt(getLength2());
 	}
 
 	template <class S>
-	inline const TValue DotProduct(const TVector3<S> &t) const
+	inline constexpr const TValue DotProduct(const TVector3<S> &t) const noexcept
 	{
 		return x*t.x + y*t.y + z*t.z;
 	}
 
 	template <class S>
-	static inline TValue DotProduct(const TVector3<S> &u, const TVector3<S> &v)
+	static inline constexpr TValue DotProduct(const TVector3<S> &u, const TVector3<S> &v) noexcept
 	{
 		return u.x*v.x + u.y*v.y + u.z*v.z;
 	}
 
 	template <class S>
-	inline TVector3<TValue> operator ^(const TVector3<S> &t) const
+	inline constexpr TVector3<TValue> operator ^(const TVector3<S> &t) const noexcept
 	{
 		return TVector3<TValue>(
 					y   * t.z  -  z   * t.y,
 					t.x * z    -  t.z * x,
 					x   * t.y  -  y   * t.x
 					);
-	}  
+	}
 
 	template <class S>
-	inline TVector3<TValue> &operator ^=(const TVector3<S> &t)
+	inline constexpr TVector3<TValue> &operator ^=(const TVector3<S> &t) noexcept
 	{
 		Set(
 			y   * t.z - z   * t.y,
@@ -208,7 +208,7 @@ public:
 	}
 
 	template <class S>
-	inline void CrossProduct(const TVector3<S> &t1, const TVector3<S> &t2)
+	inline constexpr void CrossProduct(const TVector3<S> &t1, const TVector3<S> &t2) noexcept
 	{
 		x = t1.y * t2.z - t1.z * t2.y;
 		y = t1.z * t2.x - t1.x * t2.z;
@@ -216,7 +216,7 @@ public:
 	}
 
 	template <class S>
-	inline TVector3<TValue> CrossProduct(const TVector3<S> &p) const
+	inline constexpr TVector3<TValue> CrossProduct(const TVector3<S> &p) const noexcept
 	{
 		const TValue val1 = y * p.z - z * p.y;
 		const TValue val2 = p.x * z - p.z * x;
@@ -230,9 +230,9 @@ public:
 	// Unnormalized normal of the triangle (v1, v2, v3): n = (v2 - v1) x (v3 - v1).
 	// Differences and cross product are accumulated in double then cast back, to
 	// reproduce vec3_triangle_normal bit-for-bit on TVector3<float>.
-	static inline TVector3<TValue> evaluate_triangle_normal (const TVector3<TValue> &v1,
+	static inline constexpr TVector3<TValue> evaluate_triangle_normal (const TVector3<TValue> &v1,
 								 const TVector3<TValue> &v2,
-								 const TVector3<TValue> &v3)
+								 const TVector3<TValue> &v3) noexcept
 	{
 		const double ux = (double)v2.x - (double)v1.x;
 		const double uy = (double)v2.y - (double)v1.y;
@@ -250,13 +250,13 @@ public:
 	// Area of the triangle (v1, v2, v3) = 0.5 * length of its unnormalized normal.
 	static inline TValue evaluate_triangle_area (const TVector3<TValue> &v1,
 						     const TVector3<TValue> &v2,
-						     const TVector3<TValue> &v3)
+						     const TVector3<TValue> &v3) noexcept
 	{
 		return (TValue)(0.5) * evaluate_triangle_normal(v1, v2, v3).getLength();
 	}
 
 	template <class S>
-	inline const TValue getDistance(const TVector3<S> &v2)  const
+	inline const TValue getDistance(const TVector3<S> &v2)  const noexcept
 	{
 		return std::sqrt(
 				(v2.x - x) * (v2.x - x) +
@@ -266,7 +266,7 @@ public:
 	}
 
 	template <class S>
-	inline const TValue getAngle(const TVector3<S> &v2)  const
+	inline const TValue getAngle(const TVector3<S> &v2)  const noexcept
 	{
 		const TValue denom = getLength() * v2.getLength();
 		if (denom == (TValue)0) return (TValue)0;
@@ -278,7 +278,7 @@ public:
 	}
 
 	template <class S>
-	TVector3<TValue> &Barycenter ( TVector3<S> v1, TVector3<S> v2, TVector3<S> v3)
+	constexpr TVector3<TValue> &Barycenter ( const TVector3<S> &v1, const TVector3<S> &v2, const TVector3<S> &v3) noexcept
 	{
 		x = (v1.x + v2.x + v3.x) / 3.0;
 		y = (v1.y + v2.y + v3.y) / 3.0;

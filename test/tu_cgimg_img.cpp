@@ -260,13 +260,13 @@ TEST(TEST_cgimg_img, drawing)
 	//imgc->draw_circle(img->m_iWidth/2., img->m_iHeight/2., 36, 0, 0, 255, 0);
 	imgc->draw_ellipse(img->m_iWidth/2., img->m_iHeight/3., 100, 50, 255, 0, 0, 255);
 
-	vec2 line_start, line_end;
-	vec2_init (line_start, 10, 50);
-	vec2_init (line_end, img->m_iWidth-50, img->m_iHeight-100);
-	vec2 ellipse_center, ellipse_radius;
-	vec2_init (ellipse_center, img->m_iWidth/2., img->m_iHeight/3.);
-	vec2_init (ellipse_radius, 100, 50);
-	vec2 res1, res2;
+	Vector2f line_start, line_end;
+	line_start.Set (10, 50);
+	line_end.Set (img->m_iWidth-50, img->m_iHeight-100);
+	Vector2f ellipse_center, ellipse_radius;
+	ellipse_center.Set (img->m_iWidth/2., img->m_iHeight/3.);
+	ellipse_radius.Set (100, 50);
+	Vector2f res1, res2;
 	int nres = line_ellipse_intersection (line_start, line_end, ellipse_center, ellipse_radius, res1, res2);
 	if (nres == 2)
 	{

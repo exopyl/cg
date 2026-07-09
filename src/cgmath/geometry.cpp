@@ -186,7 +186,7 @@ Circle::IntersectionResult Circle::intersection (const Circle &other) const
 	return res;
 }
 
-Circle::IntersectionResult Circle::segmentIntersection (Vector2d a, Vector2d b) const
+Circle::IntersectionResult Circle::segmentIntersection (const Vector2d& a, const Vector2d& b) const
 {
 	IntersectionResult res;
 	res.count = 0;
@@ -590,47 +590,37 @@ int Torus::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirec
 	c[1] = 2*beta*gamma + 8*R2*oz*dz;
 	c[0] = gamma2 + 4*R2*oz2 - 4*R2*r2;
 
-	//printf ("%f %f %f %f %f\n", c[0], c[1], c[2], c[3], c[4]);
+	int num = SolveQuartic (c, s);
 
-	int num, num1;
-	num1 = SolveQuartic (c, s);
-
-	num = num1;
-	if (1 || num > 0)// && s[1]<=0. && s[2]<=0. && s[3]<=0.)
+	// smallest non-negative root = nearest forward intersection
+	float t = -1.;
+	for (int j=0; j<num; j++)
 	{
-		float t = -1.;
-		for (int j=0; j<num; j++)
-		{
-			//printf ("%f ", s[j]);
-			if ((t < 0. && s[j] >= 0.) ||
-			    (s[j] >= 0. && s[j] < t))
-				t = s[j];
-		}
-		//printf ("\n");
-		if (t < 0.)
-			return 0;
-
-		*_t = t;
-		i[0] = vOrig[0] + t*vDirection[0];
-		i[1] = vOrig[1] + t*vDirection[1];
-		i[2] = vOrig[2] + t*vDirection[2];
-
-		Vector3f v;
-		v[0] = i[0];
-		v[1] = i[1];
-		v[2] = 0.;
-		(v).Normalize ();
-		v[0] *= R;
-		v[1] *= R;
-
-		n[0] = (i[0] - v[0]);
-		n[1] = (i[1] - v[1]);
-		n[2] = i[2];
-		(n).Normalize ();
-		return 1;
+		if ((t < 0. && s[j] >= 0.) ||
+		    (s[j] >= 0. && s[j] < t))
+			t = s[j];
 	}
-	else
+	if (t < 0.)
 		return 0;
+
+	*_t = t;
+	i[0] = vOrig[0] + t*vDirection[0];
+	i[1] = vOrig[1] + t*vDirection[1];
+	i[2] = vOrig[2] + t*vDirection[2];
+
+	Vector3f v;
+	v[0] = i[0];
+	v[1] = i[1];
+	v[2] = 0.;
+	(v).Normalize ();
+	v[0] *= R;
+	v[1] *= R;
+
+	n[0] = (i[0] - v[0]);
+	n[1] = (i[1] - v[1]);
+	n[2] = i[2];
+	(n).Normalize ();
+	return 1;
 }
 
 int Torus::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n)

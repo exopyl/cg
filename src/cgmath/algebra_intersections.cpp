@@ -43,7 +43,7 @@ static int Collinear (const Vector2f& a, const Vector2f& b, const Vector2f& c)
 	return fvec2_orient(a, b, c) == 0;
 }
 
-static unsigned int seg2_seg2_intersection_parallel (seg2 s1, seg2 s2, float* res)
+static unsigned int seg2_seg2_intersection_parallel (const seg2& s1, const seg2& s2, float* res)
 {
 	if ( !Collinear( s1.vs, s1.ve, s2.vs) )
 		return 0;
@@ -72,7 +72,7 @@ static unsigned int seg2_seg2_intersection_parallel (seg2 s1, seg2 s2, float* re
 	return 0;
 }
 
-unsigned int seg2_seg2_intersection (seg2 s1, seg2 s2, float* res)
+unsigned int seg2_seg2_intersection (const seg2& s1, const seg2& s2, float* res)
 {
 	double  s, t;       // The two parameters of the parametric eqns.
 	double num, denom;  // Numerator and denoninator of equations.

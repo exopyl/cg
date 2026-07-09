@@ -285,10 +285,10 @@ Polygon2::area (void)
 float
 Polygon2::area (int i1, int i2, int i3)
 {
-	vec2 u1, u2, u3;
-	vec2_init (u1, m_pPoints[0][2*i1], m_pPoints[0][2*i1+1]);
-	vec2_init (u2, m_pPoints[0][2*i2], m_pPoints[0][2*i2+1]);
-	vec2_init (u3, m_pPoints[0][2*i3], m_pPoints[0][2*i3+1]);
+	Vector2f u1, u2, u3;
+	u1.Set (m_pPoints[0][2*i1], m_pPoints[0][2*i1+1]);
+	u2.Set (m_pPoints[0][2*i2], m_pPoints[0][2*i2+1]);
+	u3.Set (m_pPoints[0][2*i3], m_pPoints[0][2*i3+1]);
 
 	Vector3f u1u2, u1u3, w;
 	u1u2.Set (u2[0]-u1[0], u2[1]-u1[1], 0.);
@@ -530,7 +530,7 @@ int Polygon2::is_trigonometric_order (void)
 	return (area () >= 0.0)? 1 : 0;
 }
 
-static float cotangent (vec2 a, vec2 b, vec2 c)
+static float cotangent (const float *a, const float *b, const float *c)
 {
 	Vector3f ba, bc, tmp;
 	ba.Set (a[0]-b[0], a[1]-b[1], 0.);
@@ -560,9 +560,8 @@ int Polygon2::generalized_barycentric_coordinates (float pt[2], float *coords)
 		ptprev[1] = m_pPoints[0][2*iprev+1];
 		ptnext[0] = m_pPoints[0][2*inext];
 		ptnext[1] = m_pPoints[0][2*inext+1];
-		vec2 tmp;
-		vec2_subtraction (tmp, pt, pti);
-		coords[i] = (cotangent(pt, pti, ptprev) + cotangent(pt, pti, ptnext)) / vec2_length2 (tmp);
+		Vector2f tmp (pt[0]-pti[0], pt[1]-pti[1]);
+		coords[i] = (cotangent(pt, pti, ptprev) + cotangent(pt, pti, ptnext)) / tmp.getLength2 ();
 		weightSum += coords[i];
 	}
 
@@ -622,14 +621,14 @@ void Polygon2::thicken (Polygon2* polygon, float ithickness, float othickness, i
 	  m_pPoints[j] = (float*)malloc(2*m_nPoints[j]*sizeof(float));
 	  for (unsigned int i=0; i<polygon->m_nPoints[j]; i++)
 	  {
-	       vec2 pt;
-	       vec2 s1, s2;
+	       Vector2f pt;
+	       Vector2f s1, s2;
 	       if (bOpen && i == 0) // first vertex
 	       {
-		       vec2_init (s1,
+		       s1.Set (
 				  polygon->m_pPoints[j][2] - polygon->m_pPoints[j][0],
 				  polygon->m_pPoints[j][3] - polygon->m_pPoints[j][1]);
-		       vec2_normalize (s1);
+		       (s1).Normalize ();
 		       
 		       // right side
 		       set_point (j, i,
@@ -643,10 +642,10 @@ void Polygon2::thicken (Polygon2* polygon, float ithickness, float othickness, i
 	       }
 	       else if (bOpen && i == polygon->m_nPoints[j]-1) // last vertex
 	       {
-		       vec2_init (s1,
+		       s1.Set (
 				  polygon->m_pPoints[j][2*i] - polygon->m_pPoints[j][2*(i-1)],
 				  polygon->m_pPoints[j][2*i+1] - polygon->m_pPoints[j][2*(i-1)+1]);
-		       vec2_normalize (s1);
+		       (s1).Normalize ();
 		       
 		       // right side
 		       set_point (j, i,
@@ -661,24 +660,24 @@ void Polygon2::thicken (Polygon2* polygon, float ithickness, float othickness, i
 	       else
 	       {
 		       seg2 seg1, seg2;
-		       vec2 pt2;
+		       Vector2f pt2;
 		       
-		       vec2 prev, current, next;
+		       Vector2f prev, current, next;
 		       polygon->get_point (j, (i+polygon->m_nPoints[j]-1)%polygon->m_nPoints[j], &prev[0], &prev[1]);
 		       polygon->get_point (j, i, &current[0], &current[1]);
 		       polygon->get_point (j, (i+1)%polygon->m_nPoints[j], &next[0], &next[1]);
 
-		       vec2_subtraction (s1, current, prev);
-		       vec2_normalize (s1);
-		       vec2_subtraction (s2, next, current);
-		       vec2_normalize (s2);
+		       s1 = current - prev;
+		       (s1).Normalize ();
+		       s2 = next - current;
+		       (s2).Normalize ();
 
 		       //
 		       // outside side
 		       //
 		       
 		       // segment 1
-		       vec2_init (pt, othickness*s1[1], -othickness*s1[0]);
+		       pt.Set (othickness*s1[1], -othickness*s1[0]);
 		       
 		       seg1.vs[0] = polygon->m_pPoints[j][2*((i-1+polygon->m_nPoints[j])%polygon->m_nPoints[j])] + pt[0];
 		       seg1.vs[1] = polygon->m_pPoints[j][2*((i-1+polygon->m_nPoints[j])%polygon->m_nPoints[j])+1] + pt[1];
@@ -686,7 +685,7 @@ void Polygon2::thicken (Polygon2* polygon, float ithickness, float othickness, i
 		       seg1.ve[1] = polygon->m_pPoints[j][2*i+1] + pt[1];
 		    
 		       // segment 2
-		       vec2_init (pt, othickness*s2[1], -othickness*s2[0]);
+		       pt.Set (othickness*s2[1], -othickness*s2[0]);
 		       
 		       seg2.vs[0] = polygon->m_pPoints[j][2*i] + pt[0];
 		       seg2.vs[1] = polygon->m_pPoints[j][2*i+1] + pt[1];
@@ -702,7 +701,7 @@ void Polygon2::thicken (Polygon2* polygon, float ithickness, float othickness, i
 		       //
 		       
 		       // segment 1
-		       vec2_init (pt, -ithickness*s1[1], ithickness*s1[0]);
+		       pt.Set (-ithickness*s1[1], ithickness*s1[0]);
 		       
 		       seg1.vs[0] = polygon->m_pPoints[j][2*((i-1+polygon->m_nPoints[j])%polygon->m_nPoints[j])] + pt[0];
 		       seg1.vs[1] = polygon->m_pPoints[j][2*((i-1+polygon->m_nPoints[j])%polygon->m_nPoints[j])+1] + pt[1];
@@ -710,7 +709,7 @@ void Polygon2::thicken (Polygon2* polygon, float ithickness, float othickness, i
 		       seg1.ve[1] = polygon->m_pPoints[j][2*i+1] + pt[1];
 		       
 		       // segment 2
-		       vec2_init (pt, -ithickness*s2[1], ithickness*s2[0]);
+		       pt.Set (-ithickness*s2[1], ithickness*s2[0]);
 		       
 		       seg2.vs[0] = polygon->m_pPoints[j][2*i] + pt[0];
 		       seg2.vs[1] = polygon->m_pPoints[j][2*i+1] + pt[1];
@@ -752,19 +751,19 @@ void Polygon2::dilate (Polygon2* polygon, float d)
 	  {
 		  seg2 seg1, seg2;
 		  
-		  vec2 s1, s2;
-		  vec2 prev, current, next, pt;
+		  Vector2f s1, s2;
+		  Vector2f prev, current, next, pt;
 		  polygon->get_point (j, (i+polygon->m_nPoints[j]-1)%polygon->m_nPoints[j], &prev[0], &prev[1]);
 		  polygon->get_point (j, i, &current[0], &current[1]);
 		  polygon->get_point (j, (i+1)%polygon->m_nPoints[j], &next[0], &next[1]);
 		  
-		  vec2_subtraction (s1, current, prev);
-		  vec2_normalize (s1);
-		  vec2_subtraction (s2, next, current);
-		  vec2_normalize (s2);
+		  s1 = current - prev;
+		  (s1).Normalize ();
+		  s2 = next - current;
+		  (s2).Normalize ();
 		  
 		  // segment 1
-		  vec2_init (pt, d*s1[1], -d*s1[0]);
+		  pt.Set (d*s1[1], -d*s1[0]);
 		  
 		  seg1.vs[0] = polygon->m_pPoints[j][2*((i-1+polygon->m_nPoints[j])%polygon->m_nPoints[j])] + pt[0];
 		  seg1.vs[1] = polygon->m_pPoints[j][2*((i-1+polygon->m_nPoints[j])%polygon->m_nPoints[j])+1] + pt[1];
@@ -772,7 +771,7 @@ void Polygon2::dilate (Polygon2* polygon, float d)
 		  seg1.ve[1] = polygon->m_pPoints[j][2*i+1] + pt[1];
 		  
 		  // segment 2
-		  vec2_init (pt, d*s2[1], -d*s2[0]);
+		  pt.Set (d*s2[1], -d*s2[0]);
 		  
 		  seg2.vs[0] = polygon->m_pPoints[j][2*i] + pt[0];
 		  seg2.vs[1] = polygon->m_pPoints[j][2*i+1] + pt[1];

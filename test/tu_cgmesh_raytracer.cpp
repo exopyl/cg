@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <memory>
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
@@ -37,12 +38,12 @@ void CreateScene (Scene *pScene, int id)
 		pSphere1->m_pMaterial->SetDiffuse (0.7, 0.3, 0.2);
 		pSphere1->m_pMaterial->SetSpecular (0.5, 0.1, 0.1);
 		*/
-		pScene->AddObject (pSphere1);
-		
+		pScene->AddObject (std::unique_ptr<Geometry> (pSphere1));
+
 		Sphere *pSphere2 = new Sphere ();
 		pSphere2->SetCenter (-1., 0., 0.);
 		pSphere2->SetRadius (2.);
-		pScene->AddObject (pSphere2);
+		pScene->AddObject (std::unique_ptr<Geometry> (pSphere2));
 	}
 	break;
 	case 1:
@@ -58,14 +59,14 @@ void CreateScene (Scene *pScene, int id)
 		Sphere *pSphere = new Sphere ();
 		pSphere->SetCenter (0., 0., 3.);
 		pSphere->SetRadius (1.5);
-		pScene->AddObject (pSphere);
+		pScene->AddObject (std::unique_ptr<Geometry> (pSphere));
 
 		Torus *pTorus = new Torus ();
 		pTorus->R = 5.;
 		pTorus->r = 1.;
 		//pTorus->SetCenter (-3., -3., 0.);
 		//pTorus->SetRadius (1.);
-		pScene->AddObject (pTorus);
+		pScene->AddObject (std::unique_ptr<Geometry> (pTorus));
 	}
 	break;
 	case 2:
@@ -81,7 +82,7 @@ void CreateScene (Scene *pScene, int id)
 			float rtmp = fScale*r*(sin(acos(z/r)));
 			pSphere->SetCenter (-rtmp*cos(fAngle), rtmp*sin(fAngle), z*fScale);
 			pSphere->SetRadius (0.13*fScale);
-			pScene->AddObject (pSphere);
+			pScene->AddObject (std::unique_ptr<Geometry> (pSphere));
 			z += 2.*r/n;
 		}
 	}
@@ -100,7 +101,7 @@ void CreateScene (Scene *pScene, int id)
 		pMesh->centerize ();
 		pMesh->scale (1./5.);
 		pMesh->computebbox();
-		pScene->AddObject (pMesh);
+		pScene->AddObject (std::unique_ptr<Geometry> (pMesh));
 	}
 	break;
 	default:
