@@ -21,6 +21,8 @@ endif()
 
 set(ENABLE_POISSON Off CACHE BOOL "Enable Poisson surface reconstruction in cgmesh (vendored PoissonRecon).")
 set(POISSONRECON_DIR "${CMAKE_SOURCE_DIR}/extern/PoissonRecon-18.76" CACHE PATH "Path to the vendored PoissonRecon source tree.")
+set(ENABLE_ZLIB On CACHE BOOL "Enable zlib (vendored extern/zlib-1.3.2); required by the NBT (Minecraft) parser.")
+set(ZLIB_DIR "${CMAKE_SOURCE_DIR}/extern/zlib-1.3.2" CACHE PATH "Path to the vendored zlib source tree.")
 set(ENABLE_SULINA Off CACHE BOOL "Compile sulina (Qt 6 + Vulkan, via cgre2).")
 set(ENABLE_OPENNURBS On CACHE BOOL "Enable openNURBS (.3dm) import.")
 set(EXTERN_OPENNURBS "" CACHE PATH "Path to openNURBS directory.")

@@ -169,4 +169,30 @@ if (ENABLE_POISSON)
     endif()
 endif()
 
+if (ENABLE_ZLIB)
+    if (NOT EXISTS "${ZLIB_DIR}/zlib.h")
+        message(FATAL_ERROR "ENABLE_ZLIB is ON but zlib.h is not found at ${ZLIB_DIR}/zlib.h")
+    endif()
+    # zlib is pure C and trivially portable, so we compile its sources straight
+    # into cgmesh (same pattern as extern/glutess) rather than shipping per-OS
+    # prebuilt binaries. The root-level *.c glob picks up exactly the 15 core
+    # translation units; the test/, contrib/ and examples/ .c files live in
+    # subdirs and are intentionally not matched.
+    file(GLOB ZLIB_SRC_FILES ${ZLIB_DIR}/*.c)
+    target_sources(cgmesh PRIVATE ${ZLIB_SRC_FILES})
+    source_group("zlib" FILES ${ZLIB_SRC_FILES})
+    # CG_HAS_ZLIB (PUBLIC) : gate nbt.{h,cpp}; PUBLIC so consumers that pull in
+    # cgmesh.h (which includes nbt.h) see the same guard.
+    target_compile_definitions(cgmesh PUBLIC CG_HAS_ZLIB)
+    # PUBLIC : nbt.h does #include "zlib.h", so consumers of cgmesh.h need the
+    # zlib headers on their include path too.
+    target_include_directories(cgmesh PUBLIC ${ZLIB_DIR})
+    if (MSVC)
+        # zlib uses fopen/strerror/etc.; silence the MSVC CRT deprecation noise
+        # for zlib's own sources only (scoped, so cgmesh's own warnings stay).
+        set_source_files_properties(${ZLIB_SRC_FILES} PROPERTIES
+            COMPILE_DEFINITIONS "_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE")
+    endif()
+endif()
+
 install(TARGETS cgmesh DESTINATION .)

@@ -42,6 +42,7 @@ inline const std::vector<Format3D>& SupportedFormats()
         { wxT("Point clouds"),  { wxT("ply"), wxT("pset"), wxT("npts"), wxT("pts"), wxT("asc") }, FormatIcon::Obj },
         { wxT("OFF"),           { wxT("off") },                                             FormatIcon::Generic },
         { wxT("KVX voxel"),     { wxT("kvx") },                                             FormatIcon::Generic },
+        { wxT("Minecraft NBT"), { wxT("nbt") },                                             FormatIcon::Generic },
     };
     return formats;
 }

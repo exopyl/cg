@@ -6,6 +6,7 @@
 #include "vmeshes.h"
 #include "voxels.h"
 #include "voxels_import_kvx.h"
+#include "voxels_import_nbt.h"
 
 #include <cmath>
 #include <cstdint>
@@ -149,6 +150,23 @@ bool VMeshes::load(const char* filename)
 	if (ext == "kvx")
 	{
 		Voxels* vox = loadkvx(const_cast<char*>(filename));
+		if (vox)
+		{
+			Mesh* pMesh = vox->ToMesh();
+			delete vox;
+			if (pMesh)
+			{
+				m_Meshes.push_back(pMesh);
+				res = true;
+			}
+		}
+	}
+
+	// nbt (Minecraft "structure block" voxel model): decode the block grid, then
+	// triangulate its activated surface into a mesh (per-material vertex colours).
+	if (ext == "nbt")
+	{
+		Voxels* vox = loadnbt(const_cast<char*>(filename));
 		if (vox)
 		{
 			Mesh* pMesh = vox->ToMesh();

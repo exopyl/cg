@@ -1,6 +1,4 @@
-//#define ZLIB
-#ifdef ZLIB
-#ifndef WIN32
+#ifdef CG_HAS_ZLIB
 
 /*
 * -----------------------------------------------------------------------------
@@ -34,7 +32,7 @@ int nbt_init(nbt_file **nbt)
 /* Parser */
 int nbt_parse(nbt_file *nbt, const char *filename)
 {
-    if ((nbt->fp = gzopen(filename, "rb")) == Z_nullptr)
+    if ((nbt->fp = gzopen(filename, "rb")) == Z_NULL)
         return NBT_EGZ;
 
     nbt->root = (nbt_tag*)malloc(sizeof(nbt_tag));
@@ -763,7 +761,7 @@ nbt_tag *nbt_find_tag_by_name(const char *needle, nbt_compound *haystack)
 
 int nbt_write(nbt_file *nbt, const char *filename)
 {
-    if ((nbt->fp = gzopen(filename, "wb")) == Z_nullptr)
+    if ((nbt->fp = gzopen(filename, "wb")) == Z_NULL)
         return NBT_EGZ;
 
     if (nbt->root != nullptr)
@@ -1276,5 +1274,4 @@ int nbt_new_compound(nbt_tag **d, const char *name)
     return nbt_set_compound(*d, nullptr, 0);
 }
 
-#endif // WIN32
-#endif // ZLIB
+#endif // CG_HAS_ZLIB

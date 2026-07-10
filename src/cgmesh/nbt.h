@@ -1,6 +1,5 @@
-//#define ZLIB
-#ifdef ZLIB
-#ifndef WIN32
+#pragma once
+#ifdef CG_HAS_ZLIB
 
 /*
 * -----------------------------------------------------------------------------
@@ -11,7 +10,6 @@
 * -----------------------------------------------------------------------------
 */
 
-#pragma once
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -181,5 +179,4 @@ int nbt_new_compound(nbt_tag **d, const char *name);
 }
 #endif
 
-#endif
-#endif // WIN32
+#endif // CG_HAS_ZLIB
