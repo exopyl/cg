@@ -99,6 +99,9 @@ class MyFrame : public wxFrame
 	ID_OPENFILESLIST,          // panneau "Models" (wxScrolledWindow)
 
     ID_FILE_EXPORT_IMAGE,
+    ID_FILE_FAV_TOOLBAR,       // dropdown button (toolbar, between Open and Save)
+    ID_FILE_FAV_ADD_CURRENT,
+    ID_FILE_FAV_MANAGE,
 
 	ID_GEOMETRY_NEW_CUBE,
 	ID_GEOMETRY_NEW_SPHERE,
@@ -167,6 +170,11 @@ class MyFrame : public wxFrame
 	ID_ShowLogging,
 	ID_ShowExplorer,
 
+	// Dynamic range for the File > Favorite Directories entries (one id per
+	// favorite). Kept below ID_FirstPerspective so it never overlaps.
+	ID_FILE_FAV_BASE,
+	ID_FILE_FAV_LAST = ID_FILE_FAV_BASE + 99,
+
         ID_FirstPerspective = ID_CreatePerspective+1000
     };
 
@@ -234,6 +242,12 @@ private:
     void OnSave(wxCommandEvent& evt);
     void OnSaveAs(wxCommandEvent& evt);
     void OnExportImage(wxCommandEvent& evt);
+    // Favorite directories (toolbar dropdown button between Open and Save).
+    void OnFavoritesDropdown(wxAuiToolBarEvent& evt); // dropdown arrow clicked
+    void OnFavoritesToolbar(wxCommandEvent& evt);     // button body clicked
+    void OnFavoriteChosen(wxCommandEvent& evt);      // a favorite entry was picked
+    void OnAddCurrentFavorite(wxCommandEvent& evt);  // "Add current folder..."
+    void OnManageFavorites(wxCommandEvent& evt);     // "Manage..."
     void OnNewGeometry(wxCommandEvent& evt);
     void OnNewParameterizedGeometry(wxCommandEvent& evt);
     void OnNewParameterizedSvg(wxCommandEvent& evt);
@@ -308,6 +322,17 @@ private:
 
 private:
     void OpenDocument(const wxString& filename);
+
+    // Favorite directories + last-used directory (persisted via wxConfig).
+    void BuildFavoritesMenu(wxMenu& menu);           // fill a menu: favorites + Add current/Manage
+    void ShowFavoritesPopup();                       // pop that menu under the toolbar dropdown
+    void NavigateExplorerTo(const wxString& dir);    // jump the Explorer/Files panes to dir
+    void PopulateFilesList(const wxString& dir);     // fill m_filesCtrl from dir (shared helper)
+    void LoadFavorites();                            // m_favorites <- wxConfig /Favorites
+    void SaveFavorites();                            // m_favorites -> wxConfig /Favorites
+    wxString LoadLastDir();                          // wxConfig /General/LastDir
+    void SaveLastDir(const wxString& dir);
+
     void UpdatePropertiesGrid();
     // Peuple le panneau "Models" (une ligne par Model de la vue courante, case = visible).
     void UpdateModelsList();
@@ -396,6 +421,10 @@ private:
     wxPropertyGrid* m_propertiesGrid = nullptr;
     wxGenericDirCtrl* m_dcDirectory = nullptr;
     wxListCtrl* m_filesCtrl = nullptr;
+
+    // Favorite directories: ordered list mirrored to wxConfig; the toolbar
+    // dropdown menu is built on demand from it.
+    wxArrayString m_favorites;
 
     // Panneau "Models" : une ligne par Model de la vue courante = nom + bouton œil
     // (visibilité) + bouton poubelle (suppression). Reconstruit par UpdateModelsList.

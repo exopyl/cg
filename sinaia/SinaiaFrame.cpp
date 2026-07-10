@@ -12,6 +12,12 @@
 #include "wx/mimetype.h"
 #include <wx/propgrid/propgrid.h>
 #include <wx/busyinfo.h>
+#include <wx/config.h>      // wxConfig : favorites + last-dir persistence
+#include <wx/dirdlg.h>      // wxDirDialog : pick a folder to favorite
+#include <wx/filename.h>    // wxFileName : derive a directory from a file path
+#include <wx/listbox.h>     // wxListBox : Manage-favorites dialog
+#include <wx/graphics.h>    // wxGraphicsContext : star overlay on the favorites icon
+#include <wx/dcgraph.h>     // wxGCDC
 #include <vector>
 #include <chrono>
 
@@ -42,6 +48,48 @@
 #include "../src/cgmesh/mesh_data_manager.h"
 #include "../src/cgmesh/parameterized_shapes.h"
 #include "../src/cgmesh/normals.h"
+
+namespace {
+// Build the favorites toolbar icon: the stock folder bitmap with a small yellow
+// star drawn over its top-left corner (there is no stock "favorite folder" art).
+wxBitmap MakeFavoritesToolBitmap()
+{
+    wxBitmap bmp = wxArtProvider::GetBitmap(wxART_FOLDER, wxART_OTHER, wxSize(16, 16));
+    if (!bmp.IsOk())
+        return bmp;
+
+    // 5-pointed star (outer R≈4, inner r≈1.7) centred near the top-left corner.
+    const wxPoint2DDouble star[10] = {
+        {4.5, 0.3}, {5.6, 3.0}, {8.4, 3.2}, {6.2, 5.0}, {7.0, 7.9},
+        {4.5, 6.1}, {2.0, 7.9}, {2.8, 5.0}, {0.6, 3.2}, {3.4, 3.0}
+    };
+
+    wxMemoryDC mdc(bmp);
+#if wxUSE_GRAPHICS_CONTEXT
+    wxGCDC gdc(mdc);
+    if (wxGraphicsContext* gc = gdc.GetGraphicsContext())
+    {
+        wxGraphicsPath path = gc->CreatePath();
+        path.MoveToPoint(star[0]);
+        for (int i = 1; i < 10; ++i)
+            path.AddLineToPoint(star[i]);
+        path.CloseSubpath();
+        gc->SetBrush(wxBrush(wxColour(255, 200, 40)));    // gold fill
+        gc->SetPen(wxPen(wxColour(90, 60, 0), 0.7));      // thin dark outline
+        gc->DrawPath(path);
+    }
+#else
+    wxPoint ip[10];
+    for (int i = 0; i < 10; ++i)
+        ip[i] = wxPoint((int)(star[i].m_x + 0.5), (int)(star[i].m_y + 0.5));
+    mdc.SetBrush(wxBrush(wxColour(255, 200, 40)));
+    mdc.SetPen(wxPen(wxColour(90, 60, 0)));
+    mdc.DrawPolygon(10, ip);
+#endif
+    mdc.SelectObject(wxNullBitmap);
+    return bmp;
+}
+} // namespace
 
 // control ids
 enum
@@ -90,6 +138,11 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(wxID_SAVE, MyFrame::OnSave)
     EVT_MENU(wxID_SAVEAS, MyFrame::OnSaveAs)
     EVT_MENU(ID_FILE_EXPORT_IMAGE, MyFrame::OnExportImage)
+    EVT_AUITOOLBAR_TOOL_DROPDOWN(ID_FILE_FAV_TOOLBAR, MyFrame::OnFavoritesDropdown)
+    EVT_MENU(ID_FILE_FAV_TOOLBAR, MyFrame::OnFavoritesToolbar)
+    EVT_MENU_RANGE(ID_FILE_FAV_BASE, ID_FILE_FAV_LAST, MyFrame::OnFavoriteChosen)
+    EVT_MENU(ID_FILE_FAV_ADD_CURRENT, MyFrame::OnAddCurrentFavorite)
+    EVT_MENU(ID_FILE_FAV_MANAGE, MyFrame::OnManageFavorites)
     EVT_MENU(ID_GEOMETRY_NEW_CUBE, MyFrame::OnNewGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_SPHERE, MyFrame::OnNewGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_CYLINDER, MyFrame::OnNewGeometry)
@@ -420,6 +473,12 @@ MyFrame::MyFrame(wxWindow* parent,
     wxBitmap tb2_save = wxArtProvider::GetBitmap(wxART_FILE_SAVE, wxART_OTHER, wxSize(16,16));
     wxBitmap tb2_saveas = wxArtProvider::GetBitmap(wxART_FILE_SAVE_AS, wxART_OTHER, wxSize(16,16));
     m_pToolBar2->AddTool(wxID_OPEN, wxT("Test"), tb2_open);
+    // Favorite directories: a dropdown button between Open and Save. The arrow
+    // (or the button body) unfolds the favorites list + Add current / Manage.
+    // Icon = folder with a star in its top-left corner (composed at runtime).
+    wxBitmap tb2_fav = MakeFavoritesToolBitmap();
+    m_pToolBar2->AddTool(ID_FILE_FAV_TOOLBAR, wxT("Favorites"), tb2_fav, _("Favorite directories"));
+    m_pToolBar2->SetToolDropDown(ID_FILE_FAV_TOOLBAR, true);
     //m_pToolBar2->AddTool(wxID_SAVE, wxT("Test"), tb2_save);
     m_pToolBar2->AddTool(wxID_SAVEAS, wxT("Test"), tb2_saveas);
     m_pToolBar2->AddTool(ID_3D_FRAME, wxT("Repere"), wxBitmap(repere_xpm));
@@ -733,6 +792,20 @@ MyFrame::MyFrame(wxWindow* parent,
     pImageList->Add(wxBitmap(icon3ds).ConvertToImage().Rescale(16, 16, wxIMAGE_QUALITY_HIGH));
     m_filesCtrl->SetImageList(pImageList, wxIMAGE_LIST_SMALL);
     m_mgr.AddPane(m_filesCtrl, wxAuiPaneInfo().Name(wxT("Files")).Caption(wxT("Files")).Bottom());
+
+    // Favorites + last-used directory: the app's first persistent state (wxConfig,
+    // enabled by the app/vendor name set in MyApp::OnInit). Fill the File >
+    // Favorite Directories submenu, and open the Explorer at the last directory
+    // used when it still exists.
+    LoadFavorites();
+    {
+        const wxString lastDir = LoadLastDir();
+        if (!lastDir.empty() && wxDirExists(lastDir))
+        {
+            m_dcDirectory->SetPath(lastDir);
+            PopulateFilesList(lastDir);
+        }
+    }
 
     m_pWndLogging = CreateTextCtrl(wxT("Logging...\n"));
     m_mgr.AddPane(m_pWndLogging, wxAuiPaneInfo().Name(wxT("Logging Window")).Caption(wxT("Logging Window")).Bottom());
@@ -1146,11 +1219,15 @@ void MyFrame::OnDropDownToolbarItem(wxAuiToolBarEvent& evt)
 
 void MyFrame::OnDirCtrlSelectionChanged(wxTreeEvent& WXUNUSED(event))
 {
-    const wxString& path = m_dcDirectory->GetPath();
-    
+    PopulateFilesList(m_dcDirectory->GetPath());
+}
 
+// Fill the "Files" list from the importable files of `dir`. Shared by the
+// Explorer selection handler and the favorite-directory navigation.
+void MyFrame::PopulateFilesList(const wxString& dir)
+{
     wxArrayString files;
-    const size_t n = wxDir::GetAllFiles(path, &files, wxEmptyString, wxDIR_FILES);
+    wxDir::GetAllFiles(dir, &files, wxEmptyString, wxDIR_FILES);
     int index = 0;
     m_filesCtrl->ClearAll();
     for (auto& file : files)
@@ -1162,6 +1239,196 @@ void MyFrame::OnDirCtrlSelectionChanged(wxTreeEvent& WXUNUSED(event))
         if (icon >= 0)
             m_filesCtrl->InsertItem(index++, filename.GetName() + _T(".") + filename.GetExt(), icon);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Favorite directories (File > Favorite Directories)
+// ---------------------------------------------------------------------------
+
+// Fill a menu from m_favorites: one entry per favorite (bounded by the reserved
+// id range), then "Add current folder..." and "Manage...". Built fresh each time
+// the toolbar dropdown is opened.
+void MyFrame::BuildFavoritesMenu(wxMenu& menu)
+{
+    const size_t maxItems = ID_FILE_FAV_LAST - ID_FILE_FAV_BASE + 1;
+    for (size_t i = 0; i < m_favorites.GetCount() && i < maxItems; ++i)
+        menu.Append((int)(ID_FILE_FAV_BASE + i), m_favorites[i]);
+
+    if (!m_favorites.IsEmpty())
+        menu.AppendSeparator();
+    menu.Append(ID_FILE_FAV_ADD_CURRENT, _T("Add current folder..."));
+    menu.Append(ID_FILE_FAV_MANAGE,      _T("Manage..."));
+}
+
+// Pop the favorites menu just under the toolbar dropdown button.
+void MyFrame::ShowFavoritesPopup()
+{
+    wxMenu menu;
+    BuildFavoritesMenu(menu);
+    if (m_pToolBar2)
+    {
+        m_pToolBar2->SetToolSticky(ID_FILE_FAV_TOOLBAR, true);
+        const wxRect rect = m_pToolBar2->GetToolRect(ID_FILE_FAV_TOOLBAR);
+        wxPoint pt = m_pToolBar2->ClientToScreen(rect.GetBottomLeft());
+        pt = ScreenToClient(pt);
+        PopupMenu(&menu, pt);
+        m_pToolBar2->SetToolSticky(ID_FILE_FAV_TOOLBAR, false);
+    }
+    else
+    {
+        PopupMenu(&menu);
+    }
+}
+
+void MyFrame::OnFavoritesDropdown(wxAuiToolBarEvent& evt)
+{
+    if (evt.IsDropDownClicked())
+        ShowFavoritesPopup();   // arrow clicked
+    else
+        evt.Skip();             // body click -> handled by OnFavoritesToolbar
+}
+
+void MyFrame::OnFavoritesToolbar(wxCommandEvent& WXUNUSED(evt))
+{
+    ShowFavoritesPopup();       // button body clicked
+}
+
+// Reveal the Explorer pane and jump it (and the Files list) to `dir`.
+void MyFrame::NavigateExplorerTo(const wxString& dir)
+{
+    wxAuiPaneInfo& p = m_mgr.GetPane(wxT("Explorer"));
+    if (p.IsOk() && !p.IsShown()) { p.Show(); m_mgr.Update(); }
+    m_dcDirectory->SetPath(dir);   // selects + reveals the node (wxGenericDirCtrl)
+    PopulateFilesList(dir);
+}
+
+void MyFrame::OnFavoriteChosen(wxCommandEvent& evt)
+{
+    const size_t i = (size_t)(evt.GetId() - ID_FILE_FAV_BASE);
+    if (i >= m_favorites.GetCount()) return;
+    const wxString dir = m_favorites[i];
+    if (!wxDirExists(dir))
+    {
+        wxMessageBox(wxString::Format(_("The favorite folder no longer exists:\n%s"), dir),
+                     _("Favorite Directories"), wxOK | wxICON_WARNING, this);
+        return;
+    }
+    NavigateExplorerTo(dir);
+}
+
+void MyFrame::OnAddCurrentFavorite(wxCommandEvent& WXUNUSED(evt))
+{
+    // Use the directory currently selected in the Explorer widget.
+    wxString dir = m_dcDirectory ? m_dcDirectory->GetPath() : wxString();
+
+    // Fallback if nothing usable is selected in the Explorer: ask.
+    if (dir.empty() || !wxDirExists(dir))
+    {
+        wxDirDialog dlg(this, _("Choose a folder to add to favorites"));
+        if (dlg.ShowModal() != wxID_OK) return;
+        dir = dlg.GetPath();
+    }
+
+    if (m_favorites.Index(dir) == wxNOT_FOUND)   // no duplicates
+    {
+        m_favorites.Add(dir);
+        SaveFavorites();
+    }
+}
+
+void MyFrame::OnManageFavorites(wxCommandEvent& WXUNUSED(evt))
+{
+    wxDialog dlg(this, wxID_ANY, _("Manage Favorite Directories"),
+                 wxDefaultPosition, wxSize(460, 320), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+
+    wxBoxSizer* top = new wxBoxSizer(wxVERTICAL);
+    wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
+
+    wxListBox* list = new wxListBox(&dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                    m_favorites, wxLB_SINGLE);
+    row->Add(list, 1, wxEXPAND | wxALL, 6);
+
+    wxBoxSizer* btns  = new wxBoxSizer(wxVERTICAL);
+    wxButton* bAdd    = new wxButton(&dlg, wxID_ANY, _("Add..."));
+    wxButton* bRemove = new wxButton(&dlg, wxID_ANY, _("Remove"));
+    wxButton* bUp     = new wxButton(&dlg, wxID_ANY, _("Up"));
+    wxButton* bDown   = new wxButton(&dlg, wxID_ANY, _("Down"));
+    btns->Add(bAdd,    0, wxEXPAND | wxBOTTOM, 4);
+    btns->Add(bRemove, 0, wxEXPAND | wxBOTTOM, 4);
+    btns->Add(bUp,     0, wxEXPAND | wxBOTTOM, 4);
+    btns->Add(bDown,   0, wxEXPAND | wxBOTTOM, 4);
+    row->Add(btns, 0, wxALL, 6);
+
+    top->Add(row, 1, wxEXPAND);
+    top->Add(dlg.CreateButtonSizer(wxOK | wxCANCEL), 0, wxEXPAND | wxALL, 6);
+    dlg.SetSizer(top);
+
+    bAdd->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+        wxDirDialog dd(&dlg, _("Choose a folder"));
+        if (dd.ShowModal() == wxID_OK && list->FindString(dd.GetPath()) == wxNOT_FOUND)
+            list->Append(dd.GetPath());
+    });
+    bRemove->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+        const int s = list->GetSelection();
+        if (s != wxNOT_FOUND) list->Delete(s);
+    });
+    bUp->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+        const int s = list->GetSelection();
+        if (s > 0) { const wxString v = list->GetString(s); list->Delete(s); list->Insert(v, s - 1); list->SetSelection(s - 1); }
+    });
+    bDown->Bind(wxEVT_BUTTON, [&](wxCommandEvent&){
+        const int s = list->GetSelection();
+        if (s != wxNOT_FOUND && s < (int)list->GetCount() - 1) { const wxString v = list->GetString(s); list->Delete(s); list->Insert(v, s + 1); list->SetSelection(s + 1); }
+    });
+
+    if (dlg.ShowModal() == wxID_OK)
+    {
+        m_favorites.Clear();
+        for (unsigned i = 0; i < list->GetCount(); ++i)
+            m_favorites.Add(list->GetString(i));
+        SaveFavorites();
+    }
+}
+
+// --- wxConfig persistence (first persistent store in the app) ---------------
+
+void MyFrame::LoadFavorites()
+{
+    wxConfigBase* c = wxConfig::Get();
+    m_favorites.Clear();
+    long n = 0;
+    c->Read(wxT("/Favorites/Count"), &n, 0);
+    for (long i = 0; i < n; ++i)
+    {
+        wxString d;
+        if (c->Read(wxString::Format(wxT("/Favorites/Dir%d"), (int)i), &d) && !d.empty())
+            m_favorites.Add(d);
+    }
+}
+
+void MyFrame::SaveFavorites()
+{
+    wxConfigBase* c = wxConfig::Get();
+    c->DeleteGroup(wxT("/Favorites"));
+    c->Write(wxT("/Favorites/Count"), (long)m_favorites.GetCount());
+    for (size_t i = 0; i < m_favorites.GetCount(); ++i)
+        c->Write(wxString::Format(wxT("/Favorites/Dir%d"), (int)i), m_favorites[i]);
+    c->Flush();
+}
+
+wxString MyFrame::LoadLastDir()
+{
+    wxString d;
+    wxConfig::Get()->Read(wxT("/General/LastDir"), &d, wxEmptyString);
+    return d;
+}
+
+void MyFrame::SaveLastDir(const wxString& dir)
+{
+    if (dir.empty()) return;
+    wxConfigBase* c = wxConfig::Get();
+    c->Write(wxT("/General/LastDir"), dir);
+    c->Flush();
 }
 
 void MyFrame::OnFilesCtrlListItemActivated(wxListEvent& WXUNUSED(event))
@@ -1313,7 +1580,8 @@ void MyFrame::OnOpen(wxCommandEvent& WXUNUSED(event))
     // Dérivé du catalogue central (SupportedFormats.h), partagé avec le panneau "Files".
     const wxString wildcard = sinaia::BuildOpenWildcard();
 
-    wxFileDialog fd(this, wxT("Open 3D Model"), wxEmptyString, wxEmptyString, wildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    // Start in the last directory a model was opened from (remembered across runs).
+    wxFileDialog fd(this, wxT("Open 3D Model"), LoadLastDir(), wxEmptyString, wildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
     if(fd.ShowModal() == wxID_OK)
     {
@@ -1330,6 +1598,10 @@ void MyFrame::OpenDocument(const wxString& strFilename)
 
 
     *m_pWndLogging << _T("Opening ") << strFilename << _T("\n");
+
+    // Remember the folder so the next File > Open (and the Explorer at startup)
+    // starts here.
+    SaveLastDir(wxFileName(strFilename).GetPath());
 
     MyGLCanvas* pGLCanvas = new MyGLCanvas(m_pCtrl, m_pWndLogging, (int*)MyGLCanvas::GetDefaultAttributes());
     pGLCanvas->LoadModel(strFilename, m_importSettings);

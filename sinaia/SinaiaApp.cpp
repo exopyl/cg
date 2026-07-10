@@ -9,6 +9,12 @@
 
 bool MyApp::OnInit()
 {
+    // App/vendor name: lets wxConfig::Get() derive a persistent store location
+    // (registry on Windows, INI in the user data dir on Linux). Must be set
+    // before the frame is built, since MyFrame's ctor loads the favorites list.
+    SetVendorName(wxT("Mango3D"));
+    SetAppName(wxT("Sinaia"));
+
     wxInitAllImageHandlers();
     MyFrame* frame = new MyFrame(nullptr,
                                  wxID_ANY,
