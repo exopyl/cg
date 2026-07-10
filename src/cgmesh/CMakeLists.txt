@@ -170,28 +170,40 @@ if (ENABLE_POISSON)
 endif()
 
 if (ENABLE_ZLIB)
-    if (NOT EXISTS "${ZLIB_DIR}/zlib.h")
-        message(FATAL_ERROR "ENABLE_ZLIB is ON but zlib.h is not found at ${ZLIB_DIR}/zlib.h")
-    endif()
-    # zlib is pure C and trivially portable, so we compile its sources straight
-    # into cgmesh (same pattern as extern/glutess) rather than shipping per-OS
-    # prebuilt binaries. The root-level *.c glob picks up exactly the 15 core
-    # translation units; the test/, contrib/ and examples/ .c files live in
-    # subdirs and are intentionally not matched.
-    file(GLOB ZLIB_SRC_FILES ${ZLIB_DIR}/*.c)
-    target_sources(cgmesh PRIVATE ${ZLIB_SRC_FILES})
-    source_group("zlib" FILES ${ZLIB_SRC_FILES})
     # CG_HAS_ZLIB (PUBLIC) : gate nbt.{h,cpp}; PUBLIC so consumers that pull in
     # cgmesh.h (which includes nbt.h) see the same guard.
     target_compile_definitions(cgmesh PUBLIC CG_HAS_ZLIB)
-    # PUBLIC : nbt.h does #include "zlib.h", so consumers of cgmesh.h need the
-    # zlib headers on their include path too.
-    target_include_directories(cgmesh PUBLIC ${ZLIB_DIR})
-    if (MSVC)
-        # zlib uses fopen/strerror/etc.; silence the MSVC CRT deprecation noise
-        # for zlib's own sources only (scoped, so cgmesh's own warnings stay).
-        set_source_files_properties(${ZLIB_SRC_FILES} PROPERTIES
-            COMPILE_DEFINITIONS "_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE")
+
+    if (WIN32)
+        # Windows has no system zlib, and OpenNURBS/OCCT ship as DLLs whose own
+        # zlib is private (PE has no cross-module symbol interposition), so we
+        # vendor-compile extern/zlib-1.3.2 straight into cgmesh (glutess pattern).
+        if (NOT EXISTS "${ZLIB_DIR}/zlib.h")
+            message(FATAL_ERROR "ENABLE_ZLIB is ON but zlib.h is not found at ${ZLIB_DIR}/zlib.h")
+        endif()
+        file(GLOB ZLIB_SRC_FILES ${ZLIB_DIR}/*.c)
+        target_sources(cgmesh PRIVATE ${ZLIB_SRC_FILES})
+        source_group("zlib" FILES ${ZLIB_SRC_FILES})
+        # PUBLIC : nbt.h does #include "zlib.h", so consumers of cgmesh.h need the
+        # zlib headers on their include path too.
+        target_include_directories(cgmesh PUBLIC ${ZLIB_DIR})
+        if (MSVC)
+            # zlib uses fopen/strerror/etc.; silence the MSVC CRT deprecation noise.
+            set_source_files_properties(${ZLIB_SRC_FILES} PROPERTIES
+                COMPILE_DEFINITIONS "_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE")
+        endif()
+    else()
+        # Linux/Unix: link the SYSTEM zlib -- the SAME copy OpenNURBS and OCCT
+        # already use. Vendoring a SECOND zlib put our inflate/deflate into the
+        # ELF global symbol namespace: unprefixed it interposed over OpenNURBS'
+        # bundled zlib (SEGFAULT loading .3dm); prefixing ours (Z_PREFIX) then left
+        # OpenNURBS' decompression unable to resolve the zlib it needs (.3dm load
+        # returned false). A single, shared system zlib removes the conflict
+        # entirely and matches how this repo already consumes OCCT on Linux.
+        # Requires the zlib1g-dev package on the build host (see build.yml).
+        find_package(ZLIB REQUIRED)
+        target_include_directories(cgmesh PUBLIC ${ZLIB_INCLUDE_DIRS})
+        target_link_libraries(cgmesh ${ZLIB_LIBRARIES})
     endif()
 endif()
 
