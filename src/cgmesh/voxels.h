@@ -1,7 +1,20 @@
 #pragma once
+#include <functional>
+
 #include "../cgimg/cgimg.h"
 
 class Mesh;
+
+// One exposed voxel face: its owner voxel and the 4 corner grid-coordinates
+// (each {x,y,z}), ordered CCW as seen from OUTSIDE the voxel (outward normal).
+// Produced by Voxels::forEachSurfaceQuad — the single surface-extraction core
+// shared by triangulate() (OBJ export) and ToMesh() (in-memory mesh).
+struct VoxelSurfaceFace
+{
+	unsigned int i, j, k;          // owner voxel
+	int          face;             // 0:-X 1:+X 2:-Y 3:+Y 4:-Z 5:+Z
+	unsigned int corner[4][3];     // 4 corners, grid coords, CCW seen from outside
+};
 
 //
 //
@@ -67,6 +80,10 @@ public:
 	// label management
 	void reset_labels (void);
 
+	// Set the colour palette from `ncolors` RGB triplets (bytes 0..255). Voxel
+	// labels index into it; ToMesh() uses it to colour the surface vertices.
+	void set_palette (const unsigned char* rgb, unsigned int ncolors);
+
 	// export methods
 	int export_slice_XY (char *filename, unsigned int islice);
 	int export_slice_YZ (char *filename, unsigned int islice);
@@ -81,6 +98,12 @@ public:
 	
 	int export_cubes (char *filename);
 	int export_palette_to_mtl (char *mtlfile);
+
+private:
+	// Shared voxel-surface extraction core (used by triangulate() and ToMesh()).
+	unsigned int gridIndex (unsigned int i, unsigned int j, unsigned int k) const;
+	void buildVertexGrid (float* v) const;   // fills the (nx+1)(ny+1)(nz+1) grid positions
+	void forEachSurfaceQuad (const std::function<void(const VoxelSurfaceFace&)>& emit) const;
 
 protected:
 	Voxel*** m_pVoxels;

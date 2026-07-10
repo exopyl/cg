@@ -681,6 +681,64 @@ int Voxels::export_slice_YZ (char *prefix, unsigned int islice)
 	return 0;
 }
 
+//
+// Shared voxel-surface extraction core
+// ------------------------------------
+// Single source of truth for (a) the vertex-grid index formula, (b) the vertex
+// positions and (c) the exposed-face enumeration — consumed by both
+// triangulate() (OBJ+materials+UV) and ToMesh() (in-memory mesh+colours). The
+// former divergence (a wrong (ny+1) stride in ToMesh only) is now impossible.
+//
+unsigned int Voxels::gridIndex (unsigned int i, unsigned int j, unsigned int k) const
+{
+	// row-major over the (nx+1, ny+1, nz+1) vertex grid
+	return (m_nx + 1) * (m_ny + 1) * k + (m_nx + 1) * j + i;
+}
+
+void Voxels::buildVertexGrid (float* v) const
+{
+	for (unsigned int i = 0; i <= m_nx; i++)
+	for (unsigned int j = 0; j <= m_ny; j++)
+	for (unsigned int k = 0; k <= m_nz; k++)
+	{
+		const unsigned int idx = gridIndex (i, j, k);
+		v[3*idx]     = (float)i;   // grid spans [0,nx]x[0,ny]x[0,nz]
+		v[3*idx + 1] = (float)j;
+		v[3*idx + 2] = (float)k;
+	}
+}
+
+void Voxels::forEachSurfaceQuad (const std::function<void(const VoxelSurfaceFace&)>& emit) const
+{
+	const unsigned int nx = m_nx, ny = m_ny, nz = m_nz;
+	VoxelSurfaceFace q;
+	auto set = [&](int n, unsigned int x, unsigned int y, unsigned int z)
+	{ q.corner[n][0] = x; q.corner[n][1] = y; q.corner[n][2] = z; };
+
+	for (unsigned int i = 0; i < nx; i++)
+	for (unsigned int j = 0; j < ny; j++)
+	for (unsigned int k = 0; k < nz; k++)
+	{
+		if (!m_pVoxels[i][j][k].m_bActivated)
+			continue;
+		q.i = i; q.j = j; q.k = k;
+
+		// Corners CCW as seen from OUTSIDE (outward normal via (c1-c0)x(c2-c0)).
+		if (i == 0    || !m_pVoxels[i-1][j][k].m_bActivated)
+		{ q.face=0; set(0,i,j,k);   set(1,i,j,k+1);   set(2,i,j+1,k+1);   set(3,i,j+1,k);   emit(q); }
+		if (i == nx-1 || !m_pVoxels[i+1][j][k].m_bActivated)
+		{ q.face=1; set(0,i+1,j,k); set(1,i+1,j+1,k); set(2,i+1,j+1,k+1); set(3,i+1,j,k+1); emit(q); }
+		if (j == 0    || !m_pVoxels[i][j-1][k].m_bActivated)
+		{ q.face=2; set(0,i,j,k);   set(1,i+1,j,k);   set(2,i+1,j,k+1);   set(3,i,j,k+1);   emit(q); }
+		if (j == ny-1 || !m_pVoxels[i][j+1][k].m_bActivated)
+		{ q.face=3; set(0,i,j+1,k); set(1,i,j+1,k+1); set(2,i+1,j+1,k+1); set(3,i+1,j+1,k); emit(q); }
+		if (k == 0    || !m_pVoxels[i][j][k-1].m_bActivated)
+		{ q.face=4; set(0,i,j,k);   set(1,i,j+1,k);   set(2,i+1,j+1,k);   set(3,i+1,j,k);   emit(q); }
+		if (k == nz-1 || !m_pVoxels[i][j][k+1].m_bActivated)
+		{ q.face=5; set(0,i,j,k+1); set(1,i+1,j,k+1); set(2,i+1,j+1,k+1); set(3,i,j+1,k+1); emit(q); }
+	}
+}
+
 int Voxels::triangulate (char *filename)
 {
 	// 0 : interpolation on texture 1D
@@ -691,15 +749,11 @@ int Voxels::triangulate (char *filename)
 	// 1 : 
 	unsigned int eMaterialMode = 0;
 
-	unsigned int i,j,k;
+	unsigned int i;
 	unsigned int nx = m_nx;
 	unsigned int ny = m_ny;
 	unsigned int nz = m_nz;
-	float xmin, xmax, ymin, ymax, zmin, zmax;
-	//xmin = 0.0; xmax = 1.0; ymin = 0.0; ymax = 1.0; zmin = 0.0; zmax = 1.0;
-	xmin = 0.0; xmax = nx; ymin = 0.0; ymax = ny; zmin = 0.0; zmax = nz; // pixelart
 
-	unsigned int index, index1, index2, index3, index4;
 	unsigned int nv = (nx+1)*(ny+1)*(nz+1);
 	float *v = (float*)malloc(3*nv*sizeof(float));
 	unsigned int nf = 5*nv;
@@ -718,266 +772,31 @@ int Voxels::triangulate (char *filename)
 	printf ("extremal values : %f -> %f\n", min, max);
 
 	// vertices
-	for (i=0; i<=nx; i++)
-	{
-		for (j=0; j<=ny; j++)
-		{
-			for (k=0; k<=nz; k++)
-			{
-				index = (nx+1)*(ny+1)*k + (nx+1)*j + i;
-				v[3*index]   = xmin + i*(xmax-xmin)/nx;
-				v[3*index+1] = ymin + j*(ymax-ymin)/ny;
-				v[3*index+2] = zmin + k*(zmax-zmin)/nz;
-			}
-		}
-	}
+	buildVertexGrid (v);
 
-	// faces
+	// faces — exposed-surface extraction via the shared core. eTextureMode==1 /
+	// eMaterialMode==0 are hard-set above, so only that path is emitted here
+	// (fixed atlas UVs per corner slot; material id = voxel label). The old
+	// per-face-hand-coded blocks (incl. the never-taken eTextureMode==0 /
+	// block_to_texture_id branches) are gone. Winding is outward, identical to
+	// before; the "horizontal face -> material+1" tweak in the OBJ output below
+	// is invariant to corner order, so the exported OBJ is unchanged.
 	int fwalk = 0;
-	for (i=0; i<nx; i++)
+	forEachSurfaceQuad ([&](const VoxelSurfaceFace& q)
 	{
-		for (j=0; j<ny; j++)
-		{
-			for (k=0; k<nz; k++)
-			{
-				if (m_pVoxels[i][j][k].m_bActivated)
-				{
-					if (i == 0 || !m_pVoxels[i-1][j][k].m_bActivated)
-					{
-						index1 = (nx+1)*(ny+1)*k + (nx+1)*j + i;
-						index2 = (nx+1)*(ny+1)*k + (nx+1)*(j+1) + i;
-						index3 = (nx+1)*(ny+1)*(k+1) + (nx+1)*j + i;
-						index4 = (nx+1)*(ny+1)*(k+1) + (nx+1)*(j+1) + i;
+		f[4*fwalk]   = (int)gridIndex (q.corner[0][0], q.corner[0][1], q.corner[0][2]);
+		f[4*fwalk+1] = (int)gridIndex (q.corner[1][0], q.corner[1][1], q.corner[1][2]);
+		f[4*fwalk+2] = (int)gridIndex (q.corner[2][0], q.corner[2][1], q.corner[2][2]);
+		f[4*fwalk+3] = (int)gridIndex (q.corner[3][0], q.corner[3][1], q.corner[3][2]);
 
-						f[4*fwalk]   = index3;
-						f[4*fwalk+1] = index4;
-						f[4*fwalk+2] = index2;
-						f[4*fwalk+3] = index1;
+		t[8*fwalk]   = 0.f; t[8*fwalk+1] = 0.f;
+		t[8*fwalk+2] = 0.f; t[8*fwalk+3] = 1.f;
+		t[8*fwalk+4] = 1.f; t[8*fwalk+5] = 1.f;
+		t[8*fwalk+6] = 1.f; t[8*fwalk+7] = 0.f;
 
-						if (eTextureMode == 0)
-						{
-							t[4*fwalk]   = get_data_for_intersection (i, j, k);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+1] = get_data_for_intersection (i, j, k+1);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+2] = get_data_for_intersection (i, j+1, k+1);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+3] = get_data_for_intersection (i, j+1, k);//m_pVoxels[i][j][k].m_fData;
-						}
-						else if (eTextureMode == 1)
-						{
-							t[8*fwalk]   = 0.;
-							t[8*fwalk+1] = 0.;
-							t[8*fwalk+2] = 0.;
-							t[8*fwalk+3] = 1.;
-							t[8*fwalk+4] = 1.;
-							t[8*fwalk+5] = 1.;
-							t[8*fwalk+6] = 1.;
-							t[8*fwalk+7] = 0.;
-						}
-
-						if (eMaterialMode == 0)
-							m[fwalk] = m_pVoxels[i][j][k].m_iLabel;
-						else
-							m[fwalk] = block_to_texture_id[3*m_pVoxels[i][j][k].m_iLabel+1];
-
-						fwalk ++;
-					}
-					
-					if (i==nx-1 || !m_pVoxels[i+1][j][k].m_bActivated)
-					{
-						index1 = (nx+1)*(ny+1)*k + (nx+1)*j + i+1;
-						index2 = (nx+1)*(ny+1)*k + (nx+1)*(j+1) + i+1;
-						index3 = (nx+1)*(ny+1)*(k+1) + (nx+1)*j + i+1;
-						index4 = (nx+1)*(ny+1)*(k+1) + (nx+1)*(j+1) + i+1;
-
-						f[4*fwalk]   = index1;
-						f[4*fwalk+1] = index2;
-						f[4*fwalk+2] = index4;
-						f[4*fwalk+3] = index3;
-
-						if (eTextureMode == 0)
-						{
-							t[4*fwalk]   = get_data_for_intersection (i+1, j, k);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+1] = get_data_for_intersection (i+1, j+1, k);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+2] = get_data_for_intersection (i+1, j+1, k+1);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+3] = get_data_for_intersection (i+1, j, k+1);//m_pVoxels[i][j][k].m_fData;
-						}
-						else if (eTextureMode == 1)
-						{
-							t[8*fwalk]   = 0.;
-							t[8*fwalk+1] = 0.;
-							t[8*fwalk+2] = 0.;
-							t[8*fwalk+3] = 1.;
-							t[8*fwalk+4] = 1.;
-							t[8*fwalk+5] = 1.;
-							t[8*fwalk+6] = 1.;
-							t[8*fwalk+7] = 0.;
-						}
-
-						if (eMaterialMode == 0)
-							m[fwalk] = m_pVoxels[i][j][k].m_iLabel;
-						else
-							m[fwalk] = block_to_texture_id[3*m_pVoxels[i][j][k].m_iLabel+1];
-
-						fwalk ++;
-					}
-					
-					if (j==0 || !m_pVoxels[i][j-1][k].m_bActivated)
-					{
-						index1 = (nx+1)*(ny+1)*k + (nx+1)*j + i;
-						index2 = (nx+1)*(ny+1)*k + (nx+1)*j + i+1;
-						index3 = (nx+1)*(ny+1)*(k+1) + (nx+1)*j + i;
-						index4 = (nx+1)*(ny+1)*(k+1) + (nx+1)*j + i+1;
-
-						f[4*fwalk]   = index1;
-						f[4*fwalk+1] = index2;
-						f[4*fwalk+2] = index4;
-						f[4*fwalk+3] = index3;
-
-						if (eTextureMode == 0)
-						{
-							t[4*fwalk]   = get_data_for_intersection (i, j, k);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+1] = get_data_for_intersection (i+1, j, k);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+2] = get_data_for_intersection (i+1, j, k+1);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+3] = get_data_for_intersection (i, j, k+1);//m_pVoxels[i][j][k].m_fData;
-						}
-						else if (eTextureMode == 1)
-						{
-							t[8*fwalk]   = 0.;
-							t[8*fwalk+1] = 0.;
-							t[8*fwalk+2] = 0.;
-							t[8*fwalk+3] = 1.;
-							t[8*fwalk+4] = 1.;
-							t[8*fwalk+5] = 1.;
-							t[8*fwalk+6] = 1.;
-							t[8*fwalk+7] = 0.;
-						}
-
-						if (eMaterialMode == 0)
-							m[fwalk] = m_pVoxels[i][j][k].m_iLabel;
-						else
-							m[fwalk] = block_to_texture_id[3*m_pVoxels[i][j][k].m_iLabel+2];
-
-						fwalk ++;
-					}
-					
-					if (j==ny-1 || !m_pVoxels[i][j+1][k].m_bActivated)
-					{
-						index1 = (nx+1)*(ny+1)*k + (nx+1)*(j+1) + i;
-						index2 = (nx+1)*(ny+1)*k + (nx+1)*(j+1) + i+1;
-						index3 = (nx+1)*(ny+1)*(k+1) + (nx+1)*(j+1) + i;
-						index4 = (nx+1)*(ny+1)*(k+1) + (nx+1)*(j+1) + i+1;
-
-						f[4*fwalk]   = index2;
-						f[4*fwalk+1] = index1;
-						f[4*fwalk+2] = index3;
-						f[4*fwalk+3] = index4;
-
-						if (eTextureMode == 0)
-						{
-							t[4*fwalk]   = get_data_for_intersection (i+1, j+1, k);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+1] = get_data_for_intersection (i, j+1, k);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+2] = get_data_for_intersection (i, j+1, k+1);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+3] = get_data_for_intersection (i+1, j+1, k+1);//m_pVoxels[i][j][k].m_fData;
-						}
-						else if (eTextureMode == 1)
-						{
-							t[8*fwalk]   = 0.;
-							t[8*fwalk+1] = 0.;
-							t[8*fwalk+2] = 0.;
-							t[8*fwalk+3] = 1.;
-							t[8*fwalk+4] = 1.;
-							t[8*fwalk+5] = 1.;
-							t[8*fwalk+6] = 1.;
-							t[8*fwalk+7] = 0.;
-						}
-
-						if (eMaterialMode == 0)
-							m[fwalk] = m_pVoxels[i][j][k].m_iLabel;
-						else
-							m[fwalk] = block_to_texture_id[3*m_pVoxels[i][j][k].m_iLabel+0];
-
-						fwalk ++;
-					}
-					if (k==0 || !m_pVoxels[i][j][k-1].m_bActivated)
-					{
-						index1 = (nx+1)*(ny+1)*k + (nx+1)*j + i;
-						index2 = (nx+1)*(ny+1)*k + (nx+1)*j + i+1;
-						index3 = (nx+1)*(ny+1)*k + (nx+1)*(j+1) + i;
-						index4 = (nx+1)*(ny+1)*k + (nx+1)*(j+1) + i+1;
-
-						f[4*fwalk]   = index1;
-						f[4*fwalk+1] = index3;
-						f[4*fwalk+2] = index4;
-						f[4*fwalk+3] = index2;
-
-						if (eTextureMode == 0)
-						{
-							t[4*fwalk]   = get_data_for_intersection (i, j, k);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+1] = get_data_for_intersection (i, j+1, k);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+2] = get_data_for_intersection (i+1, j+1, k);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+3] = get_data_for_intersection (i+1, j, k);//m_pVoxels[i][j][k].m_fData;
-						}
-						else if (eTextureMode == 1)
-						{
-							t[8*fwalk]   = 0.;
-							t[8*fwalk+1] = 0.;
-							t[8*fwalk+2] = 0.;
-							t[8*fwalk+3] = 1.;
-							t[8*fwalk+4] = 1.;
-							t[8*fwalk+5] = 1.;
-							t[8*fwalk+6] = 1.;
-							t[8*fwalk+7] = 0.;
-						}
-
-						if (eMaterialMode == 0)
-							m[fwalk] = m_pVoxels[i][j][k].m_iLabel;
-						else
-							m[fwalk] = block_to_texture_id[3*m_pVoxels[i][j][k].m_iLabel+1];
-
-						fwalk ++;
-					}
-					
-					if (k==nz-1 || !m_pVoxels[i][j][k+1].m_bActivated)
-					{
-						index1 = (nx+1)*(ny+1)*(k+1) + (nx+1)*j + i;
-						index2 = (nx+1)*(ny+1)*(k+1) + (nx+1)*j + i+1;
-						index3 = (nx+1)*(ny+1)*(k+1) + (nx+1)*(j+1) + i;
-						index4 = (nx+1)*(ny+1)*(k+1) + (nx+1)*(j+1) + i+1;
-
-						f[4*fwalk]   = index2;
-						f[4*fwalk+1] = index4;
-						f[4*fwalk+2] = index3;
-						f[4*fwalk+3] = index1;
-
-						if (eTextureMode == 0)
-						{
-							t[4*fwalk]   = get_data_for_intersection (i, j, k+1);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+1] = get_data_for_intersection (i+1, j, k+1);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+2] = get_data_for_intersection (i+1, j+1, k+1);//m_pVoxels[i][j][k].m_fData;
-							t[4*fwalk+3] = get_data_for_intersection (i, j+1, k+1);//m_pVoxels[i][j][k].m_fData;
-						}
-						else if (eTextureMode == 1)
-						{
-							t[8*fwalk]   = 0.;
-							t[8*fwalk+1] = 0.;
-							t[8*fwalk+2] = 0.;
-							t[8*fwalk+3] = 1.;
-							t[8*fwalk+4] = 1.;
-							t[8*fwalk+5] = 1.;
-							t[8*fwalk+6] = 1.;
-							t[8*fwalk+7] = 0.;
-						}
-
-						if (eMaterialMode == 0)
-							m[fwalk] = m_pVoxels[i][j][k].m_iLabel;
-						else
-							m[fwalk] = block_to_texture_id[3*m_pVoxels[i][j][k].m_iLabel+1];
-
-						fwalk ++;
-					}
-				}
-			}
-		}
-	}
+		m[fwalk] = m_pVoxels[q.i][q.j][q.k].m_iLabel;
+		fwalk++;
+	});
 
 	nf = fwalk;
 	printf ("final number of faces : %d\n", nf);
@@ -1128,6 +947,14 @@ int Voxels::triangulate (char *filename)
 // This is the pure-geometry counterpart of triangulate(filename), which
 // additionally emits texture coordinates and materials to an OBJ file.
 //
+void Voxels::set_palette (const unsigned char* rgb, unsigned int ncolors)
+{
+	if (m_pPalette) delete m_pPalette;
+	m_pPalette = new Palette ();
+	for (unsigned int i = 0; i < ncolors; i++)
+		m_pPalette->AddColor (rgb[3*i], rgb[3*i+1], rgb[3*i+2], 255);
+}
+
 Mesh* Voxels::ToMesh (void)
 {
 	unsigned int nx = m_nx;
@@ -1136,128 +963,132 @@ Mesh* Voxels::ToMesh (void)
 	if (nx == 0 || ny == 0 || nz == 0)
 		return nullptr;
 
-	float xmin = 0.f, xmax = (float)nx;
-	float ymin = 0.f, ymax = (float)ny;
-	float zmin = 0.f, zmax = (float)nz;
-
-	// grid of (nx+1)*(ny+1)*(nz+1) vertex positions
+	// grid of (nx+1)*(ny+1)*(nz+1) vertex positions (shared builder)
 	unsigned int nv = (nx + 1) * (ny + 1) * (nz + 1);
 	float *v = (float*)malloc(3 * nv * sizeof(float));
-	for (unsigned int i = 0; i <= nx; i++)
-	for (unsigned int j = 0; j <= ny; j++)
-	for (unsigned int k = 0; k <= nz; k++)
-	{
-		unsigned int idx = (nx + 1) * (ny + 1) * k + (ny + 1) * j + i;
-		v[3 * idx]     = xmin + i * (xmax - xmin) / nx;
-		v[3 * idx + 1] = ymin + j * (ymax - ymin) / ny;
-		v[3 * idx + 2] = zmin + k * (zmax - zmin) / nz;
-	}
+	buildVertexGrid (v);
+
+	// Optional per-FACE colour (voxel label -> palette). When a palette is
+	// present (KVX import) the mesh is emitted UNWELDED — 3 fresh vertices per
+	// triangle, each carrying that triangle's colour — so every face is flat
+	// coloured. Welded/shared grid vertices would make a face inherit colours
+	// from neighbouring voxels (visible "décalage"). The procedural Menger path
+	// has no palette and keeps the welded/compacted mesh.
+	const bool doColor = (m_pPalette != nullptr);
+	float curCol[3] = { 0.5f, 0.5f, 0.5f };   // colour of the voxel being emitted
 
 	// upper bound on triangle count: 6 faces per voxel * 2 triangles
 	unsigned int maxFaces = 12 * nx * ny * nz;
 	int *f = (int*)malloc(3 * maxFaces * sizeof(int));
 	unsigned int nf = 0;
+	float *tcol = doColor ? (float*)malloc(3 * maxFaces * sizeof(float)) : nullptr;  // per-triangle RGB
 
-	// helper: emit two triangles from a quad (i1,i2,i3,i4), with
-	// `flipped` controlling winding orientation
-	auto emitQuad = [&](unsigned int i1, unsigned int i2, unsigned int i3, unsigned int i4, bool flipped) {
-		if (!flipped)
+	// exposed faces via the shared surface extractor: 2 triangles per quad,
+	// (c0,c1,c2) + (c0,c2,c3), outward-facing (corners are CCW seen from outside)
+	forEachSurfaceQuad ([&](const VoxelSurfaceFace& q)
+	{
+		if (doColor)
 		{
-			f[3*nf]     = (int)i1; f[3*nf+1] = (int)i3; f[3*nf+2] = (int)i2;
-			f[3*(nf+1)] = (int)i2; f[3*(nf+1)+1] = (int)i3; f[3*(nf+1)+2] = (int)i4;
+			const unsigned int label = m_pVoxels[q.i][q.j][q.k].m_iLabel;
+			if (label < m_pPalette->m_nColors)
+			{
+				curCol[0] = m_pPalette->m_pColors[label].r() / 255.f;
+				curCol[1] = m_pPalette->m_pColors[label].g() / 255.f;
+				curCol[2] = m_pPalette->m_pColors[label].b() / 255.f;
+			}
 		}
-		else
-		{
-			f[3*nf]     = (int)i1; f[3*nf+1] = (int)i2; f[3*nf+2] = (int)i3;
-			f[3*(nf+1)] = (int)i3; f[3*(nf+1)+1] = (int)i2; f[3*(nf+1)+2] = (int)i4;
-		}
+
+		const unsigned int c0 = gridIndex (q.corner[0][0], q.corner[0][1], q.corner[0][2]);
+		const unsigned int c1 = gridIndex (q.corner[1][0], q.corner[1][1], q.corner[1][2]);
+		const unsigned int c2 = gridIndex (q.corner[2][0], q.corner[2][1], q.corner[2][2]);
+		const unsigned int c3 = gridIndex (q.corner[3][0], q.corner[3][1], q.corner[3][2]);
+
+		f[3*nf]       = (int)c0; f[3*nf+1]     = (int)c1; f[3*nf+2]     = (int)c2;
+		f[3*(nf+1)]   = (int)c0; f[3*(nf+1)+1] = (int)c2; f[3*(nf+1)+2] = (int)c3;
+
+		if (tcol)
+			for (unsigned int t = nf; t < nf + 2; ++t)
+			{ tcol[3*t] = curCol[0]; tcol[3*t+1] = curCol[1]; tcol[3*t+2] = curCol[2]; }
+
 		nf += 2;
-	};
+	});
 
-	auto vIndex = [nx, ny](unsigned int i, unsigned int j, unsigned int k) {
-		return (nx + 1) * (ny + 1) * k + (ny + 1) * j + i;
-	};
+	Mesh *mesh = nullptr;
 
-	for (unsigned int i = 0; i < nx; i++)
-	for (unsigned int j = 0; j < ny; j++)
-	for (unsigned int k = 0; k < nz; k++)
+	if (doColor)
 	{
-		if (!m_pVoxels[i][j][k].m_bActivated)
-			continue;
+		// UNWELDED: 3 fresh vertices per triangle, each carrying that triangle's
+		// (voxel's) colour. Every face is therefore flat-coloured — no bleed.
+		const unsigned int nvo = 3 * nf;
+		float *vo = (float*)malloc(3 * nvo * sizeof(float));
+		float *co = (float*)malloc(3 * nvo * sizeof(float));
+		for (unsigned int t = 0; t < nf; ++t)
+			for (int c = 0; c < 3; ++c)
+			{
+				const unsigned int g = (unsigned int)f[3*t + c];   // shared grid vertex
+				const unsigned int o = 3*t + c;                    // fresh output vertex
+				vo[3*o]   = v[3*g];    vo[3*o+1] = v[3*g+1];  vo[3*o+2] = v[3*g+2];
+				co[3*o]   = tcol[3*t]; co[3*o+1] = tcol[3*t+1]; co[3*o+2] = tcol[3*t+2];
+			}
 
-		// -X face
-		if (i == 0 || !m_pVoxels[i-1][j][k].m_bActivated)
-			emitQuad(vIndex(i, j, k),     vIndex(i, j+1, k),
-			         vIndex(i, j, k+1),   vIndex(i, j+1, k+1), false);
-
-		// +X face
-		if (i == nx-1 || !m_pVoxels[i+1][j][k].m_bActivated)
-			emitQuad(vIndex(i+1, j, k),   vIndex(i+1, j+1, k),
-			         vIndex(i+1, j, k+1), vIndex(i+1, j+1, k+1), true);
-
-		// -Y face
-		if (j == 0 || !m_pVoxels[i][j-1][k].m_bActivated)
-			emitQuad(vIndex(i, j, k),     vIndex(i+1, j, k),
-			         vIndex(i, j, k+1),   vIndex(i+1, j, k+1), true);
-
-		// +Y face
-		if (j == ny-1 || !m_pVoxels[i][j+1][k].m_bActivated)
-			emitQuad(vIndex(i, j+1, k),   vIndex(i+1, j+1, k),
-			         vIndex(i, j+1, k+1), vIndex(i+1, j+1, k+1), false);
-
-		// -Z face
-		if (k == 0 || !m_pVoxels[i][j][k-1].m_bActivated)
-			emitQuad(vIndex(i, j, k),     vIndex(i+1, j, k),
-			         vIndex(i, j+1, k),   vIndex(i+1, j+1, k), false);
-
-		// +Z face
-		if (k == nz-1 || !m_pVoxels[i][j][k+1].m_bActivated)
-			emitQuad(vIndex(i, j, k+1),   vIndex(i+1, j, k+1),
-			         vIndex(i, j+1, k+1), vIndex(i+1, j+1, k+1), true);
-	}
-
-	// compact: drop unused vertices and re-index faces
-	char *v_used = (char*)calloc(nv, sizeof(char));
-	for (unsigned int i = 0; i < 3 * nf; i++)
-		v_used[f[i]] = 1;
-
-	int *new_indices = (int*)malloc(nv * sizeof(int));
-	int iwalk = 0;
-	for (unsigned int i = 0; i < nv; i++)
-		if (v_used[i])
-			new_indices[i] = iwalk++;
-	unsigned int nv2 = (unsigned int)iwalk;
-
-	float *v2 = (float*)malloc(3 * nv2 * sizeof(float));
-	iwalk = 0;
-	for (unsigned int i = 0; i < nv; i++)
-		if (v_used[i])
+		mesh = new Mesh(nvo, nf);
+		mesh->SetVertices(nvo, vo);
+		mesh->m_pVertexColors.assign(co, co + 3 * nvo);
+		for (unsigned int t = 0; t < nf; ++t)
 		{
-			v2[3*iwalk]   = v[3*i];
-			v2[3*iwalk+1] = v[3*i+1];
-			v2[3*iwalk+2] = v[3*i+2];
-			iwalk++;
+			mesh->m_pFaces[t] = new Face();
+			mesh->m_pFaces[t]->SetTriangle(3*t, 3*t+1, 3*t+2);
 		}
 
-	int *f2 = (int*)malloc(3 * nf * sizeof(int));
-	for (unsigned int i = 0; i < 3 * nf; i++)
-		f2[i] = new_indices[f[i]];
-
-	// build the Mesh
-	Mesh *mesh = new Mesh(nv2, nf);
-	mesh->SetVertices(nv2, v2);
-	for (unsigned int i = 0; i < nf; i++)
+		free(vo);
+		free(co);
+	}
+	else
 	{
-		mesh->m_pFaces[i] = new Face();
-		mesh->m_pFaces[i]->SetTriangle(f2[3*i], f2[3*i+1], f2[3*i+2]);
+		// WELDED: drop unused vertices and re-index faces (compact, no colours)
+		char *v_used = (char*)calloc(nv, sizeof(char));
+		for (unsigned int i = 0; i < 3 * nf; i++)
+			v_used[f[i]] = 1;
+
+		int *new_indices = (int*)malloc(nv * sizeof(int));
+		int iwalk = 0;
+		for (unsigned int i = 0; i < nv; i++)
+			if (v_used[i])
+				new_indices[i] = iwalk++;
+		unsigned int nv2 = (unsigned int)iwalk;
+
+		float *v2 = (float*)malloc(3 * nv2 * sizeof(float));
+		iwalk = 0;
+		for (unsigned int i = 0; i < nv; i++)
+			if (v_used[i])
+			{
+				v2[3*iwalk]   = v[3*i];
+				v2[3*iwalk+1] = v[3*i+1];
+				v2[3*iwalk+2] = v[3*i+2];
+				iwalk++;
+			}
+
+		int *f2 = (int*)malloc(3 * nf * sizeof(int));
+		for (unsigned int i = 0; i < 3 * nf; i++)
+			f2[i] = new_indices[f[i]];
+
+		mesh = new Mesh(nv2, nf);
+		mesh->SetVertices(nv2, v2);
+		for (unsigned int i = 0; i < nf; i++)
+		{
+			mesh->m_pFaces[i] = new Face();
+			mesh->m_pFaces[i]->SetTriangle(f2[3*i], f2[3*i+1], f2[3*i+2]);
+		}
+
+		free(v_used);
+		free(new_indices);
+		free(v2);
+		free(f2);
 	}
 
 	free(v);
 	free(f);
-	free(v_used);
-	free(new_indices);
-	free(v2);
-	free(f2);
+	if (tcol) free(tcol);
 
 	return mesh;
 }

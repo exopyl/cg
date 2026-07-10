@@ -9,12 +9,12 @@
 void
 Polygon2::search_symmetry_pridmore_bis (void)
 {
-	if (m_nContours != 1)
+	if (m_contours.size() != 1)
 		return;
 
   int i,j;
-  int n = m_nPoints[0];
-  float *pPoints = m_pPoints[0];
+  int n = (int)m_contours[0].size();
+  float *pPoints = (float*)m_contours[0].data();
   int **A;
   int theta_max = 360;
   int rho_min, rho_max, rho_size;

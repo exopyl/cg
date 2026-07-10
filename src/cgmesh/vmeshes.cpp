@@ -4,6 +4,8 @@
 #endif
 
 #include "vmeshes.h"
+#include "voxels.h"
+#include "voxels_import_kvx.h"
 
 #include <cmath>
 #include <cstdint>
@@ -141,6 +143,23 @@ bool VMeshes::load(const char* filename)
 	// iges / igs (via OpenCASCADE, gated on CG_HAS_OCCT)
 	if (ext == "iges" || ext == "igs")
 		res = import_iges(filename);
+
+	// kvx (Ken Silverman voxel model): decode the voxel grid, then triangulate
+	// its activated surface into a mesh (geometry only; palette not yet mapped).
+	if (ext == "kvx")
+	{
+		Voxels* vox = loadkvx(const_cast<char*>(filename));
+		if (vox)
+		{
+			Mesh* pMesh = vox->ToMesh();
+			delete vox;
+			if (pMesh)
+			{
+				m_Meshes.push_back(pMesh);
+				res = true;
+			}
+		}
+	}
 
 	if (res)
 		return res;

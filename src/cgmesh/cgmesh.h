@@ -59,7 +59,6 @@
 #include "half_edge.h"
 #include "mesh_half_edge.h"
 #include "octree.h"
-#include "bsp.h"
 
 #include "lights_manager.h"
 

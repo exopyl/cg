@@ -9,141 +9,84 @@
 // memory allocation
 int Polygon2::alloc_contours (int nContours)
 {
-	if (m_nPoints)
-		free (m_nPoints);
-	if (m_pPoints)
-		free (m_pPoints);
-
-	m_nContours = nContours;
-
-	m_nPoints = (unsigned int*) malloc (m_nContours*sizeof(unsigned int));
-	memset (m_nPoints, 0, m_nContours*sizeof(unsigned int));
-
-	m_pPoints = (float**) malloc (m_nContours*sizeof(float*));
-	memset (m_pPoints, 0, m_nContours*sizeof(float*));
-	
+	// n empty contours (each contour is a vector<Vector2f> of size 0)
+	m_contours.assign (nContours, {});
 	return 0;
-}
-
-// constructor
-Polygon2::Polygon2 ()
-{
-	m_nContours = 0;
-	m_nPoints = nullptr;
-	m_pPoints = nullptr;
-}
-
-Polygon2::Polygon2 (const Polygon2 &pol)
-{
-	m_nContours = 0;
-	m_nPoints = nullptr;
-	m_pPoints = nullptr;
-	alloc_contours (pol.m_nContours);
-	for (int i=0; i<m_nContours; i++)
-	{
-		m_pPoints[i] = nullptr;
-		add_contour (i, pol.m_nPoints[i], pol.m_pPoints[i]);
-	}
-}
-
-Polygon2 &Polygon2::operator=(const Polygon2 &pol)
-{
-	alloc_contours (pol.m_nContours);
-	for (int i=0; i<m_nContours; i++)
-	{
-		m_pPoints[i] = nullptr;
-		add_contour (i, pol.m_nPoints[i], pol.m_pPoints[i]);
-	}
-	return *this;
-} 
-
-// destructor
-Polygon2::~Polygon2 ()
-{
-	if (m_pPoints)
-	{
-		for (int i=0; i<m_nContours; i++)
-			if (m_pPoints[i])
-				free (m_pPoints[i]);
-		free (m_pPoints);
-	}
-	if (m_nPoints)
-		free (m_nPoints);
 }
 
 // input
 void Polygon2::input (float *pPoints, int nPoints)
 {
-	alloc_contours (1);
-
-	m_nPoints[0] = nPoints;
-	m_pPoints[0] = (float*) malloc (2*nPoints*sizeof(float));
-	m_pPoints[0] = (float*) memcpy (m_pPoints[0], pPoints, 2*nPoints*sizeof(float));
+	m_contours.assign (1, {});
+	m_contours[0].resize (nPoints);
+	if (nPoints > 0)
+		memcpy ((float*)m_contours[0].data(), pPoints, 2*nPoints*sizeof(float));
 }
 
 void Polygon2::input (float *x, float *y, int nPoints)
 {
-	alloc_contours (1);
-
-	m_nPoints[0] = nPoints;
-	m_pPoints[0] = (float*) malloc (2*nPoints*sizeof(float));
+	m_contours.assign (1, {});
+	m_contours[0].resize (nPoints);
 	for (int i=0; i<nPoints; i++)
 	{
-		m_pPoints[0][2*i]   = x[i];
-		m_pPoints[0][2*i+1] = y[i];
+		m_contours[0][i].x = x[i];
+		m_contours[0][i].y = y[i];
 	}
 }
 
 void Polygon2::input (Polygon2 *p, int interpolation_type, int _n)
 {
-	int nContours = p->m_nContours;
+	int nContours = (int)p->m_contours.size();
 	if (nContours != 1)
 	{
 		printf ("don't manage several contours in the polygon\n");
 		return;
 	}
-	int   nPoints  = p->m_nPoints[0];
-	float *pPoints = p->m_pPoints[0];
-	m_nContours = nContours;
-	m_nPoints = (unsigned int*)malloc(m_nContours * sizeof(unsigned int));
-	m_pPoints = (float**) malloc (m_nContours*sizeof(float*));
-	m_pPoints[0] = (float*)malloc(2*nPoints*sizeof(float));
-	float l = p->length (interpolation_type);
-	int i, j;
-	
-	// length between two consecutive points
-	float lm = l / nPoints;
+	// take a local copy of the source contour so we stay correct even if
+	// &p == this (resizing our own storage below would otherwise dangle).
+	std::vector<Vector2f> src = p->m_contours[0];
+	int nPoints = (int)src.size();
+	if (_n <= 0) _n = nPoints;                 // 0 => keep the source resolution
+	const float l = p->length (interpolation_type);
 
-	// length in the current segment
-	float ls = 0.0;
-	
-	// length remaining before the current segment point
-	float lr = 0.0;
-	
+	m_contours.assign (1, {});
+	m_contours[0].resize (_n);                 // exactly _n output points
+
 	switch (interpolation_type)
 	{
 	case INTERPOLATION_LINEAR:
 	{
-		m_pPoints[0][0] = pPoints[0];
-		m_pPoints[0][1] = pPoints[1];
-		
-		i = 1;
-		j = 0;
-		lr = 0.0;
-		for (j=0;j<nPoints;j++)
+		// Resample the closed contour at _n points equally spaced by arc length
+		// (s_k = k * l / _n). This now HONOURS _n — previously the step used the
+		// source point count, so _n was ignored and callers (matching_arkin,
+		// slicer) read past the resampled array.
+		const float step = (_n > 0) ? l / _n : 0.f;
+		int out = 0;
+		float acc = 0.f;        // arc length at the start of the current segment
+		float target = 0.f;     // arc length of the next sample to place
+		for (int j = 0; j < nPoints && out < _n; j++)
 		{
-			ls = sqrt ((pPoints[2*((j+1)%nPoints)]-pPoints[2*j])*(pPoints[2*((j+1)%nPoints)]-pPoints[2*j]) +
-				   (pPoints[2*((j+1)%nPoints)+1]-pPoints[2*j+1])*(pPoints[2*((j+1)%nPoints)+1]-pPoints[2*j+1]));
-			int n_pts = (int)((lr+ls) / lm);
-			for (int k=1; k<=n_pts; k++)
+			const int jn = (j + 1) % nPoints;
+			const float ax = src[j].x,  ay = src[j].y;
+			const float bx = src[jn].x, by = src[jn].y;
+			const float seg = sqrt ((bx-ax)*(bx-ax) + (by-ay)*(by-ay));
+			while (out < _n && target < acc + seg)
 			{
-				m_pPoints[0][2*i]   = pPoints[2*j]+(k*lm-lr)*(pPoints[2*((j+1)%nPoints)]-pPoints[2*j])/ls;
-				m_pPoints[0][2*i+1] = pPoints[2*j+1]+(k*lm-lr)*(pPoints[2*((j+1)%nPoints)+1]-pPoints[2*j+1])/ls;
-				i++;
+				const float u = (seg > 1e-12f) ? (target - acc) / seg : 0.f;
+				m_contours[0][out].x = ax + u * (bx - ax);
+				m_contours[0][out].y = ay + u * (by - ay);
+				out++;
+				target += step;
 			}
-			lr += ls - n_pts*lm;
+			acc += seg;
 		}
-		m_nPoints[0] = i;
+		// float-rounding safety net: fill any leftover slot with the last sample
+		while (out < _n)
+		{
+			m_contours[0][out].x = (out > 0) ? m_contours[0][out-1].x : src[0].x;
+			m_contours[0][out].y = (out > 0) ? m_contours[0][out-1].y : src[0].y;
+			out++;
+		}
 	}
 	break;
 	default:
@@ -154,30 +97,14 @@ void Polygon2::input (Polygon2 *p, int interpolation_type, int _n)
 // edit
 float* Polygon2::add_contour (unsigned int index, unsigned int nPoints, float *pPoints)
 {
-	if (index < m_nContours) // update an existing contour
-	{
-		if (m_pPoints)
-			m_pPoints[index] = (float*) realloc (m_pPoints[index], 2*nPoints*sizeof(float));
-		else
-			m_pPoints[index] = (float*) malloc (2*nPoints*sizeof(float));
+	if (index >= m_contours.size())
+		m_contours.resize (index+1);
 
-		if (pPoints)
-			memcpy (m_pPoints[index], pPoints, 2*nPoints*sizeof(float));
-		m_nPoints[index] = nPoints;
-	}
+	m_contours[index].resize (nPoints);
+	if (pPoints)
+		memcpy ((float*)m_contours[index].data(), pPoints, 2*nPoints*sizeof(float));
 
-	if (index >= m_nContours)
-	{
-		m_pPoints = (float**) realloc (m_pPoints, (index+1)*sizeof(float*));
-		m_nPoints = (unsigned int*) realloc (m_nPoints, (index+1)*sizeof(unsigned int));
-		m_nContours = (index+1);
-		m_pPoints[index] = (float*) malloc (2*nPoints*sizeof(float));
-		if (pPoints)
-			memcpy (m_pPoints[index], pPoints, 2*nPoints*sizeof(float));
-		m_nPoints[index] = nPoints;
-	}
-
-	return m_pPoints[index];
+	return (float*)m_contours[index].data();
 }
 
 int Polygon2::add_polygon2d (Polygon2 *pol)
@@ -185,35 +112,30 @@ int Polygon2::add_polygon2d (Polygon2 *pol)
 	if (!pol)
 		return 0;
 
-	m_nPoints = (unsigned int*) realloc (m_nPoints, (m_nContours+pol->m_nContours)*sizeof(unsigned int));
-	m_pPoints = (float**) realloc (m_pPoints, (m_nContours+pol->m_nContours)*sizeof(float*));
-	for (int i=0; i<pol->m_nContours; i++)
-	{
-		m_pPoints[m_nContours] = nullptr;
-		add_contour (m_nContours, pol->m_nPoints[i], pol->m_pPoints[i]);
-	}
+	for (size_t i=0; i<pol->m_contours.size(); i++)
+		m_contours.push_back (pol->m_contours[i]);
 
 	return 0;
 }
 
 int Polygon2::set_point (unsigned int ci, unsigned int pi, float x, float y)
 {
-	if (ci >= m_nContours || pi >= m_nPoints[ci])
+	if (ci >= m_contours.size() || pi >= m_contours[ci].size())
 		return -1;
 
-	m_pPoints[ci][2*pi]   = x;
-	m_pPoints[ci][2*pi+1] = y;
+	m_contours[ci][pi].x = x;
+	m_contours[ci][pi].y = y;
 
 	return 0;
 }
 
 int Polygon2::get_point (unsigned int ci, unsigned int pi, float *x, float *y)
 {
-	if (ci >= m_nContours || pi >= m_nPoints[ci])
+	if (ci >= m_contours.size() || pi >= m_contours[ci].size())
 		return -1;
 
-	*x = m_pPoints[ci][2*pi];
-	*y = m_pPoints[ci][2*pi+1];
+	*x = m_contours[ci][pi].x;
+	*y = m_contours[ci][pi].y;
 
 	return 0;
 }
@@ -226,10 +148,10 @@ float Polygon2::length (int interpolation_type)
 	switch (interpolation_type)
 	{
 	case INTERPOLATION_LINEAR:
-		for (int j=0; j<m_nContours; j++)
+		for (int j=0; j<(int)m_contours.size(); j++)
 		{
-			int nPoints = m_nPoints[j];
-			float *pPoints = m_pPoints[j];
+			int nPoints = (int)m_contours[j].size();
+			float *pPoints = (float*)m_contours[j].data();
 			l = sqrt((pPoints[2*(nPoints-1)]-pPoints[0])*(pPoints[2*(nPoints-1)]-pPoints[0]) +
 				 (pPoints[2*(nPoints-1)+1]-pPoints[1])*(pPoints[2*(nPoints-1)+1]-pPoints[1]));
 			for (i=0; i<nPoints-1; i++)
@@ -246,14 +168,14 @@ float Polygon2::length (int interpolation_type)
 
 void Polygon2::get_bbox (float *xmin, float *xmax, float *ymin, float *ymax)
 {
-	*xmin = m_pPoints[0][0];
-	*xmax = m_pPoints[0][0];
-	*ymin = m_pPoints[0][1];
-	*ymax = m_pPoints[0][1];
-	for (int j=0; j<m_nContours; j++)
+	*xmin = m_contours[0][0].x;
+	*xmax = m_contours[0][0].x;
+	*ymin = m_contours[0][0].y;
+	*ymax = m_contours[0][0].y;
+	for (int j=0; j<(int)m_contours.size(); j++)
 	{
-		int nPoints = m_nPoints[j];
-		float *pPoints = m_pPoints[j];
+		int nPoints = (int)m_contours[j].size();
+		float *pPoints = (float*)m_contours[j].data();
 		for (int i=0; i<nPoints; i++)
 		{
 			if (*xmin > pPoints[2*i])   *xmin = pPoints[2*i];
@@ -270,14 +192,14 @@ void Polygon2::get_bbox (float *xmin, float *xmax, float *ymin, float *ymax)
 float
 Polygon2::area (void)
 {
-	if (m_nContours != 1)
+	if (m_contours.size() != 1)
 		return 0.;
 
-	if (m_nPoints[0] <= 2)
+	if (m_contours[0].size() <= 2)
 		return 0.;
-	
+
 	float res=0.;
-	for (int i=1; i<m_nPoints[0]-1; i++)
+	for (int i=1; i<(int)m_contours[0].size()-1; i++)
 		res += area (0, i, i+1);
 	return res;
 }
@@ -286,9 +208,9 @@ float
 Polygon2::area (int i1, int i2, int i3)
 {
 	Vector2f u1, u2, u3;
-	u1.Set (m_pPoints[0][2*i1], m_pPoints[0][2*i1+1]);
-	u2.Set (m_pPoints[0][2*i2], m_pPoints[0][2*i2+1]);
-	u3.Set (m_pPoints[0][2*i3], m_pPoints[0][2*i3+1]);
+	u1.Set (m_contours[0][i1].x, m_contours[0][i1].y);
+	u2.Set (m_contours[0][i2].x, m_contours[0][i2].y);
+	u3.Set (m_contours[0][i3].x, m_contours[0][i3].y);
 
 	Vector3f u1u2, u1u3, w;
 	u1u2.Set (u2[0]-u1[0], u2[1]-u1[1], 0.);
@@ -305,27 +227,27 @@ Polygon2::smooth (void)
 {
 	int i;
 
-	for (int j=0; j<m_nContours; j++)
+	for (int j=0; j<(int)m_contours.size(); j++)
 	{
-		int nPoints = m_nPoints[j];
-		float *pPoints = m_pPoints[j];
+		int nPoints = (int)m_contours[j].size();
+		float *pPoints = (float*)m_contours[j].data();
 
 		float *t = (float*)malloc(2*nPoints*sizeof(float));
-		
+
 		// smooth x
 		t[0]   = (pPoints[2*(nPoints-1)]+pPoints[1])/2.0;
 		t[2*(nPoints-1)] = (pPoints[2*(nPoints-2)]+pPoints[0])/2.0;
 		for (i=1; i<nPoints-1; i++)
 		t[2*i] = (pPoints[2*(i-1)]+pPoints[2*(i+1)])/2.0;
-		
+
 		// smooth y
 		t[1]   = (pPoints[2*(nPoints-1)+1]+pPoints[3])/2.0;
 		t[2*(nPoints-1)+1] = (pPoints[2*(nPoints-2)+1]+pPoints[1])/2.0;
 		for (i=1; i<nPoints-1; i++)
 			t[2*i+1] = (pPoints[2*(i-1)+1]+pPoints[2*(i+1)+1])/2.0;
-		
-		m_pPoints[j] = (float*) memcpy (m_pPoints[j], t, 2*nPoints*sizeof(float));
-		
+
+		memcpy (pPoints, t, 2*nPoints*sizeof(float));
+
 		free (t);
 	}
 }
@@ -333,9 +255,9 @@ Polygon2::smooth (void)
 void
 Polygon2::flip_x (void)
 {
-	for (int j=0; j<m_nContours; j++)
-		for (int i=0; i<m_nPoints[j]; i++)
-			m_pPoints[j][2*i] *= -1.0;
+	for (int j=0; j<(int)m_contours.size(); j++)
+		for (int i=0; i<(int)m_contours[j].size(); i++)
+			m_contours[j][i].x *= -1.0;
 }
 
 void
@@ -347,12 +269,12 @@ Polygon2::apply_PCA (void)
 	
 	center (&xc, &xy);
 	xx = xy = yy = 0.0;
-	for (int j=0; j<m_nContours; j++)
-		for (i=0; i<m_nPoints[j]; i++)
+	for (int j=0; j<(int)m_contours.size(); j++)
+		for (i=0; i<(int)m_contours[j].size(); i++)
 		{
-			xx += (m_pPoints[j][2*i]-xc)*(m_pPoints[j][2*i]-xc);
-			xy += (m_pPoints[j][2*i]-xc)*(m_pPoints[j][2*i+1]-yc);
-			yy += (m_pPoints[j][2*i+1]-yc)*(m_pPoints[j][2*i+1]-yc);
+			xx += (m_contours[j][i].x-xc)*(m_contours[j][i].x-xc);
+			xy += (m_contours[j][i].x-xc)*(m_contours[j][i].y-yc);
+			yy += (m_contours[j][i].y-yc)*(m_contours[j][i].y-yc);
 		}
 	
 	Matrix2f m2 (xx, xy, xy, yy);
@@ -381,24 +303,24 @@ Polygon2::apply_PCA (void)
 	
 	// rotate
 	float xt, yt;
-	for (int j=0; j<m_nContours; j++)
-		for (i=0; i<m_nPoints[j]; i++)
+	for (int j=0; j<(int)m_contours.size(); j++)
+		for (i=0; i<(int)m_contours[j].size(); i++)
 		{
-			xt = m_pPoints[j][2*i];
-			yt = m_pPoints[j][2*i+1];
-			m_pPoints[j][2*i] = xt*cos(-alpha) - yt*sin(-alpha);
-			m_pPoints[j][2*i+1] = xt*sin(-alpha) + yt*cos(-alpha);
+			xt = m_contours[j][i].x;
+			yt = m_contours[j][i].y;
+			m_contours[j][i].x = xt*cos(-alpha) - yt*sin(-alpha);
+			m_contours[j][i].y = xt*sin(-alpha) + yt*cos(-alpha);
 		}
 }
 
 void
 Polygon2::translate (float tx, float ty)
 {
-	for (int j=0; j<m_nContours; j++)
-		for (int i=0; i<m_nPoints[j]; i++)
+	for (int j=0; j<(int)m_contours.size(); j++)
+		for (int i=0; i<(int)m_contours[j].size(); i++)
 		{
-			m_pPoints[j][2*i]   += tx;
-			m_pPoints[j][2*i+1] += ty;
+			m_contours[j][i].x += tx;
+			m_contours[j][i].y += ty;
 		}
 }
 
@@ -407,13 +329,13 @@ void
 Polygon2::rotate (float angle)
 {
 	float alpha = angle*3.14159/180.0; /* conversion */
-	for (int j=0; j<m_nContours; j++)
-		for (int i=0; i<m_nPoints[j]; i++)
+	for (int j=0; j<(int)m_contours.size(); j++)
+		for (int i=0; i<(int)m_contours[j].size(); i++)
 		{
-			float px = m_pPoints[j][2*i];
-			float py = m_pPoints[j][2*i+1];
-			m_pPoints[j][2*i]   = px*cos(alpha) - py*sin(alpha);
-			m_pPoints[j][2*i+1] = px*sin(alpha) + py*cos(alpha);
+			float px = m_contours[j][i].x;
+			float py = m_contours[j][i].y;
+			m_contours[j][i].x = px*cos(alpha) - py*sin(alpha);
+			m_contours[j][i].y = px*sin(alpha) + py*cos(alpha);
 		}
 }
 
@@ -424,20 +346,20 @@ Polygon2::centerize (void)
 	int nPoints = 0;
 	float xc = 0.0;
 	float yc = 0.0;
-	for (int j=0; j<m_nContours; j++)
-		for (i=0; i<m_nPoints[j]; i++)
+	for (int j=0; j<(int)m_contours.size(); j++)
+		for (i=0; i<(int)m_contours[j].size(); i++)
 		{
-			xc += m_pPoints[j][2*i];
-			yc += m_pPoints[j][2*i+1];
+			xc += m_contours[j][i].x;
+			yc += m_contours[j][i].y;
 			nPoints++;
 		}
 	xc /= nPoints;
 	yc /= nPoints;
-	for (int j=0; j<m_nContours; j++)
-		for (i=0; i<m_nPoints[j]; i++)
+	for (int j=0; j<(int)m_contours.size(); j++)
+		for (i=0; i<(int)m_contours[j].size(); i++)
 		{
-			m_pPoints[j][2*i]   -= xc;
-			m_pPoints[j][2*i+1] -= yc;
+			m_contours[j][i].x -= xc;
+			m_contours[j][i].y -= yc;
 		}
 }
 
@@ -448,11 +370,11 @@ Polygon2::center (float *xc, float *yc)
 	float xcc = 0.0;
 	float ycc = 0.0;
 	int nPoints = 0;
-	for (int j=0; j<m_nContours; j++)
-		for (i=0; i<m_nPoints[j]; i++)
+	for (int j=0; j<(int)m_contours.size(); j++)
+		for (i=0; i<(int)m_contours[j].size(); i++)
 		{
-			xcc += m_pPoints[j][2*i];
-			ycc += m_pPoints[j][2*i+1];
+			xcc += m_contours[j][i].x;
+			ycc += m_contours[j][i].y;
 			nPoints++;
 		}
 	xcc /= nPoints;
@@ -472,14 +394,16 @@ int Polygon2::is_point_inside (float x, float y)
 	
 	pt[0] = x;
 	pt[1] = y;
-	for (unsigned int j=0; j<m_nContours; j++)
+	for (unsigned int j=0; j<m_contours.size(); j++)
 	{
-		p1[0] = m_pPoints[j][0];
-		p1[1] = m_pPoints[j][1];
-		for (unsigned int i=1; i<=m_nPoints[j]; i++)
+		float *pPoints = (float*)m_contours[j].data();
+		unsigned int nPointsJ = (unsigned int)m_contours[j].size();
+		p1[0] = pPoints[0];
+		p1[1] = pPoints[1];
+		for (unsigned int i=1; i<=nPointsJ; i++)
 		{
-			p2[0] = m_pPoints[j][2*(i % m_nPoints[j])];
-			p2[1] = m_pPoints[j][2*(i % m_nPoints[j])+1];
+			p2[0] = pPoints[2*(i % nPointsJ)];
+			p2[1] = pPoints[2*(i % nPointsJ)+1];
 			if (pt[1] > MIN(p1[1],p2[1]))
 			{
 				if (pt[1] <= MAX(p1[1],p2[1]))
@@ -511,18 +435,22 @@ void Polygon2::inverse_order (void)
 {
 	int i;
 	float tmp;
-	
-	for (int j=0; j<m_nContours; j++)
-		for (i=0; i<m_nPoints[j]/2; i++)
+
+	for (int j=0; j<(int)m_contours.size(); j++)
+	{
+		float *pPoints = (float*)m_contours[j].data();
+		int nP = (int)m_contours[j].size();
+		for (i=0; i<nP/2; i++)
 		{
-			tmp = m_pPoints[j][2*i];
-			m_pPoints[j][2*i] = m_pPoints[j][2*(m_nPoints[j]-1-i)];
-			m_pPoints[j][2*(m_nPoints[j]-1-i)] = tmp;
-			
-			tmp = m_pPoints[j][2*i+1];
-			m_pPoints[j][2*i+1] = m_pPoints[j][2*(m_nPoints[j]-1-i)+1];
-			m_pPoints[j][2*(m_nPoints[j]-1-i)+1] = tmp;
+			tmp = pPoints[2*i];
+			pPoints[2*i] = pPoints[2*(nP-1-i)];
+			pPoints[2*(nP-1-i)] = tmp;
+
+			tmp = pPoints[2*i+1];
+			pPoints[2*i+1] = pPoints[2*(nP-1-i)+1];
+			pPoints[2*(nP-1-i)+1] = tmp;
 		}
+	}
 }
 
 int Polygon2::is_trigonometric_order (void)
@@ -541,25 +469,26 @@ static float cotangent (const float *a, const float *b, const float *c)
 
 int Polygon2::generalized_barycentric_coordinates (float pt[2], float *coords)
 {
-	if (m_nContours != 1)
+	if (m_contours.size() != 1)
 		return -1;
 
-	if (coords == nullptr)   // caller must supply the output buffer (m_nPoints[0] floats) — no hidden allocation to leak
+	if (coords == nullptr)   // caller must supply the output buffer (get_n_points(0) floats) — no hidden allocation to leak
 		return -1;
 
 	float weightSum = 0.;
-	int n = m_nPoints[0];
+	int n = (int)m_contours[0].size();
+	float *pPoints = (float*)m_contours[0].data();
 	for (int i=0; i<n; i++)
 	{
 		int iprev = (i-1+n)%n;
 		int inext = (i+1)%n;
 		float pti[2], ptprev[2], ptnext[2];
-		pti[0] = m_pPoints[0][2*i];
-		pti[1] = m_pPoints[0][2*i+1];
-		ptprev[0] = m_pPoints[0][2*iprev];
-		ptprev[1] = m_pPoints[0][2*iprev+1];
-		ptnext[0] = m_pPoints[0][2*inext];
-		ptnext[1] = m_pPoints[0][2*inext+1];
+		pti[0] = pPoints[2*i];
+		pti[1] = pPoints[2*i+1];
+		ptprev[0] = pPoints[2*iprev];
+		ptprev[1] = pPoints[2*iprev+1];
+		ptnext[0] = pPoints[2*inext];
+		ptnext[1] = pPoints[2*inext+1];
 		Vector2f tmp (pt[0]-pti[0], pt[1]-pti[1]);
 		coords[i] = (cotangent(pt, pti, ptprev) + cotangent(pt, pti, ptnext)) / tmp.getLength2 ();
 		weightSum += coords[i];
@@ -577,26 +506,27 @@ void Polygon2::extrude (float fHeight, char *filename)
   int i;
   FILE *ptr = fopen (filename, "w");
 
-  for (int j=0; j<m_nContours; j++)
+  for (int j=0; j<(int)m_contours.size(); j++)
   {
-	  for (i=0; i<m_nPoints[j]; i++)
-		  fprintf (ptr, "v %f %f %f\n", m_pPoints[j][2*i], m_pPoints[j][2*i+1], 0.);
-	  for (i=0; i<m_nPoints[j]; i++)
-		  fprintf (ptr, "v %f %f %f\n", m_pPoints[j][2*i], m_pPoints[j][2*i+1], fHeight);
+	  int nP = (int)m_contours[j].size();
+	  float *pPoints = (float*)m_contours[j].data();
+	  for (i=0; i<nP; i++)
+		  fprintf (ptr, "v %f %f %f\n", pPoints[2*i], pPoints[2*i+1], 0.);
+	  for (i=0; i<nP; i++)
+		  fprintf (ptr, "v %f %f %f\n", pPoints[2*i], pPoints[2*i+1], fHeight);
   }
 
   int vOffset = 0;
-  for (int j=0; j<m_nContours; j++)
+  for (int j=0; j<(int)m_contours.size(); j++)
   {
-	  for (i=0; i<m_nPoints[j]-1; i++)
+	  int nP = (int)m_contours[j].size();
+	  for (i=0; i<nP-1; i++)
 	  {
 		  fprintf (ptr, "f %d %d %d %d\n",
-			   1+vOffset+i, 1+vOffset+(i+1)%m_nPoints[j],
-			   1+vOffset+m_nPoints[j]+(i+1)%m_nPoints[j], 1+vOffset+m_nPoints[j]+i);
-		  //fprintf (ptr, "f %d %d %d\n", 1+i, 1+i+1, 1+(m_nPoints+i+1)%(2*m_nPoints));
-		  //fprintf (ptr, "f %d %d %d\n", 1+i, 1+(m_nPoints+i+1)%(2*m_nPoints), 1+m_nPoints+i);
+			   1+vOffset+i, 1+vOffset+(i+1)%nP,
+			   1+vOffset+nP+(i+1)%nP, 1+vOffset+nP+i);
 	  }
-	  vOffset += 2*m_nPoints[j];
+	  vOffset += 2*nP;
   }
 
   fclose (ptr);
@@ -607,55 +537,55 @@ void Polygon2::thicken (Polygon2* polygon, float ithickness, float othickness, i
 {
      if (polygon == nullptr)
 	  return;
-     
-     m_nContours = polygon->m_nContours;
-     m_nPoints = (unsigned int*) malloc (m_nContours*sizeof(unsigned int));
-     m_pPoints = (float**) malloc (m_nContours*sizeof(float*));
 
-     for (unsigned int j=0; j<polygon->m_nContours; j++)
+     m_contours.assign (polygon->m_contours.size(), {});
+
+     for (unsigned int j=0; j<polygon->m_contours.size(); j++)
      {
-	  m_nPoints[j] = 2*polygon->m_nPoints[j];
+	  float        *src  = (float*)polygon->m_contours[j].data();
+	  unsigned int  srcN = (unsigned int)polygon->m_contours[j].size();
+	  unsigned int newN = 2*srcN;
 	  if (!bOpen)
-	       m_nPoints[j] += 2;
-	  unsigned int nvnew = m_nPoints[j];
-	  m_pPoints[j] = (float*)malloc(2*m_nPoints[j]*sizeof(float));
-	  for (unsigned int i=0; i<polygon->m_nPoints[j]; i++)
+	       newN += 2;
+	  unsigned int nvnew = newN;
+	  m_contours[j].resize (newN);
+	  for (unsigned int i=0; i<srcN; i++)
 	  {
 	       Vector2f pt;
 	       Vector2f s1, s2;
 	       if (bOpen && i == 0) // first vertex
 	       {
 		       s1.Set (
-				  polygon->m_pPoints[j][2] - polygon->m_pPoints[j][0],
-				  polygon->m_pPoints[j][3] - polygon->m_pPoints[j][1]);
+				  src[2] - src[0],
+				  src[3] - src[1]);
 		       (s1).Normalize ();
 		       
 		       // right side
 		       set_point (j, i,
-				  polygon->m_pPoints[j][0] + othickness*s1[1],
-				  polygon->m_pPoints[j][1] - othickness*s1[0]);
+				  src[0] + othickness*s1[1],
+				  src[1] - othickness*s1[0]);
 		       
 		       // left side
-		       set_point (j, 2*polygon->m_nPoints[j]-1,
-				  polygon->m_pPoints[j][0] - ithickness*s1[1],
-				  polygon->m_pPoints[j][1] + ithickness*s1[0]);
+		       set_point (j, 2*srcN-1,
+				  src[0] - ithickness*s1[1],
+				  src[1] + ithickness*s1[0]);
 	       }
-	       else if (bOpen && i == polygon->m_nPoints[j]-1) // last vertex
+	       else if (bOpen && i == srcN-1) // last vertex
 	       {
 		       s1.Set (
-				  polygon->m_pPoints[j][2*i] - polygon->m_pPoints[j][2*(i-1)],
-				  polygon->m_pPoints[j][2*i+1] - polygon->m_pPoints[j][2*(i-1)+1]);
+				  src[2*i] - src[2*(i-1)],
+				  src[2*i+1] - src[2*(i-1)+1]);
 		       (s1).Normalize ();
 		       
 		       // right side
 		       set_point (j, i,
-				  polygon->m_pPoints[j][2*i] + othickness*s1[1], 
-				  polygon->m_pPoints[j][2*i+1] - othickness*s1[0]);
+				  src[2*i] + othickness*s1[1], 
+				  src[2*i+1] - othickness*s1[0]);
 		       
 		       // left side
-		       set_point (j, 2*polygon->m_nPoints[j]-1-i,
-				  polygon->m_pPoints[j][2*i] - ithickness*s1[1],
-				  polygon->m_pPoints[j][2*i+1] + ithickness*s1[0]);
+		       set_point (j, 2*srcN-1-i,
+				  src[2*i] - ithickness*s1[1],
+				  src[2*i+1] + ithickness*s1[0]);
 	       }
 	       else
 	       {
@@ -663,9 +593,9 @@ void Polygon2::thicken (Polygon2* polygon, float ithickness, float othickness, i
 		       Vector2f pt2;
 		       
 		       Vector2f prev, current, next;
-		       polygon->get_point (j, (i+polygon->m_nPoints[j]-1)%polygon->m_nPoints[j], &prev[0], &prev[1]);
+		       polygon->get_point (j, (i+srcN-1)%srcN, &prev[0], &prev[1]);
 		       polygon->get_point (j, i, &current[0], &current[1]);
-		       polygon->get_point (j, (i+1)%polygon->m_nPoints[j], &next[0], &next[1]);
+		       polygon->get_point (j, (i+1)%srcN, &next[0], &next[1]);
 
 		       s1 = current - prev;
 		       (s1).Normalize ();
@@ -679,18 +609,18 @@ void Polygon2::thicken (Polygon2* polygon, float ithickness, float othickness, i
 		       // segment 1
 		       pt.Set (othickness*s1[1], -othickness*s1[0]);
 		       
-		       seg1.vs[0] = polygon->m_pPoints[j][2*((i-1+polygon->m_nPoints[j])%polygon->m_nPoints[j])] + pt[0];
-		       seg1.vs[1] = polygon->m_pPoints[j][2*((i-1+polygon->m_nPoints[j])%polygon->m_nPoints[j])+1] + pt[1];
-		       seg1.ve[0] = polygon->m_pPoints[j][2*i] + pt[0];
-		       seg1.ve[1] = polygon->m_pPoints[j][2*i+1] + pt[1];
+		       seg1.vs[0] = src[2*((i-1+srcN)%srcN)] + pt[0];
+		       seg1.vs[1] = src[2*((i-1+srcN)%srcN)+1] + pt[1];
+		       seg1.ve[0] = src[2*i] + pt[0];
+		       seg1.ve[1] = src[2*i+1] + pt[1];
 		    
 		       // segment 2
 		       pt.Set (othickness*s2[1], -othickness*s2[0]);
 		       
-		       seg2.vs[0] = polygon->m_pPoints[j][2*i] + pt[0];
-		       seg2.vs[1] = polygon->m_pPoints[j][2*i+1] + pt[1];
-		       seg2.ve[0] = polygon->m_pPoints[j][2*((i+1)%polygon->m_nPoints[j])] + pt[0];
-		       seg2.ve[1] = polygon->m_pPoints[j][2*((i+1)%polygon->m_nPoints[j])+1] + pt[1];
+		       seg2.vs[0] = src[2*i] + pt[0];
+		       seg2.vs[1] = src[2*i+1] + pt[1];
+		       seg2.ve[0] = src[2*((i+1)%srcN)] + pt[0];
+		       seg2.ve[1] = src[2*((i+1)%srcN)+1] + pt[1];
 		       
 		       // get intersection
 		       seg2_seg2_intersection (seg1, seg2, pt2);
@@ -703,18 +633,18 @@ void Polygon2::thicken (Polygon2* polygon, float ithickness, float othickness, i
 		       // segment 1
 		       pt.Set (-ithickness*s1[1], ithickness*s1[0]);
 		       
-		       seg1.vs[0] = polygon->m_pPoints[j][2*((i-1+polygon->m_nPoints[j])%polygon->m_nPoints[j])] + pt[0];
-		       seg1.vs[1] = polygon->m_pPoints[j][2*((i-1+polygon->m_nPoints[j])%polygon->m_nPoints[j])+1] + pt[1];
-		       seg1.ve[0] = polygon->m_pPoints[j][2*i] + pt[0];
-		       seg1.ve[1] = polygon->m_pPoints[j][2*i+1] + pt[1];
+		       seg1.vs[0] = src[2*((i-1+srcN)%srcN)] + pt[0];
+		       seg1.vs[1] = src[2*((i-1+srcN)%srcN)+1] + pt[1];
+		       seg1.ve[0] = src[2*i] + pt[0];
+		       seg1.ve[1] = src[2*i+1] + pt[1];
 		       
 		       // segment 2
 		       pt.Set (-ithickness*s2[1], ithickness*s2[0]);
 		       
-		       seg2.vs[0] = polygon->m_pPoints[j][2*i] + pt[0];
-		       seg2.vs[1] = polygon->m_pPoints[j][2*i+1] + pt[1];
-		       seg2.ve[0] = polygon->m_pPoints[j][2*((i+1)%polygon->m_nPoints[j])] + pt[0];
-		       seg2.ve[1] = polygon->m_pPoints[j][2*((i+1)%polygon->m_nPoints[j])+1] + pt[1];
+		       seg2.vs[0] = src[2*i] + pt[0];
+		       seg2.vs[1] = src[2*i+1] + pt[1];
+		       seg2.ve[0] = src[2*((i+1)%srcN)] + pt[0];
+		       seg2.ve[1] = src[2*((i+1)%srcN)+1] + pt[1];
 		       
 		       // get intersection
 		       seg2_seg2_intersection (seg1, seg2, pt2);
@@ -726,10 +656,10 @@ void Polygon2::thicken (Polygon2* polygon, float ithickness, float othickness, i
 		  float x, y;
 
 		  get_point (j, 0, &x, &y);
-		  set_point (j, polygon->m_nPoints[j], x, y);
+		  set_point (j, srcN, x, y);
 
 		  get_point (j, nvnew-1, &x, &y);
-		  set_point (j, polygon->m_nPoints[j]+1, x, y);
+		  set_point (j, srcN+1, x, y);
 	  }
      }
 }
@@ -738,24 +668,23 @@ void Polygon2::dilate (Polygon2* polygon, float d)
 {
      if (polygon == nullptr)
 	  return;
-     
-     m_nContours = polygon->m_nContours;
-     m_nPoints = (unsigned int*) malloc (m_nContours*sizeof(unsigned int));
-     m_pPoints = (float**) malloc (m_nContours*sizeof(float*));
 
-     for (unsigned int j=0; j<polygon->m_nContours; j++)
+     m_contours.assign (polygon->m_contours.size(), {});
+
+     for (unsigned int j=0; j<polygon->m_contours.size(); j++)
      {
-	  m_nPoints[j] = polygon->m_nPoints[j];
-	  m_pPoints[j] = (float*)malloc(2*m_nPoints[j]*sizeof(float));
-	  for (unsigned int i=0; i<polygon->m_nPoints[j]; i++)
+	  float        *src  = (float*)polygon->m_contours[j].data();
+	  unsigned int  srcN = (unsigned int)polygon->m_contours[j].size();
+	  m_contours[j].resize (srcN);
+	  for (unsigned int i=0; i<srcN; i++)
 	  {
 		  seg2 seg1, seg2;
 		  
 		  Vector2f s1, s2;
 		  Vector2f prev, current, next, pt;
-		  polygon->get_point (j, (i+polygon->m_nPoints[j]-1)%polygon->m_nPoints[j], &prev[0], &prev[1]);
+		  polygon->get_point (j, (i+srcN-1)%srcN, &prev[0], &prev[1]);
 		  polygon->get_point (j, i, &current[0], &current[1]);
-		  polygon->get_point (j, (i+1)%polygon->m_nPoints[j], &next[0], &next[1]);
+		  polygon->get_point (j, (i+1)%srcN, &next[0], &next[1]);
 		  
 		  s1 = current - prev;
 		  (s1).Normalize ();
@@ -765,18 +694,18 @@ void Polygon2::dilate (Polygon2* polygon, float d)
 		  // segment 1
 		  pt.Set (d*s1[1], -d*s1[0]);
 		  
-		  seg1.vs[0] = polygon->m_pPoints[j][2*((i-1+polygon->m_nPoints[j])%polygon->m_nPoints[j])] + pt[0];
-		  seg1.vs[1] = polygon->m_pPoints[j][2*((i-1+polygon->m_nPoints[j])%polygon->m_nPoints[j])+1] + pt[1];
-		  seg1.ve[0] = polygon->m_pPoints[j][2*i] + pt[0];
-		  seg1.ve[1] = polygon->m_pPoints[j][2*i+1] + pt[1];
+		  seg1.vs[0] = src[2*((i-1+srcN)%srcN)] + pt[0];
+		  seg1.vs[1] = src[2*((i-1+srcN)%srcN)+1] + pt[1];
+		  seg1.ve[0] = src[2*i] + pt[0];
+		  seg1.ve[1] = src[2*i+1] + pt[1];
 		  
 		  // segment 2
 		  pt.Set (d*s2[1], -d*s2[0]);
 		  
-		  seg2.vs[0] = polygon->m_pPoints[j][2*i] + pt[0];
-		  seg2.vs[1] = polygon->m_pPoints[j][2*i+1] + pt[1];
-		  seg2.ve[0] = polygon->m_pPoints[j][2*((i+1)%polygon->m_nPoints[j])] + pt[0];
-		  seg2.ve[1] = polygon->m_pPoints[j][2*((i+1)%polygon->m_nPoints[j])+1] + pt[1];
+		  seg2.vs[0] = src[2*i] + pt[0];
+		  seg2.vs[1] = src[2*i+1] + pt[1];
+		  seg2.ve[0] = src[2*((i+1)%srcN)] + pt[0];
+		  seg2.ve[1] = src[2*((i+1)%srcN)+1] + pt[1];
 		  
 		  // get intersection
 		  seg2_seg2_intersection (seg1, seg2, pt);
@@ -793,17 +722,17 @@ void Polygon2::dilate (Polygon2* polygon, float d)
 //
 void Polygon2::moment_0 (float m[1])
 {
-	if (m_nContours != 1)
+	if (m_contours.size() != 1)
 		return;
 
-	m[0] = (float)m_nPoints[0];
+	m[0] = (float)m_contours[0].size();
 }
 
 // first order moment (centroid)
 // m = { m10 , m01 }
 void Polygon2::moment_1 (float m[2])
 {
-	if (m_nContours != 1)
+	if (m_contours.size() != 1)
 		return;
 
 	float m0[1];
@@ -811,10 +740,12 @@ void Polygon2::moment_1 (float m[2])
 
 	m[0] = 0.;
 	m[1] = 0.;
-	for (int i=0; i<m_nPoints[0]; i++)
+	int n = (int)m_contours[0].size();
+	float *pPoints = (float*)m_contours[0].data();
+	for (int i=0; i<n; i++)
 	{
-		m[0] += m_pPoints[0][2*i];
-		m[1] += m_pPoints[0][2*i+1];
+		m[0] += pPoints[2*i];
+		m[1] += pPoints[2*i+1];
 	}
 	m[0] /= m0[0];
 	m[1] /= m0[0];
@@ -824,7 +755,7 @@ void Polygon2::moment_1 (float m[2])
 // m = { m20 , m11 , m02 }
 void Polygon2::moment_2 (float m[3], bool centralized)
 {
-	if (m_nContours != 1)
+	if (m_contours.size() != 1)
 		return;
 
 	float m0[1];
@@ -833,10 +764,12 @@ void Polygon2::moment_2 (float m[3], bool centralized)
 	m[0] = 0.0;
 	m[1] = 0.0;
 	m[2] = 0.0;
-	for (int i=0; i<m_nPoints[0]; i++)
+	int n = (int)m_contours[0].size();
+	float *pPoints = (float*)m_contours[0].data();
+	for (int i=0; i<n; i++)
 	{
-		float x = m_pPoints[0][2*i];
-		float y = m_pPoints[0][2*i+1];
+		float x = pPoints[2*i];
+		float y = pPoints[2*i+1];
 
 		m[0] += x * x;
 		m[1] += x * y;
@@ -860,17 +793,19 @@ void Polygon2::moment_2 (float m[3], bool centralized)
 // m = { m30, m21, m12, m03 }
 void Polygon2::moment_3 (float m[4])
 {
-	if (m_nContours != 1)
+	if (m_contours.size() != 1)
 		return;
 
 	m[0] = 0.0;
 	m[1] = 0.0;
 	m[2] = 0.0;
 	m[3] = 0.0;
-	for (int i=0; i<m_nPoints[0]; i++)
+	int n = (int)m_contours[0].size();
+	float *pPoints = (float*)m_contours[0].data();
+	for (int i=0; i<n; i++)
 	{
-		float x = m_pPoints[0][2*i];
-		float y = m_pPoints[0][2*i+1];
+		float x = pPoints[2*i];
+		float y = pPoints[2*i+1];
 		m[0] += x * x * x;
 		m[1] += x * x * y;
 		m[2] += x * y * y;

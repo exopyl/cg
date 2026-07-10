@@ -8,12 +8,12 @@
 void
 Polygon2::search_symmetry_zabrodsky (float *xc, float *yc, float *slope)
 {
-	if (m_nContours != 1)
+	if (m_contours.size() != 1)
 		return;
 
   int i,j;
-  int n = m_nPoints[0];
-  float *pPoints = m_pPoints[0];
+  int n = (int)m_contours[0].size();
+  float *pPoints = (float*)m_contours[0].data();
 
   // centerize the contour
   centerize ();

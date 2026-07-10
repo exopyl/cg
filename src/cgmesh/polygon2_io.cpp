@@ -105,22 +105,29 @@ static int _bCountVertices = 0;
 
 static void _AddPointToCurrentContour (float x, float y, float z)
 {
+	if (_polygon->m_contours.size() <= _iCurrentContour)
+		_polygon->m_contours.resize (_iCurrentContour + 1);
+	std::vector<Vector2f> &contour = _polygon->m_contours[_iCurrentContour];
+
+	// ensure the slot exists (counting pass grows the contour; the write pass
+	// re-uses the already-allocated storage but stays safe if counts differ)
+	if (contour.size() <= _iCurrentPoint)
+		contour.resize (_iCurrentPoint + 1);
+
 	if (_bCountVertices != 1)
 	{
-		//dbg ("pContours[%d][%d]", _iCurrentContour, _iCurrentPoint);
-		_polygon->m_pPoints[_iCurrentContour][2*_iCurrentPoint]   = x;
-		_polygon->m_pPoints[_iCurrentContour][2*_iCurrentPoint+1] = y;
-		//_polygon->m_pPoints[_iCurrentContour][3*_iCurrentPoint+2] = z;
+		contour[_iCurrentPoint].x = x;
+		contour[_iCurrentPoint].y = y;
 	}
 
 	_iCurrentPoint++;
-	_polygon->m_nPoints[_iCurrentContour] = _iCurrentPoint;
 }
 
 static void _CloseCurrentContour (void)
 {
 	_iCurrentContour++;
-	_polygon->m_nContours = _iCurrentContour;
+	if (_polygon->m_contours.size() < _iCurrentContour)
+		_polygon->m_contours.resize (_iCurrentContour);
 	_iCurrentPoint = 0;
 }
 
@@ -638,15 +645,14 @@ void Polygon2::input_from_svg_path (char *filename)
 
 	printf ("\n\n--------------------------------------------------------\n");
 	// allocate memory for the contours
-	for (unsigned int i=0; i<_polygon->m_nContours; i++)
+	for (unsigned int i=0; i<_polygon->m_contours.size(); i++)
 	{
 		printf ("contour %d : %d points\n", i, _polygon->get_n_points (i));
 		_polygon->add_contour (i, _polygon->get_n_points (i), nullptr);
 	}
-	
-	// re initialize the number of vertices in each contour
-	for (unsigned int i=0; i<_polygon->m_nContours; i++)
-		_polygon->m_nPoints[i] = 0;
+
+	// restart the writing cursors; the contour storage keeps the sizes counted
+	// during the first pass and is overwritten in place by the second pass
 	_iCurrentContour = 0;
 	_iCurrentPoint = 0;
 	printf ("\n\n--------------------------------------------------------\n");
@@ -687,21 +693,20 @@ void Polygon2::input (char *filename)
 	fscanf (ptr, "# %d\n", &nPoints);
 	alloc_contours (1);
 
-	m_nPoints[0] = nPoints;
-	m_pPoints[0] = (float*) malloc (2*nPoints*sizeof(float));
+	m_contours[0].resize (nPoints);
 	for (i=0; i<nPoints; i++)
-		fscanf (ptr, "%f %f\n", &m_pPoints[0][2*i], &m_pPoints[0][2*i+1]);
+		fscanf (ptr, "%f %f\n", &m_contours[0][i].x, &m_contours[0][i].y);
 	fclose(ptr);
 }
 
 // dump
 void Polygon2::dump (void)
 {
-	for (int i=0; i<m_nContours; i++)
+	for (int i=0; i<(int)m_contours.size(); i++)
 	{
-		printf ("contour %d / %d\n", i, m_nContours);
-		int nPoints = m_nPoints[i];
-		float *pPoints = m_pPoints[i];
+		printf ("contour %d / %d\n", i, (int)m_contours.size());
+		int nPoints = (int)m_contours[i].size();
+		float *pPoints = (float*)m_contours[i].data();
 		for (int j=0; j<nPoints; j++)
 			printf (" %f %f\n", pPoints[2*j], pPoints[2*j+1]);
 	}
@@ -715,11 +720,13 @@ void Polygon2::output (char *filename)
 	{
 		printf ("output in dat\n");
 		FILE *ptr = fopen (filename, "w");
-		for (int j=0; j<m_nContours; j++)
+		for (int j=0; j<(int)m_contours.size(); j++)
 		{
-			fprintf (ptr, "# %d\n", m_nPoints[j]);
-			for (int i=0; i<m_nPoints[j]; i++)
-				fprintf (ptr, "%f %f\n", m_pPoints[j][2*i], m_pPoints[j][2*i+1]);
+			int nP = (int)m_contours[j].size();
+			float *pPoints = (float*)m_contours[j].data();
+			fprintf (ptr, "# %d\n", nP);
+			for (int i=0; i<nP; i++)
+				fprintf (ptr, "%f %f\n", pPoints[2*i], pPoints[2*i+1]);
 		}
 		fclose (ptr);
 	}
@@ -727,11 +734,13 @@ void Polygon2::output (char *filename)
 	{
 		printf ("output in obj\n");
 		FILE *ptr = fopen (filename, "w");
-		for (int j=0; j<m_nContours; j++)
+		for (int j=0; j<(int)m_contours.size(); j++)
 		{
-			fprintf (ptr, "# %d\n", m_nPoints[j]);
-			for (int i=0; i<m_nPoints[j]; i++)
-				fprintf (ptr, "v %f %f %f\n", m_pPoints[j][2*i], m_pPoints[j][2*i+1], 0.);
+			int nP = (int)m_contours[j].size();
+			float *pPoints = (float*)m_contours[j].data();
+			fprintf (ptr, "# %d\n", nP);
+			for (int i=0; i<nP; i++)
+				fprintf (ptr, "v %f %f %f\n", pPoints[2*i], pPoints[2*i+1], 0.);
 		}
 		fclose (ptr);
 	}
@@ -772,14 +781,16 @@ void Polygon2::output (char *filename)
 			}
 
 		unsigned int xstart, ystart, xend, yend;
-		for (int j=0; j<m_nContours; j++)
+		for (int j=0; j<(int)m_contours.size(); j++)
 		{
-			for (int i=0; i<m_nPoints[j]; i++)
+			int nP = (int)m_contours[j].size();
+			float *pPoints = (float*)m_contours[j].data();
+			for (int i=0; i<nP; i++)
 			{
-				xstart = -xmin + m_pPoints[j][2*i];
-				ystart = (-ymin + m_pPoints[j][2*i+1]);
-				xend = -xmin + m_pPoints[j][2*((i+1)%m_nPoints[j])];
-				yend = (-ymin + m_pPoints[j][2*((i+1)%m_nPoints[j])+1]);
+				xstart = -xmin + pPoints[2*i];
+				ystart = (-ymin + pPoints[2*i+1]);
+				xend = -xmin + pPoints[2*((i+1)%nP)];
+				yend = (-ymin + pPoints[2*((i+1)%nP)+1]);
 				//printf ("%d %d %d %d\n", xstart, ystart, xend, yend);
 				img->draw_line (xstart, h-1-ystart,
 						xend, h-1-yend,

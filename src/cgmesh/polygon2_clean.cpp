@@ -23,16 +23,12 @@ static void glutess_begin(int type, void *user_data)
 
 	printf ("begin contour %d\n", state->current_contour);
 
-	if (state->current_contour >= polygon->m_nContours) {
+	if (state->current_contour >= polygon->m_contours.size()) {
 		printf ("realloc polygon\n");
-		polygon->m_pPoints = (float**)realloc(polygon->m_pPoints, (polygon->m_nContours + 1)*sizeof(float*));
-		polygon->m_nPoints = (unsigned int*)realloc(polygon->m_nPoints, (polygon->m_nContours + 1)*sizeof(unsigned int));
-		polygon->m_nPoints[polygon->m_nContours] = 0;
-		polygon->m_nContours++;
+		polygon->m_contours.resize (polygon->m_contours.size() + 1);
 	}
 
-	polygon->m_pPoints[state->current_contour] = (float*)malloc(2*state->n_vertices_per_contour*sizeof(float));
-	polygon->m_nPoints[state->current_contour] = state->n_vertices_per_contour;
+	polygon->m_contours[state->current_contour].assign (state->n_vertices_per_contour, {});
 
 	state->current_vertex = 0;
 	(void) type;
@@ -43,7 +39,7 @@ static void glutess_end(void *user_data)
 	struct glutess_state *state = (struct glutess_state *) user_data;
 	Polygon2 *polygon = state->polygon;
 
-	polygon->m_nPoints[state->current_contour] = state->current_vertex;
+	polygon->m_contours[state->current_contour].resize (state->current_vertex);
 	state->current_contour++;
 	// optional but cleaner : resize correctly the size of polygon->pContours
 }
@@ -56,10 +52,8 @@ static void glutess_vertex(void *vertex_data, void *user_data)
 	unsigned long ntmp = (unsigned long) vertex_data;
 	double *coords = (double*)&state->tmp[3*ntmp];
 
-	if (state->current_vertex >= polygon->m_nPoints[state->current_contour]) {
-		unsigned int nVertices = polygon->m_nPoints[state->current_contour];
-		polygon->m_pPoints[state->current_contour] = (float*)realloc(polygon->m_pPoints[state->current_contour], 2*(nVertices+1)*sizeof(float));
-		polygon->m_nPoints[state->current_contour] = nVertices + 1;
+	if (state->current_vertex >= polygon->m_contours[state->current_contour].size()) {
+		polygon->m_contours[state->current_contour].resize (state->current_vertex + 1);
 	}
 
 	polygon->set_point (state->current_contour, state->current_vertex, coords[0], coords[1]);
@@ -101,24 +95,16 @@ static void glutess_combine(double coords[3],
 int Polygon2::clean (Polygon2* polygon)
 {
 #ifdef USE_GLUTESS
-	if (polygon == nullptr || polygon->m_nContours == 0)
+	if (polygon == nullptr || polygon->m_contours.empty())
 		return -1;
 
 	// polygon merged
-	m_nContours = 5*polygon->m_nContours;
-	m_nPoints = (unsigned int*) malloc (m_nContours*sizeof(unsigned int));
-	m_pPoints = (float**) malloc (m_nContours*sizeof(float*));
-
-	for (unsigned int i=0; i<polygon->m_nContours; i++)
-	{
-		m_pPoints[i] = nullptr;
-		m_nPoints[i] = 0;
-	}
+	m_contours.assign (5*polygon->m_contours.size(), {});
 
 	// compute the number of vertices
 	unsigned int nVertices = 0;
-	for (unsigned int i=0; i<polygon->m_nContours; i++)
-		nVertices += polygon->m_nPoints[i];
+	for (unsigned int i=0; i<polygon->m_contours.size(); i++)
+		nVertices += (unsigned int)polygon->m_contours[i].size();
 
 	double *coords = (double*) malloc(2 * sizeof(double) * nVertices);
 	if (coords == nullptr)
@@ -147,14 +133,14 @@ int Polygon2::clean (Polygon2* polygon)
 	
 	gluTessBeginPolygon(tess, &state);
 	unsigned int iVertex = 0;
-	for (unsigned int j=0; j<polygon->m_nContours; j++)
+	for (unsigned int j=0; j<polygon->m_contours.size(); j++)
 	{
 		gluTessBeginContour(tess);
-		for (unsigned int i=0; i<polygon->m_nPoints[j]; i++)
+		for (unsigned int i=0; i<polygon->m_contours[j].size(); i++)
 		{
-			state.tmp[2 * iVertex + 0] = (double) polygon->m_pPoints[j][2*i];
-			state.tmp[2 * iVertex + 1] = (double) polygon->m_pPoints[j][2*i+1];
-			//state.tmp[3 * iVertex + 2] = (double) polygon->m_pPoints[j][i].p[2];
+			state.tmp[2 * iVertex + 0] = (double) polygon->m_contours[j][i].x;
+			state.tmp[2 * iVertex + 1] = (double) polygon->m_contours[j][i].y;
+			//state.tmp[3 * iVertex + 2] = (double) polygon->m_contours[j][i].z;
 			//dbg ("adding %d : %f %f %f", i, coords[3 * iVertex + 0], coords[3 * iVertex + 1], coords[3 * iVertex + 2]);
 
 			gluTessVertex(tess, &state.tmp[2 * iVertex], (void *)(unsigned long) iVertex);

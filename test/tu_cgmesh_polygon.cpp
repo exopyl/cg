@@ -1,5 +1,6 @@
 #include <cmath>
 #include <cstring>
+#include <cstdio>
 
 #include <gtest/gtest.h>
 
@@ -22,15 +23,15 @@ struct PolygonRef {
 
 static void expect_polygon_eq(const Polygon2 &pol, const PolygonRef &ref, float tol = 1e-5f)
 {
-	ASSERT_EQ(pol.m_nContours, (unsigned int)ref.nContours);
+	ASSERT_EQ((unsigned int)pol.m_contours.size(), (unsigned int)ref.nContours);
 	for (int c = 0; c < ref.nContours; c++)
 	{
-		ASSERT_EQ(pol.m_nPoints[c], (unsigned int)ref.nPoints[c]);
+		ASSERT_EQ((unsigned int)pol.m_contours[c].size(), (unsigned int)ref.nPoints[c]);
 		for (int i = 0; i < ref.nPoints[c]; i++)
 		{
-			EXPECT_NEAR(pol.m_pPoints[c][2 * i],     ref.points[c][i].x, tol)
+			EXPECT_NEAR(pol.m_contours[c][i].x, ref.points[c][i].x, tol)
 				<< "contour=" << c << " point=" << i << " coord=x";
-			EXPECT_NEAR(pol.m_pPoints[c][2 * i + 1], ref.points[c][i].y, tol)
+			EXPECT_NEAR(pol.m_contours[c][i].y, ref.points[c][i].y, tol)
 				<< "contour=" << c << " point=" << i << " coord=y";
 		}
 	}
@@ -50,6 +51,142 @@ static void make_triangle(Polygon2 &pol)
 	pol.input(pts, 3);
 }
 
+// ===========================================================================
+// Coverage for the algorithmic API that had no tests: matching (Arkin),
+// offsetting (thicken/dilate), extrusion, symmetry detectors, clean.
+// ===========================================================================
+
+// Arkin turning-function distance: a shape matched against a copy of itself is
+// ~0; a clearly different shape (triangle) is farther. (Both the OOB crash and
+// the resampling bug that ignored the sample count are now fixed.)
+TEST(TEST_cgmesh_polygon, MatchingArkin_SelfNearZero_DifferentLarger)
+{
+	Polygon2 squareA; make_unit_square(squareA);
+	Polygon2 squareB; make_unit_square(squareB);
+	Polygon2 tri;     make_triangle(tri);
+
+	const int nn = 64;
+	const float dSelf = squareA.matching_arkin(&squareB, nn);
+	const float dDiff = squareA.matching_arkin(&tri,     nn);
+	printf("matching_arkin: self=%g  square-vs-triangle=%g\n", dSelf, dDiff);
+
+	EXPECT_GE(dSelf, 0.f);
+	EXPECT_NEAR(dSelf, 0.f, 1e-2f) << "a shape vs a copy of itself must match with ~0 distance";
+	EXPECT_GT(dDiff, dSelf)        << "a triangle must be farther from a square than the square is from itself";
+}
+
+// thicken() turns an open profile of N points into a closed band of 2N points.
+TEST(TEST_cgmesh_polygon, Thicken_OpenProfile_DoublesPointCount)
+{
+	float pts[] = { 0.f, 0.f, 1.f, 0.f, 2.f, 0.f };   // 3-point open polyline
+	Polygon2 profile; profile.input(pts, 3);
+
+	Polygon2 band;
+	band.thicken(&profile, 0.1f, 0.1f, /*bOpen=*/1);
+
+	ASSERT_EQ(band.get_n_contours(), 1);
+	EXPECT_EQ(band.get_n_points(0), 2 * profile.get_n_points(0));   // 6
+	// all coordinates finite
+	for (int i = 0; i < band.get_n_points(0); ++i)
+	{
+		float x, y; band.get_point(0, i, &x, &y);
+		EXPECT_TRUE(std::isfinite(x) && std::isfinite(y));
+	}
+}
+
+// dilate() offsets each vertex by d; point/contour counts are preserved and the
+// geometry actually moves (the offset polygon differs from the source).
+TEST(TEST_cgmesh_polygon, Dilate_PreservesCountsAndOffsets)
+{
+	Polygon2 square; make_unit_square(square);
+
+	Polygon2 out;
+	out.dilate(&square, 0.25f);
+
+	ASSERT_EQ(out.get_n_contours(), 1);
+	ASSERT_EQ(out.get_n_points(0), square.get_n_points(0));   // 4
+
+	bool moved = false;
+	for (int i = 0; i < out.get_n_points(0); ++i)
+	{
+		float xs, ys, xo, yo;
+		square.get_point(0, i, &xs, &ys);
+		out.get_point(0, i, &xo, &yo);
+		EXPECT_TRUE(std::isfinite(xo) && std::isfinite(yo));
+		if (std::fabs(xo - xs) > 1e-4f || std::fabs(yo - ys) > 1e-4f) moved = true;
+	}
+	EXPECT_TRUE(moved) << "dilate must offset the vertices";
+}
+
+// extrude() writes an OBJ prism: 2N vertices + side faces.
+TEST(TEST_cgmesh_polygon, Extrude_WritesObjWithVerticesAndFaces)
+{
+	Polygon2 square; make_unit_square(square);
+	const char* path = "./polygon_extrude.obj";
+	square.extrude(2.0f, (char*)path);
+
+	FILE* f = fopen(path, "r");
+	ASSERT_NE(f, nullptr);
+	unsigned int nv = 0, nf = 0;
+	char line[256];
+	while (fgets(line, sizeof(line), f))
+	{
+		if (line[0] == 'v' && line[1] == ' ') nv++;
+		else if (line[0] == 'f' && line[1] == ' ') nf++;
+	}
+	fclose(f);
+	std::remove(path);
+
+	EXPECT_EQ(nv, 2u * 4u);   // bottom + top rings
+	EXPECT_GT(nf, 0u);        // side quads
+}
+
+// clean() is currently a no-op stub (its body is under #ifdef USE_GLUTESS, which
+// is not defined): it must return 0 and not crash. Pins the current behaviour.
+TEST(TEST_cgmesh_polygon, Clean_IsNoOpStub_ReturnsZero)
+{
+	Polygon2 square; make_unit_square(square);
+	Polygon2 out;
+	EXPECT_EQ(out.clean(&square), 0);
+}
+
+// Zabrodsky symmetry: returns the assumed centre (0,0) and a finite axis slope.
+TEST(TEST_cgmesh_polygon, SymmetryZabrodsky_CenteredSquare_FiniteAxis)
+{
+	// square centred on the origin (zabrodsky assumes centre at 0,0)
+	float pts[] = { -1.f,-1.f, 1.f,-1.f, 1.f,1.f, -1.f,1.f };
+	Polygon2 square; square.input(pts, 4);
+
+	float xc = 9.f, yc = 9.f, slope = std::nanf("");
+	square.search_symmetry_zabrodsky(&xc, &yc, &slope);
+
+	EXPECT_FLOAT_EQ(xc, 0.f);
+	EXPECT_FLOAT_EQ(yc, 0.f);
+	EXPECT_TRUE(std::isfinite(slope)) << "a symmetric square must yield a finite symmetry-axis slope";
+}
+
+// Smoke tests: the signature / Pridmore symmetry detectors (void, output via
+// side channels) must at least run on a valid polygon without crashing.
+TEST(TEST_cgmesh_polygon, SymmetrySignature_Smoke)
+{
+	Polygon2 square; make_unit_square(square);
+	square.search_symmetry_signature(SIGNATURE_CURVATURE, INTERPOLATION_LINEAR, 64);
+	square.search_symmetry_signature(SIGNATURE_DEVIATION, INTERPOLATION_LINEAR, 64);
+	SUCCEED();
+}
+TEST(TEST_cgmesh_polygon, SymmetryPridmore_Smoke)
+{
+	Polygon2 square; make_unit_square(square);
+	square.search_symmetry_pridmore();
+	SUCCEED();
+}
+TEST(TEST_cgmesh_polygon, SymmetryPridmoreBis_Smoke)
+{
+	Polygon2 square; make_unit_square(square);
+	square.search_symmetry_pridmore_bis();
+	SUCCEED();
+}
+
 // ---------------------------------------------------------------------------
 // TEST: Default constructor
 // ---------------------------------------------------------------------------
@@ -61,9 +198,8 @@ TEST(TEST_cgmesh_polygon, Constructor_Default)
 	Polygon2 pol;
 
 	// expectations
-	EXPECT_EQ(pol.m_nContours, 0u);
-	EXPECT_EQ(pol.m_nPoints, nullptr);
-	EXPECT_EQ(pol.m_pPoints, nullptr);
+	EXPECT_EQ(pol.m_contours.size(), 0u);
+	EXPECT_TRUE(pol.m_contours.empty());
 }
 
 // ---------------------------------------------------------------------------
@@ -79,16 +215,16 @@ TEST(TEST_cgmesh_polygon, Constructor_Copy)
 	Polygon2 copy(src);
 
 	// expectations
-	ASSERT_EQ(copy.m_nContours, 1u);
-	ASSERT_EQ(copy.m_nPoints[0], 4u);
+	ASSERT_EQ(copy.m_contours.size(), 1u);
+	ASSERT_EQ(copy.m_contours[0].size(), 4u);
 	for (int i = 0; i < 4; i++)
 	{
-		EXPECT_FLOAT_EQ(copy.m_pPoints[0][2 * i],     src.m_pPoints[0][2 * i]);
-		EXPECT_FLOAT_EQ(copy.m_pPoints[0][2 * i + 1], src.m_pPoints[0][2 * i + 1]);
+		EXPECT_FLOAT_EQ(copy.m_contours[0][i].x, src.m_contours[0][i].x);
+		EXPECT_FLOAT_EQ(copy.m_contours[0][i].y, src.m_contours[0][i].y);
 	}
 	// verify deep copy: modifying copy must not affect src
-	copy.m_pPoints[0][0] = 999.f;
-	EXPECT_FLOAT_EQ(src.m_pPoints[0][0], 0.f);
+	copy.m_contours[0][0].x = 999.f;
+	EXPECT_FLOAT_EQ(src.m_contours[0][0].x, 0.f);
 }
 
 // ---------------------------------------------------------------------------
@@ -105,16 +241,16 @@ TEST(TEST_cgmesh_polygon, AssignmentOperator)
 	dst = src;
 
 	// expectations
-	ASSERT_EQ(dst.m_nContours, 1u);
-	ASSERT_EQ(dst.m_nPoints[0], 4u);
+	ASSERT_EQ(dst.m_contours.size(), 1u);
+	ASSERT_EQ(dst.m_contours[0].size(), 4u);
 	for (int i = 0; i < 4; i++)
 	{
-		EXPECT_FLOAT_EQ(dst.m_pPoints[0][2 * i],     src.m_pPoints[0][2 * i]);
-		EXPECT_FLOAT_EQ(dst.m_pPoints[0][2 * i + 1], src.m_pPoints[0][2 * i + 1]);
+		EXPECT_FLOAT_EQ(dst.m_contours[0][i].x, src.m_contours[0][i].x);
+		EXPECT_FLOAT_EQ(dst.m_contours[0][i].y, src.m_contours[0][i].y);
 	}
 	// verify deep copy
-	dst.m_pPoints[0][0] = 999.f;
-	EXPECT_FLOAT_EQ(src.m_pPoints[0][0], 0.f);
+	dst.m_contours[0][0].x = 999.f;
+	EXPECT_FLOAT_EQ(src.m_contours[0][0].x, 0.f);
 }
 
 // ---------------------------------------------------------------------------
@@ -137,12 +273,12 @@ static void check_input_interleaved(const InputInterleavedParams &in, const Inpu
 	Polygon2 pol;
 	pol.input(in.pts, in.n);
 
-	ASSERT_EQ(pol.m_nContours, (unsigned int)exp.nContours);
-	ASSERT_EQ(pol.m_nPoints[0], (unsigned int)exp.nPoints);
+	ASSERT_EQ((unsigned int)pol.m_contours.size(), (unsigned int)exp.nContours);
+	ASSERT_EQ((unsigned int)pol.m_contours[0].size(), (unsigned int)exp.nPoints);
 	for (int i = 0; i < exp.nPoints; i++)
 	{
-		EXPECT_FLOAT_EQ(pol.m_pPoints[0][2 * i],     exp.pts[2 * i]);
-		EXPECT_FLOAT_EQ(pol.m_pPoints[0][2 * i + 1], exp.pts[2 * i + 1]);
+		EXPECT_FLOAT_EQ(pol.m_contours[0][i].x, exp.pts[2 * i]);
+		EXPECT_FLOAT_EQ(pol.m_contours[0][i].y, exp.pts[2 * i + 1]);
 	}
 }
 
@@ -183,12 +319,12 @@ static void check_input_separate(const InputSeparateParams &in)
 	Polygon2 pol;
 	pol.input(in.x, in.y, in.n);
 
-	ASSERT_EQ(pol.m_nContours, 1u);
-	ASSERT_EQ(pol.m_nPoints[0], (unsigned int)in.n);
+	ASSERT_EQ(pol.m_contours.size(), 1u);
+	ASSERT_EQ((unsigned int)pol.m_contours[0].size(), (unsigned int)in.n);
 	for (int i = 0; i < in.n; i++)
 	{
-		EXPECT_FLOAT_EQ(pol.m_pPoints[0][2 * i],     in.x[i]);
-		EXPECT_FLOAT_EQ(pol.m_pPoints[0][2 * i + 1], in.y[i]);
+		EXPECT_FLOAT_EQ(pol.m_contours[0][i].x, in.x[i]);
+		EXPECT_FLOAT_EQ(pol.m_contours[0][i].y, in.y[i]);
 	}
 }
 
@@ -227,9 +363,9 @@ TEST(TEST_cgmesh_polygon, InputFromFile)
 	pol.input(filename);
 
 	// expectations
-	EXPECT_GE(pol.m_nContours, 1u);
-	EXPECT_GT(pol.m_nPoints[0], 0u);
-	EXPECT_NE(pol.m_pPoints[0], nullptr);
+	EXPECT_GE(pol.m_contours.size(), 1u);
+	EXPECT_GT(pol.m_contours[0].size(), 0u);
+	EXPECT_NE(pol.m_contours[0].data(), nullptr);
 }
 
 // ---------------------------------------------------------------------------
@@ -237,19 +373,25 @@ TEST(TEST_cgmesh_polygon, InputFromFile)
 // ---------------------------------------------------------------------------
 TEST(TEST_cgmesh_polygon, InputReparameterize_Linear)
 {
-	return; // TOFIX
 	// context
 	Polygon2 src;
 	make_unit_square(src);
 
-	// action
+	// action : resample the unit square to exactly 40 arc-length-uniform points
 	Polygon2 dst;
-	dst.input(&src, INTERPOLATION_LINEAR, 0);
+	dst.input(&src, INTERPOLATION_LINEAR, 40);
 
 	// expectations
-	EXPECT_EQ(dst.m_nContours, 1u);
-	// the reparameterized polygon should have some points
-	EXPECT_GT(dst.m_nPoints[0], 4u);
+	ASSERT_EQ(dst.m_contours.size(), 1u);
+	EXPECT_EQ(dst.m_contours[0].size(), 40u);           // count now honours the argument
+	// all samples lie on the square's boundary (x or y at 0 or 1)
+	for (unsigned int i = 0; i < dst.m_contours[0].size(); ++i)
+	{
+		float x = dst.m_contours[0][i].x, y = dst.m_contours[0][i].y;
+		bool onBoundary = (std::fabs(x) < 1e-4f || std::fabs(x-1.f) < 1e-4f ||
+		                   std::fabs(y) < 1e-4f || std::fabs(y-1.f) < 1e-4f);
+		EXPECT_TRUE(onBoundary) << "resampled point " << i << " = (" << x << "," << y << ") off the square";
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -264,13 +406,10 @@ TEST(TEST_cgmesh_polygon, AllocContours)
 	pol.alloc_contours(3);
 
 	// expectations
-	EXPECT_EQ(pol.m_nContours, 3u);
-	EXPECT_NE(pol.m_nPoints, nullptr);
-	EXPECT_NE(pol.m_pPoints, nullptr);
+	EXPECT_EQ(pol.m_contours.size(), 3u);
 	for (int i = 0; i < 3; i++)
 	{
-		EXPECT_EQ(pol.m_nPoints[i], 0u);
-		EXPECT_EQ(pol.m_pPoints[i], nullptr);
+		EXPECT_EQ(pol.m_contours[i].size(), 0u);
 	}
 }
 
@@ -289,11 +428,11 @@ TEST(TEST_cgmesh_polygon, AddContour_UpdateExisting)
 
 	// expectations
 	EXPECT_NE(ret, nullptr);
-	ASSERT_EQ(pol.m_nPoints[0], 3u);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][0], 10.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][1], 20.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][4], 50.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][5], 60.f);
+	ASSERT_EQ(pol.m_contours[0].size(), 3u);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][0].x, 10.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][0].y, 20.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][2].x, 50.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][2].y, 60.f);
 }
 
 // ---------------------------------------------------------------------------
@@ -311,12 +450,12 @@ TEST(TEST_cgmesh_polygon, AddContour_AddNew)
 
 	// expectations
 	EXPECT_NE(ret, nullptr);
-	ASSERT_EQ(pol.m_nContours, 2u);
-	ASSERT_EQ(pol.m_nPoints[1], 2u);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[1][0], 2.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[1][1], 3.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[1][2], 4.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[1][3], 5.f);
+	ASSERT_EQ(pol.m_contours.size(), 2u);
+	ASSERT_EQ(pol.m_contours[1].size(), 2u);
+	EXPECT_FLOAT_EQ(pol.m_contours[1][0].x, 2.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[1][0].y, 3.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[1][1].x, 4.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[1][1].y, 5.f);
 }
 
 // ---------------------------------------------------------------------------
@@ -333,7 +472,7 @@ TEST(TEST_cgmesh_polygon, AddContour_NullPoints)
 
 	// expectations
 	EXPECT_NE(ret, nullptr);
-	EXPECT_EQ(pol.m_nPoints[0], 5u);
+	EXPECT_EQ(pol.m_contours[0].size(), 5u);
 }
 
 // ---------------------------------------------------------------------------
@@ -353,10 +492,10 @@ TEST(TEST_cgmesh_polygon, AddPolygon2d_Nominal)
 
 	// expectations
 	EXPECT_EQ(ret, 0);
-	ASSERT_EQ(base.m_nContours, 2u);
-	EXPECT_EQ(base.m_nPoints[0], 4u);
-	EXPECT_EQ(base.m_nPoints[1], 3u);
-	EXPECT_FLOAT_EQ(base.m_pPoints[1][0], 10.f);
+	ASSERT_EQ(base.m_contours.size(), 2u);
+	EXPECT_EQ(base.m_contours[0].size(), 4u);
+	EXPECT_EQ(base.m_contours[1].size(), 3u);
+	EXPECT_FLOAT_EQ(base.m_contours[1][0].x, 10.f);
 }
 
 TEST(TEST_cgmesh_polygon, AddPolygon2d_NullPointer)
@@ -370,7 +509,7 @@ TEST(TEST_cgmesh_polygon, AddPolygon2d_NullPointer)
 
 	// expectations
 	EXPECT_EQ(ret, 0);
-	EXPECT_EQ(base.m_nContours, 1u);
+	EXPECT_EQ(base.m_contours.size(), 1u);
 }
 
 // ---------------------------------------------------------------------------
@@ -744,14 +883,14 @@ TEST(TEST_cgmesh_polygon, Translate_Nominal)
 	int nPts = 4;
 	PolygonRef ref = { 1, &nPts, &ref_pts[0] ? new PointRef*[1] : nullptr };
 	// Direct check instead of using PolygonRef for simplicity
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][0], 10.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][1], 20.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][2], 11.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][3], 20.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][4], 11.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][5], 21.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][6], 10.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][7], 21.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][0].x, 10.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][0].y, 20.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][1].x, 11.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][1].y, 20.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][2].x, 11.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][2].y, 21.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][3].x, 10.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][3].y, 21.f);
 }
 
 TEST(TEST_cgmesh_polygon, Translate_Zero)
@@ -765,8 +904,10 @@ TEST(TEST_cgmesh_polygon, Translate_Zero)
 	pol.translate(0.f, 0.f);
 
 	// expectations
+	const float *p = (const float*)pol.m_contours[0].data();
+	const float *b = (const float*)before.m_contours[0].data();
 	for (int i = 0; i < 8; i++)
-		EXPECT_FLOAT_EQ(pol.m_pPoints[0][i], before.m_pPoints[0][i]);
+		EXPECT_FLOAT_EQ(p[i], b[i]);
 }
 
 // ---------------------------------------------------------------------------
@@ -784,8 +925,8 @@ TEST(TEST_cgmesh_polygon, Rotate_90Degrees)
 
 	// expectations
 	// Note: the code uses 3.14159 not M_PI, so there's a tiny imprecision
-	EXPECT_NEAR(pol.m_pPoints[0][0], 0.f, 1e-4f);
-	EXPECT_NEAR(pol.m_pPoints[0][1], 1.f, 1e-4f);
+	EXPECT_NEAR(pol.m_contours[0][0].x, 0.f, 1e-4f);
+	EXPECT_NEAR(pol.m_contours[0][0].y, 1.f, 1e-4f);
 }
 
 TEST(TEST_cgmesh_polygon, Rotate_180Degrees)
@@ -799,8 +940,8 @@ TEST(TEST_cgmesh_polygon, Rotate_180Degrees)
 	pol.rotate(180.f);
 
 	// expectations
-	EXPECT_NEAR(pol.m_pPoints[0][0], -1.f, 1e-4f);
-	EXPECT_NEAR(pol.m_pPoints[0][1], 0.f, 1e-3f);
+	EXPECT_NEAR(pol.m_contours[0][0].x, -1.f, 1e-4f);
+	EXPECT_NEAR(pol.m_contours[0][0].y, 0.f, 1e-3f);
 }
 
 TEST(TEST_cgmesh_polygon, Rotate_360Degrees)
@@ -814,8 +955,10 @@ TEST(TEST_cgmesh_polygon, Rotate_360Degrees)
 	pol.rotate(360.f);
 
 	// expectations
-	for (unsigned int i = 0; i < 2 * pol.m_nPoints[0]; i++)
-		EXPECT_NEAR(pol.m_pPoints[0][i], before.m_pPoints[0][i], 1e-3f);
+	const float *p = (const float*)pol.m_contours[0].data();
+	const float *b = (const float*)before.m_contours[0].data();
+	for (unsigned int i = 0; i < 2 * pol.m_contours[0].size(); i++)
+		EXPECT_NEAR(p[i], b[i], 1e-3f);
 }
 
 // ---------------------------------------------------------------------------
@@ -876,10 +1019,10 @@ TEST(TEST_cgmesh_polygon, Centerize_UnitSquare)
 	EXPECT_NEAR(xc, 0.f, 1e-5f);
 	EXPECT_NEAR(yc, 0.f, 1e-5f);
 	// Individual points: shifted by (-0.5, -0.5)
-	EXPECT_NEAR(pol.m_pPoints[0][0], -0.5f, 1e-5f);
-	EXPECT_NEAR(pol.m_pPoints[0][1], -0.5f, 1e-5f);
-	EXPECT_NEAR(pol.m_pPoints[0][2],  0.5f, 1e-5f);
-	EXPECT_NEAR(pol.m_pPoints[0][3], -0.5f, 1e-5f);
+	EXPECT_NEAR(pol.m_contours[0][0].x, -0.5f, 1e-5f);
+	EXPECT_NEAR(pol.m_contours[0][0].y, -0.5f, 1e-5f);
+	EXPECT_NEAR(pol.m_contours[0][1].x,  0.5f, 1e-5f);
+	EXPECT_NEAR(pol.m_contours[0][1].y, -0.5f, 1e-5f);
 }
 
 TEST(TEST_cgmesh_polygon, Centerize_AlreadyCentered)
@@ -893,8 +1036,8 @@ TEST(TEST_cgmesh_polygon, Centerize_AlreadyCentered)
 	pol.centerize();
 
 	// expectations -- should remain unchanged
-	EXPECT_NEAR(pol.m_pPoints[0][0], -1.f, 1e-5f);
-	EXPECT_NEAR(pol.m_pPoints[0][1], -1.f, 1e-5f);
+	EXPECT_NEAR(pol.m_contours[0][0].x, -1.f, 1e-5f);
+	EXPECT_NEAR(pol.m_contours[0][0].y, -1.f, 1e-5f);
 }
 
 // ---------------------------------------------------------------------------
@@ -910,14 +1053,14 @@ TEST(TEST_cgmesh_polygon, FlipX_UnitSquare)
 	pol.flip_x();
 
 	// expectations -- x coordinates negated
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][0],  0.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][1],  0.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][2], -1.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][3],  0.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][4], -1.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][5],  1.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][6],  0.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][7],  1.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][0].x,  0.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][0].y,  0.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][1].x, -1.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][1].y,  0.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][2].x, -1.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][2].y,  1.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][3].x,  0.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][3].y,  1.f);
 }
 
 TEST(TEST_cgmesh_polygon, FlipX_DoubleFlipRestoresOriginal)
@@ -932,8 +1075,10 @@ TEST(TEST_cgmesh_polygon, FlipX_DoubleFlipRestoresOriginal)
 	pol.flip_x();
 
 	// expectations
-	for (unsigned int i = 0; i < 2 * pol.m_nPoints[0]; i++)
-		EXPECT_FLOAT_EQ(pol.m_pPoints[0][i], before.m_pPoints[0][i]);
+	const float *p = (const float*)pol.m_contours[0].data();
+	const float *b = (const float*)before.m_contours[0].data();
+	for (unsigned int i = 0; i < 2 * pol.m_contours[0].size(); i++)
+		EXPECT_FLOAT_EQ(p[i], b[i]);
 }
 
 // ---------------------------------------------------------------------------
@@ -973,12 +1118,12 @@ TEST(TEST_cgmesh_polygon, Smooth_Triangle)
 	pol.smooth();
 
 	// expectations
-	EXPECT_NEAR(pol.m_pPoints[0][0], 0.f,  1e-5f);  // x0
-	EXPECT_NEAR(pol.m_pPoints[0][1], 0.5f, 1e-5f);  // y0
-	EXPECT_NEAR(pol.m_pPoints[0][2], 0.f,  1e-5f);  // x1
-	EXPECT_NEAR(pol.m_pPoints[0][3], 0.5f, 1e-5f);  // y1
-	EXPECT_NEAR(pol.m_pPoints[0][4], 0.5f, 1e-5f);  // x2
-	EXPECT_NEAR(pol.m_pPoints[0][5], 0.f,  1e-5f);  // y2
+	EXPECT_NEAR(pol.m_contours[0][0].x, 0.f,  1e-5f);  // x0
+	EXPECT_NEAR(pol.m_contours[0][0].y, 0.5f, 1e-5f);  // y0
+	EXPECT_NEAR(pol.m_contours[0][1].x, 0.f,  1e-5f);  // x1
+	EXPECT_NEAR(pol.m_contours[0][1].y, 0.5f, 1e-5f);  // y1
+	EXPECT_NEAR(pol.m_contours[0][2].x, 0.5f, 1e-5f);  // x2
+	EXPECT_NEAR(pol.m_contours[0][2].y, 0.f,  1e-5f);  // y2
 }
 
 // ---------------------------------------------------------------------------
@@ -1086,14 +1231,14 @@ TEST(TEST_cgmesh_polygon, InverseOrder_Square)
 	pol.inverse_order();
 
 	// expectations: reversed -> (0,1)(1,1)(1,0)(0,0)
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][0], 0.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][1], 1.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][2], 1.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][3], 1.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][4], 1.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][5], 0.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][6], 0.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][7], 0.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][0].x, 0.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][0].y, 1.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][1].x, 1.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][1].y, 1.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][2].x, 1.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][2].y, 0.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][3].x, 0.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][3].y, 0.f);
 }
 
 TEST(TEST_cgmesh_polygon, InverseOrder_DoubleInverseRestoresOriginal)
@@ -1108,8 +1253,10 @@ TEST(TEST_cgmesh_polygon, InverseOrder_DoubleInverseRestoresOriginal)
 	pol.inverse_order();
 
 	// expectations
-	for (unsigned int i = 0; i < 2 * pol.m_nPoints[0]; i++)
-		EXPECT_FLOAT_EQ(pol.m_pPoints[0][i], before.m_pPoints[0][i]);
+	const float *p = (const float*)pol.m_contours[0].data();
+	const float *b = (const float*)before.m_contours[0].data();
+	for (unsigned int i = 0; i < 2 * pol.m_contours[0].size(); i++)
+		EXPECT_FLOAT_EQ(p[i], b[i]);
 }
 
 TEST(TEST_cgmesh_polygon, InverseOrder_Triangle)
@@ -1123,12 +1270,12 @@ TEST(TEST_cgmesh_polygon, InverseOrder_Triangle)
 	pol.inverse_order();
 
 	// expectations: reversed -> (0,1)(1,0)(0,0)
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][0], 0.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][1], 1.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][2], 1.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][3], 0.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][4], 0.f);
-	EXPECT_FLOAT_EQ(pol.m_pPoints[0][5], 0.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][0].x, 0.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][0].y, 1.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][1].x, 1.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][1].y, 0.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][2].x, 0.f);
+	EXPECT_FLOAT_EQ(pol.m_contours[0][2].y, 0.f);
 }
 
 // ---------------------------------------------------------------------------
@@ -1404,8 +1551,8 @@ TEST(TEST_cgmesh_polygon, TranslateAndRotate_CombinedTransform)
 	pol.rotate(90.f);
 
 	// expectations
-	EXPECT_NEAR(pol.m_pPoints[0][0], 0.f, 1e-3f);
-	EXPECT_NEAR(pol.m_pPoints[0][1], 2.f, 1e-3f);
+	EXPECT_NEAR(pol.m_contours[0][0].x, 0.f, 1e-3f);
+	EXPECT_NEAR(pol.m_contours[0][0].y, 2.f, 1e-3f);
 }
 
 TEST(TEST_cgmesh_polygon, CenterizeAndFlip_CombinedTransform)
@@ -1421,10 +1568,10 @@ TEST(TEST_cgmesh_polygon, CenterizeAndFlip_CombinedTransform)
 	// expectations -- centroid after centerize is (0,0); flip_x negates x
 	// After centerize: (-0.5,-0.5)(0.5,-0.5)(0.5,0.5)(-0.5,0.5)
 	// After flip_x:    (0.5,-0.5)(-0.5,-0.5)(-0.5,0.5)(0.5,0.5)
-	EXPECT_NEAR(pol.m_pPoints[0][0],  0.5f, 1e-5f);
-	EXPECT_NEAR(pol.m_pPoints[0][1], -0.5f, 1e-5f);
-	EXPECT_NEAR(pol.m_pPoints[0][2], -0.5f, 1e-5f);
-	EXPECT_NEAR(pol.m_pPoints[0][3], -0.5f, 1e-5f);
+	EXPECT_NEAR(pol.m_contours[0][0].x,  0.5f, 1e-5f);
+	EXPECT_NEAR(pol.m_contours[0][0].y, -0.5f, 1e-5f);
+	EXPECT_NEAR(pol.m_contours[0][1].x, -0.5f, 1e-5f);
+	EXPECT_NEAR(pol.m_contours[0][1].y, -0.5f, 1e-5f);
 }
 
 // ---------------------------------------------------------------------------

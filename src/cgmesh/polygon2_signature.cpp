@@ -9,12 +9,12 @@
 void
 Polygon2::search_symmetry_signature (int signature_type, int interpolation_type, int nbins)
 {
-	if (m_nContours != 1)
+	if (m_contours.size() != 1)
 		return;
-	
+
 	int i,j;
-	int n = m_nPoints[0];
-	float *pPoints = m_pPoints[0];
+	int n = (int)m_contours[0].size();
+	float *pPoints = (float*)m_contours[0].data();
 	float *xx = (float*)malloc(n*sizeof(float));
 	float *yy = (float*)malloc(n*sizeof(float));
 	
@@ -34,14 +34,17 @@ Polygon2::search_symmetry_signature (int signature_type, int interpolation_type,
 			i1 = i-1;
 			i2 = i;
 			i3 = i+1;
-			if (i1 == -1) { i1 = n-1; xx[n-1] = 0.0; }
+			if (i1 == -1) i1 = n-1;
 			if (i3 == n)  i3 = 0;
-			
-			/* length between v1 and v2 */
-			xx[i] = xx[i-1] + sqrt ((pPoints[2*i2]-pPoints[2*i1])*(pPoints[2*i2]-pPoints[2*i1])
-						+
-						(pPoints[2*i2+1]-pPoints[2*i1+1])*(pPoints[2*i2+1]-pPoints[2*i1+1]));
-			
+
+			/* cumulative arc length (starts at 0; must not read xx[-1] at i==0) */
+			if (i == 0)
+				xx[0] = 0.0;
+			else
+				xx[i] = xx[i-1] + sqrt ((pPoints[2*i2]-pPoints[2*i1])*(pPoints[2*i2]-pPoints[2*i1])
+							+
+							(pPoints[2*i2+1]-pPoints[2*i1+1])*(pPoints[2*i2+1]-pPoints[2*i1+1]));
+
 			/* deviation */
 			float v1x = pPoints[2*i2]-pPoints[2*i1];
 			float v1y = pPoints[2*i2+1]-pPoints[2*i1+1];
@@ -64,12 +67,15 @@ Polygon2::search_symmetry_signature (int signature_type, int interpolation_type,
 			i3 = i+1;
 			if (i1 == -1) i1 = n-1;
 			if (i3 == n)  i3 = 0;
-			
-			/* length between v2 and v1 */
-			xx[i] = xx[i-1] + sqrt ((pPoints[2*i2]-pPoints[2*i1])*(pPoints[2*i2]-pPoints[2*i1])
-						+
-						(pPoints[2*i2+1]-pPoints[2*i1+1])*(pPoints[2*i2+1]-pPoints[2*i1+1]));
-			
+
+			/* cumulative arc length (starts at 0; must not read xx[-1] at i==0) */
+			if (i == 0)
+				xx[0] = 0.0;
+			else
+				xx[i] = xx[i-1] + sqrt ((pPoints[2*i2]-pPoints[2*i1])*(pPoints[2*i2]-pPoints[2*i1])
+							+
+							(pPoints[2*i2+1]-pPoints[2*i1+1])*(pPoints[2*i2+1]-pPoints[2*i1+1]));
+
 			/* curvature by the computation of the radius of the circle */
 			/* method found on http://perso.wanadoo.fr/math.15873/Cercl3p.html */
 			float x1 = pPoints[2*i1];
@@ -134,8 +140,7 @@ Polygon2::search_symmetry_signature (int signature_type, int interpolation_type,
 	for (i=1; i<nbins-1; i++)
 	{
 		float ac = i*length/nbins;
-		while (xx[j+1] < ac) j++;
-		assert (j<n);
+		while (j+1 < n && xx[j+1] < ac) j++;   // bound j (was OOB read xx[n])
 		
 		/*** interpolations ***/
 		switch (interpolation_type)
@@ -170,11 +175,12 @@ Polygon2::search_symmetry_signature (int signature_type, int interpolation_type,
 	
 	/* interpret the max */
 	float l = max*xx[n-1]/nbins;
-	for (i=0; i<n; i++)
+	for (i=0; i<n-1; i++)             // bound i (was OOB read xx[n])
 		if (xx[i+1]>l) break;
 	float xp = pPoints[2*i];
 	float yp = pPoints[2*i+1];
-	float theta = acos ((xp) / (sqrt (xp*xp+yp*yp)));
+	float rp = sqrt (xp*xp+yp*yp);
+	float theta = (rp > 1e-12f) ? acos (xp / rp) : 0.f;   // guard div-by-zero
 	if (yp < 0.0) theta = 2*3.14159 - theta;
 	while (theta >= 3.14159) theta -= 3.14159;
 	printf ("---> signature's method : %f deg\n", theta*180.0/3.14159);

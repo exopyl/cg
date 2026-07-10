@@ -379,47 +379,71 @@ TEST(TEST_cgimg_img, geodesic)
 	img->save ("./toto.ppm");
 }
 
+// Fill an RGBA image with a solid colour.
+static void fill_rect(Img& img, int x0, int y0, int x1, int y1,
+                      unsigned char r, unsigned char g, unsigned char b)
+{
+	for (int y = y0; y < y1; ++y)
+		for (int x = x0; x < x1; ++x)
+			img.set_pixel((unsigned)x, (unsigned)y, r, g, b, 255);
+}
+
+// Smoke run (kept): the historical grayscale gradient must still vectorize.
 TEST(TEST_cgimg_img, vectorization)
 {
-	Img* img = new Img();
-	img->init_test_grayscale2(50);
-	
-	// colors in the image
-	Palette *pPalette = nullptr;
-	
-	if (1)
-		pPalette = img->get_palette ();
-	else
-	{
-		pPalette = new Palette ();
-		pPalette->AddColor (255, 255, 255, 255);
-		pPalette->AddColor (255, 0, 0, 255);
-		pPalette->AddColor (85, 203, 65, 255);
+	Img img;
+	img.init_test_grayscale2(50);
 
-/*
-		pPalette->AddColor (54, 154, 201, 255);
-		pPalette->AddColor (203, 43, 43, 255);
-		pPalette->AddColor (241, 173, 43, 255);
-		pPalette->AddColor (55, 155, 59, 255);
-*/
-	}
-	//pPalette->dump ();
-
-	CLitRasterToVector *pRasterToVector = new CLitRasterToVector ();
-	bool bOk = pRasterToVector->Vectorize(img,
-					      Color (255, 255, 255),
-					      false,
-					      pPalette);
-	
+	CLitRasterToVector rtv;
+	bool bOk = rtv.Vectorize(&img, Color(255, 255, 255), false, /*palette=*/nullptr);
+	EXPECT_TRUE(bOk);
 	if (bOk)
 	{
-		pRasterToVector->WriteFile(.1);
-		//pRasterToVector->WriteFilePolygonWithHole(true,false,true,nullptr,.1,Color(0,0,0),false);
-		pRasterToVector->WriteFilePolygonWithHole(.1);
-		pRasterToVector->WriteFile(.1);
+		EXPECT_GT(rtv.GetNCoords(), 0);
+		EXPECT_GT(rtv.GetNPaths(),  0);
 	}
-	
-	delete pPalette;
+}
+
+// Verifiable behaviour on controlled inputs: a plain image vs. one carrying an
+// extra coloured region. Vectorizing must (a) succeed, (b) yield a non-empty
+// path/coord set, and (c) detect MORE colour layers / paths when a distinct
+// region is present.
+TEST(TEST_cgimg_img, vectorization_detects_regions)
+{
+	const int W = 32, H = 32;
+
+	// (1) uniform white image -> a single colour region
+	Img plain(W, H, false);
+	fill_rect(plain, 0, 0, W, H, 255, 255, 255);
+
+	CLitRasterToVector rtvPlain;
+	ASSERT_TRUE(rtvPlain.Vectorize(&plain, Color(255,255,255), false, nullptr));
+	const int layersPlain = rtvPlain.GetNColorLayers();
+	const int pathsPlain  = rtvPlain.GetNPaths();
+
+	// (2) same white image + a red square in the middle -> two colour regions
+	Img squared(W, H, false);
+	fill_rect(squared, 0, 0, W, H, 255, 255, 255);
+	fill_rect(squared, 10, 10, 22, 22, 255, 0, 0);
+
+	CLitRasterToVector rtvSq;
+	ASSERT_TRUE(rtvSq.Vectorize(&squared, Color(255,255,255), false, nullptr));
+	const int layersSq = rtvSq.GetNColorLayers();
+	const int pathsSq  = rtvSq.GetNPaths();
+	const int coordsSq = rtvSq.GetNCoords();
+
+	printf("vectorize plain: layers=%d paths=%d | squared: layers=%d paths=%d coords=%d\n",
+	       layersPlain, pathsPlain, layersSq, pathsSq, coordsSq);
+
+	// non-empty, consistent result
+	EXPECT_GE(pathsSq,  1);
+	EXPECT_GT(coordsSq, 0);
+
+	// one colour layer per distinct colour: plain=1 (white), squared=2 (white+red)
+	EXPECT_EQ(layersPlain, 1);
+	EXPECT_EQ(layersSq,    2) << "white + red square must give exactly two colour layers";
+	// the extra region adds at least one closed contour
+	EXPECT_GT(pathsSq, pathsPlain) << "the red square must add a path";
 }
 
 static void temperature2color(float temp, unsigned char& r, unsigned char& g, unsigned char& b)

@@ -1,4 +1,7 @@
 #pragma once
+#include <vector>
+#include "../cgmath/TVector2.h"
+
 #define SIGNATURE_DEVIATION 0
 #define SIGNATURE_CURVATURE 1
 #define SIGNATURE_BOUTIN    2
@@ -12,11 +15,9 @@
 class Polygon2
 {
 public:
-	Polygon2 ();
-	Polygon2 (const Polygon2 &pol);
-	~Polygon2 ();
-
-	Polygon2 &operator=(const Polygon2 &pol);
+	Polygon2 () = default;
+	// Copy-ctor, copy-assignment and destructor are the compiler-generated
+	// ones: std::vector handles deep copy and release (rule of zero).
 
 	// input
 	void input (float *pPoints, int n);
@@ -38,12 +39,12 @@ public:
 	int set_point (unsigned int iContour, unsigned int iPoint, float x, float y);
 	int get_point (unsigned int iContour, unsigned int iPoint, float *x, float *y);
 
-	int    get_n_contours (void) { return m_nContours; };
-	float* get_points (unsigned int iContour) { return m_pPoints[iContour]; };
-	int    get_n_points (unsigned int iContour) { return m_nPoints[iContour]; };
+	int    get_n_contours (void) { return (int)m_contours.size(); };
+	float* get_points (unsigned int iContour) { return (float*)m_contours[iContour].data(); };
+	int    get_n_points (unsigned int iContour) { return (int)m_contours[iContour].size(); };
 	int    get_n_points (void) {
 		int nPoints = 0;
-		for (unsigned int i=0; i<m_nContours; i++)
+		for (unsigned int i=0; i<m_contours.size(); i++)
 			nPoints += get_n_points (i);
 		return nPoints; };
 	
@@ -97,9 +98,10 @@ public:
 	
 //private:
 	int alloc_contours (int nContours);
-	
+
 	//
-	unsigned int m_nContours;
-	unsigned int *m_nPoints;
-	float **m_pPoints;
+	// Storage: one std::vector<Vector2f> per contour. Vector2f is standard-layout
+	// (two contiguous floats), so (float*)m_contours[c].data() aliases the flat
+	// interleaved x,y array the public float* API exposes.
+	std::vector<std::vector<Vector2f>> m_contours;
 };

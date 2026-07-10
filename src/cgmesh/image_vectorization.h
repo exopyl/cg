@@ -56,6 +56,17 @@ public:
 				       bool bBorder*/) const;
 	void WriteFilePolygonWithHole2 (float fLineWidth);
 
+	// Introspection of the last Vectorize() result (for tests / callers).
+	int GetNColorLayers (void) const { return (int)m_mapListPath.size(); }
+	int GetNPaths (void) const
+	{
+		int n = 0;
+		for (const auto& kv : m_mapListPath)
+			if (kv.second) n += (int)kv.second->size();
+		return n;
+	}
+	int GetNCoords (void) const { return (int)m_mapCoord.size(); }
+
 private:
 	bool GeneratePath	( const Img& sIndexed); 
 	void AddPath		( ListPath& listPath,const TPath& pathToAdd,MapPath& mapPathStart,MapPath& mapPathEnd);

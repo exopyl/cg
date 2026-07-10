@@ -41,6 +41,7 @@ inline const std::vector<Format3D>& SupportedFormats()
         { wxT("IGES"),          { wxT("iges"), wxT("igs") },                                FormatIcon::Generic },
         { wxT("Point clouds"),  { wxT("ply"), wxT("pset"), wxT("npts"), wxT("pts"), wxT("asc") }, FormatIcon::Obj },
         { wxT("OFF"),           { wxT("off") },                                             FormatIcon::Generic },
+        { wxT("KVX voxel"),     { wxT("kvx") },                                             FormatIcon::Generic },
     };
     return formats;
 }
