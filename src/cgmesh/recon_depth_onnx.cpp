@@ -2,12 +2,11 @@
 
 #ifdef CG_HAS_ONNX
 
-#include <onnxruntime_cxx_api.h>
+#include "onnx_session.h"
 
 #include "../cgimg/cgimg.h"
 
-#include <algorithm>
-#include <thread>
+#include <memory>
 #include <vector>
 
 namespace recon {
@@ -16,13 +15,12 @@ namespace recon {
 static const float kMean[3] = {0.485f, 0.456f, 0.406f};
 static const float kStd[3]  = {0.229f, 0.224f, 0.225f};
 
+// Le runtime ORT vit désormais dans cgml::OnnxSession (onnx_session.{h,cpp}) :
+// ce TU ne contient plus que l'adaptateur métier (Img -> NCHW/ImageNet, sortie
+// -> DepthMap) et n'inclut plus aucun en-tête ONNX Runtime.
 struct OnnxDepthSource::Impl
 {
-    Ort::Env            env{ORT_LOGGING_LEVEL_WARNING, "cgmesh_onnx"};
-    Ort::SessionOptions opts;
-    Ort::Session*       session = nullptr;
-    std::string         inName, outName;
-    bool                ok = false;
+    std::unique_ptr<cgml::OnnxSession> session;
 };
 
 OnnxDepthSource::OnnxDepthSource(const std::string& modelPath, int inputSize)
@@ -31,39 +29,20 @@ OnnxDepthSource::OnnxDepthSource(const std::string& modelPath, int inputSize)
     if (m_inputSize < 14) m_inputSize = 518;
 
     m_impl = new Impl();
-    unsigned hw = std::thread::hardware_concurrency();
-    m_impl->opts.SetIntraOpNumThreads(hw == 0 ? 1 : static_cast<int>(hw));
-    m_impl->opts.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-
-    try
-    {
-#ifdef _WIN32
-        std::wstring wpath(modelPath.begin(), modelPath.end());
-        m_impl->session = new Ort::Session(m_impl->env, wpath.c_str(), m_impl->opts);
-#else
-        m_impl->session = new Ort::Session(m_impl->env, modelPath.c_str(), m_impl->opts);
-#endif
-        Ort::AllocatorWithDefaultOptions alloc;
-        m_impl->inName  = m_impl->session->GetInputNameAllocated(0, alloc).get();
-        m_impl->outName = m_impl->session->GetOutputNameAllocated(0, alloc).get();
-        m_impl->ok = true;
-    }
-    catch (const Ort::Exception&)
-    {
-        m_impl->ok = false;
-    }
+    // Les options par défaut reproduisent le comportement actuel :
+    // intraOpThreads = hardware_concurrency(), GraphOptimizationLevel ORT_ENABLE_ALL.
+    m_impl->session = cgml::OnnxSession::load(modelPath, {});
 }
 
 OnnxDepthSource::~OnnxDepthSource()
 {
-    if (m_impl)
-    {
-        delete m_impl->session;
-        delete m_impl;
-    }
+    delete m_impl;
 }
 
-bool OnnxDepthSource::ok() const { return m_impl && m_impl->ok; }
+bool OnnxDepthSource::ok() const
+{
+    return m_impl && m_impl->session && m_impl->session->ok();
+}
 
 DepthMap OnnxDepthSource::estimate(const Img& image)
 {
@@ -91,22 +70,14 @@ DepthMap OnnxDepthSource::estimate(const Img& image)
                     (rgb[c] - kMean[c]) / kStd[c];
         }
 
-    std::vector<int64_t> shape = {1, 3, S, S};
-    auto mem = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-    Ort::Value t = Ort::Value::CreateTensor<float>(
-        mem, in.data(), in.size(), shape.data(), shape.size());
-
-    const char* inN[]  = {m_impl->inName.c_str()};
-    const char* outN[] = {m_impl->outName.c_str()};
-    auto outs = m_impl->session->Run(Ort::RunOptions{nullptr}, inN, &t, 1, outN, 1);
-
-    const size_t cnt = outs[0].GetTensorTypeAndShapeInfo().GetElementCount();
-    const float* od  = outs[0].GetTensorData<float>();
+    std::vector<int64_t> outShape;
+    std::vector<float> out = m_impl->session->run(
+        in.data(), {1, 3, S, S}, &outShape);
 
     dm.w = S;
     dm.h = S;
     dm.isDisparity = true;
-    dm.z.assign(od, od + cnt);   // sortie [1,S,S] -> S*S valeurs
+    dm.z = std::move(out);   // sortie [1,S,S] -> S*S valeurs
     return dm;
 }
 

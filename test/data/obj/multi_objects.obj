@@ -1,0 +1,15 @@
+# multi_objects.obj — two independent objects in a single OBJ file.
+# Exercises the importer's flattening behaviour: 'o'/'g' directives are
+# ignored and vertex indices remain file-global (1-based) across objects.
+
+o triangle_A
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.0 1.0 0.0
+f 1 2 3
+
+o triangle_B
+v 2.0 0.0 0.0
+v 3.0 0.0 0.0
+v 2.0 1.0 0.0
+f 4 5 6

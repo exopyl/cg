@@ -9,6 +9,7 @@
 #include "voxels_import_kvx.h"
 #include "voxels_import_nbt.h"
 
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -49,6 +50,10 @@ bool VMeshesIO::load(VMeshes& vm, const char* filename)
 		ext = fileStr.substr(dotPos + 1);
 		for (auto& c : ext) c = tolower(c);
 	}
+
+	// obj (split each object 'o'/'g' into its own Mesh)
+	if (ext == "obj")
+		res = import_obj(vm, filename);
 
 	// 3ds
 	if (ext == "3ds")
@@ -117,12 +122,323 @@ bool VMeshesIO::load(VMeshes& vm, const char* filename)
 		vm.AddMesh(pMesh);
 		return true;
 	}
+	delete pMesh;   // load failed: don't leak the throw-away mesh
 	return false;
 }
 
 bool VMeshesIO::export_obj(VMeshes& vm, const char* filename)
 {
 	return false;
+}
+
+namespace
+{
+	// Read a text file into lines (for the light object-boundary pass).
+	bool objReadLines(const char* filename, std::vector<std::string>& lines)
+	{
+		FILE* fp = fopen(filename, "r");
+		if (!fp) return false;
+		char buf[4096];
+		while (fgets(buf, sizeof(buf), fp))
+			lines.emplace_back(buf);
+		fclose(fp);
+		return true;
+	}
+
+	// First whitespace-delimited token of a line.
+	std::string objFirstToken(const std::string& line)
+	{
+		size_t i = 0, n = line.size();
+		while (i < n && isspace((unsigned char)line[i])) i++;
+		size_t j = i;
+		while (j < n && !isspace((unsigned char)line[j])) j++;
+		return line.substr(i, j - i);
+	}
+
+	// Trimmed remainder after the first token (used as the object name).
+	std::string objRestAfterToken(const std::string& line)
+	{
+		size_t i = 0, n = line.size();
+		while (i < n && isspace((unsigned char)line[i])) i++;
+		while (i < n && !isspace((unsigned char)line[i])) i++;   // skip token
+		while (i < n && isspace((unsigned char)line[i])) i++;    // skip ws
+		size_t end = line.size();
+		while (end > i && isspace((unsigned char)line[end - 1])) end--;
+		return line.substr(i, end - i);
+	}
+
+	// Deep-copy a Mesh material (only the concrete types cgmesh instantiates).
+	// A Mesh owns its materials (unique_ptr), so submeshes need their own copies.
+	Material* objCloneMaterial(Material* m)
+	{
+		if (!m) return nullptr;
+		Material* copy = nullptr;
+		switch (m->GetType())
+		{
+		case MATERIAL_TEXTURE:   copy = new MaterialTexture(*static_cast<MaterialTexture*>(m)); break;
+		case MATERIAL_COLOR_ADV: copy = new MaterialColorExt(*static_cast<MaterialColorExt*>(m)); break;
+		case MATERIAL_COLOR:     copy = new MaterialColor(*static_cast<MaterialColor*>(m)); break;
+		default:                 return nullptr;
+		}
+		// The material copy-ctors don't carry the base m_name over, so set it
+		// explicitly to keep name-based lookups / export working per submesh.
+		if (copy) copy->SetName(m->GetName());
+		return copy;
+	}
+
+	// Parse the vertex refs of an OBJ 'l'/'p' element line into resolved 0-based
+	// global vertex indices (any "/vt/vn" suffix ignored). runningVerts is the
+	// number of 'v' declared so far, for OBJ negative (relative) indices.
+	void objParseElementRefs(const std::string& line, int runningVerts, std::vector<int>& out)
+	{
+		const char* s = line.c_str();
+		while (*s && !isspace((unsigned char)*s)) s++;   // skip the 'l'/'p' token
+		while (*s)
+		{
+			while (*s && isspace((unsigned char)*s)) s++;
+			if (!*s) break;
+			int idx = 0;
+			if (sscanf(s, "%d", &idx) == 1)
+			{
+				if (idx < 0) idx = runningVerts + idx; else idx--;
+				if (idx >= 0 && idx < runningVerts)
+					out.push_back(idx);
+			}
+			while (*s && !isspace((unsigned char)*s)) s++;
+		}
+	}
+}
+
+//
+// Import an OBJ, splitting each object into its own Mesh. Strategy:
+//   1. Parse the whole file into ONE flattened Mesh via the existing, tested
+//      single-mesh path (Mesh::load -> MeshIO::import_obj): this resolves all
+//      vertices, per-corner UVs, negative indices, mtllib/usemtl materials.
+//   2. Light second pass over the file to tag each face (in file order) with
+//      the object it belongs to ('o' delimits objects; 'g' is used only when
+//      the file declares no 'o'), plus per-object line/point elements.
+//   3. Rebuild one Mesh per object, re-indexing its vertices / UVs to a local
+//      pool and cloning only the materials it uses.
+// A file with 0 or 1 object keeps the flattened mesh as-is (no remap).
+//
+bool VMeshesIO::import_obj(VMeshes& vm, const char* filename)
+{
+	if (!filename) return false;
+
+	// 1. Full parse into a single flattened Mesh.
+	Mesh* flat = new Mesh();
+	if (flat->load(filename) != 0)
+	{
+		delete flat;
+		return false;
+	}
+
+	// 2. Light pass: object boundaries + per-object line/point elements.
+	std::vector<std::string> lines;
+	if (!objReadLines(filename, lines))
+	{
+		delete flat;
+		return false;
+	}
+
+	bool hasO = false;
+	for (const std::string& ln : lines)
+		if (objFirstToken(ln) == "o") { hasO = true; break; }
+	const std::string delim = hasO ? "o" : "g";
+
+	std::vector<std::string> objNames;
+	std::vector<int> faceObject;                            // face (file order) -> object
+	std::vector<std::vector<std::vector<int>>> objPolylines; // [obj][polyline][refs]
+	std::vector<std::vector<int>> objPoints;                // [obj][refs]
+	int curObj = -1;
+	int runningVerts = 0;
+
+	auto ensureDefaultObject = [&]() {
+		if (curObj < 0)
+		{
+			curObj = (int)objNames.size();
+			objNames.emplace_back("default");
+			objPolylines.emplace_back();
+			objPoints.emplace_back();
+		}
+	};
+
+	for (const std::string& ln : lines)
+	{
+		std::string tok = objFirstToken(ln);
+		if (tok == delim)
+		{
+			curObj = (int)objNames.size();
+			std::string name = objRestAfterToken(ln);
+			objNames.emplace_back(name.empty() ? ("object_" + std::to_string(curObj)) : name);
+			objPolylines.emplace_back();
+			objPoints.emplace_back();
+		}
+		else if (tok == "v")
+			runningVerts++;
+		else if (tok == "f")
+		{
+			ensureDefaultObject();
+			faceObject.push_back(curObj);
+		}
+		else if (tok == "l")
+		{
+			ensureDefaultObject();
+			std::vector<int> refs;
+			objParseElementRefs(ln, runningVerts, refs);
+			if (refs.size() >= 2) objPolylines[curObj].push_back(refs);
+		}
+		else if (tok == "p")
+		{
+			ensureDefaultObject();
+			std::vector<int> refs;
+			objParseElementRefs(ln, runningVerts, refs);
+			for (int r : refs) objPoints[curObj].push_back(r);
+		}
+	}
+
+	int nObjects = (int)objNames.size();
+
+	// Safety: the face count must match the flattened mesh. If parsing drifted,
+	// fall back to the single-mesh behaviour rather than mis-assign faces.
+	if ((unsigned int)faceObject.size() != flat->m_nFaces)
+		nObjects = (nObjects <= 1) ? nObjects : 0;
+
+	// 3a. Zero/one object -> keep the flattened mesh (fast path, no remap).
+	if (nObjects <= 1)
+	{
+		if (nObjects == 1) flat->m_name = objNames[0];
+		vm.AddMesh(flat);
+		return true;
+	}
+
+	// 3b. One submesh per object.
+	for (int obj = 0; obj < nObjects; obj++)
+	{
+		std::vector<unsigned int> faces;
+		for (unsigned int fi = 0; fi < flat->m_nFaces; fi++)
+			if (faceObject[fi] == obj)
+				faces.push_back(fi);
+
+		if (faces.empty() && objPolylines[obj].empty() && objPoints[obj].empty())
+			continue;   // object with no geometry -> no mesh
+
+		// vertex remap (flat global index -> local, first-seen order)
+		std::map<int, int> vmap;
+		auto localVert = [&](int g) -> int {
+			auto it = vmap.find(g);
+			if (it != vmap.end()) return it->second;
+			int local = (int)vmap.size();
+			vmap[g] = local;
+			return local;
+		};
+		for (unsigned int fi : faces)
+		{
+			Face* f = flat->m_pFaces[fi];
+			for (int c = 0; c < f->GetNVertices(); c++)
+				localVert(f->GetVertex(c));
+		}
+		for (auto& pl : objPolylines[obj]) for (int g : pl) localVert(g);
+		for (int g : objPoints[obj]) localVert(g);
+
+		// uv remap
+		std::map<int, int> uvmap;
+		auto localUV = [&](int g) -> int {
+			auto it = uvmap.find(g);
+			if (it != uvmap.end()) return it->second;
+			int local = (int)uvmap.size();
+			uvmap[g] = local;
+			return local;
+		};
+		bool anyUV = false;
+		for (unsigned int fi : faces)
+		{
+			Face* f = flat->m_pFaces[fi];
+			if (f->m_bUseTextureCoordinates && f->m_pTextureCoordinatesIndices)
+			{
+				anyUV = true;
+				for (int c = 0; c < f->GetNVertices(); c++)
+					localUV((int)f->m_pTextureCoordinatesIndices[c]);
+			}
+		}
+
+		Mesh* sub = new Mesh();
+		sub->Init((unsigned int)vmap.size(), (unsigned int)faces.size());
+		sub->m_name = objNames[obj];
+
+		for (auto& kv : vmap)
+		{
+			int g = kv.first, l = kv.second;
+			sub->m_pVertices[3 * l]     = flat->m_pVertices[3 * g];
+			sub->m_pVertices[3 * l + 1] = flat->m_pVertices[3 * g + 1];
+			sub->m_pVertices[3 * l + 2] = flat->m_pVertices[3 * g + 2];
+		}
+
+		if (anyUV && !uvmap.empty())
+		{
+			unsigned int nUV = (unsigned int)uvmap.size();
+			sub->m_nTextureCoordinates = nUV;
+			sub->m_pTextureCoordinates.assign(2 * nUV, 0.0f);
+			for (auto& kv : uvmap)
+			{
+				int g = kv.first, l = kv.second;
+				if (2u * (unsigned int)g + 1u < flat->m_pTextureCoordinates.size())
+				{
+					sub->m_pTextureCoordinates[2 * l]     = flat->m_pTextureCoordinates[2 * g];
+					sub->m_pTextureCoordinates[2 * l + 1] = flat->m_pTextureCoordinates[2 * g + 1];
+				}
+			}
+		}
+
+		// materials actually used by this object (cloned; only the used ones)
+		std::map<int, int> matmap;
+		auto localMat = [&](unsigned int gm) -> unsigned int {
+			if (gm >= flat->GetNMaterials()) return MATERIAL_NONE;
+			auto it = matmap.find((int)gm);
+			if (it != matmap.end()) return (unsigned int)it->second;
+			Material* copy = objCloneMaterial(flat->GetMaterial(gm));
+			if (!copy) return MATERIAL_NONE;
+			unsigned int id = sub->Material_Add(copy);
+			matmap[(int)gm] = (int)id;
+			return id;
+		};
+
+		for (unsigned int k = 0; k < (unsigned int)faces.size(); k++)
+		{
+			Face* src = flat->m_pFaces[faces[k]];
+			Face* dst = sub->m_pFaces[k];
+			int nv = src->GetNVertices();
+			dst->SetNVertices((unsigned int)nv);
+			for (int c = 0; c < nv; c++)
+				dst->SetVertex((unsigned int)c, (unsigned int)localVert(src->GetVertex(c)));
+
+			if (src->m_bUseTextureCoordinates && src->m_pTextureCoordinatesIndices)
+			{
+				dst->m_bUseTextureCoordinates = true;
+				dst->ActivateTextureCoordinatesIndices();
+				for (int c = 0; c < nv; c++)
+					dst->SetTexCoord((unsigned int)c,
+					                 (unsigned int)localUV((int)src->m_pTextureCoordinatesIndices[c]));
+			}
+
+			dst->SetMaterialId(localMat(src->m_iMaterialId));
+		}
+
+		for (auto& pl : objPolylines[obj])
+			for (size_t i = 1; i < pl.size(); i++)
+			{
+				sub->m_pLines.push_back((unsigned int)localVert(pl[i - 1]));
+				sub->m_pLines.push_back((unsigned int)localVert(pl[i]));
+			}
+		for (int g : objPoints[obj])
+			sub->m_pPoints.push_back((unsigned int)localVert(g));
+
+		sub->ComputeNormals();
+		vm.AddMesh(sub);
+	}
+
+	delete flat;
+	return true;
 }
 
 //

@@ -1,0 +1,13 @@
+# No 'o' directives: two 'g' groups. The importer must fall back to splitting
+# on 'g' when the file declares no object.
+g left
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.0 1.0 0.0
+f 1 2 3
+
+g right
+v 2.0 0.0 0.0
+v 3.0 0.0 0.0
+v 2.0 1.0 0.0
+f 4 5 6

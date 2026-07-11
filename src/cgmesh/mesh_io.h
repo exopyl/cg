@@ -37,7 +37,8 @@ private:
 	static int export_pts (Mesh& mesh, const char *filename);
 	static int import_ply (Mesh& mesh, const char *filename);
 	static int export_ply (Mesh& mesh, const char *filename);
-	static int import_stl (Mesh& mesh, const char *filename);
+	static int import_stl (Mesh& mesh, const char *filename);          // auto-detects binary vs ASCII
+	static int import_stl_ascii (Mesh& mesh, const char *filename);
 	static int export_stl (Mesh& mesh, const char *filename);          // ASCII STL (called by save() for .stl)
 	static int import_u3d (Mesh& mesh, const char *filename);
 	static int export_u3d (Mesh& mesh, const char *filename);

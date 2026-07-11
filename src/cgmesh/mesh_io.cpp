@@ -1,12 +1,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "mesh.h"
 #include "mesh_io.h"
@@ -22,7 +24,11 @@ int MeshIO::load (Mesh& mesh, const char *filename)
 
 	std::filesystem::path p(filename);
 	std::string ext = p.extension().string();
-	
+	// Normalise to lower-case: extension() preserves case, so without this a file
+	// named "toto.Stl" or "MODEL.STL" would match no branch and silently fail.
+	std::transform(ext.begin(), ext.end(), ext.begin(),
+		[](unsigned char c) { return (char)std::tolower(c); });
+
 	if (ext == ".asc")
 		res = MeshIO::import_asc(mesh, filename);
 	else if (ext == ".npts" || ext == ".pset")
@@ -1531,18 +1537,88 @@ int MeshIO::export_ply (Mesh& mesh, const char *filename)
 }
 
 
-int MeshIO::import_stl (Mesh& mesh, const char *filename)
+// ASCII STL import. Scans for "vertex x y z" records (3 per facet) and builds
+// one independent triangle per facet (no vertex sharing, like binary STL).
+int MeshIO::import_stl_ascii (Mesh& mesh, const char *filename)
 {
-	FILE* ptr = nullptr;
-	ptr = fopen(filename, "rb");
+	FILE* ptr = fopen(filename, "r");
 	if (ptr == nullptr)
 		return 1;
 
-	char header[80];
-	fread(header, 80, sizeof(char), ptr);
+	std::vector<float> verts;   // xyz per vertex, 3 vertices per facet
+	char token[256];
+	while (fscanf(ptr, "%255s", token) == 1)
+	{
+		for (char* c = token; *c; ++c)
+			*c = (char)tolower((unsigned char)*c);
 
+		if (strcmp(token, "vertex") == 0)
+		{
+			float x, y, z;
+			if (fscanf(ptr, "%f %f %f", &x, &y, &z) != 3)
+				break;   // malformed record — keep the whole facets read so far
+			verts.push_back(x);
+			verts.push_back(y);
+			verts.push_back(z);
+		}
+	}
+	fclose(ptr);
+
+	// Only complete triangles (9 floats) are usable.
+	unsigned int nTriangles = (unsigned int)(verts.size() / 9);
+	mesh.Init(3 * nTriangles, nTriangles);
+	if (nTriangles == 0)
+		return 0;
+
+	memcpy(mesh.m_pVertices.data(), verts.data(),
+	       (size_t)9 * nTriangles * sizeof(float));
+
+	for (unsigned int iface = 0; iface < nTriangles; iface++)
+	{
+		Face* pFace = mesh.m_pFaces[iface];   // already allocated by Init()
+		pFace->SetNVertices(3);
+		for (int j = 0; j < 3; j++)
+			pFace->SetVertex(j, 3*iface+j);
+	}
+
+	mesh.ComputeNormals();
+	return 0;
+}
+
+int MeshIO::import_stl (Mesh& mesh, const char *filename)
+{
+	if (!filename)
+		return 1;
+
+	FILE* ptr = fopen(filename, "rb");
+	if (ptr == nullptr)
+		return 1;
+
+	// A binary STL is exactly 84 + 50*nTriangles bytes (80-byte header,
+	// 4-byte count, then 50 bytes per facet). Read the header/count, then
+	// validate against the real file size: if they disagree the file is ASCII
+	// (or corrupt). Trusting the count blindly on an ASCII file would allocate a
+	// garbage, often enormous, triangle array and crash.
+	fseek(ptr, 0, SEEK_END);
+	long fileSize = ftell(ptr);
+	fseek(ptr, 0, SEEK_SET);
+
+	char header[80];
 	unsigned int nTriangles = 0;
-	fread((char*)&nTriangles, 4, 1, ptr);
+	bool binaryHeaderOk =
+		fileSize >= 84 &&
+		fread(header, sizeof(char), 80, ptr) == 80 &&
+		fread(&nTriangles, 4, 1, ptr) == 1;
+
+	long long expectedBinarySize = 84LL + 50LL * (unsigned long long)nTriangles;
+	bool isBinary = binaryHeaderOk && expectedBinarySize == (long long)fileSize;
+
+	if (!isBinary)
+	{
+		// Fall back to the ASCII parser (which re-opens the file).
+		fclose(ptr);
+		return import_stl_ascii(mesh, filename);
+	}
 
 	mesh.Init(3 * nTriangles, nTriangles);
 
@@ -1550,20 +1626,25 @@ int MeshIO::import_stl (Mesh& mesh, const char *filename)
 	char attributes[2];
 	for (unsigned int iface = 0; iface < nTriangles; iface++)
 	{
-		fread((char*)coords, sizeof(float), 12, ptr);
+		if (fread((char*)coords, sizeof(float), 12, ptr) != 12)
+		{
+			// Truncated file: bail out without computing normals (the faces past
+			// this point are still default-constructed).
+			fclose(ptr);
+			return 1;
+		}
 		memcpy(mesh.m_pVertices.data() + 9*iface, coords + 3, 9 * sizeof(float));
 
-		Face* pFace = mesh.m_pFaces[iface];
-		if (!pFace)
-			pFace = new Face();
+		Face* pFace = mesh.m_pFaces[iface];   // already allocated by Init()
 		pFace->SetNVertices(3);
-
 		for (int j = 0; j < 3; j++)
 			pFace->SetVertex(j, 3*iface+j);
 
-		fread(attributes, sizeof(unsigned char), 2, ptr);
+		fread(attributes, sizeof(unsigned char), 2, ptr);   // 2-byte attribute count
 	}
 
+	fclose(ptr);
+	mesh.ComputeNormals();
 	return 0;
 }
 

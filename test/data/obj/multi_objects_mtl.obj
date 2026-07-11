@@ -1,0 +1,17 @@
+# Two objects, each using a distinct material from the .mtl.
+# Exercises per-submesh material cloning (only the used material per object).
+mtllib multi_objects_mtl.mtl
+
+o A
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.0 1.0 0.0
+usemtl red
+f 1 2 3
+
+o B
+v 2.0 0.0 0.0
+v 3.0 0.0 0.0
+v 2.0 1.0 0.0
+usemtl blue
+f 4 5 6

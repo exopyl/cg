@@ -58,6 +58,151 @@ TEST(TEST_cgmesh_io, obj_texcoords_per_face)
     std::remove(path);
 }
 
+// A single OBJ file may hold several objects ('o'/'g' directives). The importer
+// flattens them into one mesh: the directives are ignored and vertex indices
+// stay file-global (1-based) across objects. Guard that a two-object file loads
+// with the summed counts and that the SECOND object's face resolves to the
+// file-global vertices it declares (4,5,6 -> 0-based 3,4,5), not a per-object
+// local numbering.
+TEST(TEST_cgmesh_io, obj_multiple_objects)
+{
+    Mesh* m = new Mesh();
+    m->load("./test/data/obj/multi_objects.obj");
+
+    // 2 triangles (one per object) => 6 vertices, 2 faces.
+    ASSERT_EQ(m->GetNVertices(), 6u);
+    ASSERT_EQ(m->GetNFaces(),    2u);
+
+    // First object's face -> vertices 0,1,2.
+    Face* fA = m->m_pFaces[0];
+    ASSERT_EQ(fA->GetNVertices(), 3);
+    EXPECT_EQ(fA->GetVertex(0), 0);
+    EXPECT_EQ(fA->GetVertex(1), 1);
+    EXPECT_EQ(fA->GetVertex(2), 2);
+
+    // Second object's face -> file-global vertices 3,4,5.
+    Face* fB = m->m_pFaces[1];
+    ASSERT_EQ(fB->GetNVertices(), 3);
+    EXPECT_EQ(fB->GetVertex(0), 3);
+    EXPECT_EQ(fB->GetVertex(1), 4);
+    EXPECT_EQ(fB->GetVertex(2), 5);
+
+    // The second triangle's first vertex is the one declared as "v 2 0 0".
+    Vector3f v;
+    m->GetVertex((unsigned int)fB->GetVertex(0), v);
+    EXPECT_FLOAT_EQ(v.x, 2.0f);
+    EXPECT_FLOAT_EQ(v.y, 0.0f);
+    EXPECT_FLOAT_EQ(v.z, 0.0f);
+
+    delete m;
+}
+
+// VMeshesIO::load splits a multi-object OBJ into one Mesh per object (unlike
+// Mesh::load, which flattens). Each submesh must own only the vertices its own
+// faces reference, re-indexed to a local pool.
+TEST(TEST_cgmesh_io, vmeshes_obj_split_objects)
+{
+    VMeshes vm;
+    ASSERT_TRUE(VMeshesIO::load(vm, "./test/data/obj/multi_objects.obj"));
+
+    // Two 'o' objects -> two distinct meshes.
+    ASSERT_EQ(vm.GetNMeshes(), 2u);
+
+    Mesh* a = vm.GetMeshes()[0];
+    Mesh* b = vm.GetMeshes()[1];
+
+    // Names carried from the 'o' directives.
+    EXPECT_EQ(a->m_name, "triangle_A");
+    EXPECT_EQ(b->m_name, "triangle_B");
+
+    // Each submesh: 3 local vertices, 1 face (re-indexed, not the file-global 6).
+    ASSERT_EQ(a->GetNVertices(), 3u);
+    ASSERT_EQ(a->GetNFaces(),    1u);
+    ASSERT_EQ(b->GetNVertices(), 3u);
+    ASSERT_EQ(b->GetNFaces(),    1u);
+
+    // Local re-indexing: object B's face references local 0,1,2 even though the
+    // file used the global indices 4,5,6.
+    EXPECT_EQ(b->m_pFaces[0]->GetVertex(0), 0);
+    EXPECT_EQ(b->m_pFaces[0]->GetVertex(1), 1);
+    EXPECT_EQ(b->m_pFaces[0]->GetVertex(2), 2);
+
+    // ...and that local vertex 0 holds the coordinates declared as "v 2 0 0".
+    Vector3f v;
+    b->GetVertex(0u, v);
+    EXPECT_FLOAT_EQ(v.x, 2.0f);
+    EXPECT_FLOAT_EQ(v.y, 0.0f);
+    EXPECT_FLOAT_EQ(v.z, 0.0f);
+
+    // Aggregate over the container still sums to the whole file.
+    EXPECT_EQ(vm.GetNVertices(), 6u);
+    EXPECT_EQ(vm.GetNFaces(),    2u);
+}
+
+// Each submesh must carry only the material(s) its own faces use, cloned into
+// the submesh (a Mesh owns its materials), with the material name preserved.
+TEST(TEST_cgmesh_io, vmeshes_obj_split_materials)
+{
+    VMeshes vm;
+    ASSERT_TRUE(VMeshesIO::load(vm, "./test/data/obj/multi_objects_mtl.obj"));
+    ASSERT_EQ(vm.GetNMeshes(), 2u);
+
+    Mesh* a = vm.GetMeshes()[0];
+    Mesh* b = vm.GetMeshes()[1];
+
+    // Only the used material lands in each submesh.
+    ASSERT_EQ(a->GetNMaterials(), 1u);
+    ASSERT_EQ(b->GetNMaterials(), 1u);
+    EXPECT_EQ(a->GetMaterial(0)->GetName(), "red");
+    EXPECT_EQ(b->GetMaterial(0)->GetName(), "blue");
+
+    // The face points at its submesh-local material id (0 here).
+    EXPECT_EQ(a->m_pFaces[0]->GetMaterialId(), 0u);
+    EXPECT_EQ(b->m_pFaces[0]->GetMaterialId(), 0u);
+}
+
+// When several submeshes reference the same textured material, they must SHARE
+// one decoded image (shared_ptr<Img>), not each own a duplicate — and the
+// texture must survive the material clone (the old copy-ctor produced a blank).
+TEST(TEST_cgmesh_io, vmeshes_obj_split_shared_texture)
+{
+    VMeshes vm;
+    ASSERT_TRUE(VMeshesIO::load(vm, "./test/data/obj/multi_objects_tex.obj"));
+    ASSERT_EQ(vm.GetNMeshes(), 2u);
+
+    MaterialTexture* ta = dynamic_cast<MaterialTexture*>(vm.GetMeshes()[0]->GetMaterial(0));
+    MaterialTexture* tb = dynamic_cast<MaterialTexture*>(vm.GetMeshes()[1]->GetMaterial(0));
+    ASSERT_NE(ta, nullptr);
+    ASSERT_NE(tb, nullptr);
+
+    // Texture preserved through the clone...
+    ASSERT_NE(ta->GetImage(), nullptr) << "cloned texture lost its image";
+    // ...and SHARED between the two submeshes, not duplicated.
+    EXPECT_EQ(ta->GetImage(), tb->GetImage());
+}
+
+// With no 'o' in the file, the importer splits on 'g' instead.
+TEST(TEST_cgmesh_io, vmeshes_obj_split_groups)
+{
+    VMeshes vm;
+    ASSERT_TRUE(VMeshesIO::load(vm, "./test/data/obj/multi_groups.obj"));
+    ASSERT_EQ(vm.GetNMeshes(), 2u);
+    EXPECT_EQ(vm.GetMeshes()[0]->m_name, "left");
+    EXPECT_EQ(vm.GetMeshes()[1]->m_name, "right");
+    EXPECT_EQ(vm.GetMeshes()[0]->GetNVertices(), 3u);
+    EXPECT_EQ(vm.GetMeshes()[1]->GetNVertices(), 3u);
+}
+
+// A single-object (or object-less) OBJ must load as exactly one mesh.
+TEST(TEST_cgmesh_io, vmeshes_obj_single_object)
+{
+    VMeshes vm;
+    ASSERT_TRUE(VMeshesIO::load(vm, "./test/data/obj/cube.obj"));
+    EXPECT_EQ(vm.GetNMeshes(),   1u);
+    EXPECT_EQ(vm.GetNVertices(), 8u);
+    EXPECT_EQ(vm.GetNFaces(),    12u);
+}
+
 TEST(TEST_cgmesh_io, obj_cube_tex_texture)
 {
     // cube-tex.obj carries a complete texture setup: mtllib -> cube.mtl
@@ -239,6 +384,55 @@ TEST(TEST_cgmesh_io, stl)
     delete roundTrip;
 
     delete mesh;
+}
+
+// Regression: an ASCII STL must be parsed as text, not as binary. Reading the
+// 4 bytes at offset 80 of an ASCII file as a triangle count yields garbage
+// (often hundreds of millions) → a bogus giant allocation → crash.
+TEST(TEST_cgmesh_io, stl_ascii)
+{
+    const char* path = "./ascii_tri.stl";
+    {
+        std::ofstream o(path);
+        o << "solid test\n";
+        o << "facet normal 0 0 1\n outer loop\n"
+             "  vertex 0 0 0\n  vertex 1 0 0\n  vertex 0 1 0\n endloop\nendfacet\n";
+        o << "facet normal 0 0 1\n outer loop\n"
+             "  vertex 1 0 0\n  vertex 1 1 0\n  vertex 0 1 0\n endloop\nendfacet\n";
+        o << "endsolid test\n";
+    }
+
+    Mesh_half_edge* mesh = new Mesh_half_edge();
+    mesh->m_pMesh->load(path);
+
+    EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 2u);
+    EXPECT_EQ(mesh->m_pMesh->GetNVertices(), 6u);
+
+    delete mesh;
+    std::remove(path);
+}
+
+// Regression: extension matching must be case-insensitive, so "*.STL" / "*.Stl"
+// dispatch to the STL importer instead of silently loading nothing.
+TEST(TEST_cgmesh_io, stl_uppercase_extension)
+{
+    const char* path = "./ascii_tri_upper.STL";
+    {
+        std::ofstream o(path);
+        o << "solid test\n";
+        o << "facet normal 0 0 1\n outer loop\n"
+             "  vertex 0 0 0\n  vertex 1 0 0\n  vertex 0 1 0\n endloop\nendfacet\n";
+        o << "endsolid test\n";
+    }
+
+    Mesh_half_edge* mesh = new Mesh_half_edge();
+    mesh->m_pMesh->load(path);
+
+    EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 1u);
+    EXPECT_EQ(mesh->m_pMesh->GetNVertices(), 3u);
+
+    delete mesh;
+    std::remove(path);
 }
 
 TEST(TEST_cgmesh_io, ply)

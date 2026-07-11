@@ -105,15 +105,14 @@ void MaterialColorExt::Init_From_Library (MaterialColorExtType index)
 MaterialTexture::MaterialTexture (char const *filename, char const *path)
 {
 	m_filename = std::string (filename);
-	m_pImage = new Img ();
+	m_pImage = std::make_shared<Img> ();
 	if (m_pImage->load(filename, path) != 0)
 	{
 		// Retry with a possibly-mangled index suffix stripped (see above).
 		std::string alt = StripTextureIndexSuffix (filename);
 		if (alt == filename || m_pImage->load(alt.c_str(), path) != 0)
 		{
-			delete m_pImage;
-			m_pImage = nullptr;
+			m_pImage.reset();
 		}
 		else
 		{
@@ -128,11 +127,10 @@ MaterialTexture::MaterialTexture (const std::string &name, unsigned int width, u
 	if (!rgbaPixels || width == 0 || height == 0)
 		return;
 
-	m_pImage = new Img(width, height, false);
+	m_pImage = std::make_shared<Img>(width, height, false);
 	if (!m_pImage || !m_pImage->data())
 	{
-		delete m_pImage;
-		m_pImage = nullptr;
+		m_pImage.reset();
 		return;
 	}
 
@@ -143,14 +141,26 @@ MaterialTexture::MaterialTexture (unsigned int nWidth, unsigned int nHeight)
 {
 }
 
-MaterialTexture::MaterialTexture (const MaterialTexture &m) // constructor of copy
+// Copy constructor: SHARE the decoded image (ref-counted) rather than duplicate
+// its pixels, and carry over the filename, modulation colours and name (the
+// previous empty body silently produced a blank, unnamed, image-less material).
+MaterialTexture::MaterialTexture (const MaterialTexture &m)
 {
+	m_name     = m.m_name;
+	m_filename = m.m_filename;
+	m_pImage   = m.m_pImage;   // shared_ptr: +1 ref, no pixel copy
+	m_nWidth   = m.m_nWidth;
+	m_nHeight  = m.m_nHeight;
+	memcpy(m_fAmbient,  m.m_fAmbient,  4 * sizeof(float));
+	memcpy(m_fDiffuse,  m.m_fDiffuse,  4 * sizeof(float));
+	memcpy(m_fSpecular, m.m_fSpecular, 4 * sizeof(float));
+	m_fShininess = m.m_fShininess;
 }
 
 MaterialTexture::~MaterialTexture ()
 {
-	if (m_pImage)
-		delete m_pImage;
+	// m_pImage is a shared_ptr: the image is released automatically when the
+	// last MaterialTexture referencing it is destroyed.
 }
 
 MaterialType MaterialTexture::GetType (void)
@@ -170,6 +180,6 @@ std::string MaterialTexture::GetFilename ()
 
 Img* MaterialTexture::GetImage ()
 {
-	return m_pImage;
+	return m_pImage.get();
 }
 

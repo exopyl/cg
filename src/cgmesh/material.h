@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "../cgimg/cgimg.h"
 
 // material definition
@@ -198,8 +200,12 @@ public:
 	inline float        GetShininess() const { return m_fShininess; }
 private:
 	std::string m_filename;
-	Img* m_pImage = nullptr;
-	unsigned int m_nWidth, m_nHeight;
+	// Reference-counted so several MaterialTexture instances (e.g. the per-object
+	// submeshes produced when splitting a multi-object OBJ) can share a single
+	// decoded image instead of each owning a duplicate. The image is freed when
+	// the last referencing material dies; the owning Mesh stays self-contained.
+	std::shared_ptr<Img> m_pImage;
+	unsigned int m_nWidth = 0, m_nHeight = 0;
 	unsigned char *m_pPixels = nullptr;
 
 	float m_fAmbient[4]  = { 1.f, 1.f, 1.f, 1.f };

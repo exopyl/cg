@@ -15,6 +15,11 @@ public:
 	static bool save(VMeshes& vm, const char* filename);
 
 private:
+	// OBJ import splitting each object ('o', or 'g' when the file has no 'o')
+	// into its own Mesh. Vertices / UVs / materials are re-indexed per object
+	// (OBJ indices are file-global). Implemented in vmeshes_io.cpp on top of the
+	// single-mesh MeshIO::import_obj path.
+	static bool import_obj(VMeshes& vm, const char* filename);
 	static bool import_3ds(VMeshes& vm, const char* filename);
 	static bool import_3dm(VMeshes& vm, const char* filename);
 	static bool import_gltf(VMeshes& vm, const char* filename);
