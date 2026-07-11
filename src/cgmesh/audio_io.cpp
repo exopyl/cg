@@ -120,7 +120,7 @@ int Audio::import_wav (char const *filename, int verbose)
 	for (i = 0; i < length; i++) {
 		for (j = 0; j < NumChannels; j++) {
 			float v = get_sample(f, hdr.bps);
-			if (isnan(v)) {
+			if (std::isnan(v)) {
 				printf("unexpected end of file %s\n", filename);
 				fclose(f);
 				return -1;

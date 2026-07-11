@@ -8,6 +8,7 @@
 #include "mesh.h"
 #include "mesh_nm.h"
 #include "vmeshes.h"
+#include "vmeshes_io.h"
 
 #include "glutess/glutess.h"
 

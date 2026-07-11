@@ -1,4 +1,5 @@
 #include "image.h"
+#include "image_io.h"
 
 /*
 int Img::import_tga (const char *filename)
@@ -7,31 +8,31 @@ int Img::import_tga (const char *filename)
 	file = fopen(filename, "rb");
 	if (!file)
 		return -1;
-	
+
 	bool rle = false;
 	bool truecolor = false;
 	unsigned int CurrentPixel = 0;
 	unsigned char ch_buf1, ch_buf2;
 	unsigned char buf1[1000];
-	
+
 	unsigned char IDLength;
 	unsigned char IDColorMapType;
 	unsigned char IDImageType;
-	
+
 	fread (&IDLength, sizeof(unsigned char), 1, file);
 	fread (&IDColorMapType, sizeof(unsigned char), 1, file);
 	//ReadData(file, (char*)&IDLength, 1);
 	//ReadData(file, (char*)&IDColorMapType, 1);
-	
+
 	if (IDColorMapType == 1)
 	{
 		fclose (file);
 		return -1;
 	}
-	
+
 	fread (&IDImageType, sizeof(unsigned char), 1, file);
-	//ReadData(file, (char*)&IDImageType, 1); 
-	
+	//ReadData(file, (char*)&IDImageType, 1);
+
 	int type = 255; // O -> grayscale / 1 -> truecolor rgb / 2 -> truecolor rgba
 	switch (IDImageType)
 	{
@@ -70,10 +71,10 @@ int Img::import_tga (const char *filename)
 	if (! ((pixelDepth == 8) || (pixelDepth ==  24) ||
 	       (pixelDepth == 16) || (pixelDepth == 32)))
 		return -1;
-	
+
 	fread (&ch_buf1, sizeof(unsigned char), 1, file);
-	//ReadData(file, (char*)&ch_buf1, 1); 
-    
+	//ReadData(file, (char*)&ch_buf1, 1);
+
 	ch_buf2 = 15; //00001111;
 
 	// the depth of the alpha bitplane
@@ -143,7 +144,7 @@ int Img::import_tga (const char *filename)
 				m_pPixels[i*pixelDepth/8] = m_pPixels[i*pixelDepth/8+2];
 				m_pPixels[i*pixelDepth/8+2] = temp;
 			}
-	
+
 	return 0;
 }
 */
@@ -172,7 +173,7 @@ int Img::import_tga (const char *filename)
 #define TGA_TYPE_TRUE_COLOR_RLE  10
 #define TGA_TYPE_GRAY_RLE        11
 
-int Img::import_tga (const char *filename)
+int ImgIO::import_tga (Img& img, const char *filename)
 {
 	FILE *ptr;
 	int w, h;
@@ -184,7 +185,7 @@ int Img::import_tga (const char *filename)
 		printf ("unable to open %s\n", filename);
 		return -1;
 	}
-  
+
 	//
 	unsigned char id_length;
 	unsigned char color_map_type;
@@ -231,9 +232,9 @@ int Img::import_tga (const char *filename)
 		free (id);   // l'identifiant n'est pas exploité ensuite : libéré aussitôt
 		id = nullptr;
 	}
-  
+
 	// image data
-	resize_memory (width, height);
+	img.resize_memory (width, height);
 	w = width;
 	h = height;
 	if (color_map_type)
@@ -300,7 +301,7 @@ int Img::import_tga (const char *filename)
 				fread (&color_map[3*i], sizeof(unsigned char), 1, ptr);
 			}
 		}
-      
+
       // read the datas
       switch (image_origin)
 	{
@@ -311,7 +312,7 @@ int Img::import_tga (const char *filename)
 			unsigned char index;
 			fread (&index, sizeof(unsigned char), 1, ptr);
 			if (color_map_entry_size == 24)
-				  set_pixel (i, j, color_map[3*index], color_map[3*index+1], color_map[3*index+2], 255);
+				  img.set_pixel (i, j, color_map[3*index], color_map[3*index+1], color_map[3*index+2], 255);
 	      }
 	  break;
 	case 1:
@@ -321,7 +322,7 @@ int Img::import_tga (const char *filename)
 			unsigned char index;
 			fread (&index, sizeof(unsigned char), 1, ptr);
 			if (color_map_entry_size == 24)
-			  set_pixel (i, j, color_map[3*index], color_map[3*index+1], color_map[3*index+2], 255);
+			  img.set_pixel (i, j, color_map[3*index], color_map[3*index+1], color_map[3*index+2], 255);
 	      }
 	  break;
 	case 2:
@@ -331,7 +332,7 @@ int Img::import_tga (const char *filename)
 		unsigned char index;
 		fread (&index, sizeof(unsigned char), 1, ptr);
 		if (color_map_entry_size == 24)
-			  set_pixel (i, j, color_map[3*index], color_map[3*index+1], color_map[3*index+2], 255);
+			  img.set_pixel (i, j, color_map[3*index], color_map[3*index+1], color_map[3*index+2], 255);
 	      }
 	  break;
 	case 3:
@@ -341,7 +342,7 @@ int Img::import_tga (const char *filename)
 		unsigned char index;
 		fread (&index, sizeof(unsigned char), 1, ptr);
 		if (color_map_entry_size == 24)
-		  set_pixel (i, j, color_map[3*index], color_map[3*index+1], color_map[3*index+2], 255);
+		  img.set_pixel (i, j, color_map[3*index], color_map[3*index+1], color_map[3*index+2], 255);
 	      }
 	  break;
 	default:
@@ -372,12 +373,13 @@ int Img::import_tga (const char *filename)
 			  if (pixel_depth == 24)
 			  {
 				  fread (c, sizeof(unsigned char), 3, ptr);
-				  set_pixel (i, j, c[0], c[1], c[2], 255);
+				  // TGA stores BGR: swap to RGB (as cases 1/2/3 already do).
+				  img.set_pixel (i, j, c[2], c[1], c[0], 255);
 			  }
 			  else if (pixel_depth == 32)
 			  {
 				  fread (c, sizeof(unsigned char), 4, ptr);
-				  set_pixel (i, j, c[0], c[1], c[2], c[3]);
+				  img.set_pixel (i, j, c[2], c[1], c[0], c[3]);
 			  }
 	      }
 
@@ -392,7 +394,7 @@ int Img::import_tga (const char *filename)
 		    fread (&b, sizeof(unsigned char), 1, ptr);
 		    fread (&g, sizeof(unsigned char), 1, ptr);
 		    fread (&r, sizeof(unsigned char), 1, ptr);
-			  set_pixel (i, j, r, g, b, 255);
+			  img.set_pixel (i, j, r, g, b, 255);
 		  }
 		if (pixel_depth == 32)
 		  {
@@ -401,7 +403,7 @@ int Img::import_tga (const char *filename)
 		    fread (&g, sizeof(unsigned char), 1, ptr);
 		    fread (&r, sizeof(unsigned char), 1, ptr);
 		    fread (&a, sizeof(unsigned char), 1, ptr);
-			  set_pixel (i, j, r, g, b, a);
+			  img.set_pixel (i, j, r, g, b, a);
 		  }
 	      }
 	  break;
@@ -415,7 +417,7 @@ int Img::import_tga (const char *filename)
 		    fread (&b, sizeof(unsigned char), 1, ptr);
 		    fread (&g, sizeof(unsigned char), 1, ptr);
 		    fread (&r, sizeof(unsigned char), 1, ptr);
-			  set_pixel (i, j, r, g, b, 255);
+			  img.set_pixel (i, j, r, g, b, 255);
 		  }
 		if (pixel_depth == 32)
 		  {
@@ -424,7 +426,7 @@ int Img::import_tga (const char *filename)
 		    fread (&g, sizeof(unsigned char), 1, ptr);
 		    fread (&r, sizeof(unsigned char), 1, ptr);
 		    fread (&a, sizeof(unsigned char), 1, ptr);
-			  set_pixel (i, j, r, g, b, a);
+			  img.set_pixel (i, j, r, g, b, a);
 		  }
 	      }
 	  break;
@@ -438,7 +440,7 @@ int Img::import_tga (const char *filename)
 				fread (&b, sizeof(unsigned char), 1, ptr);
 				fread (&g, sizeof(unsigned char), 1, ptr);
 				fread (&r, sizeof(unsigned char), 1, ptr);
-				set_pixel (i, j, r, g, b, 255);
+				img.set_pixel (i, j, r, g, b, 255);
 			  }
 			if (pixel_depth == 32)
 			  {
@@ -447,7 +449,7 @@ int Img::import_tga (const char *filename)
 				fread (&g, sizeof(unsigned char), 1, ptr);
 				fread (&r, sizeof(unsigned char), 1, ptr);
 				fread (&a, sizeof(unsigned char), 1, ptr);
-				set_pixel (i, j, r, g, b, a);
+				img.set_pixel (i, j, r, g, b, a);
 			  }
 	      }
 	  break;
@@ -477,7 +479,7 @@ int Img::import_tga (const char *filename)
       fclose (ptr);
       return -1;
     }
-  
+
 	/***************************/
 	/* TGA_TYPE_TRUE_COLOR_RLE */
 	/***************************/
@@ -511,7 +513,7 @@ int Img::import_tga (const char *filename)
 					fread (&a, sizeof(unsigned char), 1, ptr);
 				for (i=0; i<pixel_count && current_line >= 0; i++)
 				{
-					set_pixel (pixels_on_line, current_line, r, g, b, a);
+					img.set_pixel (pixels_on_line, current_line, r, g, b, a);
 					pixels_on_line++;
 					if (pixels_on_line >= width)
 					{
@@ -534,7 +536,7 @@ int Img::import_tga (const char *filename)
 						fread (&a, sizeof(unsigned char), 1, ptr);
 					if (current_line >= 0)
 					{
-						set_pixel (pixels_on_line, current_line, r, g, b, a);
+						img.set_pixel (pixels_on_line, current_line, r, g, b, a);
 						pixels_on_line++;
 						if (pixels_on_line >= width)
 						{
@@ -571,10 +573,10 @@ int Img::import_tga (const char *filename)
 		    fread (&a, sizeof(unsigned char), 1, ptr);
 		  for (i=0; i<pixel_count; i++)
 		    {
-				m_pPixels[4*(pixels_read+i)+3] = a;
-				m_pPixels[4*(pixels_read+i)+2] = b;
-				m_pPixels[4*(pixels_read+i)+1] = g;
-				m_pPixels[4*(pixels_read+i)+0] = r;
+				img.m_pPixels[4*(pixels_read+i)+3] = a;
+				img.m_pPixels[4*(pixels_read+i)+2] = b;
+				img.m_pPixels[4*(pixels_read+i)+1] = g;
+				img.m_pPixels[4*(pixels_read+i)+0] = r;
 		    }
 		}
 	      else
@@ -589,11 +591,11 @@ int Img::import_tga (const char *filename)
 				a = 255;
 				if (pixel_depth == 32)
 					fread (&a, sizeof(unsigned char), 1, ptr);
-				
-				m_pPixels[4*(pixels_read+i)+3] = a;
-				m_pPixels[4*(pixels_read+i)+2] = b;
-				m_pPixels[4*(pixels_read+i)+1] = g;
-				m_pPixels[4*(pixels_read+i)+0] = r;
+
+				img.m_pPixels[4*(pixels_read+i)+3] = a;
+				img.m_pPixels[4*(pixels_read+i)+2] = b;
+				img.m_pPixels[4*(pixels_read+i)+1] = g;
+				img.m_pPixels[4*(pixels_read+i)+0] = r;
 		    }
 		}
 	      pixels_read += pixel_count;
@@ -611,7 +613,7 @@ int Img::import_tga (const char *filename)
 	  return -1;
 	}
     }
-      
+
   /*********************/
   /* TGA_TYPE_GRAY_RLE */
   /*********************/
@@ -631,26 +633,26 @@ int Img::import_tga (const char *filename)
       i++;
     }
   printf ("reste: %d octets\n", i);
-  
+
   fclose (ptr);
-  
+
   return 0;
 }
 
-void Img::compute_colormap (unsigned char **_colormap, unsigned short *_colormap_length)
+void ImgIO::compute_colormap (Img& img, unsigned char **_colormap, unsigned short *_colormap_length)
 {
   unsigned int i,j;
   unsigned short colormap_length = 0;
   unsigned char *colormap = (unsigned char*)malloc(3*sizeof(unsigned char));
   colormap_length++;
-  colormap[0] = m_pPixels[0];
-  colormap[1] = m_pPixels[1];
-  colormap[2] = m_pPixels[2];
-  for (i=1; i<m_iWidth*m_iHeight; i++)
+  colormap[0] = img.m_pPixels[0];
+  colormap[1] = img.m_pPixels[1];
+  colormap[2] = img.m_pPixels[2];
+  for (i=1; i<img.m_iWidth*img.m_iHeight; i++)
     {
-      unsigned char r_walk = m_pPixels[4*i];
-      unsigned char g_walk = m_pPixels[4*i+1];
-      unsigned char b_walk = m_pPixels[4*i+2];
+      unsigned char r_walk = img.m_pPixels[4*i];
+      unsigned char g_walk = img.m_pPixels[4*i+1];
+      unsigned char b_walk = img.m_pPixels[4*i+2];
       for (j=0; j<colormap_length; j++)
 	{
 	  if (colormap[3*j]   == r_walk &&
@@ -671,7 +673,7 @@ void Img::compute_colormap (unsigned char **_colormap, unsigned short *_colormap
   *_colormap = colormap;
 }
 
-int Img::export_tga (const char *filename)
+int ImgIO::export_tga (Img& img, const char *filename)
 {
 	int mode = TGA_TYPE_TRUE_COLOR;
 
@@ -681,8 +683,8 @@ int Img::export_tga (const char *filename)
 
   ptr = fopen (filename, "wb");
   if (!ptr) return -1;
-  w = m_iWidth;
-  h = m_iHeight;
+  w = img.m_iWidth;
+  h = img.m_iHeight;
 
   unsigned short  x_origin, y_origin;
   unsigned char pixel_depth;
@@ -696,13 +698,13 @@ int Img::export_tga (const char *filename)
       unsigned char *id = (unsigned char*)strdup ("created by cgimg\0");
       size_t id_length = strlen ((char*)id)+1;
       fwrite (&id_length, sizeof(unsigned char), 1, ptr);
-      
+
       unsigned char color_map_type = 0;
       fwrite (&color_map_type, sizeof(unsigned char), 1, ptr);
-      
+
       unsigned char image_type = TGA_TYPE_TRUE_COLOR;
       fwrite (&image_type, sizeof(unsigned char), 1, ptr);
-      
+
       // color map specifications
       unsigned short color_map_origin     = 0;
       unsigned short color_map_length     = 0;
@@ -710,37 +712,37 @@ int Img::export_tga (const char *filename)
       fwrite (&color_map_origin, sizeof(unsigned short), 1, ptr);
       fwrite (&color_map_length, sizeof(unsigned short), 1, ptr);
       fwrite (&color_map_entry_size, sizeof(unsigned char), 1, ptr);
-      
+
       // image specification
       x_origin = y_origin = 0;
       fwrite (&x_origin, sizeof(unsigned short), 1, ptr);
       fwrite (&y_origin, sizeof(unsigned short), 1, ptr);
-      fwrite (&m_iWidth, sizeof(unsigned short), 1, ptr);
-      fwrite (&m_iHeight, sizeof(unsigned short), 1, ptr);
+      fwrite (&img.m_iWidth, sizeof(unsigned short), 1, ptr);
+      fwrite (&img.m_iHeight, sizeof(unsigned short), 1, ptr);
       pixel_depth = 24;   // RGB
       //pixel_depth = 32; // RGBA
       fwrite (&pixel_depth, sizeof(unsigned char), 1, ptr);
       image_descriptor = (0x02)<<4|(0x00);
       fwrite (&image_descriptor, sizeof(unsigned char), 1, ptr);
-      
+
       if (id_length != 0)
 	fwrite (id, sizeof(unsigned char), id_length, ptr);
-      
+
       for (j=0; j<h; j++)
 	for (i=0; i<w; i++)
 	  {
 	    if (pixel_depth == 24)
 	      {
-		fwrite (&m_pPixels[4*(j*w+i)+2], sizeof(unsigned char), 1, ptr);
-		fwrite (&m_pPixels[4*(j*w+i)+1], sizeof(unsigned char), 1, ptr);
-		fwrite (&m_pPixels[4*(j*w+i)], sizeof(unsigned char), 1, ptr);
+		fwrite (&img.m_pPixels[4*(j*w+i)+2], sizeof(unsigned char), 1, ptr);
+		fwrite (&img.m_pPixels[4*(j*w+i)+1], sizeof(unsigned char), 1, ptr);
+		fwrite (&img.m_pPixels[4*(j*w+i)], sizeof(unsigned char), 1, ptr);
 	      }
 	    if (pixel_depth == 32)
 	      {
-		fwrite (&m_pPixels[4*(j*w+i)+2], sizeof(unsigned char), 1, ptr);
-		fwrite (&m_pPixels[4*(j*w+i)+1], sizeof(unsigned char), 1, ptr);
-		fwrite (&m_pPixels[4*(j*w+i)], sizeof(unsigned char), 1, ptr);
-		fwrite (&m_pPixels[4*(j*w+i)+3], sizeof(unsigned char), 1, ptr);
+		fwrite (&img.m_pPixels[4*(j*w+i)+2], sizeof(unsigned char), 1, ptr);
+		fwrite (&img.m_pPixels[4*(j*w+i)+1], sizeof(unsigned char), 1, ptr);
+		fwrite (&img.m_pPixels[4*(j*w+i)], sizeof(unsigned char), 1, ptr);
+		fwrite (&img.m_pPixels[4*(j*w+i)+3], sizeof(unsigned char), 1, ptr);
 	      }
 	  }
 		}
@@ -751,36 +753,36 @@ int Img::export_tga (const char *filename)
       unsigned char *id = (unsigned char*)strdup ("created by cl\0");
       size_t id_length = strlen ((char*)id)+1;
       fwrite (&id_length, sizeof(unsigned char), 1, ptr);
-      
+
       unsigned char color_map_type = 1;
       fwrite (&color_map_type, sizeof(unsigned char), 1, ptr);
-      
+
       unsigned char image_type = TGA_TYPE_MAPPED;
       fwrite (&image_type, sizeof(unsigned char), 1, ptr);
-      
+
       // color map specifications
       unsigned char *colormap=nullptr;
       unsigned short colormap_length;
-      compute_colormap (&colormap, &colormap_length);
-      
+      compute_colormap (img, &colormap, &colormap_length);
+
       unsigned short color_map_origin     = 0;
       unsigned short color_map_length     = colormap_length;
       unsigned char color_map_entry_size = 24;
       fwrite (&color_map_origin, sizeof(unsigned short), 1, ptr);
       fwrite (&color_map_length, sizeof(unsigned short), 1, ptr);
       fwrite (&color_map_entry_size, sizeof(unsigned char), 1, ptr);
-      
+
       // image specification
       x_origin = y_origin = 0;
       fwrite (&x_origin, sizeof(unsigned short), 1, ptr);
       fwrite (&y_origin, sizeof(unsigned short), 1, ptr);
-      fwrite (&m_iWidth, sizeof(unsigned short), 1, ptr);
-      fwrite (&m_iHeight, sizeof(unsigned short), 1, ptr);
+      fwrite (&img.m_iWidth, sizeof(unsigned short), 1, ptr);
+      fwrite (&img.m_iHeight, sizeof(unsigned short), 1, ptr);
       pixel_depth = 8; // index
       fwrite (&pixel_depth, sizeof(unsigned char), 1, ptr);
       image_descriptor = (0x02)<<4|(0x00);
       fwrite (&image_descriptor, sizeof(unsigned char), 1, ptr);
-      
+
       if (id_length != 0)
 	fwrite (id, sizeof(unsigned char), id_length, ptr);
 
@@ -794,15 +796,15 @@ int Img::export_tga (const char *filename)
 	      fwrite (&colormap[3*i], sizeof(unsigned char), 1, ptr);
 	    }
 	}
-      
+
       // write the datas
       for (j=0; j<h; j++)
 	for (i=0; i<w; i++)
 	  for (int index=0; index<colormap_length; index++)
 	    {
-	      if (m_pPixels[4*(j*w+i)]   == colormap[3*index] &&
-		  m_pPixels[4*(j*w+i)+1] == colormap[3*index+1] &&
-		  m_pPixels[4*(j*w+i)+2] == colormap[3*index+2])
+	      if (img.m_pPixels[4*(j*w+i)]   == colormap[3*index] &&
+		  img.m_pPixels[4*(j*w+i)+1] == colormap[3*index+1] &&
+		  img.m_pPixels[4*(j*w+i)+2] == colormap[3*index+2])
 		{
 		  fwrite (&index, sizeof(unsigned char), 1, ptr);
 		  break;
@@ -813,7 +815,7 @@ int Img::export_tga (const char *filename)
 	default:
 		break;
     }
-  
+
   fclose (ptr);
 
   return 0;

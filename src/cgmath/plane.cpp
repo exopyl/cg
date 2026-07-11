@@ -65,16 +65,16 @@ int Plane::position (Vector3f v)
 		return -1;
 }
 
-// projection of a point on the plane
-void Plane::projected (Vector3f res, Vector3f v)
+// projection of a point on the plane (result written into res)
+void Plane::projected (Vector3f &res, Vector3f v)
 {
   float d = distance_point (v);
   res.Set (v.x - d * normale.x, v.y - d * normale.y, v.z - d * normale.z);
 }
 
-// move a point in the direction of the normale to let it at a distance d from the plane
+// move a point in the direction of the normale to let it at a distance d from the plane (result in res)
 void
-Plane::move (Vector3f res, Vector3f v, float d)
+Plane::move (Vector3f &res, Vector3f v, float d)
 {
 	float dist = distance_point (v);
 	res.Set (v.x + (d - dist) * normale.x,

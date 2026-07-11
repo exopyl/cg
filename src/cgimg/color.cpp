@@ -29,9 +29,9 @@ void Color::SetRGBA (unsigned char r, unsigned char g, unsigned char b, unsigned
 //
 void Color::Int2RGBf (int c, RGBf &rgb)
 {
-	rgb.r = ((c >> 16) & 255) / 255;
-	rgb.g = ((c >> 8) & 255) / 255;
-	rgb.b = (c & 255) / 255;
+	rgb.r = ((c >> 16) & 255) / 255.f;
+	rgb.g = ((c >> 8) & 255) / 255.f;
+	rgb.b = (c & 255) / 255.f;
 }
 
 void Color::Int2RGBc (int c, RGBc &rgb)
@@ -64,7 +64,7 @@ int Color::RGBAc2Int (RGBAc rgba)
 // r,g,b values are from 0 to 1
 // h = [0,360], s = [0,1], v = [0,1]
 //		if s == 0, then h = -1 (undefined)
-void Color::RGBftoHSV (RGBf rgb, HSVf hsv)
+void Color::RGBftoHSV (RGBf rgb, HSVf &hsv)
 {
 	float r = rgb.r;
 	float g = rgb.g;
@@ -80,8 +80,9 @@ void Color::RGBftoHSV (RGBf rgb, HSVf hsv)
 		s = delta / max;		// s
 	else {
 		// r = g = b = 0		// s = 0, v is undefined
-		s = 0;
-		h = -1;
+		hsv.h = -1;
+		hsv.s = 0;
+		hsv.v = v;
 		return;
 	}
 	if( r == max )
@@ -99,18 +100,18 @@ void Color::RGBftoHSV (RGBf rgb, HSVf hsv)
 	hsv.v = v;
 }
 
-void Color::HSVtoRGBf (HSVf hsv, RGBf rgb)
+void Color::HSVtoRGBf (HSVf hsv, RGBf &rgb)
 {
 	float h = hsv.h;
 	float s = hsv.s;
 	float v = hsv.v;
-	float r, g, b;
+	float r = 0, g = 0, b = 0;
 
 	int i;
 	float f, p, q, t;
 	if( s == 0 ) {
 		// achromatic (grey)
-		r = g = b = v;
+		rgb.r = rgb.g = rgb.b = v;
 		return;
 	}
 	h /= 60;			// sector 0 to 5
@@ -133,7 +134,7 @@ void Color::HSVtoRGBf (HSVf hsv, RGBf rgb)
 }
 
 //
-void Color::RGBftoHSL (RGBf rgb, HSLf hsl)
+void Color::RGBftoHSL (RGBf rgb, HSLf &hsl)
 {
         float max = MAX3( rgb.r, rgb.g, rgb.b );
         float min = MIN3( rgb.r, rgb.g, rgb.b );
@@ -168,51 +169,51 @@ void Color::RGBftoHSL (RGBf rgb, HSLf hsl)
 }
 
 //
-void Color::HSLtoRGBf (HSLf hsl, RGBf rgb)
+void Color::HSLtoRGBf (HSLf hsl, RGBf &rgb)
 {
 	float q;
-	if (hsl.l < 1 / 2) {
+	if (hsl.l < 0.5f) {
 		q = hsl.l * (1 + hsl.s);
         } else {
 		q = hsl.l + hsl.s - (hsl.l * hsl.s);
         }
-        
+
         float p = 2 * hsl.l - q;
-	float hk = ((int)hsl.h % 360) / 360;
-	float tr = hk + 1 / 3;
+	float hk = ((int)hsl.h % 360) / 360.f;
+	float tr = hk + 1.f / 3.f;
         float tg = hk;
-        float tb = hk - 1 / 3;
-        
+        float tb = hk - 1.f / 3.f;
+
         float tc[3] = {tr,tg,tb};
 	for (int n=0; n<3; n++)
         {
             float t = tc[n];
             if (t < 0) t += 1;
             if (t > 1) t -= 1;
-	    if (t < 1 / 6) {
+	    if (t < 1.f / 6.f) {
                 tc[n] = p + ((q - p) * 6 * t);
-            } else if (t < 1 / 2) {
+            } else if (t < 0.5f) {
                 tc[n] = q;
-            } else if (t < 2 / 3) {
-                tc[n] = p + ((q - p) * 6 * (2 / 3 - t));
+            } else if (t < 2.f / 3.f) {
+                tc[n] = p + ((q - p) * 6 * (2.f / 3.f - t));
             } else {
                 tc[n] = p;
             }
         }
-        
+
 	rgb.r = tc[0];
 	rgb.g = tc[1];
 	rgb.b = tc[2];
 }
 
-void Color::HSLf2HSVf(HSLf hsl, HSVf hsv)
+void Color::HSLf2HSVf(HSLf hsl, HSVf &hsv)
 {
 	RGBf rgb = {0, 0, 0};
 	HSLtoRGBf (hsl, rgb);
 	RGBftoHSV (rgb, hsv);
 }
-    
-void Color::HSVf2HSLf(HSVf hsv, HSLf hsl)
+
+void Color::HSVf2HSLf(HSVf hsv, HSLf &hsl)
 {
 	RGBf rgb = {0, 0, 0};
 	HSVtoRGBf (hsv, rgb);
@@ -232,19 +233,26 @@ void color_jet(float index, float *_r, float *_g, float *_b)
 	const float bi[5] = {0.f, 0.11f, 0.34f, 0.65f, 1.f};
 	const float bv[5] = {0.5f, 1.f, 1.f, 0.f, 0.f};
 
+	// Clamp so index==1.0 (or out of range) can't run the search loops past the
+	// end of the 5-element ri/rv/bi/bv tables (green's tables have 6 entries).
+	if (index < 0.f) index = 0.f;
+	if (index > 1.f) index = 1.f;
+
 	float r, g, b;
 	int j;
-	
+
 	// red
 	for (j=1; j<5; j++) if (ri[j] > index) break;
+	if (j > 4) j = 4;
 	r = ((rv[j]-rv[j-1])*index+rv[j-1]*ri[j]-rv[j]*ri[j-1])/(ri[j]-ri[j-1]);
-	
+
 	// green
 	for (j=1; j<5; j++) if (gi[j] > index) break;
 	g = ((gv[j]-gv[j-1])*index+gv[j-1]*gi[j]-gv[j]*gi[j-1])/(gi[j]-gi[j-1]);
-	
+
 	// blue
 	for (j=1; j<5; j++) if (bi[j] > index) break;
+	if (j > 4) j = 4;
 	b = ((bv[j]-bv[j-1])*index+bv[j-1]*bi[j]-bv[j]*bi[j-1])/(bi[j]-bi[j-1]);
 
 	*_r = r;

@@ -39,12 +39,12 @@ public:
 	static int  RGBf2Int  (RGBf rgb);
 	static int  RGBc2Int  (RGBc rgb);
 	static int  RGBAc2Int (RGBAc rgba);
-	static void RGBftoHSV (RGBf rgb, HSVf hsv);
-	static void HSVtoRGBf (HSVf hsv, RGBf rgb);
-	static void RGBftoHSL (RGBf rgb, HSLf hsl);
-	static void HSLtoRGBf (HSLf hsl, RGBf rgb);
-	static void HSLf2HSVf (HSLf hsl, HSVf hsv);
-	static void HSVf2HSLf (HSVf hsv, HSLf hsl);
+	static void RGBftoHSV (RGBf rgb, HSVf &hsv);
+	static void HSVtoRGBf (HSVf hsv, RGBf &rgb);
+	static void RGBftoHSL (RGBf rgb, HSLf &hsl);
+	static void HSLtoRGBf (HSLf hsl, RGBf &rgb);
+	static void HSLf2HSVf (HSLf hsl, HSVf &hsv);
+	static void HSVf2HSLf (HSVf hsv, HSLf &hsl);
 
 private:
 	unsigned char c[4];

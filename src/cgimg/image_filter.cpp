@@ -120,12 +120,13 @@ int Img::blur (void)
 
 int Img::gaussian_blur (void)
 {
-//	{1.0f/273.0f, 4.0f/273.0f, 7.0f/273.0f, 4.0f/273.0f, 1.0f/273.0f},
-//	{4.0f/273.0f, 16.0f/273.0f, 26.0f/273.0f, 16.0f/273.0f, 4.0f/273.0f},
-//	{7.0f/273.0f, 26.0f/273.0f, 41.0f/273.0f, 26.0f/273.0f, 7.0f/273.0f},
-//	{4.0f/273.0f, 16.0f/273.0f, 26.0f/273.0f, 16.0f/273.0f, 4.0f/273.0f},             
-//	{1.0f/273.0f, 4.0f/273.0f, 7.0f/273.0f, 4.0f/273.0f, 1.0f/273.0f}};
-	return 0;
+	// 3x3 Gaussian kernel (sum = 16). filter() normalizes by the kernel sum when
+	// divide == 0, so this convolves and rescales correctly (same path as blur()).
+	// (Previously a no-op that returned success — the 5x5 kernel was only a comment.)
+	float m[3][3] = {{1.f, 2.f, 1.f},
+			 {2.f, 4.f, 2.f},
+			 {1.f, 2.f, 1.f}};
+	return filter (m);
 }
 
 //
@@ -270,18 +271,13 @@ int Img::sepia (void)
 
 			get_pixel (i, j, &r, &g, &b, &a);
 
+			// Standard sepia matrix. (A second set_pixel used to overwrite this
+			// with r+40/g+20/b-20 of the ORIGINAL pixel, negating the sepia.)
 			set_pixel (i, j,
 				   CLAMP ((r * 0.393) + (g * 0.769) + (b * 0.189), 0, 255),
 				   CLAMP ((r * 0.349) + (g * 0.686) + (b * 0.168), 0, 255),
 				   CLAMP ((r * 0.272) + (g * 0.534) + (b * 0.131), 0, 255),
 				   a);
-
-			set_pixel (i, j,
-				   CLAMP (r + 40, 0, 255),
-				   CLAMP (g + 20, 0, 255),
-				   CLAMP (b - 20, 0, 255),
-				   a);
-
 		}
 		return 0;
 }

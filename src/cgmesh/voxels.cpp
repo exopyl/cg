@@ -158,24 +158,24 @@ int Voxels::input_img (Img *img)
 
 	m_pPalette = new Palette ();
 
-	unsigned char r_bg = img->m_pPixels[0];
-	unsigned char g_bg = img->m_pPixels[1];
-	unsigned char b_bg = img->m_pPixels[2];
+	unsigned char r_bg = img->data()[0];
+	unsigned char g_bg = img->data()[1];
+	unsigned char b_bg = img->data()[2];
 	for (unsigned int j=0; j<m_ny; j++)
 		for (unsigned int i=0; i<m_nx; i++)
 		{
-			if (img->m_pPixels[4*(img->width()*j+i)]   == r_bg &&
-			    img->m_pPixels[4*(img->width()*j+i)+1] == g_bg &&
-			    img->m_pPixels[4*(img->width()*j+i)+2] == b_bg)
+			if (img->data()[4*(img->width()*j+i)]   == r_bg &&
+			    img->data()[4*(img->width()*j+i)+1] == g_bg &&
+			    img->data()[4*(img->width()*j+i)+2] == b_bg)
 				m_pVoxels[i][j][0].m_bActivated = false;
 			else
 			{
 				m_pVoxels[i][j][0].m_bActivated = true;
 				//m_pVoxels[i][j][0].m_iLabel = img->width*j+i;
-				m_pVoxels[i][j][0].m_iLabel = m_pPalette->AddColor (img->m_pPixels[4*(img->width()*j+i)] ,
-										    img->m_pPixels[4*(img->width()*j+i)+1],
-										    img->m_pPixels[4*(img->width()*j+i)+2],
-										    img->m_pPixels[4*(img->width()*j+i)+3]);
+				m_pVoxels[i][j][0].m_iLabel = m_pPalette->AddColor (img->data()[4*(img->width()*j+i)] ,
+										    img->data()[4*(img->width()*j+i)+1],
+										    img->data()[4*(img->width()*j+i)+2],
+										    img->data()[4*(img->width()*j+i)+3]);
 			}
 		}
 
@@ -201,24 +201,24 @@ int Voxels::input_imgs (Img **imgs, unsigned int nImgs)
 			continue;
 		}
 		printf ("imgs[%d/%d] : %d %d\n", k, nImgs, img->width(), img->height());
-		unsigned char r_bg = img->m_pPixels[0];
-		unsigned char g_bg = img->m_pPixels[1];
-		unsigned char b_bg = img->m_pPixels[2];
+		unsigned char r_bg = img->data()[0];
+		unsigned char g_bg = img->data()[1];
+		unsigned char b_bg = img->data()[2];
 		for (unsigned int j=0; j<m_ny; j++)
 			for (unsigned int i=0; i<m_nx; i++)
 			{
-				if (img->m_pPixels[4*(img->width()*j+i)] == r_bg
-					&& img->m_pPixels[4*(img->width()*j+i)+1] == g_bg
-					&& img->m_pPixels[4*(img->width()*j+i)+2] == b_bg)
+				if (img->data()[4*(img->width()*j+i)] == r_bg
+					&& img->data()[4*(img->width()*j+i)+1] == g_bg
+					&& img->data()[4*(img->width()*j+i)+2] == b_bg)
 					m_pVoxels[i][j][k].m_bActivated = false;
 				else
 				{
 					m_pVoxels[i][j][k].m_bActivated = true;
 					//m_pVoxels[i][j][k].m_iLabel = img->width*j+i;
-					m_pVoxels[i][j][k].m_iLabel = m_pPalette->AddColor (img->m_pPixels[4*(img->width()*j+i)] ,
-																		img->m_pPixels[4*(img->width()*j+i)+1],
-																		img->m_pPixels[4*(img->width()*j+i)+2],
-																		img->m_pPixels[4*(img->width()*j+i)+3]);
+					m_pVoxels[i][j][k].m_iLabel = m_pPalette->AddColor (img->data()[4*(img->width()*j+i)] ,
+																		img->data()[4*(img->width()*j+i)+1],
+																		img->data()[4*(img->width()*j+i)+2],
+																		img->data()[4*(img->width()*j+i)+3]);
 				}
 			}
 	}

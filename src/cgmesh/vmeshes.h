@@ -12,9 +12,6 @@ public:
 	VMeshes ();
 	~VMeshes ();
 
-	bool load(const char* filename);
-	bool save(const char *filename);
-
 	void AddMesh (Mesh *pMesh) { m_Meshes.push_back (pMesh); };
 
 	// Détruit tous les Mesh* possédés et vide la liste (utile avant un
@@ -29,24 +26,6 @@ public:
 	bool IsTriangleMesh() const;
 
 	void Normalize();
-
-protected:
-	// import / export
-	bool export_obj(const char* filename);
-	bool export_stl(const char* filename);          // ASCII STL : one solid block per Mesh
-	bool export_stl_binary(const char* filename);   // Binary STL : single concatenated solid
-	bool export_ply(const char* filename);
-
-	bool import_3ds(const char* filename);
-	bool import_3dm(const char* filename);
-	bool import_gltf(const char* filename);
-	// STEP / IGES import via OpenCASCADE. One Mesh per TopoDS_Face (the
-	// CAD feature decomposition is preserved). When cgmesh is built
-	// without CG_HAS_OCCT both fall through to a no-op stub returning
-	// false. Implementations live in vmeshes_occt.cpp.
-	bool import_step(const char* filename);
-	bool import_iges(const char* filename);
-	bool export_3ds(const char* filename);
 
 private:
 	std::vector<Mesh*> m_Meshes;

@@ -182,25 +182,9 @@ public:
 	return *this;
 	}
 
-	TSquareMatrix<TValue> operator*(const TSquareMatrix<TValue>& right) const
-	{
-	TSquareMatrix<TValue> res;
-	int i,j,k;
-		
-		for (i=0; i<m_dimension; i++) 
-		{
-			for (j=0; j<m_dimension; j++) 
-			{
-				res.a[i][j] = 0.0;
-				for (k=0; k<m_dimension; k++) 
-				{
-					res.a[i][j] += a[i][k] * (right.a[k][j]);
-				}
-			}
-		}
-
-	return res;
-	}
+	// (Removed: a broken, unused `operator*` — it built a default-constructed
+	//  `res` of dimension 0 with a == nullptr, then dereferenced res.a[i][j]
+	//  over this->m_dimension, crashing at runtime.)
 
 	TSquareMatrix<TValue> operator+ (const TSquareMatrix<TValue> &right)
 	{
@@ -219,22 +203,9 @@ public:
 		return *this;
 	}
 
-	TSquareMatrix<TValue> operator-  (const TSquareMatrix<TValue> &right)
-	{
-		//assert (m_dimension == right.m_dimension);
-		TValue *res = (TValue*) malloc (m_dimension*sizeof(TValue));
-		for (int i=0; i<m_dimension; i++)
-			for (int j=0; j<m_dimension; j++)
-				res[i][j] = a[i][j] - right.a[i][j];
-		return TSquareMatrix (m_dimension, res);
-	}
-
-	TSquareMatrix<TValue> operator-= (const TSquareMatrix<TValue> &right)
-	{
-		TSquareMatrix<TValue> res = *this - right;
-		*this = res;
-		return *this;
-	}
+	// (Removed: a broken, unused `operator-` / `operator-=` pair — `operator-`
+	//  indexed a 1-D `TValue* res` as `res[i][j]`, which is not even valid C++
+	//  and would fail to compile the moment the template was instantiated.)
 
 
 	//
@@ -290,7 +261,7 @@ public:
 
 	bool IsSymmetric (void)
 	{
-	  for (int i=0; i<=m_dimension; i++)
+	  for (int i=0; i<m_dimension; i++)   // was i<=m_dimension -> out-of-bounds row
 		for (int j=i+1; j<m_dimension; j++)
 		  if (a[i][j] != a[j][i]) return false;
 	  return true;

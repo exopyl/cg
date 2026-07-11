@@ -43,13 +43,10 @@ public:
 		m_Mat[2][0]=m2; m_Mat[2][1]=m5; m_Mat[2][2]=m8;
 	}
 
-	//
-	// Destructor
-	//
-
-	~TMatrix3<TValue>()
-	{
-	}
+	// Rule of zero: m_Mat is a plain array, so the implicit destructor, copy/move
+	// ctors and copy/move assignment are all correct and keep TMatrix3 trivially
+	// copyable. (A user empty ~TMatrix3 + hand-written operator= used to defeat
+	// that for no reason.)
 
 	//
 	// Operators
@@ -58,15 +55,6 @@ public:
 	inline TMatrix3<TValue>& operator=(TValue *mat)
 	{
 		memcpy( m_Mat, mat, 9*sizeof(TValue) );
-		return *this;
-	}
-
-	inline TMatrix3<TValue>& operator=(const TMatrix3<TValue> &src)
-	{
-		for (int i=0; i<3; i++) 
-			for (int j=0; j<3; j++) 
-				m_Mat[i][j] = src.m_Mat[i][j];
-		//memcpy( m_Mat, src.m_Mat, 9*sizeof(TValue) );
 		return *this;
 	}
 
@@ -128,7 +116,7 @@ public:
 		return *this;
 	}
 
-	inline TMatrix3<TValue> operator* (TValue s)
+	inline TMatrix3<TValue> operator* (TValue s) const noexcept
 	{
 		return TMatrix3<TValue>(m_Mat[0][0]*s, m_Mat[0][1]*s, m_Mat[0][2]*s,
 	m_Mat[1][0]*s, m_Mat[1][1]*s, m_Mat[1][2]*s,
@@ -279,7 +267,7 @@ public:
 
 		SetIdentity();
 
-		m_Mat[0][0] =  c;   m_Mat[1][1] = -s;
+		m_Mat[0][0] =  c;   m_Mat[0][1] = -s;
 		m_Mat[1][0] =  s;   m_Mat[1][1] =  c;
 	}
 	//
@@ -302,7 +290,7 @@ public:
 	/*! Transform a point or a vector using the matrix (Rotation scale and translation)
 	\param vec - The point/vector to transform
 	*/
-	inline void TransformPoint( TVector3<TValue> &vec )
+	inline void TransformPoint( TVector3<TValue> &vec ) const noexcept
 	{
 		TValue x = vec.x;
 		TValue y = vec.y;
@@ -336,7 +324,7 @@ public:
 
 	/*! isSymmetric
 	*/
-	bool isSymmetric (void)
+	bool isSymmetric (void) const noexcept
 	{
 		if (m_Mat[0][1] == m_Mat[1][0] &&
 			m_Mat[0][2] == m_Mat[2][0] &&
@@ -359,25 +347,7 @@ public:
 			}
 	}
 
-	/*! Return transpose matrix
-	\param TransposeMatrix - The matrix to transpose
-	\return TValue* - Transpose matrix
-	*/
-	/*
-	TValue *GetTranspose(TValue *TransposeMatrix)
-	{
-		int i,j;
-		TMatrix3<TValue> TempMatrice(TransposeMatrix);
-			
-			for ( i=0; i<3; i++ ) 
-				for ( j=0; j<3; j++ ) 
-					TempMatrice.m_Mat[i][j]= m_Mat[j][i];
-
-			return (TMatrix3<TValue>)(&TempMatrice.m_Mat[0][0]);
-	}
-	*/
-
-	inline TValue Determinant()
+	inline TValue Determinant() const noexcept
 	{
 		TValue d = m_Mat[0][0] * (m_Mat[1][1]*m_Mat[2][2] - m_Mat[2][1]*m_Mat[1][2])
 				 - m_Mat[1][0] * (m_Mat[0][1]*m_Mat[2][2] - m_Mat[2][1]*m_Mat[0][2])
@@ -459,53 +429,16 @@ public:
 	\param OutMatrix - In return contains the inverted matrix
 	\return Returns FALSE if there is no inverse matrix.
 	*/
-	inline bool GetInverse(TMatrix3<TValue>& OutMatrix)
+	inline bool GetInverse(TMatrix3<TValue>& OutMatrix) const
 	{
-		// Calculates the inverse of this Matrix 
-		// The inverse is calculated using Cramers rule.
-		// If no inverse exists then 'FALSE' is returned.
-
-		const TMatrix3<TValue> &m = *this;
-
-		TValue d = Determinant();
-				
-		if (d == 0.f)	//Impossible to inverse the matrix
-			return false;
-
-		//To avoid multiple division
-		d = 1.f / d;
-
-/*
-  TValue inv[9];
-  TValue fdet, finvdet;
-  
-  inv[0] = m[4]*m[8] - m[5]*m[7];
-  inv[1] = m[2]*m[7] - m[1]*m[8];
-  inv[2] = m[1]*m[5] - m[2]*m[4];
-  inv[3] = m[5]*m[6] - m[3]*m[8];
-  inv[4] = m[0]*m[8] - m[2]*m[6];
-  inv[5] = m[2]*m[3] - m[0]*m[5];
-  inv[6] = m[3]*m[7] - m[4]*m[6];
-  inv[7] = m[1]*m[6] - m[0]*m[7];
-  inv[8] = m[0]*m[4] - m[1]*m[3];
-
-  fdet = m[0]*inv[0] + m[1]*inv[3] + m[2]*inv[6];
-  if (fdet == 0.0) return false;
-  finvdet = 1.0f/fdet;
-
-  m[0] = inv[0] * finvdet;
-  m[1] = inv[1] * finvdet;
-  m[2] = inv[2] * finvdet;
-  m[3] = inv[3] * finvdet;
-  m[4] = inv[4] * finvdet;
-  m[5] = inv[5] * finvdet;
-  m[6] = inv[6] * finvdet;
-  m[7] = inv[7] * finvdet;
-  m[8] = inv[8] * finvdet;
-
-  return true;
-*/
-		return true;
+		// Compute the inverse into OutMatrix, leaving *this unchanged.
+		// Returns false if the matrix is singular.
+		// (Previously the body was entirely commented out: OutMatrix was left at
+		//  identity and the function returned true, so callers such as
+		//  bundle.cpp / regions_vertices_cylinders.cpp / vmeshes.cpp silently got a
+		//  wrong "inverse". Now delegates to the working in-place Inverse().)
+		OutMatrix = *this;
+		return OutMatrix.Inverse();
 	}
 
 	/*! Calculate the inverse of the current matrix and assign
@@ -742,45 +675,9 @@ int SolveEigensystem (TVector3<TValue>& e1, TVector3<TValue>& e2, TVector3<TValu
   }
 }
 
-/**
-* Solve the linear system based on the matrix.
-*
-* The vector right contains the right part of the linear system.
-* The vector sol contains the solution.
-*
-* \returns false if the linear system can't be solved , true otherwise.
-*/
-	bool SolveLinearsystem (TVector3<TValue> right, TVector3<TValue> &sol)
-	{
-		TValue det = Determinant ();
-		if (!det)
-		{
-		  return false;
-		}
-
-		det = 1./det;
-
-		// Cramer's rule
-		TMatrix3<TValue> tmp;
-		tmp.Set (right.x, m_Mat[0][1], m_Mat[0][2],
-			right.y, m_Mat[1][1], m_Mat[1][2],
-			right.z, m_Mat[2][1], m_Mat[2][2]);
-		TValue resultx = tmp.Determinant () * det;
-
-		tmp.Set (m_Mat[0][0], right.x, m_Mat[0][2],
-			m_Mat[1][0], right.y, m_Mat[1][2],
-			m_Mat[2][0], right.z, m_Mat[2][2]);
-		TValue resulty = tmp.Determinant () * det;
-
-		tmp.Set (m_Mat[0][0], m_Mat[0][1], right.x,
-			m_Mat[1][0], m_Mat[1][1], right.y,
-			m_Mat[2][0], m_Mat[2][1], right.z);
-		TValue resultz = tmp.Determinant () * det;
-
-		sol.Set (resultx, resulty, resultz);
-
-		return true;
-	}
+	// (A second, non-const Cramer solver `SolveLinearsystem(TVector3, TVector3&)`
+	//  used to live here — an unused duplicate of the const SolveLinearSystem
+	//  above; removed.)
 
 	//
 	// IOstream

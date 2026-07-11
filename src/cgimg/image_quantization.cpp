@@ -17,8 +17,10 @@
 // SIGGRAPH '82, July 1982, pp. 297-307
 int Img::quant_heckbert (int ncolors)
 {
-	unsigned short Hist[32768];
-	unsigned char ColMap[32768][3];
+	// 32768 * (2 + 3) bytes = 160 KB: allocate on the heap, not the stack
+	// (a stack array this large can overflow worker-thread / deep-call stacks).
+	unsigned short*   Hist   = new unsigned short[32768];
+	unsigned char (*ColMap)[3] = new unsigned char[32768][3];
 
 	memset (Hist, 0, 32768*sizeof(unsigned short));
 	unsigned char r, g, b, a;
@@ -39,6 +41,8 @@ int Img::quant_heckbert (int ncolors)
 			set_pixel (i, j, ColMap[ci][0], ColMap[ci][1], ColMap[ci][2], a);
 		}
 
+	delete[] Hist;
+	delete[] ColMap;
 	return 0;
 }
 
@@ -177,7 +181,10 @@ int Img::quant_kmean (float threshold)
 			cwalk.Set (pClusters[3*j], pClusters[3*j+1], pClusters[3*j+2]);
 			float d = (c).getDistance (cwalk);
 			if (d < dmin)
+			{
+				dmin = d;
 				cnew = cwalk;
+			}
 		}
 		m_pPixels[4*i]   = (int)255.*cnew[0];
 		m_pPixels[4*i+1] = (int)255.*cnew[1];
@@ -209,7 +216,7 @@ int Img::quant_kmean (float threshold)
 		{
 			int r2 = pPalette[3*j];
 			int g2 = pPalette[3*j+1];
-			int b2 = pPalette[3*i+2];
+			int b2 = pPalette[3*j+2];
 			if (r==r2 && g==g2 && b==b2)
 			{
 				pPalette[3*j]   = pPalette[3*(nclusters-1)];

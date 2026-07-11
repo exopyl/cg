@@ -49,8 +49,8 @@ public:
 	float distance_point (Vector3f v);                 // distance between the plane and a point
 	float distance_point (float x, float y, float z);  // distance between the plane and a point
 	int  position (Vector3f v);                        // position of a point
-	void projected (Vector3f v_projected, Vector3f v); // projected of a point on the plane
-	void move (Vector3f res, Vector3f v, float d);     // move a point in the direction of the normale to let it at a distance d from the plane
+	void projected (Vector3f &v_projected, Vector3f v); // projected of a point on the plane (result in v_projected)
+	void move (Vector3f &res, Vector3f v, float d);     // move a point in the direction of the normale to let it at a distance d from the plane (result in res)
 	
 	// getters - setters
 	float get_distance (void);

@@ -82,7 +82,7 @@ TEST(TEST_cgimg_img, binarization)
 */
 
 		Img *imgc = new Img ();
-		imgc->crop (img, 0, 0, img->m_iWidth - img->m_iWidth%psize, img->m_iHeight - img->m_iHeight%psize);
+		imgc->crop (img, 0, 0, img->width() - img->width()%psize, img->height() - img->height()%psize);
 		
 		imgc->bin_dithering (pattern, psize);
 		imgc->save ((char*)"./img_bin_dithering.pgm");
@@ -255,16 +255,16 @@ TEST(TEST_cgimg_img, drawing)
 	img->init_test_grayscale2(50);
 
 	Img *imgc = new Img (*img);
-	imgc->draw_line(10, 50, img->m_iWidth-50, img->m_iHeight-100, 255, 0, 0, 0);
-	//imgc->draw_disk(img->m_iWidth/2., img->m_iHeight/3., 60, 0, 255, 0, 0);
-	//imgc->draw_circle(img->m_iWidth/2., img->m_iHeight/2., 36, 0, 0, 255, 0);
-	imgc->draw_ellipse(img->m_iWidth/2., img->m_iHeight/3., 100, 50, 255, 0, 0, 255);
+	imgc->draw_line(10, 50, img->width()-50, img->height()-100, 255, 0, 0, 0);
+	//imgc->draw_disk(img->width()/2., img->height()/3., 60, 0, 255, 0, 0);
+	//imgc->draw_circle(img->width()/2., img->height()/2., 36, 0, 0, 255, 0);
+	imgc->draw_ellipse(img->width()/2., img->height()/3., 100, 50, 255, 0, 0, 255);
 
 	Vector2f line_start, line_end;
 	line_start.Set (10, 50);
-	line_end.Set (img->m_iWidth-50, img->m_iHeight-100);
+	line_end.Set (img->width()-50, img->height()-100);
 	Vector2f ellipse_center, ellipse_radius;
-	ellipse_center.Set (img->m_iWidth/2., img->m_iHeight/3.);
+	ellipse_center.Set (img->width()/2., img->height()/3.);
 	ellipse_radius.Set (100, 50);
 	Vector2f res1, res2;
 	int nres = line_ellipse_intersection (line_start, line_end, ellipse_center, ellipse_radius, res1, res2);
@@ -278,7 +278,7 @@ TEST(TEST_cgimg_img, drawing)
 		imgc->draw_disk (res1[0], res1[1], 5, 255, 0, 0, 255);
 	}
 
-	//imgc->draw_circle(img->m_iWidth/2., img->m_iHeight/2., 36, 0, 0, 255, 0);
+	//imgc->draw_circle(img->width()/2., img->height()/2., 36, 0, 0, 255, 0);
 	
 
 	imgc->save ((char*)"./img_drawing.ppm");
@@ -578,7 +578,7 @@ TEST(TEST_cgimg_img, get_median_value)
     // Context
     Img img(10, 10);
     img.init_color(0, 0, 0, 255);
-    for(int i=0; i<100; ++i) img.m_pPixels[4*i] = i * 2;
+    for(int i=0; i<100; ++i) img.data()[4*i] = i * 2;
 
     // Action
     int median = img.get_median_value();

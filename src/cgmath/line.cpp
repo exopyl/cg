@@ -112,9 +112,11 @@ Line::init_pluecker (double l1, double l2, double l3,
 }
 
 // fitting
-void Line::fit (Vector3d *array, int n)
+void Line::fit (Vector3d * /*array*/, int /*n*/)
 {
-	//m_lineImpl->fit (array, n);
+	// TODO: unimplemented no-op stub — the double-precision overload never
+	// forwarded to m_lineImpl (which only exposes a Vector3f fit). Either wire a
+	// double fit or drop this overload once callers are confirmed to use Vector3f.
 }
 
 void Line::fit (Vector3f *array, int n)

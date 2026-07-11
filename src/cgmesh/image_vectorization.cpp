@@ -213,8 +213,8 @@ bool CLitRasterToVector::GeneratePath (const Img& sIndexed)
 	bool bOk = true;
 	for(int y=0; y<sIndexed.height()-1; y++)
 	{
-		const unsigned char* pBuffer	      = (const unsigned char*)sIndexed.m_pPixels + y*sIndexed.width();
-		const unsigned char* pBufferLigneDown = (const unsigned char*)sIndexed.m_pPixels + (y+1)*sIndexed.width();
+		const unsigned char* pBuffer	      = (const unsigned char*)sIndexed.data() + y*sIndexed.width();
+		const unsigned char* pBufferLigneDown = (const unsigned char*)sIndexed.data() + (y+1)*sIndexed.width();
 
 		for(int x=0; x<sIndexed.width()-1; x++)
 		{

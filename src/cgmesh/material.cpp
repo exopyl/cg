@@ -129,14 +129,14 @@ MaterialTexture::MaterialTexture (const std::string &name, unsigned int width, u
 		return;
 
 	m_pImage = new Img(width, height, false);
-	if (!m_pImage || !m_pImage->m_pPixels)
+	if (!m_pImage || !m_pImage->data())
 	{
 		delete m_pImage;
 		m_pImage = nullptr;
 		return;
 	}
 
-	memcpy(m_pImage->m_pPixels, rgbaPixels, 4 * width * height * sizeof(unsigned char));
+	memcpy(m_pImage->data(), rgbaPixels, 4 * width * height * sizeof(unsigned char));
 }
 
 MaterialTexture::MaterialTexture (unsigned int nWidth, unsigned int nHeight)

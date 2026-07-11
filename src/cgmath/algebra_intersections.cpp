@@ -16,7 +16,7 @@
 // 3 : An endpoint (vertex) of one segment is on the other segment, but case 2 doesn't hold.
 //
 //
-static inline int fvec2_orient (const Vector2f& pa, const Vector2f& pb, const Vector2f& pc)
+static inline int orient2d (const Vector2f& pa, const Vector2f& pb, const Vector2f& pc)
 {
 	double acx, bcx, acy, bcy;
 
@@ -40,7 +40,7 @@ static int Between (const Vector2f& a, const Vector2f& b, const Vector2f& c)
 
 static int Collinear (const Vector2f& a, const Vector2f& b, const Vector2f& c)
 {
-	return fvec2_orient(a, b, c) == 0;
+	return orient2d(a, b, c) == 0;
 }
 
 static unsigned int seg2_seg2_intersection_parallel (const seg2& s1, const seg2& s2, float* res)

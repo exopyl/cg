@@ -307,4 +307,4 @@ public:
 public:
 
 	TMatrix4<TValue> m_Mat;
-}
+};

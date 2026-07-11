@@ -2,7 +2,7 @@
 #include <math.h>
 
 #include "curve_bezier.h"
-#include "berstein.h"
+#include "bernstein.h"
 
 int CurveBezier::addControlPoint (const Vector3f &v)
 {
@@ -24,7 +24,7 @@ bool CurveBezier::eval (float t, Vector3f &p) const
 
 	p.Set (0.f, 0.f, 0.f);
 	for (int i = 0; i < n; i++)
-		p += m_controlPoints[i] * (float)bersteinPolynomial (n - 1, i, t);
+		p += m_controlPoints[i] * (float)bernsteinPolynomial (n - 1, i, t);
 	return true;
 }
 

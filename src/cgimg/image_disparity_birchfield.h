@@ -8,6 +8,11 @@ public:
 	DisparityBirchfield();
 	~DisparityBirchfield();
 
+	// Non-copiable : possède des Img* détruits dans le destructeur ; une copie
+	// superficielle (règle de 3 manquante) provoquerait un double-delete.
+	DisparityBirchfield (const DisparityBirchfield&)            = delete;
+	DisparityBirchfield& operator= (const DisparityBirchfield&) = delete;
+
 	void SetStereoPair(Img *pLeft, Img *pRight);
 
 	void setOcclusionPenalty(int);

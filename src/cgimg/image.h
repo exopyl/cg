@@ -11,6 +11,9 @@
 class Img
 {
 public:
+	// Import / export (serialization) logic lives in ImgIO (image_io.h), a friend
+	// so it can call Img's private helpers (resize_memory, compute_colormap).
+	friend class ImgIO;
 
 	static int AreIdentical (Img *pImg1, Img *pImg2);
 
@@ -31,7 +34,14 @@ public:
 	// getters / setters
 	inline unsigned int width (void) const { return m_iWidth; };
 	inline unsigned int height (void) const { return m_iHeight; };
-	
+
+	// Raw pixel buffer (RGBA8, interleaved, width*height*4 bytes). Exposed so
+	// external consumers (GL upload, memcpy, scanline walks) keep working now
+	// that the members are private; the RGBA8 layout is the documented contract.
+	inline unsigned char*       data (void)       { return m_pPixels; }
+	inline const unsigned char* data (void) const { return m_pPixels; }
+	inline bool uses_palette (void) const { return bUsePalette != 0; }
+
 	int init_color (unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 	void set_pixel (unsigned int i, unsigned int j,
 			unsigned char r, unsigned char g, unsigned char b, unsigned char a);
@@ -145,27 +155,13 @@ public:
 private:
 	void copyFrom (const Img &img);   // copie profonde partagée (ctor de copie + operator=)
 	int resize_memory (unsigned int width, unsigned int height, bool use_palette=false);
+	// The per-format import_*/export_* helpers (+ compute_colormap) were moved to
+	// ImgIO (image_io.h). Img::load/save remain below as thin delegators.
 
-	int import_bmp (const char *filename);
-	int export_bmp (const char *filename);
-	int import_tga (const char *filename);
-	void compute_colormap (unsigned char **_colormap, unsigned short *_colormap_length);
-	int export_tga (const char *filename);
-	int import_pbm (FILE *ptr, unsigned int levels, int binary);
-	int import_pgm (FILE *ptr, unsigned int levels, int binary);
-	int import_ppm (FILE *ptr, unsigned int levels, int binary);
-	int import_pnm (const char *filename);
-	int export_ppm (const char *filename, int binary);
-	int export_pnm (const char *filename);
-#ifdef PNG
-	int import_png (const char *filename);
-	int export_png (const char *filename);
-#endif
-#ifdef JPG
-	int import_jpg (const char *filename);   // stb : import seul (pas d'encodeur)
-#endif
-
-public:
+private:
+	// Representation (RGBA8 interleaved). Accessed externally only through
+	// data()/width()/height()/get_palette()/uses_palette(); friends (ImgIO) and
+	// Img's own methods use them directly.
 	unsigned char *m_pPixels;
 	unsigned int m_iWidth, m_iHeight;
 

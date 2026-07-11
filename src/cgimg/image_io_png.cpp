@@ -1,4 +1,5 @@
 #include "image.h"
+#include "image_io.h"
 #ifdef PNG
 
 // PNG decoding via stb_image (header-only, cross-platform, no libpng
@@ -9,7 +10,7 @@
 #define STB_IMAGE_STATIC
 #include <stb/stb_image.h>
 
-int Img::import_png (const char *filename)
+int ImgIO::import_png (Img& img, const char *filename)
 {
 	int w = 0, h = 0, channels = 0;
 
@@ -24,13 +25,13 @@ int Img::import_png (const char *filename)
 		return -1;
 	}
 
-	resize_memory (w, h);
+	img.resize_memory (w, h);
 	for (int y = 0; y < h; y++)
 	{
 		for (int x = 0; x < w; x++)
 		{
 			const unsigned char *p = data + 4 * (y * w + x);
-			set_pixel (x, y, p[0], p[1], p[2], p[3]);
+			img.set_pixel (x, y, p[0], p[1], p[2], p[3]);
 		}
 	}
 
@@ -38,7 +39,7 @@ int Img::import_png (const char *filename)
 	return 0;
 }
 
-int Img::export_png (const char *filename)
+int ImgIO::export_png (Img& img, const char *filename)
 {
 	// Only the stb_image decoder is vendored (no stb_image_write), so PNG
 	// writing is not available here. Save as .bmp / .tga / .ppm instead, or

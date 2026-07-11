@@ -24,6 +24,7 @@
 //     in the sense that no extra normalization is applied on top.
 
 #include "vmeshes.h"
+#include "vmeshes_io.h"
 #include "mesh.h"
 
 // <cstdio> is used both by the active OCCT path and by the CG_HAS_OCCT=Off
@@ -245,7 +246,7 @@ int tessellateAndAppend(const TopoDS_Shape& shape, std::vector<Mesh*>& out)
 
 } // anonymous namespace
 
-bool VMeshes::import_step(const char* filename)
+bool VMeshesIO::import_step(VMeshes& vm, const char* filename)
 {
     if (!filename) return false;
 
@@ -261,7 +262,7 @@ bool VMeshes::import_step(const char* filename)
             return false;
         }
         reader.TransferRoots();
-        return tessellateAndAppend(reader.OneShape(), m_Meshes) > 0;
+        return tessellateAndAppend(reader.OneShape(), vm.GetMeshes()) > 0;
     }
     catch (const Standard_Failure& e) {
         std::fprintf(stderr,
@@ -271,7 +272,7 @@ bool VMeshes::import_step(const char* filename)
     }
 }
 
-bool VMeshes::import_iges(const char* filename)
+bool VMeshesIO::import_iges(VMeshes& vm, const char* filename)
 {
     if (!filename) return false;
 
@@ -294,7 +295,7 @@ bool VMeshes::import_iges(const char* filename)
                     (int)i, filename, e.GetMessageString());
             }
         }
-        return tessellateAndAppend(reader.OneShape(), m_Meshes) > 0;
+        return tessellateAndAppend(reader.OneShape(), vm.GetMeshes()) > 0;
     }
     catch (const Standard_Failure& e) {
         std::fprintf(stderr,
@@ -306,17 +307,17 @@ bool VMeshes::import_iges(const char* filename)
 
 #else  // !CG_HAS_OCCT
 
-bool VMeshes::import_step(const char* /*filename*/)
+bool VMeshesIO::import_step(VMeshes& /*vm*/, const char* /*filename*/)
 {
     std::fprintf(stderr,
-        "VMeshes::import_step: OCCT support not built in (CG_HAS_OCCT undefined)\n");
+        "VMeshesIO::import_step: OCCT support not built in (CG_HAS_OCCT undefined)\n");
     return false;
 }
 
-bool VMeshes::import_iges(const char* /*filename*/)
+bool VMeshesIO::import_iges(VMeshes& /*vm*/, const char* /*filename*/)
 {
     std::fprintf(stderr,
-        "VMeshes::import_iges: OCCT support not built in (CG_HAS_OCCT undefined)\n");
+        "VMeshesIO::import_iges: OCCT support not built in (CG_HAS_OCCT undefined)\n");
     return false;
 }
 

@@ -1,4 +1,5 @@
 #include "image.h"
+#include "image_io.h"
 
 // JPEG decoding via stb_image (header-only, no libjpeg dependency). Calqué sur
 // image_io_png.cpp : STB_IMAGE_STATIC garde les symboles du décodeur internes à
@@ -10,7 +11,7 @@
 #define STB_IMAGE_STATIC
 #include <stb/stb_image.h>
 
-int Img::import_jpg (const char *filename)
+int ImgIO::import_jpg (Img& img, const char *filename)
 {
 	int w = 0, h = 0, channels = 0;
 
@@ -25,12 +26,12 @@ int Img::import_jpg (const char *filename)
 		return -1;
 	}
 
-	resize_memory (w, h);
+	img.resize_memory (w, h);
 	for (int y = 0; y < h; y++)
 		for (int x = 0; x < w; x++)
 		{
 			const unsigned char *p = data + 4 * (y * w + x);
-			set_pixel (x, y, p[0], p[1], p[2], p[3]);
+			img.set_pixel (x, y, p[0], p[1], p[2], p[3]);
 		}
 
 	stbi_image_free (data);

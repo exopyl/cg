@@ -36,7 +36,7 @@ int MaterialRenderer::AddMaterial (Material *pMaterial)
 			glBindTexture(GL_TEXTURE_2D, m_pTexturesId[m_nMaterials]);
 
 			Img *pImage = pMaterialTexture->GetImage ();
-			glTexImage2D(GL_TEXTURE_2D, 0, 4, pImage->m_iWidth, pImage->m_iHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, pImage->m_pPixels);
+			glTexImage2D(GL_TEXTURE_2D, 0, 4, pImage->width(), pImage->height(), 0, GL_RGBA, GL_UNSIGNED_BYTE, pImage->data());
 			glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);

@@ -9,11 +9,12 @@
 #include <string_view>
 
 #include "mesh.h"
+#include "mesh_io.h"
 #include "mesh_io_3ds.h"
 #include "../cgmath/cgmath.h"
 #include "endianness.h"
 
-int Mesh::load (const char *filename)
+int MeshIO::load (Mesh& mesh, const char *filename)
 {
 	int res = -1;
 	if (!filename)
@@ -23,31 +24,31 @@ int Mesh::load (const char *filename)
 	std::string ext = p.extension().string();
 	
 	if (ext == ".asc")
-		res = import_asc(filename);
+		res = MeshIO::import_asc(mesh, filename);
 	else if (ext == ".npts" || ext == ".pset")
-		res = import_pset(filename);
+		res = MeshIO::import_pset(mesh, filename);
 	else if (ext == ".obj")
-		res = import_obj(filename);
+		res = MeshIO::import_obj(mesh, filename);
 	else if (ext == ".stl")
-		res = import_stl(filename);
+		res = MeshIO::import_stl(mesh, filename);
 	else if (ext == ".off")
-		res = import_off(filename);
+		res = MeshIO::import_off(mesh, filename);
 	else if (ext == ".pgm")
-		res = import_pgm(filename);
+		res = MeshIO::import_pgm(mesh, filename);
 	else if (ext == ".pts")
-		res = import_pts(filename);
+		res = MeshIO::import_pts(mesh, filename);
 	else if (ext == ".ply")
-		res = import_ply(filename);
+		res = MeshIO::import_ply(mesh, filename);
 	else if (ext == ".u3d")
-		res = import_u3d(filename);
+		res = MeshIO::import_u3d(mesh, filename);
 
 	// check coherency
-	if (m_nTextureCoordinates == 0)
+	if (mesh.m_nTextureCoordinates == 0)
 	{
 		// desactivate texture coordinates if they are not provided
-		for (unsigned int iFace = 0; iFace < m_nFaces; iFace++)
+		for (unsigned int iFace = 0; iFace < mesh.m_nFaces; iFace++)
 		{
-			auto& face = m_pFaces[iFace];
+			auto& face = mesh.m_pFaces[iFace];
 			face->m_bUseTextureCoordinates = false;
 		}
 	}
@@ -55,32 +56,32 @@ int Mesh::load (const char *filename)
 	return res;
 }
 
-int Mesh::save (const char *filename)
+int MeshIO::save (Mesh& mesh, const char *filename)
 {
 	if (!filename)
 		return -1;
 
 	if (strcmp (filename+(strlen(filename)-4), ".asc") == 0)
-	  return export_asc (filename);
+	  return MeshIO::export_asc(mesh, filename);
 	else if (strcmp (filename+(strlen(filename)-5), ".npts") == 0 ||
 		 strcmp (filename+(strlen(filename)-5), ".pset") == 0)
-	  return export_pset (filename);
+	  return MeshIO::export_pset(mesh, filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".obj") == 0)
-	  return export_obj (filename);
+	  return MeshIO::export_obj(mesh, filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".dae") == 0)
-	  return export_dae (filename);
+	  return MeshIO::export_dae(mesh, filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".cpp") == 0)
-	  return export_cpp (filename);
+	  return MeshIO::export_cpp(mesh, filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".gts") == 0)
-	  return export_gts (filename);
+	  return MeshIO::export_gts(mesh, filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".off") == 0)
-	  return export_off (filename);
+	  return MeshIO::export_off(mesh, filename);
 	else if (strcmp (filename+(strlen(filename)-4), ".pts") == 0)
-	  return export_pts (filename);
+	  return MeshIO::export_pts(mesh, filename);
 	else if (strcmp(filename + (strlen(filename) - 4), ".ply") == 0)
-		return export_ply(filename);
+		return MeshIO::export_ply(mesh, filename);
 	else if (strcmp(filename + (strlen(filename) - 4), ".stl") == 0)
-		return export_stl(filename);
+		return MeshIO::export_stl(mesh, filename);
 
 	return -1;
 }
@@ -90,7 +91,7 @@ int Mesh::save (const char *filename)
 //
 #define BUFFER_SIZE 4096
 
-int Mesh::import_mtl (const char *filename, const char *path)
+int MeshIO::import_mtl (Mesh& mesh, const char *filename, const char *path)
 {
 	FILE *ptr = nullptr;
 	char filename_full[BUFFER_SIZE];
@@ -123,8 +124,8 @@ int Mesh::import_mtl (const char *filename, const char *path)
 		if (sscanf(line, " newmtl %s", name) == 1) // new material
 		{
 			mat = new MaterialColorExt ();
-			mi = Material_Add(mat);
-			mat->m_name = name;
+			mi = mesh.Material_Add(mat);
+			mat->SetName (name);
 		}
 		else if (sscanf(line, " Kd %f %f %f", &r, &g, &b) == 3 && mat) mat->SetDiffuse (r, g, b, 1.);
 		else if (sscanf(line, " Ka %f %f %f", &r, &g, &b) == 3 && mat) mat->SetAmbient (r, g, b, 1.);
@@ -165,10 +166,10 @@ int Mesh::import_mtl (const char *filename, const char *path)
 				tex->SetSpecular(mat->m_fSpecular[0], mat->m_fSpecular[1], mat->m_fSpecular[2], 1.f);
 				tex->SetShininess(mat->m_fShininess[0] / 128.f);
 			}
-			// mat is owned by the Mesh's unique_ptr (Material_Add above);
-			// SetMaterial(mi, tex) will reset the slot which destroys mat.
+			// mat is owned by the Mesh's unique_ptr (mesh.Material_Add above);
+			// mesh.SetMaterial(mi, tex) will reset the slot which destroys mat.
 			mat = nullptr;
-			SetMaterial (mi, tex);
+			mesh.SetMaterial (mi, tex);
 		}
 		else if (strcmp(line, "map_Ka ") == 0) {} // ambient texture
 		else if (strcmp(line, "map_Ks ") == 0) {} // specular texture
@@ -214,7 +215,7 @@ static bool nextObjElementIndex (char *&s, int runningCount, unsigned int nVerti
 	return true;
 }
 
-int Mesh::import_obj (const char *filename)
+int MeshIO::import_obj (Mesh& mesh, const char *filename)
 {
 	if (filename == nullptr)
 		return 0;
@@ -263,18 +264,18 @@ int Mesh::import_obj (const char *filename)
 	}
 	//printf ("%d %d %d\n", nPoints, nTexCoords, nFaces);
 	rewind (file);
-	Init (nPoints, nFaces);
+	mesh.Init (nPoints, nFaces);
 
 	if (strlen (mtlfile) != 0)
 	{
 		auto dir = std::filesystem::path(filename).parent_path();
-		import_mtl (mtlfile, dir.string().c_str());
+		MeshIO::import_mtl(mesh, mtlfile, dir.string().c_str());
 	}
 
 	if (nTexCoords)
 	{
-		m_nTextureCoordinates = nTexCoords;
-		m_pTextureCoordinates.assign(2*nTexCoords, 0.0f);
+		mesh.m_nTextureCoordinates = nTexCoords;
+		mesh.m_pTextureCoordinates.assign(2*nTexCoords, 0.0f);
 	}
 	int ipoint = 0, itexcoord = 0, iface = 0;
 	int usemtl = -1;
@@ -299,24 +300,24 @@ int Mesh::import_obj (const char *filename)
 			while (!mtl_name.empty() && isspace(static_cast<unsigned char>(mtl_name.back())))
 				mtl_name.remove_suffix(1);
 				
-			usemtl = GetMaterialId (std::string(mtl_name));
+			usemtl = mesh.GetMaterialId (std::string(mtl_name));
 		}
 		else if (strcmp (prefix, "v") == 0)
 		{
 			sscanf (buffer, "%s %f %f %f", prefix,
-				&m_pVertices[3*ipoint],
-				&m_pVertices[3*ipoint+1],
-				&m_pVertices[3*ipoint+2]);
+				&mesh.m_pVertices[3*ipoint],
+				&mesh.m_pVertices[3*ipoint+1],
+				&mesh.m_pVertices[3*ipoint+2]);
 			ipoint++;
 		}
 		else if (strcmp (prefix, "vt") == 0)
 		{
 			float u = 0.f, v = 0.f;
 			sscanf (buffer, "%s %f %f", prefix, &u, &v);
-			m_pTextureCoordinates[2*itexcoord]   = u;
+			mesh.m_pTextureCoordinates[2*itexcoord]   = u;
 			// OBJ stores V with the origin at the bottom; OpenGL samples the
 			// first uploaded row (top of the image) at V=0. Flip V.
-			m_pTextureCoordinates[2*itexcoord+1] = 1.0f - v;
+			mesh.m_pTextureCoordinates[2*itexcoord+1] = 1.0f - v;
 			itexcoord++;
 		}
 		else if (strcmp (prefix, "f") == 0)
@@ -333,7 +334,7 @@ int Mesh::import_obj (const char *filename)
 					s++;
 				fvn++;
 			}
-			Face *pFace = m_pFaces[iface];
+			Face *pFace = mesh.m_pFaces[iface];
 			if (!pFace)
 				pFace = new Face ();
 
@@ -385,8 +386,8 @@ int Mesh::import_obj (const char *filename)
 				else
 					i0--;
 
-				if (i0 < 0 || (unsigned int) i0 >= m_nVertices) {
-					printf ("invalid vertex index %d (vn=%d)\n", i0, m_nVertices);
+				if (i0 < 0 || (unsigned int) i0 >= mesh.m_nVertices) {
+					printf ("invalid vertex index %d (vn=%d)\n", i0, mesh.m_nVertices);
 					continue;
 				}
 
@@ -399,10 +400,10 @@ int Mesh::import_obj (const char *filename)
 					else
 						i1--;
 					// Clamp to a valid slot: the index is later used to read
-					// m_pTextureCoordinates[2*i1] at render time, so an
+					// mesh.m_pTextureCoordinates[2*i1] at render time, so an
 					// out-of-range value (bad file / under-declared UVs) would
 					// read out of bounds and crash.
-					if (i1 < 0 || (unsigned int) i1 >= m_nTextureCoordinates)
+					if (i1 < 0 || (unsigned int) i1 >= mesh.m_nTextureCoordinates)
 						i1 = 0;
 					pFace->m_bUseTextureCoordinates = true;
 					// Allocate the per-face texcoord arrays ONCE: these
@@ -423,7 +424,7 @@ int Mesh::import_obj (const char *filename)
 			if (usemtl != -1)
 				pFace->m_iMaterialId = usemtl;
 
-			m_pFaces[iface] = pFace;
+			mesh.m_pFaces[iface] = pFace;
 			iface++;
 		}
 		else if (strcmp (prefix, "l") == 0)
@@ -435,14 +436,14 @@ int Mesh::import_obj (const char *filename)
 			while (*s && !isspace ((unsigned char)*s)) s++;
 
 			int prev = -1, idx;
-			while (nextObjElementIndex (s, ipoint, m_nVertices, idx))
+			while (nextObjElementIndex (s, ipoint, mesh.m_nVertices, idx))
 			{
 				if (idx < 0)
 					continue;   // malformed / out-of-range ref, skip
 				if (prev >= 0)
 				{
-					m_pLines.push_back ((unsigned int) prev);
-					m_pLines.push_back ((unsigned int) idx);
+					mesh.m_pLines.push_back ((unsigned int) prev);
+					mesh.m_pLines.push_back ((unsigned int) idx);
 				}
 				prev = idx;
 			}
@@ -455,19 +456,19 @@ int Mesh::import_obj (const char *filename)
 			while (*s && !isspace ((unsigned char)*s)) s++;
 
 			int idx;
-			while (nextObjElementIndex (s, ipoint, m_nVertices, idx))
+			while (nextObjElementIndex (s, ipoint, mesh.m_nVertices, idx))
 				if (idx >= 0)
-					m_pPoints.push_back ((unsigned int) idx);
+					mesh.m_pPoints.push_back ((unsigned int) idx);
 		}
 	}
 	fclose (file);
 
 	// OBJ vertex normals (vn) are not imported, so compute them from the
 	// geometry. Besides giving proper smooth shading, this guarantees
-	// m_pFaceNormals / m_pVertexNormals are populated — the immediate-mode
-	// render path reads m_pFaceNormals[] unconditionally and would otherwise
+	// mesh.m_pFaceNormals / mesh.m_pVertexNormals are populated — the immediate-mode
+	// render path reads mesh.m_pFaceNormals[] unconditionally and would otherwise
 	// read out of bounds on a normal-less mesh.
-	ComputeNormals ();
+	mesh.ComputeNormals ();
 
 	return 0;
 }
@@ -475,7 +476,7 @@ int Mesh::import_obj (const char *filename)
 //
 //
 //
-int Mesh::export_obj (const char *filename)
+int MeshIO::export_obj (Mesh& mesh, const char *filename)
 {
 	FILE *fp;
 	unsigned int i;
@@ -486,14 +487,14 @@ int Mesh::export_obj (const char *filename)
 
 	// some comments
 	fprintf (fp, "#\n");
-	fprintf (fp, "# number of vertices : %d\n", m_nVertices);
-	fprintf (fp, "# number of faces    : %d\n", m_nFaces);
+	fprintf (fp, "# number of vertices : %d\n", mesh.m_nVertices);
+	fprintf (fp, "# number of faces    : %d\n", mesh.m_nFaces);
 	fprintf (fp, "#\n");
 	fprintf (fp, "\n");
 
 	// materials
 	char *filematname = nullptr;
-	if (!m_pMaterials.empty())
+	if (!mesh.m_pMaterials.empty())
 	{
 		filematname = strdup (filename);
 		sprintf (filematname+strlen (filematname)-3, "%s", "mtl");
@@ -505,71 +506,71 @@ int Mesh::export_obj (const char *filename)
 	//
 	// vertices
 	//
-	for (i = 0; i < m_nVertices; i++)
+	for (i = 0; i < mesh.m_nVertices; i++)
 		fprintf (fp, "v %f %f %f\n",
-			 m_pVertices[3*i], m_pVertices[3*i+1], m_pVertices[3*i+2]);
-	if (0 && !m_pVertexNormals.empty())
+			 mesh.m_pVertices[3*i], mesh.m_pVertices[3*i+1], mesh.m_pVertices[3*i+2]);
+	if (0 && !mesh.m_pVertexNormals.empty())
 	{
-		for (i=0; i<m_nVertices; i++)
+		for (i=0; i<mesh.m_nVertices; i++)
 		{
 			fprintf (fp, "vn %f %f %f\n",
-				 m_pVertexNormals[3*i],
-				 m_pVertexNormals[3*i+1],
-				 m_pVertexNormals[3*i+2]);
+				 mesh.m_pVertexNormals[3*i],
+				 mesh.m_pVertexNormals[3*i+1],
+				 mesh.m_pVertexNormals[3*i+2]);
 		}
 	}
 	
-	if (!m_pTextureCoordinates.empty())
+	if (!mesh.m_pTextureCoordinates.empty())
 	{
-		for (i=0; i<m_nTextureCoordinates; i++)
-			fprintf (fp, "vt %f %f\n", m_pTextureCoordinates[2*i], m_pTextureCoordinates[2*i+1]);
+		for (i=0; i<mesh.m_nTextureCoordinates; i++)
+			fprintf (fp, "vt %f %f\n", mesh.m_pTextureCoordinates[2*i], mesh.m_pTextureCoordinates[2*i+1]);
 	}
 
 	//
 	// faces
 	//
 	unsigned int i_current_material = MATERIAL_NONE;
-	for (i = 0; i <m_nFaces; i++)
+	for (i = 0; i <mesh.m_nFaces; i++)
 	{
-		if (!m_pFaces[i])
+		if (!mesh.m_pFaces[i])
 			continue;
 		
-		if (m_pFaces[i]->GetMaterialId () != MATERIAL_NONE &&
-		    m_pFaces[i]->GetMaterialId () != i_current_material)
+		if (mesh.m_pFaces[i]->GetMaterialId () != MATERIAL_NONE &&
+		    mesh.m_pFaces[i]->GetMaterialId () != i_current_material)
 		{
-			fprintf (fp, "usemtl %s\n", m_pMaterials[m_pFaces[i]->GetMaterialId ()]->GetName().c_str());
-			i_current_material = m_pFaces[i]->GetMaterialId ();
+			fprintf (fp, "usemtl %s\n", mesh.m_pMaterials[mesh.m_pFaces[i]->GetMaterialId ()]->GetName().c_str());
+			i_current_material = mesh.m_pFaces[i]->GetMaterialId ();
 		}
 
-		if (0 && m_pFaces[i]->m_pTextureCoordinatesIndices)//m_pFaces[i]->m_bUseTextureCoordinates)
+		if (0 && mesh.m_pFaces[i]->m_pTextureCoordinatesIndices)//mesh.m_pFaces[i]->m_bUseTextureCoordinates)
 		{
-			for (unsigned int j=0; j<m_pFaces[i]->m_nVertices; j++)
+			for (unsigned int j=0; j<mesh.m_pFaces[i]->m_nVertices; j++)
 			{
 				//fprintf (fp, "vt %f %f\n",
-				//	 m_pTextureCoordinates[2*m_pFaces[i]->m_pTextureCoordinates[j]],
-				//	 m_pTextureCoordinates[2*m_pFaces[i]->m_pTextureCoordinates[j]+1]);
+				//	 mesh.m_pTextureCoordinates[2*mesh.m_pFaces[i]->m_pTextureCoordinates[j]],
+				//	 mesh.m_pTextureCoordinates[2*mesh.m_pFaces[i]->m_pTextureCoordinates[j]+1]);
 				fprintf (fp, "vt %f %f\n",
-					 m_pFaces[i]->m_pTextureCoordinates[2*j],
-					 m_pFaces[i]->m_pTextureCoordinates[2*j+1]);
+					 mesh.m_pFaces[i]->m_pTextureCoordinates[2*j],
+					 mesh.m_pFaces[i]->m_pTextureCoordinates[2*j+1]);
 			}
 		}
 
 		fprintf (fp, "f ");
-		for (unsigned int j=0; j<m_pFaces[i]->m_nVertices; j++)
+		for (unsigned int j=0; j<mesh.m_pFaces[i]->m_nVertices; j++)
 		{
 			// vertex
-			fprintf (fp, "%d", 1+m_pFaces[i]->m_pVertices[j]);
+			fprintf (fp, "%d", 1+mesh.m_pFaces[i]->m_pVertices[j]);
 
 			// texture coordinates
-			if (m_pFaces[i]->m_bUseTextureCoordinates && m_pFaces[i]->m_pTextureCoordinatesIndices)
-				fprintf (fp, "/%d", 1+m_pFaces[i]->m_pTextureCoordinatesIndices[j]);//m_pFaces[i]->m_nVertices);
+			if (mesh.m_pFaces[i]->m_bUseTextureCoordinates && mesh.m_pFaces[i]->m_pTextureCoordinatesIndices)
+				fprintf (fp, "/%d", 1+mesh.m_pFaces[i]->m_pTextureCoordinatesIndices[j]);//mesh.m_pFaces[i]->m_nVertices);
 
 			// normal
-			if (0 && !m_pVertexNormals.empty())
+			if (0 && !mesh.m_pVertexNormals.empty())
 			{
-				if (!m_pFaces[i]->m_bUseTextureCoordinates)
+				if (!mesh.m_pFaces[i]->m_bUseTextureCoordinates)
 					fprintf (fp, "/");
-				fprintf (fp, "/%d\n", m_pFaces[i]->m_pVertices[j]);
+				fprintf (fp, "/%d\n", mesh.m_pFaces[i]->m_pVertices[j]);
 			}
 			
 			fprintf (fp, " ");
@@ -580,17 +581,17 @@ int Mesh::export_obj (const char *filename)
 	//
 	// line segments ('l') and points ('p') — indices are 1-based in OBJ
 	//
-	for (i = 0; i < GetNLines(); i++)
-		fprintf (fp, "l %u %u\n", 1 + m_pLines[2*i], 1 + m_pLines[2*i+1]);
-	for (i = 0; i < GetNPoints(); i++)
-		fprintf (fp, "p %u\n", 1 + m_pPoints[i]);
+	for (i = 0; i < mesh.GetNLines(); i++)
+		fprintf (fp, "l %u %u\n", 1 + mesh.m_pLines[2*i], 1 + mesh.m_pLines[2*i+1]);
+	for (i = 0; i < mesh.GetNPoints(); i++)
+		fprintf (fp, "p %u\n", 1 + mesh.m_pPoints[i]);
 
 	fclose (fp);
 
 	//
 	// materials
 	//
-	if (!m_pMaterials.empty())
+	if (!mesh.m_pMaterials.empty())
 	{
 		fp = fopen(filematname,"w");
 		if (fp == nullptr)
@@ -600,9 +601,9 @@ int Mesh::export_obj (const char *filename)
 		fprintf (fp, "# Wavefront material file\n");
 		fprintf (fp, "\n");
 
-		for (size_t i = 0; i < m_pMaterials.size(); ++i)
+		for (size_t i = 0; i < mesh.m_pMaterials.size(); ++i)
 		{
-			Material *pMaterial = m_pMaterials[i].get();
+			Material *pMaterial = mesh.m_pMaterials[i].get();
 			if (!pMaterial)
 				continue;
 			switch (pMaterial->GetType ())
@@ -613,7 +614,7 @@ int Mesh::export_obj (const char *filename)
 				fprintf (fp, "newmtl material_%u\n", (unsigned int)i);
 				fprintf (fp, "Ka 0.200000 0.200000 0.200000\n");
 				fprintf (fp, "Kd %f %f %f\n",
-					 pMaterialColor->m_r/255., pMaterialColor->m_g/255., pMaterialColor->m_b/255.);
+					 pMaterialColor->GetFloatRed(), pMaterialColor->GetFloatGreen(), pMaterialColor->GetFloatBlue());
 				fprintf (fp, "Ks 1.000000 1.000000 1.000000\n");
 				fprintf (fp, "Tr 1.000000\n");
 				fprintf (fp, "illum 2\n");
@@ -651,7 +652,7 @@ int Mesh::export_obj (const char *filename)
 //
 // ASC
 //
-int Mesh::import_asc (const char *filename)
+int MeshIO::import_asc (Mesh& mesh, const char *filename)
 {
 	if (filename == nullptr)
 		return -1;
@@ -673,21 +674,21 @@ int Mesh::import_asc (const char *filename)
 	}
 	//nPoints--;
 	rewind (file);
-	Init (nPoints, 0);
-	InitVertexColors ();
+	mesh.Init (nPoints, 0);
+	mesh.InitVertexColors ();
 	unsigned int i=0;
 	while (!feof (file))
 	{
 		fscanf (file, "%f %f %f %d %d %d %f %f %f\n", &vx, &vy, &vz, &r, &g, &b, &nx, &ny, &nz);
-		m_pVertices[3*i+0] = vx;
-		m_pVertices[3*i+1] = vy;
-		m_pVertices[3*i+2] = vz;
-		m_pVertexColors[3*i+0]	= r/255.;
-		m_pVertexColors[3*i+1]	= g/255.;
-		m_pVertexColors[3*i+2]	= b/255.;
-		m_pVertexNormals[3*i+0] = nx;
-		m_pVertexNormals[3*i+1] = ny;
-		m_pVertexNormals[3*i+2] = nz;
+		mesh.m_pVertices[3*i+0] = vx;
+		mesh.m_pVertices[3*i+1] = vy;
+		mesh.m_pVertices[3*i+2] = vz;
+		mesh.m_pVertexColors[3*i+0]	= r/255.;
+		mesh.m_pVertexColors[3*i+1]	= g/255.;
+		mesh.m_pVertexColors[3*i+2]	= b/255.;
+		mesh.m_pVertexNormals[3*i+0] = nx;
+		mesh.m_pVertexNormals[3*i+1] = ny;
+		mesh.m_pVertexNormals[3*i+2] = nz;
 		i++;
 	}
 	fclose (file);
@@ -695,33 +696,33 @@ int Mesh::import_asc (const char *filename)
 	return 0;
 }
 
-int Mesh::export_asc (const char *filename)
+int MeshIO::export_asc (Mesh& mesh, const char *filename)
 {
 	FILE *ptr = fopen (filename, "w");
-	printf ("ASC : %d\n", m_nVertices);
+	printf ("ASC : %d\n", mesh.m_nVertices);
 	unsigned char r=0, g=0, b=0;
-	if (!m_pVertexColors.empty())
+	if (!mesh.m_pVertexColors.empty())
 	{
-		for (unsigned int i=0; i<m_nVertices; i++)
+		for (unsigned int i=0; i<mesh.m_nVertices; i++)
 		{
-			r = (unsigned char)(255.*m_pVertexColors[3*i+0]);
-			g = (unsigned char)(255.*m_pVertexColors[3*i+1]);
-			b = (unsigned char)(255.*m_pVertexColors[3*i+2]);
+			r = (unsigned char)(255.*mesh.m_pVertexColors[3*i+0]);
+			g = (unsigned char)(255.*mesh.m_pVertexColors[3*i+1]);
+			b = (unsigned char)(255.*mesh.m_pVertexColors[3*i+2]);
 			fprintf (ptr, "%f %f %f %d %d %d %f %f %f\n",
-				 m_pVertices[3*i+0], m_pVertices[3*i+1], m_pVertices[3*i+2],
+				 mesh.m_pVertices[3*i+0], mesh.m_pVertices[3*i+1], mesh.m_pVertices[3*i+2],
 				 r, g, b,
-				 m_pVertexNormals[3*i+0], m_pVertexNormals[3*i+1], m_pVertexNormals[3*i+2]
+				 mesh.m_pVertexNormals[3*i+0], mesh.m_pVertexNormals[3*i+1], mesh.m_pVertexNormals[3*i+2]
 				);
 		}
 	}
 	else
 	{
-		for (unsigned int i=0; i<m_nVertices; i++)
+		for (unsigned int i=0; i<mesh.m_nVertices; i++)
 		{
 			fprintf (ptr, "%f %f %f %d %d %d %f %f %f\n",
-				 m_pVertices[3*i+0], m_pVertices[3*i+1], m_pVertices[3*i+2],
+				 mesh.m_pVertices[3*i+0], mesh.m_pVertices[3*i+1], mesh.m_pVertices[3*i+2],
 				 r, g, b,
-				 m_pVertexNormals[3*i+0], m_pVertexNormals[3*i+1], m_pVertexNormals[3*i+2]
+				 mesh.m_pVertexNormals[3*i+0], mesh.m_pVertexNormals[3*i+1], mesh.m_pVertexNormals[3*i+2]
 				);
 		}
 	}
@@ -734,7 +735,7 @@ int Mesh::export_asc (const char *filename)
 //
 // PSET
 //
-int Mesh::import_pset (const char *filename)
+int MeshIO::import_pset (Mesh& mesh, const char *filename)
 {
 	if (filename == nullptr)
 		return -1;
@@ -756,17 +757,17 @@ int Mesh::import_pset (const char *filename)
 //	nPoints--;
 	rewind (file);
 	printf ("%d points\n", nPoints);
-	Init (nPoints, 0);
+	mesh.Init (nPoints, 0);
 	unsigned int i=0;
 	while (!feof (file))
 	{
 		fscanf (file, "%f %f %f %f %f %f\n",
-			&m_pVertices[i],
-			&m_pVertices[i+1],
-			&m_pVertices[i+2],
-			&m_pVertexNormals[i],
-			&m_pVertexNormals[i+1],
-			&m_pVertexNormals[i+2]);
+			&mesh.m_pVertices[i],
+			&mesh.m_pVertices[i+1],
+			&mesh.m_pVertices[i+2],
+			&mesh.m_pVertexNormals[i],
+			&mesh.m_pVertexNormals[i+1],
+			&mesh.m_pVertexNormals[i+2]);
 		i+=3;
 	}
 	fclose (file);
@@ -774,15 +775,15 @@ int Mesh::import_pset (const char *filename)
 	return 0;
 }
 
-int Mesh::export_pset (const char *filename)
+int MeshIO::export_pset (Mesh& mesh, const char *filename)
 {
 	FILE *ptr = fopen (filename, "w");
 	
-	for (unsigned int i=0; i<m_nVertices; i++)
+	for (unsigned int i=0; i<mesh.m_nVertices; i++)
 	{
 		fprintf (ptr, "%f %f %f %f %f %f\n",
-			 m_pVertices[3*i+0], m_pVertices[3*i+1], m_pVertices[3*i+2],
-			 m_pVertexNormals[3*i+0], m_pVertexNormals[3*i+1], m_pVertexNormals[3*i+2]
+			 mesh.m_pVertices[3*i+0], mesh.m_pVertices[3*i+1], mesh.m_pVertices[3*i+2],
+			 mesh.m_pVertexNormals[3*i+0], mesh.m_pVertexNormals[3*i+1], mesh.m_pVertexNormals[3*i+2]
 			 );
 	}
 
@@ -796,7 +797,7 @@ int Mesh::export_pset (const char *filename)
 //
 // DAE
 //
-int Mesh::export_dae (const char *filename)
+int MeshIO::export_dae (Mesh& mesh, const char *filename)
 {
 	FILE *ptr = fopen (filename, "w");
 
@@ -866,12 +867,12 @@ int Mesh::export_dae (const char *filename)
 	fprintf (ptr, "    <geometry id=\"GEO01-mesh\" name=\"GEO01\">\n");
 	fprintf (ptr, "      <mesh>\n");
 	fprintf (ptr, "        <source id=\"GEO01-Position\">\n");
-	fprintf (ptr, "          <float_array id=\"GEO01-Position-array\" count=\"%d\">", 3*m_nVertices);
-	for (int i=0; i<3*m_nVertices; i++)
-		fprintf (ptr, "%f ", m_pVertices[i]);
+	fprintf (ptr, "          <float_array id=\"GEO01-Position-array\" count=\"%d\">", 3*mesh.m_nVertices);
+	for (int i=0; i<3*mesh.m_nVertices; i++)
+		fprintf (ptr, "%f ", mesh.m_pVertices[i]);
 	fprintf (ptr, "</float_array>\n");
 	fprintf (ptr, "          <technique_common>\n\n");
-	fprintf (ptr, "            <accessor source=\"#GEO01-Position-array\" count=\"%d\" stride=\"3\">\n", m_nVertices);
+	fprintf (ptr, "            <accessor source=\"#GEO01-Position-array\" count=\"%d\" stride=\"3\">\n", mesh.m_nVertices);
 	fprintf (ptr, "              <param name=\"X\" type=\"float\"/>\n");
 	fprintf (ptr, "              <param name=\"Y\" type=\"float\"/>\n");
 	fprintf (ptr, "              <param name=\"Z\" type=\"float\"/>\n");
@@ -879,12 +880,12 @@ int Mesh::export_dae (const char *filename)
 	fprintf (ptr, "          </technique_common>\n");
 	fprintf (ptr, "        </source>\n");
 	fprintf (ptr, "        <source id=\"GEO01-UV\">\n");
-	fprintf (ptr, "          <float_array id=\"GEO01-UV-array\" count=\"%d\">", 2*m_nTextureCoordinates);
-	for (int i=0; i<2*m_nTextureCoordinates; i++)
-		fprintf (ptr, "%f ", m_pTextureCoordinates[i]);
+	fprintf (ptr, "          <float_array id=\"GEO01-UV-array\" count=\"%d\">", 2*mesh.m_nTextureCoordinates);
+	for (int i=0; i<2*mesh.m_nTextureCoordinates; i++)
+		fprintf (ptr, "%f ", mesh.m_pTextureCoordinates[i]);
 	fprintf (ptr, "</float_array>\n");
 	fprintf (ptr, "          <technique_common>\n");
-	fprintf (ptr, "            <accessor source=\"#GEO01-UV-array\" count=\"%d\" stride=\"2\">\n", m_nTextureCoordinates);
+	fprintf (ptr, "            <accessor source=\"#GEO01-UV-array\" count=\"%d\" stride=\"2\">\n", mesh.m_nTextureCoordinates);
 	fprintf (ptr, "              <param name=\"S\" type=\"float\"/>\n");
 	fprintf (ptr, "              <param name=\"T\" type=\"float\"/>\n");
 	fprintf (ptr, "            </accessor>\n");
@@ -893,13 +894,13 @@ int Mesh::export_dae (const char *filename)
 	fprintf (ptr, "        <vertices id=\"GEO01-Vertex\">\n");
 	fprintf (ptr, "          <input semantic=\"POSITION\" source=\"#GEO01-Position\"/>\n");
 	fprintf (ptr, "        </vertices>\n");
-	fprintf (ptr, "        <triangles material=\"mat0\" count=\"%d\">\n", m_nFaces);
+	fprintf (ptr, "        <triangles material=\"mat0\" count=\"%d\">\n", mesh.m_nFaces);
 	fprintf (ptr, "          <input offset=\"0\" semantic=\"VERTEX\" source=\"#GEO01-Vertex\"/>\n");
 	fprintf (ptr, "          <input offset=\"1\" semantic=\"TEXCOORD\" source=\"#GEO01-UV\"/>\n");
 	fprintf (ptr, "          <p>");
-	for (int i=0; i<m_nFaces; i++)
-		for (int j=0; j<m_pFaces[i]->m_nVertices; j++)
-			fprintf (ptr, "%d %d ", m_pFaces[i]->m_pVertices[j], m_pFaces[i]->m_pTextureCoordinatesIndices[j]);
+	for (int i=0; i<mesh.m_nFaces; i++)
+		for (int j=0; j<mesh.m_pFaces[i]->m_nVertices; j++)
+			fprintf (ptr, "%d %d ", mesh.m_pFaces[i]->m_pVertices[j], mesh.m_pFaces[i]->m_pTextureCoordinatesIndices[j]);
 	fprintf (ptr, "</p>\n");
 	fprintf (ptr, "        </triangles>\n");
 	fprintf (ptr, "      </mesh>\n");
@@ -935,7 +936,7 @@ int Mesh::export_dae (const char *filename)
 //
 // cpp
 //
-int Mesh::export_cpp  (const char *filename)
+int MeshIO::export_cpp (Mesh& mesh, const char *filename)
 {
 	int i;
   FILE *ptr = fopen (filename, "w");
@@ -958,52 +959,52 @@ int Mesh::export_cpp  (const char *filename)
   fprintf (ptr, "/* model coming from %s */\n\n", filename);
 
   /* n_vertices & n_faces */
-  int n_vertices = m_nVertices;
-  int n_faces    = m_nFaces;
+  int n_vertices = mesh.m_nVertices;
+  int n_faces    = mesh.m_nFaces;
   fprintf (ptr, "static int %s_n_vertices = %d;\n", modelname, n_vertices);
   fprintf (ptr, "static int %s_n_faces = %d;\n\n", modelname, n_faces);
   
   /* vertices */
   float x, y, z;
   fprintf (ptr, "static float %s_vertices[] = {", modelname);
-  x = m_pVertices[0];
-  y = m_pVertices[1];
-  z = m_pVertices[2];
+  x = mesh.m_pVertices[0];
+  y = mesh.m_pVertices[1];
+  z = mesh.m_pVertices[2];
   fprintf (ptr, "%f, %f, %f,\n", x, y, z);
   for (i=1; i<n_vertices-1; i++)
     {
-  x = m_pVertices[3*i];
-  y = m_pVertices[3*i+1];
-  z = m_pVertices[3*i+2];
+  x = mesh.m_pVertices[3*i];
+  y = mesh.m_pVertices[3*i+1];
+  z = mesh.m_pVertices[3*i+2];
       fprintf (ptr, "\t\t%f, %f, %f,\n", x, y, z);
     }
-  x = m_pVertices[3*i];
-  y = m_pVertices[3*i+1];
-  z = m_pVertices[3*i+2];
+  x = mesh.m_pVertices[3*i];
+  y = mesh.m_pVertices[3*i+1];
+  z = mesh.m_pVertices[3*i+2];
   fprintf (ptr, "\t\t%f, %f, %f};\n\n", x, y, z);
 
   /* faces */
   int a, b, c;
   fprintf (ptr, "static int %s_faces[] = {", modelname);
-  a = m_pFaces[0]->GetVertex(0);
-  b = m_pFaces[0]->GetVertex(1);
-  c = m_pFaces[0]->GetVertex(2);
+  a = mesh.m_pFaces[0]->GetVertex(0);
+  b = mesh.m_pFaces[0]->GetVertex(1);
+  c = mesh.m_pFaces[0]->GetVertex(2);
   fprintf (ptr, "%d, %d, %d,\n", a, b, c);
   for (i=1; i<n_faces-1; i++)
     {
-  a = m_pFaces[i]->GetVertex(0);
-  b = m_pFaces[i]->GetVertex(1);
-  c = m_pFaces[i]->GetVertex(2);
+  a = mesh.m_pFaces[i]->GetVertex(0);
+  b = mesh.m_pFaces[i]->GetVertex(1);
+  c = mesh.m_pFaces[i]->GetVertex(2);
       fprintf (ptr, "\t\t%d, %d, %d,\n", a, b , c);
     }
-  a = m_pFaces[i]->GetVertex(0);
-  b = m_pFaces[i]->GetVertex(1);
-  c = m_pFaces[i]->GetVertex(2);
+  a = mesh.m_pFaces[i]->GetVertex(0);
+  b = mesh.m_pFaces[i]->GetVertex(1);
+  c = mesh.m_pFaces[i]->GetVertex(2);
   fprintf (ptr, "\t\t%d, %d, %d};\n\n", a, b, c);
 
   /* vertices normales */
   fprintf (ptr, "static float %s_vertices_normales[] = {", modelname);
-  float *vertices_normales = m_pVertexNormals.data();
+  float *vertices_normales = mesh.m_pVertexNormals.data();
   fprintf (ptr, "%f, %f, %f,\n", vertices_normales[0], vertices_normales[1], vertices_normales[2]);
   for (i=1; i<n_vertices-1; i++)
     fprintf (ptr, "\t\t%f, %f, %f,\n",
@@ -1019,30 +1020,30 @@ int Mesh::export_cpp  (const char *filename)
 //
 // GTS
 //
-int Mesh::export_gts (const char *filename)
+int MeshIO::export_gts (Mesh& mesh, const char *filename)
 {
   int i;
   FILE *ptr = fopen (filename, "w");
   
-  fprintf (ptr, "%d %d %d\n", m_nVertices, 3*m_nFaces, m_nFaces);
+  fprintf (ptr, "%d %d %d\n", mesh.m_nVertices, 3*mesh.m_nFaces, mesh.m_nFaces);
   
   // vertices
-  for (i=0; i<m_nVertices; i++)
-    fprintf (ptr, "%f %f %f\n", m_pVertices[3*i], m_pVertices[3*i+1], m_pVertices[3*i+2]);
+  for (i=0; i<mesh.m_nVertices; i++)
+    fprintf (ptr, "%f %f %f\n", mesh.m_pVertices[3*i], mesh.m_pVertices[3*i+1], mesh.m_pVertices[3*i+2]);
 
   // edges
-  for (i=0; i<m_nFaces; i++)
+  for (i=0; i<mesh.m_nFaces; i++)
     {
-	    int a = m_pFaces[i]->GetVertex (0);
-	    int b = m_pFaces[i]->GetVertex (1);
-	    int c = m_pFaces[i]->GetVertex (2);
+	    int a = mesh.m_pFaces[i]->GetVertex (0);
+	    int b = mesh.m_pFaces[i]->GetVertex (1);
+	    int c = mesh.m_pFaces[i]->GetVertex (2);
       fprintf (ptr, "%d %d\n", 1+a, 1+b);
       fprintf (ptr, "%d %d\n", 1+b, 1+c);
       fprintf (ptr, "%d %d\n", 1+c, 1+a);
     }
 
   // faces
-  for (i=0; i<m_nFaces; i++)
+  for (i=0; i<mesh.m_nFaces; i++)
     fprintf (ptr, "%d %d %d\n", 3*i+1, 3*i+2, 3*i+3);
 
   fclose (ptr);
@@ -1070,7 +1071,7 @@ int Mesh::export_gts (const char *filename)
 * ...
 * f3n f3n+1 f3n+2
 */
-int Mesh::import_off (const char *filename)
+int MeshIO::import_off (Mesh& mesh, const char *filename)
 {
   char id[4];
   int i, nSegments;
@@ -1082,17 +1083,17 @@ int Mesh::import_off (const char *filename)
   // Get header information
   fgets (id, 4, ptr);
   DASSERT (id[0]=='O' && id[1]=='F' && id[2]=='F');
-  fscanf (ptr, "%d %d %d", &m_nVertices, &m_nFaces, &nSegments);
+  fscanf (ptr, "%d %d %d", &mesh.m_nVertices, &mesh.m_nFaces, &nSegments);
   
   // memory allocation
-  Init (m_nVertices, m_nFaces);
+  mesh.Init (mesh.m_nVertices, mesh.m_nFaces);
  
   // Get the vertices
-  for (i=0; i<m_nVertices; i++)
-    fscanf (ptr, "%f %f %f", &m_pVertices[3*i], &m_pVertices[3*i+1], &m_pVertices[3*i+2]);
+  for (i=0; i<mesh.m_nVertices; i++)
+    fscanf (ptr, "%f %f %f", &mesh.m_pVertices[3*i], &mesh.m_pVertices[3*i+1], &mesh.m_pVertices[3*i+2]);
 
   // Get the faces
-  for (i=0; i<m_nFaces; i++)
+  for (i=0; i<mesh.m_nFaces; i++)
     {
       //float r_tmp, g_tmp, b_tmp;
       int n_vertices_in_face;
@@ -1105,8 +1106,8 @@ int Mesh::import_off (const char *filename)
 	  return -1;
 	}
 
-      // write into the face already allocated by Init() (do NOT leak a new one)
-      Face *pFace = m_pFaces[i];
+      // write into the face already allocated by mesh.Init() (do NOT leak a new one)
+      Face *pFace = mesh.m_pFaces[i];
       fscanf (ptr, "%d %d %d",
 	      &pFace->m_pVertices[0], &pFace->m_pVertices[1], &pFace->m_pVertices[2]);
 
@@ -1119,7 +1120,7 @@ int Mesh::import_off (const char *filename)
 /**
 * export into off file
 */
-int Mesh::export_off (const char *filename)
+int MeshIO::export_off (Mesh& mesh, const char *filename)
 {
   FILE *ptr;
   int i;
@@ -1129,20 +1130,20 @@ int Mesh::export_off (const char *filename)
 
   // header
   fprintf (ptr, "OFF\n");
-  fprintf (ptr, "%ud %ud %d\n", m_nVertices, m_nFaces, 0);
+  fprintf (ptr, "%ud %ud %d\n", mesh.m_nVertices, mesh.m_nFaces, 0);
 
   // vertices
-  for (i=0; i<m_nVertices; i++)
-    fprintf (ptr, "%f %f %f\n", m_pVertices[3*i], m_pVertices[3*i+1], m_pVertices[3*i+2]);
+  for (i=0; i<mesh.m_nVertices; i++)
+    fprintf (ptr, "%f %f %f\n", mesh.m_pVertices[3*i], mesh.m_pVertices[3*i+1], mesh.m_pVertices[3*i+2]);
 
   // faces
   //for (i=0; i<n_faces; i++)
   //  fprintf (ptr, "3 %d %d %d 0.5 0.5 0.5\n",
   //	     f[3*i], f[3*i+1], f[3*i+2]);
-  for (i=0; i<m_nFaces; i++)
+  for (i=0; i<mesh.m_nFaces; i++)
   {
 	  fprintf (ptr, "%d %d %d\n",
-		   m_pFaces[i]->GetVertex (0), m_pFaces[i]->GetVertex (1), m_pFaces[i]->GetVertex (2));
+		   mesh.m_pFaces[i]->GetVertex (0), mesh.m_pFaces[i]->GetVertex (1), mesh.m_pFaces[i]->GetVertex (2));
   }
 
   fclose (ptr);
@@ -1153,7 +1154,7 @@ int Mesh::export_off (const char *filename)
 //
 // PGM
 //
-// static function used by void import_pgm (char *filename)
+// static function used by void MeshIO::import_pgm(mesh, char *filename)
 static void
 _pgm_skip_spaces(FILE *file)
 {
@@ -1183,7 +1184,7 @@ _pgm_skip_spaces(FILE *file)
 /**
 * Reads a mesh from a 'pgm' file. It creates a 3D surface as a height field.
 */
-int Mesh::import_pgm (const char *filename)
+int MeshIO::import_pgm (Mesh& mesh, const char *filename)
 {
   int width, height, levels;
   //int level_walk;
@@ -1265,27 +1266,27 @@ int Mesh::import_pgm (const char *filename)
   float y_trans = (1)? -height/2.0 : 0;
 
   // alloc memory
-  m_nVertices = width*height;
-  m_nFaces = 2*(width-1)*(height-1);
-  Init (m_nVertices, m_nFaces);
+  mesh.m_nVertices = width*height;
+  mesh.m_nFaces = 2*(width-1)*(height-1);
+  mesh.Init (mesh.m_nVertices, mesh.m_nFaces);
 
   // fill the structure
   for (j=0; j<height; j++)
     for (i=0; i<width; i++)
 	{
-	  m_pVertices[3*(j*width+i)]   = (float)i+x_trans;
-	  m_pVertices[3*(j*width+i)+1] = (float)(height-1-j)+y_trans;
-	  m_pVertices[3*(j*width+i)+2] = (float)(255-data[j*width+i]/3.0)-150.0;
+	  mesh.m_pVertices[3*(j*width+i)]   = (float)i+x_trans;
+	  mesh.m_pVertices[3*(j*width+i)+1] = (float)(height-1-j)+y_trans;
+	  mesh.m_pVertices[3*(j*width+i)+2] = (float)(255-data[j*width+i]/3.0)-150.0;
 	}
 
   for (j=0; j<height-1; j++)
     for (i=0; i<width-1; i++)
 	{
-		Face *f1 = m_pFaces[2*(j*(width-1)+i)];     // reuse faces allocated by Init (no leak)
+		Face *f1 = mesh.m_pFaces[2*(j*(width-1)+i)];     // reuse faces allocated by mesh.Init (no leak)
 		f1->SetVertex (0, j*width+i);
 		f1->SetVertex (1, (j+1)*width+i);
 		f1->SetVertex (2, j*width+i+1);
-		Face *f2 = m_pFaces[2*(j*(width-1)+i)+1];
+		Face *f2 = mesh.m_pFaces[2*(j*(width-1)+i)+1];
 		f2->SetVertex (0, (j+1)*width+i+1);
 		f2->SetVertex (1, j*width+i+1);
 		f2->SetVertex (2, (j+1)*width+i);
@@ -1298,7 +1299,7 @@ int Mesh::import_pgm (const char *filename)
 //
 // PTS
 //
-int Mesh::import_pts (const char *filename)
+int MeshIO::import_pts (Mesh& mesh, const char *filename)
 {
 	int i;
   FILE *ptr = fopen (filename, "r");
@@ -1315,15 +1316,15 @@ int Mesh::import_pts (const char *filename)
 	  return -1;
   }
   //
-  m_nVertices = 0;
+  mesh.m_nVertices = 0;
   while (1)
   {
     fgets (buffer, 512, ptr);
     if (feof(ptr)) break;
-    m_nVertices++;
+    mesh.m_nVertices++;
   }
-  Init (m_nVertices, 0);
-  m_pVertexColors.assign(3*m_nVertices, 0.0f);
+  mesh.Init (mesh.m_nVertices, 0);
+  mesh.m_pVertexColors.assign(3*mesh.m_nVertices, 0.0f);
 
   rewind (ptr);
   unsigned int vertex_walk=0;
@@ -1334,13 +1335,13 @@ int Mesh::import_pts (const char *filename)
     if (feof(ptr)) break;
 
 	sscanf (buffer, "%f %f %f %d %d %d", 
-		&m_pVertices[3*vertex_walk],
-		&m_pVertices[3*vertex_walk+1],
-		&m_pVertices[3*vertex_walk+2],
+		&mesh.m_pVertices[3*vertex_walk],
+		&mesh.m_pVertices[3*vertex_walk+1],
+		&mesh.m_pVertices[3*vertex_walk+2],
 		&r, &g, &b);
-	m_pVertexColors[3*vertex_walk]   = (float)r/255.0;
-	m_pVertexColors[3*vertex_walk+1] = (float)g/255.0;
-	m_pVertexColors[3*vertex_walk+2] = (float)b/255.0;
+	mesh.m_pVertexColors[3*vertex_walk]   = (float)r/255.0;
+	mesh.m_pVertexColors[3*vertex_walk+1] = (float)g/255.0;
+	mesh.m_pVertexColors[3*vertex_walk+2] = (float)b/255.0;
 
 	vertex_walk++;
   }
@@ -1351,7 +1352,7 @@ int Mesh::import_pts (const char *filename)
   return 0;
 }
 
-int Mesh::export_pts (const char *filename)
+int MeshIO::export_pts (Mesh& mesh, const char *filename)
 {
   FILE *ptr = fopen (filename, "w");
   if (!ptr)
@@ -1360,13 +1361,13 @@ int Mesh::export_pts (const char *filename)
 	  return false;
 	}
 
-  if (!m_pVertices.empty() && !m_pVertexColors.empty())
+  if (!mesh.m_pVertices.empty() && !mesh.m_pVertexColors.empty())
   {
-	  for (int i=0; i<m_nVertices; i++)
+	  for (int i=0; i<mesh.m_nVertices; i++)
 	  {
 		  fprintf (ptr, "%f %f %f %d %d %d\n",
-			  m_pVertices[3*i], m_pVertices[3*i+1], m_pVertices[3*i+2],
-			  (int)(m_pVertexColors[3*i]*255.0), (int)(m_pVertexColors[3*i+1]*255.0), (int)(m_pVertexColors[3*i+2]*255.0));
+			  mesh.m_pVertices[3*i], mesh.m_pVertices[3*i+1], mesh.m_pVertices[3*i+2],
+			  (int)(mesh.m_pVertexColors[3*i]*255.0), (int)(mesh.m_pVertexColors[3*i+1]*255.0), (int)(mesh.m_pVertexColors[3*i+2]*255.0));
 	  }
   }
   else
@@ -1443,7 +1444,7 @@ static int face_cb(p_ply_argument argument) {
     return 1;
 }
 
-int Mesh::import_ply (const char *filename)
+int MeshIO::import_ply (Mesh& mesh, const char *filename)
 {
 	int i;
 	long nvertices, ntriangles;
@@ -1456,50 +1457,50 @@ int Mesh::import_ply (const char *filename)
 	if (!ply_read_header(ply))
 		return -1;
 	
-	nvertices = ply_set_read_cb(ply, "vertex", "x", vertex_cb_coords, this, 0);
-	ply_set_read_cb(ply, "vertex", "y", vertex_cb_coords, this, 1);
-	ply_set_read_cb(ply, "vertex", "z", vertex_cb_coords, this, 2);
+	nvertices = ply_set_read_cb(ply, "vertex", "x", vertex_cb_coords, &mesh, 0);
+	ply_set_read_cb(ply, "vertex", "y", vertex_cb_coords, &mesh, 1);
+	ply_set_read_cb(ply, "vertex", "z", vertex_cb_coords, &mesh, 2);
 	
-	int bNormals = ply_set_read_cb(ply, "vertex", "nx", vertex_cb_normals, this, 0);
-	ply_set_read_cb(ply, "vertex", "ny", vertex_cb_normals, this, 1);
-	ply_set_read_cb(ply, "vertex", "nz", vertex_cb_normals, this, 2);
+	int bNormals = ply_set_read_cb(ply, "vertex", "nx", vertex_cb_normals, &mesh, 0);
+	ply_set_read_cb(ply, "vertex", "ny", vertex_cb_normals, &mesh, 1);
+	ply_set_read_cb(ply, "vertex", "nz", vertex_cb_normals, &mesh, 2);
 	
-	int bColors = ply_set_read_cb(ply, "vertex", "red", vertex_cb_colors, this, 0);
-	ply_set_read_cb(ply, "vertex", "green", vertex_cb_colors, this, 1);
-	ply_set_read_cb(ply, "vertex", "blue", vertex_cb_colors, this, 2);
+	int bColors = ply_set_read_cb(ply, "vertex", "red", vertex_cb_colors, &mesh, 0);
+	ply_set_read_cb(ply, "vertex", "green", vertex_cb_colors, &mesh, 1);
+	ply_set_read_cb(ply, "vertex", "blue", vertex_cb_colors, &mesh, 2);
 	
-	ntriangles = ply_set_read_cb(ply, "face", "vertex_indices", face_cb, this, 0);
+	ntriangles = ply_set_read_cb(ply, "face", "vertex_indices", face_cb, &mesh, 0);
 	
-	Init (nvertices, ntriangles);
+	mesh.Init (nvertices, ntriangles);
 	if (bColors)
-		InitVertexColors ();
+		mesh.InitVertexColors ();
 	
-	m_nVertices = (unsigned int)(-1);
-	m_nFaces = (unsigned int)(-1);
+	mesh.m_nVertices = (unsigned int)(-1);
+	mesh.m_nFaces = (unsigned int)(-1);
 	
 	if (!ply_read(ply))
 		return -1;
 	
-	m_nVertices = nvertices;
-	m_nFaces = ntriangles;
+	mesh.m_nVertices = nvertices;
+	mesh.m_nFaces = ntriangles;
 	
 	ply_close(ply);
 	
 	return 0;
 }
 
-int Mesh::export_ply (const char *filename)
+int MeshIO::export_ply (Mesh& mesh, const char *filename)
 {
     const char *value;
     p_ply oply = ply_create(filename, PLY_LITTLE_ENDIAN, nullptr, 0, nullptr);
     if (!oply)
 	    return -1;
 
-    ply_add_element(oply, "vertex", m_nVertices);
+    ply_add_element(oply, "vertex", mesh.m_nVertices);
     ply_add_property(oply, "x", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
     ply_add_property(oply, "y", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
     ply_add_property(oply, "z", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
-    if (!m_pVertexNormals.empty())
+    if (!mesh.m_pVertexNormals.empty())
     {
 	    ply_add_property(oply, "nx", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
 	    ply_add_property(oply, "ny", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
@@ -1510,16 +1511,16 @@ int Mesh::export_ply (const char *filename)
     if (!ply_write_header(oply))
 	    return -1;
 
-    for (unsigned int i=0; i<m_nVertices; i++)
+    for (unsigned int i=0; i<mesh.m_nVertices; i++)
     {
-	    ply_write (oply, m_pVertices[3*i]);
-	    ply_write (oply, m_pVertices[3*i+1]);
-	    ply_write (oply, m_pVertices[3*i+2]);
-	    if (!m_pVertexNormals.empty())
+	    ply_write (oply, mesh.m_pVertices[3*i]);
+	    ply_write (oply, mesh.m_pVertices[3*i+1]);
+	    ply_write (oply, mesh.m_pVertices[3*i+2]);
+	    if (!mesh.m_pVertexNormals.empty())
 	    {
-		    ply_write (oply, m_pVertexNormals[3*i]);
-		    ply_write (oply, m_pVertexNormals[3*i+1]);
-		    ply_write (oply, m_pVertexNormals[3*i+2]);
+		    ply_write (oply, mesh.m_pVertexNormals[3*i]);
+		    ply_write (oply, mesh.m_pVertexNormals[3*i+1]);
+		    ply_write (oply, mesh.m_pVertexNormals[3*i+2]);
 	    }
     }
 
@@ -1530,7 +1531,7 @@ int Mesh::export_ply (const char *filename)
 }
 
 
-int Mesh::import_stl(const char* filename)
+int MeshIO::import_stl (Mesh& mesh, const char *filename)
 {
 	FILE* ptr = nullptr;
 	ptr = fopen(filename, "rb");
@@ -1543,16 +1544,16 @@ int Mesh::import_stl(const char* filename)
 	unsigned int nTriangles = 0;
 	fread((char*)&nTriangles, 4, 1, ptr);
 
-	Init(3 * nTriangles, nTriangles);
+	mesh.Init(3 * nTriangles, nTriangles);
 
 	float coords[12];
 	char attributes[2];
 	for (unsigned int iface = 0; iface < nTriangles; iface++)
 	{
 		fread((char*)coords, sizeof(float), 12, ptr);
-		memcpy(m_pVertices.data() + 9*iface, coords + 3, 9 * sizeof(float));
+		memcpy(mesh.m_pVertices.data() + 9*iface, coords + 3, 9 * sizeof(float));
 
-		Face* pFace = m_pFaces[iface];
+		Face* pFace = mesh.m_pFaces[iface];
 		if (!pFace)
 			pFace = new Face();
 		pFace->SetNVertices(3);
@@ -1581,7 +1582,7 @@ int Mesh::import_stl(const char* filename)
 //
 // The solid name is derived from the filename stem.
 //
-int Mesh::export_stl (const char *filename)
+int MeshIO::export_stl (Mesh& mesh, const char *filename)
 {
 	if (!filename) return -1;
 
@@ -1598,20 +1599,20 @@ int Mesh::export_stl (const char *filename)
 
 	fprintf(fp, "solid %s\n", solidName.c_str());
 
-	for (unsigned int i = 0; i < m_nFaces; ++i)
+	for (unsigned int i = 0; i < mesh.m_nFaces; ++i)
 	{
-		Face *pFace = m_pFaces[i];
+		Face *pFace = mesh.m_pFaces[i];
 		if (!pFace || pFace->GetNVertices() != 3) continue;
 
 		int a = pFace->GetVertex(0);
 		int b = pFace->GetVertex(1);
 		int c = pFace->GetVertex(2);
 		if (a < 0 || b < 0 || c < 0) continue;
-		if ((unsigned)a >= m_nVertices || (unsigned)b >= m_nVertices || (unsigned)c >= m_nVertices) continue;
+		if ((unsigned)a >= mesh.m_nVertices || (unsigned)b >= mesh.m_nVertices || (unsigned)c >= mesh.m_nVertices) continue;
 
-		float ax = m_pVertices[3*a],   ay = m_pVertices[3*a+1], az = m_pVertices[3*a+2];
-		float bx = m_pVertices[3*b],   by = m_pVertices[3*b+1], bz = m_pVertices[3*b+2];
-		float cx = m_pVertices[3*c],   cy = m_pVertices[3*c+1], cz = m_pVertices[3*c+2];
+		float ax = mesh.m_pVertices[3*a],   ay = mesh.m_pVertices[3*a+1], az = mesh.m_pVertices[3*a+2];
+		float bx = mesh.m_pVertices[3*b],   by = mesh.m_pVertices[3*b+1], bz = mesh.m_pVertices[3*b+2];
+		float cx = mesh.m_pVertices[3*c],   cy = mesh.m_pVertices[3*c+1], cz = mesh.m_pVertices[3*c+2];
 
 		// Triangle normal = (b - a) x (c - a), normalized.
 		float ux = bx - ax, uy = by - ay, uz = bz - az;
@@ -1648,7 +1649,7 @@ int Mesh::export_stl (const char *filename)
 //
 // Symmetric with Mesh::import_stl which reads binary STL.
 //
-int Mesh::export_stl_binary (const char *filename)
+int MeshIO::export_stl_binary (Mesh& mesh, const char *filename)
 {
 	if (!filename) return -1;
 
@@ -1675,29 +1676,29 @@ int Mesh::export_stl_binary (const char *filename)
 
 	// Count valid triangles first (skip non-triangle faces / out-of-range indices).
 	uint32_t nTri = 0;
-	for (unsigned int i = 0; i < m_nFaces; ++i)
+	for (unsigned int i = 0; i < mesh.m_nFaces; ++i)
 	{
-		Face *pFace = m_pFaces[i];
+		Face *pFace = mesh.m_pFaces[i];
 		if (!pFace || pFace->GetNVertices() != 3) continue;
 		int a = pFace->GetVertex(0), b = pFace->GetVertex(1), c = pFace->GetVertex(2);
 		if (a < 0 || b < 0 || c < 0) continue;
-		if ((unsigned)a >= m_nVertices || (unsigned)b >= m_nVertices || (unsigned)c >= m_nVertices) continue;
+		if ((unsigned)a >= mesh.m_nVertices || (unsigned)b >= mesh.m_nVertices || (unsigned)c >= mesh.m_nVertices) continue;
 		++nTri;
 	}
 	fwrite(&nTri, sizeof(uint32_t), 1, fp);
 
 	// Write each triangle.
-	for (unsigned int i = 0; i < m_nFaces; ++i)
+	for (unsigned int i = 0; i < mesh.m_nFaces; ++i)
 	{
-		Face *pFace = m_pFaces[i];
+		Face *pFace = mesh.m_pFaces[i];
 		if (!pFace || pFace->GetNVertices() != 3) continue;
 		int a = pFace->GetVertex(0), b = pFace->GetVertex(1), c = pFace->GetVertex(2);
 		if (a < 0 || b < 0 || c < 0) continue;
-		if ((unsigned)a >= m_nVertices || (unsigned)b >= m_nVertices || (unsigned)c >= m_nVertices) continue;
+		if ((unsigned)a >= mesh.m_nVertices || (unsigned)b >= mesh.m_nVertices || (unsigned)c >= mesh.m_nVertices) continue;
 
-		float ax = m_pVertices[3*a],   ay = m_pVertices[3*a+1], az = m_pVertices[3*a+2];
-		float bx = m_pVertices[3*b],   by = m_pVertices[3*b+1], bz = m_pVertices[3*b+2];
-		float cx = m_pVertices[3*c],   cy = m_pVertices[3*c+1], cz = m_pVertices[3*c+2];
+		float ax = mesh.m_pVertices[3*a],   ay = mesh.m_pVertices[3*a+1], az = mesh.m_pVertices[3*a+2];
+		float bx = mesh.m_pVertices[3*b],   by = mesh.m_pVertices[3*b+1], bz = mesh.m_pVertices[3*b+2];
+		float cx = mesh.m_pVertices[3*c],   cy = mesh.m_pVertices[3*c+1], cz = mesh.m_pVertices[3*c+2];
 
 		float ux = bx - ax, uy = by - ay, uz = bz - az;
 		float vx = cx - ax, vy = cy - ay, vz = cz - az;
@@ -1721,7 +1722,7 @@ int Mesh::export_stl_binary (const char *filename)
 }
 
 
-int Mesh::export_3ds (const char *filename)
+int MeshIO::export_3ds (Mesh& mesh, const char *filename)
 {
 	t3DSModel *p = Allocate3DSModel();
 	Write3DSFile(p, filename, nullptr);
@@ -1729,3 +1730,11 @@ int Mesh::export_3ds (const char *filename)
 	return 0;
 }
 
+// ---------------------------------------------------------------------------
+// Thin public delegators kept on Mesh: forward to the MeshIO statics above so
+// the ~30+ existing callers of mesh.load()/save()/export_stl_binary() keep
+// working unchanged.
+// ---------------------------------------------------------------------------
+int Mesh::load (const char *filename)              { return MeshIO::load (*this, filename); }
+int Mesh::save (const char *filename)              { return MeshIO::save (*this, filename); }
+int Mesh::export_stl_binary (const char *filename) { return MeshIO::export_stl_binary (*this, filename); }

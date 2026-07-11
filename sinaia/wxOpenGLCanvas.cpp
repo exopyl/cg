@@ -492,7 +492,7 @@ void MyGLCanvas::LoadModel(const wxString& filename, const ImportSettings& setti
 	//printf ("%s\n", (char*) ((filename).mb_str(wxConvUTF8)).data());
 	auto meshes = new VMeshes();
 	std::string loaded_filename = filename.ToUTF8().data();
-	meshes->load(const_cast<char*>(loaded_filename.c_str()));
+	VMeshesIO::load(*meshes, const_cast<char*>(loaded_filename.c_str()));
 
 	wxString msg = wxString::Format(wxT("%zu meshes imported"), meshes->GetNMeshes());
 	*m_CtrlLog << msg << _T("\n");
@@ -570,7 +570,7 @@ Model* MyGLCanvas::AppendModel(const wxString& filename)
 
 	Model* mdl = m_pVModels->Add(base);
 	mdl->m_path = path;
-	if (!mdl->m_meshes.load(path.c_str()) || mdl->m_meshes.GetNMeshes() == 0)
+	if (!VMeshesIO::load(mdl->m_meshes, path.c_str()) || mdl->m_meshes.GetNMeshes() == 0)
 	{
 		m_pVModels->Remove(m_pVModels->GetNModels() - 1);   // retire le Model vide
 		if (m_CtrlLog) *m_CtrlLog << wxString::Format(_T("Echec de chargement: %s\n"), filename);
@@ -651,7 +651,7 @@ bool MyGLCanvas::ReloadModel(Model* mdl)
 
 	// Recharge en place depuis le fichier d'origine.
 	mdl->m_meshes.clean();
-	if (!mdl->m_meshes.load(mdl->m_path.c_str()) || mdl->m_meshes.GetNMeshes() == 0)
+	if (!VMeshesIO::load(mdl->m_meshes, mdl->m_path.c_str()) || mdl->m_meshes.GetNMeshes() == 0)
 	{
 		if (m_CtrlLog)
 			*m_CtrlLog << wxString::Format(_T("Echec du rafraichissement: %s\n"), path);
@@ -693,7 +693,7 @@ void MyGLCanvas::SaveModel(const wxString& filename)
 	//printf ("%s\n", (char*) ((filename).mb_str(wxConvUTF8)).data());
 
 	if (VMeshes* vm = GetVMeshes())
-		vm->save((char*)((filename).mb_str(wxConvUTF8)).data());
+		VMeshesIO::save(*vm, (char*)((filename).mb_str(wxConvUTF8)).data());
 }
 
 //

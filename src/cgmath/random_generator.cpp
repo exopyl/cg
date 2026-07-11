@@ -316,7 +316,7 @@ gamdev (int ia, long *idum)
   int j;
   float am,e,s,v1,v2,x,y;
 
-  if (ia < 1) printf ("Error in routine gandev\n");
+  if (ia < 1) printf ("Error in routine gamdev\n");
   if (ia < 6)  // use direct method, adding waiting time
   {
     x=1.0;

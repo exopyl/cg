@@ -93,7 +93,7 @@ TEST(TEST_cgmesh_voxels, kvx_colors_are_per_face)
 TEST(TEST_cgmesh_voxels, import_kvx_via_vmeshes_load)
 {
     VMeshes vm;
-    ASSERT_TRUE(vm.load("./test/data/kvx/duke.kvx"));
+    ASSERT_TRUE(VMeshesIO::load(vm, "./test/data/kvx/duke.kvx"));
     ASSERT_EQ(vm.GetNMeshes(), 1u);
 
     Mesh* m = vm.GetMeshes()[0];

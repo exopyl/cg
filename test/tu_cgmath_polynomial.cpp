@@ -154,6 +154,8 @@ TEST(TEST_cgmath_polynomial, Poly3FallsBackToPoly2)
 	// action
 	int n = polynomial3_find_roots(0.f, 1.f, -3.f, 2.f, roots);
 
-	// expectations
+	// expectations - a==0 must delegate to the quadratic solver: roots {1, 2}
 	EXPECT_EQ(n, 2);
+	EXPECT_FLOAT_EQ(roots[0], 1.f);
+	EXPECT_FLOAT_EQ(roots[1], 2.f);
 }

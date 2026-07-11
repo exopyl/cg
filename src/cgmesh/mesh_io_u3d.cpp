@@ -1,9 +1,10 @@
 #include "mesh.h"
+#include "mesh_io.h"
 #if 0
 #include "io/FileFormat_U3D.h"
 #endif
 
-int Mesh::import_u3d (const char *filename)
+int MeshIO::import_u3d (Mesh& mesh, const char *filename)
 {
 	if (filename == nullptr)
 		return -1;
@@ -16,7 +17,7 @@ int Mesh::import_u3d (const char *filename)
 	return 0;
 }
 
-int Mesh::export_u3d (const char *filename)
+int MeshIO::export_u3d (Mesh& mesh, const char *filename)
 {
 	/*
 	if (filename == nullptr)

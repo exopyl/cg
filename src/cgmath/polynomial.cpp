@@ -13,8 +13,9 @@ int polynomial2_find_roots (float a, float b, float c, float roots[2])
 	float d = b*b - 4*a*c;
 	if (d > 0.)
 	{
-		roots[0] = (-b-sqrt(d))/(2.*a);
-		roots[1] = (-b+sqrt(d))/(2.*a);
+		float sd = sqrt(d);              // computed once (was called twice)
+		roots[0] = (-b-sd)/(2.*a);
+		roots[1] = (-b+sd)/(2.*a);
 		return 2;
 	}
 	else if (d == 0.)
@@ -58,10 +59,9 @@ int polynomial3_find_roots (float a, float b, float c, float d, float roots[3])
 
 	if (disc > 0.) // one root real, two are complex
 	{
-		float s = r + sqrt (disc);
-		s = (s < 0.)? -pow ((float)(-s), (float)(1./3.)) : pow((float)(s), (float)(1./3.));
-		float t = r - sqrt (disc);
-		t = (t < 0.)? -pow((float)(-t), (float)(1./3.)) : pow((float)(t), (float)(1./3.));
+		float sd = sqrt (disc);          // computed once (was called twice)
+		float s = cbrtf (r + sd);        // cbrtf handles negatives (was pow + sign test)
+		float t = cbrtf (r - sd);
 		roots[0] = -term1 + s + t;
 		/*
 		  term1 += (s+t)/2.
@@ -76,7 +76,7 @@ int polynomial3_find_roots (float a, float b, float c, float d, float roots[3])
 	}
 	else if (disc == 0.) // all roots real, at least two are equal.
 	{
-		float r13 = (r < 0.)? -pow((float)(-r), (float)(1./3.)) : pow((float)(r), (float)(1./3.));
+		float r13 = cbrtf (r);           // cbrtf handles negatives (was pow + sign test)
 		roots[0] = -term1 + 2.*r13;
 		roots[1] = -(r13 + term1);
 		roots[2] = -(r13 + term1);

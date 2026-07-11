@@ -28,21 +28,19 @@
  *                  than once.
  */
 
-#include    <math.h>
+#include    <cmath>
 #ifndef M_PI
 #define M_PI          3.14159265358979323846
 #endif
-extern double   sqrt(), cbrt(), cos(), acos();
 
 /* epsilon surrounding for near zero values */
 
 #define     EQN_EPS     1e-9
 #define	    IsZero(x)	((x) > -EQN_EPS && (x) < EQN_EPS)
 
-//#ifdef NOCBRT
-#define     cbrt(x)     ((x) > 0.0 ? pow((double)(x), 1.0/3.0) : \
-                          ((x) < 0.0 ? -pow((double)-(x), 1.0/3.0) : 0.0))
-//#endif
+// (Removed the local `#define cbrt(x)` macro that shadowed std::cbrt with a
+//  pow-based expansion; <cmath>'s cbrt already computes the real cube root,
+//  including for negative arguments.)
 
 int SolveQuadric(double c[ 3 ], double s[ 2 ])
 {

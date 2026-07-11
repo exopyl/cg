@@ -1,4 +1,5 @@
 #include "image.h"
+#include "image_io.h"
 
 //
 // References :
@@ -6,7 +7,7 @@
 //
 
 #ifdef WIN32
-#define WIN32_LEAN_AND_MEAN 
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 /* AUX_RGBImageRec*
@@ -22,12 +23,12 @@ AUX_RGBImageRec *LoadBMP(char *Filename)
 	return nullptr;
 }
 */
-int Img::import_bmp (const char *filename)
+int ImgIO::import_bmp (Img& img, const char *filename)
 {
 	FILE *filePtr;
 	BITMAPFILEHEADER bitmapFileHeader;
 	BITMAPINFOHEADER bitmapInfoHeader;
-	
+
 	filePtr = fopen(filename,"rb");
 	if (filePtr == nullptr)
 		return -1;
@@ -45,7 +46,7 @@ int Img::import_bmp (const char *filename)
 
 	//move file point to the begining of bitmap data
 	fseek(filePtr, bitmapFileHeader.bfOffBits, SEEK_SET);
-	
+
 	unsigned int width = bitmapInfoHeader.biWidth;
 	unsigned int height = bitmapInfoHeader.biHeight;
 	int bits = bitmapInfoHeader.biBitCount;
@@ -54,20 +55,20 @@ int Img::import_bmp (const char *filename)
 	{
 	case 1: // monochrome
 		{
-			resize_memory (width, height, false);
-			int scanlineWidth = bitmapInfoHeader.biSizeImage/m_iHeight;
+			img.resize_memory (width, height, false);
+			int scanlineWidth = bitmapInfoHeader.biSizeImage/img.m_iHeight;
 			unsigned char *bytes=(unsigned char*)malloc(scanlineWidth*sizeof(unsigned char));
-			for(int y=m_iHeight-1;y>=0;y--)
+			for(int y=img.m_iHeight-1;y>=0;y--)
 			{
 				fread(bytes,1,scanlineWidth,filePtr);
 				int indexByte = 0;
-				for(unsigned int x=0;x<m_iWidth;x+=8)
+				for(unsigned int x=0;x<img.m_iWidth;x+=8)
 				{
 					char byte = bytes[indexByte++];
 					for(int x2=0;x2<8;++x2)
 					{
 						unsigned char level = ((byte>>(7-x2))&1)*255;
-						set_pixel (x+x2,y,level,level,level,255);
+						img.set_pixel (x+x2,y,level,level,level,255);
 					}
 				}
 			}
@@ -76,17 +77,17 @@ int Img::import_bmp (const char *filename)
 		break;
 	case 24: // RGB
 		{
-			resize_memory (width, height, false);
-			int scanlineWidth = bitmapInfoHeader.biSizeImage/m_iHeight;
+			img.resize_memory (width, height, false);
+			int scanlineWidth = bitmapInfoHeader.biSizeImage/img.m_iHeight;
 			unsigned char *bytes=(unsigned char*)malloc(scanlineWidth*sizeof(unsigned char));
-			for(int y=m_iHeight-1;y>=0;y--)
+			for(int y=img.m_iHeight-1;y>=0;y--)
 			{
 				fread(bytes,1,scanlineWidth,filePtr);
-				for(unsigned int x=0;x<m_iWidth;x++)
+				for(unsigned int x=0;x<img.m_iWidth;x++)
 				{
 					for(int c=0;c<3;++c)
-						m_pPixels[4*(y*m_iWidth + x)+2-c] = bytes[3*x+c];
-					m_pPixels[4*(y*m_iWidth + x)+3] = 255;
+						img.m_pPixels[4*(y*img.m_iWidth + x)+2-c] = bytes[3*x+c];
+					img.m_pPixels[4*(y*img.m_iWidth + x)+3] = 255;
 				}
 			}
 			free(bytes);
@@ -105,7 +106,7 @@ int Img::import_bmp (const char *filename)
 	return 0;
 }
 
-int Img::export_bmp (const char *filename)
+int ImgIO::export_bmp (Img& img, const char *filename)
 {
 	FILE *ptrbuffer = fopen(filename, "wb");
 	if (!ptrbuffer)
@@ -113,38 +114,38 @@ int Img::export_bmp (const char *filename)
 
 	BITMAPINFOHEADER bitmapInfoHeader; // bitmap info header
 	bitmapInfoHeader.biSize = sizeof(BITMAPINFOHEADER);
-	bitmapInfoHeader.biWidth = m_iWidth;
-	bitmapInfoHeader.biHeight = m_iHeight;
+	bitmapInfoHeader.biWidth = img.m_iWidth;
+	bitmapInfoHeader.biHeight = img.m_iHeight;
 	bitmapInfoHeader.biPlanes = 1;
 	bitmapInfoHeader.biBitCount = 24;//8;
 	bitmapInfoHeader.biCompression = BI_RGB;
-	bitmapInfoHeader.biSizeImage = (((m_iWidth * 3) + 3) & ~3) * m_iHeight; // packed pixel formats
+	bitmapInfoHeader.biSizeImage = (((img.m_iWidth * 3) + 3) & ~3) * img.m_iHeight; // packed pixel formats
 	bitmapInfoHeader.biXPelsPerMeter = 0;
 	bitmapInfoHeader.biYPelsPerMeter = 0;
 	bitmapInfoHeader.biClrUsed = 0;
 	bitmapInfoHeader.biClrImportant = 0;
-   
+
 	BITMAPFILEHEADER bitmapFileHeader; // bitmap file header
 	bitmapFileHeader.bfType = 0x4D42;//''MB''
 	bitmapFileHeader.bfSize = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER) + bitmapInfoHeader.biSizeImage;
 	bitmapFileHeader.bfReserved1 = 0;
 	bitmapFileHeader.bfReserved2 = 0;
 	bitmapFileHeader.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
-  
+
 	fwrite(&bitmapFileHeader, 1, sizeof(BITMAPFILEHEADER), ptrbuffer); // write the bitmap info header
 	fwrite(&bitmapInfoHeader, 1, sizeof(BITMAPINFOHEADER), ptrbuffer); // write the image data
 
-	int scanlineWidth = bitmapInfoHeader.biSizeImage/m_iHeight;
+	int scanlineWidth = bitmapInfoHeader.biSizeImage/img.m_iHeight;
 	unsigned char *pData = (unsigned char*)malloc(scanlineWidth);
 	memset(pData, 0, scanlineWidth);
-	for (unsigned int j=0; j<m_iHeight; j++)
+	for (unsigned int j=0; j<img.m_iHeight; j++)
 	{
-		for (unsigned int i=0; i<m_iWidth; i++)
+		for (unsigned int i=0; i<img.m_iWidth; i++)
 		{
 			// ! the image is a "bottom-up" bitmap with the origin in the lower-left corner
-			pData[3*i+2] = m_pPixels[4*((m_iHeight-1-j)*m_iWidth+i)];
-			pData[3*i+1] = m_pPixels[4*((m_iHeight-1-j)*m_iWidth+i)+1];
-			pData[3*i]   = m_pPixels[4*((m_iHeight-1-j)*m_iWidth+i)+2];
+			pData[3*i+2] = img.m_pPixels[4*((img.m_iHeight-1-j)*img.m_iWidth+i)];
+			pData[3*i+1] = img.m_pPixels[4*((img.m_iHeight-1-j)*img.m_iWidth+i)+1];
+			pData[3*i]   = img.m_pPixels[4*((img.m_iHeight-1-j)*img.m_iWidth+i)+2];
 		}
 		fwrite(pData, scanlineWidth, 1, ptrbuffer);
 	}
@@ -193,12 +194,12 @@ struct bmp_bitmap_header_s
   uint32 colorimportant;
 };
 
-int Img::import_bmp (const char *filename)
+int ImgIO::import_bmp (Img& img, const char *filename)
 {
 	// check size of int
 	if(sizeof(int)!=4)
 		return -1;
-		
+
 	FILE* f=fopen(filename, "rb");
 	if(!f)
 		return -1;
@@ -206,7 +207,7 @@ int Img::import_bmp (const char *filename)
 	fread(header,54,1,f);
 
 	// "BM" in header
-	if(header[0]!='B' || header[1]!='M') 
+	if(header[0]!='B' || header[1]!='M')
 	{
 		printf ("This file is not a bitmap, specifically it doesn't start 'BM'\n");
 		fclose(f);
@@ -215,11 +216,11 @@ int Img::import_bmp (const char *filename)
 
 	//it seems gimp sometimes makes its headers small, so we have to do this. hence all the fseeks
 	int offset=*(unsigned int*)(header+10);
-	
+
 	int width=*(int*)(header+18);
 	int height=*(int*)(header+22);
 	//now the bitmap knows how big it is it can allocate its memory
-	resize_memory (width, height);
+	img.resize_memory (width, height);
 
 	int bits=int(header[28]);
 	printf ("bit : %d\n", bits);
@@ -231,16 +232,16 @@ int Img::import_bmp (const char *filename)
 		fseek(f,offset,SEEK_SET);
 		//fread(m_pPixels,m_iWidth*m_iHeight*3,1,f);
 		//for(y=0;y<m_iHeight;++y)
-		for(y=m_iHeight-1;y>=0;y--)
-			for(x=0;x<m_iWidth;x++)
+		for(y=img.m_iHeight-1;y>=0;y--)
+			for(x=0;x<img.m_iWidth;x++)
 			{
 				char byte;
 				for(int c=0;c<3;++c)
 				{
 					fread(&byte,1,1,f);
-					m_pPixels[4*(y*m_iWidth + x)+2-c] = byte;
+					img.m_pPixels[4*(y*img.m_iWidth + x)+2-c] = byte;
 				}
-				m_pPixels[4*(y*m_iWidth + x)+3] = 255;
+				img.m_pPixels[4*(y*img.m_iWidth + x)+3] = 255;
 			}
 		break;
 
@@ -251,8 +252,8 @@ int Img::import_bmp (const char *filename)
 		for(y=0;y<bmp.height;++y)						//(Notice 4bytes/col for some reason)
 			for(x=0;x<bmp.width;++x)
 			{
-				BYTE byte;			
-				fread(&byte,1,1,f);						//just read byte					
+				BYTE byte;
+				fread(&byte,1,1,f);						//just read byte
 				for(int c=0;c<3;++c)
 					bmp.pixel(x,y,c)=cols[byte*4+2-c];	//and look up in the table
 			}
@@ -262,7 +263,7 @@ int Img::import_bmp (const char *filename)
 
 		fseek(f,offset,SEEK_SET);
 		printf("Reading a grayscale image...\n");
-		fread(m_pPixels, m_iWidth*m_iHeight,1,f);
+		fread(img.m_pPixels, img.m_iWidth*img.m_iHeight,1,f);
 		break;
 
 	case 4:
@@ -285,8 +286,8 @@ int Img::import_bmp (const char *filename)
 	case 1:
 		fread(cols,8,1,f);
 		fseek(f,offset,SEEK_SET);
-		for(y=0;y<m_iHeight;++y)
-			for(x=0;x<m_iWidth;x+=8)
+		for(y=0;y<img.m_iHeight;++y)
+			for(x=0;x<img.m_iWidth;x+=8)
 			{
 				char byte;
 				fread(&byte,1,1,f);
@@ -295,7 +296,7 @@ int Img::import_bmp (const char *filename)
 				//all but the lowest bit in order to get the index into the colourtable.
 				for(int x2=0;x2<8;++x2)
 					for(int c=0;c<3;++c)
-						m_pPixels[y*m_iWidth + x+x2 +c] = cols[((byte>>(7-x2))&1)*4+2-c];
+						img.m_pPixels[y*img.m_iWidth + x+x2 +c] = cols[((byte>>(7-x2))&1)*4+2-c];
 				//bmp.pixel(x+x2,y,c)=cols[((byte>>(7-x2))&1)*4+2-c];
 			}
 		break;
@@ -310,13 +311,13 @@ int Img::import_bmp (const char *filename)
 		fclose(f);
 		return -1;
 	}
-	
+
 	fclose(f);
 
 	return 0;
 }
 
-int Img::export_bmp (const char *filename)
+int ImgIO::export_bmp (Img& img, const char *filename)
 {
   FILE *ptr;
   ptr = fopen (filename, "w");
@@ -327,27 +328,27 @@ int Img::export_bmp (const char *filename)
   struct bmp_file_header_s fh;
   struct bmp_bitmap_header_s bh;
 
-  fh.size           = sizeof(id) + sizeof(fh) + sizeof(bh) + sizeof(m_pPixels);
+  fh.size           = sizeof(id) + sizeof(fh) + sizeof(bh) + sizeof(img.m_pPixels);
   fh.reserved       = 0;
   fh.offsettobits   = sizeof(id) + sizeof(fh) + sizeof(bh);
-  
+
   bh.size           = sizeof(bh);
-  bh.width          = width();
-  bh.height         = height();
+  bh.width          = img.width();
+  bh.height         = img.height();
   bh.planes         = 1;
   bh.bpp            = 24;
   bh.compression    = BI_RGB;
-  bh.imagesize      = 3*width()*height();
+  bh.imagesize      = 3*img.width()*img.height();
   bh.widthppm       = 0;
   bh.heightppm      = 0;
   bh.colorused      = 0;
   bh.colorimportant = 0;
-  
+
   fwrite (&id, sizeof(unsigned char), 2, ptr);
   fwrite (&fh, sizeof(fh), 1, ptr);
   fwrite (&bh, sizeof(bh), 1, ptr);
-  fwrite (m_pPixels, sizeof(unsigned char), 3*width()*height(), ptr); // todo : dismiss alpha
-  fclose (ptr);  
+  fwrite (img.m_pPixels, sizeof(unsigned char), 3*img.width()*img.height(), ptr); // todo : dismiss alpha
+  fclose (ptr);
 
   return 0;
 }

@@ -1,7 +1,7 @@
-#include "berstein.h"
+#include "bernstein.h"
 
 // binomial coefficient (n,k) with n>=k. If n<k, the coefficient is invalid => returns -1.0
-static int binomialCoefficients[21][21] = {{1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+static constexpr int binomialCoefficients[21][21] = {{1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 {1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 {1, 2, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 {1, 3, 3, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
@@ -33,9 +33,9 @@ int binomialCoefficient (int n, int k)
 }
 
 /**
-* Berstein polynomial
+* Bernstein polynomial
 */
-double bersteinPolynomial (int par_maxDegree, int par_degree, float par_value)
+double bernsteinPolynomial (int par_maxDegree, int par_degree, float par_value)
 {
 	return binomialCoefficient (par_maxDegree, par_degree) * pow (par_value, par_degree) * pow (1-par_value,par_maxDegree-par_degree);
 }

@@ -145,17 +145,7 @@ void convolution (float *signal, int n, float **_convolution);
 // from Nick nicolas@capens.net
 inline float rsq (float x)
 {
-#ifdef SSE
-	__asm
-	{
-		movss xmm0, x
-		rsqrtss xmm0, xmm0
-		movss x, xmm0
-	}
-	return x;
-#else
 	return 1.0f / sqrt (x);
-#endif
 }
 
 // unique IDs generator (singleton)
@@ -193,7 +183,8 @@ private:
     #endif
 #endif
 
-#define isnan(x) ((x) != (x))
+// (Removed `#define isnan(x) ((x) != (x))`: as a macro it shadowed and broke
+//  std::isnan for every consumer of common.h. Callers now use std::isnan.)
 
 #else
 

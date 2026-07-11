@@ -35,7 +35,6 @@ protected:
 //
 class MaterialColor : public Material
 {
-	friend class Mesh;
 public:
 	MaterialColor ();
 	MaterialColor (unsigned char r, unsigned char g, unsigned char b, unsigned char a=255);
@@ -59,7 +58,6 @@ private:
 //
 class MaterialColorExt : public Material
 {
-	friend class Mesh;
 
 public:
 	// material color extended library

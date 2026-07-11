@@ -10,7 +10,7 @@ unsigned int TexturesManager::addTexture (Img *pImg)
 {
 	unsigned int idImg;
 
-	unsigned char* data = pImg->m_pPixels;
+	unsigned char* data = pImg->data();
 	int img_width = pImg->width ();
 	int img_height = pImg->height ();
 

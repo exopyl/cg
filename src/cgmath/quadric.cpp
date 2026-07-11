@@ -65,11 +65,6 @@ void quadric_dump(quadric_t q)
 	for (unsigned int i = 0; i < 10; i++)
 		printf ("%f ", q[i]);
 	printf ("\n");
-	return;
-	printf ("%e %e %e %e\n", q[0], q[4], q[7], q[9]);
-	printf ("%e %e %e %e\n", q[4], q[1], q[5], q[8]);
-	printf ("%e %e %e %e\n", q[7], q[5], q[2], q[6]);
-	printf ("%e %e %e %e\n", q[9], q[8], q[6], q[3]);
 }
 
 int quadric_minimize(quadric_t q, Vector3f &vnew, float *error)
@@ -83,7 +78,7 @@ int quadric_minimize(quadric_t q, Vector3f &vnew, float *error)
 	if (fabs(fdet) <= EPSILON)
 		return -1;
 
-	if (isnan(fdet))
+	if (std::isnan(fdet))
 		return -1;
 
 	finvdet = 1.0 / fdet;
@@ -144,7 +139,7 @@ int quadric_minimize_edge(quadric_t q, Vector3f &vnew, float *error, const Vecto
 	if (fabs(det) < EPSILON)
 		return -1;
 
-	if (isnan(det))
+	if (std::isnan(det))
 		return -1;
 
 	Vector3f qv (q[9], q[8], q[6]);
@@ -189,7 +184,7 @@ int quadric_minimize2(quadric_t q, Vector3f &vnew, float *error, const Vector3f 
 	double e1 = quadric_eval(q, v1);
 	double em = quadric_eval(q, vm);
 
-	if (isnan(e0) || isnan(e1) || isnan(em))
+	if (std::isnan(e0) || std::isnan(e1) || std::isnan(em))
 		return -1;
 
 	if (e0 < e1) {

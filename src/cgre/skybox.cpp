@@ -72,7 +72,7 @@ void Skybox::load_directory(char *path)
 	for (int i=0; i<5; i++)
 	{
 		pImg->load (files[i]);
-		data = pImg->m_pPixels;
+		data = pImg->data();
 		width = pImg->width ();
 		height = pImg->height ();
 
@@ -113,7 +113,7 @@ void Skybox::load_cross(char *path)
 	for (int i=0; i<5; i++)
 	{
 		pTmp->crop(pImg, xs[i], ys[i], size, size);
-		unsigned char *data = pTmp->m_pPixels;
+		unsigned char *data = pTmp->data();
 
 		glGenTextures(1, &texture[i]);
 		glBindTexture(GL_TEXTURE_2D, texture[i]);

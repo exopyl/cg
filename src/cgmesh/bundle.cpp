@@ -399,8 +399,8 @@ int Bundle::project_textures_naive (Mesh *mesh, char *bundleoutfilename, char *i
 		// add new texture in the mesh
 		Img *texture = new Img ();
 		texture->load (camera->filename);
-		camera->w = texture->m_iWidth;
-		camera->h = texture->m_iHeight;
+		camera->w = texture->width();
+		camera->h = texture->height();
 		MaterialTexture *pMaterial = new MaterialTexture (camera->filename);
 		mesh->Material_Add (pMaterial);
 		delete texture;

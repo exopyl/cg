@@ -391,7 +391,7 @@ TEST(TEST_cgmesh_io, 3ds_sink)
     VMeshes* pVMeshes = new VMeshes();
 
     // action
-    pVMeshes->load("./test/data/sink.3ds");
+    VMeshesIO::load(*pVMeshes,"./test/data/sink.3ds");
 
     // expectations
     auto& meshes = pVMeshes->GetMeshes();
@@ -414,7 +414,7 @@ TEST(TEST_cgmesh_io, 3ds_display)
     VMeshes* pVMeshes = new VMeshes();
 
     // action
-    pVMeshes->load("./test/data/display.3ds");
+    VMeshesIO::load(*pVMeshes,"./test/data/display.3ds");
 
     // expectations
     auto& meshes = pVMeshes->GetMeshes();
@@ -457,7 +457,7 @@ TEST(TEST_cgmesh_io, 3ds_floppy)
     VMeshes* pVMeshes = new VMeshes();
 
     // action
-    pVMeshes->load("./test/data/floppy.3ds");
+    VMeshesIO::load(*pVMeshes,"./test/data/floppy.3ds");
 
     // expectations
     auto& meshes = pVMeshes->GetMeshes();
@@ -475,7 +475,7 @@ TEST(TEST_cgmesh_io, glb_duck)
     VMeshes* pVMeshes = new VMeshes();
 
     // action
-    bool res = pVMeshes->load("./test/data/Duck.glb");
+    bool res = VMeshesIO::load(*pVMeshes,"./test/data/Duck.glb");
 
     // expectations
     ASSERT_TRUE(res);
@@ -517,7 +517,7 @@ TEST(TEST_cgmesh_io, glb_fox_non_indexed)
 {
     VMeshes* pVMeshes = new VMeshes();
 
-    bool res = pVMeshes->load("./test/data/Fox.glb");
+    bool res = VMeshesIO::load(*pVMeshes,"./test/data/Fox.glb");
 
     ASSERT_TRUE(res);
     ASSERT_EQ(pVMeshes->GetNMeshes(), 1u);
@@ -547,7 +547,7 @@ TEST(TEST_cgmesh_io, step_4pinplug)
 {
     VMeshes* pVMeshes = new VMeshes();
 
-    bool res = pVMeshes->load("./test/data/4pinplug.stp");
+    bool res = VMeshesIO::load(*pVMeshes,"./test/data/4pinplug.stp");
     ASSERT_TRUE(res);
 
     auto& meshes = pVMeshes->GetMeshes();
@@ -600,7 +600,7 @@ TEST_P(TEST_cgmesh_io_iges_wireframe, imports_free_wireframe)
     const std::string filename = std::string("./test/data/") + GetParam();
 
     VMeshes* pVMeshes = new VMeshes();
-    const bool ok = pVMeshes->load(filename.c_str());
+    const bool ok = VMeshesIO::load(*pVMeshes,filename.c_str());
 
     unsigned int nLines = 0, nPoints = 0, nFaces = 0;
     for (Mesh* m : pVMeshes->GetMeshes())
@@ -657,7 +657,7 @@ TEST(TEST_cgmesh_io, iges_milled_front_x_carriage)
 {
     VMeshes* pVMeshes = new VMeshes();
 
-    ASSERT_TRUE(pVMeshes->load("./test/data/Milled_Front_X_Carriage.iges"));
+    ASSERT_TRUE(VMeshesIO::load(*pVMeshes,"./test/data/Milled_Front_X_Carriage.iges"));
 
     auto& meshes = pVMeshes->GetMeshes();
     ASSERT_GT(meshes.size(), 0u);
@@ -713,7 +713,7 @@ TEST_P(TEST_cgmesh_io_rhino_3dm, load)
 
     VMeshes* pVMeshes = new VMeshes();
 
-    ASSERT_TRUE(pVMeshes->load(filename.c_str())) << "load failed for " << filename;
+    ASSERT_TRUE(VMeshesIO::load(*pVMeshes,filename.c_str())) << "load failed for " << filename;
 
     ASSERT_EQ(pVMeshes->GetNMeshes(), exp.meshes.size())
         << "nMeshes mismatch for " << exp.filename;

@@ -67,7 +67,7 @@ imgLoad(char *filenameIn, int borderIn, int *wOut, int *hOut, GLubyte ** imgOut)
   Img *pImg = new Img ();
   pImg->load (filenameIn);
   //img->save ("toto.ppm");
-  image = pImg->m_pPixels;
+  image = pImg->data();
   width = pImg->width ();
   height = pImg->height ();
   //image = (GLubyte *) read_texture(filenameIn, &width, &height, &components);

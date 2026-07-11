@@ -108,6 +108,7 @@
 
 #include "mesh.h"
 #include "vmeshes.h"
+#include "vmeshes_io.h"
 
 #ifdef CG_HAS_OPENNURBS
 
@@ -633,7 +634,7 @@ void applyAppearance(Mesh& dst, const Appearance& app, const std::string& threeD
 
 } // namespace
 
-bool VMeshes::import_3dm(const char* filename)
+bool VMeshesIO::import_3dm(VMeshes& vm, const char* filename)
 {
     if (!filename)
         return false;
@@ -656,7 +657,7 @@ bool VMeshes::import_3dm(const char* filename)
         if (fillFromGeometry(*pMesh, gc->Geometry(nullptr), name, scale))
         {
             applyAppearance(*pMesh, resolveAppearance(model, gc->Attributes(nullptr)), threeDmDir);
-            m_Meshes.push_back(pMesh);
+            vm.AddMesh(pMesh);
         }
         else
         {
@@ -664,11 +665,11 @@ bool VMeshes::import_3dm(const char* filename)
         }
     }
 
-    return !m_Meshes.empty();
+    return !vm.GetMeshes().empty();
 }
 
 #else // !CG_HAS_OPENNURBS
 
-bool VMeshes::import_3dm(const char * /*filename*/)     { return false; }
+bool VMeshesIO::import_3dm(VMeshes& /*vm*/, const char * /*filename*/)     { return false; }
 
 #endif

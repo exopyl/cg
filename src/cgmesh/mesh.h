@@ -108,6 +108,10 @@ typedef int (*funcptr_v)(float x, float y, float z);
 class Mesh : public Geometry
 {
 public:
+	// Import / export (serialization) logic lives in MeshIO (mesh_io.h),
+	// which needs access to Mesh's private/protected members and helpers.
+	friend class MeshIO;
+
 	Mesh ();
 	Mesh (unsigned int nVertices, unsigned int nFaces);
 	Mesh (Mesh &m);
@@ -301,30 +305,8 @@ public:
 	void GetTopologicIssues(std::vector<unsigned int>& nonManifoldBorders, std::vector<unsigned int>& borders) const;
 
 	// IO
-private:
-	int import_mtl (const char *filename, const char *path);
-	int import_obj (const char *filename);
-	int import_objnm (const char *filename);
-	int export_obj (const char *filename);
-	int export_3ds (const char *filename);
-	int import_asc (const char *filename);
-	int export_asc (const char *filename);
-	int import_pset (const char *filename);
-	int export_pset (const char *filename);
-	int export_dae (const char *filename);
-	int export_cpp (const char *filename);
-	int export_gts (const char *filename);
-	int import_off (const char *filename);
-	int export_off (const char *filename);
-	int import_pgm (const char *filename);
-	int import_pts (const char *filename);
-	int export_pts (const char *filename);
-	int import_ply (const char *filename);
-	int export_ply (const char *filename);
-	int import_stl (const char *filename);
-	int export_stl (const char *filename);          // ASCII STL (called by save() for .stl)
-	int import_u3d (const char *filename);
-	int export_u3d (const char *filename);
+	// The format-specific import/export helpers now live in class MeshIO
+	// (mesh_io.h). The public entry points below are thin delegators.
 public:
 	int load (const char *filename);
 	int save (const char *filename);
