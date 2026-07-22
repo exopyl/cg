@@ -340,6 +340,84 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// L-systems (fractal curves rendered as 3D tubes)
+// ---------------------------------------------------------------------------
+
+// Runs one of the built-in L-systems (see lsysteminit.h) for a chosen number of
+// iterations, then sweeps a tube of the given radius along every drawn segment
+// of its turtle walk to produce a renderable 3D Mesh. The system is picked from
+// an ENUM exposing the whole catalogue; 3D systems (Hilbert 3D, plants) use the
+// 3D turtle interpretation automatically.
+class ParameterizedLSystem : public ParameterizedMesh
+{
+public:
+	ParameterizedLSystem();
+	std::vector<Parameter> GetParameters() override;
+	void Regenerate() override;
+	std::string GetName() const override { return "L-system"; }
+private:
+	int   m_system     = 9;      // default: Hilbert (nice and bounded)
+	int   m_iterations = 4;
+	float m_thickness  = 0.04f;
+};
+
+// ---------------------------------------------------------------------------
+// Gothic architecture
+// ---------------------------------------------------------------------------
+
+// Simple beveled masonry block (CreateBlock).
+class ParameterizedGothicBlock : public ParameterizedMesh
+{
+public:
+	ParameterizedGothicBlock();
+	std::vector<Parameter> GetParameters() override;
+	void Regenerate() override;
+	std::string GetName() const override { return "Gothic Block"; }
+private:
+	float m_width = 1.618f, m_height = 1.f, m_depth = 1.f, m_bevel = 0.1f;
+};
+
+// Full parametric Gothic window tracery (Havemann pipeline) : pointed arch +
+// offset + lancets + rosette + foils + trefoil + mouchettes + fillets, then the
+// stone region is tessellated and (optionally) extruded to a 3D Mesh. All the
+// buildXxx() steps throw on invalid inputs, so Regenerate() clamps parameters
+// and wraps the pipeline in try/catch with a placeholder fallback.
+class ParameterizedGothicWindow : public ParameterizedMesh
+{
+public:
+	ParameterizedGothicWindow();
+	std::vector<Parameter> GetParameters() override;
+	void Regenerate() override;
+	std::string GetName() const override { return "Gothic Window"; }
+private:
+	// arch
+	float m_width = 200.f, m_excess = 1.0f, m_offsetOuter = 16.f, m_offsetInner = 10.f;
+	// straight body below the pointed heads (main frame + lancets) : turns the
+	// bare pointed arch into a tall window silhouette. 0 = pure arch (old look).
+	float m_bodyHeight = 260.f;
+	// lancets
+	int   m_subCount = 2; float m_subDrop = 0.f, m_subExcess = 1.0f, m_gapFraction = 0.11f;
+	// recursion : each lancet -> mini-window (sub-lancets + small rosette), 0..2
+	int   m_recursion = 0;
+	// lancet head : 0 = plain pointed, 1 = foiled (small foiled circle in the head)
+	int   m_lancetHead = 1; int m_lancetHeadFoils = 4;
+	// rosette + foils
+	bool  m_rosette = true;
+	bool  m_rosetteFoils = true; int m_rosetteFoilCount = 6; int m_rosetteFoilType = 1; float m_rosetteFoilPointed = 0.5f;
+	bool  m_subFoils = true;     int m_subFoilCount = 3;     int m_subFoilType = 0;     float m_subFoilPointed = 0.5f;
+	// trefoil (on the main arch)
+	bool  m_archTrefoil = false; float m_trefoilSplit = 0.45f, m_trefoilFoilRadius = 0.30f;
+	// mouchettes
+	bool  m_mouchettes = false; int m_mouchetteType = 0; float m_mouchetteRadius = 0.18f;
+	// fillets + mesh
+	bool  m_fillets = true;
+	float m_zHeight = 20.f;
+	// 3D moulding profile on the field borders : 0 = flat (straight walls),
+	// 1 = chamfer (bevelled/splayed openings). Phase 2.
+	int   m_profile = 1;
+};
+
+// ---------------------------------------------------------------------------
 // Implicit surface from a point cloud
 // ---------------------------------------------------------------------------
 

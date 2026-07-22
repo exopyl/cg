@@ -36,7 +36,29 @@
       "inherits": "_base",
       "generator": "Ninja",
       "cacheVariables": {
-        "EXTERN_OPENNURBS": "${sourceDir}/.deps/cg_binaries/opennurbs-v8.27.26019.16021"
+        "EXTERN_OPENNURBS": "${sourceDir}/.deps/cg_binaries/opennurbs-v8.27.26019.16021",
+        "ENABLE_POISSON": "ON"
+      }
+    },
+    {
+      "name": "maker-wasm",
+      "displayName": "maker (WebAssembly, Emscripten)",
+      "description": "Module WASM maker : cgmesh via Emscripten. Generateur NMake (nmake fourni par Visual Studio). Necessite EMSDK dans l'environnement, et cmake + nmake sur le PATH. Configurer avec `cmake --preset maker-wasm` (ou `emcmake cmake --preset maker-wasm`).",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "generator": "NMake Makefiles",
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":          "Release",
+        "ENABLE_MAKER":              "ON",
+        "ENABLE_OPENNURBS":          "OFF",
+        "ENABLE_OCCT":               "OFF",
+        "ENABLE_ONNX":               "OFF",
+        "ENABLE_POISSON":            "OFF",
+        "ENABLE_ZLIB":               "OFF",
+        "ENABLE_SINAIA":             "OFF",
+        "ENABLE_SULINA":             "OFF",
+        "ENABLE_CGNET_DEMO":         "OFF",
+        "ENABLE_RECONSTRUCTION_CLI": "OFF"
       }
     }
   ],
@@ -49,6 +71,10 @@
     {
       "name": "ci-linux",
       "configurePreset": "ci-linux"
+    },
+    {
+      "name": "maker-wasm",
+      "configurePreset": "maker-wasm"
     }
   ],
   "testPresets": [

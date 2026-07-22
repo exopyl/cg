@@ -17,10 +17,35 @@ struct glutess_state {
 	unsigned int fn;
 	unsigned int vn;
 
+	unsigned int vcap;   // capacite (sommets) de v ; v = 3*vcap floats
+	unsigned int fcap;   // capacite (triangles) de f ; f = 3*fcap uints
+
 	unsigned int vc;
 	unsigned int tri[3];
 	unsigned int face;
 };
+
+// Tampons EXTENSIBLES : les auto-intersections (callback combine) creent des
+// sommets supplementaires ; sans agrandissement on ecrivait hors-borne ->
+// corruption du tas -> hang (ex. rosette gothique + nombreux foils).
+static int ensure_v (struct glutess_state *s, unsigned int need)
+{
+	if (need <= s->vcap) return 1;
+	unsigned int cap = s->vcap ? s->vcap * 2 : 64;
+	while (cap < need) cap *= 2;
+	float *nv = (float*) realloc (s->v, 3 * (size_t)cap * sizeof(float));
+	if (!nv) return 0;
+	s->v = nv; s->vcap = cap; return 1;
+}
+static int ensure_f (struct glutess_state *s, unsigned int need)
+{
+	if (need <= s->fcap) return 1;
+	unsigned int cap = s->fcap ? s->fcap * 2 : 64;
+	while (cap < need) cap *= 2;
+	unsigned int *nf = (unsigned int*) realloc (s->f, 3 * (size_t)cap * sizeof(unsigned int));
+	if (!nf) return 0;
+	s->f = nf; s->fcap = cap; return 1;
+}
 //
 ///////////////////////
 
@@ -48,7 +73,8 @@ static void glutess_vertex(void *vertex_data, void *user_data)
 
 	if (state->vc == 2)
 	{
-		// generate face
+		// generate face (agrandir le tampon si besoin)
+		if (!ensure_f(state, state->fn + 1)) { state->vc = 0; return; }
 		unsigned int fi = state->fn++;
 		if (state->face != (unsigned int)-1)
 		{
@@ -100,7 +126,13 @@ static void glutess_combine(double coords[3],
 	unsigned int *f = state->f;
 	unsigned int vi, v0, v1, v2, v3;
 
-	// generate vertex
+	// generate vertex (agrandir le tampon si besoin : evite le debordement sur
+	// les polygones tres auto-intersectants -> plus de corruption/hang)
+	if (!ensure_v(state, state->vn + 1))
+	{
+		*outData = (void *) (uintptr_t) 0;   // OOM : repli sur le sommet 0
+		return;
+	}
 	vi = state->vn++;
 	if (vi == (unsigned int) -1)
 	{
@@ -158,9 +190,11 @@ int Polygon2::tesselate (float **_pVertices, unsigned int *_nVertices,
 	// allocate memory for the result. 
 	// The number of vertices can increase if there are self-intersections.
 	// We allocate a bit more than needed.
-	state.v = (float*)malloc(3 * (nVertices + 100) * sizeof(float));
+	state.vcap = nVertices + 100;
+	state.fcap = (nVertices + 100) * 2;
+	state.v = (float*)malloc(3 * (size_t)state.vcap * sizeof(float));
 	state.vn = nVertices;
-	state.f = (unsigned int*)malloc(3 * (nVertices + 100) * 2 * sizeof(unsigned int));
+	state.f = (unsigned int*)malloc(3 * (size_t)state.fcap * sizeof(unsigned int));
 	state.fn = 0;
 	state.face = (unsigned int)-1;
 

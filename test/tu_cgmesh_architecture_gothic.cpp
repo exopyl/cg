@@ -251,10 +251,12 @@ TEST(TEST_cgmesh_architecture_gothic, WriteBayMeshUnknownExtensionThrows)
 
 TEST(TEST_cgmesh_architecture_gothic, BuildBayPolygonRichHasExpectedContourCount)
 {
-    // Outer + 2 lancet inner + 1 rosette + 6 rosette foils + 2*3 lancet foils = 16.
+    // Outer + 2 plain lancets + rosette flower + 6 rosette spandrel fillets = 10.
+    // (The rosette foil ring is cut as ONE connected flower void plus one eyelet
+    //  fillet per foil, between the foils and the ring.)
     WindowGeometry g = buildRichGeom();
     Polygon2 poly = buildBayStonePolygon(g);
-    EXPECT_EQ(poly.get_n_contours(), 1 + 2 + 1 + 6 + 6);
+    EXPECT_EQ(poly.get_n_contours(), 1 + 2 + 1 + 6);
 }
 
 TEST(TEST_cgmesh_architecture_gothic, BuildBayPolygonRichAllHolesAreCw)
@@ -319,7 +321,7 @@ TEST(TEST_cgmesh_architecture_gothic, WriteRichBayMeshStl)
 // Phase 3 : extrusion
 //
 
-TEST(TEST_cgmesh_architecture_gothic, ExtrudeProducesDoubledVertexCount)
+TEST(TEST_cgmesh_architecture_gothic, ExtrudeProducesQuadrupledVertexCount)
 {
     WindowGeometry g = buildTypicalGeom();
     Polygon2 poly = buildBayStonePolygon(g);
@@ -330,8 +332,9 @@ TEST(TEST_cgmesh_architecture_gothic, ExtrudeProducesDoubledVertexCount)
     Mesh meshExt;
     extrudeToMesh(poly, meshExt, 0.0, 5.0);
 
-    // Extruded mesh has top + bottom = 2x the flat vertex count.
-    EXPECT_EQ(meshExt.GetNVertices(), 2u * meshFlat.GetNVertices());
+    // Distinct vertices for cap-top, cap-bottom, wall-top, wall-bottom (so the
+    // front/back-to-wall edges keep hard normals) = 4x the flat vertex count.
+    EXPECT_EQ(meshExt.GetNVertices(), 4u * meshFlat.GetNVertices());
 }
 
 TEST(TEST_cgmesh_architecture_gothic, ExtrudeMeshHasFacesAtTopAndBottomZ)
@@ -458,10 +461,10 @@ namespace
 
 TEST(TEST_cgmesh_architecture_gothic, BuildBayPolygonWithPointedFoilsHasExpectedContourCount)
 {
-    // Outer + 2 lancet inner + 1 rosette + 6 rosette pointed foils + 2*3 lancet pointed foils = 16.
+    // Outer + 2 plain lancets + rosette flower + 6 rosette spandrel fillets = 10.
     WindowGeometry g = buildGeomWithPointedFoils();
     Polygon2 poly = buildBayStonePolygon(g);
-    EXPECT_EQ(poly.get_n_contours(), 1 + 2 + 1 + 6 + 6);
+    EXPECT_EQ(poly.get_n_contours(), 1 + 2 + 1 + 6);
 }
 
 TEST(TEST_cgmesh_architecture_gothic, PointedFoilContoursAreCw)

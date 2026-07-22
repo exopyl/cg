@@ -2,19 +2,82 @@ cmake_minimum_required(VERSION 3.18.4)
 
 project(libcgmesh)
 
-file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/*.cpp)
 file(GLOB HEADER_FILES ${PROJECT_SOURCE_DIR}/*.h)
+
+if (EMSCRIPTEN)
+    # WebAssembly (cible maker) : on ne compile QUE le sous-ensemble geometrie
+    # utile au navigateur (surfaces parametriques, extrusion SVG, L-systemes,
+    # maillage + tesselation). Les 120+ autres .cpp (raytracer, audio, bundle,
+    # onnx, reconstruction, geodesic, io lourds...) sont hors perimetre maker et
+    # ne sont pas portes vers emcc. Cf. maker/ANALYSE.md et maker/CMakeLists.txt.
+    set(SRC_FILES
+        # maillage coeur
+        ${PROJECT_SOURCE_DIR}/mesh.cpp
+        ${PROJECT_SOURCE_DIR}/mesh_transform.cpp
+        ${PROJECT_SOURCE_DIR}/mesh_triangulation.cpp
+        ${PROJECT_SOURCE_DIR}/mesh_nm.cpp
+        ${PROJECT_SOURCE_DIR}/normals.cpp
+        ${PROJECT_SOURCE_DIR}/bounding_box.cpp
+        ${PROJECT_SOURCE_DIR}/geometric_primitives.cpp
+        ${PROJECT_SOURCE_DIR}/half_edge.cpp
+        ${PROJECT_SOURCE_DIR}/mesh_half_edge.cpp
+        ${PROJECT_SOURCE_DIR}/octree.cpp
+        ${PROJECT_SOURCE_DIR}/chull.cpp
+        ${PROJECT_SOURCE_DIR}/material.cpp
+        ${PROJECT_SOURCE_DIR}/materials_manager.cpp
+        ${PROJECT_SOURCE_DIR}/extracted_line.cpp
+        # generateurs de geometrie (parameterized_shapes.cpp les reference tous)
+        ${PROJECT_SOURCE_DIR}/surface_basic.cpp
+        ${PROJECT_SOURCE_DIR}/surface_parametric.cpp
+        ${PROJECT_SOURCE_DIR}/surface_implicit.cpp
+        ${PROJECT_SOURCE_DIR}/surface_implicit_tandem.cpp
+        ${PROJECT_SOURCE_DIR}/surface_implicit_pointcloud.cpp
+        ${PROJECT_SOURCE_DIR}/voxels.cpp
+        ${PROJECT_SOURCE_DIR}/voxels_menger_sponge.cpp
+        ${PROJECT_SOURCE_DIR}/fractal.cpp
+        # import + extrusion SVG
+        ${PROJECT_SOURCE_DIR}/import_svg.cpp
+        ${PROJECT_SOURCE_DIR}/clipper.cpp
+        ${PROJECT_SOURCE_DIR}/polygon2.cpp
+        ${PROJECT_SOURCE_DIR}/polygon2_tesselation.cpp
+        # architecture gothique (remplage parametrique + primitives)
+        ${PROJECT_SOURCE_DIR}/architecture_gothic.cpp
+        ${PROJECT_SOURCE_DIR}/surface_architecture.cpp
+        # L-systemes
+        ${PROJECT_SOURCE_DIR}/lsystem.cpp
+        ${PROJECT_SOURCE_DIR}/lsysteminit.cpp
+        ${PROJECT_SOURCE_DIR}/lsrule.cpp
+        # interface de parametrage + catalogue de formes
+        ${PROJECT_SOURCE_DIR}/parameterized.cpp
+        ${PROJECT_SOURCE_DIR}/parameterized_shapes.cpp
+    )
+else()
+    file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/*.cpp)
+endif()
 # Paths relative to cgmesh's own location so this works whether cgmesh is
 # built from the repo-root CMakeLists or as a subproject of vecna/.
 file(GLOB GLUTESS_SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/glutess/*.c)
 file(GLOB GLUTESS_HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/glutess/*.h)
 
+# Clipper2 (Boost licence, vendored in extern/clipper2) : robust 2D polygon
+# boolean ops (Union/Difference/Intersect) used for the gothic tracery. Headers
+# are included as "clipper2/clipper.h" (extern/ is on the include path below).
+# Compiled straight into cgmesh (native + WASM) ; the SSE path is MSVC-x64-only
+# so emcc skips it. -fexceptions (WASM) already set at the repo root.
+# Boolean engine (Union/Difference) + offset (InflatePaths, for the tracery field
+# insets / bar widths, Phase 1). rectclip/triangulation stay out of build.
+set(CLIPPER2_SRC_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/clipper2/clipper.engine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/clipper2/clipper.offset.cpp)
+file(GLOB CLIPPER2_HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/clipper2/*.h)
+
 if (UNIX)
 	add_compile_options(-fpermissive)
 endif (UNIX)
 
-add_library(cgmesh STATIC ${HEADER_FILES} ${SRC_FILES} ${GLUTESS_HEADER_FILES} ${GLUTESS_SRC_FILES})
+add_library(cgmesh STATIC ${HEADER_FILES} ${SRC_FILES} ${GLUTESS_HEADER_FILES} ${GLUTESS_SRC_FILES} ${CLIPPER2_SRC_FILES} ${CLIPPER2_HEADER_FILES})
 source_group("glutess" FILES ${GLUTESS_HEADER_FILES} ${GLUTESS_SRC_FILES})
+source_group("clipper2" FILES ${CLIPPER2_SRC_FILES} ${CLIPPER2_HEADER_FILES})
 target_include_directories(cgmesh PUBLIC ${PROJECT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../../extern)
 target_link_libraries(cgmesh cgimg)
 

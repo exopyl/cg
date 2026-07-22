@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>maker — cgmesh</title>
+  <link rel="stylesheet" href="./style.css">
+  <!-- Online3DViewer (moteur de rendu). Fichier a placer dans maker/web/vendor/.
+       Charge en UMD -> expose le global `OV`. S'il est absent, app.js bascule en
+       mode degrade (stats + telechargement OBJ) et affiche une banniere. -->
+  <script src="./vendor/o3dv.min.js" onerror="window.__o3dvMissing = true"></script>
+</head>
+<body>
+  <aside class="panel">
+    <header>
+      <h1>maker</h1>
+      <p class="sub">cgmesh · WebAssembly</p>
+    </header>
+
+    <div id="banner" class="banner" hidden></div>
+
+    <section class="group">
+      <label class="lbl" for="catalog">Forme</label>
+      <select id="catalog"></select>
+    </section>
+
+    <section class="group">
+      <label class="lbl">Import SVG (extrusion)</label>
+      <input type="file" id="svgInput" accept=".svg,image/svg+xml">
+    </section>
+
+    <section class="group">
+      <div class="lbl">Paramètres</div>
+      <div id="params"></div>
+    </section>
+
+    <section class="group">
+      <div class="lbl">Vue</div>
+      <div class="ctrlrow"><span>Couleur du modèle</span><input type="color" id="modelColor" value="#b4bec8"></div>
+      <div class="ctrlrow"><span>Couleur du fond</span><input type="color" id="bgColor" value="#14161a"></div>
+      <div class="ctrlrow"><label for="wireframe">Fil de fer</label><input type="checkbox" id="wireframe"></div>
+      <button id="resetView">Recentrer la vue</button>
+    </section>
+
+    <footer>
+      <div id="stats" class="stats">—</div>
+      <div class="lbl">Export</div>
+      <input type="text" id="filename" value="maker" placeholder="nom du fichier" spellcheck="false">
+      <div class="btnrow">
+        <button id="download" disabled>OBJ</button>
+        <button id="downloadGlbBtn" disabled>GLB</button>
+        <button id="downloadStlBtn" disabled>STL</button>
+      </div>
+    </footer>
+  </aside>
+
+  <main id="viewer" class="viewer">
+    <div id="viewerHint" class="hint">Chargement du module…</div>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

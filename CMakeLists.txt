@@ -4,9 +4,32 @@ project (cg)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# Sous Emscripten (cible maker, WebAssembly) : aucune dependance lourde n'est
+# disponible ni souhaitee. On les force OFF ici defensivement — le preset
+# maker-wasm les met deja a OFF, ceci protege une configuration manuelle.
+# Cf. maker/ANALYSE.md sec.9.
+if (EMSCRIPTEN)
+    set(ENABLE_OPENNURBS Off)
+    set(ENABLE_OCCT      Off)
+    set(ENABLE_ONNX      Off)
+    set(ENABLE_POISSON   Off)
+    set(ENABLE_ZLIB      Off)
+    set(ENABLE_SINAIA    Off)
+    set(ENABLE_SULINA    Off)
+
+    # -fexceptions sur TOUTE la cible WASM (cgmath, cgimg, cgmesh, maker).
+    # Sans cela, un `throw` dans cgmath (ex. buildFoilRing sur des parametres
+    # degeneres) ne peut PAS remonter jusqu'au catch(...) de cgmesh : l'unwinder
+    # manque les tables dans les frames cgmath -> trap qui traverse vers JS au
+    # lieu du repli placeholder. Doit preceder les add_subdirectory ci-dessous.
+    add_compile_options(-fexceptions)
+    add_link_options(-fexceptions)
+endif()
+
 # Options
 set(ENABLE_COVERAGE Off CACHE BOOL "Enable coverage.")
 set(ENABLE_SINAIA Off CACHE BOOL "Enable sinaia.")
+set(ENABLE_MAKER Off CACHE BOOL "Build the maker WebAssembly module (Emscripten only).")
 set(ENABLE_CGNET_DEMO Off CACHE BOOL "Build the cgnet_demo executable.")
 set(ENABLE_RECONSTRUCTION_CLI Off CACHE BOOL "Build the reconstruction-cli executable (image-based 3D reconstruction; links ONNX Runtime).")
 set(ENABLE_ONNX Off CACHE BOOL "Enable the ONNX depth source in cgmesh (links ONNX Runtime).")
@@ -70,12 +93,20 @@ if ( ENABLE_SINAIA )
 	add_subdirectory(src/cgre)
 endif ()
 
-enable_testing()
-add_subdirectory(test)
+# Les tests (googletest) ne sont pas construits pour la cible WebAssembly.
+if ( NOT EMSCRIPTEN )
+	enable_testing()
+	add_subdirectory(test)
+endif ()
 
 
 if ( ENABLE_SINAIA )
 	add_subdirectory(sinaia)
+endif ()
+
+# maker : module WASM (Emscripten) — cf. maker/CMakeLists.txt et maker/ANALYSE.md.
+if ( ENABLE_MAKER )
+	add_subdirectory(maker)
 endif ()
 
 if ( ENABLE_CGNET_DEMO AND WIN32 )

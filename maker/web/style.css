@@ -1,0 +1,107 @@
+:root {
+  --bg: #1e1f22;
+  --panel: #26282c;
+  --panel2: #2f3237;
+  --fg: #e6e6e6;
+  --muted: #9aa0a6;
+  --accent: #4c9aff;
+  --border: #3a3d42;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+body {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ---- panneau ---- */
+.panel {
+  width: 320px;
+  flex: 0 0 320px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.panel header h1 { margin: 0; font-size: 20px; letter-spacing: 0.5px; }
+.panel header .sub { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+
+.group { display: flex; flex-direction: column; gap: 6px; }
+.lbl { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+
+select, input[type=file], input[type=text], button {
+  font: inherit;
+  color: var(--fg);
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+}
+select, input[type=text] { width: 100%; }
+input[type=text]:focus { outline: none; border-color: var(--accent); }
+input[type=file] { font-size: 12px; }
+
+button {
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+
+/* ---- widgets de paramètres ---- */
+.param { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.param .row { display: flex; justify-content: space-between; align-items: baseline; }
+.param .name { font-size: 13px; }
+.param .val { font-size: 12px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.param input[type=range] { width: 100%; accent-color: var(--accent); }
+.param.bool .row { justify-content: flex-start; gap: 8px; }
+.param select { padding: 6px; }
+
+footer { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+.stats { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.btnrow { display: flex; gap: 8px; }
+.btnrow button { flex: 1; }
+
+/* section Vue */
+.ctrlrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+.ctrlrow input[type=color] {
+  width: 44px; height: 26px; padding: 2px;
+  background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+}
+.ctrlrow input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+
+.banner {
+  background: #4a3a12;
+  border: 1px solid #7a5c1a;
+  color: #ffd98a;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 10px;
+  border-radius: 6px;
+}
+.banner code { background: rgba(0,0,0,.3); padding: 1px 4px; border-radius: 3px; }
+
+/* ---- viewer ---- */
+.viewer { position: relative; flex: 1 1 auto; min-width: 0; background: #14161a; }
+.viewer canvas { display: block; }
+.hint {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 14px; pointer-events: none; text-align: center; padding: 20px;
+}
+/* Sans cette regle, .hint{display:flex} l'emporte sur l'attribut [hidden]. */
+.hint[hidden] { display: none; }

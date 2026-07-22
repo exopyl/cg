@@ -37,8 +37,9 @@ TEST(TEST_cgmath_architecture_gothic, IncreasingExcessIncreasesHeight)
     ArchGeom g15 = buildArch(makeBasis(1.5));
     EXPECT_GT(g15.height, g10.height);
 
-    // Closed-form check : height = WIDTH * sqrt(excess^2 - 0.25)
-    EXPECT_NEAR(g15.height, WIDTH * std::sqrt(1.5 * 1.5 - 0.25), 1e-9);
+    // Closed-form check (thesis convention, pL/pR = springing points) :
+    // apex height = WIDTH * sqrt(4*excess - 1) / 2.
+    EXPECT_NEAR(g15.height, WIDTH * std::sqrt(4.0 * 1.5 - 1.0) / 2.0, 1e-9);
 }
 
 TEST(TEST_cgmath_architecture_gothic, ApexContinuity)
@@ -93,13 +94,11 @@ TEST(TEST_cgmath_architecture_gothic, ApexIsOnSymmetryAxis)
 }
 
 //
-// Ground footprint behavior (Havemann subtlety)
+// Ground footprint behavior (thesis convention : pL/pR = springing points)
 //
 
 TEST(TEST_cgmath_architecture_gothic, ArcAnchorsToFootForExcess1)
 {
-    // Equilateral case : the arc starting at the pR-direction on circleL is
-    // exactly pR (since |pR - pL| = r = width).
     ArchGeom g = buildArch(makeBasis(1.0));
     Vector2d startL = g.arcLeft.pointAt(0.0);
     Vector2d endR   = g.arcRight.pointAt(1.0);
@@ -110,16 +109,19 @@ TEST(TEST_cgmath_architecture_gothic, ArcAnchorsToFootForExcess1)
     EXPECT_NEAR(endR.y,    0.0,         1e-9);
 }
 
-TEST(TEST_cgmath_architecture_gothic, ArcExtendsBeyondFootForExcess15)
+TEST(TEST_cgmath_architecture_gothic, ArcAnchorsToFootForAnyExcess)
 {
-    // For excess > 1, the radius exceeds the inter-foot distance; the arc's
-    // ground-anchor lies beyond pR (resp. pL).
+    // Thesis convention : the arch springs from pL/pR (the opening width) for
+    // EVERY excess ; higher excess raises the apex, it does not widen the base.
     ArchGeom g = buildArch(makeBasis(1.5));
     Vector2d startL = g.arcLeft.pointAt(0.0);
     Vector2d endR   = g.arcRight.pointAt(1.0);
 
-    EXPECT_GT(startL.x,  WIDTH / 2.0);
-    EXPECT_LT(endR.x,   -WIDTH / 2.0);
+    EXPECT_NEAR(startL.x,  WIDTH / 2.0, 1e-9);
+    EXPECT_NEAR(startL.y,  0.0,         1e-9);
+    EXPECT_NEAR(endR.x,   -WIDTH / 2.0, 1e-9);
+    EXPECT_NEAR(endR.y,    0.0,         1e-9);
+    EXPECT_NEAR(g.width,   WIDTH,       1e-9);   // opening constant across excess
 }
 
 //
@@ -282,13 +284,15 @@ TEST(TEST_cgmath_architecture_gothic, OffsetCentersAreUnchanged)
 // Offset — sanity geometric checks
 //
 
-TEST(TEST_cgmath_architecture_gothic, OffsetWidthsAreUnchanged)
+TEST(TEST_cgmath_architecture_gothic, OffsetWidthsShrinkAndGrow)
 {
+    // Concentric offset (same centres) : the inner arch's OPENING shrinks by
+    // 2*inner, the outer's grows by 2*outer (the feet move along the springline).
     ArchGeom geom = buildArch(makeBasis(1.0));
     ArchOffsetParams p; p.outer = 15.0; p.inner = 10.0;
     ArchOffsetGeom off = buildArchOffset(geom, p);
-    EXPECT_NEAR(off.inner.width, geom.width, 1e-12);
-    EXPECT_NEAR(off.outer.width, geom.width, 1e-12);
+    EXPECT_NEAR(off.inner.width, geom.width - 2.0 * p.inner, 1e-12);
+    EXPECT_NEAR(off.outer.width, geom.width + 2.0 * p.outer, 1e-12);
 }
 
 TEST(TEST_cgmath_architecture_gothic, OffsetApexStacking)

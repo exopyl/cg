@@ -408,14 +408,11 @@ void Mesh::AdoptTensorsFrom(const Mesh& src)
 
 std::vector<unsigned int> Mesh::GetTriangles (void)
 {
-	std::vector<unsigned int> faces (3*m_nFaces);
-	for (unsigned int i=0; i<m_nFaces; i++)
-	{
-		faces[3*i]   = m_pFaces[i]->GetVertex(0);
-		faces[3*i+1] = m_pFaces[i]->GetVertex(1);
-		faces[3*i+2] = m_pFaces[i]->GetVertex(2);
-	}
-	return faces;
+	// Delegue a BuildTriangulation() : chemin robuste deja present dans le code
+	// (fan pour les faces convexes/triangles, glutess pour les concaves, drop
+	// propre des auto-intersections). L'ancienne version n'emettait qu'UN
+	// triangle par face (v0,v1,v2) -> un quad perdait sa moitie -> trous.
+	return BuildTriangulation();
 }
 
 // ----- Polygon triangulation ------------------------------------------------

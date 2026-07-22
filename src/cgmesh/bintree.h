@@ -38,7 +38,7 @@ GEN_T BINTREE::bintree (const T& data, const BINTREE& left, const BINTREE& right
 
 GEN_T BINTREE::bintree (const BINTREE& src)
 {
-	*m_data = src.data;
+	*m_data = *src.m_data;
 	if (src.is_leaf())
 	{
 		m_left = nullptr;

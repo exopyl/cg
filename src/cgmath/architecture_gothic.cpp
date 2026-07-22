@@ -10,6 +10,33 @@ namespace
 	{
 		return std::isfinite(v.x) && std::isfinite(v.y);
 	}
+
+	// Assemble a pointed arch from its two CONSTRUCTION circles (centres mL, mR on
+	// the springline, common radius r). arcLeft (on circleL, centred left) traces
+	// the right visible half from the right foot up to the apex ; arcRight the left
+	// half. Feet are the points where each circle crosses the springline toward the
+	// opposite centre. Horizontal base assumed (mL.y == mR.y).
+	ArchGeom archFromConstruction (const Vector2d &mL, const Vector2d &mR, double r)
+	{
+		ArchGeom g;
+		g.circleL = Circle(mL, r);
+		g.circleR = Circle(mR, r);
+
+		Circle::IntersectionResult inter = g.circleL.intersection(g.circleR);
+		if (inter.count < 1)
+			throw std::runtime_error("buildArch: construction circles do not intersect");
+		g.apex = inter.pts[0];
+		if (inter.count > 1 && inter.pts[1].y > g.apex.y) g.apex = inter.pts[1];  // upper
+
+		const Vector2d footR(mL.x + r, mL.y);   // on circleL, toward mR
+		const Vector2d footL(mR.x - r, mR.y);   // on circleR, toward mL
+		g.width  = Vector2d::Distance(footL, footR);
+		g.height = g.apex.y - footL.y;
+
+		g.arcLeft  = Arc(g.circleL, g.circleL.angleAt(footR), g.circleL.angleAt(g.apex), true);
+		g.arcRight = Arc(g.circleR, g.circleR.angleAt(g.apex), g.circleR.angleAt(footL), true);
+		return g;
+	}
 }
 
 ArchGeom buildArch (const ArchBasis &basis)
@@ -24,37 +51,20 @@ ArchGeom buildArch (const ArchBasis &basis)
 	if (basis.excess <= 0.5)
 		throw std::invalid_argument("buildArch: excess must be strictly greater than 0.5");
 
-	double width = Vector2d::Distance(basis.pL, basis.pR);
+	double width = Vector2d::Distance(basis.pL, basis.pR);   // opening (springing) width
 	if (width < 1e-12)
 		throw std::invalid_argument("buildArch: pL and pR must be distinct (width > 0)");
 
-	// --- Construction ----------------------------------------------------
-	ArchGeom g;
-	g.width   = width;
-	double r  = basis.excess * width;
-	g.circleL = Circle(basis.pL, r);
-	g.circleR = Circle(basis.pR, r);
-
-	Circle::IntersectionResult inter = g.circleL.intersection(g.circleR);
-	if (inter.count < 1)
-		throw std::runtime_error("buildArch: construction circles do not intersect");
-
-	g.apex   = inter.pts[0];                          // upper intersection
-	g.height = g.apex.y - basis.pL.y;                 // assumes horizontal base
-
-	// arcLeft  : on circleL, from the pR-direction (start) to the apex (end), CCW.
-	//            Traces the right visible half of the arch.
-	double aLstart = g.circleL.angleAt(basis.pR);
-	double aLend   = g.circleL.angleAt(g.apex);
-	g.arcLeft  = Arc(g.circleL, aLstart, aLend, true);
-
-	// arcRight : on circleR, from the apex (start) to the pL-direction (end), CCW.
-	//            Traces the left visible half of the arch.
-	double aRstart = g.circleR.angleAt(g.apex);
-	double aRend   = g.circleR.angleAt(basis.pL);
-	g.arcRight = Arc(g.circleR, aRstart, aRend, true);
-
-	return g;
+	// --- Construction (Havemann thesis §5.4.1) ---------------------------
+	// pL, pR are the SPRINGING points (feet of the visible arch), fixed. excess =
+	// r / dist(pL,pR). The construction-circle CENTRES mL, mR move apart as the
+	// excess grows, so a higher excess gives a taller, sharper arch over a constant
+	// opening (equilateral at excess 1, where the centres coincide with the feet).
+	// circleL passes through pR (its far foot), circleR through pL.
+	const double r = basis.excess * width;
+	const Vector2d mL(basis.pR.x - r, basis.pL.y);   // centre of the left circle
+	const Vector2d mR(basis.pL.x + r, basis.pL.y);   // centre of the right circle
+	return archFromConstruction(mL, mR, r);
 }
 
 
@@ -75,35 +85,24 @@ ArchOffsetGeom buildArchOffset (const ArchGeom &geom, const ArchOffsetParams &pa
 		throw std::invalid_argument("buildArchOffset: inner must be non-negative");
 
 	double r = geom.circleL.radius;
-	double w = geom.width;
+	double w = geom.width;   // opening (springing) width
 
-	// Spec : inner < radius (otherwise inner arch radius would be <= 0).
-	if (params.inner >= r)
-		throw std::invalid_argument("buildArchOffset: inner must be strictly less than the base radius");
-
-	// Tightened : the inner arch must remain a valid pointed arch, which
-	// requires r_in > w/2 strict (i.e. the inner construction circles must
-	// intersect strictly above the base). Equivalently, inner < r - w/2 strict.
-	// Without this, the inner arch would have excess <= 0.5, which buildArch
-	// rejects with a misleading "excess" error message.
-	if (params.inner >= r - 0.5 * w)
+	// The inner arch is the base arch offset inward : same construction CENTRES,
+	// radius r - inner (concentric offset — Havemann §2.4 : "the offset of a
+	// pointed arch has a different excess"). It stays a valid pointed arch while
+	// its radius exceeds half the centre distance D = 2r - w, i.e. while
+	// inner < w/2. (Beyond that the inner construction circles no longer meet
+	// above the springline.)
+	if (params.inner >= 0.5 * w)
 		throw std::invalid_argument("buildArchOffset: inner offset too large (would collapse the inner arch)");
 
-	// --- Construction ----------------------------------------------------
-	// Same basis (mL, mR) for both, only the excess (= radius/width) changes.
-	ArchBasis innerBasis;
-	innerBasis.pL     = geom.circleL.center;
-	innerBasis.pR     = geom.circleR.center;
-	innerBasis.excess = (r - params.inner) / w;
-
-	ArchBasis outerBasis;
-	outerBasis.pL     = geom.circleL.center;
-	outerBasis.pR     = geom.circleR.center;
-	outerBasis.excess = (r + params.outer) / w;
+	// --- Construction : concentric, same centres, radius shifted ----------
+	const Vector2d mL = geom.circleL.center;
+	const Vector2d mR = geom.circleR.center;
 
 	ArchOffsetGeom result;
-	result.inner = buildArch(innerBasis);
-	result.outer = buildArch(outerBasis);
+	result.inner = archFromConstruction(mL, mR, r - params.inner);
+	result.outer = archFromConstruction(mL, mR, r + params.outer);
 	result.stoneWidthActual = result.outer.apex.y - result.inner.apex.y;
 	return result;
 }
@@ -179,7 +178,10 @@ SubwindowsGeom buildSubwindows (const ArchGeom         &mainArch,
 	result.lancets.reserve(n);
 
 	const double y0     = mainArch.circleL.center.y - params.drop;
-	const double xOrig  = mainArch.circleL.center.x;     // pL_main.x
+	// Lay the lancets out across the main arch's OPENING (its springing feet), not
+	// its construction-circle centres (which sit outside the opening for excess>1).
+	// Left foot = right circle centre minus its radius.
+	const double xOrig  = mainArch.circleR.center.x - mainArch.circleR.radius;
 
 	for (int i = 0; i < n; ++i)
 	{
@@ -406,12 +408,15 @@ FoilRing buildFoilRing (const Circle &outerCircle, const FoilsParams &params)
 
 Circle inscribedCircleOfPointedArch (const ArchGeom &arch)
 {
-	double r = arch.circleL.radius;
-	double halfW = arch.width / 2.0;
-	if (r <= halfW)
-		throw std::invalid_argument("inscribedCircleOfPointedArch: arch is too flat (r <= width/2)");
+	// Tangent to the springline (bottom) and internally to both construction arcs.
+	// Its radius follows from the half-distance between the construction CENTRES
+	// (not the opening half-width : the two differ once excess != 1).
+	double r     = arch.circleL.radius;
+	double halfD = 0.5 * Vector2d::Distance(arch.circleL.center, arch.circleR.center);
+	if (r <= halfD)
+		throw std::invalid_argument("inscribedCircleOfPointedArch: arch is too flat (r <= halfD)");
 
-	double rk = (r * r - halfW * halfW) / (2.0 * r);
+	double rk = (r * r - halfD * halfD) / (2.0 * r);
 	double cx = (arch.circleL.center.x + arch.circleR.center.x) / 2.0;
 	double cy = arch.circleL.center.y + rk;
 	return Circle(Vector2d(cx, cy), rk);

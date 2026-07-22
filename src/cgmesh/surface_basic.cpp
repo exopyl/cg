@@ -2,8 +2,12 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <map>
+#include <array>
 
 #include "surface_basic.h"
+#include "chull.h"
 
 //
 //
@@ -619,42 +623,44 @@ static float r (float alpha)
 
 Mesh* CreateKleinBottle (int ThetaResolution, int PhiResolution)
 {
-	unsigned int vn = (ThetaResolution + 1) * (PhiResolution + 1);
+	// Grille exacte ThetaResolution x PhiResolution. Auparavant des boucles a
+	// compteur flottant (for(Theta=0; Theta<Pi; Theta+=step)) produisaient un
+	// nombre de sommets != de cette grille (accumulation flottante) -> ecriture
+	// hors-borne + decalage du stride des faces -> rupture de continuite.
+	unsigned int vn = ThetaResolution * PhiResolution;
 	unsigned int fn = 2*((ThetaResolution-1)*(PhiResolution)+PhiResolution-1+1);
 	Mesh *mesh = new Mesh (vn, fn);
 
-	float Theta, Phi;
-	float x, y, z;
 	float a = 3;
 	float b = 8;
-	float c = 2;
 	float Pi = 3.14159f;
 
 	float stepTheta = 2*Pi/ThetaResolution; // step between two slices
 	float stepPhi = 2*Pi/PhiResolution; // step in a slice
 
 	//
-	// vertices
+	// vertices (boucles ENTIERES -> exactement ThetaResolution*PhiResolution)
 	//
 	unsigned int vi=0;
-	for (Theta=0; Theta<Pi; Theta+=stepTheta)
+	for (int j=0; j<ThetaResolution; j++)
 	{
-		for (Phi=0; Phi<2.*Pi; Phi+=stepPhi)
+		float Theta = j*stepTheta;
+		for (int i=0; i<PhiResolution; i++)
 		{
-			x = (a*(1.0f+sin(Theta)) + r(Theta)*cos(Phi)) * cos(Theta);
-			y = (b+r(Theta)*cos(Phi)) * sin(Theta);
-			z = r(Theta)*sin(Phi);
-			mesh->SetVertex (vi++, x, y, z);
-		}
-	}
-
-	for (Theta=Pi; Theta<2.*Pi; Theta+=stepTheta)
-	{
-		for (Phi=0; Phi<2.*Pi; Phi+=stepPhi)
-		{
-			x = a*(1+sin(Theta))*cos(Theta) - r(Theta) * cos(Phi);
-			y = b*sin(Theta);
-			z = r(Theta)*sin(Phi);
+			float Phi = i*stepPhi;
+			float x, y, z;
+			if (Theta < Pi)   // premiere moitie (tube)
+			{
+				x = (a*(1.0f+sin(Theta)) + r(Theta)*cos(Phi)) * cos(Theta);
+				y = (b+r(Theta)*cos(Phi)) * sin(Theta);
+				z = r(Theta)*sin(Phi);
+			}
+			else              // seconde moitie (anse) ; coincide avec la premiere en Theta=Pi
+			{
+				x = a*(1+sin(Theta))*cos(Theta) - r(Theta) * cos(Phi);
+				y = b*sin(Theta);
+				z = r(Theta)*sin(Phi);
+			}
 			mesh->SetVertex (vi++, x, y, z);
 		}
 	}
@@ -720,3 +726,269 @@ Mesh* CreateKleinBottle (int ThetaResolution, int PhiResolution)
 	return mesh;
 }
 
+
+// ===========================================================================
+//  Tubes le long de polylignes (primitive generique reutilisable)
+// ===========================================================================
+//  Extrait de ParameterizedLSystem : "walk -> tube" n'a rien de specifique aux
+//  L-systemes. Utilisable pour toute polyligne (courbe parametrique, ligne
+//  extraite d'un mesh, chemin SVG...). Ne normalise pas les points.
+//  Iso-fonctionnel : chaque segment est tube independamment (repere de section
+//  propre) ; les jointures (alignement le long des chaines + coins/branches)
+//  viendront enrichir cette fonction.
+
+namespace {
+
+// --- petit algebre vectorielle locale (V3 distinct de Vector3f : evite toute
+// collision d'overload avec les free-functions eventuelles sur Vector3f) ------
+struct V3 { float x, y, z; };
+inline V3 v3(float x,float y,float z){ return {x,y,z}; }
+inline V3 vsub(const V3&a,const V3&b){ return {a.x-b.x,a.y-b.y,a.z-b.z}; }
+inline V3 vadd(const V3&a,const V3&b){ return {a.x+b.x,a.y+b.y,a.z+b.z}; }
+inline V3 vmul(const V3&a,float s){ return {a.x*s,a.y*s,a.z*s}; }
+inline float vdot(const V3&a,const V3&b){ return a.x*b.x+a.y*b.y+a.z*b.z; }
+inline V3 vcross(const V3&a,const V3&b){ return {a.y*b.z-a.z*b.y, a.z*b.x-a.x*b.z, a.x*b.y-a.y*b.x}; }
+inline float vnorm(const V3&a){ return sqrtf(vdot(a,a)); }
+inline V3 vnormalize(const V3&a){ float l=vnorm(a); return (l>1e-9f)? vmul(a,1.f/l): v3(1,0,0); }
+inline V3 vrot(const V3&v,const V3&k,float ang){   // rotation de Rodrigues
+	float c=cosf(ang), sn=sinf(ang);
+	return vadd(vadd(vmul(v,c), vmul(vcross(k,v),sn)), vmul(k, vdot(k,v)*(1.f-c)));
+}
+inline V3 anyPerp(const V3&n){
+	V3 a = (fabsf(n.z)<0.9f)? v3(0,0,1): v3(1,0,0);
+	return vnormalize(vcross(a,n));
+}
+inline V3 transport(const V3&u,const V3&n0,const V3&n1){   // RMF discret (rotation minimale)
+	V3 ax=vcross(n0,n1); float sn=vnorm(ax), c=vdot(n0,n1);
+	V3 r = (sn<1e-7f)? u : vrot(u, vmul(ax,1.f/sn), atan2f(sn,c));
+	r = vsub(r, vmul(n1, vdot(r,n1)));
+	return vnormalize(r);
+}
+inline float signedAngle(const V3&a,const V3&b,const V3&n){
+	return atan2f(vdot(vcross(a,b),n), vdot(a,b));
+}
+
+// Un anneau emis : centre, base d'index dans verts, K, type d'extremite
+// (0 = interieur, 1 = debut de chaine ouverte, 2 = fin de chaine ouverte).
+struct RingRec { V3 c; unsigned int base; int K; int endKind; };
+
+struct Station { V3 c, n; bool corner; V3 din, dout; };
+
+void addCorner(std::vector<Station>& st, const V3& c, const V3& din, const V3& dout, float miterLimit)
+{
+	V3 bis = vadd(din,dout); float bl=vnorm(bis);
+	if (bl < 1e-5f) {                    // ~180 deg -> bevel : 2 anneaux perpendiculaires
+		st.push_back({c, din, false, din, dout});
+		st.push_back({c, dout,false, din, dout});
+		return;
+	}
+	bis = vmul(bis,1.f/bl);
+	float cosHalf = vdot(dout,bis); if (cosHalf<1e-4f) cosHalf=1e-4f;
+	if (1.f/cosHalf <= miterLimit) st.push_back({c, bis, true, din, dout});     // miter
+	else { st.push_back({c, din, false, din, dout});                            // bevel
+	       st.push_back({c, dout,false, din, dout}); }
+}
+
+// L'ensemble de points s'etend-il vraiment en 3D ? (garde anti-degenerescence
+// avant Chull3D : evite les cas colineaires/coplanaires et leur printf).
+bool spans3D(const std::vector<float>& pts, int n, float r)
+{
+	auto P=[&](int i){ return v3(pts[3*i],pts[3*i+1],pts[3*i+2]); };
+	V3 p0=P(0);
+	int i1=-1; float best=0.f;
+	for (int i=1;i<n;i++){ float d=vnorm(vsub(P(i),p0)); if(d>best){best=d;i1=i;} }
+	if (i1<0 || best<1e-9f) return false;
+	V3 e1=vnormalize(vsub(P(i1),p0));
+	int i2=-1; best=0.f;
+	for (int i=1;i<n;i++){ float m=vnorm(vcross(e1, vsub(P(i),p0))); if(m>best){best=m;i2=i;} }
+	if (i2<0 || best<1e-9f) return false;
+	V3 nrm=vnormalize(vcross(e1, vsub(P(i2),p0)));
+	float thick=0.f;
+	for (int i=0;i<n;i++){ float t=fabsf(vdot(vsub(P(i),p0),nrm)); if(t>thick)thick=t; }
+	return thick > 0.1f*r;
+}
+
+// R1 (sweep anneau partage + RMF) + R2 (join miter/bevel) pour UNE polyligne.
+// Emet sommets + bandes laterales, et ENREGISTRE chaque anneau dans `rings`
+// (les capuchons et jointures sont decides ensuite par CreateTubes).
+void sweepPolyline(const std::vector<Vector3f>& raw, float r, int K, float miterLimit,
+                   std::vector<float>& verts, std::vector<unsigned int>& faces,
+                   std::vector<RingRec>& rings)
+{
+	std::vector<V3> P;
+	for (const auto& q : raw) {
+		V3 p = v3(q.x,q.y,q.z);
+		if (P.empty()) { P.push_back(p); continue; }
+		V3 dd = vsub(p,P.back());
+		if (vdot(dd,dd) >= 1e-12f) P.push_back(p);
+	}
+	bool closed = false;
+	if ((int)P.size() >= 4) {
+		V3 dd = vsub(P.front(),P.back());
+		if (vdot(dd,dd) < 0.25f*r*r) { closed = true; P.pop_back(); }
+	}
+	const int M = (int)P.size();
+	if (M < 2) return;
+
+	const int nSeg = closed ? M : (M-1);
+	std::vector<V3> d(nSeg);
+	for (int i=0;i<nSeg;i++) d[i] = vnormalize(vsub(P[(i+1)%M], P[i]));
+
+	std::vector<Station> st;
+	if (!closed) {
+		st.push_back({P[0], d[0], false, d[0], d[0]});
+		for (int i=1;i<M-1;i++) addCorner(st, P[i], d[i-1], d[i], miterLimit);
+		st.push_back({P[M-1], d[M-2], false, d[M-2], d[M-2]});
+	} else {
+		for (int i=0;i<M;i++) addCorner(st, P[i], d[(i-1+M)%M], d[i], miterLimit);
+	}
+	const int S = (int)st.size();
+	if (S < 2) return;
+
+	std::vector<V3> U(S), Vv(S);
+	U[0]=anyPerp(st[0].n); Vv[0]=vcross(st[0].n,U[0]);
+	for (int k=1;k<S;k++){ U[k]=transport(U[k-1], st[k-1].n, st[k].n); Vv[k]=vcross(st[k].n,U[k]); }
+	if (closed) {
+		V3 ucl = transport(U[S-1], st[S-1].n, st[0].n);
+		float phi = signedAngle(ucl, U[0], st[0].n);
+		for (int k=0;k<S;k++){ U[k]=vrot(U[k], st[k].n, -phi*(float)k/(float)S); Vv[k]=vcross(st[k].n,U[k]); }
+	}
+
+	std::vector<unsigned int> ringBase(S);
+	for (int k=0;k<S;k++) {
+		ringBase[k] = (unsigned int)(verts.size()/3);
+		const Station& stt = st[k];
+		bool doStretch=false; V3 mHat=v3(1,0,0); float stretch=1.f;
+		if (stt.corner) {
+			float cosHalf = vdot(stt.dout, stt.n); if (cosHalf<1e-4f) cosHalf=1e-4f;
+			stretch = 1.f/cosHalf;
+			V3 m = vsub(stt.dout, vmul(stt.n, cosHalf));
+			float ml=vnorm(m); if (ml>1e-6f){ mHat=vmul(m,1.f/ml); doStretch=true; }
+		}
+		for (int j=0;j<K;j++) {
+			float t=2.f*(float)M_PI*(float)j/(float)K, cs=cosf(t), sn=sinf(t);
+			V3 o = vadd(vmul(U[k], r*cs), vmul(Vv[k], r*sn));
+			if (doStretch) o = vadd(o, vmul(mHat, (stretch-1.f)*vdot(o,mHat)));
+			V3 pp = vadd(stt.c, o);
+			verts.push_back(pp.x); verts.push_back(pp.y); verts.push_back(pp.z);
+		}
+		int endKind = 0;
+		if (!closed) { if (k==0) endKind=1; else if (k==S-1) endKind=2; }
+		rings.push_back({stt.c, ringBase[k], K, endKind});
+	}
+
+	auto band=[&](unsigned int A, unsigned int B){
+		for (int j=0;j<K;j++){ int j2=(j+1)%K;
+			faces.push_back(A+j); faces.push_back(A+j2); faces.push_back(B+j2);
+			faces.push_back(A+j); faces.push_back(B+j2); faces.push_back(B+j);
+		}
+	};
+	const int lastBand = closed ? S : (S-1);
+	for (int k=0;k<lastBand;k++) band(ringBase[k], ringBase[(k+1)%S]);
+}
+
+} // namespace
+
+Mesh* CreateTubes (const std::vector<std::vector<Vector3f>>& polylines, float radius, int nSides, bool caps)
+{
+	if (nSides < 3) nSides = 3;
+	const int   K = nSides;
+	const float r = radius;
+	const float miterLimit = 4.0f;
+
+	std::vector<float>        verts;
+	std::vector<unsigned int> faces;
+	std::vector<RingRec>      rings;
+	for (const auto& pl : polylines)
+		sweepPolyline(pl, r, K, miterLimit, verts, faces, rings);
+
+	// --- R3/R4 : traiter les extremites et les noeuds de branchement ---------
+	// Cluster les anneaux par centre (points partages = noeuds implicites).
+	// tol minuscule : on ne cluster que les points STRICTEMENT coincidents (les
+	// vrais noeuds, coords bit-identiques), pas les points proches — sinon
+	// sur-clustering sur fractales denses -> clusters geants -> hull qui boucle.
+	const float tol = 1e-4f;
+	std::map<std::array<int,3>, std::vector<int>> cells;
+	for (int i=0;i<(int)rings.size();i++) {
+		const V3& c = rings[i].c;
+		std::array<int,3> key = { (int)floorf(c.x/tol), (int)floorf(c.y/tol), (int)floorf(c.z/tol) };
+		cells[key].push_back(i);
+	}
+
+	// Budget : hull (R3) seulement pour les maillages moderes ; au-dela, repli
+	// R4 (cap+overlap, rapide) pour rester interactif sur les grosses plantes.
+	const bool useHull = ((int)rings.size() <= 8000);
+
+	auto capRing=[&](const RingRec& rr){
+		if (!caps) return;
+		unsigned int b=rr.base; int Kk=rr.K;
+		if (rr.endKind==1) for (int j=1;j<=Kk-2;j++){ faces.push_back(b); faces.push_back(b+j+1); faces.push_back(b+j); }
+		else if (rr.endKind==2) for (int j=1;j<=Kk-2;j++){ faces.push_back(b); faces.push_back(b+j); faces.push_back(b+j+1); }
+	};
+
+	for (auto& kv : cells) {
+		std::vector<int>& idxs = kv.second;
+		if (idxs.size() == 1) { capRing(rings[idxs[0]]); continue; }
+
+		// Noeud (>=2 anneaux) : R3 = hull des sommets des anneaux incidents.
+		std::vector<float> pts;
+		for (int ri : idxs) {
+			const RingRec& rr = rings[ri];
+			for (int j=0;j<rr.K;j++) {
+				unsigned int vi = rr.base + (unsigned int)j;
+				pts.push_back(verts[3*vi]); pts.push_back(verts[3*vi+1]); pts.push_back(verts[3*vi+2]);
+			}
+		}
+		// dedup : O'Rourke boucle sur les points coincidents.
+		std::vector<float> pd;
+		const float deps2 = (1e-3f*r)*(1e-3f*r);
+		for (int a=0;a<(int)pts.size();a+=3) {
+			bool dup=false;
+			for (int b=0;b<(int)pd.size();b+=3) {
+				float dx=pts[a]-pd[b], dy=pts[a+1]-pd[b+1], dz=pts[a+2]-pd[b+2];
+				if (dx*dx+dy*dy+dz*dz < deps2) { dup=true; break; }
+			}
+			if (!dup) { pd.push_back(pts[a]); pd.push_back(pts[a+1]); pd.push_back(pts[a+2]); }
+		}
+		int nPts = (int)(pd.size()/3);
+		bool built = false;
+		if (useHull && nPts >= 4 && spans3D(pd, nPts, r)) {
+			// jitter minuscule DETERMINISTE : garantit une position generale
+			// (O'Rourke boucle sinon sur les configs coplanaires/colineaires) ;
+			// deterministe -> pas de scintillement du maillage entre regenerations.
+			for (int a=0;a<(int)pd.size();a++) {
+				unsigned h = (unsigned)((a+1)*2654435761u);
+				pd[a] += (((float)((h>>8)&1023)/1023.f) - 0.5f) * (2e-3f*r);
+			}
+			Chull3D hull(pd.data(), nPts);
+			hull.compute();
+			float* hv=nullptr; int nhv=0; int* hf=nullptr; int nhf=0;
+			if (hull.get_convex_hull(&hv,&nhv,&hf,&nhf) == 0 && nhv>=4 && nhf>=4) {
+				unsigned int base = (unsigned int)(verts.size()/3);
+				for (int i=0;i<nhv;i++){ verts.push_back(hv[3*i]); verts.push_back(hv[3*i+1]); verts.push_back(hv[3*i+2]); }
+				for (int i=0;i<nhf;i++){ faces.push_back(base+(unsigned int)hf[3*i]); faces.push_back(base+(unsigned int)hf[3*i+1]); faces.push_back(base+(unsigned int)hf[3*i+2]); }
+				built = true;
+			}
+			if (hv) free(hv);
+			if (hf) free(hf);
+		}
+		if (!built) for (int ri : idxs) capRing(rings[ri]); // R4 : repli, ferme les extremites
+	}
+
+	Mesh* mesh = new Mesh();
+	if (verts.empty()) {
+		std::vector<float>        vtri = {0.f,0.f,0.f, 0.001f,0.f,0.f, 0.f,0.001f,0.f};
+		std::vector<unsigned int> ftri = {0u,1u,2u};
+		mesh->SetVertices(3, vtri.data());
+		mesh->SetFaces(1, 3, ftri.data());
+		return mesh;
+	}
+	mesh->SetVertices((unsigned int)(verts.size()/3), verts.data());
+	mesh->SetFaces((unsigned int)(faces.size()/3), 3, faces.data());
+	return mesh;
+}
+
+Mesh* CreateTube (const std::vector<Vector3f>& polyline, float radius, int nSides, bool caps)
+{
+	return CreateTubes(std::vector<std::vector<Vector3f>>{ polyline }, radius, nSides, caps);
+}

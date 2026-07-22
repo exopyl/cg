@@ -20,22 +20,26 @@
 //     tessellated via Polygon2's GLU tessellator into a flat 3D Mesh at z = 0,
 //     saved via Mesh::save (extension dispatches : .obj / .stl / .ply / .off / .dae).
 //
-// Phase 1 holes :
-//   - main inner offset outline (CCW outer)
-//   - each lancet's INNER offset outline (CW)
+// Contours (outer + holes) :
+//   - contour 0 : main inner offset outline (CCW), bounds the whole infill
+//   - each opening (lancet / rosette) contributes glass voids as CW holes.
 //
-// Phase 2 holes (additional voids for richer tracery detail) :
-//   - rosette circle (CW)
-//   - each round rosette foil circle (CW)
-//   - each pointed rosette foil contour : 2 arcs + short rim arc on outer circle (CW)
-//   - each round / pointed lancet foil (CW)
+// Cusped-void rule (avoids stone islands) : GLU's NONZERO winding cannot nest
+// "void inside void" — a hole cut inside an already-void area flips back to
+// STONE. So for a FOILED opening we do NOT cut its base circle/arch ; we cut
+// the FOILS themselves as the voids. Havemann foils are mutually tangent
+// (touch only at cusp points), so independent foil holes reproduce the true
+// multifoil : void petals + stone cusps + stone central boss, no islands.
+//   - rosette with foils   -> its foil petals as holes (round circle / pointed leaf)
+//   - rosette without foils -> its circle as a hole (plain oculus)
 //
-// Caveat : GLU's NONZERO winding does not nest "void inside void". A foil hole
-// placed inside an already-void area (lancet inner / rosette) becomes a STONE
-// ISLAND at the foil position rather than a deeper void. This is acceptable
-// for visualization (the foils' positions are still visible) but does not
-// match the strict architectural meaning where foils are stone arches around
-// glass voids.
+// Lancets are ALWAYS a plain tall pointed-arch void (the window opening). Foil
+// head-cusping is intentionally NOT applied to lancets : the foil ring is
+// inscribed in a circle interior to the lancet, so "tall arch void + cusped
+// head" is a genuine 2D-boolean op (stone cusps must stay connected to the
+// frame) that GLU alone cannot express without floating stone. The full
+// Havemann reference (cusped lancet heads) would need a 2D polygon boolean
+// library (e.g. Clipper2), not currently vendored.
 //
 // Phase 3 :
 //   - Extrusion : if `GothicMeshParams::zHeight > 0`, the polygon is extruded
@@ -54,7 +58,53 @@ struct GothicMeshParams
 	// solid 3D mesh (top cap + bottom cap + side walls connecting outer and
 	// hole contours). If zHeight == 0, the mesh is flat at z = 0.
 	double zHeight = 0.0;
+
+	// Straight vertical body below the pointed heads. When > 0, the main frame
+	// and each lancet are extended down from their springline by `bodyHeight`
+	// (a stone sill band is kept at the very bottom), turning bare pointed
+	// arches into tall window / lancet silhouettes. 0 = pure arch.
+	double bodyHeight = 0.0;
+
+	// Recursion : when recursionDepth > 0, each main lancet opening becomes a
+	// mini-window — subdivided by thin stone mullions into `recursionSub.count`
+	// sub-lancets crowned by a small rosette, recursed `recursionDepth` times
+	// (right image of the Havemann-Fellner reference). Needs the offset and
+	// subdivision params to re-run buildArchOffset/buildSubwindows/buildRosette
+	// on each sub-arch. recursionFoils = sub-rosette foil count.
+	int              recursionDepth = 0;
+	ArchOffsetParams recursionOffset;
+	SubwindowParams  recursionSub;
+	int              recursionFoils = 3;
+
+	// Fillets : the corner FIELDS between the rosette, the sub-arches and the
+	// main arch (Havemann §5.4, Fig 5.25). Computed as region − rosette − sub-
+	// arches via Clipper2 (the 2D-CSG the thesis wanted, p.254), then inset by
+	// `filletInset` (= bdInner) so a stone bar frames them.
+	bool             fillets     = false;
+	double           filletInset = 8.0;
+
+	// Foiled lancet heads (Phase 3, Havemann §5.4 / gothic1.png middle panel) :
+	// a small foiled circle (mini-rosette) set into the head of each lancet,
+	// tangent to the lancet arch, the light open below it. `lancetHeadFoils` =
+	// number of foils. Applied at recursion depth 0.
+	bool             lancetHeadFoiled = false;
+	int              lancetHeadFoils  = 4;
+
+	// Rosette foil shape : 0 = round foils (circles), 1 = pointed foils (almond
+	// petals pointed at both ends, the reference gothic1.png look).
+	int              rosetteFoilType = 1;
+	// Pointedness of the pointed foils : 0 = fat/almost round, 2 = slender sharp.
+	double           rosettePointedness = 0.5;
 };
+
+// Oculus (rosette) circle centred on the symmetry axis x = axisX, internally
+// tangent to the main arch AND passing through the lancet apex point, so it
+// touches the DRAWN lancet tops (cf. gothic1.png) rather than the phantom
+// extension of the arc circle (which buildRosette's construction-circle tangency
+// lands on, leaving a visible gap above the apex). Returns a circle with
+// radius <= 0 if no valid solution exists (caller should fall back).
+Circle rosetteTangentToLancets (const ArchGeom &mainInner, double axisX,
+                                const Vector2d &lancetApex);
 
 // Build a multi-contour Polygon2 representing the stone region of the bay :
 //   contour 0 : main inner offset outline, CCW
@@ -79,6 +129,15 @@ void tessellateToMesh (Polygon2 &polygon, Mesh &out, double z = 0.0);
 //     out of the bay, hole-contour walls face into the holes/voids).
 // Throws std::runtime_error if the tessellator produces no output.
 void extrudeToMesh (Polygon2 &polygon, Mesh &out, double zBottom, double zTop);
+
+// Like extrudeToMesh but sweeps a CHAMFER moulding along every field border
+// instead of a vertical wall : the front face stays flat at zTop, each opening
+// edge is bevelled back into the stone by (chamW in-plane, chamD in depth), then
+// runs straight to zBottom (a splayed opening). Gives the 3D "carved stone" look
+// (Havemann §5.4 profiles, flat style) instead of a flat extruded plate.
+// Caps + moulding use distinct vertices (correct flat / smooth normals).
+void extrudeProfiledToMesh (Polygon2 &polygon, Mesh &out,
+                            double zBottom, double zTop, double chamW, double chamD);
 
 
 //
