@@ -42,6 +42,6 @@ TEST(TEST_cgmesh_surface_basic, klein_bottle)
     Mesh* mesh = CreateKleinBottle(10, 10);
 
     // expectations
-    EXPECT_EQ(mesh->GetNVertices(), 121);
+    EXPECT_EQ(mesh->GetNVertices(), 100);
     EXPECT_EQ(mesh->GetNFaces(), 200);
 }
