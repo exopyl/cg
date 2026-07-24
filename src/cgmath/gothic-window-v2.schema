@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gothic-tracery/schema/v2/window.schema.json",
+  "title": "Gothic Window (v2 — Fig 5.30 + Style)",
+  "description": "Description paramétrique d'une fenêtre gothique, structurée sur le jeu de paramètres de la thèse Havemann (Generative Mesh Modeling, TU Braunschweig 2005, Fig 5.30) plus le paramètre Style (dict de 4 fonctions de champ, Fig 5.31-5.33). Alimente WindowInstance + GothicMeshParams côté engine. Chaque `$comment` note la cible engine et le statut : 🟢 consommé, 🟡 mappé/dérivé, 🔵 requiert le système de styles, ⚪ extension hors-thèse.",
+  "type": "object",
+  "required": ["geometry"],
+  "additionalProperties": false,
+
+  "$defs": {
+
+    "profile": {
+      "title": "Profil de moulure d'un champ",
+      "description": "Section balayée le long des bords du champ (Fig 5.28 : flat vs french/round ; librairie Fig 5.32-5.33).",
+      "$comment": "cible: m_profile (aujourd'hui GLOBAL). 🟡 global / 🔵 par-champ (§5.2).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["flat", "chamfer", "roll", "keel", "ogee"],
+          "default": "roll",
+          "description": "flat = plan avant contigu ; chanfrein = bord biseauté ; roll = bâton rond (french) ; keel = arête pointue ; ogee = cyma."
+        },
+        "depth": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Profondeur/relief du profil. Défaut dérivé de wallSetback / bdInner si absent."
+        }
+      }
+    },
+
+    "foils": {
+      "title": "Anneau de foils",
+      "description": "n foils inscrits dans un cercle (Fig 5.27). round = circulaires ; pointed = en pointe (déplacement des centres m' m'').",
+      "$comment": "cible: FoilsParams + rosetteFoilType/rosettePointedness. 🟢",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count"],
+      "properties": {
+        "count":        { "type": "integer", "minimum": 3, "maximum": 24, "default": 6 },
+        "type":         { "type": "string", "enum": ["round", "pointed"], "default": "round" },
+        "pointedness":  { "type": "number", "exclusiveMinimum": 0, "maximum": 2, "default": 0.5,
+                          "description": "Acuité des foils pointus (ignoré si type=round)." },
+        "orientation":  { "type": "string", "enum": ["standing", "lying"], "default": "standing",
+                          "description": "standing = un foil vers le haut ; lying = tourné de π/n (Fig 5.8)." }
+      }
+    },
+
+    "mouchette": {
+      "title": "Mouchette / soufflet",
+      "description": "Forme flamboyante inscrite dans un champ (Fig 5.22 rang 3). vesica = lentille ; teardrop = goutte ; soufflet = triangle curviligne (Reuleaux).",
+      "$comment": "cible: mouchetteType/mouchetteSize. 🟢",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["vesica", "teardrop", "soufflet"], "default": "soufflet" },
+        "size": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.85,
+                  "description": "Taille de la forme relativement au champ (1 = remplit le champ)." }
+      }
+    }
+  },
+
+  "properties": {
+
+    "schema":   { "type": "string", "description": "Marqueur de version, ex. \"gothic-window/v2\"." },
+
+    "meta": {
+      "title": "Métadonnées (facultatif, non géométriques)",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "id":            { "type": "string" },
+        "label":         { "type": "string" },
+        "period":        { "type": "string" },
+        "cathedral_ref": { "type": "string" }
+      }
+    },
+
+    "geometry": {
+      "title": "Géométrie — paramètres de Fig 5.30",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "excess", "bdOuter", "bdInner"],
+      "properties": {
+
+        "width": {
+          "type": "number", "exclusiveMinimum": 0, "default": 200,
+          "description": "Largeur de l'ouverture (dérive pL=(-w/2,0), pR=(w/2,0)).",
+          "$comment": "cible: archBasis.pL/pR. 🟢"
+        },
+        "excess": {
+          "type": "number", "exclusiveMinimum": 0.5, "default": 1.0,
+          "description": "Fig 5.30 excess = r/dist(pL,pR). 0.5=plein cintre (exclu), 1=équilatéral, >1=lancéolé.",
+          "$comment": "cible: archBasis.excess. 🟢"
+        },
+        "bdOuter": {
+          "type": "number", "minimum": 0, "default": 16,
+          "description": "Fig 5.30 bdOuter — offset des champs vers l'arc principal (bande de cadre).",
+          "$comment": "cible: archOffset.outer. 🟢"
+        },
+        "bdInner": {
+          "type": "number", "minimum": 0, "default": 10,
+          "description": "Fig 5.30 bdInner — offset intérieur entre champs (largeur du plan-bordure) ; sert aussi de meneau central (layout prototype) et de filletInset.",
+          "$comment": "cible: archOffset.inner + GothicMeshParams.filletInset. 🟢"
+        },
+        "heightBott": {
+          "type": "number",
+          "description": "Fig 5.30 heightBott — niveau Y du bas horizontal de la baie (absolu ; springline à y=0). Absent → baie = arc nu.",
+          "$comment": "cible: GothicMeshParams.bodyHeight = springlineY - heightBott. 🟡"
+        },
+        "wallSetback": {
+          "type": "number", "minimum": 0, "default": 0,
+          "description": "Fig 5.30 wallSetback — retrait de la fenêtre dans le mur.",
+          "$comment": "cible: profondeur de relief/chanfrein (approx ; pas de mur dans le mesh). 🟡"
+        },
+        "kseg": {
+          "type": "integer", "minimum": 8, "maximum": 720, "default": 72,
+          "description": "Fig 5.30 kseg — nombre de segments par cercle complet (finesse n-gon).",
+          "$comment": "cible: maxAngleRad = 2π/kseg. 🟡"
+        },
+
+        "subwindows": {
+          "title": "Sous-fenêtres (lancettes)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count"],
+          "properties": {
+            "count": {
+              "type": "integer", "minimum": 1, "maximum": 6, "default": 2,
+              "description": "Nombre de lancettes. Une rosace n'existe que pour count=2 (tangence à deux lancettes).",
+              "$comment": "cible: subwindowParams.count. 🟢"
+            },
+            "arcDown": {
+              "type": "number", "minimum": 0, "default": 0,
+              "description": "Fig 5.30 arcDown — descente verticale des bases des sous-arcs sous le springline.",
+              "$comment": "cible: subwindowParams.drop. 🟢"
+            },
+            "excess": {
+              "type": "number", "exclusiveMinimum": 0.5, "default": 1.0,
+              "$comment": "cible: subwindowParams.excess. 🟢"
+            },
+            "layout": {
+              "type": "string", "enum": ["prototype", "uniform"], "default": "prototype",
+              "description": "prototype = pieds extérieurs sur l'arc inset de bdOuter + meneaux intérieurs de bdInner (Fig 5.39, seul layout de la thèse). uniform = count+1 meneaux égaux (extension hors-thèse ; utilise `gap`).",
+              "$comment": "cible: SubwindowParams::Layout. 🟢 prototype / ⚪ uniform"
+            },
+            "gap": {
+              "title": "Meneaux (layout uniform uniquement)",
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Ignoré si layout=prototype.",
+              "$comment": "cible: subwindowParams.gap. ⚪",
+              "properties": {
+                "mode":          { "type": "string", "enum": ["fraction", "absolute"], "default": "fraction" },
+                "gapFraction":   { "type": "number", "exclusiveMinimum": 0, "maximum": 0.3, "default": 0.11 },
+                "absoluteWidth": { "type": "number", "exclusiveMinimum": 0 }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "style": {
+      "title": "Style — dict de 4 fonctions de champ (Fig 5.30-5.33)",
+      "description": "Apparence par TYPE de champ (main-arch, sub-arch, rosette, fillet). Fidèle à la séparation contenu/apparence de la thèse.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+
+        "mainArch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "profile": { "$ref": "#/$defs/profile" },
+            "trefoil": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Arc trilobé pointu (Fig 5.27 2c-d).",
+              "$comment": "cible: hasArchTrefoil (chaîne SVG). 🔵",
+              "properties": {
+                "enabled":          { "type": "boolean", "default": false },
+                "splitParameter":   { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "default": 0.45 },
+                "foilRadiusFactor": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.5, "default": 0.30 }
+              }
+            }
+          }
+        },
+
+        "subArch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "profile": { "$ref": "#/$defs/profile" },
+            "head": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Tête de lancette.",
+              "$comment": "cible: lancetHeadFoiled + lancetHeadFoils. 🟢",
+              "properties": {
+                "type":  { "type": "string", "enum": ["plain", "foiled"], "default": "foiled" },
+                "foils": { "type": "integer", "minimum": 3, "maximum": 8, "default": 4 }
+              }
+            }
+          }
+        },
+
+        "rosette": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "present": { "type": "boolean", "default": true, "$comment": "cible: hasRosette. 🟢" },
+            "profile": { "$ref": "#/$defs/profile" },
+            "foils":   { "$ref": "#/$defs/foils" }
+          }
+        },
+
+        "fillet": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fill": {
+              "type": "string", "enum": ["plain", "mouchette"], "default": "plain",
+              "description": "plain = champ ajouré simple ; mouchette = forme flamboyante inscrite.",
+              "$comment": "cible: GothicMeshParams.mouchettes (+ fillets requis). 🟢"
+            },
+            "mouchette": { "$ref": "#/$defs/mouchette" }
+          }
+        }
+      }
+    },
+
+    "recursion": {
+      "title": "Style récursif (Fig 5.33, Style-8)",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "depth": {
+          "type": "integer", "minimum": 0, "maximum": 2, "default": 0,
+          "description": "Profondeur de récursion : chaque lancette devient une mini-fenêtre. 2 → 2·2·2 = 8 sous-fenêtres.",
+          "$comment": "cible: GothicMeshParams.recursionDepth. 🟢"
+        },
+        "harmonic": {
+          "type": "boolean", "default": false,
+          "description": "Règles harmoniques de la thèse : offsets/échelle ÷2 par niveau (p.254).",
+          "$comment": "non implémenté. 🔵 §5.5"
+        }
+      }
+    },
+
+    "extrusion": {
+      "title": "Extrusion (extension hors-thèse)",
+      "description": "La thèse tire la 3D des profils balayés + wallSetback, pas d'une extrusion plate. zHeight est une extension de notre pipeline 2.5D.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "zHeight": {
+          "type": "number", "minimum": 0, "default": 260,
+          "$comment": "cible: GothicMeshParams.zHeight. ⚪"
+        }
+      }
+    }
+  }
+}

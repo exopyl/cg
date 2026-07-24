@@ -204,6 +204,27 @@ int createSvgExtrusion(const std::string& svgText)
     return registerObject(std::move(obj));
 }
 
+// Cree une Gothic Window a partir d'un fichier de description JSON (schema
+// gothic-window-v2). Parse cote cgmesh (ParameterizedGothicWindow::LoadFromJson),
+// puis la geometrie est generee par l'engine via Regenerate() (regenerate/meshData).
+// Renvoie l'id, ou -1 si le JSON est illisible.
+int createGothicFromJson(const std::string& jsonText)
+{
+    auto obj = std::unique_ptr<ParameterizedGothicWindow>(new ParameterizedGothicWindow());
+    if (!obj->LoadFromJson(jsonText)) return -1;
+    return registerObject(std::move(obj));
+}
+
+// Exporte la Gothic Window `id` en JSON de description (schema gothic-window-v2),
+// reflet des valeurs courantes de l'UI. Renvoie "" si l'objet n'est pas une
+// Gothic Window.
+std::string exportGothicJson(int id)
+{
+    IParameterized* obj = find(id);
+    ParameterizedGothicWindow* gw = dynamic_cast<ParameterizedGothicWindow*>(obj);
+    return gw ? gw->ExportJson() : std::string();
+}
+
 // Parametres typees d'un objet, serialises en JSON.
 std::string getParams(int id)
 {
@@ -330,6 +351,8 @@ EMSCRIPTEN_BINDINGS(maker)
     emscripten::function("listShapes",        &listShapes);
     emscripten::function("createShape",       &createShape);
     emscripten::function("createSvgExtrusion",&createSvgExtrusion);
+    emscripten::function("createGothicFromJson",&createGothicFromJson);
+    emscripten::function("exportGothicJson",  &exportGothicJson);
     emscripten::function("getParams",         &getParams);
     emscripten::function("setParam",          &setParam);
     emscripten::function("regenerate",        &regenerate);

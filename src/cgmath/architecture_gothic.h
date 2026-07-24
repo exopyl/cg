@@ -137,10 +137,23 @@ struct SubwindowParams
 		double absoluteWidth = 0.0;     // active when mode == Absolute (in (0, mainWidth/(count+1)) )
 	};
 
+	// Lancet layout across the main opening :
+	//   Uniform   : count+1 EQUAL mullions of `gap` width (a gap at both ends too).
+	//               The generalized, count-agnostic layout used by default.
+	//   Prototype : the Havemann thesis prototype (§5.4.2, Fig 5.39). Outer lancet
+	//               feet are anchored on the bdOuter-inset arch (no gap at the ends),
+	//               separated by count-1 interior mullions of width bdInner. For
+	//               count == 2 this reproduces pLL/pRR (offset-arch feet) and the
+	//               single central mullion pRL=pM+dpM, pLR=pM-dpM with |dpM|=bdInner/2.
+	//               `gap` is ignored ; bdOuter/bdInner come from the offsetParams
+	//               passed to buildSubwindows (outer / inner).
+	enum class Layout { Uniform, Prototype };
+
 	int    count  = 1;          // number of lancets, in [1, 6]
 	double drop   = 0.0;        // vertical descent of lancet bases below the main arch base, >= 0
 	double excess = 1.0;        // excess of each sub-arch
 	Gap    gap;
+	Layout layout = Layout::Uniform;
 };
 
 // Geometry of a single lancet.
@@ -460,15 +473,16 @@ FilletsGeom buildFillets (const ArchOffsetGeom &mainOffset,
 //                    at an apex at distance 2r from the center. Tangent points
 //                    at angles (rotation +/- pi/2) on the base circle.
 //                    Contour : 3 arcs (base back arc + 2 side arcs).
-//       * Soufflet : aliased to Teardrop in this minimal implementation. The
-//                    proper flamboyant "bellows" curl is not yet implemented.
+//       * Soufflet : the flamboyant curvilinear ("spherical") triangle — a Reuleaux
+//                    rounded triangle, 3 convex arcs bulging outward, one vertex
+//                    pointing along `rotation`. Contour : 3 arcs.
 //
 
 enum class MouchetteType
 {
 	Vesica,
 	Teardrop,
-	Soufflet     // currently aliased to Teardrop
+	Soufflet     // flamboyant curvilinear triangle (Reuleaux)
 };
 
 struct MouchetteParams
@@ -496,3 +510,12 @@ struct MouchetteGeom
 //
 std::vector<MouchetteGeom> buildMouchettes (const SubwindowsGeom  &subwindows,
                                              const MouchetteParams &params);
+
+// Build a SINGLE mouchette of the given `type` at an arbitrary `center`, `radius`
+// and `rotation` (radians ; apex/long-axis direction for Teardrop/Vesica). Same
+// contour conventions as buildMouchettes. Used to inscribe a flamboyant shape into
+// an arbitrary tracery field (e.g. a spandrel/fillet).
+//
+// Throws std::invalid_argument if radius is non-finite or <= 0, or rotation is
+// non-finite.
+MouchetteGeom buildMouchette (MouchetteType type, Vector2d center, double radius, double rotation);

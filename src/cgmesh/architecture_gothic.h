@@ -83,6 +83,16 @@ struct GothicMeshParams
 	bool             fillets     = false;
 	double           filletInset = 8.0;
 
+	// Flamboyant mouchettes (Havemann §5.4, Fig 5.22 row 3) : when `mouchettes` is
+	// set (and `fillets` on), each spandrel FIELD is voided as an inscribed
+	// mouchette/soufflet clipped to the field, instead of a plain fillet void — the
+	// curvilinear late-Gothic look. mouchetteType : 0 = Vesica, 1 = Teardrop,
+	// 2 = Soufflet (flamboyant curvilinear triangle). mouchetteSize scales the shape
+	// within its field, in (0, 1].
+	bool             mouchettes    = false;
+	int              mouchetteType = 1;
+	double           mouchetteSize = 0.85;
+
 	// Foiled lancet heads (Phase 3, Havemann §5.4 / gothic1.png middle panel) :
 	// a small foiled circle (mini-rosette) set into the head of each lancet,
 	// tangent to the lancet arch, the light open below it. `lancetHeadFoils` =
@@ -188,6 +198,24 @@ void sweepProfileAlongArcs (const std::vector<Arc> &arcs,
 // shifted by `dest`'s current vertex count. Used to merge separately-built
 // meshes (e.g. bay tessellation + sweep moldings) into a single Mesh.
 void appendMesh (Mesh &dest, const Mesh &src);
+
+// "French style" bar moulding (Havemann §5.4.1, Fig. 5.28 d) : sweeps the closed
+// cross-section `profile` along the ACTUAL field-border outlines of the bay — the
+// main frame inner edge, each lancet opening (cusped/foiled head AND straight
+// jambs when a body is present), each recursion sub-tracery frame + sub-rosette
+// rim, and the rosette rim — reproducing the exact curves that
+// `buildBayStonePolygon` cuts as voids.
+//
+// `profile` is a CLOSED loop in (u, v) WORLD units : u = z (depth ; flat side on
+// the front face, molding proud toward +z), v = in-plane offset perpendicular to
+// the path. See the barProfile factories in parameterized_shapes (Roll / Keel /
+// Ogee). Meant to be appended (appendMesh) onto a flat extruded bay plate.
+//
+// Result written into `out` (replaces previous content). `out` is left empty when
+// the geometry yields no sweepable outline. Corner joints are left "open" (no
+// mitre / bisector plane yet — thesis §5.4.1, deferred).
+void buildBayMoulding (const WindowGeometry &geom, const GothicMeshParams &params,
+                       const std::vector<Vector2d> &profile, Mesh &out);
 
 //
 // Profile factories : closed cross-sections in (u, v) coords, CCW from

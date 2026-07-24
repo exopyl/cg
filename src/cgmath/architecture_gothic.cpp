@@ -147,54 +147,83 @@ SubwindowsGeom buildSubwindows (const ArchGeom         &mainArch,
 
 	validateOffsetParams(offsetParams);
 
-	// --- Input validation : gap ------------------------------------------
-	double gapWidth;
-	if (params.gap.mode == SubwindowParams::Gap::Mode::Fraction)
-	{
-		if (!std::isfinite(params.gap.gapFraction))
-			throw std::invalid_argument("buildSubwindows: gap.gapFraction must be finite");
-		if (params.gap.gapFraction <= 0.0)
-			throw std::invalid_argument("buildSubwindows: gap.gapFraction must be strictly positive");
-		gapWidth = params.gap.gapFraction * mainArch.width;
-	}
-	else  // Absolute
-	{
-		if (!std::isfinite(params.gap.absoluteWidth))
-			throw std::invalid_argument("buildSubwindows: gap.absoluteWidth must be finite");
-		if (params.gap.absoluteWidth <= 0.0)
-			throw std::invalid_argument("buildSubwindows: gap.absoluteWidth must be strictly positive");
-		gapWidth = params.gap.absoluteWidth;
-	}
+	// --- Lancet horizontal layout ----------------------------------------
+	// Lay lancets across the main arch's OPENING (its springing feet), not its
+	// construction-circle centres (which sit outside the opening for excess>1).
+	const int    n         = params.count;
+	const double xLeftFoot = mainArch.circleR.center.x - mainArch.circleR.radius;
+	const double openingW  = mainArch.width;
 
-	const int    n        = params.count;
-	const double totalGap = (n + 1) * gapWidth;
-	const double subWidth = (mainArch.width - totalGap) / n;
-	if (subWidth <= 0.0)
-		throw std::invalid_argument("buildSubwindows: gaps consume the full width (subWidth <= 0)");
+	std::vector<double> x0s(n), x1s(n);
+	double gapWidth = 0.0;   // reported mullion width
+
+	if (params.layout == SubwindowParams::Layout::Prototype)
+	{
+		// Havemann prototype (§5.4.2, Fig 5.39) : outer feet anchored on the
+		// bdOuter-inset arch (no end gap), count-1 interior mullions of width bdInner.
+		const double bdOuter = offsetParams.outer;
+		const double bdInner = offsetParams.inner;
+		const double xL     = xLeftFoot + bdOuter;
+		const double xR     = xLeftFoot + openingW - bdOuter;
+		const double innerW = xR - xL;
+		if (innerW <= 0.0)
+			throw std::invalid_argument("buildSubwindows: bdOuter consumes the opening (innerW <= 0)");
+		const double subWidth = (innerW - (n - 1) * bdInner) / n;
+		if (subWidth <= 0.0)
+			throw std::invalid_argument("buildSubwindows: interior mullions consume the opening (subWidth <= 0)");
+		gapWidth = bdInner;
+		for (int i = 0; i < n; ++i)
+		{
+			x0s[i] = xL + i * (subWidth + bdInner);
+			x1s[i] = x0s[i] + subWidth;
+		}
+	}
+	else
+	{
+		// Uniform : count+1 EQUAL mullions (a gap at both ends too).
+		if (params.gap.mode == SubwindowParams::Gap::Mode::Fraction)
+		{
+			if (!std::isfinite(params.gap.gapFraction))
+				throw std::invalid_argument("buildSubwindows: gap.gapFraction must be finite");
+			if (params.gap.gapFraction <= 0.0)
+				throw std::invalid_argument("buildSubwindows: gap.gapFraction must be strictly positive");
+			gapWidth = params.gap.gapFraction * openingW;
+		}
+		else  // Absolute
+		{
+			if (!std::isfinite(params.gap.absoluteWidth))
+				throw std::invalid_argument("buildSubwindows: gap.absoluteWidth must be finite");
+			if (params.gap.absoluteWidth <= 0.0)
+				throw std::invalid_argument("buildSubwindows: gap.absoluteWidth must be strictly positive");
+			gapWidth = params.gap.absoluteWidth;
+		}
+		const double totalGap = (n + 1) * gapWidth;
+		const double subWidth = (openingW - totalGap) / n;
+		if (subWidth <= 0.0)
+			throw std::invalid_argument("buildSubwindows: gaps consume the full width (subWidth <= 0)");
+		for (int i = 0; i < n; ++i)
+		{
+			x0s[i] = xLeftFoot + (i + 1) * gapWidth + i * subWidth;
+			x1s[i] = x0s[i] + subWidth;
+		}
+	}
 
 	// --- Construction ----------------------------------------------------
 	SubwindowsGeom result;
 	result.gapWidth = gapWidth;
 	result.lancets.reserve(n);
 
-	const double y0     = mainArch.circleL.center.y - params.drop;
-	// Lay the lancets out across the main arch's OPENING (its springing feet), not
-	// its construction-circle centres (which sit outside the opening for excess>1).
-	// Left foot = right circle centre minus its radius.
-	const double xOrig  = mainArch.circleR.center.x - mainArch.circleR.radius;
-
+	const double y0 = mainArch.circleL.center.y - params.drop;
 	for (int i = 0; i < n; ++i)
 	{
-		const double x0 = xOrig + (i + 1) * gapWidth + i * subWidth;
-		const double x1 = x0 + subWidth;
-
+		const double x0 = x0s[i], x1 = x1s[i];
 		LancetGeom lancet;
 		lancet.basis.pL     = Vector2d(x0, y0);
 		lancet.basis.pR     = Vector2d(x1, y0);
 		lancet.basis.excess = params.excess;
 		lancet.arch         = buildArch(lancet.basis);
 		lancet.offset       = buildArchOffset(lancet.arch, offsetParams);
-		lancet.subWidth     = subWidth;
+		lancet.subWidth     = x1 - x0;
 		lancet.center       = Vector2d((x0 + x1) / 2.0, y0);
 		result.lancets.push_back(lancet);
 	}
@@ -211,15 +240,25 @@ RosetteGeom buildRosette (const ArchGeom &mainArch, const SubwindowsGeom &subwin
 	if (subwindows.lancets.empty())
 		throw std::invalid_argument("buildRosette: subwindows must contain at least one lancet");
 
-	// Foci of the focal-sum ellipse :
+	// Foci of the focal-sum ellipse (Havemann §5.4.1, Fig. 5.25 c,d) :
 	//   F1 = center of the main arch's right foot circle
-	//   F2 = center of the rightmost sub-arch's left foot circle (adjacent to the symmetry axis)
+	//   F2 = center of the sub-arc that actually FACES the rosette field, i.e. the
+	//        axis-facing (inner) arc of the rightmost lancet. By the
+	//        archFromConstruction convention that arc is `arcRight`, hosted on
+	//        circleR (the lancet's outer-foot circle) — NOT circleL, whose drawn
+	//        arc (arcLeft) is turned away from the axis. Using circleL made the
+	//        ellipse tangent to circleL's PHANTOM extension, leaving the rosette
+	//        tangent to no visible sub-arc (regression test
+	//        RosetteTangentPointLiesOnVisibleSubArc).
+	// F1's circle choice (circleL vs circleR of the MAIN arch) is indifferent : the
+	// two main centers are symmetric about the axis, so a center-on-axis mC is
+	// equidistant from both.
 	const LancetGeom &rightLancet = subwindows.lancets.back();
 	Vector2d F1 = mainArch.circleR.center;
-	Vector2d F2 = rightLancet.arch.circleL.center;
+	Vector2d F2 = rightLancet.arch.circleR.center;
 
 	double rMain = mainArch.circleR.radius;
-	double rSub  = rightLancet.arch.circleL.radius;
+	double rSub  = rightLancet.arch.circleR.radius;
 	double sumDist = rMain + rSub;
 
 	Ellipse ellipse(F1, F2, sumDist);
@@ -703,6 +742,60 @@ namespace
 		result.contour.push_back(sideArc2);
 		return result;
 	}
+
+	// Soufflet : the flamboyant curvilinear ("spherical") triangle — a Reuleaux
+	// rounded triangle whose 3 sides are convex circular arcs bulging outward. One
+	// vertex points along `rotation` (toward the oculus). Distinct from the vesica
+	// (2-arc lens) and the teardrop (round base + point). `radius` is the circumradius
+	// of the triangle vertices ; each side arc is centred on the opposite vertex with
+	// radius = the side length (radius*sqrt(3)), so it is tangent-free but the true
+	// constant-width flamboyant unit.
+	MouchetteGeom buildSouffletMouchette (Vector2d center, double radius, double rotation)
+	{
+		MouchetteGeom result;
+		result.center = center;
+		result.radius = radius;
+
+		const double TWO_PI = 2.0 * M_PI;
+		Vector2d V[3];
+		for (int k = 0; k < 3; ++k)
+		{
+			const double a = rotation + k * (TWO_PI / 3.0);
+			V[k] = Vector2d(center.x + radius * std::cos(a), center.y + radius * std::sin(a));
+		}
+		const double side = radius * std::sqrt(3.0);   // |V_a - V_b| ; also the arc radius
+
+		// Edge V_a -> V_b is the SHORTER (60 deg) arc on the circle centred at the
+		// third vertex V_c, which bulges outward (away from the triangle interior).
+		auto edge = [&](int a, int b, int c) -> Arc
+		{
+			Circle circ(V[c], side);
+			bool ccw = pickShorterArcDirection(circ, V[a], V[b]);
+			return Arc(circ, V[a], V[b], ccw);
+		};
+		result.contour.push_back(edge(0, 1, 2));
+		result.contour.push_back(edge(1, 2, 0));
+		result.contour.push_back(edge(2, 0, 1));
+		return result;
+	}
+}
+
+MouchetteGeom buildMouchette (MouchetteType type, Vector2d center, double radius, double rotation)
+{
+	if (!std::isfinite(radius) || radius <= 0.0)
+		throw std::invalid_argument("buildMouchette: radius must be finite and positive");
+	if (!std::isfinite(rotation))
+		throw std::invalid_argument("buildMouchette: rotation must be finite");
+	switch (type)
+	{
+		case MouchetteType::Vesica:
+			return buildVesicaMouchette(center, radius, rotation);
+		case MouchetteType::Soufflet:
+			return buildSouffletMouchette(center, radius, rotation);
+		case MouchetteType::Teardrop:
+		default:
+			return buildTeardropMouchette(center, radius, rotation);
+	}
 }
 
 std::vector<MouchetteGeom> buildMouchettes (const SubwindowsGeom  &subwindows,
@@ -740,8 +833,10 @@ std::vector<MouchetteGeom> buildMouchettes (const SubwindowsGeom  &subwindows,
 			case MouchetteType::Vesica:
 				result.push_back(buildVesicaMouchette(center, radius, params.rotation));
 				break;
+			case MouchetteType::Soufflet:
+				result.push_back(buildSouffletMouchette(center, radius, params.rotation));
+				break;
 			case MouchetteType::Teardrop:
-			case MouchetteType::Soufflet:    // alias for now
 				result.push_back(buildTeardropMouchette(center, radius, params.rotation));
 				break;
 		}

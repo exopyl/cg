@@ -389,6 +389,18 @@ public:
 	std::vector<Parameter> GetParameters() override;
 	void Regenerate() override;
 	std::string GetName() const override { return "Gothic Window"; }
+
+	// Load a v2 description file (src/cgmath/gothic-window-v2.schema) into the
+	// members : geometry (Fig 5.30) + style (per-field) + recursion + extrusion.
+	// Absent fields keep their current value. Returns false on parse error (the
+	// object is left usable — partially applied fields are harmless). Does NOT
+	// regenerate ; the caller runs Regenerate() as usual.
+	bool LoadFromJson(const std::string &jsonText);
+
+	// Serialize the current member values to a v2 description
+	// (src/cgmath/gothic-window-v2.schema) — the inverse of LoadFromJson, so the
+	// result re-imports to the same window. Pretty-printed JSON string.
+	std::string ExportJson() const;
 private:
 	// arch
 	float m_width = 200.f, m_excess = 1.0f, m_offsetOuter = 16.f, m_offsetInner = 10.f;
@@ -397,6 +409,7 @@ private:
 	float m_bodyHeight = 260.f;
 	// lancets
 	int   m_subCount = 2; float m_subDrop = 0.f, m_subExcess = 1.0f, m_gapFraction = 0.11f;
+	int   m_lancetLayout = 0;   // 0 = Uniform (count+1 equal mullions), 1 = Prototype (Havemann Fig 5.39)
 	// recursion : each lancet -> mini-window (sub-lancets + small rosette), 0..2
 	int   m_recursion = 0;
 	// lancet head : 0 = plain pointed, 1 = foiled (small foiled circle in the head)
@@ -412,6 +425,8 @@ private:
 	// fillets + mesh
 	bool  m_fillets = true;
 	float m_zHeight = 20.f;
+	// arc tessellation step (rad/segment) ; default 1°. Set from `kseg` on JSON load.
+	double m_maxAngleRad = 3.14159265358979323846 / 180.0;
 	// 3D moulding profile on the field borders : 0 = flat (straight walls),
 	// 1 = chamfer (bevelled/splayed openings). Phase 2.
 	int   m_profile = 1;

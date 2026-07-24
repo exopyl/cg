@@ -566,15 +566,23 @@ namespace
 		return out;
 	}
 
+	// Forward decl (defined below, near buildBayStonePolygon) : shape a spandrel field
+	// as an inscribed mouchette clipped to it. Same anonymous namespace ⇒ same entity.
+	PathsD mouchetteInField (const PathD &field, int mType, double sizeFactor,
+	                         Vector2d focus, double maxAngleRad);
+
 	// Recursively collect every GLASS void contour of a window unit (base arch
 	// `arch`). A unit is built like the whole window : sub-lancets (leaves get a
 	// foiled head, or recurse), a crowning daisy rosette, and corner fillets.
 	// The caller Differences these from the unit opening to get the stone.
 	// Degenerate sub-geometry is skipped (the buildXxx may throw on tiny arches).
+	// When `mouchettes`, the unit's corner fillets are shaped as inscribed
+	// mouchettes/soufflets (flamboyant), like the top-level ones.
 	void collectUnitVoids (const ArchGeom &arch, const ArchOffsetParams &off,
 	                       const SubwindowParams &sub, double sillY,
 	                       int remaining, int foilN, int foilType, double pointedness,
 	                       bool headFoiled, int headFoils, double filletInset,
+	                       bool mouchettes, int mouchetteType, double mouchetteSize,
 	                       double maxAngleRad, std::vector<PathD> &out)
 	{
 		ArchOffsetGeom o;
@@ -582,6 +590,7 @@ namespace
 		catch (...) { return; }
 
 		std::vector<Vector2d> openingV = archWithBody(archOutlineCcw(o.inner, maxAngleRad), sillY);
+		Vector2d filletFocus = o.inner.apex;   // mouchette apex points here (updated to the sub-oculus below)
 
 		if (remaining <= 0)
 		{
@@ -611,7 +620,8 @@ namespace
 			lo.outer = std::min(off.outer, 0.30 * r);
 			solids.push_back(toPathD(archWithBody(archOutlineCcw(l.arch, maxAngleRad), sillY)));
 			collectUnitVoids(l.arch, lo, sub, sillY, remaining - 1, foilN, foilType, pointedness,
-			                 headFoiled, headFoils, filletInset * 0.7, maxAngleRad, out);
+			                 headFoiled, headFoils, filletInset * 0.7,
+			                 mouchettes, mouchetteType, mouchetteSize, maxAngleRad, out);
 		}
 
 		// Crowning sub-rosette : passes through the two sub-lancet apexes and is
@@ -626,6 +636,7 @@ namespace
 			Circle rc = rosetteTangentToLancets(o.inner, axisX, subApex);
 			if (rc.radius > 3.0 && rc.center.y > subApex.y)
 			{
+				filletFocus = rc.center;                                            // mouchettes point at the sub-oculus
 				solids.push_back(circlePathD(rc.center, rc.radius, maxAngleRad));   // for corner fillets
 				for (auto &v : rosetteVoidContours(rc.center, rc.radius, foilN,
 				                                   foilType, pointedness, maxAngleRad))
@@ -633,11 +644,20 @@ namespace
 			}
 		}
 
-		// Corner fillets for this unit.
+		// Corner fillets for this unit (shaped as mouchettes when enabled).
 		if (filletInset > 0.0 && !solids.empty())
 		{
 			for (auto &f : filletPaths(toPathD(openingV), solids, filletInset))
-				if (f.size() >= 3) out.push_back(std::move(f));
+			{
+				if (f.size() < 3) continue;
+				if (mouchettes)
+				{
+					for (auto &s : mouchetteInField(f, mouchetteType, mouchetteSize, filletFocus, maxAngleRad))
+						if (s.size() >= 3) out.push_back(std::move(s));
+				}
+				else
+					out.push_back(std::move(f));
+			}
 		}
 	}
 }
@@ -671,6 +691,50 @@ Circle rosetteTangentToLancets (const ArchGeom &mainInner, double axisX,
 	return Circle(Vector2d(axisX, cy), r);
 }
 
+namespace
+{
+	// Inscribe a flamboyant mouchette into a spandrel FIELD polygon, clipped to the
+	// field so the resulting void never breaks the surrounding stone frame. Returns
+	// the plain field when it is too small to carry a shape. `focus` is the point the
+	// teardrop apex points at (the oculus centre).
+	PathsD mouchetteInField (const PathD &field, int mType, double sizeFactor,
+	                         Vector2d focus, double maxAngleRad)
+	{
+		std::vector<Vector2d> poly = fromPathD(field);
+		const int n = static_cast<int>(poly.size());
+		if (n < 3) return PathsD{ field };
+		const double area = std::fabs(signedAreaShoelace(poly));
+		const double PI = 3.14159265358979323846;
+		const double charR = std::sqrt(area / PI);
+		const double rm = sizeFactor * 0.9 * charR;
+		if (rm < 1.5) return PathsD{ field };                 // field too small to shape
+
+		Vector2d C(0.0, 0.0);
+		for (const auto &p : poly) { C.x += p.x; C.y += p.y; }
+		C.x /= n; C.y /= n;
+
+		const double rot = std::atan2(focus.y - C.y, focus.x - C.x);   // apex toward the oculus
+		MouchetteType mt = (mType == 0) ? MouchetteType::Vesica
+		                 : (mType == 2) ? MouchetteType::Soufflet
+		                                : MouchetteType::Teardrop;
+		MouchetteGeom mg;
+		try { mg = buildMouchette(mt, C, rm, rot); } catch (...) { return PathsD{ field }; }
+
+		std::vector<Vector2d> contour;
+		for (const Arc &a : mg.contour)
+		{
+			std::vector<Vector2d> pts = a.tessellateAdaptive(maxAngleRad);
+			for (size_t i = (contour.empty() ? 0 : 1); i < pts.size(); ++i)
+				contour.push_back(pts[i]);
+		}
+		if (contour.size() < 3) return PathsD{ field };
+
+		PathsD clipped = Intersect(PathsD{ toPathD(contour) }, PathsD{ field }, FillRule::NonZero);
+		if (clipped.empty()) return PathsD{ field };
+		return clipped;
+	}
+}
+
 Polygon2 buildBayStonePolygon (const WindowGeometry &geom, const GothicMeshParams &params)
 {
 	// Main inner-offset outline (CCW) : the INNER edge of the frame. It bounds
@@ -682,12 +746,20 @@ Polygon2 buildBayStonePolygon (const WindowGeometry &geom, const GothicMeshParam
 	// Tall-window body : extend the main frame and the lancets straight down
 	// below their springline. Without this, every opening is a bare pointed
 	// arch (squat "dome" look). The window bottom is `sillMain` ; lancets stop
-	// a `band` above it so a stone sill remains at the very bottom.
+	// a stone sill band above it so a stone sill remains at the very bottom.
+	//
+	// Havemann §5.4.2 (thesis Fig. 5.36, l.45) : the main frame bottom is at
+	// `heightBott`, and the sub-arches (lancets) bottom is `heightBott + bdOuter`,
+	// where bdOuter is the outer field offset (the single contiguous border-plane
+	// width, §5.4.1). So the sill band is one border-plane thick — a CONSTANT
+	// stone liseré aligned with the frame, NOT a fraction of the body height.
+	// bdOuter is recovered from the already-built offset geometry.
 	double footYmain  = mainOutline.empty() ? 0.0
 	                  : std::min(mainOutline.front().y, mainOutline.back().y);
 	double sillMain   = footYmain - params.bodyHeight;
-	double band       = 0.12 * params.bodyHeight;
-	double sillLancet = sillMain + band;
+	double bdOuter    = geom.mainOffset.outer.circleL.radius
+	                  - geom.mainArch.circleL.radius;   // = window.arch.offset.outer
+	double sillLancet = sillMain + std::max(0.0, bdOuter);
 	bool   wantBody   = params.bodyHeight > 1e-6;
 
 	std::vector<Vector2d> outer = wantBody ? archWithBody(mainOutline, sillMain)
@@ -760,6 +832,7 @@ Polygon2 buildBayStonePolygon (const WindowGeometry &geom, const GothicMeshParam
 			                 params.recursionDepth, params.recursionFoils,
 			                 params.rosetteFoilType, params.rosettePointedness,
 			                 params.lancetHeadFoiled, params.lancetHeadFoils, params.filletInset,
+			                 params.mouchettes, params.mouchetteType, params.mouchetteSize,
 			                 params.maxAngleRad, subVoids);
 			if (!subVoids.empty())
 			{
@@ -818,7 +891,17 @@ Polygon2 buildBayStonePolygon (const WindowGeometry &geom, const GothicMeshParam
 		for (auto &f : fillets)
 		{
 			if (f.size() < 3) continue;
-			pushAsHoleAnyOrientation(holes, fromPathD(f));   // fillet opening (void)
+			if (params.mouchettes)
+			{
+				// Flamboyant : void the field as an inscribed mouchette/soufflet
+				// (clipped to the field) instead of a plain fillet.
+				PathsD shaped = mouchetteInField(f, params.mouchetteType, params.mouchetteSize,
+				                                 geom.rosette.circle.center, params.maxAngleRad);
+				for (auto &s : shaped)
+					if (s.size() >= 3) pushAsHoleAnyOrientation(holes, fromPathD(s));
+			}
+			else
+				pushAsHoleAnyOrientation(holes, fromPathD(f));   // plain fillet opening (void)
 		}
 	}
 
@@ -1075,6 +1158,185 @@ void appendMesh (Mesh &dest, const Mesh &src)
 
 	dest.SetVertices(destNV + srcNV, verts.data());
 	dest.SetFaces(destNF + srcNF, 3, faces.data());
+}
+
+namespace
+{
+	// Sweep a closed profile along a POLYLINE path (line-segment analogue of
+	// sweepArcBuffers). Tangent at each vertex = central difference of the
+	// neighbours ; in-plane normal N = (T.y, -T.x). Profile point (u, v) maps to
+	// 3D = (P + v*scale_v*N, u*scale_u). Buffers are APPENDED (so several paths can
+	// be merged into one mesh). `closedPath` wraps the last vertex back to the first.
+	void sweepPolylineBuffers (const std::vector<Vector2d> &path, bool closedPath,
+	                           const std::vector<Vector2d> &profile,
+	                           double scale_u, double scale_v,
+	                           std::vector<float> &verts, std::vector<unsigned int> &faces)
+	{
+		const int N = static_cast<int>(path.size());
+		const int M = static_cast<int>(profile.size());
+		if (N < 2 || M < 3) return;
+		const size_t base = verts.size() / 3;
+
+		for (int i = 0; i < N; ++i)
+		{
+			Vector2d a = path[(i - 1 + N) % N];
+			Vector2d b = path[(i + 1) % N];
+			if (!closedPath) { if (i == 0) a = path[0]; if (i == N - 1) b = path[N - 1]; }
+			double tx = b.x - a.x, ty = b.y - a.y;
+			double L = std::sqrt(tx*tx + ty*ty);
+			if (L < 1e-12) { tx = 1.0; ty = 0.0; L = 1.0; }
+			tx /= L; ty /= L;
+			const double Nx = ty, Ny = -tx;
+			const Vector2d &P = path[i];
+			for (int j = 0; j < M; ++j)
+			{
+				verts.push_back(static_cast<float>(P.x + profile[j].y * scale_v * Nx));
+				verts.push_back(static_cast<float>(P.y + profile[j].y * scale_v * Ny));
+				verts.push_back(static_cast<float>(profile[j].x * scale_u));
+			}
+		}
+
+		const int segs = closedPath ? N : (N - 1);
+		for (int i = 0; i < segs; ++i)
+		{
+			const int i1 = (i + 1) % N;
+			for (int j = 0; j < M; ++j)
+			{
+				const int j1 = (j + 1) % M;
+				const unsigned int v00 = static_cast<unsigned int>(base + static_cast<size_t>(i)  * M + j);
+				const unsigned int v10 = static_cast<unsigned int>(base + static_cast<size_t>(i1) * M + j);
+				const unsigned int v11 = static_cast<unsigned int>(base + static_cast<size_t>(i1) * M + j1);
+				const unsigned int v01 = static_cast<unsigned int>(base + static_cast<size_t>(i)  * M + j1);
+				faces.push_back(v00); faces.push_back(v10); faces.push_back(v11);
+				faces.push_back(v00); faces.push_back(v11); faces.push_back(v01);
+			}
+		}
+	}
+}
+
+namespace
+{
+	// Recursively collect the STRUCTURAL opening outlines of a window unit for
+	// moulding : every sub-lancet frame (cusped/foiled head at the leaves) and each
+	// crowning sub-rosette rim, at every recursion level. Mirrors the structural
+	// part of collectUnitVoids so the beads track the sub-tracery exactly.
+	// Decorative voids (foils, fillets, rosette flower) are NOT moulded.
+	void collectMouldingOutlines (const ArchGeom &arch, const ArchOffsetParams &off,
+	                              const SubwindowParams &sub, double sillY, int remaining,
+	                              bool headFoiled, int headFoils, double maxAngleRad,
+	                              std::vector<std::vector<Vector2d>> &out)
+	{
+		if (remaining <= 0) return;
+		ArchOffsetGeom o;
+		try { o = buildArchOffset(arch, off); } catch (...) { return; }
+		SubwindowsGeom subs;
+		try { subs = buildSubwindows(arch, off, sub); } catch (...) { return; }
+
+		for (const auto &l : subs.lancets)
+		{
+			ArchOffsetParams lo = off;
+			const double r = l.arch.circleL.radius;
+			lo.inner = std::min(off.inner, 0.30 * r);
+			lo.outer = std::min(off.outer, 0.30 * r);
+			ArchOffsetGeom lOff;
+			try { lOff = buildArchOffset(l.arch, lo); } catch (...) { continue; }
+			const bool subLeaf = (remaining - 1 <= 0);
+			std::vector<Vector2d> opening =
+				(headFoiled && subLeaf)
+					? cuspedArchOutline(lOff.inner, headFoils, maxAngleRad)
+					: archOutlineCcw(lOff.inner, maxAngleRad);
+			opening = archWithBody(opening, sillY);
+			out.push_back(std::move(opening));
+			collectMouldingOutlines(l.arch, lo, sub, sillY, remaining - 1,
+			                        headFoiled, headFoils, maxAngleRad, out);
+		}
+
+		if (subs.lancets.size() == 2)
+		{
+			const double axisX = 0.5 * (o.inner.circleL.center.x + o.inner.circleR.center.x);
+			const Vector2d subApex = subs.lancets.back().offset.inner.apex;
+			Circle rc = rosetteTangentToLancets(o.inner, axisX, subApex);
+			if (rc.radius > 3.0 && rc.center.y > subApex.y)
+				out.push_back(circleOutlineCcw(rc, maxAngleRad));
+		}
+	}
+}
+
+void buildBayMoulding (const WindowGeometry &geom, const GothicMeshParams &params,
+                       const std::vector<Vector2d> &profile, Mesh &out)
+{
+	if (profile.size() < 3) return;
+
+	// Sill levels : recomputed identically to buildBayStonePolygon so the moulding
+	// tracks the EXACT opening outlines (incl. foiled heads and straight jambs).
+	std::vector<Vector2d> mainInner = archOutlineCcw(geom.mainOffset.inner, params.maxAngleRad);
+	const bool wantBody = params.bodyHeight > 1e-6;
+	const double footYmain = mainInner.empty() ? 0.0
+	                       : std::min(mainInner.front().y, mainInner.back().y);
+	const double sillMain   = footYmain - params.bodyHeight;
+	const double bdOuter    = geom.mainOffset.outer.circleL.radius - geom.mainArch.circleL.radius;
+	const double sillLancet = sillMain + std::max(0.0, bdOuter);
+
+	std::vector<float>        V;
+	std::vector<unsigned int> F;
+
+	// Profile extent : base plane z and half-width, used to rescale per outline.
+	const double PI = 3.14159265358979323846;
+	double zBase = profile[0].x, halfW = 0.0;
+	for (const auto &p : profile) { zBase = std::min(zBase, p.x); halfW = std::max(halfW, std::fabs(p.y)); }
+
+	// Emit one moulded bar along `outline`, with a pragmatic "stable extrusion"
+	// guard : the bar half-width may not exceed ~0.6 x the outline's characteristic
+	// radius, otherwise the swept section self-intersects on tight curvature (small
+	// recursion sub-tracery, tiny sub-rosettes). Below a fifth of that the feature
+	// is too small to carry the bar at all, so it is skipped rather than crushed.
+	auto emit = [&](const std::vector<Vector2d> &outline)
+	{
+		if (outline.size() < 3 || halfW < 1e-9) return;
+		const double charR = std::sqrt(std::fabs(signedAreaShoelace(outline)) / PI);
+		const double f = 0.6 * charR / halfW;
+		if (f < 0.2) return;                     // feature too small to mould
+		if (f >= 0.999) { sweepPolylineBuffers(outline, true, profile, 1.0, 1.0, V, F); return; }
+		std::vector<Vector2d> scaled;
+		scaled.reserve(profile.size());
+		for (const auto &q : profile)
+			scaled.push_back(Vector2d(zBase + (q.x - zBase) * f, q.y * f));
+		sweepPolylineBuffers(outline, true, scaled, 1.0, 1.0, V, F);
+	};
+
+	// Main frame inner edge (whole silhouette when a body is present).
+	emit(wantBody ? archWithBody(mainInner, sillMain) : mainInner);
+
+	// Lancets : follow the ACTUAL opening outline — cusped (foiled) head at depth 0,
+	// plain arch otherwise — exactly as buildBayStonePolygon cuts them. When a lancet
+	// recurses into a mini-window, also mould its sub-tracery frames + sub-rosettes.
+	for (const auto &l : geom.subwindows.lancets)
+	{
+		std::vector<Vector2d> opening =
+			(params.lancetHeadFoiled && params.recursionDepth < 1)
+				? cuspedArchOutline(l.offset.inner, params.lancetHeadFoils, params.maxAngleRad)
+				: archOutlineCcw(l.offset.inner, params.maxAngleRad);
+		if (wantBody) opening = archWithBody(opening, sillLancet);
+		emit(opening);
+
+		if (params.recursionDepth >= 1)
+		{
+			std::vector<std::vector<Vector2d>> subOutlines;
+			collectMouldingOutlines(l.arch, params.recursionOffset, params.recursionSub,
+			                        sillLancet, params.recursionDepth,
+			                        params.lancetHeadFoiled, params.lancetHeadFoils,
+			                        params.maxAngleRad, subOutlines);
+			for (const auto &so : subOutlines) emit(so);
+		}
+	}
+
+	// Rosette rim ring.
+	if (geom.hasRosette)
+		emit(circleOutlineCcw(geom.rosette.circle, params.maxAngleRad));
+
+	if (V.empty() || F.empty()) return;
+	out.SetVertices(static_cast<unsigned int>(V.size() / 3), V.data());
+	out.SetFaces   (static_cast<unsigned int>(F.size() / 3), 3, F.data());
 }
 
 void extrudeToMesh (Polygon2 &polygon, Mesh &out, double zBottom, double zTop)

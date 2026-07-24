@@ -1,0 +1,34 @@
+{
+  "schema": "gothic-window/v2",
+  "meta": {
+    "id": "high-gothic-2lancets",
+    "label": "High Gothic — 2 lancettes, rosace 6 foils, barres rondes",
+    "period": "XIIIe siecle"
+  },
+  "geometry": {
+    "width": 200,
+    "excess": 1.15,
+    "bdOuter": 16,
+    "bdInner": 10,
+    "heightBott": -260,
+    "kseg": 180,
+    "subwindows": {
+      "count": 2,
+      "arcDown": 0,
+      "excess": 1.0,
+      "layout": "prototype"
+    }
+  },
+  "style": {
+    "mainArch": { "profile": { "type": "roll" } },
+    "subArch":  { "profile": { "type": "roll" }, "head": { "type": "foiled", "foils": 4 } },
+    "rosette":  {
+      "present": true,
+      "profile": { "type": "roll" },
+      "foils": { "count": 6, "type": "pointed", "pointedness": 0.5, "orientation": "standing" }
+    },
+    "fillet":   { "fill": "mouchette", "mouchette": { "type": "soufflet", "size": 0.85 } }
+  },
+  "recursion": { "depth": 0 },
+  "extrusion": { "zHeight": 260 }
+}

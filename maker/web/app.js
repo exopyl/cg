@@ -16,9 +16,11 @@ const viewerEl  = el("viewer");
 const hintEl    = el("viewerHint");
 const bannerEl  = el("banner");
 const svgInput  = el("svgInput");
+const gothicJsonInput = el("gothicJsonInput");
 const downloadBtn = el("download");
 const downloadGlbBtn = el("downloadGlbBtn");
 const downloadStlBtn = el("downloadStlBtn");
+const exportGothicJsonBtn = el("exportGothicJsonBtn");
 const filenameInput = el("filename");
 const modelColorInput = el("modelColor");
 const bgColorInput = el("bgColor");
@@ -300,8 +302,11 @@ function scheduleUpdate(id) {
 // Affiche la forme `id` : en place (avec recadrage anime) si le viewer est deja
 // amorce -> aucun flicker au changement de forme ; sinon amorcage initial (un
 // unique reload de fichier au demarrage, pour capturer le mesh three.js).
-function applyShape(id) {
-  if (meshRef && GeomCtor && IdxAttrCtor) updateInPlace(id, true);
+function applyShape(id, forceBootstrap = false) {
+  // forceBootstrap : imports (JSON/SVG) → reload o3dv complet, qui recadre la
+  // caméra de façon fiable même sur un gros saut d'échelle (le refit animé de
+  // updateInPlace ne fit pas correctement cube~1 → fenêtre~500).
+  if (!forceBootstrap && meshRef && GeomCtor && IdxAttrCtor) updateInPlace(id, true);
   else firstRender(id);
 }
 
@@ -331,7 +336,24 @@ async function importSvg(file) {
   const opt = new Option(`SVG : ${file.name}`, "__svg__", true, true);
   catalogEl.appendChild(opt);
   buildPanel(id);
-  applyShape(id);
+  applyShape(id, true);   // import → bootstrap (recadrage caméra fiable)
+}
+
+// Import d'une Gothic Window depuis un fichier de description JSON (schema
+// gothic-window-v2) : parsé côté cgmesh, la géométrie est générée par l'engine.
+// Le panneau reflète les valeurs chargées (getParams lit les membres remplis).
+async function importGothicJson(file) {
+  const text = await file.text();
+  if (currentId !== -1) { Module.destroyShape(currentId); currentId = -1; }
+  const id = Module.createGothicFromJson(text);
+  if (id < 0) { statsEl.textContent = "JSON illisible"; return; }
+  currentId = id;
+  currentName = file.name.replace(/\.json$/i, "");
+  filenameInput.value = currentName;
+  const opt = new Option(`JSON : ${file.name}`, "__gothicjson__", true, true);
+  catalogEl.appendChild(opt);
+  buildPanel(id);
+  applyShape(id, true);   // import → bootstrap (recadrage caméra fiable)
 }
 
 // Amorcage initial UNIQUEMENT (premier affichage) : reload complet via o3dv, qui
@@ -349,6 +371,15 @@ function downloadObj() {
   if (currentId < 0) return;
   const obj = Module.regenerate(currentId); // OBJ courant a la demande
   saveBlob(new Blob([obj], { type: "text/plain" }), safeName(".obj"));
+}
+
+// Export du descripteur JSON (schema gothic-window-v2) reflétant les valeurs
+// courantes de l'UI. Vide si la forme active n'est pas une Gothic Window.
+function downloadGothicJson() {
+  if (currentId < 0) return;
+  const text = Module.exportGothicJson(currentId);
+  if (!text) { statsEl.textContent = "Export JSON : forme non gothique"; return; }
+  saveBlob(new Blob([text], { type: "application/json" }), safeName(".json"));
 }
 
 // --- Export GLB (glTF binaire) --------------------------------------------
@@ -498,9 +529,13 @@ async function main() {
   svgInput.addEventListener("change", () => {
     if (svgInput.files.length) importSvg(svgInput.files[0]);
   });
+  gothicJsonInput.addEventListener("change", () => {
+    if (gothicJsonInput.files.length) importGothicJson(gothicJsonInput.files[0]);
+  });
   downloadBtn.addEventListener("click", downloadObj);
   downloadGlbBtn.addEventListener("click", downloadGlb);
   downloadStlBtn.addEventListener("click", downloadStl);
+  exportGothicJsonBtn.addEventListener("click", downloadGothicJson);
   modelColorInput.addEventListener("input", applyModelColor);
   bgColorInput.addEventListener("input", applyBackground);
   wireframeInput.addEventListener("change", applyWireframe);

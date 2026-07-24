@@ -1,0 +1,67 @@
+{
+  "extrusion": {
+    "zHeight": 50.5
+  },
+  "geometry": {
+    "bdInner": 3.8,
+    "bdOuter": 7.0,
+    "excess": 1.42,
+    "heightBott": -339.0,
+    "kseg": 360,
+    "subwindows": {
+      "arcDown": 0.0,
+      "count": 2,
+      "excess": 2.005,
+      "gap": {
+        "gapFraction": 0.0243,
+        "mode": "fraction"
+      },
+      "layout": "uniform"
+    },
+    "width": 312.9
+  },
+  "recursion": {
+    "depth": 1
+  },
+  "schema": "gothic-window/v2",
+  "style": {
+    "fillet": {
+      "fill": "plain",
+      "mouchette": {
+        "size": 0.85,
+        "type": "soufflet"
+      }
+    },
+    "mainArch": {
+      "profile": {
+        "type": "ogee"
+      },
+      "trefoil": {
+        "enabled": false,
+        "foilRadiusFactor": 0.3,
+        "splitParameter": 0.45
+      }
+    },
+    "rosette": {
+      "foils": {
+        "count": 7,
+        "orientation": "standing",
+        "pointedness": 1.0747,
+        "type": "pointed"
+      },
+      "present": true,
+      "profile": {
+        "type": "ogee"
+      }
+    },
+    "subArch": {
+      "head": {
+        "foils": 7,
+        "type": "foiled"
+      },
+      "profile": {
+        "type": "ogee"
+      }
+    }
+  }
+}

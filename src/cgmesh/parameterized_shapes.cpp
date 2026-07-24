@@ -9,6 +9,8 @@
 #include "lsysteminit.h"
 #include "surface_architecture.h"
 #include "architecture_gothic.h"
+#include <nlohmann/json.hpp>
+#include <cmath>
 
 #include <stdio.h>
 #include <math.h>
@@ -735,9 +737,12 @@ std::vector<Parameter> ParameterizedGothicWindow::GetParameters()
 		Parameter::MakeFloat("Lancet drop",   &m_subDrop, 0.f, 100.f),
 		Parameter::MakeFloat("Lancet excess", &m_subExcess, 0.7f, 2.5f),
 		Parameter::MakeFloat("Gap fraction",  &m_gapFraction, 0.01f, 0.2f),
+		Parameter::MakeEnum ("Lancet layout", &m_lancetLayout, {"Uniform","Prototype"}),
 		// rosette + foils (les foils de LANCETTE ne sont pas exposes : les
 		// lancettes sont de simples arcs brises hauts, cf. buildBayStonePolygon)
 		Parameter::MakeBool ("Fillets",             &m_fillets),
+		Parameter::MakeBool ("Mouchettes",          &m_mouchettes),
+		Parameter::MakeEnum ("Mouchette type",      &m_mouchetteType, {"Vesica","Teardrop","Soufflet"}),
 		Parameter::MakeBool ("Rosette",             &m_rosette),
 		Parameter::MakeBool ("Rosette foils",       &m_rosetteFoils),
 		Parameter::MakeInt  ("Rosette foil count",  &m_rosetteFoilCount, 3, 24),
@@ -745,7 +750,7 @@ std::vector<Parameter> ParameterizedGothicWindow::GetParameters()
 		Parameter::MakeFloat("Rosette pointedness", &m_rosetteFoilPointed, 0.01f, 2.f),
 		// extrusion + profil de moulure (trefoil/mouchettes non exposes)
 		Parameter::MakeFloat("Extrusion (zHeight)", &m_zHeight, 0.f, 100.f),
-		Parameter::MakeEnum ("Profile",             &m_profile, {"Flat","Chamfer"}),
+		Parameter::MakeEnum ("Profile",             &m_profile, {"Flat","Chamfer","Roll bar","Keel bar","Ogee bar"}),
 	};
 }
 
@@ -784,6 +789,9 @@ void ParameterizedGothicWindow::Regenerate()
 		wi.subwindowParams.drop   = (m_subDrop < 0.f) ? 0.0 : (double)m_subDrop;
 		double subExcess = std::min(std::max((double)m_subExcess, 0.7), 2.5);
 		wi.subwindowParams.excess = subExcess;
+		wi.subwindowParams.layout = (m_lancetLayout == 1)
+			? SubwindowParams::Layout::Prototype
+			: SubwindowParams::Layout::Uniform;
 		wi.subwindowParams.gap.mode = SubwindowParams::Gap::Mode::Fraction;
 		double gapMax = 0.6 / (count + 1);   // conservateur : garde >= 40% de largeur aux lancettes
 		double gf = (double)m_gapFraction;
@@ -875,6 +883,7 @@ void ParameterizedGothicWindow::Regenerate()
 		}
 
 		GothicMeshParams mp;
+		mp.maxAngleRad = (m_maxAngleRad > 1e-4) ? m_maxAngleRad : (3.14159265358979323846 / 180.0);
 		mp.zHeight    = (m_zHeight    < 0.f) ? 0.0 : (double)m_zHeight;
 		mp.bodyHeight = (m_bodyHeight < 0.f) ? 0.0 : (double)m_bodyHeight;
 		// Recursion : reuse the same offset + subdivision on each sub-lancet.
@@ -888,6 +897,13 @@ void ParameterizedGothicWindow::Regenerate()
 		// Fillets (Phase 1) : corner fields via Clipper2, inset by the inner offset.
 		mp.fillets     = m_fillets;
 		mp.filletInset = (m_offsetInner < 1.f) ? 4.0 : (double)m_offsetInner;
+		// Flamboyant : shape the spandrel fields as mouchettes/soufflets (needs fillets on).
+		// Use a THIN frame bar (small inset) so the field ≈ the full spandrel and the
+		// inscribed mouchette nearly fills it, leaving only a slim stone bar around it.
+		mp.mouchettes    = m_mouchettes;
+		mp.mouchetteType = std::min(std::max(m_mouchetteType, 0), 2);
+		mp.mouchetteSize = 0.92;
+		if (m_mouchettes) mp.filletInset = std::min(mp.filletInset, 4.0);
 		// Foiled lancet heads (Phase 3).
 		mp.lancetHeadFoiled = (m_lancetHead == 1);
 		mp.lancetHeadFoils  = std::min(std::max(m_lancetHeadFoils, 3), 8);
@@ -912,6 +928,50 @@ void ParameterizedGothicWindow::Regenerate()
 				catch (...) { profiled = false; }
 			}
 			if (!profiled) extrudeToMesh(poly, *m, 0.0, mp.zHeight);
+
+			// Profile bars (Phase 2b, Havemann §5.4.1 "french style", Fig 5.28 d) : on
+			// top of the flat plate, sweep a bar cross-section along the ACTUAL opening
+			// outlines (main frame, lancets incl. foiled heads + jambs, recursion sub-
+			// tracery, rosette rim) via buildBayMoulding. Profile library : 2 = Roll
+			// (half-round bead), 3 = Keel (pointed ridge), 4 = Ogee (symmetric cyma).
+			// Corner mitring is deferred (open joints for now).
+			if (m_profile >= 2)
+			{
+				const double PI = 3.14159265358979323846;
+				double rb = std::min(0.5 * mp.filletInset, 0.45 * (double)m_offsetInner + 1.5);
+				if (rb < 0.8) rb = 0.8;
+				const double zF = mp.zHeight;
+
+				// Closed cross-section in (u = z, v = in-plane) : flat base on the front
+				// face (z = zF), molding proud toward +z. Symmetric in v (a bar).
+				std::vector<Vector2d> profile;
+				if (m_profile == 3)          // Keel : pointed ridge
+				{
+					profile = { Vector2d(zF, rb), Vector2d(zF + 1.2 * rb, 0.0), Vector2d(zF, -rb) };
+				}
+				else if (m_profile == 4)     // Ogee : symmetric cyma (smoothstep flanks)
+				{
+					const int ns = 6;
+					for (int k = 0; k <= ns; ++k)
+					{ double s = (double)k/ns; double h = rb*(3*s*s - 2*s*s*s); profile.push_back(Vector2d(zF + h,  rb*(1.0-s))); }
+					for (int k = ns - 1; k >= 0; --k)
+					{ double s = (double)k/ns; double h = rb*(3*s*s - 2*s*s*s); profile.push_back(Vector2d(zF + h, -rb*(1.0-s))); }
+				}
+				else                          // Roll (m_profile==2) : half-round bead
+				{
+					const int ns = 12;
+					for (int k = 0; k <= ns; ++k)
+					{ double th = PI * (double)k/ns; profile.push_back(Vector2d(zF + rb*std::sin(th), rb*std::cos(th))); }
+				}
+
+				try
+				{
+					Mesh beads;
+					buildBayMoulding(geom, mp, profile, beads);
+					appendMesh(*m, beads);
+				}
+				catch (...) { /* degenerate outline : keep the flat plate only */ }
+			}
 		}
 		else tessellateToMesh(poly, *m, 0.0);
 		m->ComputeNormals();
@@ -922,4 +982,179 @@ void ParameterizedGothicWindow::Regenerate()
 		// Combinaison de parametres invalide (les buildXxx lancent) -> placeholder.
 		m_pMesh = placeholder();
 	}
+}
+
+bool ParameterizedGothicWindow::LoadFromJson(const std::string &jsonText)
+{
+	using nlohmann::json;
+	json j;
+	try { j = json::parse(jsonText); }
+	catch (...) { return false; }
+
+	auto profileIndex = [](const std::string &t) -> int {
+		if (t == "flat")    return 0;
+		if (t == "chamfer") return 1;
+		if (t == "roll")    return 2;
+		if (t == "keel")    return 3;
+		if (t == "ogee")    return 4;
+		return 2;   // default : roll bar
+	};
+
+	try
+	{
+		// --- geometry (Fig 5.30) -----------------------------------------
+		if (j.contains("geometry") && j["geometry"].is_object())
+		{
+			const json &g = j["geometry"];
+			m_width       = (float) g.value("width",   (double)m_width);
+			m_excess      = (float) g.value("excess",  (double)m_excess);
+			m_offsetOuter = (float) g.value("bdOuter", (double)m_offsetOuter);
+			m_offsetInner = (float) g.value("bdInner", (double)m_offsetInner);
+
+			// heightBott = niveau Y du bas (springline a y=0) -> body height = -heightBott.
+			if (g.contains("heightBott") && g["heightBott"].is_number())
+			{
+				double body = -g["heightBott"].get<double>();
+				m_bodyHeight = (float)(body > 0.0 ? body : 0.0);
+			}
+			// kseg = segments par cercle complet -> pas angulaire.
+			if (g.contains("kseg") && g["kseg"].is_number())
+			{
+				double k = g["kseg"].get<double>();
+				if (k >= 3.0) m_maxAngleRad = 2.0 * 3.14159265358979323846 / k;
+			}
+			if (g.contains("subwindows") && g["subwindows"].is_object())
+			{
+				const json &s = g["subwindows"];
+				m_subCount  =        s.value("count",   m_subCount);
+				m_subDrop   = (float) s.value("arcDown", (double)m_subDrop);
+				m_subExcess = (float) s.value("excess",  (double)m_subExcess);
+				m_lancetLayout = (s.value("layout", std::string("prototype")) == "uniform") ? 0 : 1;
+				if (s.contains("gap") && s["gap"].is_object())
+					m_gapFraction = (float) s["gap"].value("gapFraction", (double)m_gapFraction);
+			}
+		}
+
+		// --- style (dict de 4 fonctions de champ) ------------------------
+		if (j.contains("style") && j["style"].is_object())
+		{
+			const json &st = j["style"];
+			// Profil : aujourd'hui GLOBAL -> pris sur mainArch (§5.2 pour le par-champ).
+			if (st.contains("mainArch") && st["mainArch"].is_object())
+			{
+				const json &ma = st["mainArch"];
+				if (ma.contains("profile") && ma["profile"].is_object())
+					m_profile = profileIndex(ma["profile"].value("type", std::string("roll")));
+				if (ma.contains("trefoil") && ma["trefoil"].is_object())
+				{
+					const json &tf = ma["trefoil"];
+					m_archTrefoil       =        tf.value("enabled", m_archTrefoil);
+					m_trefoilSplit      = (float) tf.value("splitParameter",   (double)m_trefoilSplit);
+					m_trefoilFoilRadius = (float) tf.value("foilRadiusFactor", (double)m_trefoilFoilRadius);
+				}
+			}
+			if (st.contains("subArch") && st["subArch"].is_object()
+			    && st["subArch"].contains("head") && st["subArch"]["head"].is_object())
+			{
+				const json &h = st["subArch"]["head"];
+				m_lancetHead      = (h.value("type", std::string("foiled")) == "plain") ? 0 : 1;
+				m_lancetHeadFoils = h.value("foils", m_lancetHeadFoils);
+			}
+			if (st.contains("rosette") && st["rosette"].is_object())
+			{
+				const json &r = st["rosette"];
+				m_rosette = r.value("present", m_rosette);
+				if (r.contains("foils") && r["foils"].is_object())
+				{
+					const json &f = r["foils"];
+					m_rosetteFoils       = true;
+					m_rosetteFoilCount   = f.value("count", m_rosetteFoilCount);
+					m_rosetteFoilType    = (f.value("type", std::string("round")) == "pointed") ? 1 : 0;
+					m_rosetteFoilPointed = (float) f.value("pointedness", (double)m_rosetteFoilPointed);
+				}
+				else m_rosetteFoils = false;
+			}
+			if (st.contains("fillet") && st["fillet"].is_object())
+			{
+				const json &fi = st["fillet"];
+				m_fillets    = true;
+				m_mouchettes = (fi.value("fill", std::string("plain")) == "mouchette");
+				if (fi.contains("mouchette") && fi["mouchette"].is_object())
+				{
+					std::string mt = fi["mouchette"].value("type", std::string("soufflet"));
+					m_mouchetteType = (mt == "vesica") ? 0 : (mt == "teardrop") ? 1 : 2;
+				}
+			}
+		}
+
+		// --- recursion / extrusion --------------------------------------
+		if (j.contains("recursion") && j["recursion"].is_object())
+			m_recursion = j["recursion"].value("depth", m_recursion);
+		if (j.contains("extrusion") && j["extrusion"].is_object())
+			m_zHeight = (float) j["extrusion"].value("zHeight", (double)m_zHeight);
+	}
+	catch (...) { return false; }
+
+	return true;
+}
+
+std::string ParameterizedGothicWindow::ExportJson() const
+{
+	using nlohmann::json;
+	auto R = [](double v) { return std::round(v * 1e4) / 1e4; };   // arrondi lisible
+	auto profileName = [](int p) -> std::string {
+		switch (p) { case 0: return "flat"; case 1: return "chamfer";
+		             case 3: return "keel"; case 4: return "ogee"; default: return "roll"; }
+	};
+	const std::string prof = profileName(m_profile);   // profil GLOBAL (émis par champ)
+
+	json j;
+	j["schema"] = "gothic-window/v2";
+
+	json &g = j["geometry"];
+	g["width"]      = R(m_width);
+	g["excess"]     = R(m_excess);
+	g["bdOuter"]    = R(m_offsetOuter);
+	g["bdInner"]    = R(m_offsetInner);
+	g["heightBott"] = R(-m_bodyHeight);   // inverse de LoadFromJson (bodyHeight = -heightBott)
+	if (m_maxAngleRad > 1e-6)
+		g["kseg"] = (int) std::lround(2.0 * 3.14159265358979323846 / m_maxAngleRad);
+
+	json &sw = g["subwindows"];
+	sw["count"]   = m_subCount;
+	sw["arcDown"] = R(m_subDrop);
+	sw["excess"]  = R(m_subExcess);
+	sw["layout"]  = (m_lancetLayout == 0) ? "uniform" : "prototype";
+	if (m_lancetLayout == 0)
+		sw["gap"] = json{ {"mode", "fraction"}, {"gapFraction", R(m_gapFraction)} };
+
+	json &st = j["style"];
+	st["mainArch"]["profile"]["type"] = prof;
+	st["mainArch"]["trefoil"] = json{
+		{"enabled", m_archTrefoil},
+		{"splitParameter", R(m_trefoilSplit)},
+		{"foilRadiusFactor", R(m_trefoilFoilRadius)} };
+	st["subArch"]["profile"]["type"] = prof;
+	st["subArch"]["head"] = json{
+		{"type", (m_lancetHead == 0) ? "plain" : "foiled"},
+		{"foils", m_lancetHeadFoils} };
+	json &ros = st["rosette"];
+	ros["present"] = m_rosette;
+	ros["profile"]["type"] = prof;
+	if (m_rosetteFoils)
+		ros["foils"] = json{
+			{"count", m_rosetteFoilCount},
+			{"type", (m_rosetteFoilType == 1) ? "pointed" : "round"},
+			{"pointedness", R(m_rosetteFoilPointed)},
+			{"orientation", "standing"} };
+	json &fi = st["fillet"];
+	fi["fill"] = m_mouchettes ? "mouchette" : "plain";
+	fi["mouchette"] = json{
+		{"type", (m_mouchetteType == 0) ? "vesica" : (m_mouchetteType == 1) ? "teardrop" : "soufflet"},
+		{"size", 0.85} };
+
+	j["recursion"]["depth"] = m_recursion;
+	j["extrusion"]["zHeight"] = R(m_zHeight);
+
+	return j.dump(2);
 }

@@ -758,6 +758,72 @@ TEST(TEST_cgmath_architecture_gothic, SubwindowsOffsetTooLargeForSubarchThrows)
                  std::invalid_argument);
 }
 
+TEST(TEST_cgmath_architecture_gothic, PrototypeLayoutMatchesHavemannFig539)
+{
+    // Havemann §5.4.2 / Fig 5.39, two-lancet prototype : the outer lancet feet are
+    // inset by bdOuter from the main opening, separated by a SINGLE central mullion
+    // of width bdInner (no gap at the ends).
+    const double bdOuter = 16.0, bdInner = 10.0;
+    ArchGeom main = buildArch(makeBasis(1.2));
+
+    ArchOffsetParams off; off.outer = bdOuter; off.inner = bdInner;
+    SubwindowParams sp;
+    sp.count  = 2;
+    sp.drop   = 0.0;
+    sp.excess = 1.0;
+    sp.layout = SubwindowParams::Layout::Prototype;
+
+    SubwindowsGeom sw = buildSubwindows(main, off, sp);
+    ASSERT_EQ(sw.lancets.size(), 2u);
+
+    const double mainLeftFoot  = main.circleR.center.x - main.circleR.radius;
+    const double mainRightFoot = mainLeftFoot + main.width;
+
+    // Outer feet inset by bdOuter.
+    EXPECT_NEAR(sw.lancets.front().basis.pL.x, mainLeftFoot  + bdOuter, 1e-6);
+    EXPECT_NEAR(sw.lancets.back().basis.pR.x,  mainRightFoot - bdOuter, 1e-6);
+
+    // Single central mullion of width bdInner.
+    const double mullion = sw.lancets.back().basis.pL.x - sw.lancets.front().basis.pR.x;
+    EXPECT_NEAR(mullion, bdInner, 1e-6);
+    EXPECT_NEAR(sw.gapWidth, bdInner, 1e-6);
+
+    // Equal, symmetric lancets.
+    EXPECT_NEAR(sw.lancets.front().subWidth, sw.lancets.back().subWidth, 1e-6);
+    EXPECT_NEAR(sw.lancets.front().center.x, -sw.lancets.back().center.x, 1e-6);
+}
+
+TEST(TEST_cgmath_architecture_gothic, SouffletIsCurvilinearTriangle)
+{
+    // The Soufflet is a Reuleaux rounded triangle : 3 convex arcs, vertices on the
+    // circumradius, each arc radius = side length (r*sqrt3), one vertex along rotation.
+    const Vector2d C(10.0, 20.0);
+    const double r = 5.0, rot = 0.0;
+    MouchetteGeom m = buildMouchette(MouchetteType::Soufflet, C, r, rot);
+
+    ASSERT_EQ(m.contour.size(), 3u);
+    for (const Arc &a : m.contour)
+    {
+        EXPECT_NEAR(Vector2d::Distance(a.pointAt(0.0), C), r, 1e-6);
+        EXPECT_NEAR(Vector2d::Distance(a.pointAt(1.0), C), r, 1e-6);
+        EXPECT_NEAR(a.circle.radius, r * std::sqrt(3.0), 1e-6);   // constant-width
+    }
+    // Closed loop : end of arc i coincides with start of arc i+1.
+    for (int i = 0; i < 3; ++i)
+        EXPECT_NEAR(Vector2d::Distance(m.contour[i].pointAt(1.0),
+                                       m.contour[(i + 1) % 3].pointAt(0.0)), 0.0, 1e-6);
+    // A vertex points along `rotation` (toward the oculus) : (C.x + r, C.y) for rot=0.
+    bool vertexAlongRot = false;
+    for (const Arc &a : m.contour)
+        for (double t : {0.0, 1.0})
+        {
+            Vector2d p = a.pointAt(t);
+            if (std::fabs(p.x - (C.x + r)) < 1e-6 && std::fabs(p.y - C.y) < 1e-6)
+                vertexAlongRot = true;
+        }
+    EXPECT_TRUE(vertexAlongRot);
+}
+
 //
 // Rosette (A4)
 //
@@ -798,10 +864,45 @@ TEST(TEST_cgmath_architecture_gothic, RosetteTangentExternalToSubArc)
     RosetteGeom r = buildRosette(main, sw);
 
     const LancetGeom &right = sw.lancets.back();
-    Vector2d F2 = right.arch.circleL.center;
-    double rSub = right.arch.circleL.radius;
+    // circleR hosts the lancet's axis-facing arc (arcRight) — the arc that bounds
+    // the rosette field. See buildRosette / RosetteTangentPointLiesOnVisibleSubArc.
+    Vector2d F2 = right.arch.circleR.center;
+    double rSub = right.arch.circleR.radius;
     // External tangency : dist(mC, F2) - r_sub == r_ros
     EXPECT_NEAR(Vector2d::Distance(r.center, F2) - rSub, r.radius, 1e-9);
+}
+
+TEST(TEST_cgmath_architecture_gothic, RosetteTangentPointLiesOnVisibleSubArc)
+{
+    // The rosette must be tangent to the sub-arch arc that actually FACES it :
+    // the axis-facing (inner) arc of the rightmost lancet. By the archFromConstruction
+    // convention, that arc is `arcRight`, hosted on circleR (the lancet's outer-foot
+    // circle) — arcLeft (on circleL) is the far side, turned away from the rosette.
+    // Regression guard : buildRosette used circleL as the focal circle, so its
+    // tangency landed on the PHANTOM extension of circleL, not on any drawn arc.
+    ArchGeom main = buildArch(makeBasis(1.2));
+    SubwindowsGeom sw = typicalSubwindows(main);
+    RosetteGeom r = buildRosette(main, sw);
+
+    const LancetGeom &right   = sw.lancets.back();
+    const Arc        &facing  = right.arch.arcRight;      // axis-facing visible arc
+    Vector2d          F       = facing.circle.center;
+    double            rSub    = facing.circle.radius;
+
+    // External tangency to the facing arc's circle : dist(mC, F) - rSub == r_ros.
+    double d = Vector2d::Distance(r.center, F);
+    EXPECT_NEAR(d - rSub, r.radius, 1e-6);
+
+    // ...and the contact point must lie on the DRAWN arc, not its phantom extension.
+    // Arc has no contains(), so sample it densely : if the contact is within the
+    // arc's angular span the nearest sample is ~0 away ; if it fell beyond an
+    // endpoint (phantom extension) the nearest sample is the endpoint, far off.
+    Vector2d contact = F + (r.center - F) * (rSub / d);
+    std::vector<Vector2d> samples = facing.tessellate(2000);
+    double minDist = std::numeric_limits<double>::max();
+    for (const Vector2d &p : samples)
+        minDist = std::min(minDist, Vector2d::Distance(p, contact));
+    EXPECT_LT(minDist, 1e-2);   // contact lies on the visible sub-arc
 }
 
 TEST(TEST_cgmath_architecture_gothic, RosetteCenterOnSymmetryAxis)
@@ -859,8 +960,8 @@ TEST(TEST_cgmath_architecture_gothic, RosetteFocalSumIsMainPlusSubRadii)
     RosetteGeom r = buildRosette(main, sw);
 
     Vector2d F1 = main.circleR.center;
-    Vector2d F2 = sw.lancets.back().arch.circleL.center;
-    double expectedSum = main.circleR.radius + sw.lancets.back().arch.circleL.radius;
+    Vector2d F2 = sw.lancets.back().arch.circleR.center;
+    double expectedSum = main.circleR.radius + sw.lancets.back().arch.circleR.radius;
 
     double d1 = Vector2d::Distance(r.center, F1);
     double d2 = Vector2d::Distance(r.center, F2);
