@@ -4,6 +4,7 @@
 #include "surface_parametric.h"
 #include "voxels_menger_sponge.h"
 #include "import_svg.h"
+#include "image_relief.h"
 #include "surface_implicit.h"
 #include "surface_implicit_tandem.h"
 #include "lsysteminit.h"
@@ -497,6 +498,62 @@ void ParameterizedSvgExtrusion::Regenerate()
 	m_pMesh = import_svg_extruded(m_filename, opt);
 	if (m_pMesh)
 		m_pMesh->ComputeNormals();
+}
+
+// ===========================================================================
+// Image -> coloured relief
+// ===========================================================================
+
+ParameterizedImageRelief::ParameterizedImageRelief(const std::string& filename)
+	: m_filename(filename)
+{
+	Regenerate();
+}
+
+std::vector<Parameter> ParameterizedImageRelief::GetParameters()
+{
+	return {
+		Parameter::MakeInt  ("Max colors",      &m_maxColors, 2, 64),
+		Parameter::MakeEnum ("Quantization",    &m_algo, { "Wu", "Heckbert" }),
+		Parameter::MakeFloat("Simplify err",    &m_simplifyErr,   0.1f,  5.f),
+		Parameter::MakeInt  ("Pre-smooth",      &m_preSmooth,     0,     4),
+		Parameter::MakeInt  ("Refine palette",  &m_refine,        0,     12),
+		Parameter::MakeInt  ("Despeckle",       &m_despeckle,     0,     6),
+		Parameter::MakeInt  ("Min region area", &m_minRegionArea, 0,     400),
+		Parameter::MakeFloat("Shrink (px)",     &m_shrink,        0.f,   10.f),
+		Parameter::MakeFloat("Fit size",        &m_fitSize,       0.1f,  100.f),
+		Parameter::MakeFloat("Block height",    &m_blockHeight,   0.001f, 20.f),
+		Parameter::MakeFloat("Base thickness",  &m_baseThickness, 0.001f, 20.f),
+		Parameter::MakeFloat("Margin",          &m_margin,        0.f,    20.f),
+		Parameter::MakeFloat("Wall thickness",  &m_wallThickness, 0.001f, 20.f),
+		Parameter::MakeFloat("Wall height",     &m_wallHeight,    0.001f, 20.f),
+		Parameter::MakeBool ("Internal walls",  &m_internalWalls),
+	};
+}
+
+void ParameterizedImageRelief::Regenerate()
+{
+	delete m_pMesh;
+
+	ImageReliefOptions opt;
+	opt.maxColors     = m_maxColors;
+	opt.algo          = (m_algo == 1) ? QuantAlgo::Heckbert : QuantAlgo::Wu;
+	opt.simplifyErr      = m_simplifyErr;
+	opt.preSmoothPasses  = m_preSmooth;
+	opt.refineIterations = m_refine;
+	opt.despecklePasses  = m_despeckle;
+	opt.minRegionArea    = m_minRegionArea;
+	opt.shrink           = m_shrink;
+	opt.fitSize          = m_fitSize;
+	opt.blockHeight   = m_blockHeight;
+	opt.baseThickness = m_baseThickness;
+	opt.margin        = m_margin;
+	opt.wallThickness = m_wallThickness;
+	opt.wallHeight    = m_wallHeight;
+	opt.emitInternalWalls = m_internalWalls;
+
+	// image_to_relief() already computes the normals and the bbox.
+	m_pMesh = image_to_relief(m_filename, opt);
 }
 
 // ===========================================================================

@@ -1,19 +1,13 @@
 #include "import_svg.h"
 
+#include "extrude_contours.h"
 #include "mesh.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstdint>
 #include <cstdio>
-#include <functional>
-#include <unordered_map>
-#include <utility>
 #include <vector>
-
-extern "C" {
-#include "../../extern/glutess/glutess.h"
-}
 
 // nanosvg is a single-header library; expand its implementation here.
 #define NANOSVG_IMPLEMENTATION
@@ -98,351 +92,43 @@ std::vector<std::array<float, 2>> flattenPath(const NSVGpath* path, float tol)
 }
 
 // ============================================================================
-//  Tessellation (glutess) — flat-region triangle list
+//  Pixel space -> world XY
 // ============================================================================
 //
-// We feed all contours of a shape into a single gluTess polygon so the
-// NONZERO winding rule applies (SVG holes are inner contours of opposite
-// orientation). Output is a flat list of 2D vertex indices, three per
-// emitted triangle, referencing a per-shape index table built below.
+// The extrusion primitive (extrude_contours.h) expects contours already in
+// final world XY, so the recentering / fitting / Y flip all happen here, on the
+// flattened contour points, before anything is tessellated. A uniform positive
+// scale followed by a Y flip is orientation-consistent, and the primitive
+// derives cap and wall orientation from the world geometry itself, so doing this
+// before rather than after tessellation is equivalent.
 
-struct TessOut
+// Recenter on the XY bbox and scale so the longest XY dimension equals 1.0
+// (consistent with the other parameterized geometries in sinaia).
+void recenterAndFit(std::vector<std::vector<std::array<float, 2>>>& shapes)
 {
-    // Pool of unique 2D positions for the shape (filled as we feed contours).
-    std::vector<std::array<float, 2>> verts;
-
-    // Indices of emitted triangles, three per triangle. Indices reference
-    // `verts`.
-    std::vector<unsigned int> tris;
-
-    // Per-triangle batching helpers (the GL_TRIANGLES edge-flag forces
-    // glutess into triangle-list mode, so this is straightforward).
-    unsigned int triBuf[3] = { 0, 0, 0 };
-    int triCount = 0;
-
-    bool combineHit = false;
-};
-
-void GLAPIENTRY svgTessBeginCB(GLenum /*type*/, void* userData)
-{
-    static_cast<TessOut*>(userData)->triCount = 0;
-}
-
-void GLAPIENTRY svgTessVertexCB(void* vertexData, void* userData)
-{
-    auto* ctx = static_cast<TessOut*>(userData);
-    const unsigned int idx = (unsigned int)(uintptr_t)vertexData;
-    ctx->triBuf[ctx->triCount++] = idx;
-    if (ctx->triCount == 3)
-    {
-        const bool poisoned = (ctx->triBuf[0] == ~0u
-                            || ctx->triBuf[1] == ~0u
-                            || ctx->triBuf[2] == ~0u);
-        if (!poisoned)
+    bool any = false;
+    float minX = 0.f, minY = 0.f, maxX = 0.f, maxY = 0.f;
+    for (const auto& pts : shapes)
+        for (const auto& v : pts)
         {
-            ctx->tris.push_back(ctx->triBuf[0]);
-            ctx->tris.push_back(ctx->triBuf[1]);
-            ctx->tris.push_back(ctx->triBuf[2]);
+            if (!any) { minX = maxX = v[0]; minY = maxY = v[1]; any = true; continue; }
+            minX = std::min(minX, v[0]); maxX = std::max(maxX, v[0]);
+            minY = std::min(minY, v[1]); maxY = std::max(maxY, v[1]);
         }
-        ctx->triCount = 0;
-    }
-}
+    if (!any) return;
 
-void GLAPIENTRY svgTessEndCB(void* /*userData*/) {}
-void GLAPIENTRY svgTessEdgeFlagCB(GLboolean /*flag*/, void* /*userData*/) {}
-
-void GLAPIENTRY svgTessCombineCB(GLdouble newCoords[3], void* /*data*/[4],
-                                 GLfloat /*weight*/[4], void** outData,
-                                 void* userData)
-{
-    // For SVG paths with edge intersections (rare but legal), glutess
-    // wants to introduce a new vertex. Append it to our pool so the
-    // tessellation references a valid slot instead of a poison sentinel.
-    auto* ctx = static_cast<TessOut*>(userData);
-    ctx->combineHit = true;
-    ctx->verts.push_back({ (float)newCoords[0], (float)newCoords[1] });
-    *outData = (void*)(uintptr_t)(ctx->verts.size() - 1);
-}
-
-void GLAPIENTRY svgTessErrorCB(GLenum errnum, void* /*userData*/)
-{
-    std::fprintf(stderr, "import_svg: glutess error 0x%x\n", (unsigned)errnum);
-}
-
-// Tessellate all contours of `shape` into `out`. Each contour's points are
-// added to out.verts, contour edges are remembered in `outlineEdges` (pairs
-// of vertex indices) so we can build extrusion walls afterwards.
-void tessellateShape(const NSVGshape* shape, float flattenTol,
-                     TessOut& out,
-                     std::vector<std::pair<unsigned int, unsigned int>>& outlineEdges)
-{
-    GLUtesselator* tess = gluNewTess();
-    if (!tess) return;
-    gluTessCallback(tess, GLU_TESS_BEGIN_DATA,     (_GLUfuncptr)svgTessBeginCB);
-    gluTessCallback(tess, GLU_TESS_VERTEX_DATA,    (_GLUfuncptr)svgTessVertexCB);
-    gluTessCallback(tess, GLU_TESS_END_DATA,       (_GLUfuncptr)svgTessEndCB);
-    gluTessCallback(tess, GLU_TESS_EDGE_FLAG_DATA, (_GLUfuncptr)svgTessEdgeFlagCB);
-    gluTessCallback(tess, GLU_TESS_COMBINE_DATA,   (_GLUfuncptr)svgTessCombineCB);
-    gluTessCallback(tess, GLU_TESS_ERROR_DATA,     (_GLUfuncptr)svgTessErrorCB);
-
-    if (shape->fillRule == NSVG_FILLRULE_EVENODD)
-        gluTessProperty(tess, GLU_TESS_WINDING_RULE, GLU_TESS_WINDING_ODD);
-    else
-        gluTessProperty(tess, GLU_TESS_WINDING_RULE, GLU_TESS_WINDING_NONZERO);
-
-    // Stable storage for the GLdoubles handed to gluTessVertex (glutess
-    // keeps pointers across the polygon).
-    std::vector<std::array<GLdouble, 3>> coordPool;
-    // Reserve a generous upper bound; we'll only push what we need.
-    {
-        size_t expected = 0;
-        for (const NSVGpath* p = shape->paths; p; p = p->next)
-            expected += (size_t)std::max(0, p->npts);
-        coordPool.reserve(expected * 4);
-    }
-
-    gluTessBeginPolygon(tess, &out);
-    for (const NSVGpath* path = shape->paths; path; path = path->next)
-    {
-        auto pts = flattenPath(path, flattenTol);
-        if (pts.size() < 3) continue;
-
-        const unsigned int contourStart = (unsigned int)out.verts.size();
-        out.verts.insert(out.verts.end(), pts.begin(), pts.end());
-
-        gluTessBeginContour(tess);
-        for (size_t i = 0; i < pts.size(); ++i)
-        {
-            coordPool.push_back({ (GLdouble)pts[i][0], (GLdouble)pts[i][1], 0.0 });
-            gluTessVertex(tess, coordPool.back().data(),
-                          (void*)(uintptr_t)(contourStart + (unsigned int)i));
-        }
-        gluTessEndContour(tess);
-
-        // Record outline edges for wall construction.
-        const unsigned int n = (unsigned int)pts.size();
-        for (unsigned int i = 0; i < n; ++i)
-            outlineEdges.emplace_back(contourStart + i,
-                                       contourStart + ((i + 1) % n));
-    }
-    gluTessEndPolygon(tess);
-
-    gluDeleteTess(tess);
-}
-
-// ============================================================================
-//  Mesh assembly: bottom cap + top cap + side walls
-// ============================================================================
-
-Mesh* buildExtrudedMesh(const std::vector<std::array<float, 2>>& verts2D,
-                       const std::vector<unsigned int>& bottomTris,
-                       const std::vector<std::pair<unsigned int, unsigned int>>& outlineEdges,
-                       float height,
-                       bool invertY)
-{
-    if (verts2D.empty() || bottomTris.empty()) return nullptr;
-
-    auto* m = new Mesh();
-
-    const unsigned int n = (unsigned int)verts2D.size();
-    // Disjoint vertex blocks so cap normals don't get averaged with wall
-    // normals by Mesh::ComputeNormals. The VBO renderer feeds the per-vertex
-    // normal to the GPU for triangles (Mesh::BuildPolygonRenderData routes
-    // n==3 faces through the shared topology slots), so even GL_FLAT picks
-    // up the per-vertex average of the provoking vertex. Sharing cap and
-    // wall corners would tilt every cap-boundary normal toward the local
-    // wall direction and produce visibly non-uniform top/bottom shading.
-    //
-    //   [   0 ..  n-1] : bottom cap  (z = 0)
-    //   [   n .. 2n-1] : top    cap  (z = h)
-    //   [  2n .. 3n-1] : bottom wall (z = 0)
-    //   [  3n .. 4n-1] : top    wall (z = h)
-    const unsigned int kBotCap  = 0;
-    const unsigned int kTopCap  = n;
-    const unsigned int kBotWall = 2u * n;
-    const unsigned int kTopWall = 3u * n;
-    const unsigned int nVertsTotal = 4u * n;
-    const unsigned int nFacesTotal =
-        (unsigned int)(bottomTris.size() / 3) +     // bottom cap
-        (unsigned int)(bottomTris.size() / 3) +     // top cap
-        (unsigned int)(outlineEdges.size() * 2);    // walls (2 tris per edge)
-
-    std::vector<float> verts;
-    verts.reserve(3 * nVertsTotal);
-    auto pushBlock = [&](float z)
-    {
-        for (unsigned int i = 0; i < n; ++i)
-        {
-            const float x = verts2D[i][0];
-            const float y = invertY ? -verts2D[i][1] : verts2D[i][1];
-            verts.push_back(x);
-            verts.push_back(y);
-            verts.push_back(z);
-        }
-    };
-    pushBlock(0.0f);    // bottom cap
-    pushBlock(height);  // top cap
-    pushBlock(0.0f);    // bottom wall (duplicate of bottom cap)
-    pushBlock(height);  // top wall    (duplicate of top cap)
-    m->SetVertices(nVertsTotal, verts.data());
-
-    // Faces
-    m->m_nFaces = nFacesTotal;
-    m->m_pFaces = new Face*[nFacesTotal];
-    m->m_pFaceNormals.assign(3u * nFacesTotal, 0.0f);
-
-    unsigned int fi = 0;
-
-    auto worldY = [&](unsigned int i) -> float
-    {
-        return invertY ? -verts2D[i][1] : verts2D[i][1];
-    };
-
-    // Cap orientation. We can't assume a fixed glutess output winding:
-    // glutess preserves the contour's input orientation, and an SVG path
-    // from potrace (e.g. batman.svg, with a `scale(0.1, -0.1)` transform)
-    // can wind either way in the input plane. Combined with the optional
-    // Y flip below, a hard-coded (flipped / !flipped) policy gets the cap
-    // normals backwards for some files. Instead, compute each triangle's
-    // signed area in world XY and pick the winding that yields the desired
-    // ±Z normal per cap: bottom wants CW (normal -Z), top wants CCW (+Z).
-    auto emitCap = [&](unsigned int blockOff, bool wantCCW)
-    {
-        for (size_t t = 0; t + 2 < bottomTris.size(); t += 3)
-        {
-            const unsigned int i[3] = { bottomTris[t + 0],
-                                        bottomTris[t + 1],
-                                        bottomTris[t + 2] };
-            const float x0 = verts2D[i[0]][0], y0 = worldY(i[0]);
-            const float x1 = verts2D[i[1]][0], y1 = worldY(i[1]);
-            const float x2 = verts2D[i[2]][0], y2 = worldY(i[2]);
-            const bool worldCCW =
-                (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0) > 0.0f;
-
-            // Keep glutess order when it already matches the desired
-            // winding; otherwise swap i[1] and i[2] to reverse.
-            const unsigned int second = (worldCCW == wantCCW) ? i[1] : i[2];
-            const unsigned int third  = (worldCCW == wantCCW) ? i[2] : i[1];
-
-            Face* f = new Face();
-            f->SetNVertices(3);
-            f->SetVertex(0, blockOff + i[0]);
-            f->SetVertex(1, blockOff + second);
-            f->SetVertex(2, blockOff + third);
-            m->m_pFaces[fi++] = f;
-        }
-    };
-    emitCap(kBotCap, /*wantCCW=*/false);
-    emitCap(kTopCap, /*wantCCW=*/true);
-
-    // Side walls. For each contour edge we want a normal that points AWAY
-    // from the filled region — but the SVG contour can be wound either way
-    // (potrace with a scale(-Y) transform, hand-authored CW outlines, …),
-    // so we can't just hard-code a winding per invertY.
-    //
-    // The cap tessellation knows the truth: an outline edge is a BOUNDARY
-    // edge of the cap mesh, contained in exactly one cap triangle whose
-    // third vertex lies on the filled side. We index every cap triangle's
-    // edges → third-vertex, then for each outline edge we compute which
-    // side of (a→b) the third vertex lies on and emit the wall winding
-    // whose cross product points to the opposite side.
-    auto edgeKey = [](unsigned int u, unsigned int v) -> std::uint64_t
-    {
-        if (u > v) std::swap(u, v);
-        return (std::uint64_t(u) << 32) | std::uint64_t(v);
-    };
-
-    std::unordered_map<std::uint64_t, unsigned int> edgeThird;
-    edgeThird.reserve(bottomTris.size());
-    for (size_t t = 0; t + 2 < bottomTris.size(); t += 3)
-    {
-        const unsigned int i[3] = { bottomTris[t + 0],
-                                    bottomTris[t + 1],
-                                    bottomTris[t + 2] };
-        for (int k = 0; k < 3; ++k)
-            edgeThird[edgeKey(i[k], i[(k + 1) % 3])] = i[(k + 2) % 3];
-    }
-
-    for (auto [a, b] : outlineEdges)
-    {
-        auto it = edgeThird.find(edgeKey(a, b));
-        if (it == edgeThird.end())
-            continue;                              // tessellation gap; skip wall
-        const unsigned int c = it->second;
-
-        const float ax = verts2D[a][0], ay = worldY(a);
-        const float bx = verts2D[b][0], by = worldY(b);
-        const float cx = verts2D[c][0], cy = worldY(c);
-
-        // crossZ = (b-a) × (c-a)._z, Y-up math: >0 means c is on the LEFT
-        // of (a→b). c is on the filled side, so outward is the opposite.
-        const float crossZ = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
-        const bool outwardOnLeft = (crossZ < 0.0f);
-
-        const unsigned int b_a = kBotWall + a;
-        const unsigned int b_b = kBotWall + b;
-        const unsigned int t_a = kTopWall + a;
-        const unsigned int t_b = kTopWall + b;
-
-        Face* f1 = new Face();
-        Face* f2 = new Face();
-        f1->SetNVertices(3);
-        f2->SetNVertices(3);
-
-        if (outwardOnLeft)
-        {
-            // Winding (b_a, t_b, b_b) gives a normal rotated +90° CCW from
-            // the edge direction, i.e. to the LEFT of (a→b).
-            f1->SetVertex(0, b_a); f1->SetVertex(1, t_b); f1->SetVertex(2, b_b);
-            f2->SetVertex(0, b_a); f2->SetVertex(1, t_a); f2->SetVertex(2, t_b);
-        }
-        else
-        {
-            // Mirror winding gives the normal on the RIGHT of (a→b).
-            f1->SetVertex(0, b_a); f1->SetVertex(1, b_b); f1->SetVertex(2, t_b);
-            f2->SetVertex(0, b_a); f2->SetVertex(1, t_b); f2->SetVertex(2, t_a);
-        }
-        m->m_pFaces[fi++] = f1;
-        m->m_pFaces[fi++] = f2;
-    }
-
-    // If any walls were skipped (e.g. an outline edge wasn't adjacent to
-    // any cap triangle because of a glutess COMBINE split), shrink the
-    // face count so we never index uninitialized slots.
-    m->m_nFaces = fi;
-
-    m->ComputeNormals();
-    m->IncrementRevision();
-    return m;
-}
-
-// ============================================================================
-//  Public entry point
-// ============================================================================
-
-void recenterAndFit(std::vector<std::array<float, 2>>& verts, float height)
-{
-    if (verts.empty()) return;
-    float minX = verts[0][0], minY = verts[0][1];
-    float maxX = verts[0][0], maxY = verts[0][1];
-    for (const auto& v : verts)
-    {
-        minX = std::min(minX, v[0]); maxX = std::max(maxX, v[0]);
-        minY = std::min(minY, v[1]); maxY = std::max(maxY, v[1]);
-    }
     const float cx = 0.5f * (minX + maxX);
     const float cy = 0.5f * (minY + maxY);
-    const float w  = maxX - minX;
-    const float h  = maxY - minY;
-    const float largestXY = std::max(w, h);
+    const float largestXY = std::max(maxX - minX, maxY - minY);
     if (largestXY < 1e-9f) return;
     const float scale = 1.0f / largestXY;
-    for (auto& v : verts)
-    {
-        v[0] = (v[0] - cx) * scale;
-        v[1] = (v[1] - cy) * scale;
-    }
-    (void)height; // height stays in caller-supplied units relative to fit XY
+
+    for (auto& pts : shapes)
+        for (auto& v : pts)
+        {
+            v[0] = (v[0] - cx) * scale;
+            v[1] = (v[1] - cy) * scale;
+        }
 }
 
 } // namespace
@@ -456,39 +142,82 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
         return nullptr;
     }
 
-    // Aggregate all fillable shapes into one big tessellation pool. Each
-    // shape contributes its own contours (and outline edges); we keep the
-    // index spaces separate by offsetting on append.
-    std::vector<std::array<float, 2>> allVerts;
-    std::vector<unsigned int> allTris;
-    std::vector<std::pair<unsigned int, unsigned int>> allEdges;
+    // One entry per fillable shape: its contours flattened to polylines. Kept
+    // per shape because the fill rule (and hence the winding rule handed to the
+    // tessellator) is a per-shape property.
+    std::vector<std::vector<std::vector<std::array<float, 2>>>> shapeContours;
+    std::vector<bool> shapeEvenOdd;
 
     for (NSVGshape* shape = image->shapes; shape; shape = shape->next)
     {
         if (shape->fill.type == NSVG_PAINT_NONE) continue;
 
-        TessOut out;
-        std::vector<std::pair<unsigned int, unsigned int>> shapeEdges;
-        tessellateShape(shape, opt.flattenTol, out, shapeEdges);
+        std::vector<std::vector<std::array<float, 2>>> contours;
+        for (const NSVGpath* path = shape->paths; path; path = path->next)
+        {
+            auto pts = flattenPath(path, opt.flattenTol);
+            if (pts.size() < 3) continue;
+            contours.push_back(std::move(pts));
+        }
+        if (contours.empty()) continue;
 
-        if (out.tris.empty()) continue;
-
-        const unsigned int base = (unsigned int)allVerts.size();
-        allVerts.insert(allVerts.end(), out.verts.begin(), out.verts.end());
-        for (unsigned int t : out.tris) allTris.push_back(base + t);
-        for (auto [a, b] : shapeEdges) allEdges.emplace_back(base + a, base + b);
+        shapeContours.push_back(std::move(contours));
+        shapeEvenOdd.push_back(shape->fillRule == NSVG_FILLRULE_EVENODD);
     }
 
     nsvgDelete(image);
 
-    if (allVerts.empty() || allTris.empty())
+    if (shapeContours.empty())
     {
         std::fprintf(stderr, "import_svg: %s has no fillable shapes\n", filename.c_str());
         return nullptr;
     }
 
     if (opt.centerAndFit)
-        recenterAndFit(allVerts, opt.height);
+    {
+        // Fit over ALL shapes at once so their relative placement survives.
+        std::vector<std::vector<std::array<float, 2>>> flat;
+        for (auto& contours : shapeContours)
+            for (auto& pts : contours)
+                flat.push_back(std::move(pts));
+        recenterAndFit(flat);
+        size_t k = 0;
+        for (auto& contours : shapeContours)
+            for (auto& pts : contours)
+                pts = std::move(flat[k++]);
+    }
 
-    return buildExtrudedMesh(allVerts, allTris, allEdges, opt.height, opt.invertY);
+    ExtrudedMeshBuilder builder;
+    for (size_t s = 0; s < shapeContours.size(); ++s)
+    {
+        std::vector<ExtrudeContour> contours;
+        contours.reserve(shapeContours[s].size());
+        for (const auto& pts : shapeContours[s])
+        {
+            ExtrudeContour c;
+            c.pts.reserve(pts.size());
+            for (const auto& p : pts)
+                c.pts.emplace_back(p[0], opt.invertY ? -p[1] : p[1]);
+            contours.push_back(std::move(c));
+        }
+
+        ExtrudeAppendOptions ao;
+        ao.zBottom = 0.0f;
+        ao.zTop    = opt.height;
+        ao.winding = shapeEvenOdd[s] ? ExtrudeWinding::EvenOdd
+                                     : ExtrudeWinding::NonZero;
+        // SVG holes are inner contours of opposite orientation as AUTHORED, so
+        // the orientation must be taken at face value — rewinding here would
+        // fill the holes in.
+        ao.normalizeOrientation = false;
+        builder.Append(contours, ao);
+    }
+
+    if (builder.Empty())
+    {
+        std::fprintf(stderr, "import_svg: %s tessellated to nothing\n", filename.c_str());
+        return nullptr;
+    }
+
+    return builder.Build();
 }

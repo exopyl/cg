@@ -16,6 +16,10 @@ const viewerEl  = el("viewer");
 const hintEl    = el("viewerHint");
 const bannerEl  = el("banner");
 const svgInput  = el("svgInput");
+const imageInput = el("imageInput");
+const imagePreviewBox  = el("imagePreviewBox");
+const imagePreview     = el("imagePreview");
+const imagePreviewInfo = el("imagePreviewInfo");
 const gothicJsonInput = el("gothicJsonInput");
 const downloadBtn = el("download");
 const downloadGlbBtn = el("downloadGlbBtn");
@@ -37,6 +41,92 @@ let viewer = null;         // instance Online3DViewer (ou null si absent)
 // geometrie EN PLACE pendant l'edition, sans repasser par le reload de fichier
 // d'o3dv (qui vide la scene / cache le canvas / recadre la camera = flickering).
 let meshRef = null, GeomCtor = null, AttrCtor = null, IdxAttrCtor = null;
+
+// Le maillage courant porte-t-il ses propres couleurs par sommet ? Vrai pour un
+// relief d'image (multi-materiaux) ; faux pour les formes parametriques, qui
+// restent pilotees par le color picker.
+let hasVertexColors = false;
+
+// --------------------------------------------------------------------------
+// Remontee d'erreurs
+// --------------------------------------------------------------------------
+
+// Une erreur doit se VOIR. Sans surface d'erreur, une exception dans une
+// fonction async appelee depuis un addEventListener finit en unhandled promise
+// rejection : elle part dans la console et nulle part ailleurs, et l'UI reste
+// figee sur son message d'attente ("rien ne se passe").
+function reportError(msg, err) {
+  if (err) console.error(err);
+  statsEl.textContent = msg;
+  bannerEl.hidden = false;
+  bannerEl.textContent = err ? `${msg} — ${err.message || err}` : msg;
+}
+
+// Avertissement d'environnement pose au demarrage (o3dv absent, module WASM
+// obsolete) : il reste valable toute la session, donc clearError() ne doit PAS
+// l'effacer au premier import reussi.
+let bannerSticky = false;
+
+function clearError() {
+  if (bannerSticky) return;
+  bannerEl.hidden = true;
+  bannerEl.textContent = "";
+}
+
+// Enveloppe un <input type=file> : erreurs remontees, double import empeche, et
+// re-selection du MEME fichier possible (sans reset de .value, 'change' ne
+// re-declenche pas et l'utilisateur croit l'UI morte).
+function onFilePicked(input, handler) {
+  input.addEventListener("change", async () => {
+    if (!input.files.length) return;
+    const file = input.files[0];
+    input.value = "";
+    setImportsEnabled(false);
+    try {
+      clearError();
+      await handler(file);
+    } catch (e) {
+      reportError(`Import « ${file.name} » a échoué`, e);
+    } finally {
+      setImportsEnabled(true);
+    }
+  });
+}
+
+// La chaine complete tourne en SYNCHRONE dans le WASM : deux imports concurrents
+// n'ont pas de sens et masqueraient l'origine d'une erreur.
+function setImportsEnabled(on) {
+  for (const i of [svgInput, imageInput, gothicJsonInput]) i.disabled = !on;
+}
+
+// --------------------------------------------------------------------------
+// Apercu de l'image source
+// --------------------------------------------------------------------------
+// Affiche l'image importee a cote de ses parametres : c'est la reference a
+// laquelle on compare la segmentation, et les dimensions en pixels donnent
+// l'echelle de « Min region area » (exprime en px de la source).
+let imagePreviewUrl = null;
+
+function showImagePreview(file) {
+  clearImagePreview();
+  imagePreviewUrl = URL.createObjectURL(file);
+  imagePreview.src = imagePreviewUrl;
+  imagePreviewInfo.textContent = file.name;
+  imagePreview.onload = () => {
+    imagePreviewInfo.textContent =
+      `${file.name} — ${imagePreview.naturalWidth}×${imagePreview.naturalHeight} px`;
+  };
+  imagePreviewBox.hidden = false;
+}
+
+function clearImagePreview() {
+  // Liberer le blob : sans revoke, chaque import fuite l'image precedente.
+  if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+  imagePreviewUrl = null;
+  imagePreview.removeAttribute("src");
+  imagePreviewInfo.textContent = "";
+  imagePreviewBox.hidden = true;
+}
 
 // --------------------------------------------------------------------------
 // Online3DViewer : init + chargement d'un OBJ en memoire. Degrade proprement
@@ -126,8 +216,21 @@ function materialsOf(mesh) {
 
 function applyModelColor() {
   if (!meshRef) return;
-  for (const m of materialsOf(meshRef)) if (m.color) m.color.set(modelColorInput.value);
+  // En mode vertexColors la couleur du materiau MODULE les couleurs de sommet :
+  // il faut du blanc pour restituer la palette telle quelle. Le picker n'a donc
+  // pas d'effet sur un relief colore (et son champ est grise, cf. syncColorUI).
+  const c = hasVertexColors ? "#ffffff" : modelColorInput.value;
+  for (const m of materialsOf(meshRef)) if (m.color) m.color.set(c);
+  syncColorUI();
   if (viewer) viewer.GetViewer().Render();
+}
+
+// Grise le picker quand il ne peut rien changer (maillage multi-couleurs).
+function syncColorUI() {
+  modelColorInput.disabled = hasVertexColors;
+  modelColorInput.title = hasVertexColors
+    ? "Le modèle porte ses propres couleurs (une par région)"
+    : "";
 }
 
 function applyWireframe() {
@@ -168,11 +271,26 @@ function updateInPlace(id, refit = false) {
   g.setAttribute("position", new AttrCtor(positions, 3));
   g.setIndex(new IdxAttrCtor(indices, 1)); // BufferAttribute generique (garde le type entier)
   g.addGroup(0, indices.length, 0); // o3dv attend un material[] -> un groupe
+
+  // Couleurs par sommet : non vides uniquement pour les maillages multi-materiaux
+  // (relief d'image = une couleur par region quantifiee). Le materiau bascule en
+  // vertexColors et sa couleur de base doit repasser en BLANC, sinon three.js
+  // multiplie les deux et le gris du picker ternit toutes les regions.
+  hasVertexColors = d.colors.length === positions.length && positions.length > 0;
+  if (hasVertexColors)
+    g.setAttribute("color", new AttrCtor(new Float32Array(d.colors), 3));
+
   g.computeVertexNormals();         // normales lissees (bonus: moins facette)
 
   const old = meshRef.geometry;
   meshRef.geometry = g;
   if (old && old.dispose) old.dispose();
+
+  for (const m of materialsOf(meshRef)) {
+    m.vertexColors = hasVertexColors;
+    m.needsUpdate = true;
+  }
+  applyModelColor();
 
   const V = viewer.GetViewer();
   if (refit) {
@@ -287,16 +405,26 @@ function fmt(v, isInt) {
 // Mise a jour pendant l'edition : coalescee sur requestAnimationFrame (au plus
 // une par frame). En place si le mesh est deja capture, sinon bootstrap.
 // --------------------------------------------------------------------------
-let rafPending = false, rafId = -1;
+let rafPending = false, rafId = -1, rafFallback = 0;
 function scheduleUpdate(id) {
   rafId = id;
   if (rafPending) return;
   rafPending = true;
-  requestAnimationFrame(() => {
+
+  const run = () => {
+    if (!rafPending) return;        // deja execute par l'autre voie
     rafPending = false;
+    clearTimeout(rafFallback);
     if (meshRef && GeomCtor && IdxAttrCtor) updateInPlace(rafId, false); // drag : pas de recadrage
     else firstRender(rafId);
-  });
+  };
+
+  requestAnimationFrame(run);
+  // Filet de securite : rAF ne se declenche PAS dans un onglet masque ou
+  // occulte. Sans lui, un seul rAF avale son tour, rafPending reste true pour
+  // toujours et TOUTE mise a jour ulterieure est silencieusement ignoree -- l'UI
+  // repond aux sliders mais le modele ne bouge plus jamais.
+  rafFallback = setTimeout(run, 250);
 }
 
 // Affiche la forme `id` : en place (avec recadrage anime) si le viewer est deja
@@ -314,6 +442,7 @@ function applyShape(id, forceBootstrap = false) {
 // Selection d'une forme du catalogue / import SVG.
 // --------------------------------------------------------------------------
 function selectShape(name) {
+  clearImagePreview();   // l'apercu appartient au modele courant
   if (currentId !== -1) { Module.destroyShape(currentId); currentId = -1; }
   const id = Module.createShape(name);
   if (id < 0) { statsEl.textContent = "forme inconnue"; return; }
@@ -325,6 +454,7 @@ function selectShape(name) {
 }
 
 async function importSvg(file) {
+  clearImagePreview();
   const text = await file.text();
   if (currentId !== -1) { Module.destroyShape(currentId); currentId = -1; }
   const id = Module.createSvgExtrusion(text);
@@ -339,10 +469,45 @@ async function importSvg(file) {
   applyShape(id, true);   // import → bootstrap (recadrage caméra fiable)
 }
 
+// Import d'une image -> relief colore (quantification + vectorisation +
+// extrusion des regions, cf. cgmesh/image_relief.h). Les octets sont passes en
+// Uint8Array : une image est binaire, la convertir en texte la detruirait.
+async function importImage(file) {
+  // Affiche l'apercu AVANT le travail lourd : la chaine est synchrone et gele le
+  // thread, donc c'est le seul moment ou le navigateur peut encore peindre.
+  showImagePreview(file);
+  statsEl.textContent = "Vectorisation en cours…";
+  // Laisse le navigateur peindre le message avant le blocage : la chaine
+  // complete (load + quantification + vectorisation) tourne en synchrone dans le
+  // WASM et gele le thread principal plusieurs secondes sur une grande image.
+  //
+  // setTimeout et PAS requestAnimationFrame : rAF ne se declenche pas dans un
+  // onglet masque ou occulte, ce qui bloquerait l'import indefiniment (champs
+  // desactives, message d'attente figé) des que la fenetre perd le premier plan.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (currentId !== -1) { Module.destroyShape(currentId); currentId = -1; }
+  const id = Module.createImageRelief(bytes, file.name);
+  if (id < 0) {
+    clearImagePreview();   // rien n'a ete produit : pas d'apercu trompeur
+    statsEl.textContent = "Image illisible ou sans région";
+    return;
+  }
+  currentId = id;
+  currentName = file.name.replace(/\.[^.]+$/, "");
+  filenameInput.value = currentName;
+  const opt = new Option(`Image : ${file.name}`, "__image__", true, true);
+  catalogEl.appendChild(opt);
+  buildPanel(id);
+  applyShape(id, true);   // import → bootstrap (recadrage caméra fiable)
+}
+
 // Import d'une Gothic Window depuis un fichier de description JSON (schema
 // gothic-window-v2) : parsé côté cgmesh, la géométrie est générée par l'engine.
 // Le panneau reflète les valeurs chargées (getParams lit les membres remplis).
 async function importGothicJson(file) {
+  clearImagePreview();
   const text = await file.text();
   if (currentId !== -1) { Module.destroyShape(currentId); currentId = -1; }
   const id = Module.createGothicFromJson(text);
@@ -519,19 +684,36 @@ function saveBlob(blob, name) {
 // --------------------------------------------------------------------------
 // Amorçage.
 // --------------------------------------------------------------------------
+// Bindings Embind dont l'UI depend. Verifies au demarrage : si le navigateur
+// execute un maker.js/maker.wasm d'avant la derniere reconstruction, un binding
+// recent est `undefined` et l'echec se produirait plus tard, silencieusement, au
+// premier clic. Mieux vaut le NOMMER tout de suite.
+const REQUIRED_BINDINGS = [
+  "listShapes", "createShape", "createSvgExtrusion", "createImageRelief",
+  "createGothicFromJson", "exportGothicJson", "getParams", "setParam",
+  "regenerate", "meshData", "destroyShape",
+];
+
 async function main() {
   Module = await createMakerModule();
-  initViewer();
+  initViewer();   // peut deja poser une banniere (o3dv absent)
+
+  // Apres initViewer : un module obsolete est plus actionnable que l'avis o3dv,
+  // il a donc le dernier mot sur la banniere.
+  const missing = REQUIRED_BINDINGS.filter((f) => typeof Module[f] !== "function");
+  if (missing.length) {
+    reportError(
+      `Module WASM obsolète (cache navigateur) : ${missing.join(", ")} absent(s). ` +
+      `Rechargez avec Ctrl+Shift+R, ou relancez maker\\build.ps1.`);
+  }
+  bannerSticky = !bannerEl.hidden;
 
   const shapes = JSON.parse(Module.listShapes());
   for (const s of shapes) catalogEl.appendChild(new Option(s, s));
   catalogEl.addEventListener("change", () => selectShape(catalogEl.value));
-  svgInput.addEventListener("change", () => {
-    if (svgInput.files.length) importSvg(svgInput.files[0]);
-  });
-  gothicJsonInput.addEventListener("change", () => {
-    if (gothicJsonInput.files.length) importGothicJson(gothicJsonInput.files[0]);
-  });
+  onFilePicked(svgInput, importSvg);
+  onFilePicked(imageInput, importImage);
+  onFilePicked(gothicJsonInput, importGothicJson);
   downloadBtn.addEventListener("click", downloadObj);
   downloadGlbBtn.addEventListener("click", downloadGlb);
   downloadStlBtn.addEventListener("click", downloadStl);

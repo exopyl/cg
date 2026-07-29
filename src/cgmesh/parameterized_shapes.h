@@ -340,6 +340,45 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// Image -> coloured relief
+// ---------------------------------------------------------------------------
+
+// Quantizes a raster image to a few colours, vectorizes each colour region and
+// extrudes it as a block of uniform height on a base plate framed by a wall
+// (see image_relief.h). The produced Mesh carries one Material per colour plus
+// base and wall, so a renderer that honours face material ids shows the picture.
+//
+// NOTE: Regenerate() replays the WHOLE chain (load, quantize, vectorize,
+// extrude). The vectorization dominates and is not cheap on a large image, so
+// every parameter edit costs a full pass -- keep `Max colors` low while
+// exploring.
+class ParameterizedImageRelief : public ParameterizedMesh
+{
+public:
+	explicit ParameterizedImageRelief(const std::string& filename);
+	std::vector<Parameter> GetParameters() override;
+	void Regenerate() override;
+	std::string GetName() const override { return "Image relief"; }
+private:
+	std::string m_filename;
+	int   m_maxColors     = 8;
+	int   m_algo          = 0;      // 0 = Wu, 1 = Heckbert
+	float m_simplifyErr   = 1.0f;
+	int   m_preSmooth     = 1;       // passes de bilateral avant quantification
+	int   m_refine        = 3;       // iterations de raffinement k-means de la palette
+	int   m_despeckle     = 1;       // passes de filtre majoritaire 3x3
+	int   m_minRegionArea = 12;      // px, absorption des petites regions
+	float m_shrink        = 0.f;     // px, offset negatif sur chaque contour
+	float m_fitSize       = 1.0f;
+	float m_blockHeight   = 0.10f;
+	float m_baseThickness = 0.05f;
+	float m_margin        = 0.05f;
+	float m_wallThickness = 0.03f;
+	float m_wallHeight    = 0.10f;
+	bool  m_internalWalls = true;
+};
+
+// ---------------------------------------------------------------------------
 // L-systems (fractal curves rendered as 3D tubes)
 // ---------------------------------------------------------------------------
 

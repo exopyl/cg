@@ -32,7 +32,8 @@ CLitRasterToVector::~CLitRasterToVector(void)
 bool CLitRasterToVector::Vectorize(Img* pInput,
 				   Color colorMask,
 				   bool bUseMask,
-				   Palette *pPalette)
+				   Palette *pPalette,
+				   float fSimplifyErr)
 {
 	// initialize the palette
 	if (!pPalette)
@@ -108,9 +109,87 @@ bool CLitRasterToVector::Vectorize(Img* pInput,
 	CalculateLayerOrder(sPalettized);
 	
 	// SIMPLIFY
-	Simplify(.5);
+	Simplify(fSimplifyErr);
 
 	return bOK;
+}
+
+//
+// Signed area of a closed contour (shoelace, accumulated in double so long
+// contours don't lose the sign to cancellation).
+//
+// The sign is meaningful here: GeneratePath() always turns around the colour
+// region in the same direction (cf. miniStripElement, "sens trigo"), and the
+// path merging (AddPath / MergePath) only ever concatenates head-to-tail, so
+// the traversal direction survives. In the IMAGE frame (x right, y DOWN) that
+// makes an outer boundary come out NEGATIVE and a hole boundary POSITIVE.
+// SmoothCoords() and Simplify() are affine with positive scale on both axes,
+// so they preserve the sign.
+//
+// Orientation is used rather than point-in-polygon nesting parity because two
+// contours of the SAME colour may touch at a single point (the diagonal cases
+// 6 and 9 of miniStripElement), which makes a vertex-based containment test
+// unreliable. Orientation also handles arbitrary nesting for free: a
+// same-colour island sitting inside a hole is traced as an outer boundary.
+//
+static double ContourSignedArea (const vector<Vector2f>& pts)
+{
+	double a = 0.;
+	const size_t n = pts.size();
+	for(size_t i = 0; i < n; i++)
+	{
+		const Vector2f& p = pts[i];
+		const Vector2f& q = pts[(i+1) % n];
+		a += (double)p.x * (double)q.y - (double)q.x * (double)p.y;
+	}
+	return .5 * a;
+}
+
+vector<VectorLayer> CLitRasterToVector::GetLayers (void) const
+{
+	vector<VectorLayer> layers;
+	if(!m_palette)
+		return layers;
+
+	for(MapListPath::const_iterator itMapListPath = m_mapListPath.begin();
+	    itMapListPath != m_mapListPath.end(); itMapListPath++)
+	{
+		const int iColorIndex = itMapListPath->first;
+		if(iColorIndex < 0 || iColorIndex >= m_iPaletteSize)
+			continue;   // border / mask index: not a real palette colour
+		const ListPath* pListPath = itMapListPath->second;
+		if(!pListPath)
+			continue;
+
+		VectorLayer layer;
+		layer.colorIndex = iColorIndex;
+		layer.color      = m_palette[iColorIndex];
+
+		for(ListPath::const_iterator it = pListPath->begin(); it != pListPath->end(); it++)
+		{
+			const TPath* pPath = *it;
+			if(!pPath || pPath->size() < 3)
+				continue;   // not a surface
+
+			VectorContour contour;
+			contour.pts.reserve(pPath->size());
+			for(TPath::const_iterator itPath = pPath->begin(); itPath != pPath->end(); itPath++)
+				contour.pts.push_back(GetFinalCoord(*itPath));
+
+			const double area = ContourSignedArea(contour.pts);
+			if(fabs(area) < 1e-9)
+				continue;   // degenerate (collapsed or unclosed path)
+
+			contour.isHole = (area > 0.);   // cf. ContourSignedArea
+			contour.area   = (float)area;
+			layer.contours.push_back(contour);
+		}
+
+		if(!layer.contours.empty())
+			layers.push_back(layer);
+	}
+
+	return layers;
 }
 
 bool CLitRasterToVector::GeneratePath (const Img& sIndexed)
@@ -1022,7 +1101,7 @@ bool CLitRasterToVector::GetLimitPixelCoord(const TPath& path,TPoint& ptLimit)
 
 void CLitRasterToVector::CalculateLayerOrder(const Img& sPalettized)
 {
-	printf("   CalculateLayerOrder_fill :\n");
+	//printf("   CalculateLayerOrder_fill :\n");
 
 	//
 	// fill each closed contour with a unique index
@@ -1069,7 +1148,8 @@ void CLitRasterToVector::CalculateLayerOrder(const Img& sPalettized)
 			sOneColorByPolygon.flood_fill(ptLimit.x+1, ptLimit.y, r, g, b);
 		}
 	}
-	sOneColorByPolygon.save("sOneColorByPolygon.bmp");
+	if (0)
+		sOneColorByPolygon.save("sOneColorByPolygon.bmp");   // debug dump (pollutes the cwd on every call)
 
 	// Generate relationship between path
 	//printf("   CalculateLayerOrder_Generate relationship :\n");

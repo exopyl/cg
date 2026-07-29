@@ -37,6 +37,11 @@ if (EMSCRIPTEN)
         ${PROJECT_SOURCE_DIR}/fractal.cpp
         # import + extrusion SVG
         ${PROJECT_SOURCE_DIR}/import_svg.cpp
+        ${PROJECT_SOURCE_DIR}/extrude_contours.cpp
+        # image -> relief colore (quantification + vectorisation + extrusion)
+        ${PROJECT_SOURCE_DIR}/image_relief.cpp
+        ${PROJECT_SOURCE_DIR}/image_vectorization.cpp
+        ${PROJECT_SOURCE_DIR}/writer_svg.cpp     # WriterSVG, reference par image_vectorization.cpp
         ${PROJECT_SOURCE_DIR}/clipper.cpp
         ${PROJECT_SOURCE_DIR}/polygon2.cpp
         ${PROJECT_SOURCE_DIR}/polygon2_tesselation.cpp

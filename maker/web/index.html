@@ -30,6 +30,16 @@
     </section>
 
     <section class="group">
+      <label class="lbl" for="imageInput">Import image (relief coloré)</label>
+      <input type="file" id="imageInput" accept=".png,.jpg,.jpeg,.bmp,.tga,.ppm,.pgm,.pnm,image/*">
+      <figure class="preview" id="imagePreviewBox" hidden>
+        <img id="imagePreview" alt="Image source importée">
+        <figcaption id="imagePreviewInfo"></figcaption>
+      </figure>
+      <p class="hint-sm">Quantification + extrusion des régions de couleur. Baisser « Max colors » pour aller plus vite.</p>
+    </section>
+
+    <section class="group">
       <label class="lbl">Import Gothic Window (JSON)</label>
       <input type="file" id="gothicJsonInput" accept=".json,application/json">
     </section>

@@ -41,6 +41,7 @@
 
 // images
 #include "image_vectorization.h"
+#include "image_relief.h"
 
 // audio
 #include "audio.h"

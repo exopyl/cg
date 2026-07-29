@@ -42,6 +42,22 @@ body {
 
 .group { display: flex; flex-direction: column; gap: 6px; }
 .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+/* Note explicative sous un controle (pas un label). */
+.hint-sm { margin: 0; font-size: 11px; line-height: 1.4; color: var(--muted); }
+
+/* Apercu de l'image source importee (relief colore). */
+.preview { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.preview[hidden] { display: none; }
+.preview img {
+  display: block;
+  width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.preview figcaption { font-size: 11px; color: var(--muted); }
 
 select, input[type=file], input[type=text], button {
   font: inherit;

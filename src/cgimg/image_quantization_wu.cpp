@@ -400,10 +400,17 @@ int MedianCut_Wu(unsigned char *pPixels, int iSize, int ncolors)
 	//no. of colors
 	K = ncolors;
 
+	// The moment arrays are file-scope globals that Hist3d ACCUMULATES into
+	// (++ / +=), so they must start out 0 on every call -- cf. the "NB: these
+	// must start out 0!" note next to their declaration. wt was missing from
+	// this reset: a second quant_wu() in the same process inherited the first
+	// image's weights, which corrupted the box splitting (varying "Only got N
+	// boxes") and the resulting palette.
 	for (int ii=0; ii<33; ii++)
 		for (int jj=0; jj<33; jj++)
 			for (int kk=0; kk<33; kk++)
 			{
+				wt[ii][jj][kk] = 0;
 				mr[ii][jj][kk] = 0;
 				mg[ii][jj][kk] = 0;
 				mb[ii][jj][kk] = 0;

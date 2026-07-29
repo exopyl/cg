@@ -47,6 +47,21 @@ namespace {
 std::map<int, std::unique_ptr<IParameterized>> g_objects;
 int g_nextId = 1;
 
+// Fichiers MEMFS ecrits par les fabriques a partir d'octets (SVG, image) :
+// l'objet cgmesh en garde le CHEMIN et le relit a chaque Regenerate(), donc on ne
+// peut pas le supprimer apres chargement -- il doit vivre aussi longtemps que
+// l'objet. Sans ce registre, chaque import laissait sa copie dans le heap WASM
+// pour la duree de la page (verifie : /tmp accumulait maker_img_0/1/2...).
+std::map<int, std::string> g_tempFiles;
+
+void removeTempFile(int id)
+{
+    auto it = g_tempFiles.find(id);
+    if (it == g_tempFiles.end()) return;
+    std::remove(it->second.c_str());
+    g_tempFiles.erase(it);
+}
+
 using Factory = std::function<std::unique_ptr<IParameterized>()>;
 
 template <typename T>
@@ -201,8 +216,51 @@ int createSvgExtrusion(const std::string& svgText)
         f.write(svgText.data(), (std::streamsize)svgText.size());
     }
     auto obj = std::unique_ptr<IParameterized>(new ParameterizedSvgExtrusion(path));
-    return registerObject(std::move(obj));
+    const int id = registerObject(std::move(obj));
+    g_tempFiles[id] = path;   // libere par destroyShape()
+    return id;
 }
+
+#ifdef __EMSCRIPTEN__
+// Cree un relief colore a partir des OCTETS d'une image (PNG/JPG/BMP/TGA/PNM).
+// Contrairement au SVG, une image est binaire : les octets arrivent en Uint8Array
+// (convertJSArrayToNumberVector, pas de std::string qui passerait par une
+// conversion UTF-8 destructrice). `filename` n'est utilise que pour son
+// EXTENSION : Img::load dispatche le decodeur dessus.
+int createImageRelief(emscripten::val bytes, const std::string& filename)
+{
+    std::vector<unsigned char> data =
+        emscripten::convertJSArrayToNumberVector<unsigned char>(bytes);
+    if (data.empty()) return -1;
+
+    // Conserve l'extension d'origine (sinon Img::load ne sait pas decoder).
+    std::string ext;
+    const size_t dot = filename.find_last_of('.');
+    if (dot != std::string::npos) ext = filename.substr(dot);
+    if (ext.empty()) ext = ".png";
+
+    static int counter = 0;
+    const std::string path = "/tmp/maker_img_" + std::to_string(counter++) + ext;
+    {
+        std::ofstream f(path, std::ios::binary);
+        if (!f) return -1;
+        f.write((const char*)data.data(), (std::streamsize)data.size());
+    }
+
+    auto obj = std::unique_ptr<IParameterized>(new ParameterizedImageRelief(path));
+    // Une image illisible ou non vectorisable ne produit aucun maillage : mieux
+    // vaut le signaler que d'enregistrer un objet vide. Le fichier n'etant alors
+    // rattache a aucun id, c'est ICI qu'il faut le supprimer.
+    if (!meshOf(obj.get()))
+    {
+        std::remove(path.c_str());
+        return -1;
+    }
+    const int id = registerObject(std::move(obj));
+    g_tempFiles[id] = path;   // libere par destroyShape()
+    return id;
+}
+#endif
 
 // Cree une Gothic Window a partir d'un fichier de description JSON (schema
 // gothic-window-v2). Parse cote cgmesh (ParameterizedGothicWindow::LoadFromJson),
@@ -301,10 +359,11 @@ std::string regenerate(int id)
     return meshToObj(meshOf(obj));
 }
 
-// Libere l'objet.
+// Libere l'objet, et le fichier MEMFS dont il etait le seul lecteur.
 void destroyShape(int id)
 {
-    g_objects.erase(id);
+    g_objects.erase(id);      // d'abord l'objet : plus personne ne relira le chemin
+    removeTempFile(id);
 }
 
 #ifdef __EMSCRIPTEN__
@@ -314,6 +373,41 @@ void destroyShape(int id)
 // valides jusqu'au prochain appel : le JS doit copier les vues immediatement.
 static std::vector<float>        g_pos;
 static std::vector<unsigned int> g_idx;
+static std::vector<float>        g_col;
+
+// Couleurs par sommet deduites du material id des faces, pour les maillages
+// MULTI-MATERIAUX (le relief d'image : une couleur par region). Renvoie false
+// quand le maillage n'a pas de MaterialColor exploitable -> le JS garde alors sa
+// couleur globale (color picker) pour les formes parametriques classiques.
+//
+// Aucun sommet n'est partage entre deux materiaux differents dans les maillages
+// produits par ExtrudedMeshBuilder (blocs de sommets disjoints par Append), donc
+// une couleur par sommet est exacte, sans duplication.
+bool fillVertexColors(Mesh* m, std::vector<float>& out)
+{
+    const unsigned int nMat = m->GetNMaterials();
+    if (nMat == 0) return false;
+
+    out.assign((size_t)m->GetNVertices() * 3, 0.7f);
+    bool any = false;
+    for (unsigned int f = 0; f < m->GetNFaces(); ++f) {
+        MaterialColor* mc =
+            dynamic_cast<MaterialColor*>(m->GetMaterial((unsigned int)m->GetFaceMaterialId(f)));
+        if (!mc) continue;
+        const float rgb[3] = { mc->GetFloatRed(), mc->GetFloatGreen(), mc->GetFloatBlue() };
+        const int nfv = m->GetFaceNVertices(f);
+        for (int k = 0; k < nfv; ++k) {
+            const int vi = m->GetFaceVertex(f, k);
+            if (vi < 0) continue;
+            out[(size_t)vi * 3 + 0] = rgb[0];
+            out[(size_t)vi * 3 + 1] = rgb[1];
+            out[(size_t)vi * 3 + 2] = rgb[2];
+            any = true;
+        }
+    }
+    if (!any) out.clear();
+    return any;
+}
 
 emscripten::val meshData(int id)
 {
@@ -321,6 +415,7 @@ emscripten::val meshData(int id)
     val out = val::object();
     g_pos.clear();
     g_idx.clear();
+    g_col.clear();
 
     IParameterized* obj = find(id);
     if (obj) {
@@ -337,10 +432,13 @@ emscripten::val meshData(int id)
                 g_pos.push_back(v[2]);
             }
             g_idx = m->GetTriangles();
+            fillVertexColors(m, g_col);
         }
     }
     out.set("positions", val(typed_memory_view(g_pos.size(), g_pos.data())));
     out.set("indices",   val(typed_memory_view(g_idx.size(), g_idx.data())));
+    // Vide quand le maillage est mono-couleur : le JS retombe sur le picker.
+    out.set("colors",    val(typed_memory_view(g_col.size(), g_col.data())));
     out.set("nv", (int)(g_pos.size() / 3));
     out.set("nf", (int)(g_idx.size() / 3));
     return out;
@@ -351,6 +449,7 @@ EMSCRIPTEN_BINDINGS(maker)
     emscripten::function("listShapes",        &listShapes);
     emscripten::function("createShape",       &createShape);
     emscripten::function("createSvgExtrusion",&createSvgExtrusion);
+    emscripten::function("createImageRelief", &createImageRelief);
     emscripten::function("createGothicFromJson",&createGothicFromJson);
     emscripten::function("exportGothicJson",  &exportGothicJson);
     emscripten::function("getParams",         &getParams);

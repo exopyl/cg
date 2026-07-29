@@ -10,6 +10,27 @@
 ** Note: 1) Compile in large memory model. 2) Delete "#define FAST_REMAP" 
 **       statement below in order to deactivate fast remapping.
 */
+/* ---------------------------------------------------------------------------
+** QUALITE : cet algorithme est nettement moins bon que Wu (image_quantization_wu)
+** et ce n'est PAS un bug, c'est la methode. MSE mesuree contre l'originale sur
+** une affiche 4 couleurs rechantillonnee (375x564, apres bilateral) :
+**
+**     n couleurs |   Wu MSE | Heckbert MSE | rapport
+**             4  |    199.0 |        868.8 |  4.4x
+**             6  |    121.0 |        599.6 |  5.0x
+**             8  |     84.2 |        452.4 |  5.4x
+**            12  |     53.6 |        262.3 |  4.9x
+**            16  |     36.4 |        105.8 |  2.9x
+**
+** Deux raisons de fond :
+**  - la coupe se fait a la MEDIANE le long du plus grand axe de la boite : sur
+**    une distribution bimodale elle tranche au milieu de la masse au lieu de
+**    passer ENTRE les deux amas, donc les boites restent impures ;
+**  - les centroides sont calcules sur l'histogramme 5 bits/canal, alors que Wu
+**    accumule ses moments sur les valeurs 8 bits d'origine.
+** Consequence visible : palette delavee (rouge tirant vers le brun, bleu clair
+** terni). Garder Wu par defaut ; Heckbert reste expose a titre de comparaison.
+** --------------------------------------------------------------------------- */
 #define  FAST_REMAP
 #include <stdio.h>
 #include <stddef.h>              /* for nullptr                   */
@@ -23,9 +44,14 @@ typedef unsigned  long dword;    /* range 0-4,294,967,295      */
 
 /* Macros for converting between (r,g,b)-colors and 15-bit     */
 /* colors follow.                                              */
-#define RED(x)     (unsigned  char)(((x)&31)<<3)
-#define GREEN(x)   (unsigned  char)((((x)>>5)&255)<< 3)
-#define BLUE(x)    (unsigned  char)((((x)>>10)&255)<< 3)
+/* Le histogramme est en 5 bits par canal : la cellule d'indice v couvre les
+** valeurs 8v..8v+7. On reconstruit son CENTRE (|4) et non son plancher (<<3
+** seul) : le plancher sous-estimait chaque canal de 3,5 niveaux en moyenne, et
+** comme les centroides de InvMap sont calcules sur ces valeurs, TOUTE la palette
+** sortait systematiquement assombrie. */
+#define RED(x)     (unsigned  char)((((x)&31)<<3)|4)
+#define GREEN(x)   (unsigned  char)(((((x)>>5)&31)<<3)|4)
+#define BLUE(x)    (unsigned  char)(((((x)>>10)&31)<<3)|4)
 
 typedef  struct {       /* structure for a cube in color space */
    word  lower;         /* one corner's index in histogram     */
@@ -77,8 +103,15 @@ word MedianCut(word Hist[], unsigned  char ColMap[][3], int maxcubes)
    list[ncubes++] = Cube;
 
    /* Main loop follows. Search the list of cubes for next cube to split, which
-   ** is the lowest level cube. A special case is when a cube has only one 
-   ** color, so that it cannot be split. */
+   ** is the lowest level cube. A special case is when a cube has only one
+   ** color, so that it cannot be split.
+   **
+   ** NB : ce choix "plus bas niveau" (parcours en largeur strict) s'ecarte de
+   ** Heckbert (SIGGRAPH '82), qui coupe la boite la plus PEUPLEE. Le remplacer
+   ** par le critere de population a ete essaye et MESURE : MSE identique a n=4,
+   ** 8 et 12, meilleure a n=16 (92 vs 106) mais NETTEMENT PIRE a n=6 (714 vs
+   ** 600). Aucun gain demontre -> on garde la version d'origine. Ce n'est de
+   ** toute facon pas la cause de l'ecart avec Wu (cf. l'en-tete du fichier). */
    while (ncubes < maxcubes){
       level = 255; splitpos = -1;
       for (k=0;k<=ncubes-1;k++){
@@ -205,8 +238,8 @@ void InvMap(word * Hist, unsigned  char ColMap[][3],word ncubes)
          color = HistPtr[i];
          Hist[color] = k;
       }
-
-      if ((k % 10) == 0) fprintf(stderr,".");   /* pacifier    */
+      /* Le "pacifier" d'origine (fprintf(stderr,".") tous les 10 cubes) ecrivait
+      ** sur stderr a CHAQUE appel : trace parasite dans une bibliotheque. */
    }
 #else
    float	dr,dg,db,d,dmin;
@@ -235,7 +268,8 @@ void InvMap(word * Hist, unsigned  char ColMap[][3],word ncubes)
          }
          Hist[color] = index;
       }
-      if ((k % 10) == 0) fprintf(stderr,".");   /* pacifier    */
+      /* pacifier d'origine retire ici aussi (cf. branche FAST_REMAP) : une
+      ** bibliotheque n'ecrit pas sur stderr pendant un calcul. */
    }
 #endif
    return;

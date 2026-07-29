@@ -1,4 +1,7 @@
+#include <limits.h>
 #include <stdlib.h>
+#include <map>
+#include <vector>
 
 #include "image.h"
 
@@ -44,6 +47,90 @@ int Img::quant_heckbert (int ncolors)
 	delete[] Hist;
 	delete[] ColMap;
 	return 0;
+}
+
+//
+// Raffinement de Lloyd (k-means) de la palette. Cf. le commentaire de
+// declaration dans image.h pour les mesures et le pourquoi.
+//
+int Img::quant_refine (const Img &reference, int iterations)
+{
+	if (reference.width() != m_iWidth || reference.height() != m_iHeight)
+		return -1;
+	if (bUsePalette || reference.uses_palette())
+		return -1;   // les deux buffers doivent etre en RGBA8 (cf. data())
+	if (iterations <= 0 || m_iWidth == 0 || m_iHeight == 0)
+		return 0;
+
+	const unsigned int nPixels = m_iWidth * m_iHeight;
+	const unsigned char *pRef = reference.data();
+
+	// Palette courante = couleurs distinctes de l'image quantifiee.
+	std::map<unsigned int, int> index;
+	std::vector<int> palR, palG, palB;
+	for (unsigned int i = 0; i < nPixels; i++)
+	{
+		const unsigned int key = ((unsigned int)m_pPixels[4*i] << 16)
+		                       | ((unsigned int)m_pPixels[4*i+1] << 8)
+		                       |  (unsigned int)m_pPixels[4*i+2];
+		if (index.emplace(key, (int)palR.size()).second)
+		{
+			palR.push_back(m_pPixels[4*i]);
+			palG.push_back(m_pPixels[4*i+1]);
+			palB.push_back(m_pPixels[4*i+2]);
+		}
+	}
+	const int K = (int)palR.size();
+	if (K <= 1)
+		return K;   // rien a raffiner
+
+	std::vector<int> assign(nPixels, 0);
+	for (int it = 0; it < iterations; it++)
+	{
+		// 1) affectation au plus proche, en RGB 8 bits pleins
+		for (unsigned int i = 0; i < nPixels; i++)
+		{
+			const int r = pRef[4*i], g = pRef[4*i+1], b = pRef[4*i+2];
+			int best = 0;
+			long bestD = LONG_MAX;
+			for (int k = 0; k < K; k++)
+			{
+				const long dr = r - palR[k], dg = g - palG[k], db = b - palB[k];
+				const long d = dr*dr + dg*dg + db*db;
+				if (d < bestD) { bestD = d; best = k; }
+			}
+			assign[i] = best;
+		}
+
+		// 2) recalcul des centroides sur les valeurs de REFERENCE
+		std::vector<double> sr(K, 0.), sg(K, 0.), sb(K, 0.), cnt(K, 0.);
+		for (unsigned int i = 0; i < nPixels; i++)
+		{
+			const int k = assign[i];
+			sr[k] += pRef[4*i];
+			sg[k] += pRef[4*i+1];
+			sb[k] += pRef[4*i+2];
+			cnt[k] += 1.;
+		}
+		for (int k = 0; k < K; k++)
+			if (cnt[k] > 0.)
+			{
+				palR[k] = (int)(sr[k] / cnt[k] + .5);
+				palG[k] = (int)(sg[k] / cnt[k] + .5);
+				palB[k] = (int)(sb[k] / cnt[k] + .5);
+			}
+		// Une couleur qui n'a plus aucun pixel est laissee telle quelle : elle ne
+		// sera simplement plus utilisee a l'ecriture finale.
+	}
+
+	for (unsigned int i = 0; i < nPixels; i++)
+	{
+		const int k = assign[i];
+		m_pPixels[4*i]   = (unsigned char)palR[k];
+		m_pPixels[4*i+1] = (unsigned char)palG[k];
+		m_pPixels[4*i+2] = (unsigned char)palB[k];
+	}
+	return K;
 }
 
 //

@@ -134,6 +134,74 @@ TEST(TEST_cgimg_img, quantization)
 	}
 }
 
+// Erreur quadratique moyenne par canal entre deux images de meme taille.
+static double img_mse (Img &a, Img &b)
+{
+	double s = 0.;
+	for (unsigned y = 0; y < a.height(); y++)
+		for (unsigned x = 0; x < a.width(); x++)
+		{
+			unsigned char r1, g1, b1, a1, r2, g2, b2, a2;
+			a.get_pixel (x, y, &r1, &g1, &b1, &a1);
+			b.get_pixel (x, y, &r2, &g2, &b2, &a2);
+			s += (double)(r1-r2)*(r1-r2) + (double)(g1-g2)*(g1-g2) + (double)(b1-b2)*(b1-b2);
+		}
+	return s / (3. * a.width() * a.height());
+}
+
+// quant_refine implemente le pas de Lloyd : il MINIMISE l'erreur quadratique,
+// donc la MSE ne peut que baisser -- et elle baisse pour les deux quantifieurs,
+// qui decident tous deux sur un histogramme 5 bits/canal.
+TEST(TEST_cgimg_img, quant_refine_reduces_error)
+{
+	Img ref;
+	ref.init_test_color_jet (128, 96);   // degrade continu : beaucoup de couleurs
+
+	for (int ncolors : { 4, 8, 16 })
+	{
+		Img wu = ref;
+		wu.quant_wu (ncolors);
+		const double before = img_mse (ref, wu);
+
+		Img wuR = ref;
+		wuR.quant_wu (ncolors);
+		const int k = wuR.quant_refine (ref, 4);
+		const double after = img_mse (ref, wuR);
+
+		EXPECT_GT (k, 0) << "la palette doit etre trouvee (ncolors=" << ncolors << ")";
+		EXPECT_LE (k, ncolors) << "le raffinement n'ajoute jamais de couleur";
+		EXPECT_LE (after, before + 1e-9)
+			<< "Lloyd ne peut pas degrader la MSE (ncolors=" << ncolors
+			<< ") : " << before << " -> " << after;
+
+		// Heckbert part de bien plus loin ; le raffinement doit le rattraper.
+		Img hb = ref;
+		hb.quant_heckbert (ncolors);
+		const double hbBefore = img_mse (ref, hb);
+		Img hbR = ref;
+		hbR.quant_heckbert (ncolors);
+		hbR.quant_refine (ref, 4);
+		const double hbAfter = img_mse (ref, hbR);
+		EXPECT_LE (hbAfter, hbBefore + 1e-9)
+			<< "idem pour Heckbert : " << hbBefore << " -> " << hbAfter;
+
+		printf ("  ncolors=%2d : Wu %8.1f -> %8.1f | Heckbert %8.1f -> %8.1f\n",
+		        ncolors, before, after, hbBefore, hbAfter);
+	}
+}
+
+// Garde-fous : dimensions incompatibles ou image palettisee -> refus explicite.
+TEST(TEST_cgimg_img, quant_refine_rejects_mismatched_input)
+{
+	Img a (32, 32, false);
+	a.init_color (10, 20, 30, 255);
+	Img small (16, 16, false);
+	small.init_color (10, 20, 30, 255);
+
+	EXPECT_EQ (a.quant_refine (small, 2), -1) << "dimensions differentes";
+	EXPECT_EQ (a.quant_refine (a, 0), 0)      << "0 iteration = no-op";
+}
+
 TEST(TEST_cgimg_img, filter)
 {
 	Img* img = new Img();
