@@ -33,7 +33,8 @@ bool CLitRasterToVector::Vectorize(Img* pInput,
 				   Color colorMask,
 				   bool bUseMask,
 				   Palette *pPalette,
-				   float fSimplifyErr)
+				   float fSimplifyErr,
+				   bool  bSmooth)
 {
 	// initialize the palette
 	if (!pPalette)
@@ -99,17 +100,33 @@ bool CLitRasterToVector::Vectorize(Img* pInput,
 	if(!bOK)
 		return false;
 
-	// SMOOTH 
-	SmoothCoords();
+	// COORDS (+ SMOOTH)
+	// L'adjacence sert aux deux etages : on la construit une fois ici plutot que
+	// dans chacun.
+	MapAdjacence mapAdjacence;
+	BuildAdjacencyMap(mapAdjacence);
+	ComputeBaseCoords(mapAdjacence);
+	if (bSmooth)
+		TaubinSmooth(mapAdjacence);
 
 	// SIMPLE SIMPLIFY, we keep all corners -> needed to sort layers
+	// Fusionne les points colineaires : garde a faire meme sans lissage, c'est
+	// exactement ce qui transforme une marche d'escalier echantillonnee pixel par
+	// pixel en deux aretes. L'ordonnancement des couches en depend aussi.
 	RemoveUselessPoint();
 
 	// SORT LAYER
 	CalculateLayerOrder(sPalettized);
-	
+
 	// SIMPLIFY
-	Simplify(fSimplifyErr);
+	// fSimplifyErr NEGATIF : trace brut conserve (pixel art). Simplify() couperait
+	// les coins d'escalier, qui sont ici le signal et non du bruit.
+	//
+	// Le seuil est < 0 et non <= 0 pour que fSimplifyErr = 0 continue d'appeler
+	// Simplify(0) comme avant : c'est une valeur atteignable depuis l'UI du relief,
+	// et on ne veut aucun changement de comportement sur les chemins existants.
+	if (fSimplifyErr >= 0.f)
+		Simplify(fSimplifyErr);
 
 	return bOK;
 }
@@ -980,12 +997,10 @@ void CLitRasterToVector::BuildAdjacencyMap(MapAdjacence& mapAdjacence)
 	}
 }
 
-void CLitRasterToVector::SmoothCoords (void)
+// Positions de base des sommets de contour, sur la grille demi-pixel. TOUJOURS
+// appelee : c'est elle qui peuple m_mapCoord, dont tout le reste depend.
+void CLitRasterToVector::ComputeBaseCoords (const MapAdjacence& mapAdjacence)
 {
-	// CALCULATE ADJACENCE
-	MapAdjacence mapAdjacence;
-	BuildAdjacencyMap(mapAdjacence);
-
 	// COMPUTE COORDS  = fill m_mapCoord
 	for(MapAdjacence::const_iterator itCoord = mapAdjacence.begin(); itCoord != mapAdjacence.end() ; itCoord++)
 	{
@@ -995,7 +1010,10 @@ void CLitRasterToVector::SmoothCoords (void)
 		//m_mapCoord[uiPointIndex].Set( x*.5f +.5f , y*.5f -1.f); // with no inputWithBlackBorder
 		m_mapCoord[uiPointIndex].Set( x*.5f +.5f -1, y*.5f +.5f); // with  inputWithBlackBorder
 	}
+}
 
+void CLitRasterToVector::TaubinSmooth (const MapAdjacence& mapAdjacence)
+{
 	// TAUBIN FILTERING (because classic Laplacien filtered is too strong, and loose square, and round corner too much)
 	//		http://mesh.brown.edu/taubin/pdfs/taubin-eg00star.pdf
 	//		http://www.lems.brown.edu/~msj/cs292/assign4/volumeVis.html

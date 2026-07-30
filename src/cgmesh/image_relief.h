@@ -38,18 +38,9 @@
 #include <vector>
 
 #include "../cgimg/color.h"
+#include "image_region_pipeline.h"   // QuantAlgo + chaîne partagée avec image_pixel_blocks
 
 class Mesh;
-
-// Wu is the one to use. Heckbert (median cut) is kept for comparison only: it
-// cuts at the MEDIAN of a box's longest axis, which on a bimodal distribution
-// slices through the middle of the mass instead of passing BETWEEN the clusters,
-// and it averages over a 5-bit histogram where Wu accumulates its moments on the
-// original 8-bit values. Measured MSE against the source on a resampled
-// 4-colour poster: Wu 199 / Heckbert 869 at 4 colours, still 36 vs 106 at 16 —
-// 2.9x to 5.4x worse across the range. Visible as a washed-out palette (red
-// drifting to brown, light blue dulled).
-enum class QuantAlgo { Wu, Heckbert };
 
 struct ImageReliefOptions
 {

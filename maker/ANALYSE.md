@@ -1,8 +1,9 @@
 # `maker` — Analyse d'une interface web pour cgmesh (Online3DViewer + Emscripten)
 
 > Statut : implémenté. Les §1–14 sont l'analyse de faisabilité d'origine (2026-07-15), conservée
-> pour ses justifications ; la §15 décrit l'organisation effective du front-end (quatre pages,
-> un module WASM partagé) et prime sur les §3 et §6 là où elles divergent.
+> pour ses justifications ; la §15 décrit l'organisation effective du front-end (cinq pages,
+> un module WASM partagé) et la §16 la brique « blocs pixelisés ». Les §15–16 priment sur les
+> §3 et §6 là où elles divergent.
 
 ## 1. Objectif
 
@@ -75,8 +76,9 @@ nom de paramètre — la couche JS ne touche jamais un pointeur.
 │  index.html (accueil, aucun script)                                 │
 │      │                                                              │
 │      ├─→ shapes.html    ┐                                           │
-│      ├─→ gothic.html    │  une page par générateur                  │
-│      ├─→ relief.html    │  (§15)                                    │
+│      ├─→ gothic.html    │                                           │
+│      ├─→ relief.html    │  une page par générateur                  │
+│      ├─→ pixels.html    │  (§15, §16)                               │
 │      └─→ svg.html       ┘                                           │
 │              │                                                      │
 │   ┌──────────┴──────────┐   ┌───────────────────────────────┐      │
@@ -411,3 +413,89 @@ Les query strings de capture automatisée sont conservées : `?shape=Torus` sur 
 maintenant appliqués **avant** le premier rendu (`setShape(..., {deepLink:true})`), au lieu de
 rendre les valeurs par défaut puis de re-déclencher un chargement o3dv par-dessus — l'ancien
 enchaînement laissait le recadrage caméra calé sur la géométrie du premier chargement.
+
+---
+
+## 16. Brique « blocs pixelisés » (2026-07-30)
+
+Cinquième générateur : `pixels.html`. Même famille que le relief, mais l'image passe par une
+**pixelisation** avant segmentation, et la sortie est un jeu de **pièces séparables**.
+
+### 16.1 Chaîne
+
+```
+source -> [pré-réduction] -> bilateral -> quant_wu(N) -> PIXELISATION (vote majoritaire)
+       -> despeckle -> composantes connexes -> vectorisation SANS lissage -> extrusion
+```
+
+Deux décisions structurent le résultat :
+
+1. **Quantifier AVANT de pixeliser, et voter au lieu de moyenner.** Un sous-échantillonnage par
+   moyenne traverse les bords et fabrique des teintes absentes de la palette — c'est le défaut
+   que Gerstner et al. (*Pixelated Image Abstraction*, NPAR 2012) identifient dans la chaîne
+   naïve « réduire puis quantifier ». Le vote majoritaire choisit parmi des couleurs de
+   palette, donc n'en crée aucune. Vérifié par test (`majority_vote_never_invents_a_colour`).
+2. **Tracer sans lissage.** `CLitRasterToVector::SmoothCoords()` appliquait 10 passes de Taubin
+   **en dur**. Elle a été scindée en `ComputeBaseCoords()` (qui peuple `m_mapCoord`, donc
+   toujours appelée) et `TaubinSmooth()`, et `Vectorize()` prend un paramètre `bSmooth`
+   (défaut `true` : le relief est inchangé). Un `fSimplifyErr` **négatif** saute aussi
+   `Simplify()` — le seuil est strict pour que `0`, valeur atteignable depuis l'UI du relief,
+   garde son comportement d'origine.
+
+Le « ratio » est exprimé en **largeur cible** (`pixelWidth`) et non en facteur de réduction :
+le nombre de blocs, donc le poids du maillage et le temps de calcul, ne dépend alors pas de la
+résolution de la source.
+
+`workingMaxDim` (défaut 1024) pré-réduit la source avant lissage et quantification : pour une
+sortie de 64 cellules, faire tourner le bilatéral et Wu sur 12 Mpx est du gaspillage. Mesuré
+sur `ouaf.png` : **691 ms contre 2588 ms** pour le relief sur la même image.
+
+### 16.2 Granularité de sortie
+
+Un objet par **bloc connexe**, pas par couleur : deux zones rouges non contiguës sont deux
+pièces distinctes. `image_to_pixel_blocks_per_component()` rend un `Mesh` par bloc, puis la
+base, puis le mur.
+
+Le rattachement d'un contour à son bloc **ne rejoue aucune convention de coordonnées** du
+vectoriseur : les contours pavant l'image, leur bbox EST le rectangle image, ce qui donne la
+grille. On sonde alors **les deux côtés** de chaque arête et on retient celui dont la cellule
+porte la couleur de la couche — ça vaut identiquement pour un contour extérieur et pour un
+trou, et ça ne dépend d'aucun sens de parcours.
+
+`shrink` est appliqué **par bloc** (un extérieur + ses trous = le polygone à trous qu'attend
+Clipper2), là où le relief l'applique par couche.
+
+### 16.3 Un seul WASM, toujours
+
+La brique a coûté **+10 Ko gz** (341 → 351 Ko) : elle réutilise le noyau géométrique, le
+vectoriseur et l'extrudeur. C'est la confirmation directe de la décision §15.1.
+
+Facteurs communs extraits dans **`src/cgmesh/image_region_pipeline.{h,cpp}`** (chaîne de
+quantification, mapping monde, retrait, cadre base/mur), consommés par `image_relief.cpp` et
+`image_pixel_blocks.cpp`. Extraction plutôt que duplication parce que l'ORDRE des étapes porte
+des décisions non évidentes (référence de raffinement capturée après lissage, raffinement
+avant anti-mouchetis) que deux copies feraient diverger. Non-régression garantie par
+`test/tu_cgmesh_image_relief.cpp` : géométrie identique au sommet près après extraction.
+
+### 16.4 Export par blocs
+
+Un **unique OBJ** portant un groupe `o block_NNNN_color_NN` par bloc (plus `o base` / `o wall`).
+Aucune dépendance zip côté navigateur, et tout slicer sait séparer les groupes. Les indices OBJ
+étant globaux au fichier, un décalage cumulé est appliqué d'un maillage au suivant — vérifié :
+sur 95 blocs, les indices couvrent exactement 1..2552 et **aucune face ne référence un sommet
+hors de son propre groupe**.
+
+### 16.5 Correctif `Img::resize` mode 2
+
+Trouvé en chemin (`src/cgimg/image.cpp`) : `histogram` n'était **jamais libéré**, un intervalle
+nul (agrandissement) lisait de la mémoire non initialisée, et le compteur d'occurrences
+démarrait à 0. Corrigé. La limite restante — le pas constant `W/w` ignore les colonnes de
+reste — est documentée et **conservée** (des appelants peuvent en dépendre) ;
+`pixelize_majority` calcule des bornes exactes et n'a pas ce défaut.
+
+### 16.6 Piste d'amélioration
+
+Si la qualité de la pixelisation ne suffit pas, la voie publiée est **Gerstner et al.** :
+superpixels SLIC (k-means 5D Lab+position, contraints en grille) et palette par **MCDA**
+(recuit déterministe, la palette part à 1 couleur et se scinde), optimisés **conjointement**.
+C'est un chantier à part entière (~800–1200 l. neuves, rien de réutilisable ici).

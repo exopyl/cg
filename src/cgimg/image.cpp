@@ -680,9 +680,30 @@ int Img::resize (unsigned int width, unsigned int height, int mode)
 	}
 	else if (mode == 2)
 	{
+		// Couleur MAJORITAIRE du superpixel.
+		//
+		// ATTENTION : le pas est constant (m_iWidth/width, division ENTIERE), donc
+		// les dernieres colonnes/lignes de la source ne sont PAS lues quand les
+		// dimensions ne se divisent pas (400 px en 64 blocs n'en couvre que 384).
+		// Comportement historique, conserve pour ne pas casser les appelants
+		// existants ; pixelize_majority (cgmesh/image_region_pipeline.h) calcule des
+		// bornes exactes et n'a pas cette limite.
 		unsigned int xinterval = m_iWidth / width;
 		unsigned int yinterval = m_iHeight / height;
+		// Un intervalle nul (agrandissement, ou facteur superieur a la dimension)
+		// laisserait les boucles internes vides : ncolors resterait a 0 et on lirait
+		// un histogramme non initialise.
+		if (xinterval == 0 || yinterval == 0)
+		{
+			free (pPixels);
+			return -1;
+		}
 		int *histogram = (int*)malloc(4*xinterval*yinterval*sizeof(int));
+		if (histogram == nullptr)
+		{
+			free (pPixels);
+			return -1;
+		}
 		int ncolors = 0;
 		for (unsigned int j=0; j<height; j++)
 			for (unsigned int i=0; i<width; i++)
@@ -712,7 +733,7 @@ int Img::resize (unsigned int width, unsigned int height, int mode)
 							histogram[4*ci]   = r;
 							histogram[4*ci+1] = g;
 							histogram[4*ci+2] = b;
-							histogram[4*ci+3] = 0;
+							histogram[4*ci+3] = 1;   // premiere occurrence, pas zero
 							ncolors++;
 						}
 					}
@@ -732,6 +753,7 @@ int Img::resize (unsigned int width, unsigned int height, int mode)
 				pPixels[4*index+2] = histogram[4*cimax+2];
 				pPixels[4*index+3] = 255;
 			}
+		free (histogram);
 	}
 
 	m_iWidth = width;

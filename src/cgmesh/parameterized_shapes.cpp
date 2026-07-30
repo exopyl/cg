@@ -557,6 +557,72 @@ void ParameterizedImageRelief::Regenerate()
 }
 
 // ===========================================================================
+// Image -> blocs pixelises
+// ===========================================================================
+
+ParameterizedImagePixelBlocks::ParameterizedImagePixelBlocks(const std::string& filename)
+	: m_filename(filename)
+{
+	Regenerate();
+}
+
+std::vector<Parameter> ParameterizedImagePixelBlocks::GetParameters()
+{
+	return {
+		// En tete : c'est LE reglage de la brique. Borne haute a 256 pour garder le
+		// nombre de blocs -- donc le poids du maillage -- dans des eaux navigables.
+		Parameter::MakeInt  ("Pixel width",     &m_pixelWidth,    4,     256),
+		Parameter::MakeInt  ("Max colors",      &m_maxColors,     2,     64),
+		Parameter::MakeEnum ("Quantization",    &m_algo, { "Wu", "Heckbert" }),
+		Parameter::MakeInt  ("Pre-smooth",      &m_preSmooth,     0,     4),
+		Parameter::MakeInt  ("Refine palette",  &m_refine,        0,     12),
+		// En CELLULES de sortie, pas en pixels source.
+		Parameter::MakeInt  ("Despeckle",       &m_despeckle,     0,     6),
+		Parameter::MakeInt  ("Min region area", &m_minRegionArea, 0,     64),
+		Parameter::MakeFloat("Shrink (cells)",  &m_shrink,        0.f,   2.f),
+		Parameter::MakeFloat("Fit size",        &m_fitSize,       0.1f,  100.f),
+		Parameter::MakeFloat("Block height",    &m_blockHeight,   0.001f, 20.f),
+		Parameter::MakeFloat("Base thickness",  &m_baseThickness, 0.001f, 20.f),
+		Parameter::MakeFloat("Margin",          &m_margin,        0.f,    20.f),
+		Parameter::MakeFloat("Wall thickness",  &m_wallThickness, 0.001f, 20.f),
+		Parameter::MakeFloat("Wall height",     &m_wallHeight,    0.001f, 20.f),
+		Parameter::MakeBool ("Internal walls",  &m_internalWalls),
+	};
+}
+
+ImagePixelBlocksOptions ParameterizedImagePixelBlocks::GetOptions() const
+{
+	ImagePixelBlocksOptions opt;
+	opt.pixelWidth       = m_pixelWidth;
+	opt.maxColors        = m_maxColors;
+	opt.algo             = (m_algo == 1) ? QuantAlgo::Heckbert : QuantAlgo::Wu;
+	opt.preSmoothPasses  = m_preSmooth;
+	opt.refineIterations = m_refine;
+	opt.despecklePasses  = m_despeckle;
+	opt.minRegionArea    = m_minRegionArea;
+	opt.shrink           = m_shrink;
+	opt.fitSize          = m_fitSize;
+	opt.blockHeight      = m_blockHeight;
+	opt.baseThickness    = m_baseThickness;
+	opt.margin           = m_margin;
+	opt.wallThickness    = m_wallThickness;
+	opt.wallHeight       = m_wallHeight;
+	opt.emitInternalWalls = m_internalWalls;
+	// workingMaxDim garde sa valeur par defaut (1024) : c'est ce qui borne le cout
+	// du lissage et de la quantification sur une grande source.
+	return opt;
+}
+
+void ParameterizedImagePixelBlocks::Regenerate()
+{
+	delete m_pMesh;
+	// Maillage d'AFFICHAGE : un materiau par couleur de palette, l'image reste
+	// lisible. La decoupe en blocs separables passe par
+	// image_to_pixel_blocks_per_component() (export).
+	m_pMesh = image_to_pixel_blocks(m_filename, GetOptions());
+}
+
+// ===========================================================================
 // Implicit surface from a point cloud
 // ===========================================================================
 

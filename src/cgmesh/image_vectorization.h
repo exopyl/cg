@@ -72,11 +72,20 @@ class CLitRasterToVector
 public:
 	CLitRasterToVector(void);
 	virtual ~CLitRasterToVector(void);
+	// bSmooth : applique le filtrage de Taubin aux contours (defaut historique).
+	//   true  -> courbes adoucies, ce que veut un relief d'image organique.
+	//   false -> ESCALIER exact sur la grille de pixels, ce que veut du pixel art :
+	//            un contour pixelise n'a que des aretes axiales, et les arrondir
+	//            detruirait precisement ce qu'on cherche a montrer.
+	// Avec fSimplifyErr NEGATIF, la simplification est egalement sautee : combines,
+	// les deux donnent le trace brut, sommet de grille par sommet de grille.
+	// (Le seuil est strict pour que fSimplifyErr = 0 garde son comportement.)
 	bool Vectorize (Img* pInput,
 			Color colorMask,
 			bool bUseMask,
 			Palette *pPalette = nullptr,   // if nullptr, a palette is calculated
-			float fSimplifyErr = .5f);     // contour simplification tolerance (px)
+			float fSimplifyErr = .5f,      // contour simplification tolerance (px)
+			bool  bSmooth = true);
 
 	void WriteFile (float fLineWidth) const;
 	void WriteFilePolygonWithHole (/*bool bBottomTop,
@@ -112,7 +121,12 @@ private:
 	void AddPath		( ListPath& listPath,const TPath& pathToAdd,MapPath& mapPathStart,MapPath& mapPathEnd);
 	bool MergePath		( ListPath& listPath,MapPath& mapPathStart,MapPath& mapPathEnd);
 
-	void SmoothCoords	( void );
+	// SmoothCoords() faisait DEUX choses : peupler m_mapCoord (positions de base
+	// des sommets de contour) puis lisser. Scinde, parce qu'on ne peut pas sauter
+	// le lissage sans sauter aussi le peuplement -- et sans m_mapCoord il ne reste
+	// aucune coordonnee du tout.
+	void ComputeBaseCoords	( const MapAdjacence& mapAdjacence );
+	void TaubinSmooth	( const MapAdjacence& mapAdjacence );
 
 	void RemoveHoles	( ListPath& listPath, int iColorIndex, const Img& sIndexed );
 	bool GetLimitColor      ( const TPath& path,const Img& sIndexed,int& iInteriorColor,int& iExteriorColor);

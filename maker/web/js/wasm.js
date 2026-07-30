@@ -16,6 +16,7 @@ const REQUIRED_BINDINGS = [
   "listShapes", "createShape", "createSvgExtrusion", "createImageRelief",
   "createGothicFromJson", "exportGothicJson", "getParams", "setParam",
   "regenerate", "meshData", "destroyShape",
+  "createImagePixelBlocks", "exportPixelBlocksObj",
 ];
 
 // Renvoie { Module, staleMessage }. `staleMessage` est non nul quand le module

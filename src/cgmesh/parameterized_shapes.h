@@ -1,6 +1,7 @@
 #pragma once
 #include "parameterized.h"
 #include "mesh.h"
+#include "image_pixel_blocks.h"   // ImagePixelBlocksOptions
 #include "surface_implicit_pointcloud.h"
 
 //
@@ -369,6 +370,43 @@ private:
 	int   m_despeckle     = 1;       // passes de filtre majoritaire 3x3
 	int   m_minRegionArea = 12;      // px, absorption des petites regions
 	float m_shrink        = 0.f;     // px, offset negatif sur chaque contour
+	float m_fitSize       = 1.0f;
+	float m_blockHeight   = 0.10f;
+	float m_baseThickness = 0.05f;
+	float m_margin        = 0.05f;
+	float m_wallThickness = 0.03f;
+	float m_wallHeight    = 0.10f;
+	bool  m_internalWalls = true;
+};
+
+// Variante pixel art du relief : l'image est PIXELISEE (vote majoritaire) avant
+// segmentation, et les contours sont traces sans lissage -- des blocs carrés au
+// lieu de formes suivies. Chaque zone contiguë d'une même couleur devient un
+// solide séparable (cf. image_pixel_blocks.h).
+class ParameterizedImagePixelBlocks : public ParameterizedMesh
+{
+public:
+	explicit ParameterizedImagePixelBlocks(const std::string& filename);
+	std::vector<Parameter> GetParameters() override;
+	void Regenerate() override;
+	std::string GetName() const override { return "Image pixel blocks"; }
+
+	// Chemin de l'image source, pour l'export par blocs (qui doit rejouer la
+	// chaine avec les memes reglages).
+	const std::string& GetFilename() const { return m_filename; }
+	// Options courantes, telles que Regenerate() les construit.
+	ImagePixelBlocksOptions GetOptions() const;
+
+private:
+	std::string m_filename;
+	int   m_pixelWidth    = 64;
+	int   m_maxColors     = 8;
+	int   m_algo          = 0;      // 0 = Wu, 1 = Heckbert
+	int   m_preSmooth     = 1;
+	int   m_refine        = 3;
+	int   m_despeckle     = 0;
+	int   m_minRegionArea = 0;
+	float m_shrink        = 0.f;
 	float m_fitSize       = 1.0f;
 	float m_blockHeight   = 0.10f;
 	float m_baseThickness = 0.05f;
