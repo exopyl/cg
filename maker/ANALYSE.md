@@ -1,7 +1,8 @@
 # `maker` — Analyse d'une interface web pour cgmesh (Online3DViewer + Emscripten)
 
-> Statut : analyse de faisabilité / conception. Aucun code produit.
-> Date : 2026-07-15. Cible : nouveau répertoire `maker/` à la racine du dépôt.
+> Statut : implémenté. Les §1–14 sont l'analyse de faisabilité d'origine (2026-07-15), conservée
+> pour ses justifications ; la §15 décrit l'organisation effective du front-end (quatre pages,
+> un module WASM partagé) et prime sur les §3 et §6 là où elles divergent.
 
 ## 1. Objectif
 
@@ -71,31 +72,42 @@ nom de paramètre — la couche JS ne touche jamais un pointeur.
 ```
 ┌──────────────────────────── Navigateur ────────────────────────────┐
 │                                                                     │
-│  index.html  ─────────────────────────────────────────────────┐    │
-│   ┌─────────────────────┐   ┌───────────────────────────────┐ │    │
-│   │  Panneau paramètres │   │   Online3DViewer (o3dv)       │ │    │
-│   │  (HTML/JS)          │   │   EmbeddedViewer + three.js   │ │    │
-│   │  - catalogue formes │   │   canvas WebGL                │ │    │
-│   │  - sliders / combos │   │                               │ │    │
-│   │  - import SVG        │   │   ▲ charge un Blob mesh        │ │    │
-│   └─────────┬───────────┘   └───────────────┬───────────────┘ │    │
-│             │ set(param,val)                 │ File/Blob (OBJ/GLB)  │
-│             ▼                                │                 │    │
-│   ┌──────────────────────────────────────────┴─────────────┐ │    │
-│   │        maker.js  (glue)  ⇄  cgmesh.wasm / cgmesh.js     │ │    │
-│   │   Embind : listShapes / create / getParams / setParam  │ │    │
-│   │            / regenerate / exportMesh(format) → bytes    │ │    │
-│   └────────────────────────────────────────────────────────┘ │    │
-│                          Emscripten module                    │    │
-│                                                               │    │
+│  index.html (accueil, aucun script)                                 │
+│      │                                                              │
+│      ├─→ shapes.html    ┐                                           │
+│      ├─→ gothic.html    │  une page par générateur                  │
+│      ├─→ relief.html    │  (§15)                                    │
+│      └─→ svg.html       ┘                                           │
+│              │                                                      │
+│   ┌──────────┴──────────┐   ┌───────────────────────────────┐      │
+│   │  js/pages/<page>.js │   │   Online3DViewer (o3dv)       │      │
+│   │   contrôles propres │   │   EmbeddedViewer + three.js   │      │
+│   │         ▲           │   │   canvas WebGL                │      │
+│   │  js/shell.js        │   │                               │      │
+│   │   chrome + cycle    │   │   ▲ Blob OBJ au bootstrap,     │      │
+│   │   de vie de la forme│   │   │ puis BufferGeometry        │      │
+│   │  js/{viewer,panel,  ├───┼───┘ remplacée en place         │      │
+│   │      exporters,ui}  │   │                               │      │
+│   └─────────┬───────────┘   └───────────────────────────────┘      │
+│             │ setParam(id,name,val)                                 │
+│             ▼                                                       │
+│   ┌─────────────────────────────────────────────────────────┐      │
+│   │   maker.js (glue)  ⇄  maker.wasm    — UN SEUL module,    │      │
+│   │   Embind : listShapes(category) / create* / getParams /  │      │
+│   │            setParam / regenerate / meshData              │      │
+│   └─────────────────────────────────────────────────────────┘      │
+│                    partagé par les 4 pages                          │
 └───────────────────────────────────────────────────────────────────┘
         cgmesh (C++) ── cgimg ── cgmath   [compilés statiquement en .wasm]
 ```
 
 Trois couches nettes :
 
-1. **cgmesh.wasm** — le C++ existant, exposé par une fine API Embind.
-2. **maker.js** — colle : appelle le WASM, construit le panneau, transfère le maillage au viewer.
+1. **maker.wasm** — le C++ existant, exposé par une fine API Embind. Un seul binaire pour
+   toutes les pages (§15).
+2. **`web/js/`** — colle : appelle le WASM, construit le panneau, transfère le maillage au
+   viewer. Découpée en modules ES partagés (`shell`, `viewer`, `panel`, `exporters`, `ui`,
+   `wasm`) + un module de ~40 lignes par page dans `js/pages/`.
 3. **Online3DViewer** — moteur de rendu embarqué (on utilise `EmbeddedViewer`, pas l'appli
    complète 3dviewer.net), affiche le maillage et gère caméra/lumières/orbit.
 
@@ -325,5 +337,77 @@ extrusion SVG, L-systèmes, tesselation, export maillage) **existe déjà** dans
 (c) l'**intégration Online3DViewer**, et (d) un **petit wrapper `ParameterizedLSystem`**. La
 compilation Emscripten est sans obstacle majeur tant qu'on laisse les dépendances lourdes
 (OpenNURBS/OCCT/ONNX/Poisson) désactivées et qu'on compile en mono-thread.
-</content>
-</invoke>
+
+---
+
+## 15. Une page par générateur, un seul module WASM
+
+La page unique initiale empilait quatre générateurs sans rapport (catalogue paramétrique,
+extrusion SVG, relief d'image, fenêtre gothique) : cinq sections d'import dont quatre inertes
+à tout instant, et les deux formes gothiques noyées parmi les 27 entrées du catalogue. Elle a
+été scindée en **quatre pages** plus un accueil (`index.html`, sans aucun script).
+
+### 15.1 Décision : un seul `maker.wasm`, pas un par page
+
+Mesuré sur la build de référence (gzip, ce que le navigateur télécharge réellement) :
+
+| Asset | brut | gzip |
+|---|---|---|
+| `web/maker.wasm` | 1023 Ko | **341 Ko** |
+| `web/vendor/o3dv.min.js` | 1058 Ko | **282 Ko** |
+| `web/maker.js` (glue Emscripten) | 98 Ko | 25 Ko |
+
+Trois raisons rendent le découpage du `.wasm` perdant :
+
+1. **Le noyau commun domine.** `mesh.cpp` (1917 l.), `half_edge` (641+475), `octree` (634),
+   `chull` (683), `polygon2` (814+252), `geometric_primitives`, `normals`, `material`,
+   `bounding_box`, plus clipper2 (8812 l.), glutess et cgmath (6170 l.) sont requis par les
+   quatre familles. Trois binaires les dupliqueraient : le total téléchargé par un visiteur
+   qui ouvre les trois pages **augmenterait** (~1000 Ko gz au lieu de 341).
+2. **`parameterized_shapes.cpp` est une TU unique** de 1217 lignes définissant les 31 classes.
+   Le linker ne peut pas la découper par famille — référencer `ParameterizedCube` tire tout
+   l'objet, vtables comprises. Séparer exigerait d'éclater `parameterized_shapes.{h,cpp}` dans
+   `src/cgmesh`, ce que §12.5 recommande précisément d'éviter.
+3. **embind désactive le dead-stripping** de tout ce qui est atteignable depuis
+   `EMSCRIPTEN_BINDINGS` : le gain espéré ne se matérialiserait pas sans retravailler les
+   bindings.
+
+Avec un module partagé, `maker.wasm` et `o3dv.min.js` sont téléchargés **une fois** et servis
+par le cache HTTP aux quatre pages. **Ne pas rouvrir ce débat sans nouvelle mesure.**
+
+Contrepartie assumée : quatre documents distincts ré-instancient le module à chaque navigation
+(compilation WASM, ~100–300 ms cache chaud). Si cela devenait gênant, le repli serait une SPA à
+routeur de hash partageant une instance — pas une découpe du binaire.
+
+### 15.2 Répartition du code
+
+`web/app.js` (752 l.) est remplacé par des modules ES : ~85 % de son contenu était déjà
+générique et n'a pas été réécrit, seulement déplacé.
+
+| Module | Rôle |
+|---|---|
+| `js/wasm.js` | chargement du module + garde-fou « bindings absents » (cache navigateur) |
+| `js/ui.js` | bannière d'erreur, `<input type=file>` robuste (re-sélection du même fichier) |
+| `js/viewer.js` | o3dv, capture du mesh three.js, remplacement de géométrie **en place** |
+| `js/panel.js` | panneau piloté par `getParams`/`setParam` |
+| `js/exporters.js` | OBJ / GLB / STL |
+| `js/shell.js` | injecte le chrome du panneau, possède la forme courante, coalescing rAF |
+| `js/pages/*.js` | ~40 lignes par page : ses seuls contrôles propres |
+
+Chaque `.html` ne déclare que ses contrôles, dans `<div id="pageControls">` ; le shell insère
+en-tête, bannière, panneau de paramètres, section Vue et footer d'export autour.
+
+### 15.3 Catalogue catégorisé
+
+`catalog()` dans `wasm_api.cpp` porte désormais une **catégorie** par entrée (`"parametric"` |
+`"gothic"`) et `listShapes(category)` filtre. La catégorie vit en C++ et non en JS pour rester
+une source unique de vérité : ajouter une forme n'oblige à éditer qu'un seul endroit. Une
+catégorie inconnue renvoie `[]` (et non tout le catalogue, qui masquerait la faute de frappe).
+
+### 15.4 Deep-link
+
+Les query strings de capture automatisée sont conservées : `?shape=Torus` sur `shapes.html`,
+`?shape=Gothic%20Window&Rosette%20foil%20count=18` sur `gothic.html`. Les paramètres sont
+maintenant appliqués **avant** le premier rendu (`setShape(..., {deepLink:true})`), au lieu de
+rendre les valeurs par défaut puis de re-déclencher un chargement o3dv par-dessus — l'ancien
+enchaînement laissait le recadrage caméra calé sur la géométrie du premier chargement.

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Image en relief — maker</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./vendor/o3dv.min.js" onerror="window.__o3dvMissing = true"></script>
+</head>
+<body>
+  <aside class="panel" id="panel">
+    <div id="pageControls">
+      <section class="group">
+        <label class="lbl" for="imageInput">Import image</label>
+        <input type="file" id="imageInput"
+               accept=".png,.jpg,.jpeg,.bmp,.tga,.ppm,.pgm,.pnm,image/*">
+        <figure class="preview" id="imagePreviewBox" hidden>
+          <img id="imagePreview" alt="Image source importée">
+          <figcaption id="imagePreviewInfo"></figcaption>
+        </figure>
+        <p class="hint-sm">Quantification + extrusion des régions de couleur. Baisser
+          « Max colors » pour aller plus vite.</p>
+      </section>
+    </div>
+  </aside>
+
+  <main id="viewer" class="viewer">
+    <div id="viewerHint" class="hint">Chargement du module…</div>
+  </main>
+
+  <script type="module" src="./js/pages/relief.js"></script>
+</body>
+</html>

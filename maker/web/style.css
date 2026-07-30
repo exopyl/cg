@@ -39,6 +39,15 @@ body {
 
 .panel header h1 { margin: 0; font-size: 20px; letter-spacing: 0.5px; }
 .panel header .sub { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+/* Retour vers l'accueil (les generateurs sont des pages distinctes). */
+.panel header .back {
+  display: inline-block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.panel header .back:hover { color: var(--accent); }
 
 .group { display: flex; flex-direction: column; gap: 6px; }
 .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
@@ -88,6 +97,10 @@ button:disabled { opacity: .5; cursor: default; }
 .param select { padding: 6px; }
 
 footer { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+/* Boutons propres a une page (ex. export JSON gothique). Sans :empty, le
+   conteneur vide consommerait le `gap` du footer sur les autres pages. */
+#footerExtras { display: flex; flex-direction: column; gap: 8px; }
+#footerExtras:empty { display: none; }
 .stats { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .btnrow { display: flex; gap: 8px; }
 .btnrow button { flex: 1; }
@@ -121,3 +134,53 @@ footer { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
 }
 /* Sans cette regle, .hint{display:flex} l'emporte sur l'attribut [hidden]. */
 .hint[hidden] { display: none; }
+
+/* ---- page d'accueil ---- */
+/* body est en flex/overflow:hidden pour la mise en page panneau+viewer : l'accueil
+   doit la neutraliser, c'est une page qui defile normalement. */
+body.home {
+  display: block;
+  height: auto;
+  min-height: 100%;
+  overflow: auto;
+}
+
+.home-main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 48px 24px;
+}
+
+.home-header h1 { margin: 0; font-size: 32px; letter-spacing: 0.5px; }
+.home-header .sub { margin: 6px 0 0; font-size: 14px; color: var(--muted); }
+
+.cards {
+  margin-top: 32px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  display: block;
+  padding: 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color .15s, background .15s;
+}
+.card:hover { border-color: var(--accent); background: var(--panel2); }
+.card h2 { margin: 0 0 8px; font-size: 16px; }
+.card p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+
+.home-footer { margin-top: 32px; font-size: 12px; color: var(--muted); }
+
+/* ---- divers ---- */
+code {
+  background: rgba(0, 0, 0, .3);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: .95em;
+}

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Formes paramétriques — maker</title>
+  <link rel="stylesheet" href="./style.css">
+  <!-- Online3DViewer (moteur de rendu). Fichier a placer dans maker/web/vendor/.
+       Charge en UMD -> expose le global `OV`. S'il est absent, le shell bascule en
+       mode degrade (stats + telechargement OBJ) et affiche une banniere. -->
+  <script src="./vendor/o3dv.min.js" onerror="window.__o3dvMissing = true"></script>
+</head>
+<body>
+  <!-- Le shell (js/shell.js) injecte AUTOUR de #pageControls : en-tete, banniere,
+       panneau de parametres, section Vue et footer d'export. Cette page ne declare
+       que ce qui lui est propre. -->
+  <aside class="panel" id="panel">
+    <div id="pageControls">
+      <section class="group">
+        <label class="lbl" for="catalog">Forme</label>
+        <select id="catalog"></select>
+      </section>
+    </div>
+  </aside>
+
+  <main id="viewer" class="viewer">
+    <div id="viewerHint" class="hint">Chargement du module…</div>
+  </main>
+
+  <script type="module" src="./js/pages/shapes.js"></script>
+</body>
+</html>

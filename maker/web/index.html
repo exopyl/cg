@@ -5,75 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>maker — cgmesh</title>
   <link rel="stylesheet" href="./style.css">
-  <!-- Online3DViewer (moteur de rendu). Fichier a placer dans maker/web/vendor/.
-       Charge en UMD -> expose le global `OV`. S'il est absent, app.js bascule en
-       mode degrade (stats + telechargement OBJ) et affiche une banniere. -->
-  <script src="./vendor/o3dv.min.js" onerror="window.__o3dvMissing = true"></script>
+  <!-- Volontairement AUCUN script : ni maker.js (341 Ko gz) ni o3dv.min.js
+       (282 Ko gz). L'accueil doit s'afficher instantanement ; chaque generateur
+       charge le module partage a l'ouverture de sa page. -->
 </head>
-<body>
-  <aside class="panel">
-    <header>
+<body class="home">
+  <main class="home-main">
+    <header class="home-header">
       <h1>maker</h1>
-      <p class="sub">cgmesh · WebAssembly</p>
+      <p class="sub">cgmesh · WebAssembly — génération de modèles 3D dans le navigateur</p>
     </header>
 
-    <div id="banner" class="banner" hidden></div>
+    <nav class="cards">
+      <a class="card" href="./shapes.html">
+        <h2>Formes paramétriques</h2>
+        <p>25 surfaces analytiques, voxels, fractales et L-systèmes, pilotées au curseur :
+          tore, bouteille de Klein, nœuds, éponge de Menger…</p>
+      </a>
 
-    <section class="group">
-      <label class="lbl" for="catalog">Forme</label>
-      <select id="catalog"></select>
-    </section>
+      <a class="card" href="./gothic.html">
+        <h2>Fenêtre gothique</h2>
+        <p>Remplage architectural paramétrique — lancettes, rosace, meneaux — avec
+          aller-retour du descripteur au format JSON.</p>
+      </a>
 
-    <section class="group">
-      <label class="lbl">Import SVG (extrusion)</label>
-      <input type="file" id="svgInput" accept=".svg,image/svg+xml">
-    </section>
+      <a class="card" href="./relief.html">
+        <h2>Image en relief</h2>
+        <p>Une image bitmap devient un relief coloré : quantification des couleurs,
+          vectorisation des régions puis extrusion.</p>
+      </a>
 
-    <section class="group">
-      <label class="lbl" for="imageInput">Import image (relief coloré)</label>
-      <input type="file" id="imageInput" accept=".png,.jpg,.jpeg,.bmp,.tga,.ppm,.pgm,.pnm,image/*">
-      <figure class="preview" id="imagePreviewBox" hidden>
-        <img id="imagePreview" alt="Image source importée">
-        <figcaption id="imagePreviewInfo"></figcaption>
-      </figure>
-      <p class="hint-sm">Quantification + extrusion des régions de couleur. Baisser « Max colors » pour aller plus vite.</p>
-    </section>
+      <a class="card" href="./svg.html">
+        <h2>Extrusion SVG</h2>
+        <p>Les contours fermés d'un fichier vectoriel sont tesselés et extrudés en un
+          volume imprimable.</p>
+      </a>
+    </nav>
 
-    <section class="group">
-      <label class="lbl">Import Gothic Window (JSON)</label>
-      <input type="file" id="gothicJsonInput" accept=".json,application/json">
-    </section>
-
-    <section class="group">
-      <div class="lbl">Paramètres</div>
-      <div id="params"></div>
-    </section>
-
-    <section class="group">
-      <div class="lbl">Vue</div>
-      <div class="ctrlrow"><span>Couleur du modèle</span><input type="color" id="modelColor" value="#b4bec8"></div>
-      <div class="ctrlrow"><span>Couleur du fond</span><input type="color" id="bgColor" value="#14161a"></div>
-      <div class="ctrlrow"><label for="wireframe">Fil de fer</label><input type="checkbox" id="wireframe"></div>
-      <button id="resetView">Recentrer la vue</button>
-    </section>
-
-    <footer>
-      <div id="stats" class="stats">—</div>
-      <div class="lbl">Export</div>
-      <input type="text" id="filename" value="maker" placeholder="nom du fichier" spellcheck="false">
-      <div class="btnrow">
-        <button id="download" disabled>OBJ</button>
-        <button id="downloadGlbBtn" disabled>GLB</button>
-        <button id="downloadStlBtn" disabled>STL</button>
-      </div>
-      <button id="exportGothicJsonBtn">Export Gothic Window (JSON)</button>
+    <footer class="home-footer">
+      Export OBJ · GLB · STL sur chaque page.
     </footer>
-  </aside>
-
-  <main id="viewer" class="viewer">
-    <div id="viewerHint" class="hint">Chargement du module…</div>
   </main>
-
-  <script type="module" src="./app.js"></script>
 </body>
 </html>

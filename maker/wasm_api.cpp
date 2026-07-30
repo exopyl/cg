@@ -5,7 +5,7 @@
 // Etape 2 (cf. maker/ANALYSE.md sec.4) : facade minimale exposant la logique
 // geometrique de cgmesh au navigateur.
 //
-//   listShapes()               -> JSON : catalogue des formes disponibles
+//   listShapes(category)       -> JSON : catalogue d'une categorie ("" = tout)
 //   createShape(name)          -> id entier (registre cote C++), -1 si inconnu
 //   createSvgExtrusion(svg)    -> id, a partir du texte SVG (via MEMFS)
 //   getParams(id)              -> JSON : parametres typees (name/type/value/min/max/choices)
@@ -67,39 +67,51 @@ using Factory = std::function<std::unique_ptr<IParameterized>()>;
 template <typename T>
 Factory make() { return [] { return std::unique_ptr<IParameterized>(new T()); }; }
 
+// Une entree du catalogue. La CATEGORIE partitionne le catalogue entre les pages
+// de maker/web/ : chacune n'expose que ses propres formes (listShapes(category)).
+// Elle vit ici et pas dans le JS pour rester une source unique de verite : ajouter
+// une forme ne demande d'editer qu'un seul endroit.
+struct CatalogEntry {
+    std::string name;       // nom affiche (== GetName())
+    std::string category;   // "parametric" | "gothic"
+    Factory     make;
+};
+
 // Catalogue : source unique de verite (nom affiche == GetName()). Les formes
-// necessitant un fichier (SVG, nuage de points implicite) ont leur propre
+// necessitant un fichier (SVG, image, nuage de points implicite) ont leur propre
 // fabrique dediee et ne figurent pas ici.
-const std::vector<std::pair<std::string, Factory>>& catalog()
+const std::vector<CatalogEntry>& catalog()
 {
-    static const std::vector<std::pair<std::string, Factory>> c = {
-        {"Cube",                  make<ParameterizedCube>()},
-        {"Sphere",                make<ParameterizedSphere>()},
-        {"Cylinder",              make<ParameterizedCylinder>()},
-        {"Cone",                  make<ParameterizedCone>()},
-        {"Capsule",               make<ParameterizedCapsule>()},
-        {"Torus",                 make<ParameterizedTorus>()},
-        {"Klein Bottle",          make<ParameterizedKleinBottle>()},
-        {"Helicoid",              make<ParameterizedHelicoid>()},
-        {"Seashell",              make<ParameterizedSeashell>()},
-        {"Seashell (von Seggern)",make<ParameterizedSeashellVonSeggern>()},
-        {"Corkscrew",             make<ParameterizedCorkscrew>()},
-        {"Mobius Strip",          make<ParameterizedMobiusStrip>()},
-        {"Radial Wave",           make<ParameterizedRadialWave>()},
-        {"Breather",              make<ParameterizedBreather>()},
-        {"Hyperbolic Paraboloid", make<ParameterizedHyperbolicParaboloid>()},
-        {"Monkey Saddle",         make<ParameterizedMonkeySaddle>()},
-        {"Blobs",                 make<ParameterizedBlobs>()},
-        {"Drop",                  make<ParameterizedDrop>()},
-        {"Guimard",               make<ParameterizedGuimard>()},
-        {"Torus Knot",            make<ParameterizedTorusKnot>()},
-        {"Cinquefoil Knot",       make<ParameterizedCinquefoilKnot>()},
-        {"Trefoil Knot",          make<ParameterizedTrefoilKnot>()},
-        {"Borromean Rings",       make<ParameterizedBorromeanRings>()},
-        {"Menger Sponge",         make<ParameterizedMengerSponge>()},
-        {"L-system",              make<ParameterizedLSystem>()},
-        {"Gothic Window",         make<ParameterizedGothicWindow>()},
-        {"Gothic Block",          make<ParameterizedGothicBlock>()},
+    static const std::string P = "parametric";
+    static const std::string G = "gothic";
+    static const std::vector<CatalogEntry> c = {
+        {"Cube",                  P, make<ParameterizedCube>()},
+        {"Sphere",                P, make<ParameterizedSphere>()},
+        {"Cylinder",              P, make<ParameterizedCylinder>()},
+        {"Cone",                  P, make<ParameterizedCone>()},
+        {"Capsule",               P, make<ParameterizedCapsule>()},
+        {"Torus",                 P, make<ParameterizedTorus>()},
+        {"Klein Bottle",          P, make<ParameterizedKleinBottle>()},
+        {"Helicoid",              P, make<ParameterizedHelicoid>()},
+        {"Seashell",              P, make<ParameterizedSeashell>()},
+        {"Seashell (von Seggern)",P, make<ParameterizedSeashellVonSeggern>()},
+        {"Corkscrew",             P, make<ParameterizedCorkscrew>()},
+        {"Mobius Strip",          P, make<ParameterizedMobiusStrip>()},
+        {"Radial Wave",           P, make<ParameterizedRadialWave>()},
+        {"Breather",              P, make<ParameterizedBreather>()},
+        {"Hyperbolic Paraboloid", P, make<ParameterizedHyperbolicParaboloid>()},
+        {"Monkey Saddle",         P, make<ParameterizedMonkeySaddle>()},
+        {"Blobs",                 P, make<ParameterizedBlobs>()},
+        {"Drop",                  P, make<ParameterizedDrop>()},
+        {"Guimard",               P, make<ParameterizedGuimard>()},
+        {"Torus Knot",            P, make<ParameterizedTorusKnot>()},
+        {"Cinquefoil Knot",       P, make<ParameterizedCinquefoilKnot>()},
+        {"Trefoil Knot",          P, make<ParameterizedTrefoilKnot>()},
+        {"Borromean Rings",       P, make<ParameterizedBorromeanRings>()},
+        {"Menger Sponge",         P, make<ParameterizedMengerSponge>()},
+        {"L-system",              P, make<ParameterizedLSystem>()},
+        {"Gothic Window",         G, make<ParameterizedGothicWindow>()},
+        {"Gothic Block",          G, make<ParameterizedGothicBlock>()},
     };
     return c;
 }
@@ -180,26 +192,31 @@ Mesh* meshOf(IParameterized* obj)
 //  API exposee
 // ===========================================================================
 
-// Catalogue des formes : ["Cube","Sphere",...]
-std::string listShapes()
+// Catalogue des formes d'une CATEGORIE : listShapes("parametric") renvoie
+// ["Cube","Sphere",...]. Une categorie vide renvoie le catalogue entier ; un nom
+// de categorie inconnu renvoie [] (et non le tout, qui masquerait la faute de
+// frappe en peuplant la page avec les 27 formes).
+std::string listShapes(const std::string& category)
 {
     std::string j = "[";
     bool first = true;
     for (const auto& e : catalog()) {
+        if (!category.empty() && e.category != category) continue;
         if (!first) j += ',';
         first = false;
-        j += '"'; j += jsonEscape(e.first); j += '"';
+        j += '"'; j += jsonEscape(e.name); j += '"';
     }
     j += ']';
     return j;
 }
 
-// Cree une forme du catalogue. Renvoie son id, ou -1 si le nom est inconnu.
+// Cree une forme du catalogue. Renvoie son id, ou -1 si le nom est inconnu. Les
+// noms etant uniques toutes categories confondues, la categorie n'intervient pas.
 int createShape(const std::string& name)
 {
     for (const auto& e : catalog()) {
-        if (e.first == name)
-            return registerObject(e.second());
+        if (e.name == name)
+            return registerObject(e.make());
     }
     return -1;
 }

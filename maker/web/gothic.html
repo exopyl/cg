@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fenêtre gothique — maker</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./vendor/o3dv.min.js" onerror="window.__o3dvMissing = true"></script>
+</head>
+<body>
+  <aside class="panel" id="panel">
+    <div id="pageControls">
+      <section class="group">
+        <label class="lbl" for="catalog">Forme</label>
+        <select id="catalog"></select>
+      </section>
+
+      <section class="group">
+        <label class="lbl" for="gothicJsonInput">Import descripteur (JSON)</label>
+        <input type="file" id="gothicJsonInput" accept=".json,application/json">
+        <p class="hint-sm">Schéma <code>gothic-window-v2</code>. Le bouton d'export en bas
+          de panneau produit le même schéma depuis les valeurs courantes.</p>
+      </section>
+    </div>
+  </aside>
+
+  <main id="viewer" class="viewer">
+    <div id="viewerHint" class="hint">Chargement du module…</div>
+  </main>
+
+  <script type="module" src="./js/pages/gothic.js"></script>
+</body>
+</html>

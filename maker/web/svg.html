@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Extrusion SVG — maker</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./vendor/o3dv.min.js" onerror="window.__o3dvMissing = true"></script>
+</head>
+<body>
+  <aside class="panel" id="panel">
+    <div id="pageControls">
+      <section class="group">
+        <label class="lbl" for="svgInput">Import SVG</label>
+        <input type="file" id="svgInput" accept=".svg,image/svg+xml">
+        <p class="hint-sm">Les contours fermés du fichier sont tesselés puis extrudés.
+          « Flatten Tol » contrôle la finesse d'échantillonnage des courbes.</p>
+      </section>
+    </div>
+  </aside>
+
+  <main id="viewer" class="viewer">
+    <div id="viewerHint" class="hint">Chargement du module…</div>
+  </main>
+
+  <script type="module" src="./js/pages/svg.js"></script>
+</body>
+</html>
