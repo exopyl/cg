@@ -13,7 +13,7 @@ import { loadModule } from "./wasm.js";
 import { createBanner, createFileInputs } from "./ui.js";
 import { createViewer } from "./viewer.js";
 import { buildPanel } from "./panel.js";
-import { downloadObj, downloadGlb, downloadStl } from "./exporters.js";
+import { downloadObj, downloadStl } from "./exporters.js";
 
 const el = (id) => document.getElementById(id);
 
@@ -55,7 +55,6 @@ export async function createShell({ title, subtitle }) {
     <input type="text" id="filename" value="maker" placeholder="nom du fichier" spellcheck="false">
     <div class="btnrow">
       <button id="downloadObjBtn" disabled>OBJ</button>
-      <button id="downloadGlbBtn" disabled>GLB</button>
       <button id="downloadStlBtn" disabled>STL</button>
     </div>
     <div id="footerExtras"></div>`;
@@ -76,7 +75,7 @@ export async function createShell({ title, subtitle }) {
   const bgColorInput    = el("bgColor");
   const wireframeInput  = el("wireframe");
   const hintEl          = el("viewerHint");
-  const exportBtns      = [el("downloadObjBtn"), el("downloadGlbBtn"), el("downloadStlBtn")];
+  const exportBtns      = [el("downloadObjBtn"), el("downloadStlBtn")];
 
   const setStatus = (text) => { statsEl.textContent = text; };
   const bnr   = createBanner(banner, setStatus);
@@ -179,7 +178,6 @@ export async function createShell({ title, subtitle }) {
 
   const withShape = (fn) => () => { if (currentId >= 0) fn(Module, currentId, filenameInput.value); };
   el("downloadObjBtn").addEventListener("click", withShape(downloadObj));
-  el("downloadGlbBtn").addEventListener("click", withShape(downloadGlb));
   el("downloadStlBtn").addEventListener("click", withShape(downloadStl));
 
   // Deep-link des parametres : toute cle de la query string dont le nom correspond

@@ -2,6 +2,70 @@
 
 #include "image.h"
 
+#include <map>
+#include <utility>
+#include <vector>
+
+namespace {
+
+// Image de LABELS : une couleur RGB distincte -> un indice, attribue dans l'ordre
+// de premiere rencontre en balayage raster. Les deux filtres non lineaires
+// ci-dessous (mode, absorption) comparent et recopient des couleurs sans jamais
+// les melanger : travailler sur des indices rend le vote O(1) par voisin, la ou un
+// std::map par pixel coutait un log(n).
+//
+// L'alpha n'entre pas dans le label et n'est pas recopie : chaque pixel garde le
+// sien (cf. applyLabels).
+struct LabelImage
+{
+	int w = 0, h = 0;
+	std::vector<int>          px;    // label par pixel
+	std::vector<unsigned int> rgb;   // label -> RGB empaquete
+	int  label (int x, int y) const { return px[(size_t)y * w + x]; }
+	void set   (int x, int y, int l) { px[(size_t)y * w + x] = l; }
+};
+
+LabelImage toLabels (const Img& img)
+{
+	LabelImage L;
+	L.w = (int)img.width ();
+	L.h = (int)img.height ();
+	L.px.assign ((size_t)L.w * L.h, 0);
+
+	std::map<unsigned int, int> seen;
+	for (int y = 0; y < L.h; ++y)
+		for (int x = 0; x < L.w; ++x)
+		{
+			unsigned char r = 0, g = 0, b = 0, a = 0;
+			img.get_pixel ((unsigned)x, (unsigned)y, &r, &g, &b, &a);
+			const unsigned int key = ((unsigned)r << 16) | ((unsigned)g << 8) | (unsigned)b;
+			std::map<unsigned int, int>::iterator it = seen.find (key);
+			if (it == seen.end ())
+			{
+				it = seen.emplace (key, (int)L.rgb.size ()).first;
+				L.rgb.push_back (key);
+			}
+			L.set (x, y, it->second);
+		}
+	return L;
+}
+
+void applyLabels (const LabelImage& L, Img& img)
+{
+	for (int y = 0; y < L.h; ++y)
+		for (int x = 0; x < L.w; ++x)
+		{
+			const unsigned int c = L.rgb[(size_t)L.label (x, y)];
+			unsigned char r = 0, g = 0, b = 0, a = 0;
+			img.get_pixel ((unsigned)x, (unsigned)y, &r, &g, &b, &a);
+			img.set_pixel ((unsigned)x, (unsigned)y,
+			               (unsigned char)(c >> 16), (unsigned char)(c >> 8),
+			               (unsigned char)c, a);
+		}
+}
+
+} // namespace
+
 int Img::filter_sobel ()
 {
 	unsigned char *pPixels = (unsigned char*)malloc(4*m_iWidth*m_iHeight*sizeof(unsigned char));
@@ -160,12 +224,18 @@ int Img::bilateral_filtering (void)
 				{
 					iii = i + ii;
 					jjj = j + jj;
+					// Miroir de bord. `iii -= iii` donnait 0 (et non un miroir) :
+					// tout le demi-voisinage hors cadre s'effondrait sur la colonne
+					// 0, qui pesait alors jusqu'a 4 fois son poids -- visible sur le
+					// lisere exterieur de l'image. -1-iii est le pendant symetrique
+					// exact de la borne haute 2*W-1-iii : les deux replient autour du
+					// bord en dupliquant le pixel de bord (-1 -> 0, W -> W-1).
 					if (iii < 0)
-						iii -= iii;
+						iii = -1 - iii;
 					if (iii > iWidth-1)
 						iii = 2 * iWidth - 1 - iii;
 					if (jjj < 0)
-						jjj -= jjj;
+						jjj = -1 - jjj;
 					if (jjj > iHeight-1)
 						jjj = 2 * iHeight - 1 - jjj;
 						
@@ -202,6 +272,145 @@ int Img::bilateral_filtering (void)
 	free (m_pPixels);
 	m_pPixels = pPixels;
 
+	return 0;
+}
+
+//
+// Filtre de MODE (vote majoritaire sur un voisinage carre).
+//
+// Chaque passe LIT un instantane (`src`) et ECRIT dans `L`, sinon le resultat
+// dependrait de l'ordre de balayage : un pixel deja modifie voterait dans le
+// voisinage de son successeur.
+//
+// A egalite, le pixel central est conserve -- la comparaison est STRICTE et part
+// du compte du centre. Sans cette regle, une frontiere franche entre deux regions
+// deriverait d'un pixel a chaque passe.
+//
+int Img::filter_majority (int radius, int passes)
+{
+	if (m_pPixels == nullptr || m_iWidth == 0 || m_iHeight == 0)
+		return -1;
+	if (radius < 1 || passes < 1)
+		return 0;                      // rien a faire, pas une erreur
+
+	LabelImage L = toLabels (*this);
+	const int nLabels = (int)L.rgb.size ();
+	std::vector<int> votes ((size_t)nLabels, 0);
+	// Un label touche par pixel visite au plus : (2r+1)^2 voisins.
+	const int wnd = (2 * radius + 1) * (2 * radius + 1);
+	std::vector<int> touched ((size_t)wnd, 0);
+
+	for (int pass = 0; pass < passes; ++pass)
+	{
+		const std::vector<int> src = L.px;
+
+		for (int y = 0; y < L.h; ++y)
+			for (int x = 0; x < L.w; ++x)
+			{
+				const int centre = src[(size_t)y * L.w + x];
+				int nTouched = 0;
+				for (int dy = -radius; dy <= radius; ++dy)
+					for (int dx = -radius; dx <= radius; ++dx)
+					{
+						const int xx = x + dx, yy = y + dy;
+						if (xx < 0 || yy < 0 || xx >= L.w || yy >= L.h) continue;
+						const int l = src[(size_t)yy * L.w + xx];
+						if (votes[(size_t)l]++ == 0) touched[(size_t)nTouched++] = l;
+					}
+
+				int best = centre, bestVotes = votes[(size_t)centre];
+				for (int i = 0; i < nTouched; ++i)
+					if (votes[(size_t)touched[(size_t)i]] > bestVotes)
+					{
+						bestVotes = votes[(size_t)touched[(size_t)i]];
+						best = touched[(size_t)i];
+					}
+				for (int i = 0; i < nTouched; ++i) votes[(size_t)touched[(size_t)i]] = 0;
+
+				L.set (x, y, best);
+			}
+	}
+
+	applyLabels (L, *this);
+	return 0;
+}
+
+//
+// Absorption des composantes connexes trop petites.
+//
+// Chaque passe MESURE sur `L` intact et ECRIT dans une copie, comme
+// filter_majority. Muter `L` au fil du balayage rendait la passe dependante de
+// l'ordre : une region d'accueil rencontree APRES l'absorption d'un mouchetis
+// voyait ses cellules fraichement absorbees exclues de son flood (leur `comp`
+// etait deja marque), donc une taille sous-estimee -- et pouvait a son tour passer
+// sous le seuil et partir dans une autre couleur.
+//
+// Une composante n'est repeinte que d'une couleur DEJA presente sur sa frontiere :
+// l'etiquetage reste un pavage complet de l'image, sans trou. C'est ce qui permet
+// aux appelants qui vectorisent ensuite les regions de garder une emprise exacte.
+//
+int Img::absorb_small_regions (int minArea, int passes)
+{
+	if (m_pPixels == nullptr || m_iWidth == 0 || m_iHeight == 0)
+		return -1;
+	if (minArea <= 0 || passes < 1)
+		return 0;                      // rien a faire, pas une erreur
+
+	LabelImage L = toLabels (*this);
+	const int dx4[4] = { 1, -1, 0, 0 }, dy4[4] = { 0, 0, 1, -1 };
+
+	for (int pass = 0; pass < passes; ++pass)
+	{
+		std::vector<int> comp ((size_t)L.w * L.h, -1);
+		std::vector<int> next = L.px;   // les fusions de CETTE passe vont ici
+		bool merged = false;
+		int nComp = 0;
+
+		for (int y0 = 0; y0 < L.h; ++y0)
+			for (int x0 = 0; x0 < L.w; ++x0)
+			{
+				if (comp[(size_t)y0 * L.w + x0] != -1) continue;
+				const int mine = L.label (x0, y0);
+
+				// flood fill de la composante, en comptant les labels de sa frontiere
+				std::vector<std::pair<int,int>> cells;
+				std::map<int, int> borderVotes;
+				std::vector<std::pair<int,int>> stack { { x0, y0 } };
+				comp[(size_t)y0 * L.w + x0] = nComp;
+				while (!stack.empty ())
+				{
+					const std::pair<int,int> p = stack.back (); stack.pop_back ();
+					cells.push_back (p);
+					for (int k = 0; k < 4; ++k)
+					{
+						const int xx = p.first + dx4[k], yy = p.second + dy4[k];
+						if (xx < 0 || yy < 0 || xx >= L.w || yy >= L.h) continue;
+						const int other = L.label (xx, yy);
+						if (other != mine) { borderVotes[other]++; continue; }
+						if (comp[(size_t)yy * L.w + xx] != -1) continue;
+						comp[(size_t)yy * L.w + xx] = nComp;
+						stack.emplace_back (xx, yy);
+					}
+				}
+				++nComp;
+
+				if ((int)cells.size () >= minArea || borderVotes.empty ())
+					continue;
+
+				int winner = borderVotes.begin ()->first, best = -1;
+				for (std::map<int,int>::const_iterator it = borderVotes.begin (); it != borderVotes.end (); ++it)
+					if (it->second > best) { best = it->second; winner = it->first; }
+
+				for (size_t c = 0; c < cells.size (); ++c)
+					next[(size_t)cells[c].second * L.w + cells[c].first] = winner;
+				merged = true;
+			}
+
+		if (!merged) break;
+		L.px.swap (next);
+	}
+
+	applyLabels (L, *this);
 	return 0;
 }
 

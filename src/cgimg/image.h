@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdio.h>
+#include <vector>
 #include "../cgmath/cgmath.h"
 #include "palette.h"
 
@@ -65,6 +66,16 @@ public:
 	Palette* get_palette (void);
 	int flood_fill (unsigned int x, unsigned int y, unsigned char r, unsigned char g, unsigned char b);
 
+	// Étiquetage des composantes connexes 4-connexes de couleur identique (RGB ;
+	// l'alpha n'entre pas dans l'égalité). `labels` reçoit un indice de composante
+	// par pixel, dans l'ordre de première rencontre en balayage raster ; `colors`,
+	// s'il est fourni, reçoit la couleur de chaque composante. Renvoie le nombre de
+	// composantes, ou -1 si l'image est vide.
+	//
+	// Complète flood_fill, qui REMPLIT sans étiqueter : il ne rend aucune carte de
+	// composantes exploitable.
+	int label_components (std::vector<int>& labels, std::vector<Color>* colors = nullptr) const;
+
 	void convert_to_grayscale (grayscale_method_type grayscale_method_id = GRAYSCALE_LUMINOSITY, unsigned char nlevels = 255);
 
 	// test images
@@ -94,6 +105,25 @@ public:
 	int gaussian_blur (void);
 	int blur (void);
 	int bilateral_filtering (void);
+
+	// Filtre de MODE : chaque pixel prend la couleur la plus fréquente de son
+	// voisinage carré (2*radius+1). Égalité -> le pixel central est conservé, pour
+	// qu'une frontière franche ne dérive pas. Non linéaire : filter() ne peut pas
+	// l'exprimer (un vote majoritaire n'est pas une convolution).
+	//
+	// Chaque passe lit un instantané de l'image, donc le résultat ne dépend pas de
+	// l'ordre de balayage. L'alpha de chaque pixel est conservé.
+	int filter_majority (int radius = 1, int passes = 1);
+
+	// Absorbe toute composante connexe (4-connexe, couleur identique) d'aire
+	// strictement inférieure à `minArea` dans la couleur la plus fréquente sur sa
+	// frontière. Répété jusqu'à `passes` fois : fusionner un mouchetis dans un petit
+	// voisin peut laisser le résultat encore sous le seuil.
+	//
+	// Le nombre de couleurs ne peut que décroître : une région n'est jamais peinte
+	// d'une couleur absente de son voisinage, donc l'image reste un pavage complet.
+	int absorb_small_regions (int minArea, int passes = 3);
+
 	int saturate (float t);
 	int brightness (float t);
 	int gamma (float t);
@@ -144,7 +174,16 @@ public:
 	// crop / resample
 	//
 	int crop (Img *pImg, int x, int y, unsigned int width, unsigned int height);
-	int resize (unsigned int width, unsigned int height, int mode=1); // 0 : nearest neighbour / 1 : bilinear / 2 : most current color in superpixel
+	// mode 0 : nearest neighbour
+	//      1 : bilinear
+	//      2 : couleur majoritaire du superpixel, pas CONSTANT (m_iWidth/width en
+	//          division entière) -- les dernières colonnes/lignes de la source ne
+	//          sont pas lues quand les dimensions ne se divisent pas. Historique.
+	//      3 : couleur majoritaire du superpixel, bornes de bloc EXACTES
+	//          [i*W/w, (i+1)*W/w) -- couvre le reste de la division, contrairement
+	//          au mode 2. Égalité départagée par valeur RGB croissante, pour que le
+	//          résultat ne dépende pas de l'ordre de parcours.
+	int resize (unsigned int width, unsigned int height, int mode=1);
 	int resize_pixel (unsigned int n);
 
 	int copy (unsigned int x, unsigned int y, Img *pImg);

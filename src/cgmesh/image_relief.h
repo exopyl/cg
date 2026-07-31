@@ -135,6 +135,21 @@ struct ImageReliefOptions
 	float     wallThickness = 0.03f;         // perimeter wall thickness
 	float     wallHeight    = 0.10f;         // wall height (default = blockHeight)
 
+	// --- Cadre (plaque de base + mur périmétrique) ---
+	//
+	// Le cadre est un ACCESSOIRE de présentation : il encadre le contenu et lui
+	// donne un support. Il n'a rien à faire dans un export destiné à l'impression
+	// ou à l'intégration, où l'on ne veut que les régions extrudées — d'où ces deux
+	// interrupteurs.
+	//
+	// Attention aux conventions qui en dépendent :
+	//  - `image_to_relief` : GetNMaterials() == nCouleurs + emitBase + emitWall ;
+	//  - `image_to_relief_per_color` : la base et le mur restent les DERNIÈRES
+	//    entrées, mais n'y figurent que si demandés — le vecteur peut donc contenir
+	//    les seules couches de couleur.
+	bool      emitBase = true;
+	bool      emitWall = true;
+
 	// --- Output ---
 	// Blocks are closed solids, so two adjacent blocks each carry their own wall
 	// on the shared boundary (coincident, hidden faces). Set false to drop those

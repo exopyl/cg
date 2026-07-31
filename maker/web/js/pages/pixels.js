@@ -69,12 +69,16 @@ runPage(async () => {
   });
 
   // --------------------------------------------------------------------------
-  // Export par bloc : UN fichier OBJ portant un groupe `o block_NNNN_color_NN`
-  // par bloc connexe. Tout slicer sait les séparer, et ça n'ajoute aucune
-  // dépendance zip côté navigateur.
+  // Export par bloc : un OBJ portant un groupe `o block_NNNN_color_NN` par bloc
+  // connexe, plus son .mtl compagnon — les deux dans une seule archive ZIP, donc
+  // un seul téléchargement.
+  //
+  // Sérialisé par cgmesh (MeshIO::export_obj_zip_bytes) sur les blocs fusionnés.
+  // C'est le C++ qui nomme les entrées internes, puisqu'il dérive la ligne
+  // `mtllib` du chemin de sortie ; on reprend donc le nom qu'il renvoie.
   // --------------------------------------------------------------------------
   const exportBtn = document.createElement("button");
-  exportBtn.textContent = "OBJ par blocs";
+  exportBtn.textContent = "ZIP par blocs (OBJ+MTL)";
   exportBtn.addEventListener("click", () => {
     const id = ctx.currentId();
     if (id < 0) return;
@@ -83,12 +87,13 @@ runPage(async () => {
     // navigateur peindre le message avant le gel.
     setTimeout(() => {
       try {
-        const text = ctx.Module.exportPixelBlocksObj(id);
-        if (!text) { ctx.setStatus("Export par blocs : forme non pixelisée"); return; }
-        const nBlocks = (text.match(/^o /gm) || []).length;
-        saveBlob(new Blob([text], { type: "text/plain" }),
-                 safeName(document.getElementById("filename").value + "_blocks", ".obj"));
-        ctx.setStatus(`${nBlocks} blocs exportés`);
+        const base = document.getElementById("filename").value + "_blocks";
+        const res = ctx.Module.exportPixelBlocks(id, base);
+        // Vue typée sur le tas WASM : la copie est obligatoire.
+        const bytes = new Uint8Array(res.bytes);
+        if (!bytes.length) { ctx.setStatus("Export par blocs : forme non pixelisée"); return; }
+        saveBlob(new Blob([bytes], { type: "application/zip" }), res.name + ".zip");
+        ctx.setStatus(`${res.blocks} blocs exportés (ZIP)`);
       } catch (e) {
         ctx.banner.report("Export par blocs a échoué", e);
       }

@@ -2,13 +2,11 @@
 
 #include "../src/cgimg/cgimg.h"
 #include "../src/cgmesh/image_pixel_blocks.h"
-#include "../src/cgmesh/image_region_pipeline.h"
 #include "../src/cgmesh/image_vectorization.h"
 #include "../src/cgmesh/material.h"
 #include "../src/cgmesh/mesh.h"
 
 #include <cmath>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -64,108 +62,7 @@ void destroyAll(std::vector<Mesh*>& v)
 	v.clear();
 }
 
-// Toutes les couleurs distinctes d'une image, empaquetees.
-std::set<unsigned int> colorsOf(const Img& img)
-{
-	std::set<unsigned int> out;
-	for (unsigned int y = 0; y < img.height(); ++y)
-		for (unsigned int x = 0; x < img.width(); ++x)
-		{
-			unsigned char r = 0, g = 0, b = 0, a = 0;
-			img.get_pixel(x, y, &r, &g, &b, &a);
-			out.insert(((unsigned)r << 16) | ((unsigned)g << 8) | (unsigned)b);
-		}
-	return out;
-}
-
-unsigned int pixelAt(const Img& img, int x, int y)
-{
-	unsigned char r = 0, g = 0, b = 0, a = 0;
-	img.get_pixel((unsigned)x, (unsigned)y, &r, &g, &b, &a);
-	return ((unsigned)r << 16) | ((unsigned)g << 8) | (unsigned)b;
-}
-
-const unsigned int RED   = 0xff0000;
-const unsigned int BLUE  = 0x0000ff;
-const unsigned int WHITE = 0xffffff;
-
 } // namespace
-
-// ---------------------------------------------------------------------------
-//  Pixelisation : vote majoritaire
-// ---------------------------------------------------------------------------
-
-// Un bloc source 4x4 contenant 10 rouges et 6 bleus doit sortir ROUGE. Une
-// moyenne produirait une teinte violacee absente de l'image -- c'est precisement
-// ce que le vote evite.
-TEST(TEST_cgmesh_image_pixel_blocks, majority_vote_picks_the_dominant_colour)
-{
-	Img img(4, 4, false);
-	fillRect(img, 0, 0, 4, 4, 255, 0, 0);       // 16 rouges
-	fillRect(img, 0, 0, 3, 2, 0, 0, 255);       // 6 bleus -> 10 rouges restants
-
-	ASSERT_TRUE(pixelize_majority(img, 1));
-	EXPECT_EQ(img.width(), 1u);
-	EXPECT_EQ(img.height(), 1u);
-	EXPECT_EQ(pixelAt(img, 0, 0), RED);
-}
-
-// Le vote ne choisit que parmi des couleurs presentes : l'ensemble des couleurs
-// de sortie est inclus dans celui des couleurs d'entree.
-TEST(TEST_cgmesh_image_pixel_blocks, majority_vote_never_invents_a_colour)
-{
-	Img img(64, 64, false);
-	for (int y = 0; y < 64; ++y)
-		for (int x = 0; x < 64; ++x)
-		{
-			const bool red = ((x / 3) + (y / 5)) % 2 == 0;
-			img.set_pixel((unsigned)x, (unsigned)y,
-			              red ? 255 : 0, 0, red ? 0 : 255, 255);
-		}
-	const std::set<unsigned int> before = colorsOf(img);
-	ASSERT_EQ(before.size(), 2u);
-
-	ASSERT_TRUE(pixelize_majority(img, 7));     // 64 n'est pas multiple de 7
-	const std::set<unsigned int> after = colorsOf(img);
-
-	for (unsigned int c : after)
-		EXPECT_EQ(before.count(c), 1u) << "couleur inventee : " << std::hex << c;
-}
-
-// Les bornes de bloc couvrent TOUTE la source, reste compris. Img::resize mode 2
-// avance d'un pas constant W/w et laisse tomber les dernieres colonnes : sur
-// 100 px en 7 cellules, il n'en couvrirait que 98.
-TEST(TEST_cgmesh_image_pixel_blocks, majority_vote_covers_the_trailing_remainder)
-{
-	// Blanc partout, sauf les 4 dernieres colonnes en rouge. Avec 100/7 = 14 (pas
-	// constant), les colonnes 98-99 ne seraient jamais lues.
-	Img img(100, 10, false);
-	fillRect(img, 0, 0, 100, 10, 255, 255, 255);
-	fillRect(img, 96, 0, 100, 10, 255, 0, 0);
-
-	ASSERT_TRUE(pixelize_majority(img, 7));
-	ASSERT_EQ(img.width(), 7u);
-
-	// La derniere cellule couvre [85,100) : 15 px dont 4 rouges -> reste blanche,
-	// mais elle DOIT avoir lu les colonnes de queue. On le verifie autrement :
-	// avec une cellule qui les contient en majorite.
-	Img img2(100, 10, false);
-	fillRect(img2, 0, 0, 100, 10, 255, 255, 255);
-	fillRect(img2, 90, 0, 100, 10, 255, 0, 0);   // 10 derniers px rouges
-
-	ASSERT_TRUE(pixelize_majority(img2, 10));    // cellule 9 = [90,100), 100% rouge
-	ASSERT_EQ(img2.width(), 10u);
-	EXPECT_EQ(pixelAt(img2, 9, 0), RED)
-		<< "la derniere cellule n'a pas lu les colonnes de queue";
-}
-
-TEST(TEST_cgmesh_image_pixel_blocks, majority_vote_refuses_to_upscale)
-{
-	Img img(8, 8, false);
-	fillRect(img, 0, 0, 8, 8, 1, 2, 3);
-	EXPECT_TRUE(pixelize_majority(img, 32));   // no-op, pas une erreur
-	EXPECT_EQ(img.width(), 8u);
-}
 
 // ---------------------------------------------------------------------------
 //  Contours en escalier
@@ -426,4 +323,79 @@ TEST(TEST_cgmesh_image_pixel_blocks, pixel_width_larger_than_source_is_harmless)
 	ASSERT_NE(m, nullptr);
 	EXPECT_GT(m->GetNFaces(), 0u);
 	delete m;
+}
+
+// ---------------------------------------------------------------------------
+//  Cadre optionnel (base + mur)
+// ---------------------------------------------------------------------------
+// Le cadre est un accessoire de presentation ; un export destine a l'impression
+// ne doit pouvoir contenir QUE les blocs. Avant correction, emitBase/emitWall
+// existaient dans les options mais n'etaient jamais cables depuis l'UI : le cadre
+// etait donc toujours present, y compris a l'export.
+
+TEST(TEST_cgmesh_image_pixel_blocks, frame_can_be_switched_off_per_component)
+{
+	Img img(32, 32, false);
+	fillRect(img, 0, 0, 32, 32, 255, 255, 255);
+	fillRect(img, 10, 10, 22, 22, 255, 0, 0);
+	ASSERT_EQ(img.save(kFile), 0);
+
+	ImagePixelBlocksOptions opt = rawOptions(/*pixelWidth=*/16, /*maxColors=*/4);
+
+	opt.emitBase = true;  opt.emitWall = true;
+	std::vector<Mesh*> framed = image_to_pixel_blocks_per_component(kFile, opt);
+	opt.emitBase = false; opt.emitWall = false;
+	std::vector<Mesh*> bare = image_to_pixel_blocks_per_component(kFile, opt);
+
+	ASSERT_FALSE(framed.empty());
+	ASSERT_FALSE(bare.empty());
+	// Deux entrees de moins, et plus aucun maillage nomme base/wall.
+	EXPECT_EQ(framed.size(), bare.size() + 2);
+	EXPECT_EQ(materialName(*framed[framed.size() - 2], 0), "base");
+	EXPECT_EQ(materialName(*framed[framed.size() - 1], 0), "wall");
+	for (Mesh* m : bare)
+	{
+		const std::string n = materialName(*m, 0);
+		EXPECT_NE(n, "base");
+		EXPECT_NE(n, "wall");
+	}
+	destroyAll(framed);
+	destroyAll(bare);
+}
+
+// Sans cadre, l'emprise du modele se reduit au contenu : plus de marge ni de mur.
+// C'est le symptome que voyait l'utilisateur -- une bbox trop large a l'export.
+TEST(TEST_cgmesh_image_pixel_blocks, dropping_the_frame_shrinks_the_footprint_to_the_content)
+{
+	Img img(32, 32, false);
+	fillRect(img, 0, 0, 32, 32, 255, 255, 255);
+	fillRect(img, 10, 10, 22, 22, 255, 0, 0);
+	ASSERT_EQ(img.save(kFile), 0);
+
+	ImagePixelBlocksOptions opt = rawOptions(/*pixelWidth=*/16, /*maxColors=*/4);
+	opt.fitSize = 1.0f;
+	opt.margin = 0.05f;
+	opt.wallThickness = 0.03f;
+
+	opt.emitBase = true;  opt.emitWall = true;
+	Mesh* framed = image_to_pixel_blocks(kFile, opt);
+	opt.emitBase = false; opt.emitWall = false;
+	Mesh* bare = image_to_pixel_blocks(kFile, opt);
+	ASSERT_NE(framed, nullptr);
+	ASSERT_NE(bare, nullptr);
+
+	float fMin[3], fMax[3], bMin[3], bMax[3];
+	getBBox(*framed, fMin, fMax);
+	getBBox(*bare, bMin, bMax);
+
+	// Avec cadre : contenu (fitSize) + 2*(margin + wallThickness).
+	EXPECT_NEAR(fMax[0] - fMin[0], 1.0f + 2 * (0.05f + 0.03f), 1e-3f);
+	// Sans cadre : le contenu seul.
+	EXPECT_NEAR(bMax[0] - bMin[0], 1.0f, 1e-3f);
+	// Et le fond de la plaque disparait : z part de baseThickness, pas de 0.
+	EXPECT_NEAR(fMin[2], 0.0f, 1e-4f);
+	EXPECT_NEAR(bMin[2], opt.baseThickness, 1e-4f);
+
+	delete framed;
+	delete bare;
 }

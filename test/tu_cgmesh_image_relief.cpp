@@ -445,3 +445,39 @@ TEST(TEST_cgmesh_image_relief, nonexistent_file_fails_cleanly)
 	EXPECT_EQ(image_to_relief("./tu_image_relief_does_not_exist.ppm", opt), nullptr);
 	EXPECT_TRUE(image_to_relief_per_color("./tu_image_relief_does_not_exist.ppm", opt).empty());
 }
+
+// Le cadre (plaque + mur) est desormais optionnel : un export destine a
+// l'impression ne doit pouvoir contenir que les regions extrudees. Avant
+// correction, appendBase/appendWall etaient appeles inconditionnellement.
+TEST(TEST_cgmesh_image_relief, frame_is_optional)
+{
+	ASSERT_TRUE(writeTwoColorImage());
+
+	ImageReliefOptions opt = defaultOptions();
+	opt.emitBase = false;
+	opt.emitWall = false;
+
+	std::vector<Mesh*> bare = image_to_relief_per_color(kInputFile, opt);
+	ASSERT_FALSE(bare.empty());
+	for (Mesh* m : bare)
+	{
+		Material* mat = m->GetMaterial(0);
+		ASSERT_NE(mat, nullptr);
+		EXPECT_NE(mat->GetName(), "base");
+		EXPECT_NE(mat->GetName(), "wall");
+	}
+
+	Mesh* single = image_to_relief(kInputFile, opt);
+	ASSERT_NE(single, nullptr);
+	// Un materiau par couche de couleur, et RIEN de plus.
+	EXPECT_EQ(single->GetNMaterials(), (unsigned int)bare.size());
+
+	// L'emprise se reduit au contenu : plus de marge ni de mur.
+	float vmin[3], vmax[3];
+	getBBox(*single, vmin, vmax);
+	EXPECT_NEAR(vmax[0] - vmin[0], opt.fitSize, 1e-3f);
+	EXPECT_NEAR(vmin[2], opt.baseThickness, 1e-4f);
+
+	for (Mesh* m : bare) delete m;
+	delete single;
+}

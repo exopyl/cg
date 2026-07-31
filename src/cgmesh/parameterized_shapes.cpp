@@ -528,6 +528,10 @@ std::vector<Parameter> ParameterizedImageRelief::GetParameters()
 		Parameter::MakeFloat("Wall thickness",  &m_wallThickness, 0.001f, 20.f),
 		Parameter::MakeFloat("Wall height",     &m_wallHeight,    0.001f, 20.f),
 		Parameter::MakeBool ("Internal walls",  &m_internalWalls),
+		// Le cadre est un accessoire de presentation : decochable, pour qu'un export
+		// ne contienne que les regions extrudees.
+		Parameter::MakeBool ("Base plate",      &m_emitBase),
+		Parameter::MakeBool ("Perimeter wall",  &m_emitWall),
 	};
 }
 
@@ -551,6 +555,8 @@ void ParameterizedImageRelief::Regenerate()
 	opt.wallThickness = m_wallThickness;
 	opt.wallHeight    = m_wallHeight;
 	opt.emitInternalWalls = m_internalWalls;
+	opt.emitBase      = m_emitBase;
+	opt.emitWall      = m_emitWall;
 
 	// image_to_relief() already computes the normals and the bbox.
 	m_pMesh = image_to_relief(m_filename, opt);
@@ -587,6 +593,9 @@ std::vector<Parameter> ParameterizedImagePixelBlocks::GetParameters()
 		Parameter::MakeFloat("Wall thickness",  &m_wallThickness, 0.001f, 20.f),
 		Parameter::MakeFloat("Wall height",     &m_wallHeight,    0.001f, 20.f),
 		Parameter::MakeBool ("Internal walls",  &m_internalWalls),
+		// Decocher pour n'exporter que les blocs, sans le plateau qui les encadre.
+		Parameter::MakeBool ("Base plate",      &m_emitBase),
+		Parameter::MakeBool ("Perimeter wall",  &m_emitWall),
 	};
 }
 
@@ -608,6 +617,10 @@ ImagePixelBlocksOptions ParameterizedImagePixelBlocks::GetOptions() const
 	opt.wallThickness    = m_wallThickness;
 	opt.wallHeight       = m_wallHeight;
 	opt.emitInternalWalls = m_internalWalls;
+	// Ces deux-la existaient dans les options mais n'etaient jamais cablees : le
+	// cadre etait donc toujours emis, y compris a l'export.
+	opt.emitBase         = m_emitBase;
+	opt.emitWall         = m_emitWall;
 	// workingMaxDim garde sa valeur par defaut (1024) : c'est ce qui borne le cout
 	// du lissage et de la quantification sur une grande source.
 	return opt;

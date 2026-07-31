@@ -93,14 +93,10 @@ bool image_to_quantized_image(const std::string& filename,
                               const RegionQuantizeOptions& opt,
                               Img& out);
 
-// Sous-échantillonnage par vote majoritaire vers `targetW` cellules de large (la
-// hauteur suit le rapport d'aspect). Exposé pour les tests.
-//
-// Les bornes de bloc sont exactes -- [i*W/w, (i+1)*W/w) -- donc la dernière
-// colonne/ligne couvre bien le reste de la division. Départage déterministe par
-// valeur RGB croissante : sans lui, deux couleurs à égalité feraient dépendre le
-// résultat de l'ordre de parcours.
-bool pixelize_majority(Img& img, int targetW);
+// Le sous-échantillonnage par vote majoritaire lui-même est une primitive
+// d'image : Img::resize(w, h, 3) (bornes de bloc exactes, départage déterministe
+// par valeur RGB croissante). Ici, seule la déduction de la hauteur depuis le
+// rapport d'aspect reste locale (helper de traduction, dans le .cpp).
 
 // ---------------------------------------------------------------------------
 //  2. Couches vectorisées -> XY monde

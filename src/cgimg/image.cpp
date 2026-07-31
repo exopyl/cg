@@ -7,6 +7,9 @@
 #include "../cgmath/TVector2.h"
 
 #include <list>
+#include <map>
+#include <utility>
+#include <vector>
 using namespace std;
 
 int Img::AreIdentical (Img *pImg1, Img *pImg2)
@@ -686,8 +689,8 @@ int Img::resize (unsigned int width, unsigned int height, int mode)
 		// les dernieres colonnes/lignes de la source ne sont PAS lues quand les
 		// dimensions ne se divisent pas (400 px en 64 blocs n'en couvre que 384).
 		// Comportement historique, conserve pour ne pas casser les appelants
-		// existants ; pixelize_majority (cgmesh/image_region_pipeline.h) calcule des
-		// bornes exactes et n'a pas cette limite.
+		// existants ; le MODE 3 ci-dessous calcule des bornes exactes et n'a pas
+		// cette limite -- c'est celui a preferer pour tout nouvel appel.
 		unsigned int xinterval = m_iWidth / width;
 		unsigned int yinterval = m_iHeight / height;
 		// Un intervalle nul (agrandissement, ou facteur superieur a la dimension)
@@ -754,6 +757,74 @@ int Img::resize (unsigned int width, unsigned int height, int mode)
 				pPixels[4*index+3] = 255;
 			}
 		free (histogram);
+	}
+	else if (mode == 3)
+	{
+		// Couleur MAJORITAIRE du superpixel, bornes de bloc EXACTES.
+		//
+		// Le bloc source de la cellule (i,j) est [i*W/w, (i+1)*W/w) x
+		// [j*H/h, (j+1)*H/h) : la derniere cellule couvre donc le reste de la
+		// division, ce que le pas constant du mode 2 laisse tomber (400 px en 64
+		// blocs n'en couvrent que 384). C'est la difference entiere entre les deux
+		// modes ; tout le reste est identique.
+		//
+		// Aucune couleur nouvelle n'est fabriquee : un sous-echantillonnage par
+		// MOYENNE, lui, moyennerait a travers les bords et inventerait des teintes
+		// absentes de la palette (Gerstner et al. 2012).
+		for (unsigned int j=0; j<height; j++)
+		{
+			const unsigned int y0 = (unsigned int)((unsigned long long)j       * m_iHeight / height);
+			const unsigned int y1 = (unsigned int)((unsigned long long)(j + 1) * m_iHeight / height);
+
+			for (unsigned int i=0; i<width; i++)
+			{
+				const unsigned int x0 = (unsigned int)((unsigned long long)i       * m_iWidth / width);
+				const unsigned int x1 = (unsigned int)((unsigned long long)(i + 1) * m_iWidth / width);
+
+				index = j*width + i;
+
+				// Bloc vide : arrive a l'AGRANDISSEMENT (plus de cellules que de
+				// pixels sources). On duplique alors le pixel source le plus proche
+				// plutot que de laisser la cellule non initialisee.
+				if (x1 <= x0 || y1 <= y0)
+				{
+					const unsigned int xs = (x0 < m_iWidth)  ? x0 : m_iWidth  - 1;
+					const unsigned int ys = (y0 < m_iHeight) ? y0 : m_iHeight - 1;
+					this->get_pixel (xs, ys, &r, &g, &b, &a);
+					pPixels[4*index]   = r;
+					pPixels[4*index+1] = g;
+					pPixels[4*index+2] = b;
+					pPixels[4*index+3] = 255;
+					continue;
+				}
+
+				map<unsigned int, int> votes;
+				for (unsigned int y=y0; y<y1; y++)
+					for (unsigned int x=x0; x<x1; x++)
+					{
+						this->get_pixel (x, y, &r, &g, &b, &a);
+						votes[((unsigned int)r << 16) | ((unsigned int)g << 8) | (unsigned int)b]++;
+					}
+
+				// Depart determine par la valeur RGB la plus BASSE a egalite : map
+				// itere en ordre croissant et on ne remplace que sur un compte
+				// STRICTEMENT superieur. Sans cette regle, deux couleurs a egalite
+				// feraient dependre le resultat de l'ordre de parcours.
+				unsigned int bestColor = votes.begin()->first;
+				int bestCount = -1;
+				for (map<unsigned int, int>::const_iterator it = votes.begin(); it != votes.end(); ++it)
+					if (it->second > bestCount)
+					{
+						bestCount = it->second;
+						bestColor = it->first;
+					}
+
+				pPixels[4*index]   = (unsigned char)(bestColor >> 16);
+				pPixels[4*index+1] = (unsigned char)(bestColor >> 8);
+				pPixels[4*index+2] = (unsigned char)bestColor;
+				pPixels[4*index+3] = 255;
+			}
+		}
 	}
 
 	m_iWidth = width;
@@ -1109,4 +1180,72 @@ int Img::flood_fill (unsigned int x, unsigned int y, unsigned char r, unsigned c
 	}
 
 	return 0;
+}
+
+//
+// Etiquetage des composantes connexes 4-connexes de couleur RGB identique.
+//
+// Complement de flood_fill, qui REMPLIT (il recolore une zone) sans ETIQUETER :
+// il ne rend aucune carte de composantes exploitable par l'appelant.
+//
+// Les indices sont attribues dans l'ordre de premiere rencontre en balayage
+// raster (ligne par ligne, de gauche a droite), ce qui rend le resultat
+// reproductible. Pile explicite, pas de recursion : sur une image monochrome une
+// seule composante couvre tout le raster.
+//
+int Img::label_components (std::vector<int>& labels, std::vector<Color>* colors) const
+{
+	if (m_pPixels == nullptr || m_iWidth == 0 || m_iHeight == 0)
+		return -1;
+
+	const int w = (int)m_iWidth;
+	const int h = (int)m_iHeight;
+	labels.assign ((size_t)w * h, -1);
+	if (colors)
+		colors->clear ();
+
+	const int dx4[4] = { 1, -1, 0, 0 }, dy4[4] = { 0, 0, 1, -1 };
+	int count = 0;
+
+	// Couleur RGB empaquetee d'un pixel (l'alpha n'entre pas dans l'egalite).
+	auto packed = [this](int x, int y) -> unsigned int {
+		const size_t k = 4 * ((size_t)y * m_iWidth + (size_t)x);
+		return ((unsigned int)m_pPixels[k] << 16) |
+		       ((unsigned int)m_pPixels[k+1] << 8) |
+		        (unsigned int)m_pPixels[k+2];
+	};
+
+	std::vector<std::pair<int,int>> stack;
+	for (int y0 = 0; y0 < h; ++y0)
+		for (int x0 = 0; x0 < w; ++x0)
+		{
+			if (labels[(size_t)y0 * w + x0] != -1)
+				continue;
+
+			const unsigned int mine = packed (x0, y0);
+			const int me = count++;
+			if (colors)
+				colors->push_back (Color ((unsigned char)(mine >> 16),
+				                          (unsigned char)(mine >> 8),
+				                          (unsigned char)mine));
+
+			stack.clear ();
+			stack.emplace_back (x0, y0);
+			labels[(size_t)y0 * w + x0] = me;
+			while (!stack.empty ())
+			{
+				const std::pair<int,int> p = stack.back (); stack.pop_back ();
+				for (int k = 0; k < 4; ++k)
+				{
+					const int xx = p.first + dx4[k], yy = p.second + dy4[k];
+					if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+					if (labels[(size_t)yy * w + xx] != -1) continue;
+					if (packed (xx, yy) != mine) continue;
+					labels[(size_t)yy * w + xx] = me;
+					stack.emplace_back (xx, yy);
+				}
+			}
+		}
+
+	return count;
 }

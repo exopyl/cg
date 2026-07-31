@@ -3,8 +3,11 @@
 #include <fstream>
 #include <cstdio>
 #include <cmath>
+#include <algorithm>
 
 #include "../src/cgmesh/cgmesh.h"
+#include "../src/cgmesh/mesh_io.h"       // MeshIO::export_obj (points d entree par format)
+#include "../src/cgmesh/zip_manager.h"   // ZipManager::Crc32, pour verifier l archive
 
 
 TEST(TEST_cgmesh_io, obj)
@@ -980,3 +983,281 @@ INSTANTIATE_TEST_SUITE_P(
     }
 );
 #endif
+
+// ---------------------------------------------------------------------------
+//  Coherence des noms de materiau entre .obj et .mtl
+// ---------------------------------------------------------------------------
+// export_obj ecrivait `usemtl <GetName()>` dans le .obj mais
+// `newmtl material_<index>` dans le .mtl : aucun usemtl ne resolvait vers son
+// newmtl des que le materiau portait un nom. Symptome trompeur -- le fichier
+// s'ouvre sans erreur et le modele sort SANS COULEUR, le lecteur ne trouvant pas
+// les materiaux nommes. Les deux passent desormais par objMaterialName().
+TEST(TEST_cgmesh_io, obj_usemtl_names_resolve_in_the_mtl)
+{
+    // context : un quad par materiau, chacun nomme explicitement.
+    Mesh mesh;
+    float verts[] = {
+        0,0,0,  1,0,0,  1,1,0,  0,1,0,
+        2,0,0,  3,0,0,  3,1,0,  2,1,0,
+    };
+    mesh.SetVertices(8, verts);
+    // Deux quads : nVerticesPerFace = 4, indices a plat.
+    unsigned int faces[] = { 0,1,2,3,  4,5,6,7 };
+    mesh.SetFaces(2, 4, faces);
+
+    auto* red = new MaterialColor(255, 0, 0);
+    red->SetName("rouge_vif");
+    auto* blue = new MaterialColor(0, 0, 255);
+    blue->SetName("bleu nuit");          // avec un ESPACE : usemtl s'arrete au blanc
+    mesh.Material_Add(red);
+    mesh.Material_Add(blue);
+    mesh.SetFaceMaterialId(0, 0);
+    mesh.SetFaceMaterialId(1, 1);
+
+    // action
+    const char* objPath = "./tu_obj_matnames.obj";
+    const char* mtlPath = "./tu_obj_matnames.mtl";
+    ASSERT_EQ(mesh.save(objPath), 0);
+
+    auto readAll = [](const char* p) {
+        std::ifstream f(p);
+        return std::string((std::istreambuf_iterator<char>(f)),
+                            std::istreambuf_iterator<char>());
+    };
+    const std::string obj = readAll(objPath);
+    const std::string mtl = readAll(mtlPath);
+    ASSERT_FALSE(obj.empty());
+    ASSERT_FALSE(mtl.empty()) << "le .mtl compagnon doit etre ecrit a cote du .obj";
+
+    // expectations : chaque `usemtl X` du .obj a son `newmtl X` dans le .mtl.
+    auto collect = [](const std::string& text, const std::string& keyword) {
+        std::vector<std::string> names;
+        size_t pos = 0;
+        while ((pos = text.find(keyword, pos)) != std::string::npos)
+        {
+            // uniquement en debut de ligne
+            if (pos != 0 && text[pos - 1] != '\n') { pos += keyword.size(); continue; }
+            size_t b = pos + keyword.size();
+            size_t e = text.find_first_of("\r\n", b);
+            names.push_back(text.substr(b, e - b));
+            pos = b;
+        }
+        return names;
+    };
+    const std::vector<std::string> used     = collect(obj, "usemtl ");
+    const std::vector<std::string> declared = collect(mtl, "newmtl ");
+
+    EXPECT_EQ(used.size(), 2u);
+    EXPECT_EQ(declared.size(), 2u);
+    for (const std::string& u : used)
+        EXPECT_NE(std::find(declared.begin(), declared.end(), u), declared.end())
+            << "usemtl \"" << u << "\" n'a pas de newmtl correspondant";
+
+    // Un espace dans le nom couperait le usemtl : il doit avoir ete remplace.
+    for (const std::string& d : declared)
+        EXPECT_EQ(d.find(' '), std::string::npos)
+            << "un nom de materiau ne doit pas contenir d'espace : \"" << d << "\"";
+
+    std::remove(objPath);
+    std::remove(mtlPath);
+}
+
+// emitObjectGroups : un OBJ multi-materiaux devient separable en objets. Defaut
+// false, pour ne rien changer aux appelants existants.
+TEST(TEST_cgmesh_io, obj_object_groups_are_opt_in)
+{
+    Mesh mesh;
+    float verts[] = { 0,0,0, 1,0,0, 1,1,0, 0,1,0,   2,0,0, 3,0,0, 3,1,0, 2,1,0 };
+    mesh.SetVertices(8, verts);
+    unsigned int faces[] = { 0,1,2,3,  4,5,6,7 };
+    mesh.SetFaces(2, 4, faces);
+    auto* a = new MaterialColor(255, 0, 0); a->SetName("piece_a");
+    auto* b = new MaterialColor(0, 0, 255); b->SetName("piece_b");
+    mesh.Material_Add(a);
+    mesh.Material_Add(b);
+    mesh.SetFaceMaterialId(0, 0);
+    mesh.SetFaceMaterialId(1, 1);
+
+    auto readAll = [](const char* p) {
+        std::ifstream f(p);
+        return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    };
+    auto countLines = [](const std::string& t, const std::string& kw) {
+        size_t n = 0, pos = 0;
+        while ((pos = t.find(kw, pos)) != std::string::npos) {
+            if (pos == 0 || t[pos - 1] == '\n') n++;
+            pos += kw.size();
+        }
+        return n;
+    };
+
+    // defaut : aucun groupe objet
+    ASSERT_EQ(MeshIO::export_obj(mesh, "./tu_obj_nogroups.obj"), 0);
+    const std::string plain = readAll("./tu_obj_nogroups.obj");
+    EXPECT_EQ(countLines(plain, "o "), 0u);
+    EXPECT_EQ(countLines(plain, "usemtl "), 2u);
+
+    // demande : un `o` par changement de materiau, AVANT son usemtl
+    ASSERT_EQ(MeshIO::export_obj(mesh, "./tu_obj_groups.obj", true), 0);
+    const std::string grouped = readAll("./tu_obj_groups.obj");
+    EXPECT_EQ(countLines(grouped, "o "), 2u);
+    EXPECT_EQ(countLines(grouped, "usemtl "), 2u);
+    EXPECT_NE(grouped.find("o piece_a\nusemtl piece_a\n"), std::string::npos);
+    EXPECT_NE(grouped.find("o piece_b\nusemtl piece_b\n"), std::string::npos);
+
+    for (const char* p : { "./tu_obj_nogroups.obj", "./tu_obj_nogroups.mtl",
+                           "./tu_obj_groups.obj",   "./tu_obj_groups.mtl" })
+        std::remove(p);
+}
+
+// Le .mtl exporte doit etre OPAQUE et sans speculaire incoherent.
+//
+// export_obj ecrivait `Tr 1.000000` : dans la spec MTL, `Tr` est la TRANSPARENCE
+// (1 = totalement transparent) et c'est `d` qui vaut 1 pour opaque. Tout lecteur
+// conforme rendait donc le modele invisible -- sauf en incidence rasante, ou
+// l'accumulation des epaisseurs le fait reapparaitre. cgmesh ne le voyait pas :
+// son propre import_mtl lit `d`/`Tr` puis les jette.
+//
+// Ecrivait aussi `Ks 1 1 1` avec `Ns 0` : exposant nul => terme speculaire
+// CONSTANT sur toute la surface, donc un voile blanc uniforme.
+TEST(TEST_cgmesh_io, obj_mtl_is_opaque_and_has_no_stray_specular)
+{
+    Mesh mesh;
+    float verts[] = { 0,0,0, 1,0,0, 1,1,0, 0,1,0 };
+    mesh.SetVertices(4, verts);
+    unsigned int faces[] = { 0,1,2,3 };
+    mesh.SetFaces(1, 4, faces);
+    auto* c = new MaterialColor(200, 100, 50);
+    c->SetName("terre_cuite");
+    mesh.Material_Add(c);
+    mesh.SetFaceMaterialId(0, 0);
+
+    ASSERT_EQ(MeshIO::export_obj(mesh, "./tu_obj_mtlopacity.obj"), 0);
+    std::ifstream f("./tu_obj_mtlopacity.mtl");
+    const std::string mtl((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    ASSERT_FALSE(mtl.empty());
+
+    // Opacite : `d 1`, et surtout PAS `Tr 1` qui signifie l'inverse.
+    EXPECT_NE(mtl.find("d 1.000000"), std::string::npos) << mtl;
+    EXPECT_EQ(mtl.find("Tr 1.000000"), std::string::npos)
+        << "Tr 1 = totalement TRANSPARENT : le modele disparait chez tout lecteur conforme\n" << mtl;
+
+    // Pas de speculaire blanc a exposant nul.
+    EXPECT_EQ(mtl.find("Ks 1.000000 1.000000 1.000000"), std::string::npos) << mtl;
+
+    // La couleur, elle, doit bien y etre.
+    EXPECT_NE(mtl.find("Kd 0.784314 0.392157 0.196078"), std::string::npos) << mtl;
+
+    std::remove("./tu_obj_mtlopacity.obj");
+    std::remove("./tu_obj_mtlopacity.mtl");
+}
+
+// ---------------------------------------------------------------------------
+//  OBJ + MTL dans une archive ZIP
+// ---------------------------------------------------------------------------
+// Code au niveau OCTET (en-tetes, offsets, CRC) : il se verifie en RELISANT
+// l'archive comme le ferait un vrai lecteur ZIP -- parcours du repertoire central,
+// puis recalcul des CRC declares.
+TEST(TEST_cgmesh_io, obj_zip_bundles_obj_and_mtl)
+{
+    Mesh mesh;
+    float verts[] = { 0,0,0, 1,0,0, 1,1,0, 0,1,0 };
+    mesh.SetVertices(4, verts);
+    unsigned int faces[] = { 0,1,2,3 };
+    mesh.SetFaces(1, 4, faces);
+    auto* c = new MaterialColor(10, 200, 30);
+    c->SetName("vert_pomme");
+    mesh.Material_Add(c);
+    mesh.SetFaceMaterialId(0, 0);
+
+    const char* zipPath = "./tu_obj_bundle.zip";
+    ASSERT_EQ(MeshIO::export_obj_zip(mesh, zipPath), 0);
+
+    std::ifstream f(zipPath, std::ios::binary);
+    const std::string z((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    f.close();
+    ASSERT_GT(z.size(), 22u) << "archive trop courte pour contenir un EOCD";
+
+    auto rd16 = [&](size_t o) { return (unsigned int)((unsigned char)z[o] | ((unsigned char)z[o+1] << 8)); };
+    auto rd32 = [&](size_t o) { return (unsigned int)((unsigned char)z[o] | ((unsigned char)z[o+1] << 8)
+                                                    | ((unsigned char)z[o+2] << 16) | ((unsigned char)z[o+3] << 24)); };
+
+    // EOCD : cherche depuis la fin, comme un vrai lecteur.
+    size_t eocd = std::string::npos;
+    for (size_t i = z.size() - 22; i != (size_t)-1; --i)
+        if (rd32(i) == 0x06054b50u) { eocd = i; break; }
+    ASSERT_NE(eocd, std::string::npos) << "EOCD introuvable";
+
+    const unsigned int nEntries = rd16(eocd + 10);
+    const unsigned int cdSize   = rd32(eocd + 12);
+    const unsigned int cdOff    = rd32(eocd + 16);
+    EXPECT_EQ(nEntries, 2u) << "attendu : le .obj ET le .mtl";
+    EXPECT_EQ(cdOff + cdSize, (unsigned int)eocd) << "le repertoire central doit finir sur l'EOCD";
+
+    // Parcours du repertoire central + verification de chaque entree.
+    std::vector<std::string> names;
+    size_t p = cdOff;
+    for (unsigned int k = 0; k < nEntries; ++k)
+    {
+        ASSERT_EQ(rd32(p), 0x02014b50u) << "signature centrale invalide, entree " << k;
+        const unsigned int method = rd16(p + 10);
+        const unsigned int crc    = rd32(p + 16);
+        const unsigned int csize  = rd32(p + 20);
+        const unsigned int usize  = rd32(p + 24);
+        const unsigned int nlen   = rd16(p + 28);
+        const unsigned int lho    = rd32(p + 42);
+        const std::string name = z.substr(p + 46, nlen);
+        names.push_back(name);
+
+        EXPECT_EQ(method, 0u) << "entrees attendues non compressees (stored)";
+        EXPECT_EQ(csize, usize) << "en stored, les deux tailles sont egales";
+        ASSERT_EQ(rd32(lho), 0x04034b50u) << "signature d'en-tete local invalide";
+
+        // Donnees : en-tete local (30 o) + nom + extra
+        const size_t dataStart = lho + 30 + rd16(lho + 26) + rd16(lho + 28);
+        ASSERT_LE(dataStart + usize, z.size());
+        EXPECT_EQ(ZipManager::Crc32(z.data() + dataStart, usize), crc)
+            << "CRC declare incorrect pour " << name;
+
+        // Le contenu doit etre celui qu'on attend.
+        const std::string data = z.substr(dataStart, usize);
+        if (name.size() > 4 && name.compare(name.size()-4, 4, ".obj") == 0)
+        {
+            EXPECT_NE(data.find("mtllib tu_obj_bundle.mtl"), std::string::npos)
+                << "la ligne mtllib doit designer l'entree .mtl de l'archive";
+            EXPECT_NE(data.find("usemtl vert_pomme"), std::string::npos);
+        }
+        else
+        {
+            EXPECT_NE(data.find("newmtl vert_pomme"), std::string::npos);
+            EXPECT_NE(data.find("d 1.000000"), std::string::npos);
+        }
+        p += 46 + nlen + rd16(p + 30) + rd16(p + 32);
+    }
+    // Les noms internes prennent le radical de l'archive.
+    EXPECT_NE(std::find(names.begin(), names.end(), "tu_obj_bundle.obj"), names.end());
+    EXPECT_NE(std::find(names.begin(), names.end(), "tu_obj_bundle.mtl"), names.end());
+
+    std::remove(zipPath);
+}
+
+// Sans materiau, l'archive ne contient QUE le .obj -- pas d'entree .mtl vide.
+TEST(TEST_cgmesh_io, obj_zip_omits_the_mtl_when_there_is_no_material)
+{
+    Mesh mesh;
+    float verts[] = { 0,0,0, 1,0,0, 1,1,0 };
+    mesh.SetVertices(3, verts);
+    unsigned int faces[] = { 0,1,2 };
+    mesh.SetFaces(1, 3, faces);
+
+    const std::string bytes = MeshIO::export_obj_zip_bytes(mesh, "nu");
+    ASSERT_FALSE(bytes.empty());
+    auto rd16 = [&](size_t o) { return (unsigned int)((unsigned char)bytes[o] | ((unsigned char)bytes[o+1] << 8)); };
+    auto rd32 = [&](size_t o) { return (unsigned int)((unsigned char)bytes[o] | ((unsigned char)bytes[o+1] << 8)
+                                                    | ((unsigned char)bytes[o+2] << 16) | ((unsigned char)bytes[o+3] << 24)); };
+    size_t eocd = std::string::npos;
+    for (size_t i = bytes.size() - 22; i != (size_t)-1; --i)
+        if (rd32(i) == 0x06054b50u) { eocd = i; break; }
+    ASSERT_NE(eocd, std::string::npos);
+    EXPECT_EQ(rd16(eocd + 10), 1u) << "une seule entree attendue : le .obj";
+}

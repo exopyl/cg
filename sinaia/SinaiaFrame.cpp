@@ -21,7 +21,7 @@
 #include <vector>
 #include <chrono>
 
-#include "sample.xpm"
+#include "sinaia.xpm"
 
 // https://www.flaticon.com/fr/icone-gratuite/format-de-fichier-obj_8760186
 #include "format_obj.xpm"
@@ -50,6 +50,50 @@
 #include "../src/cgmesh/normals.h"
 
 namespace {
+
+// --- arbre des materiaux : indices FIXES de la liste d'images ---------------
+// Les pastilles de couleur sont ajoutees APRES ces deux entrees, a chaque
+// reconstruction de l'arbre ; ces constantes evitent les 0/1 magiques dispersees
+// dans le code de construction.
+const int kMatIconFolder = 0;
+const int kMatIconFile   = 1;
+const int kMatIconCount  = 2;   // nombre d'icones fixes, avant les pastilles
+
+// Pastille de couleur pour l'arbre des materiaux : un carre plein de la couleur
+// du materiau, cerne d'un liseré, sur le fond du controle.
+//
+// Le liseré n'est pas decoratif : sans lui, un materiau blanc ou tres clair
+// (frequent -- le blanc est la couleur par defaut d'un fond quantifie) se
+// confondrait avec le fond de l'arbre et la pastille disparaitrait.
+//
+// `bg` est la couleur de fond du wxTreeCtrl, pour que le pourtour de la pastille
+// se fonde dans le controle plutot que de dessiner un carre blanc en theme sombre.
+wxBitmap MakeColorSwatch (float r, float g, float b, const wxColour& bg)
+{
+    auto to8 = [](float v) -> unsigned char
+    {
+        // Les composantes viennent de Material en 0..1, mais rien ne le garantit
+        // (un MTL mal forme peut porter n'importe quoi) : on borne.
+        const int i = (int)(v * 255.f + 0.5f);
+        return (unsigned char)(i < 0 ? 0 : (i > 255 ? 255 : i));
+    };
+    const wxColour fill (to8(r), to8(g), to8(b));
+
+    wxBitmap bmp (16, 16);
+    wxMemoryDC dc (bmp);
+    dc.SetBackground (wxBrush (bg.IsOk() ? bg : *wxWHITE));
+    dc.Clear();
+
+    // Liseré gris moyen : lisible aussi bien sur fond clair que sombre, la ou un
+    // noir pur se perdrait en theme sombre.
+    dc.SetPen   (wxPen (wxColour (128, 128, 128)));
+    dc.SetBrush (wxBrush (fill));
+    dc.DrawRectangle (2, 2, 12, 12);
+
+    dc.SelectObject (wxNullBitmap);
+    return bmp;
+}
+
 // Build the favorites toolbar icon: the stock folder bitmap with a small yellow
 // star drawn over its top-left corner (there is no stock "favorite folder" art).
 wxBitmap MakeFavoritesToolBitmap()
@@ -319,7 +363,7 @@ MyFrame::MyFrame(wxWindow* parent,
     m_mgr.SetFlags(m_mgr.GetFlags() | wxAUI_MGR_LIVE_RESIZE);
 
     // set frame icon
-    SetIcon(wxIcon(sample_xpm));
+    SetIcon(wxIcon(sinaia_xpm));
 
     // set up default notebook style
     m_notebook_style = wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_TAB_EXTERNAL_MOVE | wxNO_BORDER;
@@ -1944,20 +1988,41 @@ void MyFrame::UpdatePropertiesGrid()
     if (m_hierarchyMaterials)
     {
         m_hierarchyMaterials->DeleteAllItems();
-        wxTreeItemId root = m_hierarchyMaterials->AddRoot(wxT("Materials"), 0);
+
+        // Purge les pastilles de la construction precedente, en gardant les deux
+        // icones fixes. Sans ca la liste d'images grossit a chaque chargement de
+        // modele -- et sur un modele a 98 materiaux, ca se voit vite.
+        //
+        // On retire par la FIN : wxImageList::Remove decale les indices suivants.
+        wxImageList* matIcons = m_hierarchyMaterials->GetImageList();
+        if (matIcons)
+            while (matIcons->GetImageCount() > kMatIconCount)
+                matIcons->Remove(matIcons->GetImageCount() - 1);
+
+        // Ajoute une pastille a la liste d'images et renvoie son indice, ou
+        // kMatIconFile si la liste est indisponible.
+        auto swatch = [&](float r, float g, float b) -> int
+        {
+            if (!matIcons)
+                return kMatIconFile;
+            return matIcons->Add(MakeColorSwatch(r, g, b,
+                                                 m_hierarchyMaterials->GetBackgroundColour()));
+        };
+
+        wxTreeItemId root = m_hierarchyMaterials->AddRoot(wxT("Materials"), kMatIconFolder);
 
         for (auto& mesh : pObject->GetMeshes())
         {
             if (mesh->GetNMaterials() > 0)
             {
-                wxTreeItemId meshItem = m_hierarchyMaterials->AppendItem(root, wxString(mesh->m_name), 0);
+                wxTreeItemId meshItem = m_hierarchyMaterials->AppendItem(root, wxString(mesh->m_name), kMatIconFolder);
                 for (unsigned int i = 0; i < mesh->GetNMaterials(); i++)
                 {
                     Material* mat = mesh->GetMaterial(i);
                     if (mat)
                     {
                         wxString matName = mat->GetName().empty() ? wxString::Format("Material %u", i) : wxString(mat->GetName());
-                        wxTreeItemId matItem = m_hierarchyMaterials->AppendItem(meshItem, matName, 1);
+                        wxTreeItemId matItem = m_hierarchyMaterials->AppendItem(meshItem, matName, kMatIconFile);
                         
                         // Add some details based on type
                         switch (mat->GetType())
@@ -1967,7 +2032,10 @@ void MyFrame::UpdatePropertiesGrid()
                             MaterialColor* mc = dynamic_cast<MaterialColor*>(mat);
                             if (mc)
                             {
-                                m_hierarchyMaterials->AppendItem(matItem, wxString::Format("Color: RGB(%.2f, %.2f, %.2f)", mc->GetFloatRed(), mc->GetFloatGreen(), mc->GetFloatBlue()), 1);
+                                m_hierarchyMaterials->AppendItem(matItem,
+                                    wxString::Format("Color: RGB(%.2f, %.2f, %.2f)",
+                                                     mc->GetFloatRed(), mc->GetFloatGreen(), mc->GetFloatBlue()),
+                                    swatch(mc->GetFloatRed(), mc->GetFloatGreen(), mc->GetFloatBlue()));
                             }
                             break;
                         }
@@ -1976,7 +2044,9 @@ void MyFrame::UpdatePropertiesGrid()
                             MaterialTexture* mt = dynamic_cast<MaterialTexture*>(mat);
                             if (mt)
                             {
-                                m_hierarchyMaterials->AppendItem(matItem, wxString::Format("Texture: %s", mt->GetFilename()), 1);
+                                // Icone FICHIER conservee : une texture designe bien un fichier, pas une couleur.
+                                m_hierarchyMaterials->AppendItem(matItem,
+                                    wxString::Format("Texture: %s", mt->GetFilename()), kMatIconFile);
                             }
                             break;
                         }
@@ -1985,9 +2055,16 @@ void MyFrame::UpdatePropertiesGrid()
                             MaterialColorExt* mce = dynamic_cast<MaterialColorExt*>(mat);
                             if (mce)
                             {
-                                m_hierarchyMaterials->AppendItem(matItem, wxString::Format("Type: Advanced Color"), 1);
-                                m_hierarchyMaterials->AppendItem(matItem, wxString::Format("  Diffuse: RGB(%.2f, %.2f, %.2f)", mce->m_fDiffuse[0], mce->m_fDiffuse[1], mce->m_fDiffuse[2]), 1);
-                                m_hierarchyMaterials->AppendItem(matItem, wxString::Format("  Ambient: RGB(%.2f, %.2f, %.2f)", mce->m_fAmbient[0], mce->m_fAmbient[1], mce->m_fAmbient[2]), 1);
+                                m_hierarchyMaterials->AppendItem(matItem,
+                                    wxString::Format("Type: Advanced Color"), kMatIconFile);
+                                m_hierarchyMaterials->AppendItem(matItem,
+                                    wxString::Format("  Diffuse: RGB(%.2f, %.2f, %.2f)",
+                                                     mce->m_fDiffuse[0], mce->m_fDiffuse[1], mce->m_fDiffuse[2]),
+                                    swatch(mce->m_fDiffuse[0], mce->m_fDiffuse[1], mce->m_fDiffuse[2]));
+                                m_hierarchyMaterials->AppendItem(matItem,
+                                    wxString::Format("  Ambient: RGB(%.2f, %.2f, %.2f)",
+                                                     mce->m_fAmbient[0], mce->m_fAmbient[1], mce->m_fAmbient[2]),
+                                    swatch(mce->m_fAmbient[0], mce->m_fAmbient[1], mce->m_fAmbient[2]));
                             }
                             break;
                         }
@@ -2801,6 +2878,9 @@ wxTreeCtrl* MyFrame::CreateHierarchyMaterialsTreeCtrl()
                                       wxPoint(0,0), wxSize(160,250),
                                       wxTR_DEFAULT_STYLE | wxNO_BORDER);
 
+    // Les deux premieres images sont FIXES et leurs indices sont utilises tels
+    // quels a la construction de l'arbre (cf. kMatIconFolder / kMatIconFile).
+    // Les pastilles de couleur sont ajoutees a la suite, a chaque reconstruction.
     wxImageList* imglist = new wxImageList(16, 16, true, 2);
     imglist->Add(wxArtProvider::GetBitmap(wxART_FOLDER, wxART_OTHER, wxSize(16,16)));
     imglist->Add(wxArtProvider::GetBitmap(wxART_NORMAL_FILE, wxART_OTHER, wxSize(16,16)));

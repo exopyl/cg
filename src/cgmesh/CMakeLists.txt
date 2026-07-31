@@ -25,6 +25,15 @@ if (EMSCRIPTEN)
         ${PROJECT_SOURCE_DIR}/chull.cpp
         ${PROJECT_SOURCE_DIR}/material.cpp
         ${PROJECT_SOURCE_DIR}/materials_manager.cpp
+        # Serialisation OBJ (+MTL) : extraite de mesh_io.cpp precisement pour etre
+        # compilable ici. mesh_io.cpp lui-meme reste EXCLU -- il depend de
+        # mesh_io_3ds.h et mesh_io_rply.h, soit deux formats binaires entiers a
+        # embarquer pour ecrire un fichier texte.
+        ${PROJECT_SOURCE_DIR}/mesh_io_obj.cpp
+        # Conteneur ZIP generique (entrees non compressees) : livre l'OBJ et son
+        # .mtl en un seul fichier, et servira au 3MF. Aucune dependance -- zlib
+        # n'est pas requis pour du "stored".
+        ${PROJECT_SOURCE_DIR}/zip_manager.cpp
         ${PROJECT_SOURCE_DIR}/extracted_line.cpp
         # generateurs de geometrie (parameterized_shapes.cpp les reference tous)
         ${PROJECT_SOURCE_DIR}/surface_basic.cpp

@@ -377,6 +377,8 @@ private:
 	float m_wallThickness = 0.03f;
 	float m_wallHeight    = 0.10f;
 	bool  m_internalWalls = true;
+	bool  m_emitBase      = true;    // plaque de support
+	bool  m_emitWall      = true;    // mur perimetrique
 };
 
 // Variante pixel art du relief : l'image est PIXELISEE (vote majoritaire) avant
@@ -414,6 +416,8 @@ private:
 	float m_wallThickness = 0.03f;
 	float m_wallHeight    = 0.10f;
 	bool  m_internalWalls = true;
+	bool  m_emitBase      = true;    // plaque de support
+	bool  m_emitWall      = true;    // mur perimetrique
 };
 
 // ---------------------------------------------------------------------------

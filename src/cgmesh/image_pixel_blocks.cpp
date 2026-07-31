@@ -30,55 +30,27 @@ struct Components
 	std::vector<Color> color;     // par composante : sa couleur
 };
 
-Color cellColor(const Img& img, int x, int y)
-{
-	unsigned char r = 0, g = 0, b = 0, a = 0;
-	img.get_pixel((unsigned)x, (unsigned)y, &r, &g, &b, &a);
-	return Color(r, g, b);
-}
-
 // Accesseurs de Color non const -> passage par valeur (Color est trivialement copiable).
 bool sameColor(Color a, Color b)
 {
 	return a.r() == b.r() && a.g() == b.g() && a.b() == b.b();
 }
 
-// Etiquetage 4-connexe. Pile explicite (pas de recursion) : sur une grande grille
-// monochrome, une composante couvre toute l'image et une recursion exploserait.
+// Etiquetage 4-connexe : Img::label_components (cgimg) fait le parcours ; on ne
+// fait ici que le ranger dans la forme attendue par contourComponent (dimensions
+// de la grille portees a cote de la carte d'indices).
 Components labelComponents(const Img& img)
 {
 	Components C;
 	C.w = (int)img.width();
 	C.h = (int)img.height();
-	C.id.assign((size_t)C.w * C.h, -1);
-
-	const int dx4[4] = { 1, -1, 0, 0 }, dy4[4] = { 0, 0, 1, -1 };
-
-	for (int y0 = 0; y0 < C.h; ++y0)
-		for (int x0 = 0; x0 < C.w; ++x0)
-		{
-			if (C.id[(size_t)y0 * C.w + x0] != -1) continue;
-
-			const Color mine = cellColor(img, x0, y0);
-			const int me = C.count++;
-			C.color.push_back(mine);
-
-			std::vector<std::pair<int,int>> stack{ { x0, y0 } };
-			C.id[(size_t)y0 * C.w + x0] = me;
-			while (!stack.empty())
-			{
-				const auto [x, y] = stack.back(); stack.pop_back();
-				for (int k = 0; k < 4; ++k)
-				{
-					const int xx = x + dx4[k], yy = y + dy4[k];
-					if (xx < 0 || yy < 0 || xx >= C.w || yy >= C.h) continue;
-					if (C.id[(size_t)yy * C.w + xx] != -1) continue;
-					if (!sameColor(cellColor(img, xx, yy), mine)) continue;
-					C.id[(size_t)yy * C.w + xx] = me;
-					stack.emplace_back(xx, yy);
-				}
-			}
-		}
+	C.count = img.label_components(C.id, &C.color);
+	if (C.count < 0)                  // image vide
+	{
+		C.count = 0;
+		C.id.assign((size_t)std::max(0, C.w) * (size_t)std::max(0, C.h), -1);
+		C.color.clear();
+	}
 	return C;
 }
 

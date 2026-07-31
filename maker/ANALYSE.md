@@ -490,8 +490,9 @@ hors de son propre groupe**.
 Trouvé en chemin (`src/cgimg/image.cpp`) : `histogram` n'était **jamais libéré**, un intervalle
 nul (agrandissement) lisait de la mémoire non initialisée, et le compteur d'occurrences
 démarrait à 0. Corrigé. La limite restante — le pas constant `W/w` ignore les colonnes de
-reste — est documentée et **conservée** (des appelants peuvent en dépendre) ;
-`pixelize_majority` calcule des bornes exactes et n'a pas ce défaut.
+reste — est documentée et **conservée** (des appelants peuvent en dépendre) ; le **mode 3**,
+ajouté depuis (cf. `note_cgimg.md`), calcule des bornes exactes et n'a pas ce défaut. C'est lui
+que la pixelisation appelle désormais, `pixelize_majority` ayant disparu de cgmesh.
 
 ### 16.6 Piste d'amélioration
 

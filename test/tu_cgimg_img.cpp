@@ -2,6 +2,9 @@
 
 #include "../src/cgmesh/cgmesh.h"
 
+#include <set>
+#include <vector>
+
 // Row-major 3x3 fill (replaces the removed C-API mat3_init for the filter kernels).
 static void set3x3 (float m[3][3], float a, float b, float c,
 		    float d, float e, float f,
@@ -832,3 +835,352 @@ TEST(TEST_cgimg_img, histogram_equalization_bezier)
     EXPECT_EQ(img.width(), 10);
 }
 
+
+// ---------------------------------------------------------------------------
+//  Sous-echantillonnage par vote majoritaire (resize mode 3)
+// ---------------------------------------------------------------------------
+//
+// Tests venus de tu_cgmesh_image_pixel_blocks.cpp : le vote majoritaire y etait
+// implemente dans cgmesh (pixelize_majority), il est desormais le mode 3 de
+// Img::resize -- une primitive d'image, testee ici.
+
+namespace {
+
+void mvFillRect (Img& img, int x0, int y0, int x1, int y1,
+                 unsigned char r, unsigned char g, unsigned char b)
+{
+    for (int y = y0; y < y1; ++y)
+        for (int x = x0; x < x1; ++x)
+            img.set_pixel ((unsigned)x, (unsigned)y, r, g, b, 255);
+}
+
+unsigned int mvPixelAt (const Img& img, int x, int y)
+{
+    unsigned char r = 0, g = 0, b = 0, a = 0;
+    img.get_pixel ((unsigned)x, (unsigned)y, &r, &g, &b, &a);
+    return ((unsigned)r << 16) | ((unsigned)g << 8) | (unsigned)b;
+}
+
+// Toutes les couleurs distinctes d'une image, empaquetees.
+std::set<unsigned int> mvColorsOf (const Img& img)
+{
+    std::set<unsigned int> out;
+    for (unsigned int y = 0; y < img.height(); ++y)
+        for (unsigned int x = 0; x < img.width(); ++x)
+            out.insert (mvPixelAt (img, (int)x, (int)y));
+    return out;
+}
+
+const unsigned int MV_RED   = 0xff0000;
+const unsigned int MV_BLUE  = 0x0000ff;
+const unsigned int MV_WHITE = 0xffffff;
+
+} // namespace
+
+// Un bloc source 4x4 contenant 10 rouges et 6 bleus doit sortir ROUGE. Une
+// moyenne produirait une teinte violacee absente de l'image -- c'est precisement
+// ce que le vote evite.
+TEST(TEST_cgimg_img, resize_majority_picks_the_dominant_colour)
+{
+    Img img(4, 4, false);
+    mvFillRect(img, 0, 0, 4, 4, 255, 0, 0);       // 16 rouges
+    mvFillRect(img, 0, 0, 3, 2, 0, 0, 255);       // 6 bleus -> 10 rouges restants
+
+    ASSERT_EQ(img.resize(1, 1, 3), 0);
+    EXPECT_EQ(img.width(), 1u);
+    EXPECT_EQ(img.height(), 1u);
+    EXPECT_EQ(mvPixelAt(img, 0, 0), MV_RED);
+}
+
+// Le vote ne choisit que parmi des couleurs presentes : l'ensemble des couleurs
+// de sortie est inclus dans celui des couleurs d'entree.
+TEST(TEST_cgimg_img, resize_majority_never_invents_a_colour)
+{
+    Img img(64, 64, false);
+    for (int y = 0; y < 64; ++y)
+        for (int x = 0; x < 64; ++x)
+        {
+            const bool red = ((x / 3) + (y / 5)) % 2 == 0;
+            img.set_pixel((unsigned)x, (unsigned)y,
+                          red ? 255 : 0, 0, red ? 0 : 255, 255);
+        }
+    const std::set<unsigned int> before = mvColorsOf(img);
+    ASSERT_EQ(before.size(), 2u);
+
+    ASSERT_EQ(img.resize(7, 7, 3), 0);            // 64 n'est pas multiple de 7
+    const std::set<unsigned int> after = mvColorsOf(img);
+
+    for (std::set<unsigned int>::const_iterator it = after.begin(); it != after.end(); ++it)
+        EXPECT_EQ(before.count(*it), 1u) << "couleur inventee : " << std::hex << *it;
+}
+
+// Non-regression du defaut du mode 2 : son pas est CONSTANT (W/w en division
+// entiere), donc sur 100 px en 7 cellules il s'arrete a 98 et ne voit jamais les
+// deux dernieres colonnes. Le mode 3 calcule des bornes exactes et les couvre.
+TEST(TEST_cgimg_img, resize_majority_covers_the_trailing_remainder)
+{
+    Img src(100, 10, false);
+    mvFillRect(src, 0, 0, 100, 10, 255, 255, 255);
+    mvFillRect(src, 98, 0, 100, 10, 255, 0, 0);   // SEULES les colonnes 98-99
+
+    // Mode 2, pas constant 100/7 = 14 : la derniere cellule part de 84 et lit
+    // 14 px, soit [84,98) -- les colonnes de queue restent invisibles.
+    Img mode2 = src;
+    ASSERT_EQ(mode2.resize(7, 1, 2), 0);
+    EXPECT_EQ(mvPixelAt(mode2, 6, 0), MV_WHITE)
+        << "comportement historique du mode 2 : le reste de division est ignore";
+
+    // Mode 3 : la cellule 49 est exactement [98,100), 100 % rouge.
+    Img mode3 = src;
+    ASSERT_EQ(mode3.resize(50, 1, 3), 0);
+    EXPECT_EQ(mvPixelAt(mode3, 49, 0), MV_RED)
+        << "le mode 3 doit couvrir le reste de la division";
+}
+
+// A egalite stricte, la couleur de plus BASSE valeur RGB gagne : sans cette
+// regle le resultat dependrait de l'ordre de parcours.
+TEST(TEST_cgimg_img, resize_majority_breaks_ties_deterministically)
+{
+    Img img(2, 1, false);
+    img.set_pixel(0, 0, 255, 0, 0, 255);          // rouge  0xff0000
+    img.set_pixel(1, 0, 0, 0, 255, 255);          // bleu   0x0000ff
+
+    ASSERT_EQ(img.resize(1, 1, 3), 0);
+    EXPECT_EQ(mvPixelAt(img, 0, 0), MV_BLUE) << "0x0000ff < 0xff0000";
+}
+
+// A l'agrandissement, des cellules n'ont aucun pixel source : elles dupliquent
+// le plus proche au lieu de rester non initialisees.
+TEST(TEST_cgimg_img, resize_majority_upscale_is_defined)
+{
+    Img img(2, 2, false);
+    mvFillRect(img, 0, 0, 2, 2, 10, 20, 30);
+
+    ASSERT_EQ(img.resize(6, 6, 3), 0);
+    EXPECT_EQ(img.width(), 6u);
+    for (unsigned int y = 0; y < 6; ++y)
+        for (unsigned int x = 0; x < 6; ++x)
+            EXPECT_EQ(mvPixelAt(img, (int)x, (int)y), 0x0a141eu);
+}
+
+// ---------------------------------------------------------------------------
+//  Filtre de mode
+// ---------------------------------------------------------------------------
+
+// Un pixel isole dans un fond uniforme est un mouchetis : ses 8 voisins votent
+// contre lui, il disparait. Le fond, lui, ne bouge pas.
+TEST(TEST_cgimg_img, filter_majority_removes_an_isolated_speck)
+{
+    Img img(9, 9, false);
+    mvFillRect(img, 0, 0, 9, 9, 255, 255, 255);
+    img.set_pixel(4, 4, 255, 0, 0, 255);
+
+    ASSERT_EQ(img.filter_majority(1, 1), 0);
+
+    EXPECT_EQ(mvPixelAt(img, 4, 4), MV_WHITE);
+    EXPECT_EQ(mvColorsOf(img).size(), 1u);
+}
+
+// Une frontiere franche entre deux moities NE DOIT PAS deriver : a egalite le
+// pixel central est conserve. Dix passes ne doivent pas bouger la limite d'un
+// seul pixel.
+TEST(TEST_cgimg_img, filter_majority_keeps_a_straight_boundary)
+{
+    Img img(16, 16, false);
+    mvFillRect(img, 0, 0, 8, 16, 255, 255, 255);
+    mvFillRect(img, 8, 0, 16, 16, 0, 0, 255);
+
+    ASSERT_EQ(img.filter_majority(1, 10), 0);
+
+    for (int y = 0; y < 16; ++y)
+    {
+        EXPECT_EQ(mvPixelAt(img, 7, y), MV_WHITE) << "y=" << y;
+        EXPECT_EQ(mvPixelAt(img, 8, y), MV_BLUE)  << "y=" << y;
+    }
+}
+
+// Le filtre ne cree aucune couleur : il ne recopie que des couleurs voisines.
+TEST(TEST_cgimg_img, filter_majority_never_invents_a_colour)
+{
+    Img img(24, 24, false);
+    for (int y = 0; y < 24; ++y)
+        for (int x = 0; x < 24; ++x)
+        {
+            const int k = (x * 7 + y * 3) % 3;
+            img.set_pixel((unsigned)x, (unsigned)y,
+                          k == 0 ? 255 : 0, k == 1 ? 255 : 0, k == 2 ? 255 : 0, 255);
+        }
+    const std::set<unsigned int> before = mvColorsOf(img);
+
+    ASSERT_EQ(img.filter_majority(1, 3), 0);
+
+    const std::set<unsigned int> after = mvColorsOf(img);
+    for (std::set<unsigned int>::const_iterator it = after.begin(); it != after.end(); ++it)
+        EXPECT_EQ(before.count(*it), 1u) << "couleur inventee : " << std::hex << *it;
+}
+
+TEST(TEST_cgimg_img, filter_majority_rejects_degenerate_parameters)
+{
+    Img img(4, 4, false);
+    mvFillRect(img, 0, 0, 4, 4, 1, 2, 3);
+    EXPECT_EQ(img.filter_majority(0, 1), 0);      // no-op, pas une erreur
+    EXPECT_EQ(img.filter_majority(1, 0), 0);
+    EXPECT_EQ(mvPixelAt(img, 0, 0), 0x010203u);
+}
+
+// ---------------------------------------------------------------------------
+//  Absorption des petites regions
+// ---------------------------------------------------------------------------
+
+// Un carre 2x2 (aire 4) sous un seuil de 6 est absorbe par son unique voisin.
+// Un carre 4x4 (aire 16) au-dessus du seuil survit.
+TEST(TEST_cgimg_img, absorb_small_regions_merges_below_the_threshold)
+{
+    Img img(20, 20, false);
+    mvFillRect(img, 0, 0, 20, 20, 255, 255, 255);
+    mvFillRect(img, 2, 2, 4, 4, 255, 0, 0);       // aire 4  -> absorbe
+    mvFillRect(img, 10, 10, 14, 14, 0, 0, 255);   // aire 16 -> conserve
+
+    ASSERT_EQ(img.absorb_small_regions(6), 0);
+
+    EXPECT_EQ(mvPixelAt(img, 2, 2), MV_WHITE);
+    EXPECT_EQ(mvPixelAt(img, 11, 11), MV_BLUE);
+}
+
+// Deux blocs de MEME couleur mais disjoints sont deux composantes : le seuil
+// s'applique a chacune, pas a l'aire totale de la couleur.
+TEST(TEST_cgimg_img, absorb_small_regions_works_per_component)
+{
+    Img img(20, 20, false);
+    mvFillRect(img, 0, 0, 20, 20, 255, 255, 255);
+    mvFillRect(img, 2, 2, 3, 3, 255, 0, 0);       // aire 1  -> absorbe
+    mvFillRect(img, 8, 8, 14, 14, 255, 0, 0);     // aire 36 -> conserve
+
+    ASSERT_EQ(img.absorb_small_regions(4), 0);
+
+    EXPECT_EQ(mvPixelAt(img, 2, 2), MV_WHITE);
+    EXPECT_EQ(mvPixelAt(img, 10, 10), MV_RED);
+}
+
+// L'image reste un pavage complet : aucune couleur nouvelle, et le nombre de
+// couleurs ne peut que decroitre.
+TEST(TEST_cgimg_img, absorb_small_regions_never_invents_a_colour)
+{
+    Img img(16, 16, false);
+    mvFillRect(img, 0, 0, 16, 16, 255, 255, 255);
+    mvFillRect(img, 1, 1, 2, 2, 255, 0, 0);
+    mvFillRect(img, 5, 5, 6, 6, 0, 0, 255);
+    mvFillRect(img, 9, 9, 10, 10, 0, 255, 0);
+    const std::set<unsigned int> before = mvColorsOf(img);
+
+    ASSERT_EQ(img.absorb_small_regions(3), 0);
+
+    const std::set<unsigned int> after = mvColorsOf(img);
+    EXPECT_LE(after.size(), before.size());
+    for (std::set<unsigned int>::const_iterator it = after.begin(); it != after.end(); ++it)
+        EXPECT_EQ(before.count(*it), 1u) << "couleur inventee : " << std::hex << *it;
+}
+
+TEST(TEST_cgimg_img, absorb_small_regions_rejects_degenerate_parameters)
+{
+    Img img(4, 4, false);
+    mvFillRect(img, 0, 0, 4, 4, 1, 2, 3);
+    EXPECT_EQ(img.absorb_small_regions(0), 0);    // no-op, pas une erreur
+    EXPECT_EQ(img.absorb_small_regions(4, 0), 0);
+    EXPECT_EQ(mvPixelAt(img, 0, 0), 0x010203u);
+}
+
+// ---------------------------------------------------------------------------
+//  Etiquetage en composantes connexes
+// ---------------------------------------------------------------------------
+
+// Deux blocs de meme couleur separes par du fond font DEUX composantes, et les
+// indices suivent l'ordre de balayage raster.
+TEST(TEST_cgimg_img, label_components_separates_disjoint_blocks)
+{
+    Img img(10, 10, false);
+    mvFillRect(img, 0, 0, 10, 10, 255, 255, 255);
+    mvFillRect(img, 1, 1, 3, 3, 255, 0, 0);
+    mvFillRect(img, 6, 6, 8, 8, 255, 0, 0);       // MEME couleur, disjoint
+
+    std::vector<int> labels;
+    std::vector<Color> colors;
+    const int n = img.label_components(labels, &colors);
+
+    ASSERT_EQ(n, 3);                              // fond + 2 blocs rouges
+    ASSERT_EQ(labels.size(), 100u);
+    ASSERT_EQ(colors.size(), 3u);
+    EXPECT_EQ(labels[0], 0);                      // le fond est rencontre en premier
+    const int a = labels[1 * 10 + 1];
+    const int b = labels[6 * 10 + 6];
+    EXPECT_EQ(a, 1);
+    EXPECT_EQ(b, 2);
+    EXPECT_EQ((int)colors[(size_t)a].r(), 255);
+    EXPECT_EQ((int)colors[(size_t)a].g(), 0);
+    EXPECT_EQ((int)colors[(size_t)b].r(), 255);
+}
+
+// La diagonale n'est PAS une connexion (4-connexe, pas 8).
+TEST(TEST_cgimg_img, label_components_is_four_connected)
+{
+    Img img(2, 2, false);
+    img.set_pixel(0, 0, 255, 0, 0, 255);
+    img.set_pixel(1, 1, 255, 0, 0, 255);
+    img.set_pixel(1, 0, 255, 255, 255, 255);
+    img.set_pixel(0, 1, 255, 255, 255, 255);
+
+    std::vector<int> labels;
+    const int n = img.label_components(labels);
+
+    EXPECT_EQ(n, 4) << "les deux rouges en diagonale ne sont pas connexes";
+}
+
+// Une image monochrome fait UNE composante couvrant tout le raster : c'est le
+// cas qui ferait exploser une implementation recursive.
+TEST(TEST_cgimg_img, label_components_handles_a_monochrome_raster)
+{
+    Img img(200, 200, false);
+    img.init_color(7, 8, 9, 255);
+
+    std::vector<int> labels;
+    std::vector<Color> colors;
+    const int n = img.label_components(labels, &colors);
+
+    ASSERT_EQ(n, 1);
+    ASSERT_EQ(colors.size(), 1u);
+    for (size_t i = 0; i < labels.size(); ++i)
+        ASSERT_EQ(labels[i], 0) << "pixel " << i;
+}
+
+TEST(TEST_cgimg_img, label_components_rejects_an_empty_image)
+{
+    Img img;
+    std::vector<int> labels;
+    EXPECT_EQ(img.label_components(labels), -1);
+}
+
+// ---------------------------------------------------------------------------
+//  Filtre bilateral : miroir de bord
+// ---------------------------------------------------------------------------
+
+// Regression : le repli du bord bas etait `iii -= iii`, soit 0 -- tout le
+// demi-voisinage hors cadre s'effondrait sur la colonne/ligne 0. Sur une image
+// UNIFORME le filtre doit etre l'identite exacte, y compris sur le lisere
+// exterieur : un miroir correct ne peut echantillonner que la meme couleur.
+TEST(TEST_cgimg_img, bilateral_filtering_mirrors_the_border)
+{
+    Img img(16, 16, false);
+    img.init_color(90, 110, 130, 255);
+
+    ASSERT_EQ(img.bilateral_filtering(), 0);
+
+    for (unsigned int y = 0; y < 16; ++y)
+        for (unsigned int x = 0; x < 16; ++x)
+        {
+            unsigned char r = 0, g = 0, b = 0, a = 0;
+            img.get_pixel(x, y, &r, &g, &b, &a);
+            ASSERT_NEAR((int)r, 90, 1) << "x=" << x << " y=" << y;
+            ASSERT_NEAR((int)g, 110, 1) << "x=" << x << " y=" << y;
+            ASSERT_NEAR((int)b, 130, 1) << "x=" << x << " y=" << y;
+        }
+}

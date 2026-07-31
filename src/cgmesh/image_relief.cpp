@@ -247,8 +247,11 @@ Mesh* image_to_relief(const std::string& filename, const ImageReliefOptions& opt
 	ExtrudedMeshBuilder builder;
 	for (unsigned int i = 0; i < nLayers; ++i)
 		appendLayer(builder, content.layers[i], i, opt, pInternalEdges, content.w.quantScale);
-	appendBase(builder, nLayers,      content, opt);
-	appendWall(builder, nLayers + 1u, content, opt);
+	// Les ids de materiau suivent l'ordre d'enregistrement plus bas ; un cadre
+	// desactive ne consomme donc pas son id.
+	unsigned int nextMaterial = nLayers;
+	if (opt.emitBase) appendBase(builder, nextMaterial++, content, opt);
+	if (opt.emitWall) appendWall(builder, nextMaterial++, content, opt);
 
 	Mesh* m = builder.Build();
 	if (!m)
@@ -263,8 +266,8 @@ Mesh* image_to_relief(const std::string& filename, const ImageReliefOptions& opt
 		std::snprintf(name, sizeof(name), "color_%02u", i);
 		m->Material_Add(makeColorMaterial(content.layers[i].color, name));
 	}
-	m->Material_Add(makeColorMaterial(opt.baseColor, "base"));
-	m->Material_Add(makeColorMaterial(opt.wallColor, "wall"));
+	if (opt.emitBase) m->Material_Add(makeColorMaterial(opt.baseColor, "base"));
+	if (opt.emitWall) m->Material_Add(makeColorMaterial(opt.wallColor, "wall"));
 
 	m->computebbox();
 	return m;
@@ -327,8 +330,8 @@ std::vector<Mesh*> image_to_relief_per_color(const std::string& filename,
 		return true;
 	};
 
-	if (!appendFrame(appendBase, opt.baseColor, "base") ||
-	    !appendFrame(appendWall, opt.wallColor, "wall"))
+	if ((opt.emitBase && !appendFrame(appendBase, opt.baseColor, "base")) ||
+	    (opt.emitWall && !appendFrame(appendWall, opt.wallColor, "wall")))
 	{
 		std::fprintf(stderr, "image_relief: %s failed to build the base/wall frame\n",
 		             filename.c_str());

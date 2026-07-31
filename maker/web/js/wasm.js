@@ -15,8 +15,8 @@ import createMakerModule from "../maker.js";
 const REQUIRED_BINDINGS = [
   "listShapes", "createShape", "createSvgExtrusion", "createImageRelief",
   "createGothicFromJson", "exportGothicJson", "getParams", "setParam",
-  "regenerate", "meshData", "destroyShape",
-  "createImagePixelBlocks", "exportPixelBlocksObj",
+  "regenerate", "exportObj", "meshData", "destroyShape",
+  "createImagePixelBlocks", "exportPixelBlocks",
 ];
 
 // Renvoie { Module, staleMessage }. `staleMessage` est non nul quand le module

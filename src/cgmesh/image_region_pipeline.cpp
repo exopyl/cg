@@ -18,173 +18,23 @@ const int kMaxPaletteColors = 250;
 namespace {
 
 // ============================================================================
-//  Despeckling of the quantized image (label domain)
+//  Despeckling of the quantized image
 // ============================================================================
 //
-// Everything here works on LABELS (one colour index per pixel) and only ever
-// replaces a label by one already present among its neighbours. The labelling
-// therefore stays a complete tiling of the image, which is what guarantees the
-// extruded regions keep covering the footprint exactly -- no voids. See the
-// comments on ImageReliefOptions::despecklePasses for why the alternative
-// (filtering vectorized contours by area) cannot offer that.
-
-struct LabelImage
-{
-	int w = 0, h = 0;
-	std::vector<int>          px;      // label per pixel
-	std::vector<unsigned int> rgb;     // label -> packed RGB
-	int label(int x, int y) const { return px[(size_t)y * w + x]; }
-	void set(int x, int y, int l)  { px[(size_t)y * w + x] = l; }
-};
-
-LabelImage toLabels(const Img& img)
-{
-	LabelImage L;
-	L.w = (int)img.width();
-	L.h = (int)img.height();
-	L.px.assign((size_t)L.w * L.h, 0);
-
-	std::map<unsigned int, int> seen;
-	for (int y = 0; y < L.h; ++y)
-		for (int x = 0; x < L.w; ++x)
-		{
-			unsigned char r = 0, g = 0, b = 0, a = 0;
-			img.get_pixel((unsigned)x, (unsigned)y, &r, &g, &b, &a);
-			const unsigned int key = ((unsigned)r << 16) | ((unsigned)g << 8) | (unsigned)b;
-			auto it = seen.find(key);
-			if (it == seen.end())
-			{
-				it = seen.emplace(key, (int)L.rgb.size()).first;
-				L.rgb.push_back(key);
-			}
-			L.set(x, y, it->second);
-		}
-	return L;
-}
-
-void applyLabels(const LabelImage& L, Img& img)
-{
-	for (int y = 0; y < L.h; ++y)
-		for (int x = 0; x < L.w; ++x)
-		{
-			const unsigned int c = L.rgb[(size_t)L.label(x, y)];
-			img.set_pixel((unsigned)x, (unsigned)y,
-			              (unsigned char)(c >> 16), (unsigned char)(c >> 8),
-			              (unsigned char)c, 255);
-		}
-}
-
-// One 3x3 majority pass. Read from a snapshot so the pass is order-independent.
-// Ties keep the centre pixel, so a genuine boundary does not drift.
-void majorityPass(LabelImage& L)
-{
-	const std::vector<int> src = L.px;
-	const int nLabels = (int)L.rgb.size();
-	std::vector<int> votes((size_t)nLabels, 0);
-
-	for (int y = 0; y < L.h; ++y)
-		for (int x = 0; x < L.w; ++x)
-		{
-			const int centre = src[(size_t)y * L.w + x];
-			int touched[9], nTouched = 0;
-			for (int dy = -1; dy <= 1; ++dy)
-				for (int dx = -1; dx <= 1; ++dx)
-				{
-					const int xx = x + dx, yy = y + dy;
-					if (xx < 0 || yy < 0 || xx >= L.w || yy >= L.h) continue;
-					const int l = src[(size_t)yy * L.w + xx];
-					if (votes[(size_t)l]++ == 0) touched[nTouched++] = l;
-				}
-
-			int best = centre, bestVotes = votes[(size_t)centre];
-			for (int i = 0; i < nTouched; ++i)
-				if (votes[(size_t)touched[i]] > bestVotes)
-				{
-					bestVotes = votes[(size_t)touched[i]];
-					best = touched[i];
-				}
-			for (int i = 0; i < nTouched; ++i) votes[(size_t)touched[i]] = 0;
-
-			L.set(x, y, best);
-		}
-}
-
-// Absorb every connected region below minArea into its most frequent
-// neighbouring label. Repeated a few times: merging a speck into a small
-// neighbour can leave the result still under the threshold.
-//
-// Chaque passe MESURE sur `L` intact et ECRIT dans une copie, comme
-// majorityPass. Muter `L` au fil du balayage rendait la passe dependante de
-// l'ordre : une region d'accueil rencontree APRES l'absorption d'un mouchetis
-// voyait ses cellules fraichement absorbees exclues de son flood (leur `comp`
-// etait deja marque), donc une taille sous-estimee -- et pouvait a son tour
-// passer sous le seuil et partir dans une autre couleur.
-void mergeSmallComponents(LabelImage& L, int minArea)
-{
-	const int dx4[4] = { 1, -1, 0, 0 }, dy4[4] = { 0, 0, 1, -1 };
-
-	for (int pass = 0; pass < 3; ++pass)
-	{
-		std::vector<int> comp((size_t)L.w * L.h, -1);
-		std::vector<int> next = L.px;   // les fusions de CETTE passe vont ici
-		bool merged = false;
-		int nComp = 0;
-
-		for (int y0 = 0; y0 < L.h; ++y0)
-			for (int x0 = 0; x0 < L.w; ++x0)
-			{
-				if (comp[(size_t)y0 * L.w + x0] != -1) continue;
-				const int mine = L.label(x0, y0);
-
-				// flood fill the component, tallying the labels on its border
-				std::vector<std::pair<int,int>> cells;
-				std::map<int, int> borderVotes;
-				std::vector<std::pair<int,int>> stack{ { x0, y0 } };
-				comp[(size_t)y0 * L.w + x0] = nComp;
-				while (!stack.empty())
-				{
-					const auto [x, y] = stack.back(); stack.pop_back();
-					cells.emplace_back(x, y);
-					for (int k = 0; k < 4; ++k)
-					{
-						const int xx = x + dx4[k], yy = y + dy4[k];
-						if (xx < 0 || yy < 0 || xx >= L.w || yy >= L.h) continue;
-						const int other = L.label(xx, yy);
-						if (other != mine) { borderVotes[other]++; continue; }
-						if (comp[(size_t)yy * L.w + xx] != -1) continue;
-						comp[(size_t)yy * L.w + xx] = nComp;
-						stack.emplace_back(xx, yy);
-					}
-				}
-				++nComp;
-
-				if ((int)cells.size() >= minArea || borderVotes.empty())
-					continue;
-
-				int winner = borderVotes.begin()->first, best = -1;
-				for (const auto& [lab, n] : borderVotes)
-					if (n > best) { best = n; winner = lab; }
-
-				for (const auto& [x, y] : cells) next[(size_t)y * L.w + x] = winner;
-				merged = true;
-			}
-
-		if (!merged) break;
-		L.px.swap(next);
-	}
-}
+// Les deux etages sont des primitives d'image (cgimg) : un filtre de MODE 3x3
+// puis l'absorption des composantes connexes sous un seuil d'aire. Ni l'un ni
+// l'autre ne cree de couleur -- ils ne remplacent une couleur que par une deja
+// presente dans le voisinage --, donc l'image reste un pavage complet, ce qui
+// garantit que les regions extrudees couvrent exactement l'emprise, sans trou.
+// Cf. les commentaires de ImageReliefOptions::despecklePasses pour pourquoi
+// l'alternative (filtrer les contours vectorises par aire) ne l'offre pas.
 
 void despeckle(Img& img, int passes, int minRegionArea)
 {
-	if (passes <= 0 && minRegionArea <= 0)
-		return;
-
-	LabelImage L = toLabels(img);
-	for (int i = 0; i < passes; ++i)
-		majorityPass(L);
+	if (passes > 0)
+		img.filter_majority(/*radius=*/1, passes);
 	if (minRegionArea > 0)
-		mergeSmallComponents(L, minRegionArea);
-	applyLabels(L, img);
+		img.absorb_small_regions(minRegionArea);
 }
 
 // ============================================================================
@@ -204,6 +54,27 @@ double contourArea(const std::vector<Vector2f>& pts)
 		a += (double)p.x * (double)q.y - (double)q.x * (double)p.y;
 	}
 	return .5 * a;
+}
+
+// ============================================================================
+//  Pixelisation par vote majoritaire
+// ============================================================================
+
+// Sous-echantillonne vers `targetW` cellules de large, la hauteur suivant le
+// rapport d'aspect. Le vote lui-meme est Img::resize mode 3 (bornes de bloc
+// exactes) : ici on ne fait que deduire la hauteur et refuser l'agrandissement.
+bool pixelize_to_width(Img& img, int targetW)
+{
+	const int W = (int)img.width();
+	const int H = (int)img.height();
+	if (targetW <= 0 || W <= 0 || H <= 0) return false;
+	if (targetW >= W) return true;             // rien a reduire : on ne dilate pas
+
+	// Hauteur deduite du rapport d'aspect, au moins 1 cellule.
+	int targetH = (int)std::lround((double)H * (double)targetW / (double)W);
+	if (targetH < 1) targetH = 1;
+
+	return img.resize((unsigned)targetW, (unsigned)targetH, /*mode=*/3) == 0;
 }
 
 } // namespace
@@ -277,66 +148,6 @@ void region_shrink_contours(std::vector<VectorContour>& contours, float shrink)
 }
 
 // ============================================================================
-//  Pixelisation par vote majoritaire
-// ============================================================================
-
-bool pixelize_majority(Img& img, int targetW)
-{
-	const int W = (int)img.width();
-	const int H = (int)img.height();
-	if (targetW <= 0 || W <= 0 || H <= 0) return false;
-	if (targetW >= W) return true;             // rien a reduire : on ne dilate pas
-
-	// Hauteur deduite du rapport d'aspect, au moins 1 cellule.
-	int targetH = (int)std::lround((double)H * (double)targetW / (double)W);
-	if (targetH < 1) targetH = 1;
-
-	Img out((unsigned)targetW, (unsigned)targetH);
-
-	for (int j = 0; j < targetH; ++j)
-	{
-		// Bornes EXACTES du bloc source : la derniere cellule couvre le reste de la
-		// division. Img::resize mode 2 utilise un pas constant W/w, ce qui laisse
-		// tomber les dernieres colonnes (400 px en 64 blocs n'en couvre que 384).
-		const int y0 = (int)((long long)j * H / targetH);
-		const int y1 = (int)((long long)(j + 1) * H / targetH);
-
-		for (int i = 0; i < targetW; ++i)
-		{
-			const int x0 = (int)((long long)i * W / targetW);
-			const int x1 = (int)((long long)(i + 1) * W / targetW);
-
-			std::map<unsigned int, int> votes;
-			for (int y = y0; y < y1; ++y)
-				for (int x = x0; x < x1; ++x)
-				{
-					unsigned char r = 0, g = 0, b = 0, a = 0;
-					img.get_pixel((unsigned)x, (unsigned)y, &r, &g, &b, &a);
-					votes[((unsigned)r << 16) | ((unsigned)g << 8) | (unsigned)b]++;
-				}
-			if (votes.empty()) continue;       // bloc vide (ne devrait pas arriver)
-
-			// Depart determine par la valeur RGB la plus BASSE a egalite : std::map
-			// itere en ordre croissant et on ne remplace que sur un compte
-			// STRICTEMENT superieur. Sans cette regle, deux couleurs a egalite
-			// feraient dependre le resultat de l'ordre de parcours.
-			unsigned int bestColor = votes.begin()->first;
-			int bestCount = -1;
-			for (const auto& [color, n] : votes)
-				if (n > bestCount) { bestCount = n; bestColor = color; }
-
-			out.set_pixel((unsigned)i, (unsigned)j,
-			              (unsigned char)(bestColor >> 16),
-			              (unsigned char)(bestColor >> 8),
-			              (unsigned char)bestColor, 255);
-		}
-	}
-
-	img = out;
-	return true;
-}
-
-// ============================================================================
 //  Source -> raster quantifie
 // ============================================================================
 
@@ -371,6 +182,24 @@ bool image_to_quantized_image(const std::string& filename,
 	for (int i = 0; i < opt.preSmoothPasses; ++i)
 		img.bilateral_filtering();
 
+	// Le raster de cette chaine est OPAQUE par contrat : tout l'etage aval
+	// (quantification, anti-mouchetis, vectorisation) raisonne sur des COULEURS, et
+	// Palette::IsPresent compare l'alpha -- deux pixels de meme RGB et d'alpha
+	// different y comptent pour deux couleurs, donc pour deux materiaux.
+	//
+	// Or le lissage bilateral perturbe l'alpha d'un LSB : sa moyenne ponderee tombe
+	// a 254,9 et la conversion en entier tronque. Sur une source a deux couleurs, on
+	// obtenait ainsi quatre entrees de palette (2 RGB x 2 alpha). La normalisation
+	// etait jusqu'ici un effet de bord de l'anti-mouchetis, qui reecrivait tous les
+	// pixels en a=255 -- donc absente des que despecklePasses et minRegionArea
+	// etaient a 0. Elle est desormais explicite et inconditionnelle.
+	{
+		unsigned char* px = img.data();
+		const size_t n = (size_t)img.width() * img.height();
+		for (size_t k = 0; k < n; ++k)
+			px[4 * k + 3] = 255;
+	}
+
 	// Reference pour le raffinement : l'image APRES lissage, car c'est bien elle
 	// que la segmentation doit representer (et non le bruit qu'on vient d'oter).
 	Img reference;
@@ -394,7 +223,7 @@ bool image_to_quantized_image(const std::string& filename,
 	// quantifier) moyennerait a travers les bords et fabriquerait des teintes
 	// absentes de la palette.
 	if (opt.pixelWidth > 0)
-		pixelize_majority(img, opt.pixelWidth);
+		pixelize_to_width(img, opt.pixelWidth);
 
 	// Clean the labelling BEFORE vectorizing: the vectorizer then never sees the
 	// compression hatching, so no speck ever becomes a block and the regions
