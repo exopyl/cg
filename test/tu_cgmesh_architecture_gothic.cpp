@@ -1,10 +1,13 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "../src/cgmesh/architecture_gothic.h"
 
@@ -689,4 +692,305 @@ TEST(TEST_cgmesh_architecture_gothic, WriteUnifiedBayPlusMoldingObj)
     int rc = combined.save(outFile.string().c_str());
     EXPECT_GE(rc, 0);
     EXPECT_TRUE(std::filesystem::exists(outFile));
+}
+
+// ===========================================================================
+//  extrudeProfiledToMesh — extrusion a chanfrein
+// ===========================================================================
+//  Seule variante d'extrusion sans couverture jusqu'ici, et c'est la plus
+//  delicate : elle decale chaque sommet le long d'une normale « vers la pierre »,
+//  operation qui s'auto-intersecte sur un contour concave pointu. Le garde-fou
+//  qui retombe alors sur une paroi verticale est verifie plus bas.
+
+namespace
+{
+    // Bornes en z des sommets d'un maillage.
+    void meshZRange (Mesh &m, float &zMin, float &zMax)
+    {
+        zMin = 0.f; zMax = 0.f;
+        const unsigned int n = m.GetNVertices();
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            float v[3];
+            m.GetVertex(i, v);
+            if (i == 0) { zMin = zMax = v[2]; continue; }
+            zMin = std::min(zMin, v[2]);
+            zMax = std::max(zMax, v[2]);
+        }
+    }
+
+    // Nombre de sommets situes exactement a une altitude donnee.
+    unsigned int countVerticesAtZ (Mesh &m, float z, float tol = 1e-4f)
+    {
+        unsigned int c = 0;
+        const unsigned int n = m.GetNVertices();
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            float v[3];
+            m.GetVertex(i, v);
+            if (std::fabs(v[2] - z) < tol) ++c;
+        }
+        return c;
+    }
+
+    // Volume signe (somme des tetraedres origine-triangle). Positif et proche du
+    // volume attendu = surface fermee et normales sortantes.
+    double signedVolume (Mesh &m)
+    {
+        double vol = 0.;
+        std::vector<unsigned int> tris = m.GetTriangles();
+        for (size_t t = 0; t + 2 < tris.size(); t += 3)
+        {
+            float a[3], b[3], c[3];
+            m.GetVertex(tris[t], a);
+            m.GetVertex(tris[t+1], b);
+            m.GetVertex(tris[t+2], c);
+            vol += ( (double)a[0]*((double)b[1]*c[2] - (double)b[2]*c[1])
+                   - (double)a[1]*((double)b[0]*c[2] - (double)b[2]*c[0])
+                   + (double)a[2]*((double)b[0]*c[1] - (double)b[1]*c[0]) ) / 6.0;
+        }
+        return vol;
+    }
+}
+
+TEST(TEST_cgmesh_architecture_gothic, ExtrudeProfiledProducesGeometrySpanningTheGivenZ)
+{
+    WindowGeometry g = buildTypicalGeom();
+    Polygon2 poly = buildBayStonePolygon(g);
+
+    Mesh mesh;
+    ASSERT_NO_THROW(extrudeProfiledToMesh(poly, mesh, 0.0, 10.0, /*chamW=*/2.0, /*chamD=*/4.0));
+    ASSERT_GT(mesh.GetNVertices(), 0u);
+    ASSERT_GT(mesh.GetNFaces(), 0u);
+
+    float zMin = 0.f, zMax = 0.f;
+    meshZRange(mesh, zMin, zMax);
+    EXPECT_NEAR(zMin,  0.0f, 1e-4f);
+    EXPECT_NEAR(zMax, 10.0f, 1e-4f);
+
+    // La face avant reste PLATE a zTop : il doit y avoir des sommets exactement la.
+    EXPECT_GT(countVerticesAtZ(mesh, 10.0f), 0u);
+    EXPECT_GT(countVerticesAtZ(mesh,  0.0f), 0u);
+}
+
+// Le chanfrein insere un anneau de sommets supplementaire par contour : le
+// maillage profile est donc plus lourd que l'extrusion droite, a contour egal.
+TEST(TEST_cgmesh_architecture_gothic, ExtrudeProfiledAddsGeometryComparedToStraightExtrude)
+{
+    WindowGeometry g = buildTypicalGeom();
+
+    Polygon2 polyA = buildBayStonePolygon(g);
+    Mesh straight;
+    ASSERT_NO_THROW(extrudeToMesh(polyA, straight, 0.0, 10.0));
+
+    Polygon2 polyB = buildBayStonePolygon(g);
+    Mesh profiled;
+    ASSERT_NO_THROW(extrudeProfiledToMesh(polyB, profiled, 0.0, 10.0, 2.0, 4.0));
+
+    EXPECT_GT(profiled.GetNVertices(), straight.GetNVertices());
+    EXPECT_GT(profiled.GetNFaces(),    straight.GetNFaces());
+}
+
+// Un chanfrein NUL doit rester licite et redonner une piece de meme etendue que
+// l'extrusion droite : c'est le cas degenere que traverse tout reglage a 0 dans
+// l'UI.
+TEST(TEST_cgmesh_architecture_gothic, ExtrudeProfiledWithZeroChamferIsWellFormed)
+{
+    WindowGeometry g = buildTypicalGeom();
+    Polygon2 poly = buildBayStonePolygon(g);
+
+    Mesh mesh;
+    ASSERT_NO_THROW(extrudeProfiledToMesh(poly, mesh, 0.0, 10.0, 0.0, 0.0));
+    ASSERT_GT(mesh.GetNVertices(), 0u);
+
+    float zMin = 0.f, zMax = 0.f;
+    meshZRange(mesh, zMin, zMax);
+    EXPECT_NEAR(zMin,  0.0f, 1e-4f);
+    EXPECT_NEAR(zMax, 10.0f, 1e-4f);
+}
+
+// Le volume reste POSITIF et borne par la boite englobante : c'est ce qui attrape
+// une orientation de faces inversee ou des boucles parasites nees d'un offset
+// par-sommet auto-intersectant (les « gouttes » historiques du chanfrein).
+TEST(TEST_cgmesh_architecture_gothic, ExtrudeProfiledVolumeStaysPositiveAndBounded)
+{
+    WindowGeometry g = buildRichGeom();          // remplage riche = contours concaves pointus
+    Polygon2 poly = buildBayStonePolygon(g);
+
+    Mesh mesh;
+    ASSERT_NO_THROW(extrudeProfiledToMesh(poly, mesh, 0.0, 10.0, 3.0, 6.0));
+    ASSERT_GT(mesh.GetNVertices(), 0u);
+
+    mesh.computebbox();
+    float mn[3], mx[3];
+    mesh.bbox().GetMinMax(mn, mx);
+    const double boxVol = (double)(mx[0]-mn[0]) * (mx[1]-mn[1]) * (mx[2]-mn[2]);
+    ASSERT_GT(boxVol, 0.0);
+
+    const double vol = signedVolume(mesh);
+    EXPECT_GT(vol, 0.0) << "volume negatif => faces orientees a l'envers";
+    EXPECT_LT(vol, boxVol) << "volume superieur a la boite englobante => "
+                              "geometrie repliee ou dupliquee";
+}
+
+// Un chanfrein demesure (plus large que la piece) ne doit ni lever ni produire un
+// maillage vide : la fonction doit se replier sur une paroi droite.
+TEST(TEST_cgmesh_architecture_gothic, ExtrudeProfiledSurvivesAnOversizedChamfer)
+{
+    WindowGeometry g = buildTypicalGeom();
+    Polygon2 poly = buildBayStonePolygon(g);
+
+    Mesh mesh;
+    ASSERT_NO_THROW(extrudeProfiledToMesh(poly, mesh, 0.0, 10.0,
+                                          /*chamW=*/500.0, /*chamD=*/500.0));
+    EXPECT_GT(mesh.GetNVertices(), 0u);
+    EXPECT_GT(mesh.GetNFaces(), 0u);
+}
+
+// ===========================================================================
+//  buildBayMoulding — moulure balayee le long des bords de champ
+// ===========================================================================
+//  Autre fonction publique sans couverture. Contrat : elle balaie le profil le
+//  long des VRAIES silhouettes que buildBayStonePolygon decoupe en vides, et
+//  laisse `out` VIDE quand la geometrie n'offre rien de balayable -- ce dernier
+//  point est un contrat explicite du header, donc un test a part entiere.
+
+TEST(TEST_cgmesh_architecture_gothic, BuildBayMouldingProducesASweptMesh)
+{
+    WindowGeometry g = buildTypicalGeom();
+    GothicMeshParams params;
+
+    Mesh mesh;
+    ASSERT_NO_THROW(buildBayMoulding(g, params, rectangularProfile(), mesh));
+    EXPECT_GT(mesh.GetNVertices(), 0u);
+    EXPECT_GT(mesh.GetNFaces(), 0u);
+
+    // Le profil est un carre unite en (u, v) : u = profondeur z. La moulure sort
+    // donc du plan, contrairement a une tesselation plate.
+    float zMin = 0.f, zMax = 0.f;
+    meshZRange(mesh, zMin, zMax);
+    EXPECT_GT(zMax - zMin, 0.f) << "une moulure balayee doit avoir de l'epaisseur en z";
+}
+
+// Le nombre de sommets suit le profil : un profil plus riche donne un tube plus
+// dense sur le MEME parcours. C'est ce qui verifie que le profil est reellement
+// balaye, et pas simplement ignore.
+TEST(TEST_cgmesh_architecture_gothic, BuildBayMouldingVertexCountScalesWithProfileSize)
+{
+    WindowGeometry g = buildTypicalGeom();
+    GothicMeshParams params;
+
+    Mesh rect, cavetto;
+    ASSERT_NO_THROW(buildBayMoulding(g, params, rectangularProfile(), rect));
+    ASSERT_NO_THROW(buildBayMoulding(g, params, cavettoProfile(0.3, 6), cavetto));
+    ASSERT_GT(rect.GetNVertices(), 0u);
+    ASSERT_GT(cavetto.GetNVertices(), 0u);
+
+    // rectangularProfile = 4 points ; cavettoProfile(_, 6) = 6 + 4 = 10.
+    EXPECT_GT(cavetto.GetNVertices(), rect.GetNVertices());
+}
+
+// Un remplage riche offre davantage de bords de champ (rosace, sous-arcs, tetes
+// foliees) : la moulure doit y etre plus longue, donc plus lourde.
+TEST(TEST_cgmesh_architecture_gothic, BuildBayMouldingFollowsMoreBordersOnRicherTracery)
+{
+    GothicMeshParams params;
+
+    WindowGeometry plain = buildTypicalGeom();
+    Mesh plainMesh;
+    ASSERT_NO_THROW(buildBayMoulding(plain, params, rectangularProfile(), plainMesh));
+
+    WindowGeometry rich = buildRichGeom();
+    Mesh richMesh;
+    ASSERT_NO_THROW(buildBayMoulding(rich, params, rectangularProfile(), richMesh));
+
+    ASSERT_GT(plainMesh.GetNVertices(), 0u);
+    EXPECT_GT(richMesh.GetNVertices(), plainMesh.GetNVertices());
+}
+
+// Un profil de moins de 3 points n'est pas une section fermee. Contrairement a
+// sweepProfileAlongArc, qui LEVE std::invalid_argument, buildBayMoulding rejette
+// EN SILENCE (`if (profile.size() < 3) return;`) et laisse `out` intact.
+//
+// Ce test fige le comportement REEL, pas le contrat du header -- lequel annonce
+// « Result written into `out` (replaces previous content) » et « `out` is left
+// empty » : ni l'un ni l'autre sur ce chemin. Ecart signale, non corrige : changer
+// la semantique d'une fonction partagee sortait du perimetre « ecrire les tests
+// manquants ».
+TEST(TEST_cgmesh_architecture_gothic, BuildBayMouldingSilentlySkipsADegenerateProfile)
+{
+    WindowGeometry g = buildTypicalGeom();
+    GothicMeshParams params;
+
+    std::vector<Vector2d> tooSmall = { Vector2d(0, 0), Vector2d(1, 0) };
+    Mesh mesh;
+    EXPECT_NO_THROW(buildBayMoulding(g, params, tooSmall, mesh));
+    EXPECT_EQ(mesh.GetNVertices(), 0u) << "rien ne doit etre produit depuis un profil degenere";
+}
+
+// Le piege que cree ce retour anticipe : sur un Mesh DEJA rempli, un profil
+// degenere ne remet pas a zero -- l'appelant croit lire le nouveau resultat et
+// relit l'ancien. Verrouille pour que la correction eventuelle du contrat soit un
+// changement VOULU et non une surprise.
+TEST(TEST_cgmesh_architecture_gothic, BuildBayMouldingLeavesStaleContentOnADegenerateProfile)
+{
+    WindowGeometry g = buildTypicalGeom();
+    GothicMeshParams params;
+
+    Mesh mesh;
+    ASSERT_NO_THROW(buildBayMoulding(g, params, rectangularProfile(), mesh));
+    const unsigned int valid = mesh.GetNVertices();
+    ASSERT_GT(valid, 0u);
+
+    std::vector<Vector2d> tooSmall = { Vector2d(0, 0), Vector2d(1, 0) };
+    ASSERT_NO_THROW(buildBayMoulding(g, params, tooSmall, mesh));
+    EXPECT_EQ(mesh.GetNVertices(), valid)
+        << "comportement actuel : `out` reste INTACT (le header dit « left empty »)";
+}
+
+// `out` est remplace, pas complete : un second appel ne doit pas empiler sur le
+// resultat du premier.
+TEST(TEST_cgmesh_architecture_gothic, BuildBayMouldingReplacesPreviousContent)
+{
+    WindowGeometry g = buildTypicalGeom();
+    GothicMeshParams params;
+
+    Mesh mesh;
+    ASSERT_NO_THROW(buildBayMoulding(g, params, rectangularProfile(), mesh));
+    const unsigned int first = mesh.GetNVertices();
+    ASSERT_GT(first, 0u);
+
+    ASSERT_NO_THROW(buildBayMoulding(g, params, rectangularProfile(), mesh));
+    EXPECT_EQ(mesh.GetNVertices(), first) << "le maillage a ete complete au lieu d'etre remplace";
+}
+
+// appendMesh est la voie documentee pour poser la moulure sur la plaque extrudee :
+// on verifie que le total est bien la somme, indices de faces decales compris.
+TEST(TEST_cgmesh_architecture_gothic, MouldingAppendsOntoTheExtrudedPlate)
+{
+    WindowGeometry g = buildTypicalGeom();
+    GothicMeshParams params;
+
+    Polygon2 poly = buildBayStonePolygon(g);
+    Mesh plate;
+    ASSERT_NO_THROW(extrudeToMesh(poly, plate, 0.0, 10.0));
+    const unsigned int nvPlate = plate.GetNVertices();
+    const unsigned int nfPlate = plate.GetNFaces();
+
+    Mesh moulding;
+    ASSERT_NO_THROW(buildBayMoulding(g, params, rectangularProfile(), moulding));
+    const unsigned int nvMould = moulding.GetNVertices();
+    const unsigned int nfMould = moulding.GetNFaces();
+    ASSERT_GT(nvMould, 0u);
+
+    appendMesh(plate, moulding);
+    EXPECT_EQ(plate.GetNVertices(), nvPlate + nvMould);
+    EXPECT_EQ(plate.GetNFaces(),    nfPlate + nfMould);
+
+    // Aucun indice de face ne doit sortir du nouveau domaine : c'est la seule
+    // maniere d'attraper un decalage oublie lors de la concatenation.
+    std::vector<unsigned int> tris = plate.GetTriangles();
+    ASSERT_FALSE(tris.empty());
+    for (unsigned int idx : tris)
+        ASSERT_LT(idx, plate.GetNVertices());
 }

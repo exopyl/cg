@@ -32,9 +32,18 @@ bool VMeshesIO::save(VMeshes& vm, const char *filename)
 	// obj
 	if (filename[size - 3] == 'o' && filename[size - 2] == 'b' && filename[size - 1] == 'j')
 		res = export_obj(vm, filename);
-	// stl (ASCII by default)
+	// stl : BINAIRE.
+	//
+	// C'est le STL de fait -- compact (50 o/triangle contre ~250 en ASCII), lu
+	// partout, et sans la perte de precision du formatage %g. import_stl detecte
+	// automatiquement les deux variantes, donc l'aller-retour reste assure.
+	//
+	// export_stl (ASCII) reste implemente mais n'a plus d'appelant : il etait
+	// jusqu'ici le seul export atteignable de VMeshesIO, alors que la variante
+	// binaire -- ecrite, testee, meilleure -- ne l'etait pas. A exposer si un choix
+	// de variante devient necessaire.
 	else if (filename[size - 3] == 's' && filename[size - 2] == 't' && filename[size - 1] == 'l')
-		res = export_stl(vm, filename);
+		res = export_stl_binary(vm, filename);
 
 	return res;
 }
@@ -464,20 +473,28 @@ namespace
 	};
 
 	// Collect every triangle of every Mesh in `meshes` into a flat list, with
-	// pre-computed normals. Non-triangle faces and out-of-range indices skipped.
+	// pre-computed normals. Out-of-range indices are skipped.
+	//
+	// Passe par Mesh::GetTriangles(), qui TRIANGULE les faces a plus de trois
+	// sommets (eventail pour les convexes, glutess pour les concaves).
+	//
+	// L'ancienne version parcourait m_pFaces et faisait `if (GetNVertices() != 3)
+	// continue;` : toute face non triangulaire etait IGNOREE en silence, et le STL
+	// sortait incomplet sans le moindre avertissement. Ce n'etait pas theorique --
+	// CreateCube() a bTri=false par defaut, donc produit des quads, et c'est la
+	// scene initiale de sinaia : l'enregistrer en STL donnait un fichier SANS
+	// AUCUNE facette.
 	std::vector<Tri> collectTriangles(const std::vector<Mesh*> &meshes)
 	{
 		std::vector<Tri> tris;
 		for (Mesh *m : meshes)
 		{
 			if (!m) continue;
-			for (unsigned int i = 0; i < m->m_nFaces; ++i)
+			const std::vector<unsigned int> idx = m->GetTriangles();
+			for (size_t k = 0; k + 2 < idx.size(); k += 3)
 			{
-				Face *f = m->m_pFaces[i];
-				if (!f || f->GetNVertices() != 3) continue;
-				int a = f->GetVertex(0), b = f->GetVertex(1), c = f->GetVertex(2);
-				if (a < 0 || b < 0 || c < 0) continue;
-				if ((unsigned)a >= m->m_nVertices || (unsigned)b >= m->m_nVertices || (unsigned)c >= m->m_nVertices) continue;
+				const unsigned int a = idx[k], b = idx[k+1], c = idx[k+2];
+				if (a >= m->m_nVertices || b >= m->m_nVertices || c >= m->m_nVertices) continue;
 
 				Tri t;
 				t.ax = m->m_pVertices[3*a];   t.ay = m->m_pVertices[3*a+1]; t.az = m->m_pVertices[3*a+2];

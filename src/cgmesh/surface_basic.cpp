@@ -421,7 +421,18 @@ Mesh* CreateCapsule (unsigned int n, float height, float radius)
     unsigned int nhalf = n/2.;
 
 	unsigned int nVertices = 2*n*nhalf+2;
-	unsigned int nFaces = 2*(n-1)*2*nhalf + 2*n;
+
+	// Nombre EXACT de faces effectivement emises plus bas :
+	//   calottes  2 x [ 2*n*(nhalf-1) bandes + n triangles d'eventail ]
+	//   corps     2*n
+	//   soit      4*n*(nhalf-1) + 4*n = 4*n*nhalf
+	//
+	// L'ancienne formule `2*(n-1)*2*nhalf + 2*n` valait 4*n*nhalf - 4*nhalf + 2*n :
+	// juste par coincidence pour n PAIR (ou nhalf = n/2 annule l'ecart), mais deux
+	// faces de trop pour n IMPAIR. Comme InitFaces() pre-alloue un Face() par slot,
+	// ces deux slots restaient des faces a ZERO sommet, et ComputeNormals() lisait
+	// pFace->m_pVertices[0] hors bornes -- crash sur toute capsule a n impair.
+	unsigned int nFaces = 4*n*nhalf;
 	Mesh *mesh = new Mesh (nVertices, nFaces);
 
 	float x, y, z;
