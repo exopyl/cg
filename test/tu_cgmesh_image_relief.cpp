@@ -14,7 +14,9 @@
 namespace {
 
 // PPM (P6): lossless and the encoder ships with cgimg (there is no PNG writer).
-const char* kInputFile = "./tu_image_relief_input.ppm";
+//
+// The scratch file name is declared INSIDE each test, after the test's own name.
+// A file-scope constant had the eight tests of this suite writing the same PPM.
 const int   W = 32, H = 32;
 
 void fillRect(Img& img, int x0, int y0, int x1, int y1,
@@ -37,11 +39,11 @@ void makeTwoColorImage(Img& img)
 
 // Writes the same image to disk so the file-based entry points can read it.
 // Returns false when the format round-trip is unavailable.
-bool writeTwoColorImage()
+bool writeTwoColorImage(const char* path)
 {
 	Img img;
 	makeTwoColorImage(img);
-	return img.save(kInputFile) == 0;
+	return img.save(path) == 0;
 }
 
 ImageReliefOptions defaultOptions()
@@ -105,7 +107,8 @@ TEST(TEST_cgmesh_image_relief, get_layers_splits_background_and_square)
 
 TEST(TEST_cgmesh_image_relief, produces_multi_material_mesh)
 {
-	ASSERT_TRUE(writeTwoColorImage());
+	const char* kInputFile = "./produces_multi_material_mesh.ppm";
+	ASSERT_TRUE(writeTwoColorImage(kInputFile));
 
 	const ImageReliefOptions opt = defaultOptions();
 	std::unique_ptr<Mesh> m(image_to_relief(kInputFile, opt));
@@ -133,7 +136,8 @@ TEST(TEST_cgmesh_image_relief, produces_multi_material_mesh)
 
 TEST(TEST_cgmesh_image_relief, bbox_frames_content_with_margin_and_wall)
 {
-	ASSERT_TRUE(writeTwoColorImage());
+	const char* kInputFile = "./bbox_frames_content_with_margin_and_wall.ppm";
+	ASSERT_TRUE(writeTwoColorImage(kInputFile));
 
 	const ImageReliefOptions opt = defaultOptions();
 	std::unique_ptr<Mesh> m(image_to_relief(kInputFile, opt));
@@ -160,7 +164,8 @@ TEST(TEST_cgmesh_image_relief, bbox_frames_content_with_margin_and_wall)
 // z=0. So the only Z values in the mesh are the four plane heights.
 TEST(TEST_cgmesh_image_relief, blocks_rise_from_the_top_of_the_base)
 {
-	ASSERT_TRUE(writeTwoColorImage());
+	const char* kInputFile = "./blocks_rise_from_the_top_of_the_base.ppm";
+	ASSERT_TRUE(writeTwoColorImage(kInputFile));
 
 	ImageReliefOptions opt = defaultOptions();
 	opt.blockHeight = 0.50f;
@@ -201,7 +206,8 @@ TEST(TEST_cgmesh_image_relief, blocks_rise_from_the_top_of_the_base)
 
 TEST(TEST_cgmesh_image_relief, per_color_returns_colors_then_base_then_wall)
 {
-	ASSERT_TRUE(writeTwoColorImage());
+	const char* kInputFile = "./per_color_returns_colors_then_base_then_wall.ppm";
+	ASSERT_TRUE(writeTwoColorImage(kInputFile));
 
 	const ImageReliefOptions opt = defaultOptions();
 	std::vector<Mesh*> meshes = image_to_relief_per_color(kInputFile, opt);
@@ -237,7 +243,8 @@ TEST(TEST_cgmesh_image_relief, per_color_returns_colors_then_base_then_wall)
 
 TEST(TEST_cgmesh_image_relief, dropping_internal_walls_shrinks_mesh_not_shape)
 {
-	ASSERT_TRUE(writeTwoColorImage());
+	const char* kInputFile = "./dropping_internal_walls_shrinks_mesh_not_shape.ppm";
+	ASSERT_TRUE(writeTwoColorImage(kInputFile));
 
 	ImageReliefOptions opt = defaultOptions();
 	std::unique_ptr<Mesh> closed(image_to_relief(kInputFile, opt));
@@ -377,7 +384,8 @@ TEST(TEST_cgmesh_image_relief, despeckling_removes_specks_without_opening_holes)
 
 TEST(TEST_cgmesh_image_relief, shrink_erodes_regions_without_moving_the_frame)
 {
-	ASSERT_TRUE(writeTwoColorImage());
+	const char* kInputFile = "./shrink_erodes_regions_without_moving_the_frame.ppm";
+	ASSERT_TRUE(writeTwoColorImage(kInputFile));
 
 	ImageReliefOptions opt = defaultOptions();
 	const float zTop = opt.baseThickness + opt.blockHeight;
@@ -417,7 +425,8 @@ TEST(TEST_cgmesh_image_relief, shrink_erodes_regions_without_moving_the_frame)
 // Le sillon doit s'élargir de façon monotone avec le paramètre.
 TEST(TEST_cgmesh_image_relief, shrink_is_monotonic)
 {
-	ASSERT_TRUE(writeTwoColorImage());
+	const char* kInputFile = "./shrink_is_monotonic.ppm";
+	ASSERT_TRUE(writeTwoColorImage(kInputFile));
 
 	ImageReliefOptions opt = defaultOptions();
 	const float zTop = opt.baseThickness + opt.blockHeight;
@@ -451,7 +460,8 @@ TEST(TEST_cgmesh_image_relief, nonexistent_file_fails_cleanly)
 // correction, appendBase/appendWall etaient appeles inconditionnellement.
 TEST(TEST_cgmesh_image_relief, frame_is_optional)
 {
-	ASSERT_TRUE(writeTwoColorImage());
+	const char* kInputFile = "./frame_is_optional.ppm";
+	ASSERT_TRUE(writeTwoColorImage(kInputFile));
 
 	ImageReliefOptions opt = defaultOptions();
 	opt.emitBase = false;

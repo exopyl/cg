@@ -2047,6 +2047,55 @@ void MyFrame::UpdatePropertiesGrid()
                                 // Icone FICHIER conservee : une texture designe bien un fichier, pas une couleur.
                                 m_hierarchyMaterials->AppendItem(matItem,
                                     wxString::Format("Texture: %s", mt->GetFilename()), kMatIconFile);
+
+                                // Etat du decodage. Un nom present sans image veut dire
+                                // fichier introuvable ou format non gere : sans cette
+                                // ligne, le panneau laissait croire que la texture etait
+                                // en place alors que rien n'etait charge.
+                                Img* img = mt->GetImage();
+                                if (img)
+                                    m_hierarchyMaterials->AppendItem(matItem,
+                                        wxString::Format("  Size: %u x %u", img->width(), img->height()),
+                                        kMatIconFile);
+                                else
+                                    m_hierarchyMaterials->AppendItem(matItem,
+                                        wxT("  Size: (image non chargee)"), kMatIconFile);
+
+                                // Carte de reflexion (MAT_REFLMAP en 3DS, refl en MTL),
+                                // appliquee en sphere mapping.
+                                if (!mt->GetReflectionFilename().empty())
+                                {
+                                    m_hierarchyMaterials->AppendItem(matItem,
+                                        wxString::Format("  Reflection: %s", mt->GetReflectionFilename()),
+                                        kMatIconFile);
+                                    Img* refl = mt->GetReflectionImage();
+                                    m_hierarchyMaterials->AppendItem(matItem,
+                                        refl ? wxString::Format("    Size: %u x %u", refl->width(), refl->height())
+                                             : wxString(wxT("    Size: (image non chargee)")),
+                                        kMatIconFile);
+                                }
+
+                                // Les memes champs que MATERIAL_COLOR_ADV : un materiau
+                                // texture porte aussi ses couleurs d'eclairage, qui
+                                // modulent le texel. Les voir explique pourquoi une
+                                // texture peut sortir noire (diffus quasi nul) ou saturee
+                                // (speculaire blanc a exposant nul).
+                                const float* d = mt->GetDiffuse();
+                                const float* a = mt->GetAmbient();
+                                const float* sp = mt->GetSpecular();
+                                m_hierarchyMaterials->AppendItem(matItem,
+                                    wxString::Format("  Diffuse: RGB(%.2f, %.2f, %.2f)", d[0], d[1], d[2]),
+                                    swatch(d[0], d[1], d[2]));
+                                m_hierarchyMaterials->AppendItem(matItem,
+                                    wxString::Format("  Ambient: RGB(%.2f, %.2f, %.2f)", a[0], a[1], a[2]),
+                                    swatch(a[0], a[1], a[2]));
+                                m_hierarchyMaterials->AppendItem(matItem,
+                                    wxString::Format("  Specular: RGB(%.2f, %.2f, %.2f)", sp[0], sp[1], sp[2]),
+                                    swatch(sp[0], sp[1], sp[2]));
+                                m_hierarchyMaterials->AppendItem(matItem,
+                                    wxString::Format("  Shininess: %.3f  (GL %.0f)",
+                                                     mt->GetShininess(), 128.f * mt->GetShininess()),
+                                    kMatIconFile);
                             }
                             break;
                         }

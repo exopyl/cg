@@ -36,7 +36,10 @@ using namespace std;
 	void ProcessNextTriMeshChunk_3DS	(t3DSModel*, t3DSObject*,	t3DSChunk*);
 	void ProcessNextLightChunk_3DS		(t3DSModel*, t3DSLight*,	t3DSChunk*);
 	void ProcessNextCameraChunk_3DS		(t3DSModel*, t3DSCamera*,	t3DSChunk*);
-	void ProcessNextMaterialChunk_3DS	(t3DSModel*,				t3DSChunk*);
+	// mapSlot : ou ranger le MAT_MAPNAME rencontre -- 0 = texture diffuse
+	// (MAT_TEXMAP), 1 = carte de reflexion (MAT_REFLMAP). Le nom de map est un
+	// chunk IMBRIQUE, donc c'est l'appelant qui sait de quel emplacement il parle.
+	void ProcessNextMaterialChunk_3DS	(t3DSModel*,				t3DSChunk*, int mapSlot = 0);
 	void ProcessNextKeyFrameChunk_3DS	(t3DSModel*,				t3DSChunk*);
 	void ProcessKeyFrameChunk_3DS		(t3DSModel*,				t3DSChunk*);
 

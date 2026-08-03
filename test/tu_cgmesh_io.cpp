@@ -1133,8 +1133,15 @@ TEST(TEST_cgmesh_io, obj_mtl_is_opaque_and_has_no_stray_specular)
     mesh.SetFaceMaterialId(0, 0);
 
     ASSERT_EQ(MeshIO::export_obj(mesh, "./tu_obj_mtlopacity.obj"), 0);
-    std::ifstream f("./tu_obj_mtlopacity.mtl");
-    const std::string mtl((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    // Bloc explicite : le flux doit etre FERME avant le std::remove de la fin, sans
+    // quoi Windows refuse de supprimer le fichier encore ouvert et le .mtl reste
+    // dans le repertoire de sortie. Les autres tests de ce fichier lisent via une
+    // lambda readAll(), dont le flux local est detruit au retour -- meme effet.
+    std::string mtl;
+    {
+        std::ifstream f("./tu_obj_mtlopacity.mtl");
+        mtl.assign((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    }
     ASSERT_FALSE(mtl.empty());
 
     // Opacite : `d 1`, et surtout PAS `Tr 1` qui signifie l'inverse.
@@ -1260,4 +1267,690 @@ TEST(TEST_cgmesh_io, obj_zip_omits_the_mtl_when_there_is_no_material)
         if (rd32(i) == 0x06054b50u) { eocd = i; break; }
     ASSERT_NE(eocd, std::string::npos);
     EXPECT_EQ(rd16(eocd + 10), 1u) << "une seule entree attendue : le .obj";
+}
+
+// ===========================================================================
+//  Import MTL : les VALEURS
+// ===========================================================================
+// Les tests d'import existants (vmeshes_obj_split_materials, obj_cube_tex_texture)
+// verifient le NOM du materiau et la presence de la texture, jamais un nombre. Un
+// Kd lu comme gris, ou les canaux R et B permutes, passait donc inapercu -- alors
+// que quatre defauts de MTL du cote EXPORT ont ete corriges recemment (Tr, Ks/Ns,
+// Kd noir en branche texture, usemtl/newmtl desaccordes).
+//
+// Chaque champ recoit ici des valeurs DISTINCTES canal par canal ET distinctes
+// d'un champ a l'autre : une permutation de canaux comme un echange de champs
+// (Ka lu dans Kd) sortent tous deux du lot.
+
+namespace
+{
+    // Ecrit un couple .obj/.mtl minimal. Le .mtl est nomme d'apres le .obj, car
+    // import_obj resout `mtllib` relativement au repertoire du .obj.
+    void writeObjWithMtl (const std::string& stem, const std::string& mtlBody,
+                          const std::string& usemtlName = "probe")
+    {
+        {
+            std::ofstream f(stem + ".mtl");
+            ASSERT_TRUE(f.is_open());
+            f << mtlBody;
+        }
+        std::ofstream f(stem + ".obj");
+        ASSERT_TRUE(f.is_open());
+        // basename : mtllib est resolu par rapport au .obj, pas au repertoire courant
+        const size_t slash = stem.find_last_of("/\\");
+        const std::string base = (slash == std::string::npos) ? stem : stem.substr(slash + 1);
+        f << "mtllib " << base << ".mtl\n"
+             "v 0 0 0\nv 1 0 0\nv 1 1 0\n";
+        if (!usemtlName.empty())
+            f << "usemtl " << usemtlName << "\n";
+        f << "f 1 2 3\n";
+    }
+
+    void removeObjWithMtl (const std::string& stem)
+    {
+        std::remove((stem + ".obj").c_str());
+        std::remove((stem + ".mtl").c_str());
+    }
+}
+
+// Les six champs numeriques que import_mtl declare parser : Ka, Kd, Ks, Ke, Ns.
+TEST(TEST_cgmesh_io, obj_mtl_import_reads_every_colour_channel)
+{
+    const std::string stem = "./tu_obj_mtlvalues";
+    writeObjWithMtl(stem,
+        "newmtl probe\n"
+        "Ka 0.10 0.20 0.30\n"
+        "Kd 0.40 0.50 0.60\n"
+        "Ks 0.70 0.80 0.90\n"
+        "Ke 0.11 0.22 0.33\n"
+        "Ns 64\n");
+
+    Mesh mesh;
+    ASSERT_EQ(mesh.load((stem + ".obj").c_str()), 0);
+    ASSERT_EQ(mesh.GetNMaterials(), 1u);
+
+    MaterialColorExt* m = dynamic_cast<MaterialColorExt*>(mesh.GetMaterial(0));
+    ASSERT_NE(m, nullptr) << "un MTL sans map_Kd doit donner un MaterialColorExt";
+    EXPECT_EQ(m->GetName(), "probe");
+
+    float d[4];
+    m->GetDiffuse(d);
+    EXPECT_NEAR(d[0], 0.40f, 1e-5f) << "Kd.r";
+    EXPECT_NEAR(d[1], 0.50f, 1e-5f) << "Kd.g";
+    EXPECT_NEAR(d[2], 0.60f, 1e-5f) << "Kd.b";
+
+    EXPECT_NEAR(m->m_fAmbient[0], 0.10f, 1e-5f) << "Ka.r";
+    EXPECT_NEAR(m->m_fAmbient[1], 0.20f, 1e-5f) << "Ka.g";
+    EXPECT_NEAR(m->m_fAmbient[2], 0.30f, 1e-5f) << "Ka.b";
+
+    EXPECT_NEAR(m->m_fSpecular[0], 0.70f, 1e-5f) << "Ks.r";
+    EXPECT_NEAR(m->m_fSpecular[1], 0.80f, 1e-5f) << "Ks.g";
+    EXPECT_NEAR(m->m_fSpecular[2], 0.90f, 1e-5f) << "Ks.b";
+
+    EXPECT_NEAR(m->m_fEmission[0], 0.11f, 1e-5f) << "Ke.r";
+    EXPECT_NEAR(m->m_fEmission[1], 0.22f, 1e-5f) << "Ke.g";
+    EXPECT_NEAR(m->m_fEmission[2], 0.33f, 1e-5f) << "Ke.b";
+
+    // Ns est un exposant de Phong OBJ (0..1000) stocke en fraction de 128, parce
+    // que ActivateMaterial remultiplie par 128 (cap GL_SHININESS).
+    EXPECT_NEAR(m->m_fShininess[0], 64.0f / 128.0f, 1e-5f) << "Ns";
+
+    // La face pointe bien sur ce materiau, et non sur MATERIAL_NONE.
+    ASSERT_EQ(mesh.GetNFaces(), 1u);
+    EXPECT_EQ(mesh.m_pFaces[0]->GetMaterialId(), 0u);
+
+    removeObjWithMtl(stem);
+}
+
+// Ns hors de 0..128 est ECRETE, pas mis a l'echelle depuis 1000. C'est une perte
+// assumee (cf. le commentaire de import_mtl) : la figer evite qu'un futur passage
+// a une remise a l'echelle 0..1000 se fasse en silence.
+TEST(TEST_cgmesh_io, obj_mtl_import_clamps_the_specular_exponent)
+{
+    struct Case { const char* ns; float expected; const char* why; };
+    const Case cases[] = {
+        { "0",    0.0f,        "Ns nul" },
+        { "128",  1.0f,        "Ns a la borne haute" },
+        { "1000", 1.0f,        "Ns=1000, legal en OBJ, ecrete a 128" },
+        { "-5",   0.0f,        "Ns negatif, ecrete a 0" },
+        { "32",   32.f/128.f,  "Ns intermediaire" },
+    };
+
+    for (const Case& c : cases)
+    {
+        SCOPED_TRACE(c.why);
+        const std::string stem = std::string("./tu_obj_mtlns_") + c.ns;
+        writeObjWithMtl(stem, std::string("newmtl probe\nKd 1 1 1\nNs ") + c.ns + "\n");
+
+        Mesh mesh;
+        ASSERT_EQ(mesh.load((stem + ".obj").c_str()), 0);
+        ASSERT_EQ(mesh.GetNMaterials(), 1u);
+        MaterialColorExt* m = dynamic_cast<MaterialColorExt*>(mesh.GetMaterial(0));
+        ASSERT_NE(m, nullptr);
+        EXPECT_NEAR(m->m_fShininess[0], c.expected, 1e-5f);
+
+        removeObjWithMtl(stem);
+    }
+}
+
+// import_mtl porte une branche dediee a `Ns <e> Ni <i>` sur UNE SEULE ligne, en
+// plus des branches Ns et Ni separees. Aucun test ne l'exercait, et elle est
+// fragile : elle precede la branche `Ns` seule, donc un ordre d'alternatives
+// inverse la rendrait morte sans que rien ne le signale.
+TEST(TEST_cgmesh_io, obj_mtl_import_accepts_ns_and_ni_on_one_line)
+{
+    const std::string stem = "./tu_obj_mtlnsni";
+    writeObjWithMtl(stem, "newmtl probe\nKd 1 1 1\nNs 64 Ni 1.5\n");
+
+    Mesh mesh;
+    ASSERT_EQ(mesh.load((stem + ".obj").c_str()), 0);
+    ASSERT_EQ(mesh.GetNMaterials(), 1u);
+    MaterialColorExt* m = dynamic_cast<MaterialColorExt*>(mesh.GetMaterial(0));
+    ASSERT_NE(m, nullptr);
+    EXPECT_NEAR(m->m_fShininess[0], 64.0f / 128.0f, 1e-5f)
+        << "la branche `Ns %f Ni %f` n'a pas pris, ou a pris la mauvaise valeur";
+
+    removeObjWithMtl(stem);
+}
+
+// Plusieurs materiaux dans un meme .mtl : l'ordre de declaration fixe les ids, et
+// chaque materiau garde SES valeurs. Attrape un etat `mat` mal reinitialise entre
+// deux `newmtl`, qui ferait fuir les champs du premier vers le second.
+TEST(TEST_cgmesh_io, obj_mtl_import_keeps_materials_separate)
+{
+    const std::string stem = "./tu_obj_mtlmulti";
+    writeObjWithMtl(stem,
+        "newmtl first\n"
+        "Kd 1.0 0.0 0.0\n"
+        "Ns 16\n"
+        "newmtl second\n"
+        "Kd 0.0 0.0 1.0\n",           // pas de Ns : doit rester a son defaut
+        "second");
+
+    Mesh mesh;
+    ASSERT_EQ(mesh.load((stem + ".obj").c_str()), 0);
+    ASSERT_EQ(mesh.GetNMaterials(), 2u);
+
+    MaterialColorExt* a = dynamic_cast<MaterialColorExt*>(mesh.GetMaterial(0));
+    MaterialColorExt* b = dynamic_cast<MaterialColorExt*>(mesh.GetMaterial(1));
+    ASSERT_NE(a, nullptr);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(a->GetName(), "first");
+    EXPECT_EQ(b->GetName(), "second");
+
+    float da[4], db[4];
+    a->GetDiffuse(da);
+    b->GetDiffuse(db);
+    EXPECT_NEAR(da[0], 1.0f, 1e-5f); EXPECT_NEAR(da[2], 0.0f, 1e-5f);
+    EXPECT_NEAR(db[0], 0.0f, 1e-5f); EXPECT_NEAR(db[2], 1.0f, 1e-5f);
+
+    EXPECT_NEAR(a->m_fShininess[0], 16.0f / 128.0f, 1e-5f);
+    EXPECT_NEAR(b->m_fShininess[0], 0.0f, 1e-5f) << "le Ns de `first` a fuit vers `second`";
+
+    // `usemtl second` doit resoudre vers l'id 1, pas vers le premier materiau.
+    ASSERT_EQ(mesh.GetNFaces(), 1u);
+    EXPECT_EQ(mesh.m_pFaces[0]->GetMaterialId(), 1u);
+
+    removeObjWithMtl(stem);
+}
+
+// ---------------------------------------------------------------------------
+//  Import MTL : robustesse
+// ---------------------------------------------------------------------------
+// Ces trois cas se produisent pour de vrai : un .obj distribue sans son .mtl, un
+// usemtl qui ne resout pas (c'etait le defaut usemtl/newmtl corrige recemment), et
+// un .mtl abime. Dans les trois cas la GEOMETRIE doit survivre : mieux vaut un
+// modele sans couleur qu'un echec de chargement.
+
+TEST(TEST_cgmesh_io, obj_survives_a_missing_mtllib)
+{
+    const std::string stem = "./tu_obj_nomtl";
+    {
+        std::ofstream f(stem + ".obj");
+        ASSERT_TRUE(f.is_open());
+        f << "mtllib tu_obj_nomtl_does_not_exist.mtl\n"
+             "v 0 0 0\nv 1 0 0\nv 1 1 0\n"
+             "usemtl whatever\n"
+             "f 1 2 3\n";
+    }
+
+    Mesh mesh;
+    EXPECT_EQ(mesh.load((stem + ".obj").c_str()), 0) << "le .mtl absent ne doit pas faire echouer le chargement";
+    EXPECT_EQ(mesh.GetNVertices(), 3u) << "geometrie perdue";
+    EXPECT_EQ(mesh.GetNFaces(), 1u);
+    EXPECT_EQ(mesh.GetNMaterials(), 0u) << "aucun materiau ne peut avoir ete lu";
+    ASSERT_EQ(mesh.GetNFaces(), 1u);
+    EXPECT_EQ(mesh.m_pFaces[0]->GetMaterialId(), MATERIAL_NONE)
+        << "la face doit rester sans materiau, pas pointer sur un id inexistant";
+
+    std::remove((stem + ".obj").c_str());
+}
+
+// `usemtl` nommant un materiau absent du .mtl : GetMaterialId renvoie -1. La face
+// ne doit PAS se retrouver avec un id hors bornes, qui ferait deborder toute
+// boucle indexant m_pMaterials.
+TEST(TEST_cgmesh_io, obj_usemtl_naming_an_unknown_material_leaves_the_face_unassigned)
+{
+    const std::string stem = "./tu_obj_badusemtl";
+    writeObjWithMtl(stem, "newmtl present\nKd 1 0 0\n", "absent");
+
+    Mesh mesh;
+    ASSERT_EQ(mesh.load((stem + ".obj").c_str()), 0);
+    EXPECT_EQ(mesh.GetNVertices(), 3u);
+    ASSERT_EQ(mesh.GetNMaterials(), 1u) << "le materiau declare doit quand meme etre lu";
+    EXPECT_EQ(mesh.GetMaterial(0)->GetName(), "present");
+
+    // import_obj fait `if (usemtl != -1) pFace->m_iMaterialId = usemtl;` : sur un
+    // nom non resolu la face garde son defaut, MATERIAL_NONE. Sans cette garde,
+    // le -1 de GetMaterialId deviendrait un id non signe enorme.
+    ASSERT_EQ(mesh.GetNFaces(), 1u);
+    EXPECT_EQ(mesh.m_pFaces[0]->GetMaterialId(), MATERIAL_NONE)
+        << "un usemtl non resolu a tout de meme affecte un id a la face";
+
+    removeObjWithMtl(stem);
+}
+
+// .mtl abime : directives inconnues, champ tronque, valeurs non numeriques. Le
+// parseur signale sur la sortie standard et continue ; les materiaux VALIDES
+// doivent survivre, et la geometrie avec.
+TEST(TEST_cgmesh_io, obj_survives_a_malformed_mtl)
+{
+    const std::string stem = "./tu_obj_badmtl";
+    writeObjWithMtl(stem,
+        "newmtl probe\n"
+        "Kd 0.25 0.50 0.75\n"
+        "Kd_incomplete 1 2\n"          // directive inconnue
+        "Ka\n"                          // champ sans valeur
+        "Ks abc def ghi\n"              // valeurs non numeriques
+        "@!#$\n"                        // ligne franchement invalide
+        "Ns 48\n");                     // valide, APRES les lignes cassees
+
+    Mesh mesh;
+    ASSERT_EQ(mesh.load((stem + ".obj").c_str()), 0);
+    EXPECT_EQ(mesh.GetNVertices(), 3u) << "geometrie perdue";
+    ASSERT_EQ(mesh.GetNMaterials(), 1u) << "le materiau valide a disparu";
+
+    MaterialColorExt* m = dynamic_cast<MaterialColorExt*>(mesh.GetMaterial(0));
+    ASSERT_NE(m, nullptr);
+    float d[4];
+    m->GetDiffuse(d);
+    EXPECT_NEAR(d[0], 0.25f, 1e-5f) << "le Kd valide, AVANT les lignes cassees";
+    EXPECT_NEAR(d[1], 0.50f, 1e-5f);
+    EXPECT_NEAR(d[2], 0.75f, 1e-5f);
+    // Le parseur ne doit pas s'arreter a la premiere ligne cassee.
+    EXPECT_NEAR(m->m_fShininess[0], 48.0f / 128.0f, 1e-5f)
+        << "le Ns valide APRES les lignes cassees n'a pas ete lu : le parseur s'est arrete";
+
+    removeObjWithMtl(stem);
+}
+
+// ===========================================================================
+//  Import 3DS : quelle map devient la texture
+// ===========================================================================
+// Bar_chair_2.3ds sort d'un exportateur qui empile DEUX blocs MAT_MAPNAME dans
+// un meme MAT_TEXMAP -- la diffuse, puis la normale (materiau 0) ou la reflexion
+// (materiau 1) :
+//
+//   MAT_ENTRY "BLACKChair_C"        MAT_ENTRY "silver refle"
+//     MAT_BUMPMAP -> Bar_Chair_N.     MAT_BUMPMAP -> Bar_Chair_N.
+//     MAT_TEXMAP  -> Bar_Chair_C.     MAT_TEXMAP  -> Bar_Chair_C.
+//                 -> Bar_Chair_N.                 -> Ref.jpg
+//
+// Le case CHK3DS_A_MAT_MAPNAME ecrasait strFile a chaque passage, donc le DERNIER
+// nom gagnait : le fauteuil se texturait avec sa carte de normales (materiau 0) et
+// avec une vignette de reflexion de 32 Ko (materiau 1) au lieu de sa diffuse de
+// 401 Ko. MAT_BUMPMAP, lui, n'est pas lu du tout (son case est commente, le chunk
+// tombe dans le default), donc les deux noms viennent bien du MAT_TEXMAP.
+//
+// Corrige : on garde le PREMIER nom, qui est la map principale.
+TEST(TEST_cgmesh_io, 3ds_texmap_keeps_the_first_map_name)
+{
+    VMeshes vm;
+    ASSERT_TRUE(VMeshesIO::load(vm, "./test/data/Bar Chair/Bar_chair_2.3ds"));
+    ASSERT_EQ(vm.GetNMeshes(), 1u);
+
+    Mesh* m = vm.GetMeshes()[0];
+    EXPECT_EQ(m->m_name, "Bar_Chair");
+    EXPECT_EQ(m->GetNVertices(), 9999u);
+    EXPECT_EQ(m->GetNFaces(),    18112u);
+
+    // TRI_MAPPINGCOORDS : une UV par sommet. Note : m_nTextureCoordinates reste a
+    // 0 sur ce chemin, seul le vecteur est renseigne (import_3ds ne met pas le
+    // compteur a jour).
+    EXPECT_EQ(m->m_pTextureCoordinates.size(), 2u * 9999u) << "coordonnees de texture perdues";
+
+    ASSERT_EQ(m->GetNMaterials(), 2u);
+    EXPECT_EQ(m->GetMaterial(0)->GetName(), "BLACKChair_C");
+    EXPECT_EQ(m->GetMaterial(1)->GetName(), "silver refle");
+
+    // Le coeur du test : les DEUX materiaux doivent porter la diffuse, premier
+    // MAT_MAPNAME de leur MAT_TEXMAP -- et non Bar_Chair_N. / Ref.jpg.
+    for (unsigned int k = 0; k < 2; k++)
+    {
+        SCOPED_TRACE(::testing::Message() << "materiau " << k);
+        MaterialTexture* tex = dynamic_cast<MaterialTexture*>(m->GetMaterial(k));
+        ASSERT_NE(tex, nullptr) << "un MAT_TEXMAP doit donner un MaterialTexture";
+        // Le nom stocke dans le fichier est "Bar_Chair_C." (tronque a 12
+        // caracteres) ; MaterialTexture rapporte le nom COMPLETE, celui qui a
+        // effectivement charge. Ce qui compte ici est la racine : C (diffuse) et
+        // non N (normales) ni Ref (reflexion).
+        EXPECT_EQ(tex->GetFilename(), "Bar_Chair_C.jpg")
+            << "le DERNIER MAT_MAPNAME a gagne : la correction du premier-gagnant a saute";
+    }
+}
+
+// Le nom de map que porte ce fichier est TRONQUE a la largeur du champ 8.3 d'un
+// MAT_MAPNAME : "Bar_Chair_C.", point final, extension absente. Sans rattrapage,
+// std::filesystem::path::extension() rend une chaine vide, aucune branche de
+// format ne s'active dans ImgIO::load, et la texture est perdue alors que
+// Bar_Chair_C.jpg est dans le meme repertoire que le .3ds.
+//
+// CompleteTruncated3dsMapName reconnait la troncature a la longueur du nom (12
+// caracteres = 8 + 1 + 3, le champ rempli jusqu'au bord) et reconstruit
+// l'extension .jpg.
+TEST(TEST_cgmesh_io, 3ds_truncated_map_name_is_recovered_with_a_jpg_extension)
+{
+    // Le fichier reel, celui que le rattrapage doit retrouver.
+    ASSERT_TRUE(std::filesystem::exists("./test/data/Bar Chair/Bar_Chair_C.jpg"));
+
+    VMeshes vm;
+    ASSERT_TRUE(VMeshesIO::load(vm, "./test/data/Bar Chair/Bar_chair_2.3ds"));
+    ASSERT_EQ(vm.GetNMeshes(), 1u);
+    Mesh* m = vm.GetMeshes()[0];
+    ASSERT_EQ(m->GetNMaterials(), 2u);
+
+    // Les deux materiaux pointent la meme diffuse : les deux doivent la decoder.
+    for (unsigned int k = 0; k < 2; k++)
+    {
+        SCOPED_TRACE(::testing::Message() << "materiau " << k);
+        MaterialTexture* tex = dynamic_cast<MaterialTexture*>(m->GetMaterial(k));
+        ASSERT_NE(tex, nullptr);
+        EXPECT_EQ(tex->GetFilename(), "Bar_Chair_C.jpg")
+            << "le nom n'a pas ete complete";
+        Img* img = tex->GetImage();
+        ASSERT_NE(img, nullptr)
+            << "image non decodee : le rattrapage de troncature a saute, ou le "
+               "support JPEG de cgimg est absent";
+        EXPECT_GT(img->width(), 0u);
+        EXPECT_GT(img->height(), 0u);
+    }
+}
+
+// Les QUATRE formes de coupure a 12 caracteres, chacune completee par ce qui
+// manque de ".jpg" :
+//
+//     "abcdefghijkl"  -> + ".jpg"       "abcdefghijk."  -> + "jpg"
+//     "abcdefghij.j"  -> + "pg"         "abcdefghi.jp"  -> + "g"
+//
+// Le test a besoin d'un JPEG a chaque nom cible pour que le chargement reussisse,
+// et cgimg n'a pas d'encodeur JPEG (stb ne fournit que le decodeur). On recopie
+// donc Ref.jpg -- le plus petit du jeu de donnees, 32 Ko -- sous les noms voulus,
+// dans le repertoire de travail du test. Aucun actif ajoute au depot.
+TEST(TEST_cgmesh_io, truncation_recovery_completes_every_cut_position)
+{
+    const std::filesystem::path src = "./test/data/Bar Chair/Ref.jpg";
+    ASSERT_TRUE(std::filesystem::exists(src));
+
+    struct Case { const char* truncated; const char* completed; const char* what; };
+    const Case cases[] = {
+        { "abcdefghijkl", "abcdefghijkl.jpg", "coupure avant le point" },
+        { "abcdefghijk.", "abcdefghijk.jpg",  "coupure juste apres le point" },
+        { "abcdefghij.j", "abcdefghij.jpg",   "un caractere d'extension conserve" },
+        { "abcdefghi.jp", "abcdefghi.jpg",    "deux caracteres d'extension conserves" },
+    };
+
+    for (const Case& c : cases)
+    {
+        SCOPED_TRACE(::testing::Message() << c.what << " : \"" << c.truncated << "\"");
+        ASSERT_EQ(std::string(c.truncated).size(), 12u) << "le cas doit tenir la largeur du champ";
+
+        std::error_code ec;
+        std::filesystem::copy_file(src, c.completed,
+                                   std::filesystem::copy_options::overwrite_existing, ec);
+        ASSERT_FALSE(ec) << "copie impossible : " << ec.message();
+
+        MaterialTexture tex(c.truncated, nullptr);
+        EXPECT_EQ(tex.GetFilename(), c.completed) << "nom non complete";
+        Img* img = tex.GetImage();
+        EXPECT_NE(img, nullptr) << "image non decodee apres completion";
+
+        std::filesystem::remove(c.completed);
+    }
+}
+
+// Contre-epreuve : le rattrapage ne doit pas se declencher a tort.
+TEST(TEST_cgmesh_io, truncation_recovery_leaves_other_names_alone)
+{
+    struct Case { const char* name; const char* why; };
+    const Case cases[] = {
+        { "Bar_Chai.jpg", "12 caracteres mais extension DEJA complete" },
+        { "Ref.",         "hors de la largeur du champ (4 caracteres)" },
+        { "abcdefghij.x", "12 caracteres, mais \".x\" n'est pas un prefixe de \"jpg\"" },
+        { "abcdefghi.xy", "12 caracteres, mais \".xy\" n'est pas un prefixe de \"jpg\"" },
+    };
+
+    for (const Case& c : cases)
+    {
+        SCOPED_TRACE(::testing::Message() << c.why);
+        MaterialTexture tex(c.name, "./test/data/Bar Chair");
+        EXPECT_EQ(tex.GetFilename(), c.name) << "nom reecrit alors qu'il ne fallait pas";
+        EXPECT_EQ(tex.GetImage(), nullptr) << "aucun de ces fichiers n'existe";
+    }
+}
+
+// Un materiau 3DS TEXTURE : la map est la couleur diffuse, et un fichier sans
+// MAT_SHININESS n'a pas de reflet speculaire.
+//
+// Avant ce correctif, l'import reportait le Kd/Ka du fichier dans GL_DIFFUSE et
+// GL_AMBIENT. L'environnement de texture etant GL_MODULATE, le texel etait
+// MULTIPLIE par ce Kd : le materiau « BLACKChair_C » de Bar_chair_2.3ds porte
+// Kd = 5/255 = 0.0196 et texture le dessous en bois de l'assise, qui sortait donc
+// a 2 % de son intensite -- noir a l'ecran.
+//
+// Et comme le fichier n'a aucun chunk MAT_SHININESS, Power restait a 0 tandis que
+// Ks valait (255,255,255) : pow(N.H, 0) == 1 rendait le speculaire BLANC ENTIER
+// partout ou N.H > 0, module par le texel (mode GL_SINGLE_COLOR par defaut), et
+// absent des que N.H <= 0. C'est ce speculaire qui rendait la texture visible sous
+// certains angles, et sa coupure qui la faisait disparaitre sous les autres.
+//
+// Les deux vont de pair : couper le speculaire SEUL aurait rendu le bois noir a
+// tous les angles, faute de diffus pour le remplacer.
+TEST(TEST_cgmesh_io, 3ds_textured_material_uses_the_map_as_diffuse_and_kills_a_zero_exponent_specular)
+{
+    VMeshes vm;
+    ASSERT_TRUE(VMeshesIO::load(vm, "./test/data/Bar Chair/Bar_chair_2.3ds"));
+    ASSERT_EQ(vm.GetNMeshes(), 1u);
+    Mesh* m = vm.GetMeshes()[0];
+    ASSERT_EQ(m->GetNMaterials(), 2u);
+
+    for (unsigned int k = 0; k < 2; k++)
+    {
+        SCOPED_TRACE(::testing::Message() << "materiau " << k << " '"
+                     << m->GetMaterial(k)->GetName() << "'");
+        MaterialTexture* tex = dynamic_cast<MaterialTexture*>(m->GetMaterial(k));
+        ASSERT_NE(tex, nullptr);
+
+        // La map porte la couleur : diffus et ambiant neutres.
+        const float* d = tex->GetDiffuse();
+        const float* a = tex->GetAmbient();
+        for (int c = 0; c < 3; c++)
+        {
+            EXPECT_NEAR(d[c], 1.f, 1e-5f)
+                << "canal " << c << " : le Kd du fichier module le texel et l'eteint";
+            EXPECT_NEAR(a[c], 1.f, 1e-5f) << "canal " << c;
+        }
+
+        // Aucun MAT_SHININESS dans ce fichier -> pas de reflet.
+        const float* s = tex->GetSpecular();
+        for (int c = 0; c < 3; c++)
+            EXPECT_NEAR(s[c], 0.f, 1e-5f)
+                << "canal " << c << " : speculaire blanc a exposant nul, il sature "
+                   "partout ou N.H > 0 et disparait ailleurs";
+        EXPECT_NEAR(tex->GetShininess(), 0.f, 1e-5f);
+    }
+}
+
+// Le fichier porte bien ses affectations de materiau, dans des MSH_MAT_GROUP
+// niches sous TRI_FACEL1 : 1664 faces pour BLACKChair_C, 16448 pour silver refle.
+// C'est BLACKChair_C qui porte le disque de bois de l'atlas -- donc le materiau
+// dont le Kd quasi noir eteignait la texture.
+TEST(TEST_cgmesh_io, 3ds_material_groups_are_assigned_per_face)
+{
+    VMeshes vm;
+    ASSERT_TRUE(VMeshesIO::load(vm, "./test/data/Bar Chair/Bar_chair_2.3ds"));
+    Mesh* m = vm.GetMeshes()[0];
+    ASSERT_EQ(m->GetNFaces(), 18112u);
+
+    unsigned int counts[2] = { 0, 0 }, none = 0;
+    for (unsigned int f = 0; f < m->GetNFaces(); f++)
+    {
+        const unsigned int id = m->m_pFaces[f]->GetMaterialId();
+        if (id == MATERIAL_NONE) none++;
+        else { ASSERT_LT(id, 2u); counts[id]++; }
+    }
+    EXPECT_EQ(none, 0u) << "des faces sans materiau alors que le fichier les affecte toutes";
+    EXPECT_EQ(counts[0], 1664u)  << "BLACKChair_C";
+    EXPECT_EQ(counts[1], 16448u) << "silver refle";
+}
+
+// ===========================================================================
+//  Cartes de reflexion
+// ===========================================================================
+// Un materiau peut declarer une carte de reflexion en plus de sa diffuse : par
+// `MAT_REFLMAP` en 3DS, par `refl` en MTL. Elle est appliquee en sphere mapping,
+// donc sans UV.
+//
+// Bar_chair_2.mtl la declare explicitement -- `refl Ref.jpg` sur
+// silver_reflection_2 -- alors que Bar_chair_2.3ds ne le fait PAS : il empile
+// Ref.jpg comme second MAT_MAPNAME d'un MAT_TEXMAP, un emplacement dont la
+// semantique n'est pas declaree (le meme emplacement porte une carte de NORMALES
+// pour l'autre materiau). Le chemin OBJ est donc le seul qui puisse la charger
+// depuis cet actif.
+TEST(TEST_cgmesh_io, mtl_refl_loads_a_reflection_map)
+{
+    Mesh mesh;
+    ASSERT_EQ(mesh.load("./test/data/Bar Chair/Bar_chair_2.obj"), 0);
+    ASSERT_EQ(mesh.GetNMaterials(), 2u);
+
+    // BLACK : map_Kd + map_Bump, PAS de refl.
+    MaterialTexture* black = dynamic_cast<MaterialTexture*>(mesh.GetMaterial(0));
+    ASSERT_NE(black, nullptr);
+    EXPECT_EQ(black->GetName(), "BLACK");
+    EXPECT_FALSE(black->HasReflectionMap()) << "BLACK ne declare aucun refl";
+    EXPECT_TRUE(black->GetReflectionFilename().empty());
+
+    // silver_reflection_2 : refl Ref.jpg.
+    MaterialTexture* silver = dynamic_cast<MaterialTexture*>(mesh.GetMaterial(1));
+    ASSERT_NE(silver, nullptr);
+    EXPECT_EQ(silver->GetName(), "silver_reflection_2");
+    EXPECT_EQ(silver->GetReflectionFilename(), "Ref.jpg");
+    ASSERT_TRUE(silver->HasReflectionMap()) << "Ref.jpg n'a pas ete decodee";
+
+    Img* refl = silver->GetReflectionImage();
+    ASSERT_NE(refl, nullptr);
+    EXPECT_GT(refl->width(),  0u);
+    EXPECT_GT(refl->height(), 0u);
+
+    // La diffuse reste la diffuse : la reflexion ne l'ecrase pas.
+    EXPECT_EQ(silver->GetFilename(), "Bar_Chair_C.jpg");
+    EXPECT_NE(silver->GetImage(), nullptr);
+    EXPECT_NE(silver->GetImage(), refl) << "diffuse et reflexion partagent la meme image";
+}
+
+// La reflexion appartient au materiau qui la declare, pas au suivant : `newmtl`
+// doit oublier la texture precedente. Sans cette remise a zero, un `refl` place
+// dans un materiau sans map_Kd se collerait a la texture du materiau d'avant.
+TEST(TEST_cgmesh_io, mtl_refl_does_not_leak_to_the_next_material)
+{
+    const std::string stem = "./tu_obj_refl_leak";
+    writeObjWithMtl(stem,
+        "newmtl textured\n"
+        "Kd 1 1 1\n"
+        "map_Kd Bar_Chair_C.jpg\n"      // volontairement introuvable ici
+        "newmtl plain\n"
+        "Kd 0 1 0\n"
+        "refl Ref.jpg\n",               // refl SANS map_Kd : ne doit rien accrocher
+        "plain");
+
+    Mesh mesh;
+    ASSERT_EQ(mesh.load((stem + ".obj").c_str()), 0);
+    ASSERT_EQ(mesh.GetNMaterials(), 2u);
+
+    MaterialTexture* first = dynamic_cast<MaterialTexture*>(mesh.GetMaterial(0));
+    ASSERT_NE(first, nullptr) << "le premier materiau porte un map_Kd";
+    EXPECT_FALSE(first->HasReflectionMap())
+        << "le refl du SECOND materiau s'est accroche au premier";
+
+    // Le second n'a pas de map_Kd, donc reste un materiau de couleur : le refl
+    // n'a rien pour le porter et est ignore, sans faire echouer le chargement.
+    EXPECT_EQ(dynamic_cast<MaterialTexture*>(mesh.GetMaterial(1)), nullptr);
+
+    removeObjWithMtl(stem);
+}
+
+// Le .3ds du fauteuil ne declare AUCUN MAT_REFLMAP : son Ref.jpg est le second
+// MAT_MAPNAME d'un MAT_TEXMAP. Ce test fige ce constat, pour qu'on ne croie pas
+// le support des reflexions cassé en le chargeant.
+TEST(TEST_cgmesh_io, 3ds_chair_declares_no_reflection_map)
+{
+    VMeshes vm;
+    ASSERT_TRUE(VMeshesIO::load(vm, "./test/data/Bar Chair/Bar_chair_2.3ds"));
+    Mesh* m = vm.GetMeshes()[0];
+    ASSERT_EQ(m->GetNMaterials(), 2u);
+    for (unsigned int k = 0; k < 2; k++)
+    {
+        MaterialTexture* tex = dynamic_cast<MaterialTexture*>(m->GetMaterial(k));
+        ASSERT_NE(tex, nullptr);
+        EXPECT_FALSE(tex->HasReflectionMap())
+            << "materiau " << k << " : une reflexion apparait, alors que le fichier "
+               "n'a pas de chunk MAT_REFLMAP -- le second MAT_MAPNAME du MAT_TEXMAP "
+               "serait-il pris pour une reflexion ?";
+    }
+}
+
+// Un `map_Kd` neutralise les couleurs du MTL, comme sur le chemin 3DS : la map EST
+// la couleur diffuse. Sans cela le Kd du MTL multipliait le texel (GL_MODULATE) --
+// « BLACK » porte Kd = 0.018262 et texture le dessous en bois de l'assise, qui
+// sortait donc noir -- et `Ka 0.000000` retirait tout plancher ambiant.
+TEST(TEST_cgmesh_io, mtl_map_kd_neutralises_the_material_colours)
+{
+    Mesh mesh;
+    ASSERT_EQ(mesh.load("./test/data/Bar Chair/Bar_chair_2.obj"), 0);
+    ASSERT_EQ(mesh.GetNMaterials(), 2u);
+
+    for (unsigned int k = 0; k < 2; k++)
+    {
+        SCOPED_TRACE(::testing::Message() << "materiau " << k << " '"
+                     << mesh.GetMaterial(k)->GetName() << "'");
+        MaterialTexture* t = dynamic_cast<MaterialTexture*>(mesh.GetMaterial(k));
+        ASSERT_NE(t, nullptr);
+        for (int c = 0; c < 3; c++)
+        {
+            EXPECT_NEAR(t->GetDiffuse()[c], 1.f, 1e-5f)
+                << "canal " << c << " : le Kd du MTL eteint le texel";
+            EXPECT_NEAR(t->GetAmbient()[c], 1.f, 1e-5f) << "canal " << c;
+        }
+    }
+}
+
+// L'exposant speculaire ne doit etre divise par 128 QU'UNE FOIS.
+//
+// import_mtl convertit deja le Ns du MTL en fraction de 128, et ActivateMaterial
+// remultiplie par 128 a l'affichage. La branche map_Kd divisait une seconde fois :
+// un Ns de 96 devenait un exposant de 0,75, or pow(N.H, 0.75) est quasi constant,
+// donc tout le speculaire s'appliquait partout et les pieds chromes sortaient
+// beaucoup plus brillants que le rendu de reference.
+TEST(TEST_cgmesh_io, mtl_specular_exponent_is_not_divided_twice)
+{
+    Mesh mesh;
+    ASSERT_EQ(mesh.load("./test/data/Bar Chair/Bar_chair_2.obj"), 0);
+    ASSERT_EQ(mesh.GetNMaterials(), 2u);
+
+    // Valeurs Ns du .mtl, dans l'ordre de declaration.
+    const float expectedNs[2] = { 17.647059f, 96.078431f };
+    for (unsigned int k = 0; k < 2; k++)
+    {
+        SCOPED_TRACE(::testing::Message() << "materiau " << k);
+        MaterialTexture* t = dynamic_cast<MaterialTexture*>(mesh.GetMaterial(k));
+        ASSERT_NE(t, nullptr);
+        // GetShininess() est la fraction ; ActivateMaterial pousse 128 * fraction
+        // dans GL_SHININESS, ce qui doit redonner le Ns du fichier.
+        EXPECT_NEAR(128.f * t->GetShininess(), expectedNs[k], 0.01f)
+            << "exposant reel " << 128.f * t->GetShininess() << " au lieu de " << expectedNs[k];
+    }
+}
+
+// Une directive de map non geree, et une ligne vide, doivent etre AVALEES : les
+// anciens `strcmp(line, "map_Ka ")` comparaient la ligne entiere a un prefixe et ne
+// pouvaient jamais correspondre, si bien que chaque `map_Bump` et chaque ligne vide
+// -- il y en a une entre deux materiaux dans tout export Blender -- signalait une
+// « MTL parse error ». Ce qui suit la directive doit continuer d'etre lu.
+TEST(TEST_cgmesh_io, mtl_unhandled_map_directives_do_not_derail_the_parser)
+{
+    const std::string stem = "./tu_obj_mtlmaps";
+    writeObjWithMtl(stem,
+        "newmtl probe\n"
+        "Kd 0.25 0.50 0.75\n"
+        "\n"                            // ligne vide
+        "map_Bump some_normal.jpg\n"     // non gere
+        "map_Ka some_ambient.jpg\n"      // non gere
+        "bump other.jpg\n"               // non gere
+        "\n"
+        "Ns 48\n");                      // valide, APRES les directives ignorees
+
+    Mesh mesh;
+    ASSERT_EQ(mesh.load((stem + ".obj").c_str()), 0);
+    ASSERT_EQ(mesh.GetNMaterials(), 1u);
+
+    // Pas de map_Kd : le materiau reste une couleur, et garde son Kd.
+    MaterialColorExt* m = dynamic_cast<MaterialColorExt*>(mesh.GetMaterial(0));
+    ASSERT_NE(m, nullptr);
+    float d[4];
+    m->GetDiffuse(d);
+    EXPECT_NEAR(d[0], 0.25f, 1e-5f);
+    EXPECT_NEAR(d[2], 0.75f, 1e-5f);
+    EXPECT_NEAR(m->m_fShininess[0], 48.f / 128.f, 1e-5f)
+        << "le Ns place APRES les directives ignorees n'a pas ete lu";
+
+    removeObjWithMtl(stem);
 }

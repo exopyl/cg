@@ -21,7 +21,17 @@ CXX_EXECUTABLE=$PWD/${BUILD_DIR}/test/TU
 echo ${CXX_EXECUTABLE}
 ls -l $PWD/${BUILD_DIR}
 ls -l $PWD/${BUILD_DIR}/test
-LLVM_PROFILE_FILE="code-%p.profraw" ${CXX_EXECUTABLE}
+
+# Lancer TU depuis son repertoire de travail dedie (cf. TU_RUN_DIR dans
+# test/CMakeLists.txt) et non depuis la racine : les tests ecrivent leurs sorties
+# via des noms relatifs nus, et depuis la racine ils y deversaient 200+ fichiers.
+# C'est aussi la seule facon de resoudre leurs entrees "./test/data/...", qui y
+# sont copiees au build.
+#
+# LLVM_PROFILE_FILE reste ABSOLU : le merge plus bas cherche $PWD/code-*.profraw.
+REPO_ROOT=$PWD
+TU_RUN_DIR=$PWD/${BUILD_DIR}/test/test-run
+( cd ${TU_RUN_DIR} && LLVM_PROFILE_FILE="${REPO_ROOT}/code-%p.profraw" ${CXX_EXECUTABLE} )
 
 echo "Launching 'llvm-profdata merge' ..."
 llvm-profdata-18 merge -output=$PWD/code.profdata $PWD/code-*.profraw

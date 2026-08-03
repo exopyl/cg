@@ -13,18 +13,45 @@ file(GLOB HEADER_FILES ${PROJECT_SOURCE_DIR}/*.h)
 
 add_executable(${PROJECT_NAME} ${HEADER_FILES} ${SRC_FILES})
 
-# Pour Visual Studio : generer les fichiers de sortie dans le repertoire de build avec suffixe de config
+# ---------------------------------------------------------------------------
+# Repertoire de travail des tests
+# ---------------------------------------------------------------------------
+# Les tests ecrivent leurs sorties via des noms relatifs NUS ("shapes_cube.obj",
+# "img_quant_wu.ppm", ... : 52 noms, plus ~155 SVG produits par les L-systemes) et
+# lisent leurs entrees via "./test/data/..." (63 sites). Entrees et sorties
+# partagent donc le meme repertoire courant, et aucun code de test ne le choisit :
+# il est herite du lanceur. D'ou deux symptomes :
+#
+#   - lance a la main ou par coverage.sh depuis la racine, TU deverse ses 200+
+#     fichiers de sortie DANS la racine du depot ;
+#   - ctest, lui, tournait dans CMAKE_CURRENT_BINARY_DIR (build/<preset>/test)
+#     alors que test/data etait copie dans $<TARGET_FILE_DIR> -- soit un niveau
+#     PLUS BAS en multi-config (build/<preset>/test/Debug). Les tests lisant
+#     test/data echouaient donc sous ctest sur Windows.
+#
+# Correctif : un sous-repertoire DEDIE, impose a ctest comme au debogueur, sous
+# lequel test/data est copie. Les sorties y sont confinees (et sous build*/, donc
+# ignore par git) ; le chargement des DLL n'est pas affecte, Windows les cherchant
+# dans le dossier de l'exe et non dans le repertoire courant.
+set(TU_RUN_DIR "$<TARGET_FILE_DIR:${PROJECT_NAME}>/test-run")
+
 set_target_properties(${PROJECT_NAME} PROPERTIES
-    VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    VS_DEBUGGER_WORKING_DIRECTORY "${TU_RUN_DIR}"
 )
 
-# Copier test/data dans le repertoire de l'executable de test apres build
+# Cree sans condition : c'est le repertoire de travail annonce a ctest, il doit
+# exister meme si le depot n'embarque pas de test/data.
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${TU_RUN_DIR}"
+    COMMENT "Preparing test working directory ${TU_RUN_DIR}"
+)
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/test/data")
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_SOURCE_DIR}/test/data"
-            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/test/data"
-        COMMENT "Copying test/data to $<TARGET_FILE_DIR:${PROJECT_NAME}>/test/data"
+            "${TU_RUN_DIR}/test/data"
+        COMMENT "Copying test/data to ${TU_RUN_DIR}/test/data"
     )
 endif()
 
@@ -77,7 +104,11 @@ elseif (NOT WIN32)
     target_link_libraries(${PROJECT_NAME} GTest::gtest_main)
 endif (WIN32 AND EXTERN_GOOGLETEST)
 
-gtest_discover_tests(${PROJECT_NAME})
+# WORKING_DIRECTORY explicite : sans lui, ctest utilise CMAKE_CURRENT_BINARY_DIR,
+# qui n'est pas la ou test/data est copie en multi-config (cf. TU_RUN_DIR ci-dessus).
+gtest_discover_tests(${PROJECT_NAME}
+    WORKING_DIRECTORY "${TU_RUN_DIR}"
+)
 
 target_link_libraries(${PROJECT_NAME} cgmath cgimg cgmesh)
 if ( WIN32 )

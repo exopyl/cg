@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <string>
+
 #include "../src/cgmesh/cgmesh.h"
 
 static Mesh_half_edge* load_mesh()
@@ -125,7 +127,10 @@ TEST(TEST_cgmesh_he, normals)
 //
 //
 //
-static void diff_common(TensorMethodId tensorMethodId)
+// `prefix` distingue les fichiers de sortie d'un appelant a l'autre. Sans lui, les
+// trois tests qui appellent cette fonction ecrivaient les MEMES quatre
+// histogrammes.
+static void diff_common(TensorMethodId tensorMethodId, const char* prefix)
 {
 	Mesh_half_edge* he = load_mesh();
 
@@ -163,25 +168,25 @@ static void diff_common(TensorMethodId tensorMethodId)
 	res = pDiffParamEvaluator->GetCurvaturesHistogram (CurvatureType::Max, nbins, &histogram);
 	if (res == true)
 	{
-		output_1array (histogram, nbins, "histogram_maximal_curvatures.txt");
+		output_1array (histogram, nbins, (std::string(prefix) + "_histogram_maximal_curvatures.txt").c_str());
 		SAFE_FREE (histogram);
 	}
 	res = pDiffParamEvaluator->GetCurvaturesHistogram (CurvatureType::Min, nbins, &histogram);
 	if (res == true)
 	{
-		output_1array (histogram, nbins, "histogram_minimal_curvatures.txt");
+		output_1array (histogram, nbins, (std::string(prefix) + "_histogram_minimal_curvatures.txt").c_str());
 		SAFE_FREE (histogram);
 	}
 	res = pDiffParamEvaluator->GetCurvaturesHistogram (CurvatureType::Mean, nbins, &histogram);
 	if (res == true)
 	{
-		output_1array (histogram, nbins, "histogram_mean_curvatures.txt");
+		output_1array (histogram, nbins, (std::string(prefix) + "_histogram_mean_curvatures.txt").c_str());
 		SAFE_FREE (histogram);
 	}
 	res = pDiffParamEvaluator->GetCurvaturesHistogram (CurvatureType::Gaussian, nbins, &histogram);
 	if (res == true)
 	{
-		output_1array (histogram, nbins, "histogram_gaussian_curvatures.txt");
+		output_1array (histogram, nbins, (std::string(prefix) + "_histogram_gaussian_curvatures.txt").c_str());
 		SAFE_FREE (histogram);
 	}
 	
@@ -190,27 +195,27 @@ static void diff_common(TensorMethodId tensorMethodId)
 
 TEST(TEST_cgmesh_he, diff_hamman)
 {
-	diff_common(TENSOR_HAMANN);
+	diff_common(TENSOR_HAMANN, "hamman");
 }
 
 TEST(TEST_cgmesh_he, diff_taubin)
 {
-	diff_common(TENSOR_TAUBIN);
+	diff_common(TENSOR_TAUBIN, "taubin");
 }
 
 TEST(TEST_cgmesh_he, diff_desbrun)
 {
-	diff_common(TENSOR_DESBRUN);
+	diff_common(TENSOR_DESBRUN, "desbrun");
 }
 
 TEST(TEST_cgmesh_he, diff_steiner)
 {
-	//diff_common(TENSOR_STEINER);
+	diff_common(TENSOR_STEINER, "steiner");
 }
 
 TEST(TEST_cgmesh_he, diff_goldfeather)
 {
-	//diff_common(TENSOR_GOLDFEATHER);
+	diff_common(TENSOR_GOLDFEATHER, "goldfeather");
 }
 
 TEST(TEST_cgmesh_he, clipper)

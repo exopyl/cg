@@ -1,27 +1,65 @@
 #include "material.h"
 
-#include <cctype>
 #include <string>
 
-// Some exporters append a sequential "_<n>" index to texture map names that
-// does not match the file on disk (e.g. the MTL says "Sand0_3.png" while the
-// actual file is "Sand0.png"). Strip a trailing "_<digits>" before the
-// extension so we can retry with the real name.
-static std::string StripTextureIndexSuffix (const std::string& fn)
+// ---------------------------------------------------------------------------
+//  Rattrapage des noms de texture TRONQUES par le format 3DS
+// ---------------------------------------------------------------------------
+// Le champ de nom de map d'un chunk MAT_MAPNAME est un nom DOS 8.3, soit
+// 8 + 1 + 3 = 12 caracteres au plus. Un exportateur dont le nom de fichier
+// depasse cette capacite le coupe a 12 caracteres, et c'est l'extension qui part
+// en premier : « Bar_Chair_C.jpg » est ecrit « Bar_Chair_C. », point final sans
+// extension.
+//
+// Consequence, avant ce rattrapage : ImgIO::load appelle
+// std::filesystem::path::extension(), qui rend une chaine VIDE sur un nom
+// terminant par un point. Aucune branche de format ne s'active, load renvoie -1
+// sans jamais toucher au disque, et la texture est perdue alors que le fichier est
+// juste a cote.
+//
+// Mecanisme retenu : une longueur de nom EXACTEMENT egale a la largeur du champ
+// est le signal de la troncature -- le nom a rempli le champ jusqu'au bord. Dans
+// ce cas seulement, on COMPLETE le nom par ce qui manque de ".jpg", selon ce que
+// la coupure a laisse subsister :
+//
+//     "abcdefghijkl"  (rien)  -> + ".jpg"  -> "abcdefghijkl.jpg"
+//     "abcdefghijk."  (point) -> + "jpg"   -> "abcdefghijk.jpg"
+//     "abcdefghij.j"  (".j")  -> + "pg"    -> "abcdefghij.jpg"
+//     "abcdefghi.jp"  (".jp") -> + "g"     -> "abcdefghi.jpg"
+//
+// jpg est le format d'image de loin le plus courant dans les jeux de donnees 3DS,
+// et le seul qu'on puisse deviner sans lister le repertoire.
+//
+// Trois garde-fous. Le rattrapage n'est tente qu'APRES l'echec du chargement
+// nominal, donc il ne peut pas detourner un nom qui fonctionne. Une extension
+// deja complete (trois caracteres apres le point) exclut la troncature : l'echec
+// vient alors d'un fichier reellement absent, qu'il ne faut pas renommer. Enfin ce
+// qui subsiste de l'extension doit etre un PREFIXE de "jpg" : sans cela,
+// "abcdefghij.x" donnerait ".xpg", un nom qui ne peut designer aucun fichier.
+//
+// Ce code vit dans MaterialTexture, partage avec l'import OBJ. Un nom d'OBJ de 12
+// caracteres a extension incomplete subirait le meme traitement -- sans dommage,
+// puisqu'il a de toute facon deja echoue a charger.
+static const size_t k3dsMapNameWidth = 8 + 1 + 3;   // nom DOS 8.3
+
+static std::string CompleteTruncated3dsMapName (const std::string& fn)
 {
-	size_t dot  = fn.find_last_of('.');
-	std::string stem = (dot == std::string::npos) ? fn : fn.substr(0, dot);
-	std::string ext  = (dot == std::string::npos) ? std::string() : fn.substr(dot);
-	size_t us = stem.find_last_of('_');
-	if (us != std::string::npos && us + 1 < stem.size())
-	{
-		bool allDigits = true;
-		for (size_t i = us + 1; i < stem.size(); ++i)
-			if (!std::isdigit((unsigned char)stem[i])) { allDigits = false; break; }
-		if (allDigits)
-			return stem.substr(0, us) + ext;
-	}
-	return fn;
+	if (fn.size() != k3dsMapNameWidth)
+		return fn;                                  // pas a la largeur du champ
+
+	const size_t dot = fn.find_last_of('.');
+	if (dot == std::string::npos)
+		return fn + ".jpg";                         // le point lui-meme a ete coupe
+
+	const std::string ext = fn.substr(dot + 1);     // ce qui subsiste apres le point
+	if (ext.size() >= 3)
+		return fn;                                  // extension complete : pas une troncature
+
+	const std::string jpg = "jpg";
+	if (jpg.compare(0, ext.size(), ext) != 0)
+		return fn;                                  // pas un ".jpg" coupe
+
+	return fn + jpg.substr(ext.size());             // completer par ce qui manque
 }
 
 //
@@ -102,23 +140,47 @@ void MaterialColorExt::Init_From_Library (MaterialColorExtType index)
 //
 // Texture
 //
+// Charge une image de texture, avec le rattrapage de troncature 8.3. Rend
+// l'image partagee, ou nullptr ; `name` recoit le nom qui a effectivement charge.
+// Factorise entre la texture diffuse et la carte de reflexion : les deux viennent
+// des memes fichiers, donc subissent la meme troncature.
+static std::shared_ptr<Img> LoadTextureImage (char const *filename, char const *path,
+                                              std::string &name)
+{
+	name = std::string (filename ? filename : "");
+	if (name.empty())
+		return nullptr;
+
+	std::shared_ptr<Img> img = std::make_shared<Img> ();
+	if (img->load(name.c_str(), path) == 0)
+		return img;
+
+	// Second essai : le nom est peut-etre tronque a la largeur du champ 8.3
+	// d'un MAT_MAPNAME 3DS (cf. l'en-tete de ce fichier).
+	const std::string alt = CompleteTruncated3dsMapName (name);
+	if (alt != name && img->load(alt.c_str(), path) == 0)
+	{
+		name = alt;             // rapporter le nom qui a effectivement charge
+		return img;
+	}
+	return nullptr;             // introuvable ou format inconnu
+}
+
 MaterialTexture::MaterialTexture (char const *filename, char const *path)
 {
-	m_filename = std::string (filename);
-	m_pImage = std::make_shared<Img> ();
-	if (m_pImage->load(filename, path) != 0)
-	{
-		// Retry with a possibly-mangled index suffix stripped (see above).
-		std::string alt = StripTextureIndexSuffix (filename);
-		if (alt == filename || m_pImage->load(alt.c_str(), path) != 0)
-		{
-			m_pImage.reset();
-		}
-		else
-		{
-			m_filename = alt;
-		}
-	}
+	m_pImage = LoadTextureImage (filename, path, m_filename);
+}
+
+bool MaterialTexture::SetReflectionMap (char const *filename, char const *path)
+{
+	std::string name;
+	std::shared_ptr<Img> img = LoadTextureImage (filename, path, name);
+	if (!img)
+		return false;           // laisser le materiau intact
+
+	m_reflFilename = name;
+	m_pReflImage   = img;
+	return true;
 }
 
 MaterialTexture::MaterialTexture (const std::string &name, unsigned int width, unsigned int height, const unsigned char *rgbaPixels)
@@ -151,6 +213,9 @@ MaterialTexture::MaterialTexture (const MaterialTexture &m)
 	m_pImage   = m.m_pImage;   // shared_ptr: +1 ref, no pixel copy
 	m_nWidth   = m.m_nWidth;
 	m_nHeight  = m.m_nHeight;
+	// La carte de reflexion suit la meme regle : partagee, pas dupliquee.
+	m_reflFilename = m.m_reflFilename;
+	m_pReflImage   = m.m_pReflImage;
 	memcpy(m_fAmbient,  m.m_fAmbient,  4 * sizeof(float));
 	memcpy(m_fDiffuse,  m.m_fDiffuse,  4 * sizeof(float));
 	memcpy(m_fSpecular, m.m_fSpecular, 4 * sizeof(float));

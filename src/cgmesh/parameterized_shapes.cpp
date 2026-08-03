@@ -483,7 +483,13 @@ ParameterizedSvgExtrusion::ParameterizedSvgExtrusion(const std::string& filename
 std::vector<Parameter> ParameterizedSvgExtrusion::GetParameters()
 {
 	return {
-		Parameter::MakeFloat("Height",         &m_height,     0.001f, 10.f),
+		// Plage resserree a 0.01 .. 0.1. Le maillage etant recentre et normalise a
+		// 1.0 dans sa plus grande dimension (SvgExtrudeOptions::centerAndFit), une
+		// hauteur se lit comme une FRACTION de cette taille : au-dela de 0.1 on
+		// obtient une dalle, pas une plaque gravee. L'ancien maximum de 10 donnait
+		// une course de curseur ou toute la plage utile tenait dans le premier
+		// centieme.
+		Parameter::MakeFloat("Height",         &m_height,     0.01f, 0.1f),
 		Parameter::MakeFloat("Flatten Tol",    &m_flattenTol, 0.05f,  10.f),
 	};
 }

@@ -89,6 +89,10 @@ typedef struct _t3DSMaterialInfo_
 {
 	char	strName[255];		// The texture name
 	char	strFile[255];		// The texture file name (If this is set it's a texture map)
+	// Carte de REFLEXION, chunk MAT_REFLMAP. Champ distinct de strFile : un
+	// materiau peut porter les deux, et le MAT_MAPNAME imbrique doit atterrir
+	// dans le bon emplacement.
+	char	strReflFile[255];
 	BYTE	color[3];			// The color of the object (R, G, B)
 	INT32   texureId;			// the texture ID
 	FLOAT32 uScale;				// u tiling of texture  (Currently not used)

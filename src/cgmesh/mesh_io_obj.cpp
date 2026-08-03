@@ -82,19 +82,31 @@ int MeshIO::import_mtl (Mesh& mesh, const char *filename, const char *path)
 	unsigned int dummy;
 	unsigned int mi = MATERIAL_NONE;
 	MaterialColorExt *mat = nullptr;
+	MaterialTexture  *texMat = nullptr;   // dernier map_Kd vu, pour `refl`
 
 	while (fgets(line, sizeof(line), ptr) != nullptr)
 	{
 		line_count++;
 
-		if (line[0] == 0 || line[0] == '#') // skip empty lines and comments
-			continue;
+		// Sauter les lignes vides et les commentaires. `line[0] == 0` ne suffit pas :
+		// fgets conserve le saut de ligne, donc une ligne vide vaut "\n" et non "".
+		// Sans ce test, chaque ligne vide d'un MTL -- il y en a une entre deux
+		// materiaux dans tout export Blender -- produisait une « MTL parse error ».
+		{
+			const char *p = line;
+			while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+			if (*p == 0 || *p == '#')
+				continue;
+		}
 
 		if (sscanf(line, " newmtl %s", name) == 1) // new material
 		{
 			mat = new MaterialColorExt ();
 			mi = mesh.Material_Add(mat);
 			mat->SetName (name);
+			// Nouveau materiau : oublier la texture du precedent, sans quoi un
+			// `refl` d'ici se collerait a la texture d'avant.
+			texMat = nullptr;
 		}
 		else if (sscanf(line, " Kd %f %f %f", &r, &g, &b) == 3 && mat) mat->SetDiffuse (r, g, b, 1.);
 		else if (sscanf(line, " Ka %f %f %f", &r, &g, &b) == 3 && mat) mat->SetAmbient (r, g, b, 1.);
@@ -125,25 +137,58 @@ int MeshIO::import_mtl (Mesh& mesh, const char *filename, const char *path)
 			MaterialTexture *tex = new MaterialTexture (name, path);
 			if (mat)
 				tex->SetName (mat->GetName());
-			// Carry the MTL colours so the texture is modulated under lighting
-			// (a dark Kd tints a light texture, etc.) — same as the 3DS path.
+			// La MAP EST la couleur diffuse : ambiant et diffus a BLANC, et non au
+			// Kd/Ka du MTL. Meme raison que sur le chemin 3DS -- l'environnement de
+			// texture est GL_MODULATE, donc reporter le Kd revient a le MULTIPLIER
+			// au texel. Le materiau « BLACK » de Bar_chair_2.mtl porte
+			// Kd = 0.018262 et texture le dessous en bois de l'assise : le texel
+			// sortait a 1,8 % de son intensite, donc noir. `Ka 0.000000` retirait
+			// en plus tout plancher ambiant.
+			tex->SetAmbient (1.f, 1.f, 1.f, 1.f);
+			tex->SetDiffuse (1.f, 1.f, 1.f, 1.f);
+
 			if (mat)
 			{
-				float d[4]; mat->GetDiffuse(d);
-				tex->SetDiffuse (d[0], d[1], d[2], 1.f);
-				tex->SetAmbient (mat->m_fAmbient[0], mat->m_fAmbient[1], mat->m_fAmbient[2], 1.f);
 				tex->SetSpecular(mat->m_fSpecular[0], mat->m_fSpecular[1], mat->m_fSpecular[2], 1.f);
-				tex->SetShininess(mat->m_fShininess[0] / 128.f);
+				// PAS de nouvelle division par 128 : import_mtl a DEJA converti le
+				// Ns du MTL en fraction de 128 (`SetShininess(e / 128.f)`), et
+				// ActivateMaterial remultiplie par 128 a l'affichage. Diviser ici
+				// une seconde fois ramenait un Ns de 96 a un exposant de 0,75 :
+				// pow(N.H, 0.75) est quasi constant, donc tout le speculaire
+				// s'appliquait partout et les pieds chromes sortaient beaucoup plus
+				// brillants que la reference.
+				tex->SetShininess(mat->m_fShininess[0]);
 			}
 			// mat is owned by the Mesh's unique_ptr (mesh.Material_Add above);
 			// mesh.SetMaterial(mi, tex) will reset the slot which destroys mat.
 			mat = nullptr;
 			mesh.SetMaterial (mi, tex);
+			// Retenu pour un `refl` ulterieur : la carte de reflexion se declare
+			// APRES map_Kd dans un MTL, quand `mat` a deja ete remplace.
+			texMat = tex;
 		}
-		else if (strcmp(line, "map_Ka ") == 0) {} // ambient texture
-		else if (strcmp(line, "map_Ks ") == 0) {} // specular texture
-		else if (strcmp(line, "map_bump ") == 0) {} // bumpmap
-		else if (strcmp(line, "bump ") == 0) {} // bumpmap
+		// Carte de REFLEXION. Elle suppose une texture diffuse deja declaree :
+		// sans elle il n'y a pas de MaterialTexture pour la porter, et un
+		// materiau purement reflechissant sort du modele de rendu actuel.
+		else if (sscanf(line, " refl %s", name) == 1) {
+			if (texMat && !texMat->SetReflectionMap (name, path))
+				printf ("MTL line %d: carte de reflexion introuvable : %s\n", line_count, name);
+		}
+		// Maps reconnues mais NON exploitees : on les avale en silence.
+		//
+		// Les strcmp precedents comparaient la LIGNE ENTIERE a un prefixe comme
+		// "map_Ka ", ce qui ne pouvait jamais correspondre : la ligne porte aussi le
+		// nom du fichier et son saut de ligne. Toute directive de map non geree
+		// tombait donc dans le `else` final et signalait une « MTL parse error » --
+		// le map_Bump de Bar_chair_2.mtl en produisait deux a chaque chargement.
+		// Un sscanf sur le mot-cle suivi d'un %s, comme les autres branches.
+		else if (sscanf(line, " map_Ka %s",   name) == 1) {} // texture ambiante
+		else if (sscanf(line, " map_Ks %s",   name) == 1) {} // texture speculaire
+		else if (sscanf(line, " map_Ns %s",   name) == 1) {} // exposant speculaire
+		else if (sscanf(line, " map_d %s",    name) == 1) {} // opacite
+		else if (sscanf(line, " map_Bump %s", name) == 1) {} // carte de normales
+		else if (sscanf(line, " map_bump %s", name) == 1) {} // idem, autre casse
+		else if (sscanf(line, " bump %s",     name) == 1) {} // idem, forme courte
 		else
 			printf("MTL parse error line %d: '%s'", line_count, line);
 	}

@@ -1186,7 +1186,7 @@ void ParseKeyframer_3DS (t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 //
 //
 //*****************************************************************************
-void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
+void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk, int mapSlot)
 {
 	// The current chunk to work with
 	t3DSChunk currentChunk;
@@ -1321,12 +1321,40 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 */
 		case CHK3DS_A_MAT_TEXMAP:							// This is the header for the texture info
 			// Proceed to read in the material information
-			ProcessNextMaterialChunk_3DS(pModel, &currentChunk);
+			ProcessNextMaterialChunk_3DS(pModel, &currentChunk, 0);   // diffuse
+			break;
+
+		// Carte de REFLEXION. Chunk conteneur, comme MAT_TEXMAP : le nom de
+		// fichier est un MAT_MAPNAME imbrique. On descend en annoncant
+		// l'emplacement 1 pour que ce nom aille dans strReflFile, sans quoi il
+		// ecraserait la texture diffuse.
+		case CHK3DS_A_MAT_REFLMAP:
+			ProcessNextMaterialChunk_3DS(pModel, &currentChunk, 1);   // reflexion
 			break;
 
 		case CHK3DS_A_MAT_MAPNAME:						// This stores the file name of the material
-		// Here we read in the material's file name
-			currentChunk.bytesRead += fread(pModel->pMaterials[pModel->numOfMaterials - 1].strFile, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+		// Here we read in the material's file name.
+		//
+		// On garde le PREMIER nom rencontre, pas le dernier. Un MAT_TEXMAP est
+		// cense ne designer qu'une map, mais certains exportateurs y empilent
+		// plusieurs blocs MAT_MAPNAME (diffuse, puis normale ou reflexion). Comme
+		// ce case ecrasait strFile a chaque passage, le dernier nom gagnait : le
+		// materiau se retrouvait texture avec sa carte de normales ou sa carte de
+		// reflexion au lieu de sa diffuse. Le premier bloc est la map principale.
+		//
+		// strFile vient d'un `t3DSMaterialInfo newTexture = {}` (CHK3DS_A_MAT_ENTRY),
+		// donc une chaine vide signifie bien « aucun nom lu pour ce materiau ».
+		//
+		// `mapSlot` dit de quel emplacement ce nom releve : le MAT_MAPNAME est
+		// imbrique dans son chunk de map, seul son parent le sait.
+			{
+				t3DSMaterialInfo &mi = pModel->pMaterials[pModel->numOfMaterials - 1];
+				char *dest = (mapSlot == 1) ? mi.strReflFile : mi.strFile;
+				if (dest[0] == '\0')
+					currentChunk.bytesRead += fread(dest, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				else
+					SkipChunk_3DS(&currentChunk);
+			}
 			break;
 /*
 		case CHK3DS_A_MAT_SPECMAP:	//
@@ -1334,10 +1362,6 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 			break;
 
 		case CHK3DS_A_MAT_OPACMAP:	//
-			SkipChunk_3DS(&currentChunk);
-			break;
-
-		case CHK3DS_A_MAT_REFLMAP:	//
 			SkipChunk_3DS(&currentChunk);
 			break;
 

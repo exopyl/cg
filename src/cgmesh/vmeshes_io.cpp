@@ -780,16 +780,59 @@ bool VMeshesIO::import_3ds(VMeshes& vm, const char* filename)
 				if (strlen(mat3ds.strFile) > 0)
 				{
 					// Textured material: load the referenced image from the
-					// model's directory (PNG now supported via cgimg). The 3DS
-					// diffuse/ambient/specular tint the texture under lighting
-					// (GL_MODULATE) — e.g. a light rubber tread darkened by a
-					// grey diffuse.
+					// model's directory (PNG now supported via cgimg).
 					auto pTex = new MaterialTexture(mat3ds.strFile,
 					                                modelDir.empty() ? nullptr : modelDir.c_str());
-					pTex->SetAmbient(mat3ds.sMaterial.Ambient.r / 255.f, mat3ds.sMaterial.Ambient.g / 255.f, mat3ds.sMaterial.Ambient.b / 255.f, 1.f);
-					pTex->SetDiffuse(mat3ds.sMaterial.Diffuse.r / 255.f, mat3ds.sMaterial.Diffuse.g / 255.f, mat3ds.sMaterial.Diffuse.b / 255.f, 1.f);
-					pTex->SetSpecular(mat3ds.sMaterial.Specular.r / 255.f, mat3ds.sMaterial.Specular.g / 255.f, mat3ds.sMaterial.Specular.b / 255.f, 1.f);
-					pTex->SetShininess(mat3ds.sMaterial.Power / 100.f);
+
+					// La MAP EST la couleur diffuse : ambiant et diffus passent a
+					// BLANC, et non au Kd/Ka du fichier.
+					//
+					// C'est la semantique du format -- dans 3ds Max une map
+					// branchee sur l'emplacement diffus REMPLACE la couleur
+					// diffuse, qui ne sert qu'a defaut de map. L'environnement de
+					// texture etant GL_MODULATE, reporter le Kd revenait a le
+					// MULTIPLIER au texel : sur Bar_chair_2.3ds, dont le materiau
+					// « BLACKChair_C » porte Kd = 5/255 = 0.0196 et texture le
+					// dessous en bois de l'assise, le texel sortait a 2 % de son
+					// intensite, donc noir.
+					//
+					// Le 3DS n'a d'ailleurs aucun moyen d'exprimer « teinter une
+					// map » : un MAT_TEXMAP ne porte que le nom du fichier et ses
+					// tuilages. Un Kd quasi nul n'assombrit pas la texture, il
+					// l'annule.
+					pTex->SetAmbient (1.f, 1.f, 1.f, 1.f);
+					pTex->SetDiffuse (1.f, 1.f, 1.f, 1.f);
+
+					// Un exposant de Phong nul rend pow(N.H, 0) == 1 partout ou
+					// N.H > 0 : le speculaire ENTIER s'ajoute a chaque fragment, et
+					// il est module par le texel (le mode par defaut du pipeline
+					// fixe est GL_SINGLE_COLOR, donc le speculaire est fondu dans
+					// la couleur primaire AVANT le texturage). Aux angles rasants
+					// N.H <= 0, OpenGL abandonne le terme : le rendu devient
+					// tout-ou-rien, sature d'un cote et noir de l'autre.
+					//
+					// Un 3DS sans chunk MAT_SHININESS laisse Power a 0 (structure
+					// zero-initialisee), ce qui veut dire « pas de reflet » et non
+					// « reflet d'etendue infinie ». On coupe donc le speculaire.
+					// Meme pathologie que le `Ks 1 1 1` avec `Ns 0` corrige cote
+					// export MTL, sur l'autre chemin.
+					if (mat3ds.sMaterial.Power > 0.f)
+					{
+						pTex->SetSpecular(mat3ds.sMaterial.Specular.r / 255.f, mat3ds.sMaterial.Specular.g / 255.f, mat3ds.sMaterial.Specular.b / 255.f, 1.f);
+						pTex->SetShininess(mat3ds.sMaterial.Power / 100.f);
+					}
+					else
+					{
+						pTex->SetSpecular(0.f, 0.f, 0.f, 1.f);
+						pTex->SetShininess(0.f);
+					}
+
+					// Carte de reflexion, si le materiau en declare une par
+					// MAT_REFLMAP. L'echec de chargement est sans consequence :
+					// SetReflectionMap laisse alors le materiau intact.
+					if (mat3ds.strReflFile[0] != '\0')
+						pTex->SetReflectionMap(mat3ds.strReflFile,
+						                       modelDir.empty() ? nullptr : modelDir.c_str());
 					pMaterial = pTex;
 				}
 				else

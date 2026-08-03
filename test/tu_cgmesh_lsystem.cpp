@@ -44,28 +44,50 @@ TEST(TEST_cgmesh_lsystem, cube)
 				pWriterSVG->InitFile(strFilename);
 				pWriterSVG->WriteHeader(fWidth, fHeight);
 
-				// frame
-				list<point2D> frame;
-				point2D pt1, pt2, pt3, pt4;
-				pt1.set(0., 0.);
-				pt2.set(fWidth, 0.);
-				pt3.set(fWidth, fHeight);
-				pt4.set(0., fHeight);
-				frame.push_back(pt1);
-				frame.push_back(pt2);
-				frame.push_back(pt3);
-				frame.push_back(pt4);
-				frame.push_back(pt1);
-				pWriterSVG->WriteStyleBegin((char*)"rgb(0,0,0)", 0.2);
-				pWriterSVG->WritePath(frame);
-				pWriterSVG->WriteStyleEnd();
+				// PAS de cadre de page.
+				//
+				// Un carre couvrant tout le canevas etait dessine ici. C'est du decor
+				// de mise en page, sans rapport avec le dessin, et il polluait tout
+				// usage geometrique du fichier : rempli il donnait une PLAQUE pleine
+				// dans laquelle le motif se retrouvait enferme, et une fois passe en
+				// trait il ressortait en cadre EPAISSI autour du modele.
+				//
+				// Ne pas l'ecrire est plus simple que de le filtrer a la lecture, et
+				// ne coute rien : le canevas est deja defini par WriteHeader.
 
 				// LSystem
+				//
+				// Aucun remplissage demande : WriteStyleBegin ecrit `fill:none`, ce
+				// qui decrit fidelement un trace au trait. C'est import_svg qui sait
+				// desormais quoi en faire -- il EPAISSIT le trait selon son
+				// stroke-width pour en tirer un volume (cf. SvgExtrudeOptions
+				// ::strokeToVolume).
+				//
+				// Un remplissage explicite avait ete essaye ici pour garder ces
+				// fichiers extrudables ; c'etait une rustine, et elle empeche
+				// justement le traitement au trait puisqu'une forme remplie suit le
+				// chemin de tessellation. Une courbe du dragon « remplie » degenere
+				// en damier : le trace se replie sur lui-meme, aucun interieur n'est
+				// definissable.
+				//
+				// bClosed distingue les L-systemes dont le trace se referme ; ils
+				// delimitent alors une vraie surface, qu'on remplit.
 				if (pLSystemData->bClosed)
 					pWriterSVG->WriteStyleBegin((char*)"rgb(255,0,0)", 1.f, (char*)"#a0a0a0");
 				else
 					pWriterSVG->WriteStyleBegin((char*)"rgb(255,0,0)", 1.f);
 				pWriterSVG->WriteGroupBegin();
+
+				// Un sous-trace ferme delimite une surface -> <polygon> ; sinon
+				// c'est une ligne -> <polyline>, que import_svg epaissira selon son
+				// stroke-width au lieu de tenter de la remplir.
+				const bool bClosedTrace = pLSystemData->bClosed;
+				auto emit = [pWriterSVG, bClosedTrace](const list<point2D>& pts)
+				{
+					if (bClosedTrace) pWriterSVG->WritePolygon (pts);
+					else              pWriterSVG->WritePolyline (pts);
+				};
+
 				list<point2D> listPoints;
 				for (int i = 0; i < pLSystem->m_iNumberPoints; i++)
 				{
@@ -80,12 +102,12 @@ TEST(TEST_cgmesh_lsystem, cube)
 
 					if (!pLSystem->m_bDrawable[i])
 					{
-						pWriterSVG->WritePath(listPoints);
+						emit(listPoints);
 						listPoints.clear();
 						continue;
 					}
 				}
-				pWriterSVG->WritePath(listPoints);
+				emit(listPoints);
 
 				pWriterSVG->WriteGroupEnd();
 				pWriterSVG->WriteStyleEnd();

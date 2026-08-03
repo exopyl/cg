@@ -186,6 +186,20 @@ public:
 	std::string GetFilename ();
 	Img* GetImage ();
 
+	// Carte de REFLEXION, facultative, en plus de la texture diffuse.
+	//
+	// Un materiau peut la declarer par `MAT_REFLMAP` en 3DS ou `refl` en MTL. Le
+	// rendu l'applique en sphere mapping : les coordonnees sont GENEREES depuis la
+	// normale en espace oeil (GL_SPHERE_MAP), la carte n'a donc pas besoin d'UV et
+	// suit le point de vue, ce qui est le propre d'un reflet.
+	//
+	// Renvoie true si l'image a pu etre decodee. Un echec laisse le materiau
+	// inchange : une reflexion introuvable ne doit pas invalider sa diffuse.
+	bool SetReflectionMap (char const *filename, char const *path = nullptr);
+	std::string GetReflectionFilename () const { return m_reflFilename; }
+	Img* GetReflectionImage () const { return m_pReflImage.get(); }
+	bool HasReflectionMap () const { return m_pReflImage != nullptr; }
+
 	// Optional material colours that MODULATE the texture under lighting. 3DS
 	// textured materials carry a diffuse tint (e.g. a light rubber tread
 	// texture darkened by a grey diffuse). Defaults are white/neutral so a
@@ -207,6 +221,11 @@ private:
 	std::shared_ptr<Img> m_pImage;
 	unsigned int m_nWidth = 0, m_nHeight = 0;
 	unsigned char *m_pPixels = nullptr;
+
+	// Carte de reflexion : meme partage par comptage de references que la diffuse,
+	// plusieurs materiaux d'un meme fichier la designant en general.
+	std::string m_reflFilename;
+	std::shared_ptr<Img> m_pReflImage;
 
 	float m_fAmbient[4]  = { 1.f, 1.f, 1.f, 1.f };
 	float m_fDiffuse[4]  = { 1.f, 1.f, 1.f, 1.f };

@@ -699,9 +699,11 @@ CameraView frontalCamera()
     return cam;
 }
 
-void writeTestTexture()
+// Le chemin est fourni par l'appelant : les trois tests qui utilisent ce helper
+// partageaient "./tt_tex0.bmp", donc ecrivaient et lisaient le meme fichier.
+void writeTestTexture(const char* path)
 {
-    Img a(64, 48); a.init_color(180, 140, 100, 255); a.save((char*)"./tt_tex0.bmp");
+    Img a(64, 48); a.init_color(180, 140, 100, 255); a.save(path);
 }
 
 } // namespace
@@ -710,7 +712,8 @@ void writeTestTexture()
 // avec des UV connus (oracle analytique).
 TEST(TEST_cgmesh_recon, texture_projective_frontal_face)
 {
-    writeTestTexture();
+    const char* texFile = "./texture_projective_frontal_face.bmp";
+    writeTestTexture(texFile);
 
     Mesh mesh; mesh.Init(3, 1);
     mesh.SetVertex(0, -0.5f, -0.5f, -2.f);
@@ -719,7 +722,7 @@ TEST(TEST_cgmesh_recon, texture_projective_frontal_face)
     mesh.SetFace(0, 0, 1, 2);                 // normale = +Z, vers la caméra
 
     ProjectiveTexturer tex; tex.occlusion = false;
-    tex.texture(mesh, {"./tt_tex0.bmp"}, {frontalCamera()});
+    tex.texture(mesh, {texFile}, {frontalCamera()});
 
     // Mesh éclaté : 1 triangle -> 1 face, 3 sommets propres.
     ASSERT_EQ(mesh.GetNFaces(), 1u);
@@ -741,7 +744,8 @@ TEST(TEST_cgmesh_recon, texture_projective_frontal_face)
 // pas de coordonnées de texture.
 TEST(TEST_cgmesh_recon, texture_projective_fallback_when_not_facing)
 {
-    writeTestTexture();
+    const char* texFile = "./texture_projective_fallback_when_not_facing.bmp";
+    writeTestTexture(texFile);
 
     Mesh mesh; mesh.Init(3, 1);
     mesh.SetVertex(0, -0.5f, -0.5f, -2.f);
@@ -750,7 +754,7 @@ TEST(TEST_cgmesh_recon, texture_projective_fallback_when_not_facing)
     mesh.SetFace(0, 0, 2, 1);                 // enroulement inversé -> normale = −Z
 
     ProjectiveTexturer tex; tex.occlusion = false;
-    tex.texture(mesh, {"./tt_tex0.bmp"}, {frontalCamera()});
+    tex.texture(mesh, {texFile}, {frontalCamera()});
 
     const int fb = mesh.GetMaterialId("fallback");
     ASSERT_GE(fb, 0);
@@ -763,7 +767,8 @@ TEST(TEST_cgmesh_recon, texture_projective_fallback_when_not_facing)
 // est bien la cause du repli, pas la géométrie de projection).
 TEST(TEST_cgmesh_recon, texture_projective_occlusion_culls_hidden_face)
 {
-    writeTestTexture();
+    const char* texFile = "./texture_projective_occlusion_culls_hidden_face.bmp";
+    writeTestTexture(texFile);
 
     auto build = [](Mesh& m) {
         m.Init(6, 2);
@@ -784,7 +789,7 @@ TEST(TEST_cgmesh_recon, texture_projective_occlusion_culls_hidden_face)
     // --- occlusion ON ---
     Mesh on; build(on);
     ProjectiveTexturer texOn;                 // occlusion = true par défaut
-    texOn.texture(on, {"./tt_tex0.bmp"}, {cam});
+    texOn.texture(on, {texFile}, {cam});
 
     ASSERT_EQ(on.GetNFaces(), 2u);
     const int texOnId = on.GetMaterialId("tex0");
@@ -798,7 +803,7 @@ TEST(TEST_cgmesh_recon, texture_projective_occlusion_culls_hidden_face)
     // --- occlusion OFF : la même face arrière est désormais texturée ---
     Mesh off; build(off);
     ProjectiveTexturer texOff; texOff.occlusion = false;
-    texOff.texture(off, {"./tt_tex0.bmp"}, {cam});
+    texOff.texture(off, {texFile}, {cam});
 
     EXPECT_EQ(off.GetFaceMaterialId(1), (unsigned)off.GetMaterialId("tex0"));
     EXPECT_TRUE(off.GetFace(1)->m_bUseTextureCoordinates);

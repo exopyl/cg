@@ -13,7 +13,10 @@
 namespace {
 
 // PPM (P6) : sans perte, et l'encodeur est fourni par cgimg (pas d'ecrivain PNG).
-const char* kFile = "./tu_pixel_blocks_input.ppm";
+//
+// Le nom du fichier de travail est declare DANS chaque test, d'apres le nom du
+// test. Une constante de portee fichier faisait que les neuf tests de la suite
+// ecrivaient le meme PPM.
 
 void fillRect(Img& img, int x0, int y0, int x1, int y1,
               unsigned char r, unsigned char g, unsigned char b)
@@ -121,6 +124,7 @@ TEST(TEST_cgmesh_image_pixel_blocks, unsmoothed_contours_are_axis_aligned)
 // disjointes. Un objet par COULEUR n'en donnerait que 3, les deux rouges reunis.
 TEST(TEST_cgmesh_image_pixel_blocks, per_component_splits_disjoint_blocks_of_one_colour)
 {
+	const char* kFile = "./per_component_splits_disjoint_blocks_of_one_colour.ppm";
 	Img img(32, 32, false);
 	fillRect(img, 0, 0, 32, 32, 255, 255, 255);
 	fillRect(img,  2,  2, 10, 10, 255, 0, 0);     // rouge A (haut-gauche)
@@ -166,6 +170,7 @@ TEST(TEST_cgmesh_image_pixel_blocks, per_component_splits_disjoint_blocks_of_one
 // donc encadrer le bleu sans le recouvrir.
 TEST(TEST_cgmesh_image_pixel_blocks, a_ring_block_keeps_its_hole)
 {
+	const char* kFile = "./a_ring_block_keeps_its_hole.ppm";
 	Img img(32, 32, false);
 	fillRect(img, 0, 0, 32, 32, 255, 255, 255);
 	fillRect(img,  6,  6, 26, 26, 255, 0, 0);     // anneau rouge...
@@ -210,6 +215,7 @@ TEST(TEST_cgmesh_image_pixel_blocks, a_ring_block_keeps_its_hole)
 
 TEST(TEST_cgmesh_image_pixel_blocks, display_mesh_has_one_material_per_palette_colour)
 {
+	const char* kFile = "./display_mesh_has_one_material_per_palette_colour.ppm";
 	Img img(32, 32, false);
 	fillRect(img, 0, 0, 32, 32, 255, 255, 255);
 	fillRect(img,  2,  2, 10, 10, 255, 0, 0);
@@ -229,6 +235,7 @@ TEST(TEST_cgmesh_image_pixel_blocks, display_mesh_has_one_material_per_palette_c
 
 TEST(TEST_cgmesh_image_pixel_blocks, base_and_wall_come_last_when_requested)
 {
+	const char* kFile = "./base_and_wall_come_last_when_requested.ppm";
 	Img img(32, 32, false);
 	fillRect(img, 0, 0, 32, 32, 255, 255, 255);
 	fillRect(img, 10, 10, 22, 22, 255, 0, 0);
@@ -247,6 +254,7 @@ TEST(TEST_cgmesh_image_pixel_blocks, base_and_wall_come_last_when_requested)
 
 TEST(TEST_cgmesh_image_pixel_blocks, palette_is_bounded_by_max_colors)
 {
+	const char* kFile = "./palette_is_bounded_by_max_colors.ppm";
 	// Degrade continu : sans borne, chaque cellule aurait sa teinte.
 	Img img(64, 64, false);
 	for (int y = 0; y < 64; ++y)
@@ -270,6 +278,7 @@ TEST(TEST_cgmesh_image_pixel_blocks, palette_is_bounded_by_max_colors)
 // cadre (donc l'emprise globale) ne bouge pas -- la bbox est figee avant.
 TEST(TEST_cgmesh_image_pixel_blocks, shrink_erodes_blocks_without_moving_the_frame)
 {
+	const char* kFile = "./shrink_erodes_blocks_without_moving_the_frame.ppm";
 	Img img(32, 32, false);
 	fillRect(img, 0, 0, 32, 32, 255, 255, 255);
 	fillRect(img, 8, 8, 24, 24, 255, 0, 0);
@@ -313,6 +322,7 @@ TEST(TEST_cgmesh_image_pixel_blocks, nonexistent_file_fails_cleanly)
 // lisse.
 TEST(TEST_cgmesh_image_pixel_blocks, pixel_width_larger_than_source_is_harmless)
 {
+	const char* kFile = "./pixel_width_larger_than_source_is_harmless.ppm";
 	Img img(16, 16, false);
 	fillRect(img, 0, 0, 16, 16, 255, 255, 255);
 	fillRect(img, 4, 4, 12, 12, 255, 0, 0);
@@ -335,6 +345,7 @@ TEST(TEST_cgmesh_image_pixel_blocks, pixel_width_larger_than_source_is_harmless)
 
 TEST(TEST_cgmesh_image_pixel_blocks, frame_can_be_switched_off_per_component)
 {
+	const char* kFile = "./frame_can_be_switched_off_per_component.ppm";
 	Img img(32, 32, false);
 	fillRect(img, 0, 0, 32, 32, 255, 255, 255);
 	fillRect(img, 10, 10, 22, 22, 255, 0, 0);
@@ -367,6 +378,7 @@ TEST(TEST_cgmesh_image_pixel_blocks, frame_can_be_switched_off_per_component)
 // C'est le symptome que voyait l'utilisateur -- une bbox trop large a l'export.
 TEST(TEST_cgmesh_image_pixel_blocks, dropping_the_frame_shrinks_the_footprint_to_the_content)
 {
+	const char* kFile = "./dropping_the_frame_shrinks_the_footprint_to_the_content.ppm";
 	Img img(32, 32, false);
 	fillRect(img, 0, 0, 32, 32, 255, 255, 255);
 	fillRect(img, 10, 10, 22, 22, 255, 0, 0);

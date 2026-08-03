@@ -70,8 +70,20 @@ void WriterSVG::WriteStyleBegin (char* pStroke, float fStrokeWidth, char * pColo
 		fprintf (m_pFile, "stroke:%s;", pStroke); // example : rgb(0,0,0)
 	if (fStrokeWidth >= 0.)
 		fprintf (m_pFile, "stroke-width:%f;", fStrokeWidth);
+	// `fill` est TOUJOURS ecrit, `none` a defaut.
+	//
+	// En SVG, omettre `fill` ne veut pas dire « pas de remplissage » : la valeur
+	// initiale de la propriete est NOIR. Un groupe defini par son seul trait sortait
+	// donc rempli, et tout lecteur conforme -- import_svg compris, qui respecte la
+	// propriete -- traitait ses contours fermes comme des surfaces pleines.
+	//
+	// Consequence observee : le cadre de page des SVG de L-systeme, un carre couvrant
+	// tout le canevas, devenait une PLAQUE PLEINE a l'extrusion, dans laquelle le
+	// motif se retrouvait enferme.
 	if (pColorFill)
 		fprintf (m_pFile, "fill:%s;", pColorFill); // example : #a0a0a0
+	else
+		fprintf (m_pFile, "fill:none;");
 
 	fprintf (m_pFile, "\">\n");
 }
@@ -154,6 +166,37 @@ void WriterSVG::WritePath (const list<point2D>& listPoints, PathStyle *pathStyle
 	if (pathStyle && pathStyle->bClosed)
 		fprintf (m_pFile, "Z");
 	fprintf (m_pFile, "\"/>\n");
+}
+
+// Serialise l'attribut `points` commun a polygon et polyline.
+static void WritePointsAttr (FILE *pFile, const list<point2D>& listPoints)
+{
+	fprintf (pFile, " points=\"");
+	for (list<point2D>::const_iterator it = listPoints.begin(); it != listPoints.end(); it++)
+		fprintf (pFile, "%f,%f ", (*it).x, (*it).y);
+	fprintf (pFile, "\"");
+}
+
+void WriterSVG::WritePolygon (const list<point2D>& listPoints)
+{
+	// Trois points au moins : en dessous il n'y a pas de surface a delimiter, et
+	// un « polygone » a deux sommets serait un segment mal nomme.
+	if (!m_pFile || listPoints.size() < 3)
+		return;
+	fprintf (m_pFile, "<polygon");
+	WritePointsAttr (m_pFile, listPoints);
+	fprintf (m_pFile, "/>\n");
+}
+
+void WriterSVG::WritePolyline (const list<point2D>& listPoints)
+{
+	// Deux points suffisent pour une ligne. Un point isole n'a aucune direction,
+	// donc aucune epaisseur exploitable a l'extrusion : on l'ecarte.
+	if (!m_pFile || listPoints.size() < 2)
+		return;
+	fprintf (m_pFile, "<polyline");
+	WritePointsAttr (m_pFile, listPoints);
+	fprintf (m_pFile, "/>\n");
 }
 
 void WriterSVG::WritePath (const list<list<point2D> >& listsPoints, PathStyle *pathStyle)

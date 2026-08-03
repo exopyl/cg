@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <vector>
 
+#include "../../extern/clipper2/clipper.h"
+
 // nanosvg is a single-header library; expand its implementation here.
 #define NANOSVG_IMPLEMENTATION
 #include "../../extern/nanosvg/nanosvg.h"
@@ -102,6 +104,76 @@ std::vector<std::array<float, 2>> flattenPath(const NSVGpath* path, float tol)
 // derives cap and wall orientation from the world geometry itself, so doing this
 // before rather than after tessellation is equivalent.
 
+// ============================================================================
+//  Trace au trait -> contours fermes
+// ============================================================================
+// Epaissit des polylignes OUVERTES de `width` et rend les contours fermes qui en
+// resultent, prets pour la tessellation.
+//
+// Clipper2 fait tout le travail : `EndType::Round`/`Square`/`Butt` decale les DEUX
+// cotes d'un chemin ouvert, et `InflatePaths` termine par un `Union`
+// (clipper.offset.cpp:623) -- les recouvrements sont donc resolus par la
+// bibliotheque. C'est ce qui rend cette voie praticable sur une courbe du dragon,
+// dont le trace se touche lui-meme des milliers de fois : sans cette union il
+// faudrait traiter chaque auto-contact a la main.
+//
+// La correspondance avec les attributs SVG est directe : `stroke-linejoin` donne
+// le JoinType, `stroke-linecap` le EndType.
+//
+// A APPELER AVANT recenterAndFit : `width` est exprimee en unites SVG, alors que
+// le recentrage renormalise le dessin a 1.0. Epaissir apres donnerait une largeur
+// dans une echelle qui n'est plus celle du fichier.
+std::vector<std::vector<std::array<float, 2>>>
+strokeToContours(const std::vector<std::vector<std::array<float, 2>>>& polylines,
+                 float width, char lineJoin, char lineCap)
+{
+    using namespace Clipper2Lib;
+
+    PathsD open;
+    open.reserve(polylines.size());
+    for (const auto& pl : polylines)
+    {
+        // Deux points suffisent pour un trait -- contrairement a un contour a
+        // remplir, qui en exige trois. Un point ISOLE n'a en revanche aucune
+        // direction, donc aucune epaisseur : ces fichiers en contiennent
+        // (`<path d="M239.9,239.8 "/>`), il faut les ecarter explicitement.
+        if (pl.size() < 2) continue;
+        PathD p;
+        p.reserve(pl.size());
+        for (const auto& q : pl)
+            p.emplace_back((double)q[0], (double)q[1]);
+        open.push_back(std::move(p));
+    }
+
+    std::vector<std::vector<std::array<float, 2>>> out;
+    if (open.empty() || width <= 0.f)
+        return out;
+
+    const JoinType jt = (lineJoin == NSVG_JOIN_MITER) ? JoinType::Miter
+                      : (lineJoin == NSVG_JOIN_BEVEL) ? JoinType::Bevel
+                                                      : JoinType::Round;
+    const EndType  et = (lineCap == NSVG_CAP_BUTT)   ? EndType::Butt
+                      : (lineCap == NSVG_CAP_SQUARE) ? EndType::Square
+                                                     : EndType::Round;
+
+    // precision 6 et non le defaut 2 : les traces font 0.2 unite de large sur un
+    // canevas de 250, deux decimales arrondiraient la moitie de l'epaisseur.
+    const PathsD inflated = InflatePaths(open, 0.5 * (double)width, jt, et,
+                                         /*miter_limit*/ 2.0, /*precision*/ 6);
+
+    out.reserve(inflated.size());
+    for (const PathD& p : inflated)
+    {
+        if (p.size() < 3) continue;
+        std::vector<std::array<float, 2>> c;
+        c.reserve(p.size());
+        for (const PointD& q : p)
+            c.push_back({ (float)q.x, (float)q.y });
+        out.push_back(std::move(c));
+    }
+    return out;
+}
+
 // Recenter on the XY bbox and scale so the longest XY dimension equals 1.0
 // (consistent with the other parameterized geometries in sinaia).
 void recenterAndFit(std::vector<std::vector<std::array<float, 2>>>& shapes)
@@ -150,19 +222,78 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
 
     for (NSVGshape* shape = image->shapes; shape; shape = shape->next)
     {
-        if (shape->fill.type == NSVG_PAINT_NONE) continue;
+        // Decor de mise en page : ecarte avant tout traitement (cf.
+        // SvgExtrudeOptions::ignoreShapeId).
+        if (!opt.ignoreShapeId.empty() && opt.ignoreShapeId == shape->id)
+            continue;
 
-        std::vector<std::vector<std::array<float, 2>>> contours;
+        const bool hasFill   = (shape->fill.type   != NSVG_PAINT_NONE);
+        const bool hasStroke = (shape->stroke.type != NSVG_PAINT_NONE);
+
+        // Ni remplissage ni trait : rien a produire.
+        if (!hasFill && !(hasStroke && opt.strokeToVolume)) continue;
+
+        // La decision se prend PAR CHEMIN, sur NSVGpath::closed, et non par forme
+        // sur l'attribut `fill` : un meme <g> peut melanger des contours fermes et
+        // des polylignes ouvertes. nanosvg renseigne ce drapeau fidelement --
+        // `<polygon>` et `<path ... Z>` donnent closed = 1, `<polyline>` et un
+        // `<path>` sans Z donnent 0 (nanosvg.h:2826-2833).
+        //
+        //   ferme  -> frontiere de SURFACE, tessellation (>= 3 points)
+        //   ouvert -> LIGNE, epaissie de son stroke-width (>= 2 points)
+        //
+        // C'est ce qui manquait : sans lui, une polyligne ouverte etait refermee
+        // d'office pour etre remplie. Sur un trace qui se replie sur lui-meme
+        // (courbe du dragon) le remplissage degenere en damier, faute de pouvoir
+        // designer un interieur.
+        std::vector<std::vector<std::array<float, 2>>> filled;
+        std::vector<std::vector<std::array<float, 2>>> openPaths;
+
         for (const NSVGpath* path = shape->paths; path; path = path->next)
         {
             auto pts = flattenPath(path, opt.flattenTol);
-            if (pts.size() < 3) continue;
-            contours.push_back(std::move(pts));
+            const bool closed = (path->closed != 0);
+            if (closed && hasFill)
+            {
+                if (pts.size() < 3) continue;
+                filled.push_back(std::move(pts));
+            }
+            else if (opt.strokeToVolume && hasStroke)
+            {
+                if (pts.size() < 2) continue;
+                openPaths.push_back(std::move(pts));
+            }
+            else if (hasFill && pts.size() >= 3)
+            {
+                // Ouvert mais sans trait exploitable : on retombe sur l'ancien
+                // comportement, nanosvg refermant le trace pour le remplir.
+                filled.push_back(std::move(pts));
+            }
         }
-        if (contours.empty()) continue;
 
-        shapeContours.push_back(std::move(contours));
-        shapeEvenOdd.push_back(shape->fillRule == NSVG_FILLRULE_EVENODD);
+        if (!filled.empty())
+        {
+            shapeContours.push_back(std::move(filled));
+            shapeEvenOdd.push_back(shape->fillRule == NSVG_FILLRULE_EVENODD);
+        }
+
+        if (!openPaths.empty())
+        {
+            float w = shape->strokeWidth * opt.strokeScale;
+            if (!(w > 0.f)) w = opt.strokeWidthFallback * opt.strokeScale;
+
+            auto ribbons = strokeToContours(openPaths, w,
+                                            shape->strokeLineJoin, shape->strokeLineCap);
+            if (!ribbons.empty())
+            {
+                shapeContours.push_back(std::move(ribbons));
+                // Les contours sortis de Clipper2 portent leur propre orientation :
+                // enveloppes en sens positif, trous en sens inverse -- exactement la
+                // convention de NonZero, qui soustrait donc les trous (l'interieur
+                // d'une boucle du trace) sans qu'on ait a reorienter.
+                shapeEvenOdd.push_back(false);
+            }
+        }
     }
 
     nsvgDelete(image);

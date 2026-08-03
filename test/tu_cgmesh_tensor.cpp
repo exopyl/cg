@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <memory>
 #include <vector>
 
 #include "../src/cgmesh/cgmesh.h"
@@ -9,79 +10,93 @@
 // Principal-curvature / principal-direction estimators (DiffParamEvaluator_*)
 // validated against an analytic parametric surface.
 //
+// ORACLE: ParametricTorus (src/cgmesh/surface_parametric.cpp). It computes its
+// tensors ANALYTICALLY from the first and second fundamental forms, per vertex,
+// and shares no code with the discrete estimators under test. Its own accuracy is
+// established independently in tu_cgmesh_surface_parametric.cpp -- read that
+// first: an oracle nobody checks is just a second opinion.
+//
+// The expected curvatures are therefore READ FROM THE ORACLE rather than
+// hard-coded. Changing R, r or the grid no longer requires recomputing constants
+// by hand, and the two sides can never drift apart.
+//
 // Surface: a CLOSED torus (major radius R, minor radius r), which the 1-ring
-// estimators require (a boundary-free 2-manifold). Parametrisation:
+// estimators require (a boundary-free 2-manifold). ParametricTorus wraps in both
+// u and v, so the mesh has no seam and no duplicated vertices.
 //   p(u,v) = ((R + r cos v) cos u, (R + r cos v) sin u, r sin v)
-// Principal curvatures / directions (F = 0, so u/v ARE the principal axes):
-//   - meridian (dp/dv): kappa = 1/r
-//   - parallel (dp/du): kappa = cos v / (R + r cos v)
+// Principal curvatures (F = 0, so u/v ARE the principal axes):
+//   - meridian (dp/dv): |kappa| = 1/r
+//   - parallel (dp/du): |kappa| = |cos v| / (R + r cos v)
 //
 // We test at the INNER equator (u = 0, v = pi), i.e. the vertex (R-r, 0, 0),
 // which is a genuine SADDLE point (Gaussian curvature < 0):
-//   - meridian curvature  = +1/r         , direction = +z
-//   - parallel curvature  = -1/(R - r)    , direction = +y
-// With R=3, r=1 the two curvatures are +1 (z) and -1/2 (y): opposite signs and
-// a clean 2:1 magnitude ratio, so the principal directions are unambiguous.
+//   - meridian curvature, magnitude 1/r      , direction = +z
+//   - parallel curvature, magnitude 1/(R-r)  , direction = +y
+// With R=3, r=1 the two magnitudes are 1 and 1/2: opposite signs and a clean 2:1
+// ratio, so the principal directions are unambiguous.
 //
 // (A true monkey saddle z = x^3 - 3xy^2 is unusable here: at its characteristic
 // point the whole second fundamental form vanishes, so k1 = k2 = 0 and the
 // principal directions are undefined.)
 //
 // The comparison is orientation-robust: we never assume the sign of the
-// estimator's normal. We sort the two estimated principal curvatures by
-// magnitude and check the strong one (|k| ~ 1/r) against +z and the weak one
-// (|k| ~ 1/(R-r)) against +y, allowing a sign flip on the direction vectors.
+// estimator's normal, nor of the oracle's. Both sides are sorted by MAGNITUDE,
+// and direction vectors are compared up to a sign flip.
+//
+// DIRECTIONS ARE *NOT* TAKEN FROM THE ORACLE. ParametricSurface::EvaluateTensor()
+// gets the principal curvatures right but the principal directions wrong: it
+// reinterprets the (u,v)-space eigenvector as a world-space (x,y,0) vector and
+// projects that onto the tangent plane, which at some vertices collapses to the
+// zero vector. See torus_principal_directions_are_currently_wrong in
+// tu_cgmesh_surface_parametric.cpp. The expected directions below (+z meridian,
+// +y parallel at u=0) are the closed-form ones, which need no oracle.
 //
 
 static const float TORUS_R = 3.0f;
 static const float TORUS_r = 1.0f;
 
-// Analytic principal curvatures at the inner equator (u=0, v=pi):
-static const float KAPPA_MERIDIAN = 1.0f / TORUS_r;                 // = +1   (along z)
-static const float KAPPA_PARALLEL = -1.0f / (TORUS_R - TORUS_r);    // = -0.5 (along y)
-
-// Build a closed torus on an (nu x nv) grid (both even), wrapping in u and v so
-// the mesh is a boundary-free manifold. Returns the index of the vertex at
-// (u=0, v=pi) — the inner-equator saddle point.
-static Mesh_half_edge* build_torus (int nu, int nv, float R, float r, int* saddleIndex)
+// Build a closed torus from ParametricTorus and copy its geometry into a
+// Mesh_half_edge, the structure the 1-ring estimators need. `oracle` keeps the
+// ParametricTorus alive so its analytic tensors stay readable by the caller.
+//
+// Returns the index of the vertex at (u=0, v=pi) -- the inner-equator saddle.
+// Generate() lays vertices out as index = v*nu + u with fV = v/nv, so v = pi is
+// row nv/2. The caller asserts the resulting position, which pins that mapping.
+static Mesh_half_edge* build_torus (unsigned int nu, unsigned int nv, float R, float r,
+				    std::unique_ptr<ParametricTorus>& oracle, int* saddleIndex)
 {
-	std::vector<float> verts;
-	verts.reserve (3*nu*nv);
-	for (int j = 0; j < nv; j++)
-		for (int i = 0; i < nu; i++)
-		{
-			const float u = 2.f*(float)M_PI * i / nu;
-			const float v = 2.f*(float)M_PI * j / nv;
-			const float cu = cosf(u), su = sinf(u), cv = cosf(v), sv = sinf(v);
-			verts.push_back ((R + r*cv) * cu);
-			verts.push_back ((R + r*cv) * su);
-			verts.push_back (r * sv);
-		}
+	oracle = std::make_unique<ParametricTorus> (nu, nv, R, r);
+	if (!oracle->Generate ())
+		return nullptr;
 
-	auto idx = [nu,nv](int i, int j){ return (j % nv)*nu + (i % nu); };
+	const unsigned int nVerts = oracle->GetNVertices ();
+	std::vector<float> verts (3 * (size_t)nVerts);
+	for (unsigned int i = 0; i < nVerts; i++)
+		oracle->GetVertex (i, &verts[3 * (size_t)i]);
+
 	std::vector<unsigned int> faces;
-	for (int j = 0; j < nv; j++)
-		for (int i = 0; i < nu; i++)
-		{
-			const unsigned int v00 = idx(i,   j),   v10 = idx(i+1, j);
-			const unsigned int v01 = idx(i,   j+1), v11 = idx(i+1, j+1);
-			faces.push_back (v00); faces.push_back (v10); faces.push_back (v11);
-			faces.push_back (v00); faces.push_back (v11); faces.push_back (v01);
-		}
+	faces.reserve (3 * (size_t)oracle->GetNFaces ());
+	for (unsigned int f = 0; f < oracle->GetNFaces (); f++)
+	{
+		if (oracle->GetFaceNVertices (f) != 3)
+			continue;
+		for (int k = 0; k < 3; k++)
+			faces.push_back ((unsigned int)oracle->GetFaceVertex (f, k));
+	}
 
 	Mesh_half_edge* he = new Mesh_half_edge ();
-	he->m_pMesh->SetVertices ((unsigned int)(verts.size()/3), verts.data());
-	he->m_pMesh->SetFaces ((unsigned int)(faces.size()/3), 3, faces.data());
+	he->m_pMesh->SetVertices (nVerts, verts.data ());
+	he->m_pMesh->SetFaces ((unsigned int)(faces.size () / 3), 3, faces.data ());
 	he->create_half_edge ();
 
 	// SetVertices only sizes m_pVertices; EvalOnVertices writes into
 	// m_pVertexNormals, so allocate it first (load() would normally do this).
-	he->m_pMesh->m_pVertexNormals.assign (3*(verts.size()/3), 0.0f);
+	he->m_pMesh->m_pVertexNormals.assign (3 * (size_t)nVerts, 0.0f);
 
 	Normals normals;
 	normals.EvalOnVertices (he, Normals::THURMER);
 
-	if (saddleIndex) *saddleIndex = (nv/2)*nu + 0;   // u=0 (i=0), v=pi (j=nv/2)
+	if (saddleIndex) *saddleIndex = (int)((nv / 2) * nu);   // u=0, v=pi
 	return he;
 }
 
@@ -109,7 +124,26 @@ class TensorSaddle : public ::testing::TestWithParam<MethodCase> {};
 TEST_P (TensorSaddle, principal_curvatures_and_directions)
 {
 	int saddle = -1;
-	Mesh_half_edge* he = build_torus (120, 60, TORUS_R, TORUS_r, &saddle);
+	std::unique_ptr<ParametricTorus> oracle;
+	Mesh_half_edge* he = build_torus (120, 60, TORUS_R, TORUS_r, oracle, &saddle);
+	ASSERT_NE (he, nullptr);
+
+	// L'index du sommet de selle vient d'une convention d'indexation interne a
+	// Generate(). On la verifie plutot que de la supposer : (R-r, 0, 0).
+	float P[3];
+	ASSERT_GE (oracle->GetVertex ((unsigned int)saddle, P), 0);
+	ASSERT_NEAR (P[0], TORUS_R - TORUS_r, 1e-4f) << "le sommet de selle n'est pas ou on croit";
+	ASSERT_NEAR (P[1], 0.0f, 1e-4f);
+	ASSERT_NEAR (P[2], 0.0f, 1e-4f);
+
+	// Verite de terrain analytique, lue sur l'oracle au MEME sommet.
+	Tensor* truth = oracle->GetTensor ((unsigned int)saddle);
+	ASSERT_NE (truth, nullptr) << "l'oracle n'a pas de tenseur au sommet de selle";
+	const float tA = truth->GetKappaMax (), tB = truth->GetKappaMin ();
+	ASSERT_LT (tA * tB, 0.0f) << "l'oracle ne voit pas une selle : le test ne mesure plus rien";
+	const bool truthFirstIsBig = std::fabs (tA) >= std::fabs (tB);
+	const float truthBig   = truthFirstIsBig ? tA : tB;   // meridien,  |k| = 1/r
+	const float truthSmall = truthFirstIsBig ? tB : tA;   // parallele, |k| = 1/(R-r)
 
 	MeshAlgoTensorEvaluator ev;
 	ev.Init (he);
@@ -126,7 +160,8 @@ TEST_P (TensorSaddle, principal_curvatures_and_directions)
 	normalize3 (d1);
 	normalize3 (d2);
 
-	// sort by magnitude: strong ~ |1/r|=1 (meridian, z), weak ~ 1/(R-r)=0.5 (parallel, y)
+	// sort by magnitude, same as the oracle above: strong = meridian (|1/r|, along
+	// z), weak = parallel (1/(R-r), along y)
 	const bool firstIsBig = std::fabs(k1) >= std::fabs(k2);
 	const float  kBig   = firstIsBig ? k1 : k2;
 	const float  kSmall = firstIsBig ? k2 : k1;
@@ -136,16 +171,17 @@ TEST_P (TensorSaddle, principal_curvatures_and_directions)
 	const float dotBigZ   = std::fabs (dBig[2]);    // |dBig . z|   (meridian)
 	const float dotSmallY = std::fabs (dSmall[1]);  // |dSmall . y| (parallel)
 
-	printf ("[%-11s] kBig=%+.3f (exp %+.2f)  kSmall=%+.3f (exp %+.2f)  K=%+.3f  |dBig.z|=%.3f |dSmall.y|=%.3f\n",
-		GetParam().name, kBig, KAPPA_MERIDIAN, kSmall, KAPPA_PARALLEL, k1*k2, dotBigZ, dotSmallY);
+	printf ("[%-11s] |kBig|=%.3f (oracle %.3f)  |kSmall|=%.3f (oracle %.3f)  K=%+.3f  |dBig.z|=%.3f |dSmall.y|=%.3f\n",
+		GetParam().name, std::fabs(kBig), std::fabs(truthBig),
+		std::fabs(kSmall), std::fabs(truthSmall), k1*k2, dotBigZ, dotSmallY);
 
 	// saddle: opposite-signed principal curvatures (Gaussian curvature < 0)
 	EXPECT_LT (k1*k2, 0.0f) << GetParam().name;
 
 	// magnitudes within the method's calibrated relative tolerance
 	const float relEps = GetParam().relEps;
-	EXPECT_NEAR (std::fabs(kBig),   std::fabs(KAPPA_MERIDIAN), relEps*std::fabs(KAPPA_MERIDIAN)) << GetParam().name;
-	EXPECT_NEAR (std::fabs(kSmall), std::fabs(KAPPA_PARALLEL), relEps*std::fabs(KAPPA_PARALLEL)) << GetParam().name;
+	EXPECT_NEAR (std::fabs(kBig),   std::fabs(truthBig),   relEps*std::fabs(truthBig))   << GetParam().name;
+	EXPECT_NEAR (std::fabs(kSmall), std::fabs(truthSmall), relEps*std::fabs(truthSmall)) << GetParam().name;
 
 	// principal directions (sign-agnostic): strong along z, weak along y
 	const float cosTol = std::cos (GetParam().dirDeg * (float)M_PI / 180.f);
@@ -172,7 +208,9 @@ INSTANTIATE_TEST_SUITE_P (
 TEST (TensorSaddle_Steiner, is_currently_a_noop_stub)
 {
 	int saddle = -1;
-	Mesh_half_edge* he = build_torus (120, 60, TORUS_R, TORUS_r, &saddle);
+	std::unique_ptr<ParametricTorus> oracle;
+	Mesh_half_edge* he = build_torus (120, 60, TORUS_R, TORUS_r, oracle, &saddle);
+	ASSERT_NE (he, nullptr);
 
 	MeshAlgoTensorEvaluator ev;
 	ev.Init (he);   // Init pre-fills every vertex with a default (zero) Tensor

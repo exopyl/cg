@@ -336,7 +336,10 @@ public:
 	std::string GetName() const override { return "SVG extrusion"; }
 private:
 	std::string m_filename;
-	float       m_height     = 0.2f;
+	// 0.01 : le maillage etant normalise a 1.0 dans sa plus grande dimension, c'est
+	// un centieme de cette taille -- l'epaisseur d'une plaque gravee. A 0.2 le
+	// resultat etait un pave dont le relief se lisait mal.
+	float       m_height     = 0.01f;
 	float       m_flattenTol = 0.5f;
 };
 
@@ -508,9 +511,14 @@ private:
 	float m_zHeight = 20.f;
 	// arc tessellation step (rad/segment) ; default 1°. Set from `kseg` on JSON load.
 	double m_maxAngleRad = 3.14159265358979323846 / 180.0;
-	// 3D moulding profile on the field borders : 0 = flat (straight walls),
-	// 1 = chamfer (bevelled/splayed openings). Phase 2.
-	int   m_profile = 1;
+	// 3D moulding profile on the field borders. Index dans la liste exposee par
+	// GetParameters : 0 = Flat (parois droites), 1 = Chamfer (ebrasement biseaute),
+	// 2 = Roll bar, 3 = Keel bar, 4 = Ogee bar. Phase 2.
+	//
+	// FLAT par defaut : c'est la forme la plus simple, celle qui laisse lire la
+	// geometrie de la baie sans le relief des moulures, et le point de depart
+	// naturel avant d'enrichir. Le defaut etait Chamfer.
+	int   m_profile = 0;
 };
 
 // ---------------------------------------------------------------------------

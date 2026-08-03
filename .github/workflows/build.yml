@@ -54,7 +54,14 @@ jobs:
         run: cmake --build --preset ci-linux
 
       - name: Test
-        run: ctest --preset ci-linux
+        # -j en ligne de commande et non dans le preset : testPresets.execution.jobs
+        # n'accepte qu'un entier litteral, or le nombre de coeurs d'un runner
+        # GitHub-hosted a deja change (2 -> 4 sur les depots publics) et peut encore
+        # changer. `nproc` donne la valeur du runner du jour ; l'echo la trace dans
+        # le log, seule facon de savoir de quoi on disposait reellement.
+        run: |
+          echo "nproc = $(nproc)"
+          ctest --preset ci-linux -j "$(nproc)"
 
       - name: Discord Notification
         if: always()
