@@ -71,6 +71,11 @@ public:
 	// un unique Model qui adopte les maillages de pVMeshes (qui est ensuite détruit).
 	void SetVMeshes(VMeshes* pVMeshes, bool normalize = true);
 
+	// Remplace la geometrie en laissant la camera ET les positions intactes : ni
+	// normalisation, ni recadrage. Pour la regeneration pendant l edition d un
+	// parametre, ou tout deplacement de la forme rendrait le reglage illisible.
+	void UpdateGeometryKeepingView(VMeshes* pVMeshes);
+
 	void SetBackgroundColor (unsigned char r, unsigned char g, unsigned char b);
 	void GetBackgroundColor (unsigned char *r, unsigned char *g, unsigned char *b);
 
@@ -114,6 +119,16 @@ public:
 	void SetClippingPlaneZ(float z) { prop.clipping_plane_z = z; Refresh(false); };
 
 	void ApplyNormalization(bool normalize);
+	void AdoptScene(VMeshes* pVMeshes);
+	void RefreshGeometryState();
+
+	// Transformation de normalisation FIGEE au chargement (centre puis echelle du
+	// modele initial). UpdateGeometryKeepingView la reapplique telle quelle a chaque
+	// regeneration, au lieu de renormaliser : la forme reste a sa place et a son
+	// echelle de depart, donc un parametre qui la deplace ou l agrandit se VOIT.
+	bool  m_hasNormalization = false;
+	float m_normCenter[3] = { 0.f, 0.f, 0.f };
+	float m_normScale = 1.f;
 
 	void ChangeWarning(void);	bool GetWarning(void);
 

@@ -81,8 +81,9 @@ Factory make() { return [] { return std::unique_ptr<IParameterized>(new T()); };
 // Elle vit ici et pas dans le JS pour rester une source unique de verite : ajouter
 // une forme ne demande d'editer qu'un seul endroit.
 struct CatalogEntry {
-    std::string name;       // nom affiche (== GetName())
+    std::string name;       // cle du catalogue (== GetName())
     std::string category;   // "parametric" | "gothic"
+    std::string group;      // en-tete <optgroup> dans la liste ("" = aucun)
     Factory     make;
 };
 
@@ -93,34 +94,41 @@ const std::vector<CatalogEntry>& catalog()
 {
     static const std::string P = "parametric";
     static const std::string G = "gothic";
+    // Groupes : de simples en-tetes de liste, ils ne changent rien au comportement.
+    // Chaque forme garde son entree et son nom -- on cherche « Klein Bottle » ou
+    // « Trefoil Knot » par son nom, et les regrouper derriere une famille les rendait
+    // introuvables.
+    static const std::string SOL = "Solides";
+    static const std::string SUR = "Surfaces";
+    static const std::string FRA = "Fractales";
     static const std::vector<CatalogEntry> c = {
-        {"Cube",                  P, make<ParameterizedCube>()},
-        {"Sphere",                P, make<ParameterizedSphere>()},
-        {"Cylinder",              P, make<ParameterizedCylinder>()},
-        {"Cone",                  P, make<ParameterizedCone>()},
-        {"Capsule",               P, make<ParameterizedCapsule>()},
-        {"Torus",                 P, make<ParameterizedTorus>()},
-        {"Klein Bottle",          P, make<ParameterizedKleinBottle>()},
-        {"Helicoid",              P, make<ParameterizedHelicoid>()},
-        {"Seashell",              P, make<ParameterizedSeashell>()},
-        {"Seashell (von Seggern)",P, make<ParameterizedSeashellVonSeggern>()},
-        {"Corkscrew",             P, make<ParameterizedCorkscrew>()},
-        {"Mobius Strip",          P, make<ParameterizedMobiusStrip>()},
-        {"Radial Wave",           P, make<ParameterizedRadialWave>()},
-        {"Breather",              P, make<ParameterizedBreather>()},
-        {"Hyperbolic Paraboloid", P, make<ParameterizedHyperbolicParaboloid>()},
-        {"Monkey Saddle",         P, make<ParameterizedMonkeySaddle>()},
-        {"Blobs",                 P, make<ParameterizedBlobs>()},
-        {"Drop",                  P, make<ParameterizedDrop>()},
-        {"Guimard",               P, make<ParameterizedGuimard>()},
-        {"Torus Knot",            P, make<ParameterizedTorusKnot>()},
-        {"Cinquefoil Knot",       P, make<ParameterizedCinquefoilKnot>()},
-        {"Trefoil Knot",          P, make<ParameterizedTrefoilKnot>()},
-        {"Borromean Rings",       P, make<ParameterizedBorromeanRings>()},
-        {"Menger Sponge",         P, make<ParameterizedMengerSponge>()},
-        {"L-system",              P, make<ParameterizedLSystem>()},
-        {"Gothic Window",         G, make<ParameterizedGothicWindow>()},
-        {"Gothic Block",          G, make<ParameterizedGothicBlock>()},
+        {"Cube",                  P, SOL, make<ParameterizedCube>()},
+        {"Sphere",                P, SOL, make<ParameterizedSphere>()},
+        {"Cylinder",              P, SOL, make<ParameterizedCylinder>()},
+        {"Cone",                  P, SOL, make<ParameterizedCone>()},
+        {"Capsule",               P, SOL, make<ParameterizedCapsule>()},
+        {"Torus",                 P, SOL, make<ParameterizedTorus>()},
+        {"Seashell",              P, SUR, make<ParameterizedSeashell>()},
+        {"Seashell (von Seggern)",P, SUR, make<ParameterizedSeashellVonSeggern>()},
+        {"Klein Bottle",          P, SUR, make<ParameterizedKleinBottle>()},
+        {"Breather",              P, SUR, make<ParameterizedBreather>()},
+        {"Hyperbolic Paraboloid", P, SUR, make<ParameterizedHyperbolicParaboloid>()},
+        {"Monkey Saddle",         P, SUR, make<ParameterizedMonkeySaddle>()},
+        {"Blobs",                 P, SUR, make<ParameterizedBlobs>()},
+        {"Drop",                  P, SUR, make<ParameterizedDrop>()},
+        {"Torus Knot",            P, SUR, make<ParameterizedTorusKnot>()},
+        {"Cinquefoil Knot",       P, SUR, make<ParameterizedCinquefoilKnot>()},
+        {"Trefoil Knot",          P, SUR, make<ParameterizedTrefoilKnot>()},
+        {"Borromean Rings",       P, SUR, make<ParameterizedBorromeanRings>()},
+        {"Helicoid",              P, SUR, make<ParameterizedHelicoid>()},
+        {"Corkscrew",             P, SUR, make<ParameterizedCorkscrew>()},
+        {"Mobius Strip",          P, SUR, make<ParameterizedMobiusStrip>()},
+        {"Radial Wave",           P, SUR, make<ParameterizedRadialWave>()},
+        {"Guimard",               P, SUR, make<ParameterizedGuimard>()},
+        {"Menger Sponge",         P, FRA, make<ParameterizedMengerSponge>()},
+        {"L-system",              P, FRA, make<ParameterizedLSystem>()},
+        {"Gothic Window",         G, "", make<ParameterizedGothicWindow>()},
+        {"Gothic Block",          G, "", make<ParameterizedGothicBlock>()},
     };
     return c;
 }
@@ -213,7 +221,10 @@ std::string listShapes(const std::string& category)
         if (!category.empty() && e.category != category) continue;
         if (!first) j += ',';
         first = false;
-        j += '"'; j += jsonEscape(e.name); j += '"';
+        // Objet et non simple chaine : le JS a besoin du groupe pour ses
+        // <optgroup>. Le nom reste la cle -- createShape(name).
+        j += "{\"name\":\""; j += jsonEscape(e.name);
+        j += "\",\"group\":\""; j += jsonEscape(e.group); j += "\"}";
     }
     j += ']';
     return j;

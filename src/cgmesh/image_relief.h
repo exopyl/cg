@@ -49,6 +49,22 @@ struct ImageReliefOptions
 	QuantAlgo algo          = QuantAlgo::Wu;
 	float     simplifyErr   = 1.0f;          // contour simplification (px)
 
+	// Pré-réduction de la source : si sa plus grande dimension dépasse cette
+	// valeur, l'image est ramenée à cette taille (bilinéaire) avant tout
+	// traitement. 0 désactive.
+	//
+	// Les deux étages coûteux -- filtrage bilatéral et Wu -- sont linéaires en
+	// nombre de pixels, et la vectorisation qui suit l'est en nombre de régions,
+	// lui-même croissant avec la résolution. Une photo de 12 Mpx coûte donc ~45
+	// fois une image de 512 px de côté, pour un relief dont les contours sont de
+	// toute façon simplifiés à `simplifyErr` près et dont les régions d'un pixel
+	// sont supprimées par l'anti-mouchetis. C'est du détail payé puis jeté.
+	//
+	// À savoir : `minRegionArea` s'exprime en pixels de l'image RÉDUITE, donc il
+	// filtre plus agressivement en proportion de la source qu'il ne le ferait à
+	// pleine résolution.
+	int       workingMaxDim = 512;
+
 	// Edge-preserving smoothing passes applied BEFORE quantization
 	// (Img::bilateral_filtering). 0 disables.
 	//

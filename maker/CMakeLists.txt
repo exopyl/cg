@@ -36,6 +36,16 @@ set_target_properties(maker PROPERTIES
     SUFFIX ".js"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/web")
 
+# Descripteur gothique servi a la page : gothic.html le charge au demarrage comme
+# modele par defaut. Il ne peut pas etre lu depuis test/data/ -- le serveur ne sert
+# que maker/web/ --, d'ou la copie. La SOURCE reste test/data/, une seule, et la
+# copie est un artefact de build comme maker.js a cote.
+add_custom_command(TARGET maker POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/test/data/gothic-window-instance.json"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/data/gothic-window-instance.json"
+    COMMENT "Copie du descripteur gothique par defaut dans maker/web/data/")
+
 # Exceptions : nanosvg / STL en levent (cf. ANALYSE sec.9.3).
 target_compile_options(maker PRIVATE -fexceptions)
 

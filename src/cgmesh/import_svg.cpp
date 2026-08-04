@@ -9,7 +9,7 @@
 #include <cstdio>
 #include <vector>
 
-#include "../../extern/clipper2/clipper.h"
+#include "stroke_contours.h"
 
 // nanosvg is a single-header library; expand its implementation here.
 #define NANOSVG_IMPLEMENTATION
@@ -103,76 +103,6 @@ std::vector<std::array<float, 2>> flattenPath(const NSVGpath* path, float tol)
 // scale followed by a Y flip is orientation-consistent, and the primitive
 // derives cap and wall orientation from the world geometry itself, so doing this
 // before rather than after tessellation is equivalent.
-
-// ============================================================================
-//  Trace au trait -> contours fermes
-// ============================================================================
-// Epaissit des polylignes OUVERTES de `width` et rend les contours fermes qui en
-// resultent, prets pour la tessellation.
-//
-// Clipper2 fait tout le travail : `EndType::Round`/`Square`/`Butt` decale les DEUX
-// cotes d'un chemin ouvert, et `InflatePaths` termine par un `Union`
-// (clipper.offset.cpp:623) -- les recouvrements sont donc resolus par la
-// bibliotheque. C'est ce qui rend cette voie praticable sur une courbe du dragon,
-// dont le trace se touche lui-meme des milliers de fois : sans cette union il
-// faudrait traiter chaque auto-contact a la main.
-//
-// La correspondance avec les attributs SVG est directe : `stroke-linejoin` donne
-// le JoinType, `stroke-linecap` le EndType.
-//
-// A APPELER AVANT recenterAndFit : `width` est exprimee en unites SVG, alors que
-// le recentrage renormalise le dessin a 1.0. Epaissir apres donnerait une largeur
-// dans une echelle qui n'est plus celle du fichier.
-std::vector<std::vector<std::array<float, 2>>>
-strokeToContours(const std::vector<std::vector<std::array<float, 2>>>& polylines,
-                 float width, char lineJoin, char lineCap)
-{
-    using namespace Clipper2Lib;
-
-    PathsD open;
-    open.reserve(polylines.size());
-    for (const auto& pl : polylines)
-    {
-        // Deux points suffisent pour un trait -- contrairement a un contour a
-        // remplir, qui en exige trois. Un point ISOLE n'a en revanche aucune
-        // direction, donc aucune epaisseur : ces fichiers en contiennent
-        // (`<path d="M239.9,239.8 "/>`), il faut les ecarter explicitement.
-        if (pl.size() < 2) continue;
-        PathD p;
-        p.reserve(pl.size());
-        for (const auto& q : pl)
-            p.emplace_back((double)q[0], (double)q[1]);
-        open.push_back(std::move(p));
-    }
-
-    std::vector<std::vector<std::array<float, 2>>> out;
-    if (open.empty() || width <= 0.f)
-        return out;
-
-    const JoinType jt = (lineJoin == NSVG_JOIN_MITER) ? JoinType::Miter
-                      : (lineJoin == NSVG_JOIN_BEVEL) ? JoinType::Bevel
-                                                      : JoinType::Round;
-    const EndType  et = (lineCap == NSVG_CAP_BUTT)   ? EndType::Butt
-                      : (lineCap == NSVG_CAP_SQUARE) ? EndType::Square
-                                                     : EndType::Round;
-
-    // precision 6 et non le defaut 2 : les traces font 0.2 unite de large sur un
-    // canevas de 250, deux decimales arrondiraient la moitie de l'epaisseur.
-    const PathsD inflated = InflatePaths(open, 0.5 * (double)width, jt, et,
-                                         /*miter_limit*/ 2.0, /*precision*/ 6);
-
-    out.reserve(inflated.size());
-    for (const PathD& p : inflated)
-    {
-        if (p.size() < 3) continue;
-        std::vector<std::array<float, 2>> c;
-        c.reserve(p.size());
-        for (const PointD& q : p)
-            c.push_back({ (float)q.x, (float)q.y });
-        out.push_back(std::move(c));
-    }
-    return out;
-}
 
 // Recenter on the XY bbox and scale so the longest XY dimension equals 1.0
 // (consistent with the other parameterized geometries in sinaia).
@@ -282,8 +212,15 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
             float w = shape->strokeWidth * opt.strokeScale;
             if (!(w > 0.f)) w = opt.strokeWidthFallback * opt.strokeScale;
 
-            auto ribbons = strokeToContours(openPaths, w,
-                                            shape->strokeLineJoin, shape->strokeLineCap);
+            // Traduction des conventions nanosvg vers l'API partagee : c'est a
+            // l'appelant de la faire, strokeToContours ne connait pas nanosvg.
+            const StrokeJoin join = (shape->strokeLineJoin == NSVG_JOIN_MITER) ? StrokeJoin::Miter
+                                  : (shape->strokeLineJoin == NSVG_JOIN_BEVEL) ? StrokeJoin::Bevel
+                                                                               : StrokeJoin::Round;
+            const StrokeCap  cap  = (shape->strokeLineCap == NSVG_CAP_BUTT)   ? StrokeCap::Butt
+                                  : (shape->strokeLineCap == NSVG_CAP_SQUARE) ? StrokeCap::Square
+                                                                              : StrokeCap::Round;
+            auto ribbons = strokeToContours(openPaths, w, join, cap);
             if (!ribbons.empty())
             {
                 shapeContours.push_back(std::move(ribbons));

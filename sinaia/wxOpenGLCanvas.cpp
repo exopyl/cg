@@ -200,6 +200,49 @@ VMeshes* MyGLCanvas::GetVMeshes(void)
 
 void MyGLCanvas::SetVMeshes(VMeshes* pObject, bool normalize)
 {
+	AdoptScene(pObject);
+	ApplyNormalization(normalize);   // géométrie finale + BVH picking (voir ApplyNormalization)
+}
+
+// Remplace la géométrie SANS toucher à la caméra ni aux positions : ni
+// normalisation, ni recadrage, ni remise à zéro du trackball. C'est ce qu'exige
+// l'édition d'un paramètre, où l'on veut voir l'effet du réglage sur la forme --
+// renormaliser la recentrerait et la remettrait à l'échelle à chaque cran de
+// curseur, ce qui masque précisément ce que le paramètre fait.
+void MyGLCanvas::UpdateGeometryKeepingView(VMeshes* pObject)
+{
+	AdoptScene(pObject);
+
+	VMeshes* vm = GetVMeshes();
+	if (!vm) return;
+
+	// La geometrie regeneree arrive dans les unites du generateur, alors que la
+	// scene affichee est celle du chargement, normalisee. On lui applique donc la
+	// MEME transformation qu alors, figee : sans elle le modele sauterait d un coup
+	// a son echelle brute, hors du cadrage etabli.
+	if (m_hasNormalization)
+	{
+		for (const auto& mesh : vm->GetMeshes())
+		{
+			if (!mesh) continue;
+			mesh->translate(-m_normCenter[0], -m_normCenter[1], -m_normCenter[2]);
+			mesh->scale(m_normScale);
+		}
+	}
+
+	for (const auto& mesh : vm->GetMeshes())
+	{
+		mesh->ComputeNormals();
+		mesh->computebbox();
+	}
+	RefreshGeometryState();
+}
+
+// Adopte `pObject` comme scène courante, l'ancienne étant détachée du renderer et
+// détruite. Ne touche ni à la caméra ni à la géométrie : c'est aux appelants de
+// décider ce qu'ils en font.
+void MyGLCanvas::AdoptScene(VMeshes* pObject)
+{
 	// Détache l'ancienne scène du renderer puis la détruit.
 	if (m_pVModels)
 	{
@@ -221,8 +264,6 @@ void MyGLCanvas::SetVMeshes(VMeshes* pObject, bool normalize)
 		delete pObject;
 	}
 	m_selectedModel = mdl;   // sélection initiale = le modèle chargé
-
-    ApplyNormalization(normalize);   // géométrie finale + BVH picking (voir ApplyNormalization)
 }
 
 void MyGLCanvas::ApplyNormalization(bool normalize)
@@ -237,7 +278,22 @@ void MyGLCanvas::ApplyNormalization(bool normalize)
 
 	if (normalize)
 	{
-		vm->Normalize(); // This method now re-centers and re-scales meshes and updates their individual bboxes
+		// On retient la transformation avant de l appliquer : les regenerations
+		// ulterieures la rejouent a l identique au lieu de renormaliser. Meme calcul
+		// que VMeshes::Normalize -- translate(-centre) puis scale(1/plus grande
+		// dimension) -- dont on a besoin de la VALEUR, pas seulement de l effet.
+		BoundingBox raw;
+		for (const auto& mesh : vm->GetMeshes())
+		{
+			mesh->computebbox();
+			raw.AddBoundingBox(mesh->bbox());
+		}
+		raw.GetCenter(m_normCenter);
+		const float largest = raw.GetLargestLength();
+		m_normScale = (largest > 0.f) ? 1.f / largest : 1.f;
+		m_hasNormalization = true;
+
+		vm->Normalize(); // recentre, remet a l echelle, et met a jour les bboxes
 	}
 
 	// Always compute the aggregate bounding box for all meshes AFTER potential normalization
@@ -255,6 +311,17 @@ void MyGLCanvas::ApplyNormalization(bool normalize)
 	// Frame the camera on the resulting model.
 	m_pTrackball->ResetTransformations(); // Reset camera rotation/translation
 	FrameCamera(aggregateBbox);
+
+	RefreshGeometryState();
+}
+
+// Ce que TOUT changement de géométrie doit refaire, normalisation ou pas :
+// diagnostic topologique, mode d'affichage d'un nuage sans faces, BVH de picking,
+// et le rafraîchissement. Partagé avec UpdateGeometryKeepingView.
+void MyGLCanvas::RefreshGeometryState()
+{
+	VMeshes* vm = GetVMeshes();
+	if (!vm) return;
 
 	UpdateTopologicIssues();
 

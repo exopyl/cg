@@ -6,6 +6,7 @@
 #include "../src/cgmesh/mesh.h"
 
 #include <cmath>
+#include <cstdio>
 #include <memory>
 #include <set>
 #include <string>
@@ -490,4 +491,72 @@ TEST(TEST_cgmesh_image_relief, frame_is_optional)
 
 	for (Mesh* m : bare) delete m;
 	delete single;
+}
+
+// ---------------------------------------------------------------------------
+//  Pre-reduction de la source
+// ---------------------------------------------------------------------------
+// Les deux etages couteux -- filtrage bilateral et quantification de Wu -- sont
+// lineaires en nombre de pixels, et la vectorisation qui suit l'est en nombre de
+// regions, lui-meme croissant avec la resolution. La source est donc ramenee a
+// `workingMaxDim` sur sa plus grande dimension avant tout traitement.
+//
+// Le controle porte sur le RASTER que la chaine produit, pas sur un chronometre :
+// une mesure de duree serait instable et ne dirait pas OU le temps est passe.
+TEST(TEST_cgmesh_image_relief, source_is_reduced_to_the_working_size)
+{
+	const char* kInputFile = "./source_is_reduced_to_the_working_size.ppm";
+
+	// 1024 x 768 : au-dela de la limite, et de rapport 4:3 pour verifier que le
+	// rapport d'aspect est conserve et non ecrase sur un carre.
+	Img img(1024, 768, false);
+	fillRect(img, 0, 0, 1024, 768, 255, 255, 255);
+	fillRect(img, 100, 100, 600, 500, 255, 0, 0);
+	ASSERT_EQ(img.save(kInputFile), 0);
+
+	RegionQuantizeOptions qo;
+	qo.maxColors        = 4;
+	qo.preSmoothPasses  = 0;   // hors sujet ici, et c'est l'etage le plus lent
+	qo.refineIterations = 0;
+	qo.despecklePasses  = 0;
+	qo.workingMaxDim    = 512;
+
+	Img reduced;
+	ASSERT_TRUE(image_to_quantized_image(kInputFile, qo, reduced));
+	EXPECT_EQ(reduced.width(),  512u);
+	EXPECT_EQ(reduced.height(), 384u) << "rapport d'aspect non conserve";
+
+	// Temoin : sans limite, la chaine travaille sur la source telle quelle. Sans
+	// lui, un test qui passerait parce que la reduction est cablee en dur ailleurs
+	// ne se distinguerait pas.
+	qo.workingMaxDim = 0;
+	Img full;
+	ASSERT_TRUE(image_to_quantized_image(kInputFile, qo, full));
+	EXPECT_EQ(full.width(),  1024u);
+	EXPECT_EQ(full.height(), 768u);
+
+	// Une image DEJA sous la limite n'est pas agrandie : la reduction est un
+	// plafond, pas une normalisation de taille.
+	Img small(200, 100, false);
+	fillRect(small, 0, 0, 200, 100, 255, 255, 255);
+	fillRect(small, 20, 20, 120, 80, 0, 0, 255);
+	const char* kSmallFile = "./source_is_reduced_to_the_working_size_small.ppm";
+	ASSERT_EQ(small.save(kSmallFile), 0);
+
+	qo.workingMaxDim = 512;
+	Img untouched;
+	ASSERT_TRUE(image_to_quantized_image(kSmallFile, qo, untouched));
+	EXPECT_EQ(untouched.width(),  200u);
+	EXPECT_EQ(untouched.height(), 100u);
+
+	std::remove(kInputFile);
+	std::remove(kSmallFile);
+}
+
+// La valeur par defaut de l'option est celle que la page de maker applique : un
+// reglage silencieusement remis a 0 rendrait la pre-reduction inoperante sans
+// qu'aucun autre test ne s'en apercoive, les images de cette suite faisant 32 px.
+TEST(TEST_cgmesh_image_relief, working_size_defaults_to_512)
+{
+	EXPECT_EQ(ImageReliefOptions().workingMaxDim, 512);
 }

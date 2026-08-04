@@ -1,13 +1,13 @@
 // ===========================================================================
-//  Page « Image en relief » : quantification des couleurs, vectorisation des
-//  regions puis extrusion (cf. cgmesh/image_relief.h).
+//  Page « Image quantification » : quantification des couleurs, vectorisation
+//  des regions puis extrusion (cf. cgmesh/image_relief.h).
 // ===========================================================================
 
 import { createShell, runPage } from "../shell.js";
 
 runPage(async () => {
   const ctx = await createShell({
-    title: "Image en relief",
+    title: "Image quantification",
     subtitle: "quantification · vectorisation · extrusion",
   });
 

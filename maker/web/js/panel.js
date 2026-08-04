@@ -12,12 +12,26 @@
 export function buildPanel(Module, paramsEl, id, onChange) {
   paramsEl.innerHTML = "";
   const params = JSON.parse(Module.getParams(id));
+
+  // Les bornes d'un parametre peuvent dependre de la valeur d'un AUTRE : le
+  // plafond de recursions du L-systeme depend du systeme choisi (2 pour Plant1,
+  // 9 pour la courbe du dragon). Le panneau n'etant construit qu'une fois par
+  // forme, il afficherait sinon les bornes du systeme selectionne a sa
+  // construction. On relit donc getParams() apres chaque ecriture d'enum et on
+  // remet les curseurs d'accord, en place -- pas de reconstruction, donc pas de
+  // perte de focus sur la liste qu'on vient de manipuler.
+  const refreshers = [];
+  const refresh = () => {
+    const cur = JSON.parse(Module.getParams(id));
+    for (const r of refreshers) r(cur);
+  };
+
   for (const p of params) {
-    paramsEl.appendChild(buildParamWidget(Module, id, p, onChange));
+    paramsEl.appendChild(buildParamWidget(Module, id, p, onChange, refreshers, refresh));
   }
 }
 
-function buildParamWidget(Module, id, p, onChange) {
+function buildParamWidget(Module, id, p, onChange, refreshers, refresh) {
   const wrap = document.createElement("div");
   wrap.className = "param " + p.type;
 
@@ -36,6 +50,7 @@ function buildParamWidget(Module, id, p, onChange) {
     wrap.appendChild(row);
     cb.addEventListener("change", () => {
       Module.setParam(id, p.name, cb.checked ? 1 : 0);
+      refresh();   // meme raison que pour les listes : les bornes peuvent bouger
       onChange();
     });
     return wrap;
@@ -58,6 +73,7 @@ function buildParamWidget(Module, id, p, onChange) {
     });
     sel.addEventListener("change", () => {
       Module.setParam(id, p.name, Number(sel.value));
+      refresh();   // le choix peut avoir change les bornes d'un autre parametre
       onChange();
     });
     wrap.appendChild(sel);
@@ -90,6 +106,22 @@ function buildParamWidget(Module, id, p, onChange) {
     onChange();
   });
   wrap.appendChild(range);
+
+  // Remet ce curseur d'accord avec les bornes courantes. Une valeur retenue qui
+  // depasse la nouvelle borne est REECRITE : Regenerate() la plafonne de son cote,
+  // afficher 6 recursions sous une borne a 1 serait mensonger.
+  refreshers.push((cur) => {
+    const q = cur.find((x) => x.name === p.name);
+    if (!q || q.type !== p.type) return;
+    range.min = q.min;
+    range.max = q.max;
+    range.step = isInt ? 1 : (q.max - q.min) / 200 || 0.001;
+    const v = Math.min(Math.max(q.value, q.min), q.max);
+    if (v !== q.value) Module.setParam(id, p.name, v);
+    range.value = v;
+    val.textContent = fmt(v, isInt);
+  });
+
   return wrap;
 }
 

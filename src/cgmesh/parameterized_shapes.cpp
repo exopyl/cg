@@ -10,12 +10,15 @@
 #include "lsysteminit.h"
 #include "surface_architecture.h"
 #include "architecture_gothic.h"
+#include "extrude_contours.h"
+#include "stroke_contours.h"
 #include <nlohmann/json.hpp>
 #include <cmath>
 
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+#include <map>
 #include <vector>
 #include <algorithm>
 
@@ -137,43 +140,8 @@ void ParameterizedTorus::Regenerate()
 // Parametric surfaces
 // ===========================================================================
 
-// --- Klein Bottle ----------------------------------------------------------
-ParameterizedKleinBottle::ParameterizedKleinBottle()    { Regenerate(); }
-std::vector<Parameter> ParameterizedKleinBottle::GetParameters()
-{
-	return {
-		Parameter::MakeInt("Theta resolution", &m_thetaRes, 4, 200),
-		Parameter::MakeInt("Phi resolution", &m_phiRes, 4, 200),
-	};
-}
-void ParameterizedKleinBottle::Regenerate()
-{
-	delete m_pMesh;
-	m_pMesh = CreateKleinBottle(m_thetaRes, m_phiRes);
-	m_pMesh->ComputeNormals();
-}
-
-// --- Helicoid --------------------------------------------------------------
-ParameterizedHelicoid::ParameterizedHelicoid()          { Regenerate(); }
-std::vector<Parameter> ParameterizedHelicoid::GetParameters()
-{
-	return {
-		Parameter::MakeInt("nu", &m_nu, 4, 200),
-		Parameter::MakeInt("nv", &m_nv, 4, 200),
-		Parameter::MakeFloat("a", &m_a, 0.01f, 10.f),
-		Parameter::MakeFloat("b", &m_b, 0.01f, 10.f),
-		Parameter::MakeFloat("c", &m_c, 0.01f, 5.f),
-	};
-}
-void ParameterizedHelicoid::Regenerate()
-{
-	delete m_pMesh;
-	m_pMesh = new EllipticHelicoid(m_nu, m_nv, m_a, m_b, m_c);
-	m_pMesh->ComputeNormals();
-}
-
-// --- Seashell --------------------------------------------------------------
-ParameterizedSeashell::ParameterizedSeashell()          { Regenerate(); }
+// --- Seashell ----------------------------------------------------------------
+ParameterizedSeashell::ParameterizedSeashell() { Regenerate(); }
 std::vector<Parameter> ParameterizedSeashell::GetParameters()
 {
 	return {
@@ -188,7 +156,7 @@ void ParameterizedSeashell::Regenerate()
 	m_pMesh->ComputeNormals();
 }
 
-// --- Seashell von Seggern --------------------------------------------------
+// --- Seashell von Seggern ----------------------------------------------------
 ParameterizedSeashellVonSeggern::ParameterizedSeashellVonSeggern() { Regenerate(); }
 std::vector<Parameter> ParameterizedSeashellVonSeggern::GetParameters()
 {
@@ -205,6 +173,56 @@ void ParameterizedSeashellVonSeggern::Regenerate()
 {
 	delete m_pMesh;
 	m_pMesh = new SeaShellVonSeggern(m_nu, m_nv, m_a, m_b, m_c, m_n);
+	m_pMesh->ComputeNormals();
+}
+
+// --- Klein Bottle ------------------------------------------------------------
+ParameterizedKleinBottle::ParameterizedKleinBottle() { Regenerate(); }
+std::vector<Parameter> ParameterizedKleinBottle::GetParameters()
+{
+	return {
+		Parameter::MakeInt("Theta resolution", &m_thetaRes, 4, 200),
+		Parameter::MakeInt("Phi resolution", &m_phiRes, 4, 200),
+	};
+}
+void ParameterizedKleinBottle::Regenerate()
+{
+	delete m_pMesh;
+	m_pMesh = CreateKleinBottle(m_thetaRes, m_phiRes);
+	m_pMesh->ComputeNormals();
+}
+
+// --- Breather ----------------------------------------------------------------
+ParameterizedBreather::ParameterizedBreather() { Regenerate(); }
+std::vector<Parameter> ParameterizedBreather::GetParameters()
+{
+	return {
+		Parameter::MakeInt("nu", &m_nu, 4, 200),
+		Parameter::MakeInt("nv", &m_nv, 4, 200),
+	};
+}
+void ParameterizedBreather::Regenerate()
+{
+	delete m_pMesh;
+	m_pMesh = new Breather(m_nu, m_nv);
+	m_pMesh->ComputeNormals();
+}
+// --- Helicoid --------------------------------------------------------------
+ParameterizedHelicoid::ParameterizedHelicoid()          { Regenerate(); }
+std::vector<Parameter> ParameterizedHelicoid::GetParameters()
+{
+	return {
+		Parameter::MakeInt("nu", &m_nu, 4, 200),
+		Parameter::MakeInt("nv", &m_nv, 4, 200),
+		Parameter::MakeFloat("a", &m_a, 0.01f, 10.f),
+		Parameter::MakeFloat("b", &m_b, 0.01f, 10.f),
+		Parameter::MakeFloat("c", &m_c, 0.01f, 5.f),
+	};
+}
+void ParameterizedHelicoid::Regenerate()
+{
+	delete m_pMesh;
+	m_pMesh = new EllipticHelicoid(m_nu, m_nv, m_a, m_b, m_c);
 	m_pMesh->ComputeNormals();
 }
 
@@ -263,23 +281,7 @@ void ParameterizedRadialWave::Regenerate()
 	m_pMesh->ComputeNormals();
 }
 
-// --- Breather --------------------------------------------------------------
-ParameterizedBreather::ParameterizedBreather()          { Regenerate(); }
-std::vector<Parameter> ParameterizedBreather::GetParameters()
-{
-	return {
-		Parameter::MakeInt("nu", &m_nu, 4, 200),
-		Parameter::MakeInt("nv", &m_nv, 4, 200),
-	};
-}
-void ParameterizedBreather::Regenerate()
-{
-	delete m_pMesh;
-	m_pMesh = new Breather(m_nu, m_nv);
-	m_pMesh->ComputeNormals();
-}
-
-// --- Hyperbolic Paraboloid -------------------------------------------------
+// --- Hyperbolic Paraboloid ---------------------------------------------------
 ParameterizedHyperbolicParaboloid::ParameterizedHyperbolicParaboloid() { Regenerate(); }
 std::vector<Parameter> ParameterizedHyperbolicParaboloid::GetParameters()
 {
@@ -299,8 +301,8 @@ void ParameterizedHyperbolicParaboloid::Regenerate()
 	m_pMesh->ComputeNormals();
 }
 
-// --- Monkey Saddle ---------------------------------------------------------
-ParameterizedMonkeySaddle::ParameterizedMonkeySaddle()  { Regenerate(); }
+// --- Monkey Saddle -----------------------------------------------------------
+ParameterizedMonkeySaddle::ParameterizedMonkeySaddle() { Regenerate(); }
 std::vector<Parameter> ParameterizedMonkeySaddle::GetParameters()
 {
 	return {
@@ -319,8 +321,8 @@ void ParameterizedMonkeySaddle::Regenerate()
 	m_pMesh->ComputeNormals();
 }
 
-// --- Blobs -----------------------------------------------------------------
-ParameterizedBlobs::ParameterizedBlobs()                { Regenerate(); }
+// --- Blobs -------------------------------------------------------------------
+ParameterizedBlobs::ParameterizedBlobs() { Regenerate(); }
 std::vector<Parameter> ParameterizedBlobs::GetParameters()
 {
 	return {
@@ -339,8 +341,8 @@ void ParameterizedBlobs::Regenerate()
 	m_pMesh->ComputeNormals();
 }
 
-// --- Drop ------------------------------------------------------------------
-ParameterizedDrop::ParameterizedDrop()                  { Regenerate(); }
+// --- Drop --------------------------------------------------------------------
+ParameterizedDrop::ParameterizedDrop() { Regenerate(); }
 std::vector<Parameter> ParameterizedDrop::GetParameters()
 {
 	return {
@@ -358,7 +360,6 @@ void ParameterizedDrop::Regenerate()
 	m_pMesh = new Drop(m_nu, m_nv, m_xmin, m_xmax, m_ymin, m_ymax);
 	m_pMesh->ComputeNormals();
 }
-
 // --- Guimard ---------------------------------------------------------------
 ParameterizedGuimard::ParameterizedGuimard()            { Regenerate(); }
 std::vector<Parameter> ParameterizedGuimard::GetParameters()
@@ -382,8 +383,8 @@ void ParameterizedGuimard::Regenerate()
 // Knots
 // ===========================================================================
 
-// --- Torus Knot ------------------------------------------------------------
-ParameterizedTorusKnot::ParameterizedTorusKnot()        { Regenerate(); }
+// --- Torus Knot --------------------------------------------------------------
+ParameterizedTorusKnot::ParameterizedTorusKnot() { Regenerate(); }
 std::vector<Parameter> ParameterizedTorusKnot::GetParameters()
 {
 	return {
@@ -400,7 +401,7 @@ void ParameterizedTorusKnot::Regenerate()
 	m_pMesh->ComputeNormals();
 }
 
-// --- Cinquefoil Knot -------------------------------------------------------
+// --- Cinquefoil Knot ---------------------------------------------------------
 ParameterizedCinquefoilKnot::ParameterizedCinquefoilKnot() { Regenerate(); }
 std::vector<Parameter> ParameterizedCinquefoilKnot::GetParameters()
 {
@@ -417,8 +418,8 @@ void ParameterizedCinquefoilKnot::Regenerate()
 	m_pMesh->ComputeNormals();
 }
 
-// --- Trefoil Knot ----------------------------------------------------------
-ParameterizedTrefoilKnot::ParameterizedTrefoilKnot()    { Regenerate(); }
+// --- Trefoil Knot ------------------------------------------------------------
+ParameterizedTrefoilKnot::ParameterizedTrefoilKnot() { Regenerate(); }
 std::vector<Parameter> ParameterizedTrefoilKnot::GetParameters()
 {
 	return {
@@ -433,7 +434,7 @@ void ParameterizedTrefoilKnot::Regenerate()
 	m_pMesh->ComputeNormals();
 }
 
-// --- Borromean Rings -------------------------------------------------------
+// --- Borromean Rings ---------------------------------------------------------
 ParameterizedBorromeanRings::ParameterizedBorromeanRings() { Regenerate(); }
 std::vector<Parameter> ParameterizedBorromeanRings::GetParameters()
 {
@@ -448,11 +449,6 @@ void ParameterizedBorromeanRings::Regenerate()
 	m_pMesh = new BorromeanRings(m_nu, m_nv);
 	m_pMesh->ComputeNormals();
 }
-
-// ===========================================================================
-// Fractal shapes
-// ===========================================================================
-
 // --- Menger Sponge ---------------------------------------------------------
 ParameterizedMengerSponge::ParameterizedMengerSponge()  { Regenerate(); }
 std::vector<Parameter> ParameterizedMengerSponge::GetParameters()
@@ -519,20 +515,29 @@ ParameterizedImageRelief::ParameterizedImageRelief(const std::string& filename)
 std::vector<Parameter> ParameterizedImageRelief::GetParameters()
 {
 	return {
-		Parameter::MakeInt  ("Max colors",      &m_maxColors, 2, 64),
+		// Borne haute a 10 et non a la limite technique de la palette : au-dela, les
+		// couleurs supplementaires se depensent en degrades du fond et en regions
+		// minuscules, que la simplification de contour et l anti-mouchetis effacent
+		// ensuite. Du temps de calcul paye pour du detail jete.
+		Parameter::MakeInt  ("Max colors",      &m_maxColors, 2, 10),
 		Parameter::MakeEnum ("Quantization",    &m_algo, { "Wu", "Heckbert" }),
 		Parameter::MakeFloat("Simplify err",    &m_simplifyErr,   0.1f,  5.f),
 		Parameter::MakeInt  ("Pre-smooth",      &m_preSmooth,     0,     4),
 		Parameter::MakeInt  ("Refine palette",  &m_refine,        0,     12),
 		Parameter::MakeInt  ("Despeckle",       &m_despeckle,     0,     6),
 		Parameter::MakeInt  ("Min region area", &m_minRegionArea, 0,     400),
-		Parameter::MakeFloat("Shrink (px)",     &m_shrink,        0.f,   10.f),
+		// En pixels de l image REDUITE (512 px de cote au plus) : un pixel y vaut deja
+		// plusieurs pixels source, donc 1 suffit a degager le jeu entre regions.
+		Parameter::MakeFloat("Shrink (px)",     &m_shrink,        0.f,   1.f),
 		Parameter::MakeFloat("Fit size",        &m_fitSize,       0.1f,  100.f),
-		Parameter::MakeFloat("Block height",    &m_blockHeight,   0.001f, 20.f),
+		// Emprise du contenu ramenee a `fitSize` (1 par defaut) : au-dela de 1 le
+		// relief est plus haut que large, ce qui n a plus de sens pour une plaque.
+		Parameter::MakeFloat("Block height",    &m_blockHeight,   0.001f, 1.f),
 		Parameter::MakeFloat("Base thickness",  &m_baseThickness, 0.001f, 20.f),
 		Parameter::MakeFloat("Margin",          &m_margin,        0.f,    20.f),
 		Parameter::MakeFloat("Wall thickness",  &m_wallThickness, 0.001f, 20.f),
-		Parameter::MakeFloat("Wall height",     &m_wallHeight,    0.001f, 20.f),
+		// Meme raison que Block height : borne a l emprise du contenu.
+		Parameter::MakeFloat("Wall height",     &m_wallHeight,    0.001f, 1.f),
 		Parameter::MakeBool ("Internal walls",  &m_internalWalls),
 		// Le cadre est un accessoire de presentation : decochable, pour qu'un export
 		// ne contienne que les regions extrudees.
@@ -748,6 +753,76 @@ const std::vector<std::string>& LSystemCatalogueNames()
 	return names;
 }
 
+// Plafond de recursions, par systeme.
+//
+// Le nombre de segments croit comme k^n, ou k est le facteur de reecriture de la
+// regle, et k va de 2 a une vingtaine selon le systeme. Une valeur unique ne peut
+// donc pas convenir : elle tronquerait les uns et brimerait les autres. Deux
+// contraintes fixent chaque plafond.
+//
+// 1. MAX_SEG. Regenerate() arrete la marche a 60 000 segments, et le fait EN
+//    SILENCE : la figure sort incomplete sans que rien ne le signale. Sur un axiome
+//    "F+F+F+F" le trace compte 4 x k^n segments, et pour les regles les plus
+//    prolifiques la recursion suivante depasse deja le plafond :
+//
+//        Cross B                 k =  5 -> 12 500 a n=5,   62 500 a n=6
+//        Board                   k =  7 ->  9 604 a n=4,   67 228 a n=5
+//        Koch Curve              k =  8 -> 16 384 a n=4,  131 072 a n=5
+//        Rings                   k =  8 -> 16 384 a n=4,  131 072 a n=5
+//        Quadratic Koch island A k =  9 -> 26 244 a n=4,  236 196 a n=5
+//        Quadratic Koch island B k = 18 -> 23 328 a n=3,  419 904 a n=4
+//
+//    Quadratic Gosper deborde de meme, avec une vingtaine de non-terminaux par
+//    regle : n=3 frole le plafond, n=4 le depasse d'un ordre de grandeur.
+//
+// 2. La lisibilite. Cross A, Peano curve, Hexagonal Gosper, les buissons 1 a 3 et
+//    les plantes 1 et 3 tiendraient une recursion de plus sous MAX_SEG -- Bush3 par
+//    exemple monte a 59 049 a n=5 --, mais leur trace remplit alors son enveloppe au
+//    point de ne plus rien montrer. Plant1, dont la regle porte SEIZE F, sature des
+//    la troisieme.
+//
+//    Plant2 est a l'oppose : sa regle reconduit un seul X et ajoute dix-huit F, donc
+//    une croissance LINEAIRE -- une centaine de segments a six recursions. Elle
+//    reste au defaut, faute de raison de la brider.
+//
+// Hilbert curve 3D est le cas extreme, plafonne a UNE recursion : ses quatre regles
+// comptent une dizaine de F chacune, et le cube s'y remplit d'un coup. En mode
+// Extrusion la marche repliee sur elle-meme coute en plus tres cher a l'union
+// Clipper2 -- une quinzaine de secondes des la deuxieme recursion.
+//
+// A l'inverse, deux systemes croissent LENTEMENT et ont besoin de plus de
+// recursions pour prendre forme, d'ou un plafond releve au-dessus du defaut :
+//
+//        Sierpinski Arrowhead    X -> YF+XF+Y, Y -> XF-YF-X : 3^n
+//        Dragon curve            X -> X+YF+,   Y -> -FX-Y   : 2^n
+int LSystemMaxIterations (int system)
+{
+	switch (system)
+	{
+	case LSYSTEM_HILBERT_CURVE_3D:        return 1;
+	case LSYSTEM_PLANT1:                  return 2;
+	case LSYSTEM_QUADRATIC_KOCH_ISLAND_B: return 3;
+	case LSYSTEM_PLANT3:                  return 3;
+	case LSYSTEM_QUADRATIC_GOSPER:        return 3;
+	case LSYSTEM_BOARD:                   return 4;
+	case LSYSTEM_KOCH_CURVE:              return 4;
+	case LSYSTEM_QUADRATIC_KOCH_ISLAND_A: return 4;
+	case LSYSTEM_PEANO_CURVE:             return 4;
+	case LSYSTEM_HEXAGONAL_GOSPER:        return 4;
+	case LSYSTEM_CROSS_A:                 return 4;
+	case LSYSTEM_RINGS:                   return 4;
+	case LSYSTEM_BUSH1:                   return 4;
+	case LSYSTEM_BUSH2:                   return 4;
+	case LSYSTEM_BUSH3:                   return 4;
+	case LSYSTEM_CROSS_B:                 return 5;
+	case LSYSTEM_BUSH4:                   return 6;   // le defaut, explicites pour memoire
+	case LSYSTEM_PLANT2:                  return 6;
+	case LSYSTEM_SIERPINSKI_ARROWHEAD:    return 7;
+	case LSYSTEM_DRAGON_CURVE:            return 9;
+	default:                              return 6;
+	}
+}
+
 } // namespace
 
 ParameterizedLSystem::ParameterizedLSystem() { Regenerate(); }
@@ -755,9 +830,22 @@ ParameterizedLSystem::ParameterizedLSystem() { Regenerate(); }
 std::vector<Parameter> ParameterizedLSystem::GetParameters()
 {
 	return {
+		Parameter::MakeEnum("Mode", &m_mode, {"Tube", "Extrusion"}),
 		Parameter::MakeEnum("System", &m_system, LSystemCatalogueNames()),
-		Parameter::MakeInt("Iterations", &m_iterations, 0, 6),
-		Parameter::MakeFloat("Tube radius", &m_thickness, 0.005f, 0.3f),
+		// Borne haute dependante du systeme choisi. Elle n'est lue qu'a la
+		// construction du panneau, qui ne se reconstruit pas au changement de
+		// systeme : c'est le meme plafond, applique dans Regenerate(), qui fait
+		// vraiment foi.
+		Parameter::MakeInt("Iterations", &m_iterations, 0, LSystemMaxIterations(m_system)),
+		// Rayon du tube, ou demi-largeur du trait epaissi : la meme grandeur
+		// geometrique dans les deux modes, en unites du maillage normalise.
+		Parameter::MakeFloat("Thickness", &m_thickness, 0.005f, 0.3f),
+		// Mode Extrusion : sans effet sur le tube, mais laisses visibles plutot
+		// que masques -- le panneau est construit une fois a la liaison, il ne se
+		// reconstruit pas au changement de mode.
+		Parameter::MakeFloat("Height", &m_height, 0.01f, 0.5f),
+		Parameter::MakeEnum("Join", &m_join, {"Round", "Miter", "Bevel"}),
+		Parameter::MakeEnum("Cap",  &m_cap,  {"Round", "Square", "Butt"}),
 	};
 }
 
@@ -779,12 +867,22 @@ void ParameterizedLSystem::Regenerate()
 	}
 
 	LSystem* ls = it->second->pLSystem;
+	// Borne l'expansion exponentielle de Next(). On plafonne la COPIE, pas le
+	// membre : le reglage de l'utilisateur reste celui qu'il a pose, et redescendre
+	// vers un systeme moins prolifique le retrouve.
 	int iters = m_iterations;
 	if (iters < 0) iters = 0;
-	if (iters > 6) iters = 6; // borne l'expansion exponentielle de Next()
+	const int maxIters = LSystemMaxIterations(m_system);
+	if (iters > maxIters) iters = maxIters;
 	for (int k = 0; k < iters; ++k) ls->Next();
 
-	const bool is3D = (m_system >= LSYSTEM_HILBERT_CURVE_3D);
+	// A lire MAINTENANT : cleanup() detruit le catalogue avant la construction du
+	// maillage.
+	const bool traceIsClosed = it->second->bClosed;
+
+	// Une extrusion est PLANE : on garde l'interpretation 2D meme pour un systeme
+	// 3D, projeter la marche tortue n'aurait pas de sens.
+	const bool is3D = (m_system >= LSYSTEM_HILBERT_CURVE_3D) && (m_mode == 0);
 	if (is3D) ls->ComputeGraphicalInterpretation3D();
 	else      ls->ComputeGraphicalInterpretation2D();
 
@@ -832,9 +930,81 @@ void ParameterizedLSystem::Regenerate()
 	for (auto& ch : chains) for (auto& q : ch)
 		q.Set((q.x-ctr[0])*scale, (q.y-ctr[1])*scale, (q.z-ctr[2])*scale);
 
+	if (m_mode == 1)
+	{
+		m_pMesh = BuildExtrudedTrace(chains, traceIsClosed);
+		m_pMesh->ComputeNormals();
+		return;
+	}
+
 	// --- tube generique (cf. CreateTubes dans surface_basic) ---
 	m_pMesh = CreateTubes(chains, m_thickness, 6);
 	m_pMesh->ComputeNormals();
+}
+
+// Mode Extrusion : le trace, deja normalise (diagonale de bbox = 4), est ramene
+// au plan XY puis extrude sur `Height`.
+//
+// `m_thickness` est la DEMI-largeur du trait -- exactement ce qu'il est comme
+// rayon du tube dans l'autre mode --, donc une largeur de 2*m_thickness. Il est
+// applique APRES la normalisation, l'echelle dans laquelle le parametre est
+// defini.
+Mesh* ParameterizedLSystem::BuildExtrudedTrace (const std::vector<std::vector<Vector3f>>& chains,
+                                                bool traceIsClosed)
+{
+	std::vector<std::vector<std::array<float, 2>>> polylines;
+	polylines.reserve(chains.size());
+	for (const auto& ch : chains)
+	{
+		if (ch.size() < 2) continue;
+		std::vector<std::array<float, 2>> pl;
+		pl.reserve(ch.size());
+		for (const auto& q : ch) pl.push_back({ q.x, q.y });
+		polylines.push_back(std::move(pl));
+	}
+
+	std::vector<std::vector<std::array<float, 2>>> contours;
+	if (traceIsClosed)
+	{
+		// Le trace delimite deja une surface : la tesseler telle quelle.
+		// L'epaissir en donnerait le contour creux au lieu du plein.
+		contours = std::move(polylines);
+	}
+	else
+	{
+		const StrokeJoin join = (m_join == 1) ? StrokeJoin::Miter
+		                      : (m_join == 2) ? StrokeJoin::Bevel
+		                                      : StrokeJoin::Round;
+		const StrokeCap  cap  = (m_cap == 1) ? StrokeCap::Square
+		                      : (m_cap == 2) ? StrokeCap::Butt
+		                                     : StrokeCap::Round;
+		contours = strokeToContours(polylines, 2.f * m_thickness, join, cap);
+	}
+
+	std::vector<ExtrudeContour> ec;
+	ec.reserve(contours.size());
+	for (const auto& c : contours)
+	{
+		if (c.size() < 3) continue;
+		ExtrudeContour e;
+		e.pts.reserve(c.size());
+		for (const auto& p : c) e.pts.emplace_back(p[0], p[1]);
+		ec.push_back(std::move(e));
+	}
+	if (ec.empty()) return new Mesh();  // vide mais valide, comme le repli du tube
+
+	ExtrudeAppendOptions ao;
+	ao.zBottom = 0.f;
+	ao.zTop    = (m_height > 0.f) ? m_height : 0.01f;
+	ao.winding = ExtrudeWinding::NonZero;
+	// Orientation prise telle quelle : celle de Clipper2 pour un trace epaissi
+	// (enveloppes positives, trous inverses), celle du parcours pour un trace
+	// ferme. La renormaliser remplirait les trous.
+	ao.normalizeOrientation = false;
+
+	ExtrudedMeshBuilder builder;
+	if (!builder.Append(ec, ao) || builder.Empty()) return new Mesh();
+	return builder.Build();
 }
 
 // ===========================================================================

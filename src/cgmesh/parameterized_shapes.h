@@ -101,29 +101,6 @@ private:
 // Parametric surfaces
 // ---------------------------------------------------------------------------
 
-class ParameterizedKleinBottle : public ParameterizedMesh
-{
-public:
-	ParameterizedKleinBottle();
-	std::vector<Parameter> GetParameters() override;
-	void Regenerate() override;
-	std::string GetName() const override { return "Klein Bottle"; }
-private:
-	int m_thetaRes = 20, m_phiRes = 20;
-};
-
-class ParameterizedHelicoid : public ParameterizedMesh
-{
-public:
-	ParameterizedHelicoid();
-	std::vector<Parameter> GetParameters() override;
-	void Regenerate() override;
-	std::string GetName() const override { return "Helicoid"; }
-private:
-	int m_nu = 20, m_nv = 20;
-	float m_a = 1.f, m_b = 1.f, m_c = 0.2f;
-};
-
 class ParameterizedSeashell : public ParameterizedMesh
 {
 public:
@@ -145,6 +122,40 @@ public:
 private:
 	int m_nu = 50, m_nv = 50;
 	float m_a = 0.2f, m_b = 1.f, m_c = 0.1f, m_n = 2.f;
+};
+
+class ParameterizedKleinBottle : public ParameterizedMesh
+{
+public:
+	ParameterizedKleinBottle();
+	std::vector<Parameter> GetParameters() override;
+	void Regenerate() override;
+	std::string GetName() const override { return "Klein Bottle"; }
+private:
+	int m_thetaRes = 20, m_phiRes = 20;
+};
+
+class ParameterizedBreather : public ParameterizedMesh
+{
+public:
+	ParameterizedBreather();
+	std::vector<Parameter> GetParameters() override;
+	void Regenerate() override;
+	std::string GetName() const override { return "Breather"; }
+private:
+	int m_nu = 50, m_nv = 50;
+};
+
+class ParameterizedHelicoid : public ParameterizedMesh
+{
+public:
+	ParameterizedHelicoid();
+	std::vector<Parameter> GetParameters() override;
+	void Regenerate() override;
+	std::string GetName() const override { return "Helicoid"; }
+private:
+	int m_nu = 20, m_nv = 20;
+	float m_a = 1.f, m_b = 1.f, m_c = 0.2f;
 };
 
 class ParameterizedCorkscrew : public ParameterizedMesh
@@ -181,17 +192,6 @@ public:
 private:
 	int m_nu = 50, m_nv = 50;
 	float m_radius = 10.f, m_height = 20.f, m_frequency = 0.6f;
-};
-
-class ParameterizedBreather : public ParameterizedMesh
-{
-public:
-	ParameterizedBreather();
-	std::vector<Parameter> GetParameters() override;
-	void Regenerate() override;
-	std::string GetName() const override { return "Breather"; }
-private:
-	int m_nu = 50, m_nv = 50;
 };
 
 class ParameterizedHyperbolicParaboloid : public ParameterizedMesh
@@ -362,7 +362,7 @@ public:
 	explicit ParameterizedImageRelief(const std::string& filename);
 	std::vector<Parameter> GetParameters() override;
 	void Regenerate() override;
-	std::string GetName() const override { return "Image relief"; }
+	std::string GetName() const override { return "Image quantification"; }
 private:
 	std::string m_filename;
 	int   m_maxColors     = 8;
@@ -428,10 +428,27 @@ private:
 // ---------------------------------------------------------------------------
 
 // Runs one of the built-in L-systems (see lsysteminit.h) for a chosen number of
-// iterations, then sweeps a tube of the given radius along every drawn segment
-// of its turtle walk to produce a renderable 3D Mesh. The system is picked from
-// an ENUM exposing the whole catalogue; 3D systems (Hilbert 3D, plants) use the
-// 3D turtle interpretation automatically.
+// iterations, then gives its turtle walk a volume. The system is picked from an
+// ENUM exposing the whole catalogue.
+//
+// DEUX MODES, car un trace peut prendre corps de deux facons distinctes :
+//
+//   Tube      : un tube de rayon `Thickness` est balaye le long de chaque segment
+//               dessine. Rendu filaire epais, en 3D. Les systemes 3D (Hilbert 3D,
+//               plantes) utilisent alors l'interpretation 3D de la tortue.
+//   Extrusion : le trace est EPAISSI dans son plan (stroke_contours.h) puis
+//               extrude sur `Height`, ce qui donne une plaque gravee. Le
+//               traitement des coins et des extremites devient reglable, et un
+//               trace FERME -- le catalogue en marque cinq -- est tessele
+//               directement au lieu d'etre epaissi, puisqu'il delimite deja une
+//               surface.
+//
+// En mode Extrusion l'interpretation est toujours 2D : une extrusion est plane,
+// projeter un trace 3D n'aurait pas de sens.
+//
+// `Thickness` sert aux deux modes -- rayon du tube, ou demi-largeur du trait --
+// et s'exprime dans les unites du maillage normalise (diagonale de la boite
+// englobante ramenee a 4), donc apres la mise a l'echelle et non avant.
 class ParameterizedLSystem : public ParameterizedMesh
 {
 public:
@@ -440,9 +457,20 @@ public:
 	void Regenerate() override;
 	std::string GetName() const override { return "L-system"; }
 private:
+	// Trace normalise -> maillage extrude. Sorti de Regenerate() pour en garder le
+	// corps lisible ; ne renvoie jamais nullptr (Mesh vide si rien a extruder).
+	Mesh* BuildExtrudedTrace (const std::vector<std::vector<Vector3f>>& chains,
+	                          bool traceIsClosed);
+
+	int   m_mode       = 0;      // 0 = Tube, 1 = Extrusion
 	int   m_system     = 9;      // default: Hilbert (nice and bounded)
 	int   m_iterations = 4;
 	float m_thickness  = 0.04f;
+
+	// Mode Extrusion uniquement.
+	float m_height     = 0.05f;
+	int   m_join       = 0;      // Round / Miter / Bevel
+	int   m_cap        = 0;      // Round / Square / Butt
 };
 
 // ---------------------------------------------------------------------------

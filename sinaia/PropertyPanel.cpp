@@ -1,5 +1,6 @@
 #include "PropertyPanel.h"
 
+#include <algorithm>
 #include <chrono>
 
 #include <wx/sizer.h>
@@ -82,6 +83,47 @@ void PropertyPanel::Rebuild()
 	}
 }
 
+void PropertyPanel::RefreshBounds()
+{
+	if (!m_pBound)
+		return;
+
+	// Copie NON const : une valeur retenue au-dela de la nouvelle borne est
+	// reecrite dans le membre, faute de quoi la grille afficherait 6 recursions
+	// sous une borne a 1 -- Regenerate() la plafonne de son cote, l'affichage
+	// mentirait.
+	std::vector<Parameter> cur = m_pBound->GetParameters();
+	for (Parameter &p : cur)
+	{
+		wxPGProperty *prop = m_pGrid->GetPropertyByName(p.GetName());
+		if (!prop)
+			continue;
+
+		if (p.GetType() == Parameter::INT)
+		{
+			prop->SetAttribute(wxPG_ATTR_MIN, p.GetMinInt());
+			prop->SetAttribute(wxPG_ATTR_MAX, p.GetMaxInt());
+			const int v = std::min(std::max(p.GetInt(), p.GetMinInt()), p.GetMaxInt());
+			if (v != p.GetInt())
+			{
+				p.SetInt(v);
+				prop->SetValue(v);
+			}
+		}
+		else if (p.GetType() == Parameter::FLOAT)
+		{
+			prop->SetAttribute(wxPG_ATTR_MIN, p.GetMinFloat());
+			prop->SetAttribute(wxPG_ATTR_MAX, p.GetMaxFloat());
+			const float v = std::min(std::max(p.GetFloat(), p.GetMinFloat()), p.GetMaxFloat());
+			if (v != p.GetFloat())
+			{
+				p.SetFloat(v);
+				prop->SetValue((double)v);
+			}
+		}
+	}
+}
+
 void PropertyPanel::OnPropertyChanged(wxPropertyGridEvent &event)
 {
 	if (!m_pBound)
@@ -115,6 +157,10 @@ void PropertyPanel::OnPropertyChanged(wxPropertyGridEvent &event)
 		}
 		break;
 	}
+
+	// AVANT Regenerate() : la relecture peut plafonner une valeur devenue hors
+	// bornes, et c'est cette valeur-la qu'il faut regenerer.
+	RefreshBounds();
 
 	auto t0 = std::chrono::high_resolution_clock::now();
 	m_pBound->Regenerate();

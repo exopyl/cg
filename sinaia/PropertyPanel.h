@@ -34,6 +34,14 @@ private:
 	void OnPropertyChanged(wxPropertyGridEvent &event);
 	void Rebuild();
 
+	// Re-reads the bounds from the bound object and updates the MIN/MAX
+	// attributes in place. Needed because a parameter's bounds may depend on
+	// ANOTHER parameter's value -- the L-system caps its recursion count per
+	// system (2 for Plant1, 9 for the dragon curve). Updating in place rather
+	// than calling Rebuild(): the latter clears the grid, which would destroy
+	// the property whose event is being handled.
+	void RefreshBounds();
+
 	wxPropertyGrid *m_pGrid = nullptr;
 	IParameterized *m_pBound = nullptr;
 	std::vector<Parameter> m_params;  // cached copy for the bound object

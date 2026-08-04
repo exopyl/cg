@@ -39,7 +39,8 @@ bool buildContent(const std::string& filename,
 {
 	// Chargement, lissage, quantification, raffinement et anti-mouchetis : chaine
 	// partagee avec image_pixel_blocks (image_region_pipeline.h). Le relief ne
-	// pixelise pas et ne pre-reduit pas -> pixelWidth et workingMaxDim a 0.
+	// pixelise pas -> pixelWidth a 0. Il PRE-REDUIT en revanche (workingMaxDim,
+	// cf. ImageReliefOptions).
 	RegionQuantizeOptions qo;
 	qo.maxColors        = opt.maxColors;
 	qo.algo             = opt.algo;
@@ -48,7 +49,7 @@ bool buildContent(const std::string& filename,
 	qo.despecklePasses  = opt.despecklePasses;
 	qo.minRegionArea    = opt.minRegionArea;
 	qo.pixelWidth       = 0;
-	qo.workingMaxDim    = 0;
+	qo.workingMaxDim    = opt.workingMaxDim;
 
 	Img img;
 	if (!image_to_quantized_image(filename, qo, img))

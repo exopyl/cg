@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 extern "C" {
 #include "../../extern/glutess/glutess.h"
@@ -101,6 +102,51 @@ double signedArea(const std::vector<Vector2f>& pts)
 	return 0.5 * a;
 }
 
+// Retire les points consecutifs QUASI CONFONDUS, et referme proprement la boucle.
+//
+// Pourquoi c'est indispensable : glutess ECARTE un sommet redondant -- il
+// n'apparait alors dans aucun triangle. Or les parois se construisent en
+// retrouvant chaque arete de contour parmi les triangles de capot (voir
+// ExtrudedMeshBuilder::Append) : un sommet ecarte fait donc perdre TROIS aretes
+// d'un coup, celle qui entre, celle de longueur nulle, celle qui sort -- et donc
+// trois parois, silencieusement.
+//
+// Mesure avant correction, sur un trace dense (L-systeme « Dragon curve ») : 190
+// aretes sans paroi sur 1633, et sur ces 190, le nombre dont les deux extremites
+// etaient utilisees par un triangle valait exactement ZERO. Autrement dit la
+// totalite des pertes venait de sommets ecartes. Les paires fautives etaient
+// separees de 0 ou de 2,98e-08 -- soit un ULP de float a une magnitude de 0,3.
+//
+// Tolerance RELATIVE et non absolue : ces points sont IDENTIQUES en sortie de
+// Clipper2, c'est la mise a l'echelle de recenterAndFit qui les separe d'un bit.
+// Une comparaison exacte (meme sur les bits) les rate donc par construction.
+// 1e-6 de la magnitude laisse une marge de ~30 ULP au-dessus du bruit, et reste
+// trois ordres de grandeur sous la plus courte arete legitime observee (0,005).
+std::vector<Vector2f> dropDuplicatePoints(const std::vector<Vector2f>& pts)
+{
+	float mag = 1.f;
+	for (const Vector2f& p : pts)
+		mag = std::max(mag, std::max(std::fabs(p.x), std::fabs(p.y)));
+	const float eps = 1e-6f * mag;
+	auto same = [eps](const Vector2f& a, const Vector2f& b)
+	{
+		return std::fabs(a.x - b.x) <= eps && std::fabs(a.y - b.y) <= eps;
+	};
+
+	std::vector<Vector2f> out;
+	out.reserve(pts.size());
+	for (const Vector2f& p : pts)
+		if (out.empty() || !same(out.back(), p))
+			out.push_back(p);
+
+	// L'arete de fermeture est implicite : un dernier point confondu avec le
+	// premier produirait la meme degenerescence, en fin de boucle.
+	while (out.size() >= 2 && same(out.front(), out.back()))
+		out.pop_back();
+
+	return out;
+}
+
 // Tessellate all contours into `out`, remembering each contour's edges in
 // `outlineEdges` (pairs of vertex indices) so walls can be built afterwards.
 void tessellateContours(const std::vector<ExtrudeContour>& contours,
@@ -136,7 +182,10 @@ void tessellateContours(const std::vector<ExtrudeContour>& contours,
 	gluTessBeginPolygon(tess, &out);
 	for (const ExtrudeContour& contour : contours)
 	{
-		const size_t n = contour.pts.size();
+		// Nettoyage AVANT tout le reste : un point redondant serait ecarte par
+		// glutess et emporterait trois parois (cf. dropDuplicatePoints).
+		const std::vector<Vector2f> pts = dropDuplicatePoints(contour.pts);
+		const size_t n = pts.size();
 		if (n < 3) continue;
 
 		// Outer boundaries CCW, holes CW: the orientation a NONZERO fill needs
@@ -145,14 +194,14 @@ void tessellateContours(const std::vector<ExtrudeContour>& contours,
 		bool reverse = false;
 		if (normalizeOrientation)
 		{
-			const bool ccw = signedArea(contour.pts) > 0.;
+			const bool ccw = signedArea(pts) > 0.;
 			reverse = (ccw == contour.isHole);
 		}
 
 		const unsigned int contourStart = (unsigned int)out.verts.size();
 		for (size_t k = 0; k < n; ++k)
 		{
-			const Vector2f& p = contour.pts[reverse ? (n - 1 - k) : k];
+			const Vector2f& p = pts[reverse ? (n - 1 - k) : k];
 			out.verts.push_back({ p.x, p.y });
 		}
 
