@@ -1,24 +1,26 @@
 #include <stdlib.h>
 
 #include "image.h"
+#include "image_binarization.h"
+#include "image_histogram.h"
 
 //
 // binarization
 //
-int Img::bin_threshold (int threshold)
+int ImgBinarize::threshold (Img& img, int threshold)
 {
 	unsigned int i,j;
-	for (j=0; j<m_iHeight; j++)
-		for (i=0; i<m_iWidth; i++)
+	for (j=0; j<img.m_iHeight; j++)
+		for (i=0; i<img.m_iWidth; i++)
 			{
-				unsigned char value = (m_pPixels[4*(j*m_iWidth+i)] > threshold)? 255 : 0;
-				set_pixel(i, j, value, value, value, 255);
+				unsigned char value = (img.m_pPixels[4*(j*img.m_iWidth+i)] > threshold)? 255 : 0;
+				img.set_pixel (i, j, value, value, value, 255);
 			}
 	
 	return 0;
 }
 
-int Img::bin_random(int methodId)
+int ImgBinarize::random (Img& img, int methodId)
 {
 	unsigned int i,j,k;
 	float law[256];
@@ -26,7 +28,7 @@ int Img::bin_random(int methodId)
 	{
 	case 0: // GAUSSIAN
 	{
-		int mean = get_median_value ();
+		int mean = img.get_median_value ();
 		float sigma = 20.;
 		float sigma2 = sigma * sigma;
 		for (i=0; i<256; i++)
@@ -47,12 +49,12 @@ int Img::bin_random(int methodId)
 			thresholds[k++] = i;
 
 	// binarization
-	for (j=0; j<m_iHeight; j++)
-		for (i=0; i<m_iWidth; i++)
+	for (j=0; j<img.m_iHeight; j++)
+		for (i=0; i<img.m_iWidth; i++)
 			{
 				unsigned char threshold = thresholds[(int)(nthresholds * ((float)rand()/RAND_MAX))];
-				unsigned char value = (m_pPixels[4*(j*m_iWidth+i)] > threshold)? 255 : 0;
-				set_pixel(i, j, value, value, value, 255);
+				unsigned char value = (img.m_pPixels[4*(j*img.m_iWidth+i)] > threshold)? 255 : 0;
+				img.set_pixel (i, j, value, value, value, 255);
 			}
 
 	// clean
@@ -86,24 +88,24 @@ static float sig(float histo[256], int k, int mu, int taille_x, int taille_y)
 	return (float)tmp2;
 }
 
-int Img::bin_otsu (void)
+int ImgBinarize::otsu (Img& img)
 {
 	unsigned int i,j,k;
 
 	// get the histogram
 	float histogram[256];
-	get_histogram (histogram, 0);
+	ImgHistogram::compute (img, histogram, 0);
 	
 	// muT computation
 	float muT = 0.;
 	for (i=0;i<256;i++)
 		muT += (i+1)*histogram[i];
-	muT /= (float)(m_iWidth*m_iHeight);
+	muT /= (float)(img.m_iWidth*img.m_iHeight);
 	
 	// sigma computation
 	float sigma[256];
 	for (i=1; i<255; i++)
-		sigma[i] = sig(histogram,i,muT,m_iWidth,m_iHeight);
+		sigma[i] = sig(histogram,i,muT,img.m_iWidth,img.m_iHeight);
 
 	// looking for the max
 	i=0; 
@@ -115,19 +117,19 @@ int Img::bin_otsu (void)
 		}
 
 	// binarization
-	for (i=0; i<m_iWidth; i++)
-		for (j=0; j<m_iHeight; j++)
-			if (m_pPixels[4*(j*m_iWidth+i)] >= k)
-				set_pixel (i, j, 255, 255, 255, 255);
+	for (i=0; i<img.m_iWidth; i++)
+		for (j=0; j<img.m_iHeight; j++)
+			if (img.m_pPixels[4*(j*img.m_iWidth+i)] >= k)
+				img.set_pixel (i, j, 255, 255, 255, 255);
 			else
-				set_pixel (i, j, 0, 0, 0, 255);
+				img.set_pixel (i, j, 0, 0, 0, 255);
 	
 	return 0;
 }
 
-int Img::bin_floyd_steinberg (void)
+int ImgBinarize::floyd_steinberg (Img& img)
 {
-	const int w = (int)m_iWidth, h = (int)m_iHeight;
+	const int w = (int)img.m_iWidth, h = (int)img.m_iHeight;
 	const int threshold = 128;
 
 	// Tampon de travail signé : accumule l'erreur diffusée, qui peut sortir de [0,255].
@@ -136,7 +138,7 @@ int Img::bin_floyd_steinberg (void)
 		return -1;
 	for (int j=0; j<h; j++)
 		for (int i=0; i<w; i++)
-			buffer[w*j+i] = (float)m_pPixels[4*(j*w+i)];   // canal rouge (image supposée en gris)
+			buffer[w*j+i] = (float)img.m_pPixels[4*(j*w+i)];   // canal rouge (image supposée en gris)
 
 	// Balayage raster (ligne par ligne, gauche->droite) : seuillage + diffusion
 	// d'erreur Floyd-Steinberg (7/16 droite, 3/16 bas-gauche, 5/16 bas, 1/16 bas-droite),
@@ -146,7 +148,7 @@ int Img::bin_floyd_steinberg (void)
 		{
 			const float         oldv = buffer[w*j+i];
 			const unsigned char newv = (oldv < threshold) ? 0 : 255;
-			set_pixel (i, j, newv, newv, newv, 255);
+			img.set_pixel (i, j, newv, newv, newv, 255);
 			const float err = oldv - (float)newv;
 
 			if (i+1 < w)         buffer[w*j     + (i+1)] += err * 7.f/16.f;
@@ -162,17 +164,17 @@ int Img::bin_floyd_steinberg (void)
 	return 0;
 }
 
-int Img::bin_dithering (unsigned char *pattern, int psize)
+int ImgBinarize::dithering (Img& img, unsigned char *pattern, int psize)
 {
 	unsigned int i, j;
-	for (j=0; j<m_iHeight; j+=psize)
-		for (i=0; i<m_iWidth; i+=psize)
+	for (j=0; j<img.m_iHeight; j+=psize)
+		for (i=0; i<img.m_iWidth; i+=psize)
 		{
 			// get the mean value
 			int mean=0;
 			for (int pj=0; pj<psize; pj++)
 				for (int pi=0; pi<psize; pi++)
-					mean += m_pPixels[4*(m_iWidth*(j+pj)+i+pi)];
+					mean += img.m_pPixels[4*(img.m_iWidth*(j+pj)+i+pi)];
 			mean /= (psize*psize);
 
 			// get the threshold in the pattern
@@ -182,29 +184,29 @@ int Img::bin_dithering (unsigned char *pattern, int psize)
 			for (int pj=0; pj<psize; pj++)
 				for (int pi=0; pi<psize; pi++)
 					if (pattern[pj*psize+pi] < threshold)
-						set_pixel (i+pi, j+pj, 255, 255, 255, 255);
+						img.set_pixel (i+pi, j+pj, 255, 255, 255, 255);
 					else
-						set_pixel (i+pi, j+pj, 0, 0, 0, 255);
+						img.set_pixel (i+pi, j+pj, 0, 0, 0, 255);
 			
 		}
 		return 0;
 }
 
-int Img::bin_screening (Img *pPattern)
+int ImgBinarize::screening (Img& img, Img *pPattern)
 {
 	unsigned int i, j;
-	for (j=0; j<m_iHeight; j++)
-		for (i=0; i<m_iWidth; i++)
+	for (j=0; j<img.m_iHeight; j++)
+		for (i=0; i<img.m_iWidth; i++)
 		{
 			unsigned char r, g, b, a;
 			pPattern->get_pixel (i%pPattern->m_iWidth, j%pPattern->m_iHeight, &r, &g, &b, &a);
 			unsigned threshold = r;
-			get_pixel (i, j, &r, &g, &b, &a);
+			img.get_pixel (i, j, &r, &g, &b, &a);
 
 			if (r > threshold)
-				set_pixel (i, j, 255, 255, 255, 255);
+				img.set_pixel (i, j, 255, 255, 255, 255);
 			else
-				set_pixel (i, j, 0, 0, 0, 255);
+				img.set_pixel (i, j, 0, 0, 0, 255);
 		}
 		return 0;
 }

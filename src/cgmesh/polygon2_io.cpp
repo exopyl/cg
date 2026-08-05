@@ -792,7 +792,7 @@ void Polygon2::output (char *filename)
 				xend = -xmin + pPoints[2*((i+1)%nP)];
 				yend = (-ymin + pPoints[2*((i+1)%nP)+1]);
 				//printf ("%d %d %d %d\n", xstart, ystart, xend, yend);
-				img->draw_line (xstart, h-1-ystart,
+				ImgDraw::line (*img, xstart, h-1-ystart,
 						xend, h-1-yend,
 						255, 0, 0, 255);
 			}

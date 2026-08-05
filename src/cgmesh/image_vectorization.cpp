@@ -405,7 +405,7 @@ bool CLitRasterToVector::GeneratePath (const Img& sIndexed)
 					for(; itPath != pPath->end();itPath++)
 					{
 						Vector2f interPointE = GetInterpolatedCoord(*itPath);
-						sDebug.draw_line((interPointS[0]+.5)*5,
+						ImgDraw::line (sDebug, (interPointS[0]+.5)*5,
 								 (interPointS[1]+.5)*5,
 								 (interPointE[0]+.5)*5,
 								 (interPointE[1]+.5)*5,

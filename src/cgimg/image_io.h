@@ -9,8 +9,10 @@
 //
 // Img::load / Img::save remain as thin public delegators that forward here.
 //
-// image.h is included (not just forward-declared) so that FILE and the PNG/JPG
-// feature macros are visible to the guarded declarations below.
+// image.h is included (not just forward-declared) so that FILE is visible. The
+// CGIMG_WITH_PNG / CGIMG_WITH_JPG guards below come from cgimg's CMakeLists
+// (PRIVATE definitions): this header is included only by cgimg's own .cpp files,
+// so every translation unit that sees these declarations also sees the macros.
 #include "image.h"
 
 class ImgIO
@@ -31,11 +33,11 @@ private:
 	static int import_pnm (Img& img, const char *filename);
 	static int export_ppm (Img& img, const char *filename, int binary);
 	static int export_pnm (Img& img, const char *filename);
-#ifdef PNG
+#ifdef CGIMG_WITH_PNG
 	static int import_png (Img& img, const char *filename);
 	static int export_png (Img& img, const char *filename);
 #endif
-#ifdef JPG
+#ifdef CGIMG_WITH_JPG
 	static int import_jpg (Img& img, const char *filename);   // stb : import seul (pas d'encodeur)
 #endif
 };

@@ -311,8 +311,10 @@ void CgreQuickItem::updatePick(const QPointF &posItem)
     const QVector3D o = invModel.map(nearW);
     const QVector3D d = (invModel.map(farW) - o).normalized();
 
-    float oo[3] = { o.x(), o.y(), o.z() };
-    float dd[3] = { d.x(), d.y(), d.z() };
+    // Mesh::GetIntersectionWithRay prend des Vector3f depuis la migration de
+    // l'algebre (vec3/float[3] -> TVector3) ; ne pas repasser par des float[3].
+    const Vector3f oo (o.x(), o.y(), o.z());
+    const Vector3f dd (d.x(), d.y(), d.z());
 
     float     bestT = -1.0f;
     QVector3D bestHit;
@@ -320,13 +322,13 @@ void CgreQuickItem::updatePick(const QPointF &posItem)
     for (Mesh *mesh : meshes->GetMeshes()) {
         if (!mesh || mesh->GetNVertices() == 0)
             continue;
-        float t = -1.0f;
-        float hit[3] = { 0, 0, 0 };
-        float nrm[3] = { 0, 0, 0 };
+        float    t = -1.0f;
+        Vector3f hit (0.f, 0.f, 0.f);
+        Vector3f nrm (0.f, 0.f, 0.f);
         if (mesh->GetIntersectionWithRay(oo, dd, &t, hit, nrm) > 0 && t > 0.0f) {
             if (!found || t < bestT) {
                 bestT = t;
-                bestHit = QVector3D(hit[0], hit[1], hit[2]);
+                bestHit = QVector3D(hit.x, hit.y, hit.z);
                 found = true;
             }
         }

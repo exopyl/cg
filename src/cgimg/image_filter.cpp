@@ -1,6 +1,7 @@
 #include <stdlib.h>
 
 #include "image.h"
+#include "image_filter.h"
 
 #include <map>
 #include <utility>
@@ -66,10 +67,10 @@ void applyLabels (const LabelImage& L, Img& img)
 
 } // namespace
 
-int Img::filter_sobel ()
+int ImgFilter::sobel (Img& img)
 {
-	unsigned char *pPixels = (unsigned char*)malloc(4*m_iWidth*m_iHeight*sizeof(unsigned char));
-	memset (pPixels, 0, 4*m_iWidth*m_iHeight*sizeof(unsigned char));
+	unsigned char *pPixels = (unsigned char*)malloc(4*img.m_iWidth*img.m_iHeight*sizeof(unsigned char));
+	memset (pPixels, 0, 4*img.m_iWidth*img.m_iHeight*sizeof(unsigned char));
 	char filterx[3][3] = { {-1, -2, -1}, {0, 0, 0},  {1, 2, 1} };
 	char filtery[3][3] = { {-1, 0, 1},   {-2, 0, 2}, {-1, 0, 1} };
 	unsigned char mrgb[3][3][3];
@@ -78,8 +79,8 @@ int Img::filter_sobel ()
 
 	// visit the image
 	int i, j;
-	int iWidth = m_iWidth;
-	int iHeight = m_iHeight;
+	int iWidth = img.m_iWidth;
+	int iHeight = img.m_iHeight;
 	for (j=0; j<iHeight; j++)
 		for (i=0; i<iWidth; i++)
 		{
@@ -98,7 +99,7 @@ int Img::filter_sobel ()
 					if (jj > iHeight-1)
 						jj = 2 * iHeight - 1 - jj;
 
-					get_pixel (ii, jj, &mrgb[0][k+1][l+1], &mrgb[1][k+1][l+1], &mrgb[2][k+1][l+1], &a);
+					img.get_pixel (ii, jj, &mrgb[0][k+1][l+1], &mrgb[1][k+1][l+1], &mrgb[2][k+1][l+1], &a);
 				}
 			
 			// apply the filter
@@ -115,21 +116,21 @@ int Img::filter_sobel ()
 			for (int m=0; m<3; m++)
 			{
 				v = fabs((float)Gx[m]) + fabs((float)Gy[m]);
-				pPixels[4*(j*m_iWidth+i)+m]   = (v>255)? 255 : v;
+				pPixels[4*(j*img.m_iWidth+i)+m]   = (v>255)? 255 : v;
 			}
-			pPixels[4*(j*m_iWidth+i)+3] = 255;
+			pPixels[4*(j*img.m_iWidth+i)+3] = 255;
 		}
 
-	free (m_pPixels);
-	m_pPixels = pPixels;
+	free (img.m_pPixels);
+	img.m_pPixels = pPixels;
 
 	return 0;
 }
 
-int Img::filter (float m[3][3], float divide, float decay)
+int ImgFilter::convolve (Img& img, float m[3][3], float divide, float decay)
 {
-	unsigned char *pPixels = (unsigned char*)malloc(4*m_iWidth*m_iHeight*sizeof(unsigned char));
-	memset (pPixels, 0, 4*m_iWidth*m_iHeight*sizeof(unsigned char));
+	unsigned char *pPixels = (unsigned char*)malloc(4*img.m_iWidth*img.m_iHeight*sizeof(unsigned char));
+	memset (pPixels, 0, 4*img.m_iWidth*img.m_iHeight*sizeof(unsigned char));
 
 	if (divide == 0.)
 	{
@@ -139,8 +140,8 @@ int Img::filter (float m[3][3], float divide, float decay)
 	}
 	if (divide == 0.)
 		divide = 1.;
-	int iWidth = m_iWidth;
-	int iHeight = m_iHeight;
+	int iWidth = img.m_iWidth;
+	int iHeight = img.m_iHeight;
 	for (int j=1; j<iHeight-1; j++)
 		for (int i=1; i<iWidth-1; i++)
 		{
@@ -150,7 +151,7 @@ int Img::filter (float m[3][3], float divide, float decay)
 			for (int jj=0; jj<3; jj++)
 				for (int ii=0; ii<3; ii++)
 				{
-					get_pixel (i+ii-1, j+jj-1, &r, &g, &b, &a);
+					img.get_pixel (i+ii-1, j+jj-1, &r, &g, &b, &a);
 					accum[0] += m[ii][jj]*(float)r;
 					accum[1] += m[ii][jj]*(float)g;
 					accum[2] += m[ii][jj]*(float)b;
@@ -164,43 +165,43 @@ int Img::filter (float m[3][3], float divide, float decay)
 				if (accum[k] > 255.)
 					accum[k] = 255.;
 				unsigned char level = (unsigned char)accum[k];
-				pPixels[4*(j*m_iWidth+i)+k] = level;
+				pPixels[4*(j*img.m_iWidth+i)+k] = level;
 			}
 		}
 
-	free (m_pPixels);
-	m_pPixels = pPixels;
+	free (img.m_pPixels);
+	img.m_pPixels = pPixels;
 
 	return 0;
 }
 
-int Img::blur (void)
+int ImgFilter::blur (Img& img)
 {
 	float m[3][3] = {{1., 1., 1.},
 			 {1., 1., 1.},
 			 {1., 1., 1.}};
-	return filter (m);
+	return convolve (img, m);
 }
 
-int Img::gaussian_blur (void)
+int ImgFilter::gaussian_blur (Img& img)
 {
-	// 3x3 Gaussian kernel (sum = 16). filter() normalizes by the kernel sum when
+	// 3x3 Gaussian kernel (sum = 16). convolve() normalizes by the kernel sum when
 	// divide == 0, so this convolves and rescales correctly (same path as blur()).
 	// (Previously a no-op that returned success — the 5x5 kernel was only a comment.)
 	float m[3][3] = {{1.f, 2.f, 1.f},
 			 {2.f, 4.f, 2.f},
 			 {1.f, 2.f, 1.f}};
-	return filter (m);
+	return convolve (img, m);
 }
 
 //
 // "Bilateral Filtering for Gray and Color Images"
 // http://users.soe.ucsc.edu/~manduchi/Papers/ICCV98.pdf
 //
-int Img::bilateral_filtering (void)
+int ImgFilter::bilateral (Img& img)
 {
-	unsigned char *pPixels = (unsigned char*)malloc(4*m_iWidth*m_iHeight*sizeof(unsigned char));
-	memset (pPixels, 0, 4*m_iWidth*m_iHeight*sizeof(unsigned char));
+	unsigned char *pPixels = (unsigned char*)malloc(4*img.m_iWidth*img.m_iHeight*sizeof(unsigned char));
+	memset (pPixels, 0, 4*img.m_iWidth*img.m_iHeight*sizeof(unsigned char));
 
 	int n = 6;
 	float sigmaD = 5.;
@@ -211,12 +212,12 @@ int Img::bilateral_filtering (void)
 	unsigned char ro, go, bo, ao;
 	unsigned char r, g, b, a;
 	int i, ii, iii, j, jj, jjj;
-	int iWidth = m_iWidth;
-	int iHeight = m_iHeight;
+	int iWidth = img.m_iWidth;
+	int iHeight = img.m_iHeight;
 	for (j=0; j<iHeight; j++)
 		for (i=0; i<iWidth; i++)
 		{
-			get_pixel (i, j, &ro, &go, &bo, &ao);
+			img.get_pixel (i, j, &ro, &go, &bo, &ao);
 			float accum[4] = {0., 0., 0., 0.};
 			float norm = 0.;
 			for (jj=-n/2; jj<=n/2; jj++)
@@ -240,7 +241,7 @@ int Img::bilateral_filtering (void)
 						jjj = 2 * iHeight - 1 - jjj;
 						
 						
-					get_pixel (iii, jjj, &r, &g, &b, &a);
+					img.get_pixel (iii, jjj, &r, &g, &b, &a);
 
 					// closeness function
 					float c = exp (-0.5*(ii*ii+jj*jj)*sigmaD2inv);
@@ -265,12 +266,12 @@ int Img::bilateral_filtering (void)
 				if (accum[k] > 255.)
 					accum[k] = 255.;
 				unsigned char level = (unsigned char)accum[k];
-				pPixels[4*(j*m_iWidth+i)+k] = level;
+				pPixels[4*(j*img.m_iWidth+i)+k] = level;
 			}
 		}
 
-	free (m_pPixels);
-	m_pPixels = pPixels;
+	free (img.m_pPixels);
+	img.m_pPixels = pPixels;
 
 	return 0;
 }
@@ -286,14 +287,14 @@ int Img::bilateral_filtering (void)
 // du compte du centre. Sans cette regle, une frontiere franche entre deux regions
 // deriverait d'un pixel a chaque passe.
 //
-int Img::filter_majority (int radius, int passes)
+int ImgFilter::majority (Img& img, int radius, int passes)
 {
-	if (m_pPixels == nullptr || m_iWidth == 0 || m_iHeight == 0)
+	if (img.m_pPixels == nullptr || img.m_iWidth == 0 || img.m_iHeight == 0)
 		return -1;
 	if (radius < 1 || passes < 1)
 		return 0;                      // rien a faire, pas une erreur
 
-	LabelImage L = toLabels (*this);
+	LabelImage L = toLabels (img);
 	const int nLabels = (int)L.rgb.size ();
 	std::vector<int> votes ((size_t)nLabels, 0);
 	// Un label touche par pixel visite au plus : (2r+1)^2 voisins.
@@ -331,7 +332,7 @@ int Img::filter_majority (int radius, int passes)
 			}
 	}
 
-	applyLabels (L, *this);
+	applyLabels (L, img);
 	return 0;
 }
 
@@ -349,14 +350,14 @@ int Img::filter_majority (int radius, int passes)
 // l'etiquetage reste un pavage complet de l'image, sans trou. C'est ce qui permet
 // aux appelants qui vectorisent ensuite les regions de garder une emprise exacte.
 //
-int Img::absorb_small_regions (int minArea, int passes)
+int ImgFilter::absorb_small_regions (Img& img, int minArea, int passes)
 {
-	if (m_pPixels == nullptr || m_iWidth == 0 || m_iHeight == 0)
+	if (img.m_pPixels == nullptr || img.m_iWidth == 0 || img.m_iHeight == 0)
 		return -1;
 	if (minArea <= 0 || passes < 1)
 		return 0;                      // rien a faire, pas une erreur
 
-	LabelImage L = toLabels (*this);
+	LabelImage L = toLabels (img);
 	const int dx4[4] = { 1, -1, 0, 0 }, dy4[4] = { 0, 0, 1, -1 };
 
 	for (int pass = 0; pass < passes; ++pass)
@@ -410,79 +411,79 @@ int Img::absorb_small_regions (int minArea, int passes)
 		L.px.swap (next);
 	}
 
-	applyLabels (L, *this);
+	applyLabels (L, img);
 	return 0;
 }
 
-int Img::saturate (float t)
+int ImgFilter::saturate (Img& img, float t)
 {
-	for (unsigned int j=0; j<m_iHeight; j++)
-		for (unsigned int i=0; i<m_iWidth; i++)
+	for (unsigned int j=0; j<img.m_iHeight; j++)
+		for (unsigned int i=0; i<img.m_iWidth; i++)
 		{
 			unsigned char r, g, b, a, avg;
 
-			get_pixel (i, j, &r, &g, &b, &a);
+			img.get_pixel (i, j, &r, &g, &b, &a);
 			avg = ( r + g + b ) / 3;
 
 			r = CLAMP ((avg + t * (r - avg)), 0, 255);
 			g = CLAMP ((avg + t * (g - avg)), 0, 255);
 			b = CLAMP ((avg + t * (b - avg)), 0, 255);
 		
-			set_pixel (i, j, r, g, b, a);
+			img.set_pixel (i, j, r, g, b, a);
 		}
 		return 0;
 }
 
-int Img::brightness (float t)
+int ImgFilter::brightness (Img& img, float t)
 {
-	for (unsigned int j=0; j<m_iHeight; j++)
-		for (unsigned int i=0; i<m_iWidth; i++)
+	for (unsigned int j=0; j<img.m_iHeight; j++)
+		for (unsigned int i=0; i<img.m_iWidth; i++)
 		{
 			unsigned char r, g, b, a;
 
-			get_pixel (i, j, &r, &g, &b, &a);
+			img.get_pixel (i, j, &r, &g, &b, &a);
 
 			r = CLAMP (t * r, 0, 255);
 			g = CLAMP (t * g, 0, 255);
 			b = CLAMP (t * b, 0, 255);
 		
-			set_pixel (i, j, r, g, b, a);
+			img.set_pixel (i, j, r, g, b, a);
 		}
 		return 0;
 }
 
-int Img::gamma (float t)
+int ImgFilter::gamma (Img& img, float t)
 {
-	for (unsigned int j=0; j<m_iHeight; j++)
-		for (unsigned int i=0; i<m_iWidth; i++)
+	for (unsigned int j=0; j<img.m_iHeight; j++)
+		for (unsigned int i=0; i<img.m_iWidth; i++)
 		{
 			unsigned char r, g, b, a;
 
-			get_pixel (i, j, &r, &g, &b, &a);
+			img.get_pixel (i, j, &r, &g, &b, &a);
 
 			r = CLAMP (pow(r, t), 0, 255);
 			g = CLAMP (pow(g, t), 0, 255);
 			b = CLAMP (pow(b, t), 0, 255);
 		
-			set_pixel (i, j, r, g, b, a);
+			img.set_pixel (i, j, r, g, b, a);
 		}
 		return 0;
 }
 
-int Img::sepia (void)
+int ImgFilter::sepia (Img& img)
 {
-	unsigned int w = m_iWidth;
-	unsigned int h = m_iHeight;
+	unsigned int w = img.m_iWidth;
+	unsigned int h = img.m_iHeight;
 	for (unsigned int j=0; j<h; j++)
 		for (unsigned int i=0; i<w; i++)
 		{
 			unsigned char r, g, b, a;
 
-			get_pixel (i, j, &r, &g, &b, &a);
+			img.get_pixel (i, j, &r, &g, &b, &a);
 
 			// Standard sepia matrix. (A second set_pixel used to overwrite this
 			// with r+40/g+20/b-20 of the ORIGINAL pixel, negating the sepia.)
-			set_pixel (i, j,
+			img.set_pixel (i, j,
 				   CLAMP ((r * 0.393) + (g * 0.769) + (b * 0.189), 0, 255),
 				   CLAMP ((r * 0.349) + (g * 0.686) + (b * 0.168), 0, 255),
 				   CLAMP ((r * 0.272) + (g * 0.534) + (b * 0.131), 0, 255),

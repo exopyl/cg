@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "image.h"
+#include "image_quantization.h"
 
 #include "image_quantization_heckbert.h"
 #include "image_quantization_wu.h"
@@ -18,7 +19,7 @@
 // Color Image Quantization for Frame Buffer Display
 // Paul S. Heckbert
 // SIGGRAPH '82, July 1982, pp. 297-307
-int Img::quant_heckbert (int ncolors)
+int ImgQuantize::heckbert (Img& img, int ncolors)
 {
 	// 32768 * (2 + 3) bytes = 160 KB: allocate on the heap, not the stack
 	// (a stack array this large can overflow worker-thread / deep-call stacks).
@@ -27,21 +28,21 @@ int Img::quant_heckbert (int ncolors)
 
 	memset (Hist, 0, 32768*sizeof(unsigned short));
 	unsigned char r, g, b, a;
-	for (unsigned int j=0; j<m_iHeight; j++)
-		for (unsigned int i=0; i<m_iWidth; i++)
+	for (unsigned int j=0; j<img.m_iHeight; j++)
+		for (unsigned int i=0; i<img.m_iWidth; i++)
 		{
-			get_pixel (i, j, &r, &g, &b, &a);
+			img.get_pixel (i, j, &r, &g, &b, &a);
 			Hist[RGB(r,g,b)]++;
 		}
 
 	unsigned short res = MedianCut(Hist, ColMap, ncolors);
 
-	for (unsigned int j=0; j<m_iHeight; j++)
-		for (unsigned int i=0; i<m_iWidth; i++)
+	for (unsigned int j=0; j<img.m_iHeight; j++)
+		for (unsigned int i=0; i<img.m_iWidth; i++)
 		{
-			get_pixel (i, j, &r, &g, &b, &a);
+			img.get_pixel (i, j, &r, &g, &b, &a);
 			int ci = Hist[RGB(r,g,b)];
-			set_pixel (i, j, ColMap[ci][0], ColMap[ci][1], ColMap[ci][2], a);
+			img.set_pixel (i, j, ColMap[ci][0], ColMap[ci][1], ColMap[ci][2], a);
 		}
 
 	delete[] Hist;
@@ -53,16 +54,16 @@ int Img::quant_heckbert (int ncolors)
 // Raffinement de Lloyd (k-means) de la palette. Cf. le commentaire de
 // declaration dans image.h pour les mesures et le pourquoi.
 //
-int Img::quant_refine (const Img &reference, int iterations)
+int ImgQuantize::refine (Img& img, const Img &reference, int iterations)
 {
-	if (reference.width() != m_iWidth || reference.height() != m_iHeight)
+	if (reference.width() != img.m_iWidth || reference.height() != img.m_iHeight)
 		return -1;
-	if (bUsePalette || reference.uses_palette())
+	if (img.bUsePalette || reference.uses_palette())
 		return -1;   // les deux buffers doivent etre en RGBA8 (cf. data())
-	if (iterations <= 0 || m_iWidth == 0 || m_iHeight == 0)
+	if (iterations <= 0 || img.m_iWidth == 0 || img.m_iHeight == 0)
 		return 0;
 
-	const unsigned int nPixels = m_iWidth * m_iHeight;
+	const unsigned int nPixels = img.m_iWidth * img.m_iHeight;
 	const unsigned char *pRef = reference.data();
 
 	// Palette courante = couleurs distinctes de l'image quantifiee.
@@ -70,14 +71,14 @@ int Img::quant_refine (const Img &reference, int iterations)
 	std::vector<int> palR, palG, palB;
 	for (unsigned int i = 0; i < nPixels; i++)
 	{
-		const unsigned int key = ((unsigned int)m_pPixels[4*i] << 16)
-		                       | ((unsigned int)m_pPixels[4*i+1] << 8)
-		                       |  (unsigned int)m_pPixels[4*i+2];
+		const unsigned int key = ((unsigned int)img.m_pPixels[4*i] << 16)
+		                       | ((unsigned int)img.m_pPixels[4*i+1] << 8)
+		                       |  (unsigned int)img.m_pPixels[4*i+2];
 		if (index.emplace(key, (int)palR.size()).second)
 		{
-			palR.push_back(m_pPixels[4*i]);
-			palG.push_back(m_pPixels[4*i+1]);
-			palB.push_back(m_pPixels[4*i+2]);
+			palR.push_back(img.m_pPixels[4*i]);
+			palG.push_back(img.m_pPixels[4*i+1]);
+			palB.push_back(img.m_pPixels[4*i+2]);
 		}
 	}
 	const int K = (int)palR.size();
@@ -126,9 +127,9 @@ int Img::quant_refine (const Img &reference, int iterations)
 	for (unsigned int i = 0; i < nPixels; i++)
 	{
 		const int k = assign[i];
-		m_pPixels[4*i]   = (unsigned char)palR[k];
-		m_pPixels[4*i+1] = (unsigned char)palG[k];
-		m_pPixels[4*i+2] = (unsigned char)palB[k];
+		img.m_pPixels[4*i]   = (unsigned char)palR[k];
+		img.m_pPixels[4*i+1] = (unsigned char)palG[k];
+		img.m_pPixels[4*i+2] = (unsigned char)palB[k];
 	}
 	return K;
 }
@@ -136,25 +137,25 @@ int Img::quant_refine (const Img &reference, int iterations)
 //
 // http://www.ece.mcmaster.ca/~xwu/cq.c
 //
-int Img::quant_wu (int ncolors)
+int ImgQuantize::wu (Img& img, int ncolors)
 {
-	int res = MedianCut_Wu (m_pPixels, m_iWidth*m_iHeight, ncolors);
+	int res = MedianCut_Wu (img.m_pPixels, img.m_iWidth*img.m_iHeight, ncolors);
 
 	return 0;
 }
 
-int Img::quant_kmean (float threshold)
+int ImgQuantize::kmean (Img& img, float threshold)
 {
-	int n = m_iWidth*m_iHeight;
+	int n = img.m_iWidth*img.m_iHeight;
 	printf ("n pixels : %d\n", n);
 
 	// convert unsigned char to float
 	float *pPixels = (float*)malloc(3*n*sizeof(float));
 	for (int i=0; i<n; i++)
 	{
-		pPixels[3*i]   = m_pPixels[4*i]/255.;
-		pPixels[3*i+1] = m_pPixels[4*i+1]/255.;
-		pPixels[3*i+2] = m_pPixels[4*i+2]/255.;
+		pPixels[3*i]   = img.m_pPixels[4*i]/255.;
+		pPixels[3*i+1] = img.m_pPixels[4*i+1]/255.;
+		pPixels[3*i+2] = img.m_pPixels[4*i+2]/255.;
 	}
 	FILE *ptr = fopen ("colors.asc", "w");
 	for (int i=0; i<n; i++)
@@ -273,10 +274,10 @@ int Img::quant_kmean (float threshold)
 				cnew = cwalk;
 			}
 		}
-		m_pPixels[4*i]   = (int)255.*cnew[0];
-		m_pPixels[4*i+1] = (int)255.*cnew[1];
-		m_pPixels[4*i+2] = (int)255.*cnew[2];
-		m_pPixels[4*i+3] = 255;
+		img.m_pPixels[4*i]   = (int)255.*cnew[0];
+		img.m_pPixels[4*i+1] = (int)255.*cnew[1];
+		img.m_pPixels[4*i+2] = (int)255.*cnew[2];
+		img.m_pPixels[4*i+3] = 255;
 	}
 
 	ptr = fopen ("clusters2.asc", "w");
@@ -289,8 +290,8 @@ int Img::quant_kmean (float threshold)
 	fclose (ptr);
 
 	// look for the final number of colors
-	//int *pIndices = (int*)malloc(m_iWidth*m_iHeight*sizeof(int));
-	unsigned char *pPalette = (unsigned char*)malloc(3*m_iWidth*m_iHeight*sizeof(unsigned char));
+	//int *pIndices = (int*)malloc(img.m_iWidth*img.m_iHeight*sizeof(int));
+	unsigned char *pPalette = (unsigned char*)malloc(3*img.m_iWidth*img.m_iHeight*sizeof(unsigned char));
 	int ncolors = 0;
 	for (int i=0; i<3*nclusters; i++)
 		pPalette[i] = (int)(255.*pClusters[i]);

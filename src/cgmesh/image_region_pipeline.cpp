@@ -32,9 +32,9 @@ namespace {
 void despeckle(Img& img, int passes, int minRegionArea)
 {
 	if (passes > 0)
-		img.filter_majority(/*radius=*/1, passes);
+		ImgFilter::majority (img, /*radius=*/1, passes);
 	if (minRegionArea > 0)
-		img.absorb_small_regions(minRegionArea);
+		ImgFilter::absorb_small_regions (img, minRegionArea);
 }
 
 // ============================================================================
@@ -180,7 +180,7 @@ bool image_to_quantized_image(const std::string& filename,
 	// resampled source before the palette decision is taken, which is what keeps
 	// the region boundaries on the shapes of the original (cf. preSmoothPasses).
 	for (int i = 0; i < opt.preSmoothPasses; ++i)
-		img.bilateral_filtering();
+		ImgFilter::bilateral (img);
 
 	// Le raster de cette chaine est OPAQUE par contrat : tout l'etage aval
 	// (quantification, anti-mouchetis, vectorisation) raisonne sur des COULEURS, et
@@ -208,15 +208,15 @@ bool image_to_quantized_image(const std::string& filename,
 
 	const int nColors = std::max(2, std::min(opt.maxColors, kMaxPaletteColors));
 	if (opt.algo == QuantAlgo::Heckbert)
-		img.quant_heckbert(nColors);
+		ImgQuantize::heckbert (img, nColors);
 	else
-		img.quant_wu(nColors);
+		ImgQuantize::wu (img, nColors);
 
 	// Raffinement AVANT l'anti-mouchetis : il reaffecte chaque pixel au plus
 	// proche, donc l'appliquer apres reintroduirait le mouchetis qu'on vient
 	// d'oter.
 	if (opt.refineIterations > 0)
-		img.quant_refine(reference, opt.refineIterations);
+		ImgQuantize::refine (img, reference, opt.refineIterations);
 
 	// Pixelisation APRES la quantification : le vote majoritaire choisit parmi des
 	// couleurs de palette, donc n'en cree aucune. L'inverse (reduire puis

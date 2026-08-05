@@ -33,11 +33,11 @@ int ImgIO::load (Img& img, char const *filename, char const *path)
 
 	std::string ext = fullPath.extension().string();
 
-#ifdef PNG
+#ifdef CGIMG_WITH_PNG
 	if (ext == ".png")
 	     return import_png (img, fullPath.string().c_str());
 #endif
-#ifdef JPG
+#ifdef CGIMG_WITH_JPG
 	if (ext == ".jpg" || ext == ".jpeg")
 	     return import_jpg (img, fullPath.string().c_str());
 #endif
@@ -58,7 +58,7 @@ int ImgIO::save (Img& img, char const *filename)
 
 	std::string ext = std::filesystem::path(filename).extension().string();
 
-#ifdef PNG
+#ifdef CGIMG_WITH_PNG
 	if (ext == ".png")
 	     return export_png (img, filename);
 #endif

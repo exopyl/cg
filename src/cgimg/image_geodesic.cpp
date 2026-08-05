@@ -2,6 +2,7 @@
 using namespace std;
 
 #include "image.h"
+#include "image_geodesic.h"
 
 #include "../cgmath/common.h"
 
@@ -34,15 +35,15 @@ static void _compute_offsets_for_neighbours (int offset_neighbours[4], int i, in
 }
 
 // geodesic
-int Img::geodesic (void)
+int ImgGeodesic::apply (Img& img)
 {
 	// distances
-	float *d = (float*)malloc(m_iWidth*m_iHeight*sizeof(float));
-	memset (d, 0, m_iWidth*m_iHeight*sizeof(float));
+	float *d = (float*)malloc(img.m_iWidth*img.m_iHeight*sizeof(float));
+	memset (d, 0, img.m_iWidth*img.m_iHeight*sizeof(float));
 
 	// labels : 0 -> unprocessed / 1 -> close / 2 -> fixed
-	char *l = (char*)malloc(m_iWidth*m_iHeight*sizeof(char));
-	memset (l, 0, m_iWidth*m_iHeight*sizeof(char));
+	char *l = (char*)malloc(img.m_iWidth*img.m_iHeight*sizeof(char));
+	memset (l, 0, img.m_iWidth*img.m_iHeight*sizeof(char));
 	
 	//
 	// init d & l
@@ -50,27 +51,27 @@ int Img::geodesic (void)
 	unsigned i, j;
 	int offset;
 
-	for (j=0; j<m_iHeight; j++)
-		for (i=0; i<m_iWidth; i++)
+	for (j=0; j<img.m_iHeight; j++)
+		for (i=0; i<img.m_iWidth; i++)
 		{
-			int offset = m_iWidth*j + i;
+			int offset = img.m_iWidth*j + i;
 			d[offset] = 100000000.; // infinite
 			l[offset] = 0;   // unprocessed
 		}
 
 	// identify the fixed pixels
-	for (j=0; j<m_iHeight; j++)
-		for (i=0; i<m_iWidth; i++)
+	for (j=0; j<img.m_iHeight; j++)
+		for (i=0; i<img.m_iWidth; i++)
 		{
-			int offset = m_iWidth*j + i;
-			if (get_r (i, j) == 0) // black => source
+			int offset = img.m_iWidth*j + i;
+			if (img.get_r (i, j) == 0) // black => source
 			{
 				d[offset] = 0.;
 				l[offset] = 2; // fixed
 				
 				// update the 4-neighbours
 				int offsetneighbours[4];
-				_compute_offsets_for_neighbours (offsetneighbours, i, j, m_iWidth, m_iHeight);
+				_compute_offsets_for_neighbours (offsetneighbours, i, j, img.m_iWidth, img.m_iHeight);
 
 				for (int k=0; k<4; k++)
 				{
@@ -80,10 +81,10 @@ int Img::geodesic (void)
 						d[offsetneighbours[k]] = 1.; // h = 1
 
 						// debug
-						m_pPixels[4*offsetneighbours[k]]   = 1;
-						m_pPixels[4*offsetneighbours[k]+1] = 1;
-						m_pPixels[4*offsetneighbours[k]+2] = 1;
-						m_pPixels[4*offsetneighbours[k]+3] = 255;
+						img.m_pPixels[4*offsetneighbours[k]]   = 1;
+						img.m_pPixels[4*offsetneighbours[k]+1] = 1;
+						img.m_pPixels[4*offsetneighbours[k]+2] = 1;
+						img.m_pPixels[4*offsetneighbours[k]+3] = 255;
 					}
 				}
 			}
@@ -94,15 +95,15 @@ int Img::geodesic (void)
 	//
 	// init the priority queue
 	priority_queue<PixelClose, vector<PixelClose>, ComparePixelClose> pq;
-	for (j=1; j<m_iHeight-1; j++)
-		for (i=1; i<m_iWidth-1; i++)
+	for (j=1; j<img.m_iHeight-1; j++)
+		for (i=1; i<img.m_iWidth-1; i++)
 		{
-			if (l[m_iWidth*j + i] == 1)
+			if (l[img.m_iWidth*j + i] == 1)
 			{
 				PixelClose pc;
 				pc.i = i;
 				pc.j = j;
-				pc.d = d[m_iWidth*j + i];
+				pc.d = d[img.m_iWidth*j + i];
 				pq.push(pc);
 			}
 		}
@@ -114,21 +115,21 @@ int Img::geodesic (void)
 		PixelClose pc = pq.top();
 		pq.pop();
 
-		offset = m_iWidth*pc.j+pc.i;
+		offset = img.m_iWidth*pc.j+pc.i;
 
 		// debug
 		//printf ("%d %d\n", pc.i, pc.j);
 		mm++;
-		m_pPixels[4*offset]   = (unsigned char)d[offset];
-		m_pPixels[4*offset+1] = (unsigned char)d[offset];
-		m_pPixels[4*offset+2] = (unsigned char)d[offset];
-		m_pPixels[4*offset+2] = (unsigned char)d[offset];
+		img.m_pPixels[4*offset]   = (unsigned char)d[offset];
+		img.m_pPixels[4*offset+1] = (unsigned char)d[offset];
+		img.m_pPixels[4*offset+2] = (unsigned char)d[offset];
+		img.m_pPixels[4*offset+2] = (unsigned char)d[offset];
 		//if (mm==250)
 		//	break;
 
 		
 		int offsetneighbours[4];
-		_compute_offsets_for_neighbours (offsetneighbours, pc.i, pc.j, m_iWidth, m_iHeight);
+		_compute_offsets_for_neighbours (offsetneighbours, pc.i, pc.j, img.m_iWidth, img.m_iHeight);
 
 		if (offsetneighbours[0] == -1 ||
 		    offsetneighbours[1] == -1 ||
@@ -167,7 +168,7 @@ int Img::geodesic (void)
 					pc_new.i = pc.i+1;
 					pc_new.j = pc.j;
 				}
-				_compute_offsets_for_neighbours (offsetneighbours2, pc.i, pc.j-1, m_iWidth, m_iHeight);
+				_compute_offsets_for_neighbours (offsetneighbours2, pc.i, pc.j-1, img.m_iWidth, img.m_iHeight);
 
 				if (offsetneighbours2[0] == -1 ||
 				    offsetneighbours2[1] == -1 ||

@@ -19,20 +19,20 @@ TEST(TEST_cgimg_img, generations)
 {
 	Img *img = new Img ();
 
-	img->init_test_grayscale1 (100);
+	ImgTestPattern::grayscale1 (*img, 100);
 	img->save ((char*)"./img_grayscale1.pgm");
 
-	img->init_test_grayscale2 (50);
+	ImgTestPattern::grayscale2 (*img, 50);
 	img->save ((char*)"./img_grayscale2.pgm");
 
-	img->init_test_color_jet (256, 100);
+	ImgTestPattern::color_jet (*img, 256, 100);
 	img->save ((char*)"./img_color_jet.ppm");
 }
 
 TEST(TEST_cgimg_img, binarization)
 {
 	Img* img = new Img();
-	img->init_test_grayscale2(50);
+	ImgTestPattern::grayscale2 (*img, 50);
 
 	img->convert_to_grayscale ();
 	// threshold
@@ -40,7 +40,7 @@ TEST(TEST_cgimg_img, binarization)
 		Img *imgc = new Img (*img);
 
 		unsigned char t = imgc->get_mean_value ();
-		imgc->bin_threshold (t);
+		ImgBinarize::threshold (*imgc, t);
 		imgc->save ((char*)"./img_bin_threshold.pgm");
 
 		delete imgc;
@@ -50,7 +50,7 @@ TEST(TEST_cgimg_img, binarization)
 	{
 		Img *imgc = new Img (*img);
 
-		imgc->bin_otsu ();
+		ImgBinarize::otsu (*imgc);
 		imgc->save ((char*)"./img_bin_otsu.pgm");
 
 		delete imgc;
@@ -60,7 +60,7 @@ TEST(TEST_cgimg_img, binarization)
 	{
 		Img *imgc = new Img (*img);
 
-		imgc->bin_floyd_steinberg ();
+		ImgBinarize::floyd_steinberg (*imgc);
 		imgc->save ((char*)"./img_bin_floyd_steinberg.pgm");
 
 		delete imgc;
@@ -87,7 +87,7 @@ TEST(TEST_cgimg_img, binarization)
 		Img *imgc = new Img ();
 		imgc->crop (img, 0, 0, img->width() - img->width()%psize, img->height() - img->height()%psize);
 		
-		imgc->bin_dithering (pattern, psize);
+		ImgBinarize::dithering (*imgc, pattern, psize);
 		imgc->save ((char*)"./img_bin_dithering.pgm");
 
 		delete imgc;
@@ -99,7 +99,7 @@ TEST(TEST_cgimg_img, binarization)
 		Img *imgPattern = new Img ();
 		imgPattern->load ((char*)"./test/data/halftone.pgm");
 
-		imgc->bin_screening (imgPattern);
+		ImgBinarize::screening (*imgc, imgPattern);
 		imgc->save ((char*)"./img_bin_screening.pgm");
 
 		delete imgPattern;
@@ -110,12 +110,12 @@ TEST(TEST_cgimg_img, binarization)
 TEST(TEST_cgimg_img, quantization)
 {
 	Img* img = new Img();
-	img->init_test_grayscale2(50);
+	ImgTestPattern::grayscale2 (*img, 50);
 
 	// heckbert
 	{
 		Img *imgc = new Img (*img);
-		imgc->quant_heckbert (16);
+		ImgQuantize::heckbert (*imgc, 16);
 		imgc->save ((char*)"./img_quant_heckbert.ppm");
 		delete imgc;
 	}
@@ -123,7 +123,7 @@ TEST(TEST_cgimg_img, quantization)
 	// wu
 	{
 		Img *imgc = new Img (*img);
-		imgc->quant_wu (16);
+		ImgQuantize::wu (*imgc, 16);
 		imgc->save ((char*)"./img_quant_wu.ppm");
 		delete imgc;
 	}
@@ -131,7 +131,7 @@ TEST(TEST_cgimg_img, quantization)
 	// kmean
 	{
 		Img *imgc = new Img (*img);
-		imgc->quant_kmean (0.05);
+		ImgQuantize::kmean (*imgc, 0.05);
 		imgc->save ((char*)"./img_quant_kmean.ppm");
 		delete imgc;
 	}
@@ -158,17 +158,17 @@ static double img_mse (Img &a, Img &b)
 TEST(TEST_cgimg_img, quant_refine_reduces_error)
 {
 	Img ref;
-	ref.init_test_color_jet (128, 96);   // degrade continu : beaucoup de couleurs
+	ImgTestPattern::color_jet (ref, 128, 96);   // degrade continu : beaucoup de couleurs
 
 	for (int ncolors : { 4, 8, 16 })
 	{
 		Img wu = ref;
-		wu.quant_wu (ncolors);
+		ImgQuantize::wu (wu, ncolors);
 		const double before = img_mse (ref, wu);
 
 		Img wuR = ref;
-		wuR.quant_wu (ncolors);
-		const int k = wuR.quant_refine (ref, 4);
+		ImgQuantize::wu (wuR, ncolors);
+		const int k = ImgQuantize::refine (wuR, ref, 4);
 		const double after = img_mse (ref, wuR);
 
 		EXPECT_GT (k, 0) << "la palette doit etre trouvee (ncolors=" << ncolors << ")";
@@ -179,11 +179,11 @@ TEST(TEST_cgimg_img, quant_refine_reduces_error)
 
 		// Heckbert part de bien plus loin ; le raffinement doit le rattraper.
 		Img hb = ref;
-		hb.quant_heckbert (ncolors);
+		ImgQuantize::heckbert (hb, ncolors);
 		const double hbBefore = img_mse (ref, hb);
 		Img hbR = ref;
-		hbR.quant_heckbert (ncolors);
-		hbR.quant_refine (ref, 4);
+		ImgQuantize::heckbert (hbR, ncolors);
+		ImgQuantize::refine (hbR, ref, 4);
 		const double hbAfter = img_mse (ref, hbR);
 		EXPECT_LE (hbAfter, hbBefore + 1e-9)
 			<< "idem pour Heckbert : " << hbBefore << " -> " << hbAfter;
@@ -201,14 +201,14 @@ TEST(TEST_cgimg_img, quant_refine_rejects_mismatched_input)
 	Img small (16, 16, false);
 	small.init_color (10, 20, 30, 255);
 
-	EXPECT_EQ (a.quant_refine (small, 2), -1) << "dimensions differentes";
-	EXPECT_EQ (a.quant_refine (a, 0), 0)      << "0 iteration = no-op";
+	EXPECT_EQ (ImgQuantize::refine (a, small, 2), -1) << "dimensions differentes";
+	EXPECT_EQ (ImgQuantize::refine (a, a, 0), 0)      << "0 iteration = no-op";
 }
 
 TEST(TEST_cgimg_img, filter)
 {
 	Img* img = new Img();
-	img->init_test_grayscale2(50);
+	ImgTestPattern::grayscale2 (*img, 50);
 
 	float filter[3][3];
 	set3x3 (filter,
@@ -223,7 +223,7 @@ TEST(TEST_cgimg_img, filter)
 			   -1., 5., -1.,
 			   0., -1., 0.);
 		Img *imgc = new Img (*img);
-		imgc->filter (filter);
+		ImgFilter::convolve (*imgc, filter);
 		imgc->save ((char*)"./img_filter_passe_haut.ppm");
 		delete imgc;
 	}
@@ -235,7 +235,7 @@ TEST(TEST_cgimg_img, filter)
 			   1., 4., 1.,
 			   1., 1., 1.);
 		Img *imgc = new Img (*img);
-		imgc->filter (filter);
+		ImgFilter::convolve (*imgc, filter);
 		imgc->save ((char*)"./img_filter_passe_bas.ppm");
 		delete imgc;
 	}
@@ -257,7 +257,7 @@ TEST(TEST_cgimg_img, filter)
 			   1., -2.,  1.);
 */
 		Img *imgc = new Img (*img);
-		imgc->filter (filter);
+		ImgFilter::convolve (*imgc, filter);
 		imgc->save ((char*)"./img_filter_laplacian.ppm");
 		delete imgc;
 	}
@@ -273,7 +273,7 @@ TEST(TEST_cgimg_img, filter)
 			   -1., 1., 0.,
 			   -1., 1., 0.);
 		Img *imgc = new Img (*img);
-		imgc->filter (filter);
+		ImgFilter::convolve (*imgc, filter);
 		imgc->save ((char*)"./img_filter_gradient.ppm");
 		delete imgc;
 	}
@@ -281,7 +281,7 @@ TEST(TEST_cgimg_img, filter)
 	// sobel
 	{
 		Img *imgc = new Img (*img);
-		imgc->filter_sobel ();
+		ImgFilter::sobel (*imgc);
 		imgc->save ((char*)"./img_filter_sobel.ppm");
 		delete imgc;
 	}
@@ -289,7 +289,7 @@ TEST(TEST_cgimg_img, filter)
 	// bilateral filtering
 	{
 		Img *imgc = new Img (*img);
-		imgc->bilateral_filtering ();
+		ImgFilter::bilateral (*imgc);
 		imgc->save ((char*)"./img_filter_bilateral.ppm");
 		delete imgc;
 	}
@@ -300,22 +300,22 @@ TEST(TEST_cgimg_img, filter2)
 {
 #if 0
 	Img* img = new Img();
-	img->init_test_grayscale2(50);
+	ImgTestPattern::grayscale2 (*img, 50);
 
 	Img* snow = new Img();
 	snow->load("./test/data/fallout_mask.png");
 	snow->resize(512, 512, 1);
-	//img->smooth_transition (5);
-	//img->bilateral_filtering ();
-	//img->saturate (1.9);
+	//ImgDraw::smooth_transition (*img, 5);
+	//ImgFilter::bilateral (*img);
+	//ImgFilter::saturate (*img, 1.9);
 	img->resize(snow->width(), snow->height());
 	img->convert_to_grayscale();
-	img->blur();
-	img->sepia();
+	ImgFilter::blur (*img);
+	ImgFilter::sepia (*img);
 	img->multiply(snow);
-	img->brightness(2.1);
+	ImgFilter::brightness (*img, 2.1);
 	img->save("./img_filter2.png");
-	//snow->brightness(2.1);
+	//ImgFilter::brightness (*snow, 2.1);
 	//snow->save("../fallout_mask2.png");
 #endif
 }
@@ -323,13 +323,13 @@ TEST(TEST_cgimg_img, filter2)
 TEST(TEST_cgimg_img, drawing)
 {
 	Img* img = new Img();
-	img->init_test_grayscale2(50);
+	ImgTestPattern::grayscale2 (*img, 50);
 
 	Img *imgc = new Img (*img);
-	imgc->draw_line(10, 50, img->width()-50, img->height()-100, 255, 0, 0, 0);
-	//imgc->draw_disk(img->width()/2., img->height()/3., 60, 0, 255, 0, 0);
-	//imgc->draw_circle(img->width()/2., img->height()/2., 36, 0, 0, 255, 0);
-	imgc->draw_ellipse(img->width()/2., img->height()/3., 100, 50, 255, 0, 0, 255);
+	ImgDraw::line (*imgc, 10, 50, img->width()-50, img->height()-100, 255, 0, 0, 0);
+	//ImgDraw::disk (*imgc, img->width()/2., img->height()/3., 60, 0, 255, 0, 0);
+	//ImgDraw::circle (*imgc, img->width()/2., img->height()/2., 36, 0, 0, 255, 0);
+	ImgDraw::ellipse (*imgc, img->width()/2., img->height()/3., 100, 50, 255, 0, 0, 255);
 
 	Vector2f line_start, line_end;
 	line_start.Set (10, 50);
@@ -341,15 +341,15 @@ TEST(TEST_cgimg_img, drawing)
 	int nres = line_ellipse_intersection (line_start, line_end, ellipse_center, ellipse_radius, res1, res2);
 	if (nres == 2)
 	{
-		imgc->draw_disk (res1[0], res1[1], 5, 255, 0, 0, 255);
-		imgc->draw_disk (res2[0], res2[1], 5, 255, 0, 0, 255);
+		ImgDraw::disk (*imgc, res1[0], res1[1], 5, 255, 0, 0, 255);
+		ImgDraw::disk (*imgc, res2[0], res2[1], 5, 255, 0, 0, 255);
 	}
 	else if (nres == 1)
 	{
-		imgc->draw_disk (res1[0], res1[1], 5, 255, 0, 0, 255);
+		ImgDraw::disk (*imgc, res1[0], res1[1], 5, 255, 0, 0, 255);
 	}
 
-	//imgc->draw_circle(img->width()/2., img->height()/2., 36, 0, 0, 255, 0);
+	//ImgDraw::circle (*imgc, img->width()/2., img->height()/2., 36, 0, 0, 255, 0);
 	
 
 	imgc->save ((char*)"./img_drawing.ppm");
@@ -359,7 +359,7 @@ TEST(TEST_cgimg_img, drawing)
 TEST(TEST_cgimg_img, histogram)
 {
 	Img* img = new Img();
-	img->init_test_grayscale2(50);
+	ImgTestPattern::grayscale2 (*img, 50);
 	
 	img->convert_to_grayscale ();
 	Img *imgc = new Img (*img);
@@ -367,19 +367,19 @@ TEST(TEST_cgimg_img, histogram)
 	imgc->save ("./img_histo_orig.ppm");
 
 	float h[256];
-	imgc->get_histogram (h);
+	ImgHistogram::compute (*imgc, h);
 	output_1array (h, 256, "histogram1.dat");
 	for (int i=1; i<256; i++)
 		h[i] += h[i-1];
 	output_1array (h, 256, "histogram11.dat");
 
-	Img *histo = imgc->get_histogram_img (200);
+	Img *histo = ImgHistogram::to_image (*imgc, 200);
 	histo->save ("./img_histo_histo_orig.ppm");
 	delete histo;
 
-	imgc->histogram_equalization ();
+	ImgHistogram::equalize (*imgc);
 	imgc->save ("./data_generated/img_histo_equalized.ppm");
-	histo = imgc->get_histogram_img (200);
+	histo = ImgHistogram::to_image (*imgc, 200);
 	histo->save ("./data_generated/img_histo_histo_equalized.ppm");
 	delete histo;
 
@@ -387,10 +387,10 @@ TEST(TEST_cgimg_img, histogram)
 
 /*
 
-	//img->histogram_equalization_bezier ();
+	//ImgHistogram::equalize_bezier (*img);
 	img->contrast (0.);
 
-	img->get_histogram (h);
+	ImgHistogram::compute (*img, h);
 	output_1array (h, 256, "histogram2.dat");
 	for (int i=1; i<256; i++)
 		h[i] += h[i-1];
@@ -446,7 +446,7 @@ TEST(TEST_cgimg_img, geodesic)
 	img->set_pixel (25, 50, 0, 0, 0, 255);
 	img->set_pixel (75, 75, 0, 0, 0, 255);
 
-	img->geodesic ();
+	ImgGeodesic::apply (*img);
 	img->save ("./toto.ppm");
 }
 
@@ -463,7 +463,7 @@ static void fill_rect(Img& img, int x0, int y0, int x1, int y1,
 TEST(TEST_cgimg_img, vectorization)
 {
 	Img img;
-	img.init_test_grayscale2(50);
+	ImgTestPattern::grayscale2 (img, 50);
 
 	CLitRasterToVector rtv;
 	bool bOk = rtv.Vectorize(&img, Color(255, 255, 255), false, /*palette=*/nullptr);
@@ -829,7 +829,7 @@ TEST(TEST_cgimg_img, histogram_equalization_bezier)
     img.convert_to_grayscale();
 
     // Action
-    img.histogram_equalization_bezier(nullptr);
+    ImgHistogram::equalize_bezier (img, nullptr);
 
     // Expectations
     EXPECT_EQ(img.width(), 10);
@@ -975,7 +975,7 @@ TEST(TEST_cgimg_img, filter_majority_removes_an_isolated_speck)
     mvFillRect(img, 0, 0, 9, 9, 255, 255, 255);
     img.set_pixel(4, 4, 255, 0, 0, 255);
 
-    ASSERT_EQ(img.filter_majority(1, 1), 0);
+    ASSERT_EQ(ImgFilter::majority (img, 1, 1), 0);
 
     EXPECT_EQ(mvPixelAt(img, 4, 4), MV_WHITE);
     EXPECT_EQ(mvColorsOf(img).size(), 1u);
@@ -990,7 +990,7 @@ TEST(TEST_cgimg_img, filter_majority_keeps_a_straight_boundary)
     mvFillRect(img, 0, 0, 8, 16, 255, 255, 255);
     mvFillRect(img, 8, 0, 16, 16, 0, 0, 255);
 
-    ASSERT_EQ(img.filter_majority(1, 10), 0);
+    ASSERT_EQ(ImgFilter::majority (img, 1, 10), 0);
 
     for (int y = 0; y < 16; ++y)
     {
@@ -1012,7 +1012,7 @@ TEST(TEST_cgimg_img, filter_majority_never_invents_a_colour)
         }
     const std::set<unsigned int> before = mvColorsOf(img);
 
-    ASSERT_EQ(img.filter_majority(1, 3), 0);
+    ASSERT_EQ(ImgFilter::majority (img, 1, 3), 0);
 
     const std::set<unsigned int> after = mvColorsOf(img);
     for (std::set<unsigned int>::const_iterator it = after.begin(); it != after.end(); ++it)
@@ -1023,8 +1023,8 @@ TEST(TEST_cgimg_img, filter_majority_rejects_degenerate_parameters)
 {
     Img img(4, 4, false);
     mvFillRect(img, 0, 0, 4, 4, 1, 2, 3);
-    EXPECT_EQ(img.filter_majority(0, 1), 0);      // no-op, pas une erreur
-    EXPECT_EQ(img.filter_majority(1, 0), 0);
+    EXPECT_EQ(ImgFilter::majority (img, 0, 1), 0);      // no-op, pas une erreur
+    EXPECT_EQ(ImgFilter::majority (img, 1, 0), 0);
     EXPECT_EQ(mvPixelAt(img, 0, 0), 0x010203u);
 }
 
@@ -1041,7 +1041,7 @@ TEST(TEST_cgimg_img, absorb_small_regions_merges_below_the_threshold)
     mvFillRect(img, 2, 2, 4, 4, 255, 0, 0);       // aire 4  -> absorbe
     mvFillRect(img, 10, 10, 14, 14, 0, 0, 255);   // aire 16 -> conserve
 
-    ASSERT_EQ(img.absorb_small_regions(6), 0);
+    ASSERT_EQ(ImgFilter::absorb_small_regions (img, 6), 0);
 
     EXPECT_EQ(mvPixelAt(img, 2, 2), MV_WHITE);
     EXPECT_EQ(mvPixelAt(img, 11, 11), MV_BLUE);
@@ -1056,7 +1056,7 @@ TEST(TEST_cgimg_img, absorb_small_regions_works_per_component)
     mvFillRect(img, 2, 2, 3, 3, 255, 0, 0);       // aire 1  -> absorbe
     mvFillRect(img, 8, 8, 14, 14, 255, 0, 0);     // aire 36 -> conserve
 
-    ASSERT_EQ(img.absorb_small_regions(4), 0);
+    ASSERT_EQ(ImgFilter::absorb_small_regions (img, 4), 0);
 
     EXPECT_EQ(mvPixelAt(img, 2, 2), MV_WHITE);
     EXPECT_EQ(mvPixelAt(img, 10, 10), MV_RED);
@@ -1073,7 +1073,7 @@ TEST(TEST_cgimg_img, absorb_small_regions_never_invents_a_colour)
     mvFillRect(img, 9, 9, 10, 10, 0, 255, 0);
     const std::set<unsigned int> before = mvColorsOf(img);
 
-    ASSERT_EQ(img.absorb_small_regions(3), 0);
+    ASSERT_EQ(ImgFilter::absorb_small_regions (img, 3), 0);
 
     const std::set<unsigned int> after = mvColorsOf(img);
     EXPECT_LE(after.size(), before.size());
@@ -1085,8 +1085,8 @@ TEST(TEST_cgimg_img, absorb_small_regions_rejects_degenerate_parameters)
 {
     Img img(4, 4, false);
     mvFillRect(img, 0, 0, 4, 4, 1, 2, 3);
-    EXPECT_EQ(img.absorb_small_regions(0), 0);    // no-op, pas une erreur
-    EXPECT_EQ(img.absorb_small_regions(4, 0), 0);
+    EXPECT_EQ(ImgFilter::absorb_small_regions (img, 0), 0);    // no-op, pas une erreur
+    EXPECT_EQ(ImgFilter::absorb_small_regions (img, 4, 0), 0);
     EXPECT_EQ(mvPixelAt(img, 0, 0), 0x010203u);
 }
 
@@ -1172,7 +1172,7 @@ TEST(TEST_cgimg_img, bilateral_filtering_mirrors_the_border)
     Img img(16, 16, false);
     img.init_color(90, 110, 130, 255);
 
-    ASSERT_EQ(img.bilateral_filtering(), 0);
+    ASSERT_EQ(ImgFilter::bilateral (img), 0);
 
     for (unsigned int y = 0; y < 16; ++y)
         for (unsigned int x = 0; x < 16; ++x)

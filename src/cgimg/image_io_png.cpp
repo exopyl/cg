@@ -1,6 +1,6 @@
 #include "image.h"
 #include "image_io.h"
-#ifdef PNG
+#ifdef CGIMG_WITH_PNG
 
 // PNG decoding via stb_image (header-only, cross-platform, no libpng
 // dependency). STB_IMAGE_STATIC keeps the implementation symbols internal to
@@ -48,4 +48,4 @@ int ImgIO::export_png (Img& img, const char *filename)
 	return -1;
 }
 
-#endif // PNG
+#endif // CGIMG_WITH_PNG

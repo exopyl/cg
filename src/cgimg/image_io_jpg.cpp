@@ -6,7 +6,7 @@
 // cette unité de compilation pour ne pas entrer en conflit avec les copies
 // compilées dans image_io_png.cpp et cgmesh (vmeshes.cpp) lorsqu'elles sont
 // liées ensemble. (stb ne fournit pas d'encodeur : pas d'export JPEG ici.)
-#ifdef JPG
+#ifdef CGIMG_WITH_JPG
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_STATIC
 #include <stb/stb_image.h>
@@ -37,4 +37,4 @@ int ImgIO::import_jpg (Img& img, const char *filename)
 	stbi_image_free (data);
 	return 0;
 }
-#endif // JPG
+#endif // CGIMG_WITH_JPG

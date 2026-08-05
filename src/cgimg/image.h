@@ -6,15 +6,44 @@
 #include "palette.h"
 
 
-#define PNG
-#define JPG       // JPEG import via stb_image (header-only, sans dépendance libjpeg)
+// Les décodeurs PNG / JPEG (stb_image) sont gardés par CGIMG_WITH_PNG /
+// CGIMG_WITH_JPG, définies par le CMakeLists de cgimg (options du même nom, ON par
+// défaut) et PRIVATE : elles ne concernent que les .cpp de la bibliothèque.
+//
+// Elles s'appelaient auparavant PNG / JPG et étaient #define ici même, ce qui avait
+// deux défauts : la définition CMake en devenait inerte (cet en-tête étant inclus
+// avant tout #ifdef, la fonctionnalité ne pouvait pas être désactivée), et deux
+// macros aux noms très communs fuyaient dans chaque unité de compilation incluant
+// cgimg.
 
 class Img
 {
 public:
-	// Import / export (serialization) logic lives in ImgIO (image_io.h), a friend
-	// so it can call Img's private helpers (resize_memory, compute_colormap).
+	// Les traitements sont hors d'Img, dans des classes dediees par domaine, sur le
+	// modele historique d'ImgIO : methodes statiques prenant l'Img en premier
+	// parametre, declarees amies pour atteindre le tampon de pixels et les aides
+	// privees (resize_memory, compute_colormap).
+	//
+	// Objectif : ajouter un algorithme ne doit plus imposer de modifier CET en-tete,
+	// donc de recompiler tous les consommateurs de cgimg. Img ne garde que ce qui
+	// releve du conteneur (pixels, palette, geometrie, E/S, colorimetrie de base).
+	//
+	//   ImgIO          image_io.h            import / export
+	//   ImgFilter      image_filter.h        convolution, flous, colorimetrie
+	//   ImgBinarize    image_binarization.h  seuillage, tramage
+	//   ImgDraw        image_drawing.h       primitives 2D
+	//   ImgQuantize    image_quantization.h  quantification de couleurs
+	//   ImgGeodesic    image_geodesic.h      transformee geodesique
+	//   ImgHistogram   image_histogram.h     histogramme, egalisation
+	//   ImgTestPattern image_test_pattern.h  mires de test
 	friend class ImgIO;
+	friend class ImgFilter;
+	friend class ImgBinarize;
+	friend class ImgDraw;
+	friend class ImgQuantize;
+	friend class ImgGeodesic;
+	friend class ImgHistogram;
+	friend class ImgTestPattern;
 
 	static int AreIdentical (Img *pImg1, Img *pImg2);
 
@@ -78,18 +107,9 @@ public:
 
 	void convert_to_grayscale (grayscale_method_type grayscale_method_id = GRAYSCALE_LUMINOSITY, unsigned char nlevels = 255);
 
-	// test images
-	void init_test_grayscale1 (unsigned int h);
-	void init_test_grayscale2 (unsigned int size);
-	void init_test_color_jet (unsigned int w, unsigned int h);
+	// Mires de test -> ImgTestPattern (image_test_pattern.h)
+	// Histogramme   -> ImgHistogram   (image_histogram.h)
 
-	//
-	// histogram
-	//
-	void get_histogram (float histogram[256], int normalized = 1);
-	Img* get_histogram_img (unsigned int height);
-	void histogram_equalization (void);
-	void histogram_equalization_bezier (CurveBezier *bezier = nullptr);
 	void invert (void);
 	void contrast (float k);
 
@@ -99,76 +119,10 @@ public:
 
 	int multiply (Img *pImg);
 
-	// filters
-	int filter (float m[3][3], float divide = 0., float decay = 0.);
-	int filter_sobel (void);
-	int gaussian_blur (void);
-	int blur (void);
-	int bilateral_filtering (void);
-
-	// Filtre de MODE : chaque pixel prend la couleur la plus fréquente de son
-	// voisinage carré (2*radius+1). Égalité -> le pixel central est conservé, pour
-	// qu'une frontière franche ne dérive pas. Non linéaire : filter() ne peut pas
-	// l'exprimer (un vote majoritaire n'est pas une convolution).
-	//
-	// Chaque passe lit un instantané de l'image, donc le résultat ne dépend pas de
-	// l'ordre de balayage. L'alpha de chaque pixel est conservé.
-	int filter_majority (int radius = 1, int passes = 1);
-
-	// Absorbe toute composante connexe (4-connexe, couleur identique) d'aire
-	// strictement inférieure à `minArea` dans la couleur la plus fréquente sur sa
-	// frontière. Répété jusqu'à `passes` fois : fusionner un mouchetis dans un petit
-	// voisin peut laisser le résultat encore sous le seuil.
-	//
-	// Le nombre de couleurs ne peut que décroître : une région n'est jamais peinte
-	// d'une couleur absente de son voisinage, donc l'image reste un pavage complet.
-	int absorb_small_regions (int minArea, int passes = 3);
-
-	int saturate (float t);
-	int brightness (float t);
-	int gamma (float t);
-	int sepia (void);
-
-	//
-	// quantization
-	//
-	int quant_heckbert (int ncolors);
-	int quant_wu (int ncolors);
-	int quant_kmean (float threshold);
-
-	// Raffinement de Lloyd (k-means) de la palette de CETTE image, deja
-	// quantifiee, contre `reference` = l'image AVANT quantification (memes
-	// dimensions). Chaque iteration reaffecte chaque pixel a la couleur de
-	// palette la plus proche en RGB 8 bits, puis recalcule chaque couleur comme la
-	// moyenne des pixels de reference qui lui sont affectes : c'est exactement le
-	// critere que minimise l'erreur quadratique, donc la MSE decroit de facon
-	// monotone.
-	//
-	// Utile apres quant_wu comme apres quant_heckbert. Les deux prennent leurs
-	// decisions sur un histogramme 5 bits/canal (Wu affecte via ses boites 32^3,
-	// Heckbert via le centroide de cube) ; le raffinement rejuge en 8 bits pleins.
-	// Mesures sur une affiche 4 couleurs rechantillonnee (375x564) :
-	//   n=4  Wu 199.0 -> 187.3 | Heckbert 868.8 -> 187.3 (les deux convergent)
-	//   n=8  Wu  84.2 ->  75.8 | Heckbert 452.4 ->  70.7
-	//   n=16 Wu  36.4 ->  29.3 | Heckbert 105.8 ->  36.2
-	// Convergence : 1 iteration suffit a n=4, ~3 a n=16.
-	//
-	// Renvoie le nombre de couleurs de la palette, ou -1 si les images ne sont pas
-	// compatibles (dimensions differentes, ou image palettisee).
-	int quant_refine (const Img &reference, int iterations = 3);
-
-	//
-	// binarization
-	//
-	int bin_threshold (int threshold);
-	int bin_random (int methodId);
-	int bin_floyd_steinberg (void);
-	int bin_otsu (void);
-	int bin_dithering (unsigned char *pattern, int psize);
-	int bin_screening (Img *pPattern);
-
-	// geodesic
-	int geodesic (void);
+	// Filtres et colorimetrie -> ImgFilter   (image_filter.h)
+	// Quantification          -> ImgQuantize (image_quantization.h)
+	// Binarisation            -> ImgBinarize (image_binarization.h)
+	// Geodesique              -> ImgGeodesic (image_geodesic.h)
 
 	//
 	// crop / resample
@@ -194,23 +148,7 @@ public:
 	int resize_canvas (unsigned int width, unsigned int height, int positioning,
 			   unsigned char bg_r, unsigned char bg_g, unsigned char bg_b, unsigned char bg_a);
 
-	//
-	// drawing functions
-	//
-	int draw_horizontal_line (unsigned int y, unsigned int xstart, unsigned int xend,
-				  unsigned char r, unsigned int g, unsigned char b, unsigned char a);
-	int draw_line (unsigned int xtart, unsigned int ystart, unsigned int xend, unsigned int yend,
-		       unsigned char r, unsigned int g, unsigned char b, unsigned char a);
-	int draw_circle (unsigned int x0, unsigned int y0, unsigned int radius,
-			 unsigned char r, unsigned int g, unsigned char b, unsigned char a);
-	int draw_disk (unsigned int x0, unsigned int y0, unsigned int radius,
-		       unsigned char r, unsigned int g, unsigned char b, unsigned char a);
-	int draw_ellipse (unsigned int x0, unsigned int y0,
-			  unsigned int radiusx, unsigned int radiusy,
-			  unsigned char r, unsigned int g, unsigned char b, unsigned char a);
-
-	// smooth the transitions between black and white
-	int smooth_transition (int l);
+	// Primitives de trace + smooth_transition -> ImgDraw (image_drawing.h)
 
 private:
 	void copyFrom (const Img &img);   // copie profonde partagée (ctor de copie + operator=)

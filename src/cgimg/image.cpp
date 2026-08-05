@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "image.h"
+#include "image_histogram.h"   // get_median_value s'appuie sur ImgHistogram::compute
 #include "color.h"
 #include "../cgmath/TVector2.h"
 
@@ -266,39 +267,8 @@ void Img::get_nearest_pixel (float u, float v,
 	get_pixel (i, j, r, g, b, a);
 }
 
-// test images
-void Img::init_test_grayscale1 (unsigned int h)
-{
-	resize_memory (255, h);
-	for (unsigned int j=0; j<m_iHeight; j++)
-		for (unsigned int i=0; i<m_iWidth; i++)
-			set_pixel (i, j, i, i, i, 255);
-}
-
-void Img::init_test_grayscale2 (unsigned int size)
-{
-	resize_memory (8*size, 8*size);
-	for (unsigned int j=0; j<8; j++)
-		for (unsigned int i=0; i<8; i++)
-		{
-			unsigned char level = 4 * (8*j+i);
-			for (unsigned int kj=0; kj<size; kj++)
-				for (unsigned int ki=0; ki<size; ki++)
-					set_pixel (i*size+ki, j*size+kj, level, level, level, 255);
-		}
-}
-
-void Img::init_test_color_jet (unsigned int w, unsigned int h)
-{
-	resize_memory (w, h);
-	for (unsigned int i=0; i<m_iWidth; i++)
-	{
-		int r, g, b;
-		color_jet_int ((float)i/m_iWidth, &r, &g, &b);
-		for (unsigned int j=0; j<m_iHeight; j++)
-			set_pixel (i, j, (unsigned char)r, (unsigned char)g, (unsigned char)b, 255);
-	}
-}
+// Les mires de test (init_test_grayscale1/2, init_test_color_jet) sont passees
+// dans ImgTestPattern (image_test_pattern.h/.cpp).
 
 // http://docs.gimp.org/2.6/en/gimp-tool-desaturate.html
 void Img::convert_to_grayscale (grayscale_method_type grayscale_method_id, unsigned char nlevels)
@@ -367,125 +337,9 @@ void Img::convert_to_grayscale (grayscale_method_type grayscale_method_id, unsig
      }
 }
 
-void Img::get_histogram (float histogram[256], int normalized)
-{
-     memset (histogram, 0, 256*sizeof(float));
-     
-     for (unsigned int j=0; j<m_iHeight; j++)
-     {
-	  for (unsigned int i=0; i<m_iWidth; i++)
-	  {
-	       unsigned int index = j * m_iWidth + i;
-	       unsigned char red = m_pPixels[4*index];
-	       histogram[red] += 1.;
-	  }
-     }
-
-     // normalize the histogram (sum = 1)
-     if (normalized)
-     {
-	     float s = 1./(m_iWidth * m_iHeight);
-	     for (int j=0; j<256; j++)
-		     histogram[j] *= s;
-     }
-}
-
-Img* Img::get_histogram_img (unsigned int height)
-{
-	float histogram[256];
-	get_histogram (histogram, 1);
-
-	Img *histo = new Img (256, height);
-	for (unsigned int j=0; j<histo->m_iHeight; j++)
-		for (unsigned int i=0; i<histo->m_iWidth; i++)
-		{
-			if (histogram[i] > (float)j*0.01/histo->m_iHeight)
-				histo->set_pixel (i, histo->m_iHeight-1-j, 255, 255, 255, 255);
-			else
-				histo->set_pixel (i, histo->m_iHeight-1-j, 0, 0, 0, 255);
-		}
-
-	return histo;
-}
-
-void Img::histogram_equalization (void)
-{
-     // eval the histogram
-     float histogram[256];
-     get_histogram (histogram);
-
-     // eval the cumulative distribution function
-     float cdf[256];
-     float sum = 0.;
-     for (int i=0; i<256; i++)
-     {
-	  sum += histogram[i];
-	  cdf[i] = sum;
-    }
-
-     // image mapping
-    for (unsigned int j=0; j<m_iHeight; j++)
-     {
-	  for (unsigned int i=0; i<m_iWidth; i++)
-	  {
-	       unsigned int index = j * m_iWidth + i;
-	       unsigned char red = m_pPixels[4*index];
-	       float grey = cdf[red];
-	       m_pPixels[4*index]   = (unsigned char)(grey*255.0);
-	       m_pPixels[4*index+1] = (unsigned char)(grey*255.0);
-	       m_pPixels[4*index+2] = (unsigned char)(grey*255.0);
-	  }
-     }
-}
-
-void Img::histogram_equalization_bezier (CurveBezier *bezier)
-{
-	if (bezier == nullptr)
-		bezier = new CurveBezier();
-	bezier->addControlPoint (0.f, 255.f, 0.f);
-	bezier->addControlPoint (10.f, 0.f, 0.f);
-	bezier->addControlPoint (245.f, 0.f, 0.f);
-	bezier->addControlPoint (255.f, 255.f, 0.f);
-
-     // eval the histogram
-     float histogram[256];
-     get_histogram (histogram);
-
-     // eval the cumulative distribution function
-     float cdf[256];
-     float sum = 0.;
-     for (int i=0; i<256; i++)
-     {
-	  sum += histogram[i];
-	  cdf[i] = sum;
-     }
-     
-     float *bezier_interpolated = (float*)malloc(256*sizeof(float));
-     for (int i=0; i<256; i++)
-     {
-	     Vector3f pt;
-	     bezier->eval_on_x ((float)i, pt);
-	     bezier_interpolated[i] = pt.y;
-     }
-     output_1array (bezier_interpolated, 256, "output.dat");
-
-     bezier->export_interpolated ((char*)"bezier.dat", 256);
-
-     // image mapping
-     for (unsigned int j=0; j<m_iHeight; j++)
-     {
-	  for (unsigned int i=0; i<m_iWidth; i++)
-	  {
-	       unsigned int index = j * m_iWidth + i;
-	       unsigned char red = m_pPixels[4*index];
-	       red = (unsigned char)bezier_interpolated[red];
-	       float grey = cdf[red];
-	       m_pPixels[4*index]   = (unsigned char)(grey*255.0);
-	       m_pPixels[4*index+1] = (unsigned char)(grey*255.0);
-	       m_pPixels[4*index+2] = (unsigned char)(grey*255.0);
-	  }
-     }
-}
+// Histogramme (get_histogram, get_histogram_img, histogram_equalization,
+// histogram_equalization_bezier) : passe dans ImgHistogram
+// (image_histogram.h/.cpp).
 
 void Img::invert (void)
 {
@@ -541,7 +395,7 @@ int Img::get_mean_value (void)
 int Img::get_median_value (void)
 {
 	float histogram[256];
-	get_histogram (histogram, 0);
+	ImgHistogram::compute (*this, histogram, 0);
 
 	int i = 0, n = 0;
 	int n2 = m_iWidth * m_iHeight /2.;

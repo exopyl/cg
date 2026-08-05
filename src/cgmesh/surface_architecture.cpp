@@ -781,17 +781,17 @@ Polygon2* ArcBrise::Generate (void)
 	Img *pImg = new Img (1200, 1200);
 	float s = 2.;
 
-	pImg->draw_circle (600, 600,    (int)10/2., 0, 0, 0, 255);
+	ImgDraw::circle (*pImg, 600, 600,    (int)10/2., 0, 0, 0, 255);
 
-	pImg->draw_circle (600+c_principal[0]/s, 600+c_principal[1]/s,    (int)10/2., 255, 0, 0, 255);
-	pImg->draw_circle (600+c_principal[0]/s, 600+c_principal[1]/s,    (int)r_principal/s, 255, 0, 0, 255);
+	ImgDraw::circle (*pImg, 600+c_principal[0]/s, 600+c_principal[1]/s,    (int)10/2., 255, 0, 0, 255);
+	ImgDraw::circle (*pImg, 600+c_principal[0]/s, 600+c_principal[1]/s,    (int)r_principal/s, 255, 0, 0, 255);
 
-	pImg->draw_circle (600+c_second[0]/s, 600+c_second[1]/s,    (int)10/2., 0, 255, 0, 255);
-	pImg->draw_circle (600+c_second[0]/s, 600+c_second[1]/s,    (int)r_second/s, 0, 255, 0, 255);
+	ImgDraw::circle (*pImg, 600+c_second[0]/s, 600+c_second[1]/s,    (int)10/2., 0, 255, 0, 255);
+	ImgDraw::circle (*pImg, 600+c_second[0]/s, 600+c_second[1]/s,    (int)r_second/s, 0, 255, 0, 255);
 
-	pImg->draw_circle (600+c_mid[0]/s, 600+c_mid[1]/s,    (int)10/2., 0, 0, 255, 255);
-	pImg->draw_ellipse (600+c_mid[0]/s, 600+c_mid[1]/s,    a/s, b/s, 0., 0., 255, 255);
-	pImg->draw_circle (600, 600-rosace_y/s,    (int)10/2., 0, 0, 255, 255);
+	ImgDraw::circle (*pImg, 600+c_mid[0]/s, 600+c_mid[1]/s,    (int)10/2., 0, 0, 255, 255);
+	ImgDraw::ellipse (*pImg, 600+c_mid[0]/s, 600+c_mid[1]/s,    a/s, b/s, 0., 0., 255, 255);
+	ImgDraw::circle (*pImg, 600, 600-rosace_y/s,    (int)10/2., 0, 0, 255, 255);
 
 	pImg->save ("toto.png");
 */

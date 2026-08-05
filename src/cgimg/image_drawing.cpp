@@ -1,27 +1,28 @@
 #include <stdlib.h>
 
 #include "image.h"
+#include "image_drawing.h"
 #include "../cgmath/TVector2.h"
 
 //
 // drawing
 //
-int Img::draw_horizontal_line (unsigned int y,
+int ImgDraw::horizontal_line (Img& img, unsigned int y,
 			       unsigned int xstart, unsigned int xend,
 			       unsigned char r, unsigned int g, unsigned char b, unsigned char a)
 {
 	if (xstart > xend)
-		return draw_horizontal_line (y, xend, xstart, r, g, b, a);
+		return horizontal_line (img, y, xend, xstart, r, g, b, a);
 	for (unsigned int x=xstart; x<=xend; x++)
-		set_pixel (x, y, r, g, b, a);
+		img.set_pixel (x, y, r, g, b, a);
 	return 0;
 }
 
-int Img::draw_line (unsigned int xstart, unsigned int ystart, unsigned int xend, unsigned int yend,
+int ImgDraw::line (Img& img, unsigned int xstart, unsigned int ystart, unsigned int xend, unsigned int yend,
 		    unsigned char r, unsigned int g, unsigned char b, unsigned char a)
 {
- 	int w = (int) m_iWidth;
-	int h = (int) m_iHeight;
+ 	int w = (int) img.m_iWidth;
+	int h = (int) img.m_iHeight;
 
 	int dy = yend - ystart;
         int dx = xend - xstart;
@@ -45,7 +46,7 @@ int Img::draw_line (unsigned int xstart, unsigned int ystart, unsigned int xend,
         dy <<= 1;
         dx <<= 1;
 
-	set_pixel (x0, y0, r, g, b, a);
+	img.set_pixel (x0, y0, r, g, b, a);
         if (dx > dy) {
             int fraction = dy - (dx >> 1);
             while (x0 != x1) {
@@ -55,7 +56,7 @@ int Img::draw_line (unsigned int xstart, unsigned int ystart, unsigned int xend,
 		    }
 		    x0 += stepx;
 		    fraction += dy;
-		    set_pixel (x0, y0, r, g, b, a);
+		    img.set_pixel (x0, y0, r, g, b, a);
            }
         } else {
 		int fraction = dx - (dy >> 1);
@@ -66,7 +67,7 @@ int Img::draw_line (unsigned int xstart, unsigned int ystart, unsigned int xend,
 			}
 			y0 += stepy;
 			fraction += dx;
-			set_pixel (x0, y0, r, g, b, a);
+			img.set_pixel (x0, y0, r, g, b, a);
 		}
         }
 		return 0;
@@ -76,7 +77,7 @@ int Img::draw_line (unsigned int xstart, unsigned int ystart, unsigned int xend,
 //  http://www.ecse.rpi.edu/Homepages/wrf/Research/Short_Notes/bresenham.html
 //  http://en.wikipedia.org/wiki/Midpoint_circle_algorithm
 //
-int Img::draw_circle (unsigned int x0, unsigned int y0, unsigned int radius,
+int ImgDraw::circle (Img& img, unsigned int x0, unsigned int y0, unsigned int radius,
 		      unsigned char r, unsigned int g, unsigned char b, unsigned char a)
 {
 	int x,y,d,dE,dSE;
@@ -87,14 +88,14 @@ int Img::draw_circle (unsigned int x0, unsigned int y0, unsigned int radius,
 	dE=3;
 	dSE=-2*radius+5;
 
-	set_pixel (x0+x, y0+y, r, g, b, a);
-	set_pixel (x0+x, y0-y, r, g, b, a);
-	set_pixel (x0+y, y0+x, r, g, b, a);
-	set_pixel (x0+y, y0-x, r, g, b, a);
-	set_pixel (x0-x, y0+y, r, g, b, a);
-	set_pixel (x0-x, y0-y, r, g, b, a);
-	set_pixel (x0-y, y0+x, r, g, b, a);
-	set_pixel (x0-y, y0-x, r, g, b, a);
+	img.set_pixel (x0+x, y0+y, r, g, b, a);
+	img.set_pixel (x0+x, y0-y, r, g, b, a);
+	img.set_pixel (x0+y, y0+x, r, g, b, a);
+	img.set_pixel (x0+y, y0-x, r, g, b, a);
+	img.set_pixel (x0-x, y0+y, r, g, b, a);
+	img.set_pixel (x0-x, y0-y, r, g, b, a);
+	img.set_pixel (x0-y, y0+x, r, g, b, a);
+	img.set_pixel (x0-y, y0-x, r, g, b, a);
 
 	while(y>x)
 	{
@@ -113,14 +114,14 @@ int Img::draw_circle (unsigned int x0, unsigned int y0, unsigned int radius,
 			x++;
 			y--;
 		}
-		set_pixel (x0+x, y0+y, r, g, b, a);
-		set_pixel (x0+x, y0-y, r, g, b, a);
-		set_pixel (x0+y, y0+x, r, g, b, a);
-		set_pixel (x0+y, y0-x, r, g, b, a);
-		set_pixel (x0-x, y0+y, r, g, b, a);
-		set_pixel (x0-x, y0-y, r, g, b, a);
-		set_pixel (x0-y, y0+x, r, g, b, a);
-		set_pixel (x0-y, y0-x, r, g, b, a);
+		img.set_pixel (x0+x, y0+y, r, g, b, a);
+		img.set_pixel (x0+x, y0-y, r, g, b, a);
+		img.set_pixel (x0+y, y0+x, r, g, b, a);
+		img.set_pixel (x0+y, y0-x, r, g, b, a);
+		img.set_pixel (x0-x, y0+y, r, g, b, a);
+		img.set_pixel (x0-x, y0-y, r, g, b, a);
+		img.set_pixel (x0-y, y0+x, r, g, b, a);
+		img.set_pixel (x0-y, y0-x, r, g, b, a);
 	}
 
 	return 0;
@@ -128,7 +129,7 @@ int Img::draw_circle (unsigned int x0, unsigned int y0, unsigned int radius,
 
 //  http://www.ecse.rpi.edu/Homepages/wrf/Research/Short_Notes/bresenham.html
 //  http://en.wikipedia.org/wiki/Midpoint_circle_algorithm
-int Img::draw_disk (unsigned int x0, unsigned int y0, unsigned int radius,
+int ImgDraw::disk (Img& img, unsigned int x0, unsigned int y0, unsigned int radius,
 		    unsigned char r, unsigned int g, unsigned char b, unsigned char a)
 {
 	int x,y,d,dE,dSE;
@@ -139,7 +140,7 @@ int Img::draw_disk (unsigned int x0, unsigned int y0, unsigned int radius,
 	dE=3;
 	dSE=-2*radius+5;
 
-	draw_horizontal_line (y0-x, x0+y, x0-y, r, g, b, a);
+	horizontal_line (img, y0-x, x0+y, x0-y, r, g, b, a);
 	while(y>x)
 	{
 		if(d<0)
@@ -157,10 +158,10 @@ int Img::draw_disk (unsigned int x0, unsigned int y0, unsigned int radius,
 			x++;
 			y--;
 		}
-		draw_horizontal_line (y0+y, x0+x, x0-x, r, g, b, a);
-		draw_horizontal_line (y0-y, x0+x, x0-x, r, g, b, a);
-	        draw_horizontal_line (y0+x, x0+y, x0-y, r, g, b, a);
-		draw_horizontal_line (y0-x, x0+y, x0-y, r, g, b, a);
+		horizontal_line (img, y0+y, x0+x, x0-x, r, g, b, a);
+		horizontal_line (img, y0-y, x0+x, x0-x, r, g, b, a);
+	        horizontal_line (img, y0+x, x0+y, x0-y, r, g, b, a);
+		horizontal_line (img, y0-x, x0+y, x0-y, r, g, b, a);
 	}
 	return 0;
 }
@@ -168,7 +169,7 @@ int Img::draw_disk (unsigned int x0, unsigned int y0, unsigned int radius,
 //
 // (x-x0)^2/a^2 + (y-y0)^2/b^2 = 1
 //
-int Img::draw_ellipse (unsigned int x0, unsigned int y0,
+int ImgDraw::ellipse (Img& img, unsigned int x0, unsigned int y0,
 		       unsigned int radiusx, unsigned int radiusy,
 		       unsigned char r, unsigned int g, unsigned char b, unsigned char a)
 {
@@ -176,38 +177,38 @@ int Img::draw_ellipse (unsigned int x0, unsigned int y0,
 	for (int x=0; x<=(int)radiusx; x++)
 	{
 		int y = radiusy * sqrt (1. - (float)x*x/radiusx2);
-		set_pixel (x+x0, y+y0, r, g, b, a);
+		img.set_pixel (x+x0, y+y0, r, g, b, a);
 
 		// symmetric values
-		set_pixel (x+x0, -y+y0, r, g, b, a);
-		set_pixel (-x+x0, y+y0, r, g, b, a);
-		set_pixel (-x+x0, -y+y0, r, g, b, a);
+		img.set_pixel (x+x0, -y+y0, r, g, b, a);
+		img.set_pixel (-x+x0, y+y0, r, g, b, a);
+		img.set_pixel (-x+x0, -y+y0, r, g, b, a);
 	}
 
 	return 0;
 }
 
 // smooth the transitions between black and white
-int Img::smooth_transition (int l)
+int ImgDraw::smooth_transition (Img& img, int l)
 {
-	unsigned char *pPixels = (unsigned char*)malloc(4*m_iWidth*m_iHeight*sizeof(unsigned char));
-	memcpy (pPixels, m_pPixels, 4*m_iWidth*m_iHeight*sizeof(unsigned char));
+	unsigned char *pPixels = (unsigned char*)malloc(4*img.m_iWidth*img.m_iHeight*sizeof(unsigned char));
+	memcpy (pPixels, img.m_pPixels, 4*img.m_iWidth*img.m_iHeight*sizeof(unsigned char));
 
-	int n=m_iHeight*m_iWidth;
-	for (unsigned int j=0; j<m_iHeight; j++)
-		for (unsigned int i=0; i<m_iWidth; i++)
+	int n=img.m_iHeight*img.m_iWidth;
+	for (unsigned int j=0; j<img.m_iHeight; j++)
+		for (unsigned int i=0; i<img.m_iWidth; i++)
 		{
-			if (m_pPixels[4*(j*m_iWidth+i)] == 255) // current pixel is white
+			if (img.m_pPixels[4*(j*img.m_iWidth+i)] == 255) // current pixel is white
 			{
 				float d=l+1;
 				Vector2f p ((float)i, (float)j);
 				for (int kj=-l; kj<l; kj++)
 					for (int ki=-l; ki<l; ki++)
 					{
-						int index = (j+kj)*m_iWidth+i+ki;
+						int index = (j+kj)*img.m_iWidth+i+ki;
 						if (index>=0 && index<n) // in the image
 						{
-							if (m_pPixels[4*index] == 0) // pixel is black
+							if (img.m_pPixels[4*index] == 0) // pixel is black
 							{
 								// get the distance
 								Vector2f t ((float)(i+ki), (float)(j+kj));
@@ -223,13 +224,13 @@ int Img::smooth_transition (int l)
 					unsigned char g = 255-(unsigned char)(255*sqrt(cos(3.14159*0.5*d/(float)l)));
 					//unsigned char g = 255*(unsigned char)(1.-(l-d))/l;
 					for (int m=0; m<3; m++)
-						pPixels[4*(j*m_iWidth+i)+m] = g;
-					pPixels[4*(j*m_iWidth+i)+3] = 255;
+						pPixels[4*(j*img.m_iWidth+i)+m] = g;
+					pPixels[4*(j*img.m_iWidth+i)+3] = 255;
 				}
 			}
 		}
-	free (m_pPixels);
-	m_pPixels = pPixels;
+	free (img.m_pPixels);
+	img.m_pPixels = pPixels;
 
 	return 0;
 }
