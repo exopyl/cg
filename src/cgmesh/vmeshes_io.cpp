@@ -72,6 +72,10 @@ bool VMeshesIO::load(VMeshes& vm, const char* filename)
 	if (ext == "3dm")
 		res = import_3dm(vm, filename);
 
+	// 3mf (via lib3mf, gated on CG_HAS_LIB3MF)
+	if (ext == "3mf")
+		res = import_3mf(vm, filename);
+
 	// gltf
 	if (ext == "gltf")
 		res = import_gltf(vm, filename);

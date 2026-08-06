@@ -29,6 +29,11 @@ private:
 	// false. Implementations live in vmeshes_io_occt.cpp.
 	static bool import_step(VMeshes& vm, const char* filename);
 	static bool import_iges(VMeshes& vm, const char* filename);
+	// 3MF import via lib3mf. Un Mesh par build item (la structure de la scene
+	// 3MF est preservee : composants resolus, transformations appliquees).
+	// Sans CG_HAS_LIB3MF, retombe sur un stub no-op renvoyant false.
+	// Implementation dans vmeshes_io_3mf.cpp.
+	static bool import_3mf(VMeshes& vm, const char* filename);
 
 	static bool export_obj(VMeshes& vm, const char* filename);
 	static bool export_stl(VMeshes& vm, const char* filename);          // ASCII STL : one solid block per Mesh

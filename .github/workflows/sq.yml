@@ -8,7 +8,9 @@ on:
 
 env:
   # Tag of the cg_binaries Release this build consumes.
-  CG_BINARIES_VERSION: v1.0.0
+  # v1.1.0 adds lib3mf 2.5.0 (3MF import) alongside openNURBS and OCCT.
+  # Doit rester aligne avec build.yml : les deux workflows consomment la meme release.
+  CG_BINARIES_VERSION: v1.1.0
   BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed
 
 jobs:
@@ -119,7 +121,9 @@ jobs:
             -DENABLE_OPENNURBS=On \
             -DEXTERN_OPENNURBS="$GITHUB_WORKSPACE/.deps/cg_binaries/opennurbs-v8.27.26019.16021" \
             -DENABLE_OCCT=On \
-            -DENABLE_POISSON=On
+            -DENABLE_POISSON=On \
+            -DENABLE_LIB3MF=On \
+            -DEXTERN_LIB3MF="$GITHUB_WORKSPACE/.deps/cg_binaries/lib3mf-2.5.0"
           ./build-wrapper-linux-x86/build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build build/
 
       - name: Download sonar-scanner

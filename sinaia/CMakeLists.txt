@@ -75,6 +75,13 @@ if(WIN32)
                 "$<TARGET_FILE_DIR:${APP_TARGET}>")
     endif()
 
+    if (ENABLE_LIB3MF)
+        add_custom_command(TARGET ${APP_TARGET} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${EXTERN_LIB3MF}/bin/lib3mf.dll"
+                "$<TARGET_FILE_DIR:${APP_TARGET}>")
+    endif()
+
     # OCCT ships ~48 interdependent DLLs (TKernel + dependencies). Copy
     # the whole bin/ folder so STEP loading via Mesh::load → import_step
     # finds TKernel.dll etc. at runtime.

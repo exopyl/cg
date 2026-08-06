@@ -21,5 +21,14 @@ if (WIN32)
             "$<TARGET_FILE_DIR:reconstruction-cli>")
 endif()
 
+# lib3mf.dll de meme : cgmesh l'importe de facon IMPLICITE sous ENABLE_LIB3MF,
+# donc l'exe ne demarre pas sans elle, meme s'il n'ouvre jamais de .3mf.
+if (WIN32 AND ENABLE_LIB3MF)
+    add_custom_command(TARGET reconstruction-cli POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${EXTERN_LIB3MF}/bin/lib3mf.dll"
+            "$<TARGET_FILE_DIR:reconstruction-cli>")
+endif()
+
 set_target_properties(reconstruction-cli PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:reconstruction-cli>")

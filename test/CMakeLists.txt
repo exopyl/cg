@@ -73,6 +73,39 @@ if (WIN32 AND ENABLE_OPENNURBS)
     )
 endif()
 
+# lib3mf est liee en IMPLICITE : le .dll doit etre trouvable au lancement, sinon
+# TU.exe ne demarre meme pas (l'erreur precede tout code de test).
+if (WIN32 AND ENABLE_LIB3MF)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${EXTERN_LIB3MF}/bin/lib3mf.dll"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        COMMENT "Copying lib3mf.dll to $<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    )
+endif()
+
+# Linux : on copie "lib3mf.so.2" et NON "lib3mf.so".
+#
+# Le SONAME de la bibliotheque est `lib3mf.so.2` (lu dans l'ELF) : c'est ce nom
+# que ld.so cherche a l'execution. `lib3mf.so` n'est que le lien de
+# developpement utilise a l'edition de liens ; le copier seul ne servirait a
+# rien. copy_if_different suit le lien symbolique et depose un fichier reel sous
+# le bon nom.
+#
+# Ce qui resout REELLEMENT la dependance pendant ctest, c'est le RPATH de build :
+# cgmesh liant ${EXTERN_LIB3MF}/lib/lib3mf.so par chemin absolu, CMake ajoute ce
+# repertoire au RPATH de TU. Cette copie double la garantie et aligne le bloc sur
+# celui d'openNURBS ci-dessus ; elle sert des que le binaire est execute hors de
+# l'arbre de build.
+if (UNIX AND ENABLE_LIB3MF)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${EXTERN_LIB3MF}/lib/lib3mf.so.2"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        COMMENT "Copying lib3mf.so.2 to $<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    )
+endif()
+
 # OCCT ships ~48 interdependent DLLs; copy the whole bin/ folder next to
 # the test exe so STEP-loading tests can resolve TKernel.dll & friends
 # without polluting PATH. copy_directory is idempotent; cost is one-time.

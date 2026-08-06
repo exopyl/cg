@@ -128,6 +128,44 @@ if (ENABLE_OPENNURBS)
     endif()
 endif()
 
+# lib3mf (.3mf) -- meme montage qu'OpenNURBS ci-dessus.
+#
+# Les bindings C++ sont des en-tetes AUTOGENERES au-dessus d'une API C, livres en
+# deux variantes : Cpp/ (liaison implicite sur l'import lib) et CppDynamic/
+# (chargement par LoadLibrary/dlopen). On prend l'IMPLICITE, cohérent avec les
+# trois autres dependances binaires du depot ; CG_HAS_LIB3MF rend deja la
+# fonctionnalite optionnelle a la compilation.
+#
+# include/ n'est PAS expose en PUBLIC : lib3mf n'apparait dans aucune signature de
+# cgmesh (vmeshes_io_3mf.cpp est le seul consommateur), donc les applications n'ont
+# pas a voir ses en-tetes. CG_HAS_LIB3MF reste PUBLIC pour que sinaia/sulina
+# puissent conditionner leur catalogue de formats.
+if (ENABLE_LIB3MF)
+    if (NOT EXTERN_LIB3MF AND DEFINED ENV{EXTERN_LIB3MF})
+        set(EXTERN_LIB3MF "$ENV{EXTERN_LIB3MF}")
+    endif()
+
+    if (NOT EXTERN_LIB3MF)
+        message(FATAL_ERROR "ENABLE_LIB3MF is ON but EXTERN_LIB3MF is not defined.")
+    endif()
+
+    if (NOT EXISTS "${EXTERN_LIB3MF}/include")
+        message(FATAL_ERROR "ENABLE_LIB3MF is ON but EXTERN_LIB3MF/include does not exist at ${EXTERN_LIB3MF}/include")
+    endif()
+
+    target_compile_definitions(cgmesh PUBLIC CG_HAS_LIB3MF)
+    target_include_directories(cgmesh PRIVATE ${EXTERN_LIB3MF}/include/Bindings/Cpp)
+
+    if (WIN32)
+        if (NOT EXISTS "${EXTERN_LIB3MF}/lib/lib3mf.lib")
+            message(FATAL_ERROR "ENABLE_LIB3MF is ON but ${EXTERN_LIB3MF}/lib/lib3mf.lib is missing.")
+        endif()
+        target_link_libraries(cgmesh ${EXTERN_LIB3MF}/lib/lib3mf.lib)
+    elseif (UNIX)
+        target_link_libraries(cgmesh ${EXTERN_LIB3MF}/lib/lib3mf.so)
+    endif()
+endif()
+
 if (ENABLE_OCCT)
     target_compile_definitions(cgmesh PUBLIC CG_HAS_OCCT)
 

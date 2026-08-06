@@ -43,6 +43,16 @@ inline const std::vector<Format3D>& SupportedFormats()
         { wxT("OFF"),           { wxT("off") },                                             FormatIcon::Generic },
         { wxT("KVX voxel"),     { wxT("kvx") },                                             FormatIcon::Generic },
         { wxT("Minecraft NBT"), { wxT("nbt") },                                             FormatIcon::Generic },
+#ifdef CG_HAS_LIB3MF
+        // Conditionne a la presence de lib3mf : sans elle, VMeshesIO::import_3mf
+        // retombe sur son stub et renvoie false. Annoncer le format dans le
+        // dialogue d'ouverture pour ensuite echouer serait trompeur.
+        //
+        // NOTE : STEP/IGES ci-dessus sont annonces SANS garde equivalente alors
+        // qu'ils dependent de CG_HAS_OCCT -- incoherence preexistante, laissee en
+        // l'etat pour ne pas melanger les sujets.
+        { wxT("3MF"),           { wxT("3mf") },                                             FormatIcon::Generic },
+#endif
     };
     return formats;
 }

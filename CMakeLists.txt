@@ -50,6 +50,12 @@ set(ENABLE_SULINA Off CACHE BOOL "Compile sulina (Qt 6 + Vulkan, via cgre2).")
 set(ENABLE_OPENNURBS On CACHE BOOL "Enable openNURBS (.3dm) import.")
 set(EXTERN_OPENNURBS "" CACHE PATH "Path to openNURBS directory.")
 
+# lib3mf (3MF Consortium, BSD-2-Clause) : import .3mf. Bibliotheque PARTAGEE
+# uniquement (aucun .a/.lib statique publie en amont) -> le .dll/.so doit etre
+# livre a cote de chaque executable, comme OpenNURBS et OCCT.
+set(ENABLE_LIB3MF Off CACHE BOOL "Enable lib3mf (.3mf) import.")
+set(EXTERN_LIB3MF "" CACHE PATH "Path to the lib3mf prebuilt directory (contains include/ and lib/).")
+
 if (ENABLE_OPENNURBS)
     if (NOT EXTERN_OPENNURBS AND DEFINED ENV{EXTERN_OPENNURBS})
         set(EXTERN_OPENNURBS "$ENV{EXTERN_OPENNURBS}")

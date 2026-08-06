@@ -23,10 +23,12 @@
       "architecture": { "value": "x64", "strategy": "set" },
       "cacheVariables": {
         "ENABLE_SINAIA":     "ON",
+        "ENABLE_LIB3MF":     "ON",
         "EXTERN_OPENNURBS":  "...",
         "EXTERN_OCCT":       "...",
         "EXTERN_WXWIDGETS":  "...",
-        "EXTERN_GOOGLETEST": "..."
+        "EXTERN_GOOGLETEST": "...",
+        "EXTERN_LIB3MF":     "..."
       }
     },
     {
@@ -37,7 +39,9 @@
       "generator": "Ninja",
       "cacheVariables": {
         "EXTERN_OPENNURBS": "${sourceDir}/.deps/cg_binaries/opennurbs-v8.27.26019.16021",
-        "ENABLE_POISSON": "ON"
+        "ENABLE_POISSON": "ON",
+        "ENABLE_LIB3MF": "ON",
+        "EXTERN_LIB3MF": "${sourceDir}/.deps/cg_binaries/lib3mf-2.5.0"
       }
     },
     {

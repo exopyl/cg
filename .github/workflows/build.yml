@@ -9,7 +9,8 @@ on:
 
 env:
   # Tag of the cg_binaries Release this build consumes.
-  CG_BINARIES_VERSION: v1.0.0
+  # v1.1.0 adds lib3mf 2.5.0 (3MF import) alongside openNURBS and OCCT.
+  CG_BINARIES_VERSION: v1.1.0
 
 jobs:
   build:

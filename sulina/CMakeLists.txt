@@ -124,6 +124,60 @@ if (WIN32 AND TARGET Qt6::windeployqt)
         VERBATIM)
 endif()
 
+# --- Windows: dependances binaires de cgmesh a cote de l'exe ---------------
+# cgmesh lie ces bibliotheques de facon IMPLICITE : leurs DLL doivent etre
+# trouvables au DEMARRAGE du processus, meme si sulina n'ouvre jamais un .3dm,
+# un .step ou un .3mf. Sans elles, sulina.exe ne se lance pas du tout et le
+# message d'erreur de Windows ne dit pas laquelle manque.
+#
+# windeployqt (ci-dessus) ne couvre QUE Qt : ces copies-ci sont a notre charge.
+# Elles atterrissent dans $<TARGET_FILE_DIR:sulina>, donc la cible `dist`
+# (MakeDist.cmake copie tout le dossier hors .lib/.exp/.pdb/.ilk) les embarque
+# sans traitement particulier.
+#
+# Meme montage que sinaia/CMakeLists.txt, a ceci pres que sinaia n'a pas de
+# cible `dist`.
+if (WIN32)
+    if (ENABLE_OPENNURBS)
+        add_custom_command(TARGET sulina POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${EXTERN_OPENNURBS}/lib/vc14x_x64/OpenNURBS.dll"
+                "$<TARGET_FILE_DIR:sulina>"
+            COMMENT "Copying OpenNURBS.dll next to sulina.exe"
+            VERBATIM)
+    endif()
+
+    if (ENABLE_LIB3MF)
+        add_custom_command(TARGET sulina POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${EXTERN_LIB3MF}/bin/lib3mf.dll"
+                "$<TARGET_FILE_DIR:sulina>"
+            COMMENT "Copying lib3mf.dll next to sulina.exe"
+            VERBATIM)
+    endif()
+
+    if (ENABLE_ONNX)
+        add_custom_command(TARGET sulina POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${EXTERN_ONNXRUNTIME}/lib/onnxruntime.dll"
+                "$<TARGET_FILE_DIR:sulina>"
+            COMMENT "Copying onnxruntime.dll next to sulina.exe"
+            VERBATIM)
+    endif()
+
+    # OCCT livre ~48 DLL interdependantes (TKernel + ses dependances) : copier
+    # le dossier bin/ entier, comme le font sinaia et la cible de test. C'est
+    # idempotent et le cout n'est paye qu'une fois.
+    if (ENABLE_OCCT AND EXTERN_OCCT)
+        add_custom_command(TARGET sulina POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${EXTERN_OCCT}/bin"
+                "$<TARGET_FILE_DIR:sulina>"
+            COMMENT "Copying OCCT DLLs next to sulina.exe"
+            VERBATIM)
+    endif()
+endif()
+
 # --- Redistributable bundle: `cmake --build . --config Release --target dist`
 # Stages a clean, self-contained copy of the app into <repo>/dist/sulina:
 # the exe + the windeployqt'd Qt runtime, minus the dev-only artifacts
