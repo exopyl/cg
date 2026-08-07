@@ -596,7 +596,9 @@ std::vector<Parameter> ParameterizedImagePixelBlocks::GetParameters()
 		// En CELLULES de sortie, pas en pixels source.
 		Parameter::MakeInt  ("Despeckle",       &m_despeckle,     0,     6),
 		Parameter::MakeInt  ("Min region area", &m_minRegionArea, 0,     64),
-		Parameter::MakeFloat("Shrink (cells)",  &m_shrink,        0.f,   2.f),
+		// Borne haute a 0.2 cellule : au-dela le sillon (2*shrink) devore les
+		// blocs les plus fins, qui disparaissent du maillage.
+		Parameter::MakeFloat("Shrink (cells)",  &m_shrink,        0.f,   0.2f),
 		Parameter::MakeFloat("Fit size",        &m_fitSize,       0.1f,  100.f),
 		Parameter::MakeFloat("Block height",    &m_blockHeight,   0.001f, 20.f),
 		Parameter::MakeFloat("Base thickness",  &m_baseThickness, 0.001f, 20.f),

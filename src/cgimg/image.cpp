@@ -13,16 +13,16 @@
 #include <vector>
 using namespace std;
 
-int Img::AreIdentical (Img *pImg1, Img *pImg2)
+int Img::AreIdentical (const Img &img1, const Img &img2)
 {
-	if (pImg1->m_iWidth != pImg2->m_iWidth || pImg1->m_iHeight != pImg2->m_iHeight)
+	if (img1.m_iWidth != img2.m_iWidth || img1.m_iHeight != img2.m_iHeight)
 		return -1;
 
 	int nDifferentPixels = 0;
-	for (unsigned int j=0; j<pImg1->m_iHeight; j++)
-		for (unsigned int i=0; i<pImg1->m_iWidth; i++)
+	for (unsigned int j=0; j<img1.m_iHeight; j++)
+		for (unsigned int i=0; i<img1.m_iWidth; i++)
 		{
-			if (pImg1->get_pixel_int(i,j) != pImg2->get_pixel_int(i,j))
+			if (img1.get_pixel_int(i,j) != img2.get_pixel_int(i,j))
 				nDifferentPixels++;
 		}
 
@@ -201,7 +201,7 @@ void Img::get_pixel (unsigned int i, unsigned int j,
 	}
 }
 
-int Img::get_pixel_int (unsigned int i, unsigned int j)
+int Img::get_pixel_int (unsigned int i, unsigned int j) const
 {
 	RGBAc rgba;
 	//unsigned char r, g, b, a;
@@ -212,14 +212,14 @@ int Img::get_pixel_int (unsigned int i, unsigned int j)
 	return Color::RGBAc2Int (rgba);
 }
 
-int Img::get_pixel_index (unsigned int i, unsigned int j)
+int Img::get_pixel_index (unsigned int i, unsigned int j) const
 {
 	if (!bUsePalette)
 		return -1;
 	return m_pPixels[m_iWidth*j+i];
 }
 
-unsigned char Img::get_r (unsigned int i, unsigned int j)
+unsigned char Img::get_r (unsigned int i, unsigned int j) const
 {
 	if (i>=m_iWidth || j>= m_iHeight)
 	{
@@ -229,7 +229,7 @@ unsigned char Img::get_r (unsigned int i, unsigned int j)
 	return m_pPixels[4*(j*m_iWidth+i)];
 }
 
-unsigned char Img::get_g (unsigned int i, unsigned int j)
+unsigned char Img::get_g (unsigned int i, unsigned int j) const
 {
 	if (i>=m_iWidth || j>= m_iHeight)
 	{
@@ -239,7 +239,7 @@ unsigned char Img::get_g (unsigned int i, unsigned int j)
 	return m_pPixels[4*(j*m_iWidth+i)+1];
 }
 
-unsigned char Img::get_b (unsigned int i, unsigned int j)
+unsigned char Img::get_b (unsigned int i, unsigned int j) const
 {
 	if (i>=m_iWidth || j>= m_iHeight)
 	{
@@ -249,7 +249,7 @@ unsigned char Img::get_b (unsigned int i, unsigned int j)
 	return m_pPixels[4*(j*m_iWidth+i)+2];
 }
 
-unsigned char Img::get_a (unsigned int i, unsigned int j)
+unsigned char Img::get_a (unsigned int i, unsigned int j) const
 {
 	if (i>=m_iWidth || j>= m_iHeight)
 	{
@@ -260,7 +260,7 @@ unsigned char Img::get_a (unsigned int i, unsigned int j)
 }
 
 void Img::get_nearest_pixel (float u, float v,
-			     unsigned char *r, unsigned char *g, unsigned char *b, unsigned char *a)
+			     unsigned char *r, unsigned char *g, unsigned char *b, unsigned char *a) const
 {
 	unsigned int i = (unsigned int)(u*m_iWidth);
 	unsigned int j = (unsigned int)(v*m_iHeight);
@@ -382,7 +382,7 @@ void Img::contrast (float k)
 		}
 }
 
-int Img::get_mean_value (void)
+int Img::get_mean_value (void) const
 {
 	int sum = 0;
 	for (unsigned int j=0; j<m_iHeight; j++)
@@ -392,7 +392,7 @@ int Img::get_mean_value (void)
 	return (int)(sum/(m_iWidth*m_iHeight));
 }
 
-int Img::get_median_value (void)
+int Img::get_median_value (void) const
 {
 	float histogram[256];
 	ImgHistogram::compute (*this, histogram, 0);
@@ -406,9 +406,9 @@ int Img::get_median_value (void)
 	return i;
 }
 
-int Img::crop (Img *pImg, int x, int y, unsigned int width, unsigned int height)
+int Img::crop (const Img &src, int x, int y, unsigned int width, unsigned int height)
 {
-	if (x+width > pImg->m_iWidth || y+height > pImg->m_iHeight)
+	if (x+width > src.m_iWidth || y+height > src.m_iHeight)
 		return -1;
 	
 	m_iWidth = 0;
@@ -421,11 +421,11 @@ int Img::crop (Img *pImg, int x, int y, unsigned int width, unsigned int height)
 		{
 			unsigned int ii = x+i;
 			unsigned int jj = y+j;
-			if (ii > pImg->m_iWidth-1)
-				ii = 2 * pImg->m_iWidth - 1 - ii;
-			if (jj > pImg->m_iHeight-1)
-				jj = 2 * pImg->m_iHeight - 1 - jj;
-			pImg->get_pixel (ii, jj, &r, &g, &b, &a);
+			if (ii > src.m_iWidth-1)
+				ii = 2 * src.m_iWidth - 1 - ii;
+			if (jj > src.m_iHeight-1)
+				jj = 2 * src.m_iHeight - 1 - jj;
+			src.get_pixel (ii, jj, &r, &g, &b, &a);
 			this->set_pixel (i, j, r, g, b, a);
 		}
 	
@@ -718,29 +718,26 @@ int Img::resize_pixel (unsigned int n)
 	return 0;
 }
 
-int Img::copy (unsigned int x, unsigned int y, Img *pSrc)
+int Img::copy (unsigned int x, unsigned int y, const Img &src)
 {
-	if (!pSrc)
-		return -1;
-
+	// La garde `if (!pSrc) return -1;` a disparu avec le passage a une
+	// reference : une reference ne peut pas etre nulle.
 	unsigned char r, g, b, a;
-	for (unsigned int j=0; j<pSrc->m_iHeight; j++)
-		for (unsigned int i=0; i<pSrc->m_iWidth; i++)
+	for (unsigned int j=0; j<src.m_iHeight; j++)
+		for (unsigned int i=0; i<src.m_iWidth; i++)
 		{
-			pSrc->get_pixel (i, j, &r, &g, &b, &a);
+			src.get_pixel (i, j, &r, &g, &b, &a);
 			set_pixel (x+i, y+j, r, g, b, a);
 		}
 	return 0;
 }
 
-int Img::concatenate (Img *pImg)
+int Img::concatenate (const Img &src)
 {
-	if (!pImg)
-		return -1;
 
 	unsigned int w = m_iWidth;
-	resize_canvas (m_iWidth+pImg->m_iWidth, m_iHeight, 8, 255, 255, 255, 255);
-	copy (w, 0, pImg);
+	resize_canvas (m_iWidth+src.m_iWidth, m_iHeight, 8, 255, 255, 255, 255);
+	copy (w, 0, src);
 	return 0;
 }
 
@@ -917,9 +914,9 @@ int Img::resize_canvas (unsigned int width, unsigned int height, int positioning
 	return 0;
 }
 
-int Img::multiply (Img *pImg)
+int Img::multiply (const Img &src)
 {
-	if (!pImg || pImg->m_iWidth != m_iWidth || pImg->m_iHeight != m_iHeight)
+	if (src.m_iWidth != m_iWidth || src.m_iHeight != m_iHeight)
 		return -1;
 
 	unsigned char r, g, b, a;
@@ -928,7 +925,7 @@ int Img::multiply (Img *pImg)
 		for (unsigned int i=0; i<m_iWidth; i++)
 		{
 			get_pixel (i, j, &r, &g, &b, &a);
-			pImg->get_pixel (i, j, &r2, &g2, &b2, &a2);
+			src.get_pixel (i, j, &r2, &g2, &b2, &a2);
 			
 			set_pixel (i, j,
 				   (unsigned char)(r*r2/255.),
@@ -940,19 +937,19 @@ int Img::multiply (Img *pImg)
 }
 
 
-int Img::palettize (Img *pImg)
+int Img::palettize (const Img &src)
 {
 	if (m_pPixels)
 		free (m_pPixels);
 	m_iWidth = 0;
 	m_iHeight = 0;
-	resize_memory (pImg->width(), pImg->height(), true);
+	resize_memory (src.width(), src.height(), true);
 
 	unsigned char r, g, b, a;
 	for (unsigned int j=0; j<m_iHeight; j++)
 		for (unsigned int i=0; i<m_iWidth; i++)
 		{
-			pImg->get_pixel (i, j, &r, &g, &b, &a);
+			src.get_pixel (i, j, &r, &g, &b, &a);
 			m_pPixels[m_iWidth*j + i] = m_pPalette->AddColor (r, g, b, a);
 		}
 

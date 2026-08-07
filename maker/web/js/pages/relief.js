@@ -1,13 +1,13 @@
 // ===========================================================================
-//  Page « Image quantification » : quantification des couleurs, vectorisation
-//  des regions puis extrusion (cf. cgmesh/image_relief.h).
+//  Page « Image to puzzle » : quantification des couleurs, vectorisation
+//  des regions puis extrusion (cf. image_relief.h).
 // ===========================================================================
 
 import { createShell, runPage } from "../shell.js";
 
 runPage(async () => {
   const ctx = await createShell({
-    title: "Image quantification",
+    title: "Image to puzzle",
     subtitle: "quantification · vectorisation · extrusion",
   });
 
@@ -47,7 +47,7 @@ runPage(async () => {
 
   // Les octets sont passes en Uint8Array : une image est binaire, la convertir en
   // texte la detruirait.
-  ctx.registerFileInput(imageInput, async (file) => {
+  const importImage = ctx.registerFileInput(imageInput, async (file) => {
     // Affiche l'apercu AVANT le travail lourd : la chaine est synchrone et gele le
     // thread, donc c'est le seul moment ou le navigateur peut encore peindre.
     showPreview(file);
@@ -73,5 +73,29 @@ runPage(async () => {
     ctx.setShape(id, file.name.replace(/\.[^.]+$/, ""), { bootstrap: true });
   });
 
-  ctx.setStatus("Importe une image pour commencer.");
+  // --------------------------------------------------------------------------
+  // Image par defaut
+  // --------------------------------------------------------------------------
+  // La page ouvre sur une image plutot que sur un viewer vide. Le fichier est
+  // copie de test/data/jpg/ par le build (cf. maker/CMakeLists.txt).
+  //
+  // On passe par importImage() et non par le handler nu : c'est le meme enrobage
+  // que la selection manuelle (desactivation des champs pendant le calcul,
+  // banniere d'erreur). fetch -> Blob -> File, parce que la chaine attend un File
+  // (.arrayBuffer(), .name, et createObjectURL pour l'apercu).
+  //
+  // Tout echec est silencieux et laisse la page utilisable : image absente parce
+  // que le build n'a pas tourne, ou serveur qui ne sert pas data/.
+  async function loadDefaultImage() {
+    try {
+      const res = await fetch("data/joconde.jpg", { cache: "no-store" });
+      if (!res.ok) return false;
+      const blob = await res.blob();
+      await importImage(new File([blob], "joconde.jpg", { type: "image/jpeg" }));
+      return true;
+    } catch { return false; }
+  }
+
+  if (!await loadDefaultImage())
+    ctx.setStatus("Importe une image pour commencer.");
 });

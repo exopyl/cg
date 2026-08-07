@@ -1,6 +1,6 @@
 // ===========================================================================
 //  Page « Blocs pixelisés » : quantification, pixelisation au vote majoritaire,
-//  segmentation en blocs connexes puis extrusion (cf. cgmesh/image_pixel_blocks.h).
+//  segmentation en blocs connexes puis extrusion (cf. image_pixel_blocks.h).
 // ===========================================================================
 
 import { createShell, runPage } from "../shell.js";
@@ -43,7 +43,7 @@ runPage(async () => {
     previewBox.hidden = true;
   }
 
-  ctx.registerFileInput(imageInput, async (file) => {
+  const importImage = ctx.registerFileInput(imageInput, async (file) => {
     // Aperçu AVANT le travail lourd : la chaîne est synchrone et gèle le thread,
     // c'est le seul moment où le navigateur peut encore peindre.
     showPreview(file);
@@ -73,7 +73,7 @@ runPage(async () => {
   // connexe, plus son .mtl compagnon — les deux dans une seule archive ZIP, donc
   // un seul téléchargement.
   //
-  // Sérialisé par cgmesh (MeshIO::export_obj_zip_bytes) sur les blocs fusionnés.
+  // Sérialisé côté natif (MeshIO::export_obj_zip_bytes) sur les blocs fusionnés.
   // C'est le C++ qui nomme les entrées internes, puisqu'il dérive la ligne
   // `mtllib` du chemin de sortie ; on reprend donc le nom qu'il renvoie.
   // --------------------------------------------------------------------------
@@ -101,5 +101,29 @@ runPage(async () => {
   });
   ctx.footerExtras.appendChild(exportBtn);
 
-  ctx.setStatus("Importe une image pour commencer.");
+  // --------------------------------------------------------------------------
+  // Image par défaut
+  // --------------------------------------------------------------------------
+  // La page ouvre sur une image plutôt que sur un viewer vide. Le fichier est
+  // copié de test/data/jpg/ par le build (cf. maker/CMakeLists.txt).
+  //
+  // On passe par importImage() et non par le handler nu : c'est le même enrobage
+  // que la sélection manuelle (désactivation des champs pendant le calcul,
+  // bannière d'erreur). fetch -> Blob -> File, parce que la chaîne attend un File
+  // (.arrayBuffer(), .name, et createObjectURL pour l'aperçu).
+  //
+  // Tout échec est silencieux et laisse la page utilisable : image absente parce
+  // que le build n'a pas tourné, ou serveur qui ne sert pas data/.
+  async function loadDefaultImage() {
+    try {
+      const res = await fetch("data/joconde.jpg", { cache: "no-store" });
+      if (!res.ok) return false;
+      const blob = await res.blob();
+      await importImage(new File([blob], "joconde.jpg", { type: "image/jpeg" }));
+      return true;
+    } catch { return false; }
+  }
+
+  if (!await loadDefaultImage())
+    ctx.setStatus("Importe une image pour commencer.");
 });

@@ -1,4 +1,4 @@
-# Build du module WASM `maker` (cgmesh via Emscripten).
+# Build du module WASM `maker` (moteur natif via Emscripten).
 # Usage :  .\maker\build.ps1
 # Prerequis : emsdk, cmake, et Visual Studio (nmake) installes.
 # Ajuste les 3 chemins ci-dessous si ton installation differe.

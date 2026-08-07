@@ -35,7 +35,7 @@ int DisparityEvaluator::Compute_Block (void)
 		printf ("%d / %d\n", j, height);
 		for (unsigned int i=0; i<width; i++)
 		{
-			pBlock1->crop (m_pLeft, i-block_size/2, j-block_size/2, block_size, block_size);
+			pBlock1->crop (*m_pLeft, i-block_size/2, j-block_size/2, block_size, block_size);
 
 			unsigned int mindiff = 765 * block_size * block_size;
 			unsigned int mind = 0;
@@ -47,7 +47,7 @@ int DisparityEvaluator::Compute_Block (void)
 					continue;
 
 				unsigned int sumdiff;
-				pBlock2->crop (m_pRight, x2-block_size/2, j-block_size/2, block_size, block_size);
+				pBlock2->crop (*m_pRight, x2-block_size/2, j-block_size/2, block_size, block_size);
 
 				sumdiff = block_SAD(pBlock1, pBlock2);
 				if (sumdiff < mindiff)

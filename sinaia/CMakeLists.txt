@@ -9,6 +9,17 @@ set(APP_VERSION_MINOR 0)
 
 set(APP_TARGET sinaia)
 
+# Panneau « Treatments » (Smoothing / Subdivision / Normals / Curvature /
+# Decimation). ON par defaut : desactiver ne retire QUE le rattachement du dock
+# a l'AUI, les widgets restent construits.
+#
+# Ce compromis est volontaire : m_pTreatmentsNotebook, m_pCurvaturePanel et
+# m_pDecimationPanel sont references depuis ~47 endroits de SinaiaFrame.cpp.
+# Garder tout ce code sous #ifdef imposerait autant de points de garde et deux
+# configurations a maintenir compilables -- pour un gain de taille negligeable,
+# et sans aucun test pour couvrir l'une ou l'autre.
+option(ENABLE_SINAIA_TREATMENTS "Afficher le panneau Treatments dans sinaia." ON)
+
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(../src/cgre)
 
@@ -27,6 +38,10 @@ set(srcs
         )
 
 add_executable(${APP_TARGET} WIN32 ${srcs})
+
+if (ENABLE_SINAIA_TREATMENTS)
+    target_compile_definitions(${APP_TARGET} PRIVATE CG_SINAIA_TREATMENTS)
+endif()
 target_link_libraries(${APP_TARGET} cgimg cgmath cgmesh cgnet cgre)
 
 # opengl

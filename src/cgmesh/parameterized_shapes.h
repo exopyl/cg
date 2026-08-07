@@ -372,7 +372,10 @@ private:
 	int   m_refine        = 3;       // iterations de raffinement k-means de la palette
 	int   m_despeckle     = 1;       // passes de filtre majoritaire 3x3
 	int   m_minRegionArea = 12;      // px, absorption des petites regions
-	float m_shrink        = 0.f;     // px, offset negatif sur chaque contour
+	// px, offset negatif sur chaque contour. Non nul par defaut : les regions
+	// cessent d'etre jointives et se detachent en pieces separables -- c'est ce
+	// que la page « Image to puzzle » cherche a produire.
+	float m_shrink        = 0.3f;
 	float m_fitSize       = 1.0f;
 	float m_blockHeight   = 0.10f;
 	float m_baseThickness = 0.05f;
@@ -411,7 +414,10 @@ private:
 	int   m_refine        = 3;
 	int   m_despeckle     = 0;
 	int   m_minRegionArea = 0;
-	float m_shrink        = 0.f;
+	// En CELLULES de sortie. Non nul par defaut : le sillon de 2*shrink separe
+	// les blocs voisins, qui deviennent des pieces distinctes plutot qu'un
+	// pavage jointif.
+	float m_shrink        = 0.1f;
 	float m_fitSize       = 1.0f;
 	float m_blockHeight   = 0.10f;
 	float m_baseThickness = 0.05f;

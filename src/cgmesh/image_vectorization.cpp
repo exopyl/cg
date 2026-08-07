@@ -47,7 +47,7 @@ bool CLitRasterToVector::Vectorize(Img* pInput,
 
 
 	Img sPalettizedNoBorder;
-	sPalettizedNoBorder.palettize(pInput);
+	sPalettizedNoBorder.palettize(*pInput);
 
 	// MAKE BORDER TO BE SURE TO HAVE CLOSED SURFACE
 	Img sPalettized (sPalettizedNoBorder.width()+2, sPalettizedNoBorder.height()+2, true);

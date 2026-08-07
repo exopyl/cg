@@ -1,6 +1,6 @@
 // ===========================================================================
 //  Page « Extrusion SVG » : contours d'un fichier SVG tesseles puis extrudes
-//  (cf. cgmesh/import_svg.h + extrude_contours.h).
+//  (cf. import_svg.h + extrude_contours.h).
 // ===========================================================================
 
 import { createShell, runPage } from "../shell.js";
@@ -14,7 +14,7 @@ runPage(async () => {
   const svgInput = document.getElementById("svgInput");
 
   // Le SVG arrive en TEXTE (contrairement a l'image, binaire) : le WASM l'ecrit en
-  // MEMFS car l'importeur cgmesh travaille par chemin de fichier.
+  // MEMFS car l'importeur natif travaille par chemin de fichier.
   ctx.registerFileInput(svgInput, async (file) => {
     const text = await file.text();
     ctx.destroyCurrent();

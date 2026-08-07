@@ -296,45 +296,7 @@ void MaterialRenderer::SetMaterial (MaterialColorExt::MaterialColorExtType eType
 
 
 
-#ifndef WIN32
-#include "cgmesh/cgmesh.h"
-#include "cgimg/cgimg.h"
-#include "cgimg/image_tga.h"
-
-// Load a TGA texture
-GLuint LoadTexture(char *TexName)
-{
-	TGAImg Img;
-	GLuint Texture;
-	
-	// Load our Texture
-	if(Img.Load(TexName)!=IMG_OK)
-		return -1;
-	
-	glGenTextures(1,&Texture);
-	glBindTexture(GL_TEXTURE_2D,Texture);
-	
-	// Create the texture
-	if(Img.GetBPP()==24)
-		glTexImage2D(GL_TEXTURE_2D,0,3,
-			     Img.GetWidth(),Img.GetHeight(),
-			     0,GL_RGB,GL_UNSIGNED_BYTE,
-			     Img.GetImg());
-	else if(Img.GetBPP()==32)
-		glTexImage2D(GL_TEXTURE_2D,0,4,
-			     Img.GetWidth(),Img.GetHeight(),
-			     0,GL_RGBA,GL_UNSIGNED_BYTE,
-			     Img.GetImg());
-	else
-		return -1;
-	
-	// Specify filtering and edge actions
-	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_REPEAT);
-	
-	return Texture;
-}
-
-#endif
+// Le chargeur de texture TGA autonome (LoadTexture + TGAImg) a ete retire :
+// jamais appele, et place sous #ifndef WIN32 alors que cgre n'est construit
+// qu'avec ENABLE_SINAIA, donc sous Windows -- il n'etait donc meme pas
+// compile. cgimg a deja un decodeur TGA, atteint par Img::load().

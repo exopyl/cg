@@ -192,14 +192,14 @@ int ImgBinarize::dithering (Img& img, unsigned char *pattern, int psize)
 		return 0;
 }
 
-int ImgBinarize::screening (Img& img, Img *pPattern)
+int ImgBinarize::screening (Img& img, const Img &pattern)
 {
 	unsigned int i, j;
 	for (j=0; j<img.m_iHeight; j++)
 		for (i=0; i<img.m_iWidth; i++)
 		{
 			unsigned char r, g, b, a;
-			pPattern->get_pixel (i%pPattern->m_iWidth, j%pPattern->m_iHeight, &r, &g, &b, &a);
+			pattern.get_pixel (i%pattern.m_iWidth, j%pattern.m_iHeight, &r, &g, &b, &a);
 			unsigned threshold = r;
 			img.get_pixel (i, j, &r, &g, &b, &a);
 

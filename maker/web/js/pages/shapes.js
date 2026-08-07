@@ -1,6 +1,6 @@
 // ===========================================================================
 //  Page « Formes paramétriques » : catalogue des surfaces analytiques, voxels,
-//  fractales et L-systemes de cgmesh.
+//  fractales et L-systemes du moteur natif.
 // ===========================================================================
 
 import { createShell, runPage } from "../shell.js";

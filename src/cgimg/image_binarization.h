@@ -14,5 +14,5 @@ public:
 	static int floyd_steinberg (Img& img);
 	static int otsu            (Img& img);
 	static int dithering       (Img& img, unsigned char *pattern, int psize);
-	static int screening       (Img& img, Img *pPattern);
+	static int screening       (Img& img, const Img &pattern);
 };

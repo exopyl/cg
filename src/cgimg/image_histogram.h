@@ -14,7 +14,7 @@ class ImgHistogram
 public:
 	// Remplit `histogram` (256 casiers, niveaux de gris). `normalized` != 0 -> la
 	// somme des casiers vaut 1.
-	static void compute (Img& img, float histogram[256], int normalized = 1);
+	static void compute (const Img& img, float histogram[256], int normalized = 1);
 
 	// Construit une image de l'histogramme, de hauteur `height`. L'appelant
 	// devient propriétaire de l'Img renvoyée.

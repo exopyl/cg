@@ -83,7 +83,7 @@ export async function createShell({ title, subtitle }) {
 
   // --- etat ---------------------------------------------------------------
   let Module = null;
-  let currentId = -1;   // id de l'objet cgmesh courant
+  let currentId = -1;   // id de l'objet natif courant
 
   // --- viewer -------------------------------------------------------------
   const viewer = createViewer({
@@ -234,7 +234,10 @@ export async function createShell({ title, subtitle }) {
       applyShape(id, bootstrap);
     },
 
-    registerFileInput(input, handler) { files.register(input, handler); },
+    // Renvoie un declencheur `run(file)` : cf. createFileInputs (ui.js). Permet a
+    // une page de rejouer son propre import sur un fichier synthetique, par
+    // exemple l'image chargee par defaut au demarrage.
+    registerFileInput(input, handler) { return files.register(input, handler); },
   };
 
   return ctx;

@@ -29,28 +29,43 @@ struct Format3D
 
 // Le catalogue des formats supportés — l'unique endroit à éditer pour en
 // ajouter/retirer un.
+//
+// COHÉRENCE AVEC LE BUILD : quatre importeurs de cgmesh sont conditionnels ;
+// compilés sans leur dépendance, ils retombent sur un stub qui renvoie false.
+// Annoncer un format dans le dialogue d'ouverture pour ensuite échouer à
+// l'ouvrir serait trompeur, donc chaque famille concernée porte la garde de
+// son importeur. Les macros CG_HAS_* sont PUBLIC sur la cible cgmesh, donc
+// visibles ici (cf. src/cgmesh/CMakeLists.txt).
+//
+//   3DM              CG_HAS_OPENNURBS   mesh_io_3dm.cpp
+//   STEP / IGES      CG_HAS_OCCT        vmeshes_io_occt.cpp
+//   3MF              CG_HAS_LIB3MF      vmeshes_io_3mf.cpp
+//   NBT              CG_HAS_ZLIB        nbt.cpp (l'analyseur décompresse)
+//
+// Les autres familles sont inconditionnelles : OBJ / 3DS / glTF / KVX sont
+// traités par VMeshesIO::load, STL / OFF / nuages de points par le repli
+// Mesh::load. Aucune dépendance externe.
 inline const std::vector<Format3D>& SupportedFormats()
 {
     static const std::vector<Format3D> formats = {
         { wxT("Wavefront OBJ"), { wxT("obj") },                                             FormatIcon::Obj     },
         { wxT("STL"),           { wxT("stl") },                                             FormatIcon::Stl     },
         { wxT("3D Studio"),     { wxT("3ds") },                                             FormatIcon::Generic },
+#ifdef CG_HAS_OPENNURBS
         { wxT("Rhino 3DM"),     { wxT("3dm") },                                             FormatIcon::Generic },
+#endif
         { wxT("glTF"),          { wxT("gltf"), wxT("glb") },                                FormatIcon::Generic },
+#ifdef CG_HAS_OCCT
         { wxT("STEP"),          { wxT("step"), wxT("stp") },                                FormatIcon::Generic },
         { wxT("IGES"),          { wxT("iges"), wxT("igs") },                                FormatIcon::Generic },
+#endif
         { wxT("Point clouds"),  { wxT("ply"), wxT("pset"), wxT("npts"), wxT("pts"), wxT("asc") }, FormatIcon::Obj },
         { wxT("OFF"),           { wxT("off") },                                             FormatIcon::Generic },
         { wxT("KVX voxel"),     { wxT("kvx") },                                             FormatIcon::Generic },
+#ifdef CG_HAS_ZLIB
         { wxT("Minecraft NBT"), { wxT("nbt") },                                             FormatIcon::Generic },
+#endif
 #ifdef CG_HAS_LIB3MF
-        // Conditionne a la presence de lib3mf : sans elle, VMeshesIO::import_3mf
-        // retombe sur son stub et renvoie false. Annoncer le format dans le
-        // dialogue d'ouverture pour ensuite echouer serait trompeur.
-        //
-        // NOTE : STEP/IGES ci-dessus sont annonces SANS garde equivalente alors
-        // qu'ils dependent de CG_HAS_OCCT -- incoherence preexistante, laissee en
-        // l'etat pour ne pas melanger les sujets.
         { wxT("3MF"),           { wxT("3mf") },                                             FormatIcon::Generic },
 #endif
     };

@@ -11,7 +11,7 @@
 // receveur change : les anciens membres m_pPixels / m_iWidth / m_iHeight sont
 // desormais atteints via `img`, ImgHistogram etant classe amie d'Img.
 
-void ImgHistogram::compute (Img& img, float histogram[256], int normalized)
+void ImgHistogram::compute (const Img& img, float histogram[256], int normalized)
 {
      memset (histogram, 0, 256*sizeof(float));
 

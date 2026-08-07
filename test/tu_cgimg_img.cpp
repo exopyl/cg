@@ -5,6 +5,47 @@
 #include <set>
 #include <vector>
 
+// ===========================================================================
+//  Oracles partages
+// ===========================================================================
+// Ces tests exercaient les algorithmes puis ecrivaient un fichier, sans rien
+// verifier : ils ne detectaient qu'un plantage. Les helpers ci-dessous donnent
+// de quoi affirmer une propriete plutot qu'une absence de crash.
+
+// Niveau de gris d'un pixel (canal rouge : convert_to_grayscale ecrit la meme
+// valeur sur les trois canaux).
+static int gray_at (Img& img, unsigned x, unsigned y)
+{
+	unsigned char r, g, b, a;
+	img.get_pixel (x, y, &r, &g, &b, &a);
+	(void)g; (void)b; (void)a;
+	return r;
+}
+
+// Couleurs RGB distinctes presentes dans l'image. Sert d'oracle a la
+// quantification (« au plus n couleurs ») comme a la binarisation
+// (« exactement deux niveaux »).
+static std::set<int> distinct_colors (Img& img)
+{
+	std::set<int> s;
+	for (unsigned y = 0; y < img.height(); y++)
+		for (unsigned x = 0; x < img.width(); x++)
+		{
+			unsigned char r, g, b, a;
+			img.get_pixel (x, y, &r, &g, &b, &a);
+			s.insert ((int)r << 16 | (int)g << 8 | (int)b);
+		}
+	return s;
+}
+
+// Vrai si l'image ne porte qu'une seule couleur. Une sortie uniforme est le
+// symptome classique d'un algorithme qui a tout ecrase : plusieurs oracles
+// ci-dessous s'en servent comme garde-fou minimal.
+static bool is_uniform (Img& img)
+{
+	return distinct_colors (img).size() == 1u;
+}
+
 // Row-major 3x3 fill (replaces the removed C-API mat3_init for the filter kernels).
 static void set3x3 (float m[3][3], float a, float b, float c,
 		    float d, float e, float f,
@@ -19,14 +60,48 @@ TEST(TEST_cgimg_img, generations)
 {
 	Img *img = new Img ();
 
+	// grayscale1 : rampe HORIZONTALE de 255 colonnes. Le niveau vaut l'abscisse
+	// et ne depend pas de la ligne -- c'est tout le contrat de la mire.
 	ImgTestPattern::grayscale1 (*img, 100);
 	img->save ((char*)"./img_grayscale1.pgm");
+	ASSERT_EQ (img->width(),  255u);
+	ASSERT_EQ (img->height(), 100u);
+	EXPECT_EQ (gray_at (*img, 0, 0),    0);
+	EXPECT_EQ (gray_at (*img, 254, 0),  254);
+	EXPECT_EQ (gray_at (*img, 137, 0),  137);
+	EXPECT_EQ (gray_at (*img, 137, 99), 137) << "la rampe doit etre invariante en y";
 
+	// grayscale2 : damier 8x8 de blocs de `size` px, niveau 4*(8*j+i). Deux
+	// blocs voisins different donc de 4, et le dernier vaut 4*63 = 252.
 	ImgTestPattern::grayscale2 (*img, 50);
 	img->save ((char*)"./img_grayscale2.pgm");
+	ASSERT_EQ (img->width(),  400u);
+	ASSERT_EQ (img->height(), 400u);
+	EXPECT_EQ (gray_at (*img, 0, 0),     0);
+	EXPECT_EQ (gray_at (*img, 60, 0),    4)   << "bloc (1,0)";
+	EXPECT_EQ (gray_at (*img, 0, 60),    32)  << "bloc (0,1) = 4*8";
+	EXPECT_EQ (gray_at (*img, 399, 399), 252) << "bloc (7,7) = 4*63";
+	EXPECT_EQ (gray_at (*img, 10, 10), gray_at (*img, 40, 40))
+		<< "un bloc est uniforme";
 
+	// color_jet : degrade en fausses couleurs. La couleur ne depend que de la
+	// colonne, et les extremes du degrade different.
 	ImgTestPattern::color_jet (*img, 256, 100);
 	img->save ((char*)"./img_color_jet.ppm");
+	ASSERT_EQ (img->width(),  256u);
+	ASSERT_EQ (img->height(), 100u);
+	{
+		unsigned char r0, g0, b0, a0, r1, g1, b1, a1;
+		img->get_pixel (0,   0,  &r0, &g0, &b0, &a0);
+		img->get_pixel (0,   99, &r1, &g1, &b1, &a1);
+		EXPECT_EQ (r0, r1); EXPECT_EQ (g0, g1); EXPECT_EQ (b0, b1)
+			<< "une colonne est uniforme";
+		img->get_pixel (255, 0,  &r1, &g1, &b1, &a1);
+		EXPECT_TRUE (r0 != r1 || g0 != g1 || b0 != b1)
+			<< "les deux extremites du degrade doivent differer";
+		EXPECT_GT (distinct_colors (*img).size(), 8u) << "un degrade, pas un aplat";
+	}
+	delete img;
 }
 
 TEST(TEST_cgimg_img, binarization)
@@ -43,6 +118,19 @@ TEST(TEST_cgimg_img, binarization)
 		ImgBinarize::threshold (*imgc, t);
 		imgc->save ((char*)"./img_bin_threshold.pgm");
 
+		// Contrat exact : strictement au-dessus du seuil -> 255, sinon 0.
+		// Verifiable pixel par pixel contre la source, pas seulement en
+		// comptant les niveaux.
+		const std::set<int> lv = distinct_colors (*imgc);
+		EXPECT_LE (lv.size(), 2u) << "une binarisation ne laisse que deux niveaux";
+		for (unsigned y = 0; y < img->height(); y += 37)
+			for (unsigned x = 0; x < img->width(); x += 37)
+			{
+				const int expected = (gray_at (*img, x, y) > (int)t) ? 255 : 0;
+				ASSERT_EQ (gray_at (*imgc, x, y), expected)
+					<< "seuil " << (int)t << " en (" << x << "," << y << ")";
+			}
+
 		delete imgc;
 	}
 
@@ -53,6 +141,15 @@ TEST(TEST_cgimg_img, binarization)
 		ImgBinarize::otsu (*imgc);
 		imgc->save ((char*)"./img_bin_otsu.pgm");
 
+		// Otsu cherche le seuil qui separe au mieux deux populations : sur une
+		// mire qui couvre toute la dynamique, les deux niveaux doivent etre
+		// presents. Une sortie uniforme signifierait un seuil degenere (0 ou
+		// 255) -- exactement le bug qu'un test sans assertion laissait passer.
+		const std::set<int> lv = distinct_colors (*imgc);
+		EXPECT_EQ (lv.size(), 2u) << "Otsu doit produire deux classes non vides";
+		EXPECT_TRUE (lv.count (0x000000) && lv.count (0xFFFFFF))
+			<< "les deux niveaux attendus sont 0 et 255";
+
 		delete imgc;
 	}
 
@@ -62,6 +159,12 @@ TEST(TEST_cgimg_img, binarization)
 
 		ImgBinarize::floyd_steinberg (*imgc);
 		imgc->save ((char*)"./img_bin_floyd_steinberg.pgm");
+
+		// Diffusion d'erreur : sortie binaire, et les deux niveaux coexistent
+		// puisque la mire couvre toute la dynamique.
+		const std::set<int> lv = distinct_colors (*imgc);
+		EXPECT_EQ (lv.size(), 2u);
+		EXPECT_FALSE (is_uniform (*imgc)) << "le tramage ne doit pas tout ecraser";
 
 		delete imgc;
 	}
@@ -85,10 +188,16 @@ TEST(TEST_cgimg_img, binarization)
 */
 
 		Img *imgc = new Img ();
-		imgc->crop (img, 0, 0, img->width() - img->width()%psize, img->height() - img->height()%psize);
+		imgc->crop (*img, 0, 0, img->width() - img->width()%psize, img->height() - img->height()%psize);
 		
 		ImgBinarize::dithering (*imgc, pattern, psize);
 		imgc->save ((char*)"./img_bin_dithering.pgm");
+
+		// Le crop a d'abord ramene les dimensions a un multiple de psize.
+		EXPECT_EQ (imgc->width()  % (unsigned)psize, 0u);
+		EXPECT_EQ (imgc->height() % (unsigned)psize, 0u);
+		EXPECT_LE (distinct_colors (*imgc).size(), 2u) << "sortie binaire";
+		EXPECT_FALSE (is_uniform (*imgc)) << "le tramage ordonne ne doit pas tout ecraser";
 
 		delete imgc;
 	}
@@ -99,12 +208,23 @@ TEST(TEST_cgimg_img, binarization)
 		Img *imgPattern = new Img ();
 		imgPattern->load ((char*)"./test/data/halftone.pgm");
 
-		ImgBinarize::screening (*imgc, imgPattern);
+		const bool patternLoaded = (imgPattern->width() > 0 && imgPattern->height() > 0);
+		ImgBinarize::screening (*imgc, *imgPattern);
 		imgc->save ((char*)"./img_bin_screening.pgm");
+
+		// La trame vient d'un fichier : si test/data/halftone.pgm manque, le
+		// test dirait n'importe quoi. On l'affirme d'abord, puis on verifie la
+		// sortie -- dimensions conservees et resultat binaire.
+		ASSERT_TRUE (patternLoaded) << "test/data/halftone.pgm introuvable";
+		EXPECT_EQ (imgc->width(),  img->width());
+		EXPECT_EQ (imgc->height(), img->height());
+		EXPECT_LE (distinct_colors (*imgc).size(), 2u) << "sortie binaire";
 
 		delete imgPattern;
 		delete imgc;
 	}
+
+	delete img;
 }
 
 TEST(TEST_cgimg_img, quantization)
@@ -117,6 +237,12 @@ TEST(TEST_cgimg_img, quantization)
 		Img *imgc = new Img (*img);
 		ImgQuantize::heckbert (*imgc, 16);
 		imgc->save ((char*)"./img_quant_heckbert.ppm");
+		// Contrat d'un quantifieur : AU PLUS n couleurs, et l'image reste
+		// exploitable (dimensions inchangees, pas d'aplat).
+		EXPECT_LE (distinct_colors (*imgc).size(), 16u);
+		EXPECT_EQ (imgc->width(), img->width());
+		EXPECT_EQ (imgc->height(), img->height());
+		EXPECT_FALSE (is_uniform (*imgc));
 		delete imgc;
 	}
 
@@ -125,6 +251,9 @@ TEST(TEST_cgimg_img, quantization)
 		Img *imgc = new Img (*img);
 		ImgQuantize::wu (*imgc, 16);
 		imgc->save ((char*)"./img_quant_wu.ppm");
+		EXPECT_LE (distinct_colors (*imgc).size(), 16u);
+		EXPECT_EQ (imgc->width(), img->width());
+		EXPECT_FALSE (is_uniform (*imgc));
 		delete imgc;
 	}
 
@@ -133,8 +262,14 @@ TEST(TEST_cgimg_img, quantization)
 		Img *imgc = new Img (*img);
 		ImgQuantize::kmean (*imgc, 0.05);
 		imgc->save ((char*)"./img_quant_kmean.ppm");
+		// kmean n'a pas de n impose : son seul contrat verifiable ici est de
+		// REDUIRE le nombre de couleurs sans tout ecraser.
+		EXPECT_LE (distinct_colors (*imgc).size(), distinct_colors (*img).size());
+		EXPECT_FALSE (is_uniform (*imgc));
 		delete imgc;
 	}
+
+	delete img;
 }
 
 // Erreur quadratique moyenne par canal entre deux images de meme taille.
@@ -225,6 +360,9 @@ TEST(TEST_cgimg_img, filter)
 		Img *imgc = new Img (*img);
 		ImgFilter::convolve (*imgc, filter);
 		imgc->save ((char*)"./img_filter_passe_haut.ppm");
+		EXPECT_EQ (imgc->width(),  img->width());
+		EXPECT_EQ (imgc->height(), img->height());
+		EXPECT_FALSE (is_uniform (*imgc)) << "le filtre ne doit pas tout ecraser";
 		delete imgc;
 	}
 
@@ -237,6 +375,9 @@ TEST(TEST_cgimg_img, filter)
 		Img *imgc = new Img (*img);
 		ImgFilter::convolve (*imgc, filter);
 		imgc->save ((char*)"./img_filter_passe_bas.ppm");
+		EXPECT_EQ (imgc->width(),  img->width());
+		EXPECT_EQ (imgc->height(), img->height());
+		EXPECT_FALSE (is_uniform (*imgc)) << "le filtre ne doit pas tout ecraser";
 		delete imgc;
 	}
 
@@ -259,6 +400,9 @@ TEST(TEST_cgimg_img, filter)
 		Img *imgc = new Img (*img);
 		ImgFilter::convolve (*imgc, filter);
 		imgc->save ((char*)"./img_filter_laplacian.ppm");
+		EXPECT_EQ (imgc->width(),  img->width());
+		EXPECT_EQ (imgc->height(), img->height());
+		EXPECT_FALSE (is_uniform (*imgc)) << "le filtre ne doit pas tout ecraser";
 		delete imgc;
 	}
 
@@ -275,6 +419,9 @@ TEST(TEST_cgimg_img, filter)
 		Img *imgc = new Img (*img);
 		ImgFilter::convolve (*imgc, filter);
 		imgc->save ((char*)"./img_filter_gradient.ppm");
+		EXPECT_EQ (imgc->width(),  img->width());
+		EXPECT_EQ (imgc->height(), img->height());
+		EXPECT_FALSE (is_uniform (*imgc)) << "le filtre ne doit pas tout ecraser";
 		delete imgc;
 	}
 
@@ -283,6 +430,9 @@ TEST(TEST_cgimg_img, filter)
 		Img *imgc = new Img (*img);
 		ImgFilter::sobel (*imgc);
 		imgc->save ((char*)"./img_filter_sobel.ppm");
+		EXPECT_EQ (imgc->width(),  img->width());
+		EXPECT_EQ (imgc->height(), img->height());
+		EXPECT_FALSE (is_uniform (*imgc)) << "le filtre ne doit pas tout ecraser";
 		delete imgc;
 	}
 
@@ -291,34 +441,79 @@ TEST(TEST_cgimg_img, filter)
 		Img *imgc = new Img (*img);
 		ImgFilter::bilateral (*imgc);
 		imgc->save ((char*)"./img_filter_bilateral.ppm");
+		EXPECT_EQ (imgc->width(),  img->width());
+		EXPECT_EQ (imgc->height(), img->height());
+		EXPECT_FALSE (is_uniform (*imgc)) << "le filtre ne doit pas tout ecraser";
 		delete imgc;
+	}
+
+	delete img;
+}
+
+
+// Oracle MATHEMATIQUE de la convolution, la ou les blocs ci-dessus ne verifient
+// que des invariants faibles.
+//
+// Sur une image UNIFORME de valeur V :
+//   - un noyau de somme nulle (laplacien, gradient, Sobel) rend 0 ;
+//   - un noyau passe-bas rend V, puisque convolve() normalise par la somme du
+//     noyau quand `divide` vaut 0.
+//
+// La BORDURE d'un pixel est exclue : convolve() balaie de 1 a n-2 et laisse le
+// tampon a 0 sur le pourtour. C'est le comportement reel, pas un oubli du test.
+TEST(TEST_cgimg_img, convolve_of_a_uniform_image_follows_the_kernel_sum)
+{
+	const unsigned int W = 32, H = 24;
+	const unsigned char V = 120;
+
+	// --- noyau de somme nulle -> reponse nulle a l'interieur ---------------
+	{
+		Img img (W, H);
+		img.init_color (V, V, V, 255);
+		float k[3][3];
+		set3x3 (k, 0.f, -1.f, 0.f,
+		          -1.f,  4.f, -1.f,
+		           0.f, -1.f, 0.f);   // laplacien, somme = 0
+		ASSERT_EQ (ImgFilter::convolve (img, k), 0);
+		for (unsigned y = 1; y < H - 1; y++)
+			for (unsigned x = 1; x < W - 1; x++)
+				ASSERT_EQ (gray_at (img, x, y), 0)
+					<< "somme nulle sur une image plate en (" << x << "," << y << ")";
+	}
+
+	// --- passe-bas normalise -> image inchangee a l'interieur --------------
+	{
+		Img img (W, H);
+		img.init_color (V, V, V, 255);
+		float k[3][3];
+		set3x3 (k, 1.f, 1.f, 1.f,
+		           1.f, 1.f, 1.f,
+		           1.f, 1.f, 1.f);    // somme = 9, normalisee par convolve()
+		ASSERT_EQ (ImgFilter::convolve (img, k), 0);
+		for (unsigned y = 1; y < H - 1; y++)
+			for (unsigned x = 1; x < W - 1; x++)
+				ASSERT_EQ (gray_at (img, x, y), (int)V)
+					<< "moyenne d'une image plate en (" << x << "," << y << ")";
+	}
+
+	// --- Sobel : contours d'une image plate = rien -------------------------
+	{
+		Img img (W, H);
+		img.init_color (V, V, V, 255);
+		ASSERT_EQ (ImgFilter::sobel (img), 0);
+		for (unsigned y = 1; y < H - 1; y++)
+			for (unsigned x = 1; x < W - 1; x++)
+				ASSERT_EQ (gray_at (img, x, y), 0)
+					<< "Sobel doit etre nul sans contour, en (" << x << "," << y << ")";
 	}
 }
 
-
-TEST(TEST_cgimg_img, filter2)
-{
-#if 0
-	Img* img = new Img();
-	ImgTestPattern::grayscale2 (*img, 50);
-
-	Img* snow = new Img();
-	snow->load("./test/data/fallout_mask.png");
-	snow->resize(512, 512, 1);
-	//ImgDraw::smooth_transition (*img, 5);
-	//ImgFilter::bilateral (*img);
-	//ImgFilter::saturate (*img, 1.9);
-	img->resize(snow->width(), snow->height());
-	img->convert_to_grayscale();
-	ImgFilter::blur (*img);
-	ImgFilter::sepia (*img);
-	img->multiply(snow);
-	ImgFilter::brightness (*img, 2.1);
-	img->save("./img_filter2.png");
-	//ImgFilter::brightness (*snow, 2.1);
-	//snow->save("../fallout_mask2.png");
-#endif
-}
+// NOTE : le test « filter2 » a ete supprime. Son corps etait integralement
+// encadre par #if 0 : il ne compilait aucun appel et ne pouvait donc rien
+// verifier, pas meme l'absence de plantage. Le remplacer par des assertions
+// aurait demande de le reecrire entierement ; la chaine qu'il decrivait
+// (blur + sepia + multiply + brightness) est deja couverte par les blocs du
+// test `filter` et par convolve_of_a_uniform_image_follows_the_kernel_sum.
 
 TEST(TEST_cgimg_img, drawing)
 {
@@ -353,7 +548,31 @@ TEST(TEST_cgimg_img, drawing)
 	
 
 	imgc->save ((char*)"./img_drawing.ppm");
+	// Oracle : le trace DOIT poser la couleur demandee la ou il passe, et ne
+	// pas repeindre toute l'image. On verifie les deux bouts du segment (ses
+	// extremites exactes) et le centre du disque.
+	{
+		unsigned char r, g, b, a;
+		imgc->get_pixel (10, 50, &r, &g, &b, &a);
+		EXPECT_EQ (r, 255) << "extremite du segment";
+		imgc->get_pixel (img->width() - 50, img->height() - 100, &r, &g, &b, &a);
+		EXPECT_EQ (r, 255) << "autre extremite du segment";
+
+		// Un disque plein de rayon 5 : son centre est necessairement peint.
+		ImgDraw::disk (*imgc, 200, 200, 5, 0, 255, 0, 255);
+		imgc->get_pixel (200, 200, &r, &g, &b, &a);
+		EXPECT_EQ (g, 255) << "centre du disque";
+		// ... et un point tres au-dela du rayon ne l'est pas.
+		imgc->get_pixel (200, 180, &r, &g, &b, &a);
+		EXPECT_NE (g, 255) << "hors du disque, la couleur ne doit pas avoir bavé";
+
+		EXPECT_EQ (imgc->width(),  img->width());
+		EXPECT_EQ (imgc->height(), img->height());
+		EXPECT_FALSE (is_uniform (*imgc));
+	}
+
 	delete imgc;
+	delete img;
 }
 
 TEST(TEST_cgimg_img, histogram)
@@ -368,6 +587,20 @@ TEST(TEST_cgimg_img, histogram)
 
 	float h[256];
 	ImgHistogram::compute (*imgc, h);
+	// Normalise par defaut : la somme des casiers vaut 1.
+	{
+		double sum = 0.;
+		for (int i = 0; i < 256; i++) sum += h[i];
+		EXPECT_NEAR (sum, 1.0, 1e-4) << "histogramme normalise";
+	}
+	// Non normalise : la somme vaut le nombre de pixels.
+	{
+		float raw[256];
+		ImgHistogram::compute (*imgc, raw, 0);
+		double sum = 0.;
+		for (int i = 0; i < 256; i++) sum += raw[i];
+		EXPECT_NEAR (sum, (double)imgc->width() * imgc->height(), 1.0);
+	}
 	output_1array (h, 256, "histogram1.dat");
 	for (int i=1; i<256; i++)
 		h[i] += h[i-1];
@@ -375,6 +608,11 @@ TEST(TEST_cgimg_img, histogram)
 
 	Img *histo = ImgHistogram::to_image (*imgc, 200);
 	histo->save ("./img_histo_histo_orig.ppm");
+	// Le rendu d'histogramme fait 256 colonnes (un casier par colonne) et la
+	// hauteur demandee.
+	ASSERT_NE (histo, nullptr);
+	EXPECT_EQ (histo->width(),  256u);
+	EXPECT_EQ (histo->height(), 200u);
 	delete histo;
 
 	ImgHistogram::equalize (*imgc);
@@ -425,12 +663,30 @@ TEST(TEST_cgimg_img, disparity)
 		pRight->save ("./meterbig_r.bmp");
 		printf ("%d %d\n", pLeft->width(), pLeft->height());
 		printf ("%d %d\n", pRight->width(), pRight->height());
+
+		// La paire vient de fichiers : sans eux le test ne mesurerait rien.
+		// L'affirmer AVANT de calculer, sinon la donnee manquante se
+		// manifesterait comme un resultat vide plutot que comme sa vraie cause.
+		ASSERT_GT (pLeft->width(),  0u) << "test/data/meterbig_l.pgm introuvable";
+		ASSERT_GT (pRight->width(), 0u) << "test/data/meterbig_r.pgm introuvable";
+		ASSERT_EQ (pLeft->width(),  pRight->width());
+		ASSERT_EQ (pLeft->height(), pRight->height());
 		
 		DisparityBirchfield *pBirchfield = new DisparityBirchfield();
 		pBirchfield->SetStereoPair (pLeft, pRight);
 		pBirchfield->Process ();
 		Img *pDisparity = pBirchfield->GetDisparity ();
 		pDisparity->save ("./disparity.bmp");
+
+		// Faute de verite terrain, on verifie ce qui l'est : la carte a la taille
+		// de la paire, et elle porte plusieurs valeurs. Une carte uniforme
+		// signifierait que l'appariement n'a rien trouve -- exactement ce que
+		// l'absence d'assertion laissait passer.
+		ASSERT_NE (pDisparity, nullptr);
+		EXPECT_EQ (pDisparity->width(),  pLeft->width());
+		EXPECT_EQ (pDisparity->height(), pLeft->height());
+		EXPECT_FALSE (is_uniform (*pDisparity))
+			<< "carte de disparite uniforme : aucun appariement";
 
 		delete pBirchfield;
 		delete pRight;
@@ -447,7 +703,21 @@ TEST(TEST_cgimg_img, geodesic)
 	img->set_pixel (75, 75, 0, 0, 0, 255);
 
 	ImgGeodesic::apply (*img);
-	img->save ("./toto.ppm");
+	img->save ("./geodesic.ppm");
+
+	// La transformee geodesique repartit une distance depuis les germes noirs.
+	// Oracles : dimensions conservees, sortie NON uniforme (sinon la carte de
+	// distance n'a rien produit), et un germe reste extremal -- il ne peut pas
+	// etre plus loin de lui-meme qu'un point quelconque.
+	ASSERT_EQ (img->width(),  100u);
+	ASSERT_EQ (img->height(), 100u);
+	EXPECT_FALSE (is_uniform (*img)) << "aucune distance n'a ete propagee";
+	const int atSeed = gray_at (*img, 50, 50);
+	EXPECT_LE (atSeed, gray_at (*img, 5, 5))
+		<< "un germe doit etre au moins aussi proche que n'importe quel autre point";
+	EXPECT_LE (atSeed, gray_at (*img, 95, 5));
+
+	delete img;
 }
 
 // Fill an RGBA image with a solid colour.
@@ -594,7 +864,27 @@ TEST(TEST_cgimg_img, temperature2color)
 			pImg->set_pixel(i, j, r, g, b, 255);
 		}
 	}
-	pImg->save("./toto.bmp");
+	pImg->save("./temperature2color.bmp");
+
+	// Oracle PHYSIQUE : une temperature de couleur basse tire vers le rouge,
+	// une haute vers le bleu. C'est la definition meme du corps noir, donc la
+	// seule propriete que ce degrade doit respecter.
+	//
+	// NOTE : temperature2color() est definie dans CE fichier de test, pas dans
+	// cgimg -- ce test n'exerce donc aucun code de la bibliotheque. Le laisser
+	// tel quel serait trompeur ; le supprimer perdrait la fonction. A trancher :
+	// soit elle descend dans cgimg (color.h), soit ce test disparait avec elle.
+	{
+		unsigned char r1, g1, b1, r2, g2, b2;
+		temperature2color (1000.f,  r1, g1, b1);   // rouge profond
+		temperature2color (11000.f, r2, g2, b2);   // bleu
+		EXPECT_GT ((int)r1, (int)b1) << "1000 K doit tirer vers le rouge";
+		EXPECT_GT ((int)b2, (int)r2) << "11000 K doit tirer vers le bleu";
+		EXPECT_GT ((int)b2, (int)b1) << "le bleu croit avec la temperature";
+		EXPECT_FALSE (is_uniform (*pImg)) << "le degrade ne doit pas etre un aplat";
+	}
+
+	delete pImg;
 }
 
 TEST(TEST_cgimg_img, invert)
@@ -728,7 +1018,7 @@ TEST(TEST_cgimg_img, copy)
     dst.init_color(0, 0, 0, 255);
 
     // Action
-    dst.copy(5, 5, &src);
+    dst.copy(5, 5, src);
 
     // Expectations
     unsigned char r, g, b, a;
@@ -743,7 +1033,7 @@ TEST(TEST_cgimg_img, concatenate)
     Img img2(10, 10);
 
     // Action
-    img1.concatenate(&img2);
+    img1.concatenate(img2);
 
     // Expectations
     EXPECT_EQ(img1.width(), 20);
@@ -813,7 +1103,7 @@ TEST(TEST_cgimg_img, multiply)
     img2.init_color(128, 128, 128, 255);
 
     // Action
-    img1.multiply(&img2);
+    img1.multiply(img2);
 
     // Expectations
     unsigned char r, g, b, a;

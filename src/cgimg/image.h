@@ -45,7 +45,7 @@ public:
 	friend class ImgHistogram;
 	friend class ImgTestPattern;
 
-	static int AreIdentical (Img *pImg1, Img *pImg2);
+	static int AreIdentical (const Img &img1, const Img &img2);
 
 	enum grayscale_method_type
 	{
@@ -79,19 +79,19 @@ public:
 	void set_pixel_index (unsigned int i, unsigned int j, unsigned int index);
 	void get_pixel (unsigned int i, unsigned int j,
 			unsigned char *r, unsigned char *g, unsigned char *b, unsigned char *a) const;
-	int get_pixel_int (unsigned int i, unsigned int j);
-	int get_pixel_index (unsigned int i, unsigned int j);
-	unsigned char get_r (unsigned int i, unsigned int j);
-	unsigned char get_g (unsigned int i, unsigned int j);
-	unsigned char get_b (unsigned int i, unsigned int j);
-	unsigned char get_a (unsigned int i, unsigned int j);
+	int get_pixel_int (unsigned int i, unsigned int j) const;
+	int get_pixel_index (unsigned int i, unsigned int j) const;
+	unsigned char get_r (unsigned int i, unsigned int j) const;
+	unsigned char get_g (unsigned int i, unsigned int j) const;
+	unsigned char get_b (unsigned int i, unsigned int j) const;
+	unsigned char get_a (unsigned int i, unsigned int j) const;
 	void get_nearest_pixel (float u, float v,
-				unsigned char *r, unsigned char *g, unsigned char *b, unsigned char *a);
+				unsigned char *r, unsigned char *g, unsigned char *b, unsigned char *a) const;
 	
 	//
 	// palette
 	//
-	int palettize (Img *pImg);
+	int palettize (const Img &src);
 	Palette* get_palette (void);
 	int flood_fill (unsigned int x, unsigned int y, unsigned char r, unsigned char g, unsigned char b);
 
@@ -114,10 +114,10 @@ public:
 	void contrast (float k);
 
 	// 
-	int get_mean_value (void);
-	int get_median_value (void);
+	int get_mean_value (void) const;
+	int get_median_value (void) const;
 
-	int multiply (Img *pImg);
+	int multiply (const Img &src);
 
 	// Filtres et colorimetrie -> ImgFilter   (image_filter.h)
 	// Quantification          -> ImgQuantize (image_quantization.h)
@@ -127,7 +127,7 @@ public:
 	//
 	// crop / resample
 	//
-	int crop (Img *pImg, int x, int y, unsigned int width, unsigned int height);
+	int crop (const Img &src, int x, int y, unsigned int width, unsigned int height);
 	// mode 0 : nearest neighbour
 	//      1 : bilinear
 	//      2 : couleur majoritaire du superpixel, pas CONSTANT (m_iWidth/width en
@@ -140,8 +140,8 @@ public:
 	int resize (unsigned int width, unsigned int height, int mode=1);
 	int resize_pixel (unsigned int n);
 
-	int copy (unsigned int x, unsigned int y, Img *pImg);
-	int concatenate (Img *pImg);
+	int copy (unsigned int x, unsigned int y, const Img &src);
+	int concatenate (const Img &src);
 
 	int rotate (int mode);
 

@@ -32,4 +32,7 @@ private:
 	float  m_pReflAmount[256];
 };
 
-extern GLuint LoadTexture(char *TexName);
+// LoadTexture(char*) a ete retiree avec le decodeur TGAImg qu'elle etait seule a
+// utiliser : jamais appelee, et compilee sous #ifndef WIN32 alors que cgre n'est
+// construit qu'avec ENABLE_SINAIA, donc sous Windows. Pour charger une texture,
+// passer par Img::load(), qui dispatche sur l'extension (TGA compris).

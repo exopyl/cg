@@ -449,7 +449,14 @@ MyFrame::MyFrame(wxWindow* parent,
 
     wxMenu* windows_menu = new wxMenu;
     windows_menu->AppendCheckItem(ID_ShowInformation, _("Information"));
+    // Même garde que l'AddPane du dock : sans le panneau, cette case à cocher
+    // n'aurait plus rien à afficher/masquer (GetPane renverrait le panneau
+    // invalide statique de wxAUI, et le clic serait sans effet). Un contrôle
+    // mort dans un menu est le même défaut que le catalogue de formats qui
+    // annonçait STEP sans OCCT.
+#ifdef CG_SINAIA_TREATMENTS
     windows_menu->AppendCheckItem(ID_ShowTreatments, _("Treatments"));
+#endif
     windows_menu->AppendCheckItem(ID_ShowLogging, _("Logging Window"));
     windows_menu->AppendCheckItem(ID_ShowExplorer, _("Explorer"));
     options_menu->AppendSubMenu(windows_menu, wxT("Windows"));
@@ -796,8 +803,23 @@ MyFrame::MyFrame(wxWindow* parent,
     m_pTreatmentsNotebook->AddPage(m_pDecimationPanel, _("Decimation"));
 
     // Empilé à droite, sous "Model information" (Position 2 dans la même rangée).
+    //
+    // Seul point de garde du panneau Treatments (option CMake
+    // ENABLE_SINAIA_TREATMENTS -> CG_SINAIA_TREATMENTS). Sans elle, le notebook
+    // et ses cinq onglets sont bien construits mais ne sont JAMAIS rattachés à
+    // l'AUI : le dock n'apparaît pas.
+    //
+    // Ne pas étendre cette garde à la construction ci-dessus sans traiter les
+    // ~47 références à m_pTreatmentsNotebook / m_pCurvaturePanel /
+    // m_pDecimationPanel ailleurs dans ce fichier, sous peine de casser la
+    // compilation dans la configuration désactivée -- que rien ne teste.
+    //
+    // Le notebook reste parenté à `this` : wxWidgets le détruira avec la frame,
+    // même non rattaché. Pas de fuite.
+#ifdef CG_SINAIA_TREATMENTS
     m_mgr.AddPane(m_pTreatmentsNotebook, wxAuiPaneInfo().Name(wxT("Treatments")).Caption(wxT("Treatments"))
                   .Right().Layer(1).Row(0).Position(2).BestSize(280, 360).MinSize(220, 180));
+#endif
 
 
     m_dcDirectory = new wxGenericDirCtrl(this, ID_DIRCTRL, wxT(""), wxDefaultPosition, wxSize(142, 120), wxSIMPLE_BORDER | wxDIRCTRL_DIR_ONLY, wxT("All files (*.*)|*.*"), 0);

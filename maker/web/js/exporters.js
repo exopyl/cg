@@ -2,7 +2,7 @@
 //  Export du maillage courant : OBJ (produit par le WASM) et STL (binaire, JS).
 // ===========================================================================
 //  L'OBJ est serialise cote C++ : la serialisation d'un maillage appartient a
-//  cgmesh, pas a la couche navigateur. Ce module ne garde que ce qui est
+//  au moteur natif, pas a la couche navigateur. Ce module ne garde que ce qui est
 //  reellement une preoccupation navigateur -- nommer le fichier et declencher le
 //  telechargement.
 //
@@ -28,7 +28,7 @@ export function saveBlob(blob, name) {
 }
 
 // Un OBJ ne peut pas embarquer ses materiaux : il les reference par `mtllib`, donc
-// un export colore compte forcement deux fichiers. cgmesh les livre zippes
+// un export colore compte forcement deux fichiers. Le moteur natif les livre zippes
 // (MeshIO::export_obj_zip_bytes), ce qui ramene l'operation a UN telechargement.
 //
 // Les octets arrivent en vue typee sur le tas WASM, valide seulement jusqu'au

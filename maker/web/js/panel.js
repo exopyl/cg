@@ -2,7 +2,7 @@
 //  Panneau de parametres, construit depuis getParams() (JSON type).
 // ===========================================================================
 //  Reecriture JS du PropertyPanel de sinaia (cf. ANALYSE.md sec.6) : les
-//  Parameter de cgmesh referencent des pointeurs crus vers les membres de
+//  Parameter du moteur natif referencent des pointeurs crus vers les membres de
 //  l'objet, ils ne traversent jamais la frontiere JS -- on lit du JSON et on
 //  ecrit par nom via setParam.
 // ===========================================================================

@@ -30,7 +30,7 @@ runPage(async () => {
   catalogEl.addEventListener("change", () => selectShape(catalogEl.value));
 
   // Import d'une Gothic Window depuis un fichier de description JSON (schema
-  // gothic-window-v2) : parse cote cgmesh, la geometrie est generee par l'engine.
+  // gothic-window-v2) : parse cote natif, la geometrie est generee par l'engine.
   // Le panneau reflete les valeurs chargees (getParams lit les membres remplis).
   ctx.registerFileInput(jsonInput, async (file) => {
     const text = await file.text();
@@ -63,7 +63,7 @@ runPage(async () => {
   // foils -- plutot que sur les valeurs par defaut de la classe.
   //
   // Renvoie true si le modele a pu etre installe. Tout echec (fichier absent parce
-  // que le build n a pas tourne, JSON refuse par le parseur cgmesh) laisse la place
+  // que le build n a pas tourne, JSON refuse par le parseur natif) laisse la place
   // au catalogue : une page qui affiche quelque chose vaut mieux qu une page vide.
   async function selectDefaultDescriptor() {
     let text;

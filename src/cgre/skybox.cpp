@@ -112,7 +112,7 @@ void Skybox::load_cross(char *path)
 	unsigned int ys[6] = {size, size, size, size, 0, 2*size};
 	for (int i=0; i<5; i++)
 	{
-		pTmp->crop(pImg, xs[i], ys[i], size, size);
+		pTmp->crop(*pImg, xs[i], ys[i], size, size);
 		unsigned char *data = pTmp->data();
 
 		glGenTextures(1, &texture[i]);

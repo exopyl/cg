@@ -55,12 +55,15 @@ export function createFileInputs(banner) {
   }
 
   return {
+    // Renvoie un declencheur `run(file)` qui rejoue le MEME enrobage que la
+    // selection manuelle (desactivation des inputs, banniere, try/catch). Il
+    // sert aux pages qui chargent une image par defaut au demarrage : appeler
+    // le handler nu contournerait la garde et une erreur finirait en unhandled
+    // rejection invisible.
     register(input, handler) {
       inputs.push(input);
-      input.addEventListener("change", async () => {
-        if (!input.files.length) return;
-        const file = input.files[0];
-        input.value = "";
+
+      async function run(file) {
         setEnabled(false);
         try {
           banner.clear();
@@ -70,7 +73,16 @@ export function createFileInputs(banner) {
         } finally {
           setEnabled(true);
         }
+      }
+
+      input.addEventListener("change", async () => {
+        if (!input.files.length) return;
+        const file = input.files[0];
+        input.value = "";
+        await run(file);
       });
+
+      return run;
     },
     setEnabled,
   };
