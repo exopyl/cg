@@ -3,7 +3,9 @@
 #include "TVector3.h"
 
 #include <cmath>
+#include <cstddef>
 #include <iostream>
+#include <type_traits>
 
 template <class TValue>
 class TQuaternion
@@ -189,14 +191,19 @@ class TQuaternion
 		return &x;
 	}   
 
-	inline const TValue  operator[](int i) const
+	// Selection de membre, et non arithmetique de pointeur : `&x` ne designe qu'un
+	// seul TValue, donc `((TValue*)&x)[i]` lisait au-dela de l'objet. Contrairement
+	// a TVector2/TVector4, l'ancien code ne bornait meme pas l'indice : un i hors
+	// [0,3] sortait de l'objet, il rabat desormais sur w. Meme defaut que
+	// TVector3, non signale par l'analyse statique : corrige par coherence.
+	inline constexpr const TValue  operator[](int i) const
 	{
-		return ((TValue*)&x)[i];
+		return (i == 0) ? x : ((i == 1) ? y : ((i == 2) ? z : w));
 	}
 
-	inline TValue &operator[](int i)
+	inline constexpr TValue &operator[](int i)
 	{
-		return ((TValue*)&x)[i];
+		return (i == 0) ? x : ((i == 1) ? y : ((i == 2) ? z : w));
 	}
 
 	void Conjugate (void)
@@ -373,6 +380,18 @@ class TQuaternion
  public:
   TValue x, y, z, w;
 };
+
+// Meme promesse de disposition memoire que TVector3 : `&x` publie comme base d'un
+// tableau de 4 scalaires par les conversions implicites ci-dessus. Verifiee, pas
+// supposee -- sans quoi le nouvel operator[] et ces conversions pourraient diverger
+// silencieusement si l'ordre des membres changeait.
+// `is_trivially_copyable` n'est pas asserti : le constructeur de copie (ligne 90) et
+// l'operateur d'affectation (ligne 111) explicites l'empechent -- regle de zero non
+// respectee, sans consequence tant qu'aucun tableau de TQuaternion n'est memcpy.
+static_assert (sizeof (TQuaternion<float>)  == 4 * sizeof (float),  "TQuaternion<float> : padding interdit");
+static_assert (sizeof (TQuaternion<double>) == 4 * sizeof (double), "TQuaternion<double> : padding interdit");
+static_assert (offsetof (TQuaternion<float>, w) == 3 * sizeof (float), "TQuaternion<float> : w mal place");
+static_assert (std::is_standard_layout_v<TQuaternion<float>>,       "TQuaternion : standard-layout requis");
 
 typedef TQuaternion<float>		Quaternionf;
 typedef TQuaternion<double>		Quaterniond;

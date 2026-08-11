@@ -53,41 +53,54 @@ int ProfilePolyline::import_obj (char *filename)
 		return -1;
 
 	const int BUFFER_SIZE = 4096;
-	char buffer[BUFFER_SIZE];
-	char prefix[BUFFER_SIZE];
+	char buffer[BUFFER_SIZE] = {};
+	char prefix[BUFFER_SIZE] = {};
 
 	FILE *ptr = fopen (filename, "r");
 	if (!ptr)
 	{
-		printf ("Unable to open %s", filename);
+		printf ("Unable to open %s\n", filename);
 		return -1;
 	}
 
-	unsigned int nPoints=0;
-	while (!feof (ptr))
+	// `while (!feof (ptr))` traitait la derniere ligne deux fois et, sur un fichier
+	// vide, laissait `buffer` non initialise : le strcmp partait a l'aventure. Le
+	// retour de fgets est desormais la condition de boucle.
+	unsigned int nPoints = 0;
+	while (fgets (buffer, BUFFER_SIZE, ptr))
 	{
-		fgets (buffer, BUFFER_SIZE, ptr);
-		sscanf (buffer, "%s", buffer);
-		if (strcmp (buffer, "v") == 0)
+		// prefix, et non buffer : `sscanf (buffer, "%s", buffer)` faisait de la
+		// source sa propre destination (recouvrement -> comportement indefini).
+		prefix[0] = '\0';
+		if (sscanf (buffer, "%4095s", prefix) == 1 && strcmp (prefix, "v") == 0)
 			nPoints++;
 	}
 	rewind (ptr);
 
+	free (m_pPoints);   // evite la fuite si import_obj est appele deux fois
 	m_nPoints = 0;
-	m_pPoints = (float*)malloc(3*nPoints*sizeof(float));
-	while (!feof (ptr))
+	m_pPoints = (float*)malloc(3*(size_t)nPoints*sizeof(float));
+	if (!m_pPoints)
 	{
-		fgets (buffer, BUFFER_SIZE, ptr);
-		sscanf (buffer, "%s", prefix);
-		if (strcmp (prefix, "v") == 0)
-		{
-			sscanf (buffer, "%s %f %f %f", prefix,
-				&m_pPoints[3*m_nPoints],
-				&m_pPoints[3*m_nPoints+1],
-				&m_pPoints[3*m_nPoints+2]);
-			m_nPoints++;
-		}
+		fclose (ptr);
+		return -1;
 	}
+
+	// La borne sur nPoints est indispensable : si les deux passes divergent (erreur
+	// d'E/S en cours de route), l'ecriture sortait de l'allocation.
+	while (fgets (buffer, BUFFER_SIZE, ptr) && m_nPoints < (int)nPoints)
+	{
+		prefix[0] = '\0';
+		if (sscanf (buffer, "%4095s", prefix) != 1 || strcmp (prefix, "v") != 0)
+			continue;
+		if (sscanf (buffer, "%4095s %f %f %f", prefix,
+			&m_pPoints[3*m_nPoints],
+			&m_pPoints[3*m_nPoints+1],
+			&m_pPoints[3*m_nPoints+2]) == 4)
+			m_nPoints++;
+	}
+
+	fclose (ptr);   // n'etait ferme sur AUCUN chemin
 
 	return 0;
 }

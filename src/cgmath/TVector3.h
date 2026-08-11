@@ -1,21 +1,24 @@
 #pragma once
 #include <cmath>
+#include <cstddef>
 #include <iostream>
+#include <type_traits>
 
 template <class TValue>
 class TVector3
 {
 public:
-	constexpr TVector3<TValue>(TValue _x = 0, TValue _y = 0, TValue _z = 0) noexcept
-	{ x = _x; y = _y; z = _z; }
+	// Listes d'initialisation plutot qu'affectations dans le corps : sans elles ces
+	// constructeurs `constexpr` sont purement decoratifs en C++17 -- affecter un
+	// membre non initialise n'est autorise en evaluation constante que depuis
+	// C++20, et le projet est en C++17 (CMakeLists.txt:5). Autrement dit
+	// `constexpr Vector3f v {1,2,3};` ne compilait pas.
+	constexpr TVector3 (TValue _x = 0, TValue _y = 0, TValue _z = 0) noexcept
+		: x (_x), y (_y), z (_z) {}
 
 	template <class S>
-	constexpr TVector3<TValue>(const TVector3<S> &src) noexcept
-	{
-		x = (TValue)src.x;
-		y = (TValue)src.y;
-		z = (TValue)src.z;
-	}
+	constexpr TVector3 (const TVector3<S> &src) noexcept
+		: x ((TValue)src.x), y ((TValue)src.y), z ((TValue)src.z) {}
 
 	//
 	// Operators
@@ -116,8 +119,16 @@ public:
 
 	inline operator const TValue*() const noexcept { return &x; }
 	inline operator TValue*() noexcept { return &x; }
-	inline const TValue operator[](int i) const noexcept { return ((TValue*)&x)[i]; }
-	inline TValue &operator[](int i) noexcept { return ((TValue*)&x)[i]; }
+	// Selection de membre, et non arithmetique de pointeur : `&x` ne designe qu'un
+	// seul TValue, donc `((TValue*)&x)[i]` lisait au-dela de l'objet -- un acces
+	// hors bornes que l'analyse statique signalait a CHACUN des sites d'appel.
+	// Un indice hors [0,2] rabat desormais sur z (comportement defini) au lieu de
+	// sortir de l'objet. Utilisable en evaluation constante, ce que ne permettrait
+	// pas une union (lire un membre inactif n'est jamais une expression constante).
+	inline constexpr const TValue operator[](int i) const noexcept
+	{ return (i == 0) ? x : ((i == 1) ? y : z); }
+	inline constexpr TValue &operator[](int i) noexcept
+	{ return (i == 0) ? x : ((i == 1) ? y : z); }
 
 	//
 	// Set
@@ -304,6 +315,20 @@ public:
 
     TValue x, y, z;
 };
+
+// Les conversions implicites vers TValue* publient `&x` comme base d'un tableau de
+// 3 scalaires, et une soixantaine de sites en dependent : polygon2.h:43
+// `(float*)m_contours[i].data()`, TMatrix4::SetLookAt, geometry.h:15
+// point_triangle_distance2, tensor.h GetNormal(float*)... Cette promesse de
+// disposition memoire n'est donc pas supprimable a court terme : on la VERIFIE ici
+// au lieu de la supposer. Couvre aussi la trivial-copyability dont dependent les
+// malloc/realloc/memcpy de tableaux de Vector3 documentes plus haut.
+static_assert (sizeof (TVector3<float>)  == 3 * sizeof (float),  "TVector3<float> : padding interdit");
+static_assert (sizeof (TVector3<double>) == 3 * sizeof (double), "TVector3<double> : padding interdit");
+static_assert (offsetof (TVector3<float>, y) ==     sizeof (float), "TVector3<float> : y mal place");
+static_assert (offsetof (TVector3<float>, z) == 2 * sizeof (float), "TVector3<float> : z mal place");
+static_assert (std::is_standard_layout_v<TVector3<float>>,    "TVector3 : standard-layout requis");
+static_assert (std::is_trivially_copyable_v<TVector3<float>>, "TVector3 : malloc/memcpy de tableaux");
 
 typedef TVector3<int>		Vector3i;
 typedef TVector3<float>		Vector3f;

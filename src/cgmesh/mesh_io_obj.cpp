@@ -66,7 +66,12 @@ int MeshIO::import_mtl (Mesh& mesh, const char *filename, const char *path)
 	char filename_full[BUFFER_SIZE];
 	if (path)
 	{
-		sprintf (filename_full, "%s/%s", path, filename);
+		// snprintf borne : `path` et `filename` viennent de l'appelant et leur
+		// concatenation peut depasser filename_full. Une troncature silencieuse
+		// designerait un AUTRE fichier, donc on echoue comme un fopen rate.
+		int n = snprintf (filename_full, sizeof(filename_full), "%s/%s", path, filename);
+		if (n < 0 || (size_t)n >= sizeof(filename_full))
+			return -1;
 		ptr = fopen (filename_full, "r");
 	}
 	else
@@ -511,7 +516,17 @@ int MeshIO::export_obj (Mesh& mesh, const char *filename, bool emitObjectGroups)
 	if (!mesh.m_pMaterials.empty())
 	{
 		filematname = strdup (filename);
-		sprintf (filematname+strlen (filematname)-3, "%s", "mtl");
+		if (filematname == nullptr)
+		{
+			fclose (fp);
+			return -1;
+		}
+		// Remplace l'extension sur place. Le buffer strdup laisse exactement
+		// 3 octets + le '\0' a partir de len-3, d'ou la borne a 4 ; et un nom de
+		// moins de 3 caracteres ferait reculer le pointeur AVANT le buffer.
+		size_t lenmat = strlen (filematname);
+		if (lenmat >= 3)
+			snprintf (filematname + lenmat - 3, 4, "mtl");
 
 		// `mtllib` doit designer le .mtl par son NOM SEUL : il est ecrit a cote du
 		// .obj, et un chemin absolu ne resoudrait plus des que le couple est

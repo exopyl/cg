@@ -803,12 +803,27 @@ int Voxels::triangulate (char *filename)
 
 	// delete useless vertices
 	char *v_used = (char*)malloc(nv*sizeof(char));
-	v_used = (char*)memset((void*)v_used, 0, nv*sizeof(char));
+	if (!v_used)
+	{
+		free (v); free (f); free (t); free (m);
+		return -1;
+	}
+	memset ((void*)v_used, 0, nv*sizeof(char));
+	// `f[i]` est un int signe et `nv` un unsigned : l'ancien test `f[i] > nv`
+	// promouvait f[i] en unsigned (un indice negatif devenait enorme) et, surtout,
+	// laissait passer le cas d'egalite -- puis ecrivait QUAND MEME, y compris
+	// apres avoir affiche l'avertissement. `f[i] == nv` debordait donc v_used d'un
+	// octet a chaque fois. Les indices viennent de gridIndex() et sont valides :
+	// la garde est defensive, mais elle protege desormais au lieu de constater.
 	for (i=0; i<4*nf; i++)
 	{
-		if (f[i] > nv)
-			printf ("Warning : %d > %d\n", f[i], nv);
-		v_used[f[i]] = 1;
+		const int idx = f[i];
+		if (idx < 0 || (unsigned int)idx >= nv)
+		{
+			printf ("Warning : index %d hors de [0,%u[\n", idx, nv);
+			continue;
+		}
+		v_used[idx] = 1;
 	}
 	
 	int *new_indices = (int*)malloc(nv*sizeof(int));
@@ -832,7 +847,13 @@ int Voxels::triangulate (char *filename)
 	}
 	
 	int *f2 = (int*)malloc(4*nf*sizeof(int));
-	for (i=0; i<4*nf; i++) f2[i] = new_indices[f[i]];
+	// Meme validation que pour v_used : sans elle, `new_indices[f[i]]` relisait
+	// hors bornes exactement dans les cas ecartes ci-dessus.
+	for (i=0; i<4*nf; i++)
+	{
+		const int idx = f[i];
+		f2[i] = (idx >= 0 && (unsigned int)idx < nv) ? new_indices[idx] : 0;
+	}
 	
 	free (v);
 	v = v2;

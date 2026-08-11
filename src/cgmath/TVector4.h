@@ -1,5 +1,7 @@
 #pragma once
+#include <cstddef>
 #include <iostream>
+#include <type_traits>
 
 #include "TVector3.h"
 
@@ -55,14 +57,19 @@ public:
 		return &x;
 	}
 
-	inline const TValue  operator[](int i) const
+	// Selection de membre, et non arithmetique de pointeur : `&x` ne designe qu'un
+	// seul TValue, donc `((TValue*)&x)[i]` lisait au-dela de l'objet. Strictement
+	// equivalent a l'ancien code POUR TOUT i -- le rabattement sur x hors [0,3]
+	// existait deja. Meme defaut que TVector2/TVector3, non signale par l'analyse
+	// statique faute de site d'appel instrumente : corrige par coherence.
+	inline constexpr const TValue  operator[](int i) const
 	{
-		return (i==0 || i==1 || i==2 || i==3)? ((TValue*)&x)[i] : ((TValue*)&x)[0];
+		return (i == 1) ? y : ((i == 2) ? z : ((i == 3) ? w : x));
 	}
 
-	inline TValue &operator[](int i)
+	inline constexpr TValue &operator[](int i)
 	{
-		return (i==0 || i==1 || i==2 || i==3)? ((TValue*)&x)[i] : ((TValue*)&x)[0];
+		return (i == 1) ? y : ((i == 2) ? z : ((i == 3) ? w : x));
 	}
  
 	inline TVector4<TValue> &operator = (const TVector4<TValue> &src)
@@ -222,6 +229,16 @@ public:
 
     TValue x, y, z, w;
 };
+
+// Meme promesse de disposition memoire que TVector3 : `&x` publie comme base d'un
+// tableau de 4 scalaires par les conversions implicites (TMatrix4, code OpenGL).
+// `is_trivially_copyable` n'est pas asserti : le constructeur de copie et
+// l'operateur d'affectation explicites ci-dessus l'empechent (regle de zero non
+// respectee), sans consequence tant qu'aucun tableau de TVector4 n'est memcpy.
+static_assert (sizeof (TVector4<float>)  == 4 * sizeof (float),  "TVector4<float> : padding interdit");
+static_assert (sizeof (TVector4<double>) == 4 * sizeof (double), "TVector4<double> : padding interdit");
+static_assert (offsetof (TVector4<float>, w) == 3 * sizeof (float), "TVector4<float> : w mal place");
+static_assert (std::is_standard_layout_v<TVector4<float>>,        "TVector4 : standard-layout requis");
 
 typedef TVector4<int   > Vector4i;
 typedef TVector4<float > Vector4f;

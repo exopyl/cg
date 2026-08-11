@@ -1,6 +1,8 @@
 #pragma once
 #include <cmath>
+#include <cstddef>
 #include <iostream>
+#include <type_traits>
 
 template <class TValue>
 class TVector2
@@ -97,14 +99,18 @@ public:
 		return &x;
 	}   
 
-	inline const TValue operator[](int i) const
+	// Selection de membre, et non arithmetique de pointeur : `&x` ne designe qu'un
+	// seul TValue, donc `((TValue*)&x)[i]` lisait au-dela de l'objet. Strictement
+	// equivalent a l'ancien code POUR TOUT i -- le rabattement sur x hors [0,1]
+	// existait deja -- simplement sans le cast de pointeur.
+	inline constexpr const TValue operator[](int i) const
 	{
-		return (i==0 || i==1)? ((TValue*)&x)[i] : ((TValue*)&x)[0];
+		return (i == 1) ? y : x;
 	}
 
-	inline TValue &operator[](int i)
+	inline constexpr TValue &operator[](int i)
 	{
-		return (i==0 || i==1)? ((TValue*)&x)[i] : ((TValue*)&x)[0];
+		return (i == 1) ? y : x;
 	}
 
 	template <class S>
@@ -249,6 +255,17 @@ public:
 
 	TValue x, y;
 };
+
+// Meme promesse de disposition memoire que TVector3 : les conversions implicites
+// vers TValue* publient `&x` comme base d'un tableau de 2 scalaires, et polygon2
+// s'en sert massivement (`(float*)m_contours[i].data()`). Verifiee, pas supposee.
+// NB : `is_trivially_copyable` n'est PAS asserti ici -- le destructeur vide
+// `~TVector2() {}` declare plus haut l'empeche (et supprime le move implicite).
+// Le retirer restaurerait la regle de zero, comme documente dans TVector3.h.
+static_assert (sizeof (TVector2<float>)  == 2 * sizeof (float),  "TVector2<float> : padding interdit");
+static_assert (sizeof (TVector2<double>) == 2 * sizeof (double), "TVector2<double> : padding interdit");
+static_assert (offsetof (TVector2<float>, y) == sizeof (float),   "TVector2<float> : y mal place");
+static_assert (std::is_standard_layout_v<TVector2<float>>,       "TVector2 : standard-layout requis");
 
 typedef TVector2<int> Vector2i;
 typedef TVector2<float> Vector2f;

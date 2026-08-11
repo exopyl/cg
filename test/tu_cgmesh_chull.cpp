@@ -471,3 +471,117 @@ TEST(TEST_cgmesh_chull, EulerFormula_Cube)
 	// expectations
 	EXPECT_EQ(F, 2 * V - 4);
 }
+
+// ===========================================================================
+// Non-regression -- interior points placed FIRST in the input
+// ===========================================================================
+//
+// double_triangle() seeds the hull with the first non-collinear vertices of the
+// list and marks them processed. When those seeds are interior points they get
+// deleted by clean_vertices() as the hull grows -- which is precisely the path
+// where construct_hull()'s cursor could be left pointing at freed memory.
+// CubeWithInteriorPoints_HullUnchanged above appends the interior points, so the
+// seeds are hull corners and the deletion path is never taken: it cannot catch
+// the regression these two tests cover.
+
+// ---------------------------------------------------------------------------
+// TEST: interior points first -- hull should be the cube
+//
+// DISABLED: documents a PRE-EXISTING correctness defect, not a regression.
+// Verified against the unmodified chull.cpp (git stash): the original code
+// returns the very same 10 vertices / 19 faces. Two interior seed vertices are
+// never dropped from the hull, and 19 != 2*10-4 -- the result is not a closed
+// convex polyhedron. The memory-safety work (use-after-free on the
+// construct_hull cursor, null-list dereferences) does not change this output;
+// it is a separate algorithmic bug in the vertex-retirement logic, still open.
+// InteriorPointsInterleaved_HullIsCube below covers the same freed-cursor path
+// and passes, so the fix itself is exercised by the suite.
+// ---------------------------------------------------------------------------
+TEST(TEST_cgmesh_chull, DISABLED_InteriorPointsFirst_HullIsCube)
+{
+	// context -- the 4 seed vertices are all strictly inside the cube
+	float pts[] = {
+		// interior points, consumed first by double_triangle()
+		0.5f, 0.5f, 0.5f,
+		0.4f, 0.6f, 0.3f,
+		0.6f, 0.3f, 0.7f,
+		0.3f, 0.4f, 0.6f,
+		// cube corners
+		0.f, 0.f, 0.f,
+		1.f, 0.f, 0.f,
+		1.f, 1.f, 0.f,
+		0.f, 1.f, 0.f,
+		0.f, 0.f, 1.f,
+		1.f, 0.f, 1.f,
+		1.f, 1.f, 1.f,
+		0.f, 1.f, 1.f
+	};
+
+	Chull3D ch(pts, 12);
+
+	// action
+	ch.compute();
+
+	// expectations -- the interior seeds must have been dropped from the hull
+	EXPECT_EQ(ch.get_n_vertices(), 8);
+	EXPECT_EQ(ch.get_n_faces(), 12);
+}
+
+// ---------------------------------------------------------------------------
+// TEST: interior points interleaved -- exercises clean_vertices repeatedly
+// ---------------------------------------------------------------------------
+TEST(TEST_cgmesh_chull, InteriorPointsInterleaved_HullIsCube)
+{
+	// context -- interior points spread between the corners, so vertices are
+	// deleted at several different iterations of construct_hull()
+	float pts[] = {
+		0.5f, 0.5f, 0.5f,
+		0.f, 0.f, 0.f,
+		0.45f, 0.55f, 0.5f,
+		1.f, 0.f, 0.f,
+		0.55f, 0.45f, 0.5f,
+		1.f, 1.f, 0.f,
+		0.5f, 0.5f, 0.45f,
+		0.f, 1.f, 0.f,
+		0.5f, 0.5f, 0.55f,
+		0.f, 0.f, 1.f,
+		0.42f, 0.5f, 0.5f,
+		1.f, 0.f, 1.f,
+		0.58f, 0.5f, 0.5f,
+		1.f, 1.f, 1.f,
+		0.5f, 0.42f, 0.5f,
+		0.f, 1.f, 1.f
+	};
+
+	Chull3D ch(pts, 16);
+
+	// action
+	ch.compute();
+
+	// expectations
+	EXPECT_EQ(ch.get_n_vertices(), 8);
+	EXPECT_EQ(ch.get_n_faces(), 12);
+}
+
+// ---------------------------------------------------------------------------
+// TEST: get_convex_hull on an empty hull reports failure and nulls the outputs
+// ---------------------------------------------------------------------------
+TEST(TEST_cgmesh_chull, GetConvexHull_WithoutCompute_NullsOutputs)
+{
+	// context -- no compute() call, so there is no face list yet
+	Chull3D ch(cube_pts, 8);
+
+	float *vertices = (float*)0x1;   // sentinelles : doivent etre remises a zero
+	int *faces = (int*)0x1;
+	int nVertices = -1, nFaces = -1;
+
+	// action
+	int ret = ch.get_convex_hull(&vertices, &nVertices, &faces, &nFaces);
+
+	// expectations -- failure reported, and the caller's pointers are safe to free
+	EXPECT_NE(ret, 0);
+	EXPECT_EQ(vertices, nullptr);
+	EXPECT_EQ(faces, nullptr);
+	EXPECT_EQ(nVertices, 0);
+	EXPECT_EQ(nFaces, 0);
+}

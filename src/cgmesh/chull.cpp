@@ -127,13 +127,19 @@ Chull3D::get_convex_hull (float **v, int *nv, int **f, int *nf)
   /* memory allocation */
   float *cv_vertices = (float*)malloc(3*(*nv)*sizeof(float));
   int   *cv_faces    = (int*)malloc(3*(*nf)*sizeof(int));
-  if (!cv_vertices || !cv_faces)
+  if (!cv_vertices || !cv_faces || *nv == 0 || *nf == 0)
     {
-      v = nullptr; f = nullptr;
+      /* Celui des deux blocs qui a reussi fuyait. Et `v = nullptr` ecrivait le
+         PARAMETRE local, pas `*v` : l'appelant repartait avec un pointeur non
+         initialise qu'il croyait mis a zero. free(nullptr) est un no-op. */
+      free (cv_vertices);
+      free (cv_faces);
+      *v = nullptr; *f = nullptr;
       *nv = *nf = 0;
       return 1;
     }
-  
+
+
   /* vertices */
   Chull3D_vertex *v_walk=vertices;
   int i=0;
@@ -286,6 +292,9 @@ Chull3D::construct_hull (void)
 {
   Chull3D_vertex *v = nullptr, *vnext = nullptr;
 
+  if (!vertices)
+    return 0;
+
   v = vertices;
   do {
     vnext = v->next;
@@ -293,11 +302,16 @@ Chull3D::construct_hull (void)
       {
 		v->processed = 1;
 		add_one (v);
-		clean_up (vnext);
+		// &vnext : clean_up supprime peut-etre le sommet designe par vnext, et
+		// doit alors le faire avancer. Sans l'indirection, la boucle repartait
+		// d'un sommet libere (lecture apres liberation sur `v->next` ci-dessus).
+		clean_up (&vnext);
       }
     v = vnext;
+    if (!v)   // la liste peut avoir ete entierement videe
+      break;
   } while (v != vertices);
-  
+
   return 0;
 }
 
@@ -407,11 +421,11 @@ Chull3D::add_one (Chull3D_vertex *v)
  * and nullptrs out some pointers.
  */
 void
-Chull3D::clean_up (Chull3D_vertex *vnext)
+Chull3D::clean_up (Chull3D_vertex **pvnext)
 {
   clean_edges ();
   clean_faces ();
-  clean_vertices (vnext);
+  clean_vertices (pvnext);
 }
 
 /*
@@ -423,7 +437,10 @@ Chull3D::clean_up (Chull3D_vertex *vnext)
 void
 Chull3D::clean_edges (void)
 {
-  Chull3D_edge *e, *t;
+  Chull3D_edge *e = nullptr, *t = nullptr;
+
+  if (!edges)   // la macro DELETE met la tete a nullptr en supprimant le dernier
+    return;
 
   /* integrate the new face's into the data structure */
   /* check every edge */
@@ -444,6 +461,8 @@ Chull3D::clean_edges (void)
       e = edges;
       delete_edge (e);
     }
+  if (!edges)   // toutes les aretes viennent d'etre supprimees
+    return;
   e = edges->next;
   do {
     if (e->to_delete)
@@ -463,13 +482,15 @@ Chull3D::clean_edges (void)
 void
 Chull3D::clean_faces (void)
 {
-  Chull3D_face *f, *t;
+  Chull3D_face *f = nullptr, *t = nullptr;
 
   while (faces && faces->visible)
     {
       f = faces;
       delete_face (f);
     }
+  if (!faces)   // liste vide, ou entierement supprimee ci-dessus
+    return;
   f = faces->next;
   do {
     if (f->visible)
@@ -491,40 +512,62 @@ Chull3D::clean_faces (void)
  * in construct_hull() if we are about to delete vnext.
 */
 void
-Chull3D::clean_vertices (Chull3D_vertex *vnext)
+Chull3D::clean_vertices (Chull3D_vertex **pvnext)
 {
   Chull3D_edge *e = nullptr;
   Chull3D_vertex *v = nullptr, *t = nullptr;
 
   /* mark all vertices incident to some undeleted edge as
      on the hull */
-  e = edges;
-  do {
-    e->end_points[0]->on_hull = e->end_points[1]->on_hull = 1;
-    e = e->next;
-  } while (e != edges);
+  if (edges)
+    {
+      e = edges;
+      do {
+        e->end_points[0]->on_hull = e->end_points[1]->on_hull = 1;
+        e = e->next;
+      } while (e != edges);
+    }
 
   /* delete all vertices that have been processed but are
      not on the hull */
   while (vertices && vertices->processed && !vertices->on_hull)
     {
-      /* if about to delete vnext, advance it first */
-      if (v == vnext)
-	vnext = v->next;
-	v = vertices;
-	delete_vertex (v);
+      /* if about to delete vnext, advance it first.
+         On compare la TETE de liste -- c'est elle qu'on s'apprete a supprimer.
+         L'ancien code comparait `v`, qui valait nullptr a la premiere iteration
+         puis designait le sommet deja libere : la garde ne protegeait rien. */
+      if (pvnext && *pvnext == vertices)
+        *pvnext = vertices->next;
+      delete_vertex (vertices);
     }
+  if (!vertices)
+    {
+      /* liste videe : le `next` releve ci-dessus designe un sommet libere */
+      if (pvnext)
+        *pvnext = nullptr;
+      return;
+    }
+
   v = vertices->next;
   do {
     if (v->processed && !v->on_hull)
       {
 	t = v;
 	v = v->next;
+	if (pvnext && *pvnext == t)
+	  *pvnext = t->next;
 	delete_vertex (t);
       }
     else
       v = v->next;
-  } while (v != vertices);
+  } while (vertices && v != vertices);
+
+  if (!vertices)
+    {
+      if (pvnext)
+        *pvnext = nullptr;
+      return;
+    }
 
   /* reset flags */
   v = vertices;

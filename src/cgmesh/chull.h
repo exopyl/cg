@@ -73,10 +73,14 @@ class Chull3D
   int are_collinear   (Chull3D_vertex *v1, Chull3D_vertex *v2, Chull3D_vertex *v3);
   int volume_sign     (Chull3D_face *f, Chull3D_vertex *v);
   int add_one         (Chull3D_vertex *v);
-  void clean_up       (Chull3D_vertex *vnext);
+  // pvnext : POINTEUR sur le curseur de construct_hull. clean_vertices peut
+  // supprimer le sommet sur lequel il pointe et doit alors l'avancer -- d'ou
+  // l'indirection. Le passage par valeur perdait la mise a jour et laissait
+  // construct_hull reprendre sa boucle sur un sommet libere.
+  void clean_up       (Chull3D_vertex **pvnext);
   void clean_edges    (void);
   void clean_faces    (void);
-  void clean_vertices (Chull3D_vertex *vnext);
+  void clean_vertices (Chull3D_vertex **pvnext);
   int double_triangle (void);
   int construct_hull  (void);
 

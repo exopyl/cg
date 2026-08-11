@@ -31,23 +31,25 @@ int Mesh_nm::import_objnm (char *filename)
 {
   FILE *ptr;
   int vertex_walk, face_walk;
-  char *buffer;
-  char prefix[10];
+  // Tampon de ligne sur la pile : la taille est connue et bornee, et surtout le
+  // `buffer = fgets (buffer, ...)` d'origine ecrasait le pointeur d'allocation
+  // (fgets renvoie nullptr en fin de fichier) -- le bloc etait perdu, le free
+  // final ne liberait rien, et le sscanf suivant lisait nullptr sur erreur d'E/S.
+  char buffer[512] = {};
+  // prefix etait un char[10] rempli par un "%s" NON borne : tout premier jeton de
+  // plus de 9 caracteres debordait la pile. La largeur est desormais bornee.
+  char prefix[64] = {};
 
   ptr = fopen (filename, "r");
   if (!ptr) return false;
 
-  buffer = (char*)malloc(512*sizeof(char));
-  if (!buffer) return false;
-
   // determine the number of vertices and the number of faces
   m_nVertices = 0;
   m_nFaces = 0;
-  while (1)
+  while (fgets (buffer, sizeof (buffer), ptr))
   {
-    buffer = fgets (buffer, 512, ptr);
-    if (feof(ptr)) break;
-    sscanf (buffer, "%s", prefix);
+    prefix[0] = '\0';   // une ligne vide laissait sinon le prefixe precedent
+    if (sscanf (buffer, "%63s", prefix) != 1) continue;
     if (!strcmp(prefix, "v")) m_nVertices++;
     if (!strcmp(prefix, "f")) m_nFaces++;
   }
@@ -62,70 +64,79 @@ int Mesh_nm::import_objnm (char *filename)
   binormal = (float*)malloc(3*m_nVertices*sizeof(float));
   assert (binormal);
   tangentSpaceLight = (float*)malloc(3*m_nVertices*sizeof(float));
-  assert (tangent);
+  assert (tangentSpaceLight);   // testait `tangent` : copier-coller
 
 
   /* get the vertices and the faces */
   vertex_walk = 0;
   face_walk   = 0;
   rewind (ptr);
-  buffer = (char*)malloc(512*sizeof(char));
 
-  while (1)
+  while (fgets (buffer, sizeof (buffer), ptr))
   {
-    buffer = fgets (buffer, 512, ptr);
-    if (feof(ptr)) break;
-    sscanf (buffer, "%s", prefix);
-    if (!strcmp(prefix, "v"))
+    prefix[0] = '\0';
+    if (sscanf (buffer, "%63s", prefix) != 1) continue;
+    // Les deux passes ne comptent pas les lignes de la meme facon (celle-ci
+    // consomme 4 lignes de plus par sommet) : sans ces bornes, un fichier avec
+    // des lignes vides faisait diverger les compteurs et ecrire hors de
+    // m_pVertices / m_pFaces.
+    if (!strcmp(prefix, "v") && vertex_walk < (int)m_nVertices)
       {
         // position
-        sscanf (buffer, "%s %f %f %f", prefix,
+        sscanf (buffer, "%63s %f %f %f", prefix,
             &m_pVertices[3*vertex_walk],
             &m_pVertices[3*vertex_walk+1],
             &m_pVertices[3*vertex_walk+2]);
         //printf ("%f %f %f\n", v[3*vertex_walk], v[3*vertex_walk+1], v[3*vertex_walk+2]);
 
         // normale
-        buffer = fgets (buffer, 512, ptr);
-        sscanf (buffer, "%s %f %f %f", prefix,
+        if (!fgets (buffer, sizeof (buffer), ptr)) break;   // fichier tronque
+        sscanf (buffer, "%63s %f %f %f", prefix,
             &m_pVertexNormals[3*vertex_walk],
             &m_pVertexNormals[3*vertex_walk+1],
             &m_pVertexNormals[3*vertex_walk+2]);
         //printf ("%f %f %f\n", vn[3*vertex_walk], vn[3*vertex_walk+1], vn[3*vertex_walk+2]);
 
         // tangent
-        buffer = fgets (buffer, 512, ptr);
-        sscanf (buffer, "%s %f %f %f", prefix,
+        if (!fgets (buffer, sizeof (buffer), ptr)) break;
+        sscanf (buffer, "%63s %f %f %f", prefix,
             &tangent[3*vertex_walk],
             &tangent[3*vertex_walk+1],
             &tangent[3*vertex_walk+2]);
         //printf ("%f %f %f\n", tangent[3*vertex_walk], tangent[3*vertex_walk+1], tangent[3*vertex_walk+2]);
 
         // binormal
-        buffer = fgets (buffer, 512, ptr);
-        sscanf (buffer, "%s %f %f %f", prefix,
+        if (!fgets (buffer, sizeof (buffer), ptr)) break;
+        sscanf (buffer, "%63s %f %f %f", prefix,
             &binormal[3*vertex_walk],
             &binormal[3*vertex_walk+1],
             &binormal[3*vertex_walk+2]);
         //printf ("%f %f %f\n", binormal[3*vertex_walk], binormal[3*vertex_walk+1], binormal[3*vertex_walk+2]);
 
         // texture
-        buffer = fgets (buffer, 512, ptr);
-        sscanf (buffer, "%s %f %f", prefix,
+        if (!fgets (buffer, sizeof (buffer), ptr)) break;
+        sscanf (buffer, "%63s %f %f", prefix,
             &vt[2*vertex_walk],
             &vt[2*vertex_walk+1]);
         //printf ("%f %f\n", vt[2*vertex_walk], vt[2*vertex_walk+1]);
 
         vertex_walk++;
       }
-   if (!strcmp(prefix, "f"))
+   if (!strcmp(prefix, "f") && face_walk < (int)m_nFaces)
       {
-       char i1[64], i2[64], i3[64];
-        sscanf (buffer, "%s %s %s %s", prefix, &i1, &i2, &i3);
-	
-	int a = atoi(strtok (i1, "/"))-1;
-	int b = atoi(strtok (i2, "/"))-1;
-	int c = atoi(strtok (i3, "/"))-1;
+       char i1[64] = {}, i2[64] = {}, i3[64] = {};
+        // `&i1` etait un char(*)[64] la ou "%s" attend un char* -- meme adresse,
+        // mais type faux. Et les "%s" non bornes debordaient les tampons.
+        if (sscanf (buffer, "%63s %63s %63s %63s", prefix, i1, i2, i3) != 4) continue;
+
+	// strtok renvoie nullptr sur un jeton vide : atoi(nullptr) dereferencait
+	const char *t1 = strtok (i1, "/");
+	const char *t2 = strtok (i2, "/");
+	const char *t3 = strtok (i3, "/");
+	if (!t1 || !t2 || !t3) continue;
+	int a = atoi(t1)-1;
+	int b = atoi(t2)-1;
+	int c = atoi(t3)-1;
         //printf ("%d %d %d\n", a, b, c);
 	m_pFaces[face_walk] = new Face ();
 	m_pFaces[face_walk]->SetTriangle (a, b, c);
@@ -135,7 +146,6 @@ int Mesh_nm::import_objnm (char *filename)
   }
 
   fclose (ptr);
-  free (buffer);
 
   return 0;
 }
