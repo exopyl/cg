@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <string.h>
 
+#include <iostream>
+
 #include "extracted_line.h"
 #include "geometric_primitives.h"
 
@@ -225,6 +227,6 @@ Cextracted_line::dump (void)
   for (int i=0; i<n_vertices; i++)
     {
       printf ("vertex %d : ", ivertices[i]);
-      cout << vertices[i] << endl;
+      std::cout << vertices[i] << std::endl;
     }
 }

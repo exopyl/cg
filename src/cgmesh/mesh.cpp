@@ -1385,7 +1385,7 @@ void Mesh::add_gaussian_noise (float variance)
 }
 
 // topology
-void Mesh::GetTopologicIssues(vector<unsigned int>& nonManifoldEdges, vector<unsigned int>& borders) const
+void Mesh::GetTopologicIssues(std::vector<unsigned int>& nonManifoldEdges, std::vector<unsigned int>& borders) const
 {
 	nonManifoldEdges.clear();
 	borders.clear();

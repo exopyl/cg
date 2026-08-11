@@ -1,8 +1,10 @@
 #pragma once
 
-#include <iostream>
-#include <algorithm> // for std::swap
-using namespace std;
+#include <cmath>     // std::fabs, std::sqrt
+#include <cstdio>    // std::printf
+#include <cstring>   // std::memcpy
+#include <iostream>  // std::ostream (operator<<)
+#include <utility>   // std::swap  (<algorithm> ne le declare plus depuis C++11)
 
 #include "common.h"
 
@@ -405,8 +407,8 @@ public:
 	  for (i=0;i<n;i++) {
 		big=0.0;
 		for (j=0;j<n;j++)
-		  if ((temp=fabs(a[i][j])) > big) big=temp;
-		if (big == 0.0) printf ("Singular matrix in routine ludcmp\n");
+		  if ((temp=std::fabs(a[i][j])) > big) big=temp;
+		if (big == 0.0) std::printf ("Singular matrix in routine ludcmp\n");
 		vv[i]=1.0/big;
 	  }
 	  for (j=0;j<n;j++) {
@@ -421,7 +423,7 @@ public:
 		  for (k=0;k<j;k++)
 		sum -= a[i][k]*a[k][j];
 		  a[i][j]=sum;
-		  if ( (dum=vv[i]*fabs(sum)) >= big) {
+		  if ( (dum=vv[i]*std::fabs(sum)) >= big) {
 		big=dum;
 		imax=i;
 		  }
@@ -495,21 +497,21 @@ public:
 		  if (ipiv[j] != 1)
 		for (k=0;k<n;k++) {
 		  if (ipiv[k] == 0) {
-			if (fabs(a[j][k]) >= big) {
-			  big=fabs(a[j][k]);
+			if (std::fabs(a[j][k]) >= big) {
+			  big=std::fabs(a[j][k]);
 			  irow=j;
 			  icol=k;
 			}
-		  } else if (ipiv[k] > 1) printf ("Singular Matrix-1 in solve linear system gauss\n");
+		  } else if (ipiv[k] > 1) std::printf ("Singular Matrix-1 in solve linear system gauss\n");
 		}
 		++(ipiv[icol]);
 		if (irow != icol) {
-			for (l=0;l<n;l++) swap(a[irow][l],a[icol][l]);
-			swap(b[irow],b[icol]);
+			for (l=0;l<n;l++) std::swap(a[irow][l],a[icol][l]);
+			std::swap(b[irow],b[icol]);
 							}
 		indxr[i]=irow;
 		indxc[i]=icol;
-		if (a[icol][icol] == 0.0) printf ("Singular Matrix-2 in solve linear system gauss\n");
+		if (a[icol][icol] == 0.0) std::printf ("Singular Matrix-2 in solve linear system gauss\n");
 		pivinv=1.0/a[icol][icol];
 		a[icol][icol]=1.0;
 		for (l=0;l<n;l++) a[icol][l] *= pivinv;
@@ -525,13 +527,17 @@ public:
 	  for (l=n-1;l>=0;l--) {
 		if (indxr[l] != indxc[l])
 		  for (k=0;k<n;k++)
-		SWAP(a[k][indxr[l]],a[k][indxc[l]]);
+		std::swap(a[k][indxr[l]],a[k][indxc[l]]);
 	  }
 	  free (ipiv);
 	  free (indxr);
 	  free (indxc);
 	}
-	#undef SWAP
+	// (Retire : un `#undef SWAP` orphelin se trouvait ici. Cet en-tete ne
+	//  definit aucun SWAP -- il annulait donc celui de common.h:99 pour toute
+	//  unite de compilation incluant cgmath.h, et ce des que TSquareMatrix.h
+	//  etait atteint. Les deux seuls usages du fichier passent desormais par
+	//  std::swap, la macro du projet n'a plus a etre touchee.)
 
 	/**
 	* Solve the linear system using the Gauss Jordan method.
@@ -602,7 +608,7 @@ public:
 	{
 	  if (!Determinant ())
 		{
-		  printf ("can't solve linear system (determinant is nil)\n");
+		  std::printf ("can't solve linear system (determinant is nil)\n");
 		  return 0;
 		}
 	  
@@ -646,7 +652,7 @@ public:
 		sm=0.0;
 		for (ip=0;ip<n-1;ip++) {
 		  for (iq=ip+1;iq<n;iq++)
-		sm += fabs(a[ip][iq]);
+		sm += std::fabs(a[ip][iq]);
 		}
 		if (sm == 0.0) {
 		  free (z);
@@ -659,20 +665,20 @@ public:
 		  tresh=0.0;
 		for (ip=0;ip<n-1;ip++) {
 		  for (iq=ip+1;iq<n;iq++) {
-		g=100.0*fabs(a[ip][iq]);
-		if (i > 4 && (TValue)(fabs(d[ip])+g) == (TValue)fabs(d[ip])
-			&& (TValue)(fabs(d[iq])+g) == (TValue)fabs(d[iq]))
+		g=100.0*std::fabs(a[ip][iq]);
+		if (i > 4 && (TValue)(std::fabs(d[ip])+g) == (TValue)std::fabs(d[ip])
+			&& (TValue)(std::fabs(d[iq])+g) == (TValue)std::fabs(d[iq]))
 		  a[ip][iq]=0.0;
-		else if (fabs(a[ip][iq]) > tresh) {
+		else if (std::fabs(a[ip][iq]) > tresh) {
 		  h=d[iq]-d[ip];
-		  if ((TValue)(fabs(h)+g) == (TValue)fabs(h))
+		  if ((TValue)(std::fabs(h)+g) == (TValue)std::fabs(h))
 			t=(a[ip][iq])/h;
 		  else {
 			theta=0.5*h/(a[ip][iq]);
-			t=1.0/(fabs(theta)+sqrt(1.0+theta*theta));
+			t=1.0/(std::fabs(theta)+std::sqrt(1.0+theta*theta));
 			if (theta < 0.0) t = -t;
 		  }
-		  c=1.0/sqrt(1+t*t);
+		  c=1.0/std::sqrt(1+t*t);
 		  s=t*c;
 		  tau=s/(1.0+c);
 		  h=t*a[ip][iq];
@@ -703,7 +709,7 @@ public:
 		  z[ip] =  0.0;
 		}
 	  }
-	  printf ("Too many iterations in routine jacobi\n");
+	  std::printf ("Too many iterations in routine jacobi\n");
 	}
 	#undef ROTATE
 
@@ -742,10 +748,10 @@ public:
 		Temp.jacobi ();
 		Temp.sort ();
 
-		memcpy (d, Temp.d, m_dimension*sizeof(TValue));
+		std::memcpy (d, Temp.d, m_dimension*sizeof(TValue));
 		for (int i=0; i<m_dimension; i++)
 		{
-			memcpy (v[i], Temp.v[i], m_dimension*sizeof(TValue));
+			std::memcpy (v[i], Temp.v[i], m_dimension*sizeof(TValue));
 		}
 
 		return true;
@@ -789,7 +795,7 @@ public:
 	// IOstream
 	//
 
-	friend ostream & operator << ( ostream & out, const TSquareMatrix<TValue> &right)
+	friend std::ostream & operator << ( std::ostream & out, const TSquareMatrix<TValue> &right)
 	{
 		for (int i=0; i<right.m_dimension; i++)
 		{
@@ -797,7 +803,7 @@ public:
 			{
 				out << right.a[i][j] << " ";
 			}
-			out << endl;
+			out << std::endl;
 		}
 		return out;
 	}

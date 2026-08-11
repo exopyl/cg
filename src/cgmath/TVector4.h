@@ -1,6 +1,5 @@
 #pragma once
 #include <iostream>
-using namespace std;
 
 #include "TVector3.h"
 
@@ -209,12 +208,12 @@ public:
 	// IOstream
 	//
 
-	friend ostream & operator<< ( ostream & out, const TVector4<TValue> &right)
+	friend std::ostream & operator<< ( std::ostream & out, const TVector4<TValue> &right)
 	{
 		return out << "( " << right.x << " , " << right.y << " , " << right.z << " , " << right.w << " )";
 	}
 
-	friend istream & operator >> (istream & in, TVector4<TValue> &right)
+	friend std::istream & operator >> (std::istream & in, TVector4<TValue> &right)
 	{
 		return in >> right.x >> right.y >> right.z >> right.w;
 	}

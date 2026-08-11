@@ -9,6 +9,8 @@
 //
 #include <assert.h>
 
+#include <algorithm>
+
 #include "image_disparity_birchfield.h"
 
 #define COLS               512//630   // number of columns in image
@@ -984,7 +986,7 @@ void DisparityBirchfield::Process(void)
 				phi_best = INF;
 
 				for (delta_p = 0 ; delta_p <= MAXDISP ; delta_p++)  {
-					y_p = y - max(1, delta_p - deltaa + 1);
+					y_p = y - std::max(1, delta_p - deltaa + 1);
 					if (y_p>=0) {
 						if (deltaa==delta_p ||
 							(deltaa>delta_p && !no_igL[y+deltaa-1]) ||

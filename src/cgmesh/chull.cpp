@@ -4,6 +4,11 @@
 
 #include "chull.h"
 
+// SWAP local a 3 arguments (t = variable temporaire fournie par l'appelant),
+// incompatible avec le SWAP(a, b) de cgmath/common.h que chull.h fait entrer
+// ici. On l'annule explicitement : jusqu'ici le masquage tenait a un `#undef
+// SWAP` orphelin dans cgmath/TSquareMatrix.h, retire depuis.
+#undef SWAP
 #define SWAP(t,x,y) { t = x; x = y; y = t; }
 #define ADD( head, p )  if ( head )  { \
 				p->next = head; \

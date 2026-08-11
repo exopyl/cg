@@ -2,8 +2,9 @@
 #include "TVector3.h"
 #include "common.h"
 
+#include <cmath>
+#include <cstring>
 #include <iostream>
-using namespace std;
 
 // TMatrix3[n][m] addresses the following element :
 // n = row
@@ -29,7 +30,7 @@ public:
 
 	TMatrix3<TValue>(TValue *mat)
 	{
-		memcpy( m_Mat, mat, 9*sizeof(TValue) );
+		std::memcpy( m_Mat, mat, 9*sizeof(TValue) );
 	}
 
 	TMatrix3<TValue>(
@@ -54,7 +55,7 @@ public:
 
 	inline TMatrix3<TValue>& operator=(TValue *mat)
 	{
-		memcpy( m_Mat, mat, 9*sizeof(TValue) );
+		std::memcpy( m_Mat, mat, 9*sizeof(TValue) );
 		return *this;
 	}
 
@@ -199,7 +200,7 @@ public:
 		TValue theta = M_PI*angle/180.;//RS_DEGTORAD(angle);
 		
 		// Normalize
-		length = sqrtf(x*x + y*y + z*z);
+		length = std::sqrt(x*x + y*y + z*z);
 		
 		// Too close to 0, can't make a normalized vector
 		if (length < 0.000001f)
@@ -208,8 +209,8 @@ public:
 		x /= length; y /= length; z /= length;
 		
 		// Do the trig
-		c = cosf(theta);
-		s = sinf(theta);
+		c = std::cos(theta);
+		s = std::sin(theta);
 		t = 1-c;   
 		
 		// Build the rotation matrix
@@ -234,8 +235,8 @@ public:
 	*/
 	void SetRotation_X( TValue angle )
 	{
-		TValue s = (TValue)sin(DEGTORAD(angle));
-		TValue c = (TValue)cos(DEGTORAD(angle));
+		TValue s = (TValue)std::sin(DEGTORAD(angle));
+		TValue c = (TValue)std::cos(DEGTORAD(angle));
 
 		SetIdentity();
 
@@ -248,8 +249,8 @@ public:
 	*/
 	void SetRotation_Y( TValue angle )
 	{
-		TValue s = (TValue)sin(DEGTORAD(angle));
-		TValue c = (TValue)cos(DEGTORAD(angle));
+		TValue s = (TValue)std::sin(DEGTORAD(angle));
+		TValue c = (TValue)std::cos(DEGTORAD(angle));
 
 		SetIdentity();
 
@@ -262,8 +263,8 @@ public:
 	*/
 	void SetRotation_Z( TValue angle )
 	{
-		TValue s = (TValue)sin(DEGTORAD(angle));
-		TValue c = (TValue)cos(DEGTORAD(angle));
+		TValue s = (TValue)std::sin(DEGTORAD(angle));
+		TValue c = (TValue)std::cos(DEGTORAD(angle));
 
 		SetIdentity();
 
@@ -494,7 +495,7 @@ void tridiagonal (TValue diag[3], TValue subd[3])
   subd[2] = 0.0;
   if (fm02 != 0.0)
   {
-      TValue length = sqrt (fm01*fm01 + fm02*fm02);
+      TValue length = std::sqrt (fm01*fm01 + fm02*fm02);
       TValue invlength = 1.0 / length;
       TValue q;
       fm01 *= invlength;
@@ -533,15 +534,15 @@ bool QLalgorithm (TValue diag[3], TValue subd[3])
 		
 		for (i2=i0; i2<=1; i2++)
 		{
-			TValue tmp = fabs (diag[i2]) + fabs(diag[i2+1]);
-			if (fabs(subd[i2])+tmp == tmp)
+			TValue tmp = std::fabs (diag[i2]) + std::fabs(diag[i2+1]);
+			if (std::fabs(subd[i2])+tmp == tmp)
 				break;
 		}
 		if (i2 == i0)
 			break;
 		
 		G = (diag[i0+1] - diag[i0]) / (2.0*subd[i0]);
-		R = sqrt (G*G+1.0);
+		R = std::sqrt (G*G+1.0);
 		if (G < 0.0)
 			G = diag[i2] - diag[i0] + subd[i0] / (G - R);
 		else
@@ -555,10 +556,10 @@ bool QLalgorithm (TValue diag[3], TValue subd[3])
 		{
 			TValue F = sinus*subd[i3];
 			TValue B = cosinus*subd[i3];
-			if (fabs(F) >= fabs(G))
+			if (std::fabs(F) >= std::fabs(G))
 			{
 				cosinus = G/F;
-				R = sqrt(cosinus*cosinus + 1.0);
+				R = std::sqrt(cosinus*cosinus + 1.0);
 				subd[i3+1] = F*R;
 				sinus = 1.0/R;
 				cosinus *= sinus;
@@ -566,7 +567,7 @@ bool QLalgorithm (TValue diag[3], TValue subd[3])
 			else
 			{
 				sinus = F/G;
-				R = sqrt (sinus*sinus + 1.0);
+				R = std::sqrt (sinus*sinus + 1.0);
 				subd[i3+1]=G*R;
 				cosinus = 1.0/R;
 				sinus *= cosinus;
@@ -683,10 +684,10 @@ int SolveEigensystem (TVector3<TValue>& e1, TVector3<TValue>& e2, TVector3<TValu
 	// IOstream
 	//
 
-	friend ostream & operator << ( ostream & out, const TMatrix3<TValue> &right)
+	friend std::ostream & operator << ( std::ostream & out, const TMatrix3<TValue> &right)
 	{
-		return out << "( " << right.m_Mat[0][0] << " , " << right.m_Mat[0][1] << " , " << right.m_Mat[0][2] << " )" << endl \
-			<< "( " << right.m_Mat[1][0] << " , " << right.m_Mat[1][1] << " , " << right.m_Mat[1][2] << " )" << endl \
+		return out << "( " << right.m_Mat[0][0] << " , " << right.m_Mat[0][1] << " , " << right.m_Mat[0][2] << " )" << std::endl \
+			<< "( " << right.m_Mat[1][0] << " , " << right.m_Mat[1][1] << " , " << right.m_Mat[1][2] << " )" << std::endl \
 			<< "( " << right.m_Mat[2][0] << " , " << right.m_Mat[2][1] << " , " << right.m_Mat[2][2] << " )";
 	}
 

@@ -2,8 +2,8 @@
 #include "TMatrix4.h"
 #include "TVector4.h"
 
+#include <cmath>
 #include <iostream>
-using namespace std;
 
 // TMatrix4[n][m] addresses the following element :
 // n = row
@@ -100,8 +100,8 @@ public:
 //*
 		TValue c,s,Q;
 			
-			c= (TValue) cos( 0.5f*DEGTORAD(fieldOfViewRadians) );
-			s= (TValue) sin( 0.5f*DEGTORAD(fieldOfViewRadians) );
+			c= (TValue) std::cos( 0.5f*DEGTORAD(fieldOfViewRadians) );
+			s= (TValue) std::sin( 0.5f*DEGTORAD(fieldOfViewRadians) );
 			
 			Q= s/(1.0f-zNear/zFar);
 //			Q= s/zNear;
@@ -159,7 +159,7 @@ public:
 	{
 	TValue c;
 
-		c= (TValue) tan( DEGTORAD(fieldOfViewRadians) );
+		c= (TValue) std::tan( DEGTORAD(fieldOfViewRadians) );
 		
 	//	Q= s/(1.0f-zNear/zFar);
 		

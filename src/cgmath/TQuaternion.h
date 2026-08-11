@@ -2,9 +2,8 @@
 #include "common.h"
 #include "TVector3.h"
 
-#include <math.h>
+#include <cmath>
 #include <iostream>
-using namespace std;
 
 template <class TValue>
 class TQuaternion
@@ -37,7 +36,7 @@ class TQuaternion
 		TValue trace = 1 + m[0] + m[5] + m[10];
 		if (trace > EPSILON)
 		{
-			s = 2.0 * sqrt (trace);
+			s = 2.0 * std::sqrt (trace);
 			x = (m[9] - m[6]) / s;
 			y = (m[2] - m[8]) / s;
 			z = (m[4] - m[1]) / s;
@@ -47,7 +46,7 @@ class TQuaternion
 		// what is the greatest value on the diagonal
 		if (m[0] > m[5] && m[0] > m[10])
 		{
-			s = 2.0 * sqrt (1.0 + m[0] - m[5] - m[10]);
+			s = 2.0 * std::sqrt (1.0 + m[0] - m[5] - m[10]);
 			x = 0.25 * s;
 			y = (m[4] + m[1]) / s;
 			z = (m[2] + m[8]) / s;
@@ -55,7 +54,7 @@ class TQuaternion
 		}
 		else if (m[5] > m[10])
 		{
-			s = 2.0 * sqrt (1.0 + m[5] - m[0] - m[10]);
+			s = 2.0 * std::sqrt (1.0 + m[5] - m[0] - m[10]);
 			x = (m[4] + m[1]) / s;
 			y = 0.25 * s;
 			z = (m[9] + m[6]) / s;
@@ -63,7 +62,7 @@ class TQuaternion
 		}
 		else
 		{
-			s = 2.0 * sqrt (1.0 + m[10] - m[0] - m[5]);
+			s = 2.0 * std::sqrt (1.0 + m[10] - m[0] - m[5]);
 			x = (m[2] + m[8]) / s;
 			y = (m[9] + m[6]) / s;
 			z = 0.25 * s;
@@ -78,8 +77,8 @@ class TQuaternion
 	 TQuaternion<TValue> (TVector3<TValue> axis, TValue alpha)
 	 {
 		axis.Normalize ();
-		TValue sina = (TValue)sin (alpha/2.0);
-		TValue cosa = (TValue)cos (alpha/2.0);
+		TValue sina = (TValue)std::sin (alpha/2.0);
+		TValue cosa = (TValue)std::cos (alpha/2.0);
 		w = cosa;
 		x = axis.x * sina;
 		y = axis.y * sina;
@@ -217,7 +216,7 @@ class TQuaternion
 
 	TValue Length (void)
 	{
-		return sqrt (w*w + x*x + y*y + z*z);
+		return std::sqrt (w*w + x*x + y*y + z*z);
 	}
 
 	TQuaternion<TValue> Inverse (void)
@@ -251,20 +250,20 @@ class TQuaternion
 
 		// Calculate angle beteen them. 
 		TValue costheta = p->w * q->w + p->x * q->x + p->y * q->y + p->z * q->z; 
-		TValue theta = acos(costheta); 
+		TValue theta = std::acos(costheta); 
 		
 		// if theta = 0 then return q 
-		if (fabs(theta) < 0.01)
+		if (std::fabs(theta) < 0.01)
 		{
 			Set (p->x, p->y, p->z, p->w);
 			return;
 		} 
 		
 		// Calculate temporary values. 
-		TValue sinTheta = sqrt(1.0 - costheta*costheta); 
+		TValue sinTheta = std::sqrt(1.0 - costheta*costheta); 
 		
 		// if theta*2 = 180 degrees then result is undefined 
-		if (fabs(sinTheta) < 0.01)
+		if (std::fabs(sinTheta) < 0.01)
 		{ 
 			Set (
 				(p->z * 0.5 + q->z * 0.5),
@@ -275,8 +274,8 @@ class TQuaternion
 			return;
 		} 
 
-		TValue ratioA = sin((1 - t) * theta) / sinTheta; 
-		TValue ratioB = sin(t * theta) / sinTheta; 
+		TValue ratioA = std::sin((1 - t) * theta) / sinTheta; 
+		TValue ratioB = std::sin(t * theta) / sinTheta; 
 		
 		//calculate TQuaternion.
 		Set (
@@ -351,9 +350,9 @@ class TQuaternion
 	{
 		Normalize ();
 		TValue cosa = w;
-		*alpha = (TValue)acos (cosa) * (TValue)2.0;
-		TValue sina = (TValue)sqrt (1.0 - cosa*cosa);
-		if (fabs (sina) < 0.0005) sina = 1.0;
+		*alpha = (TValue)std::acos (cosa) * (TValue)2.0;
+		TValue sina = (TValue)std::sqrt (1.0 - cosa*cosa);
+		if (std::fabs (sina) < 0.0005) sina = 1.0;
 		axis.Set (x / sina, y / sina,  z / sina);
 	}
 
@@ -361,12 +360,12 @@ class TQuaternion
 	// IOstream
 	//
 
-	friend ostream & operator << ( ostream & out, const TQuaternion<TValue> &right)
+	friend std::ostream & operator << ( std::ostream & out, const TQuaternion<TValue> &right)
 	{
 		return out << "TQuaternion ( " << right.x << " , " << right.y << " , " << right.z << " , " << right.w <<" )";
 	}
 
-	friend istream & operator >> (istream & in, TQuaternion<TValue> &right)
+	friend std::istream & operator >> (std::istream & in, TQuaternion<TValue> &right)
 	{
 		return in >> right.x >> right.y >> right.z >> right.w;
 	}

@@ -1,6 +1,6 @@
 #pragma once
+#include <cmath>
 #include <iostream>
-using namespace std;
 
 template <class TValue>
 class TVector2
@@ -163,7 +163,7 @@ public:
 
 	inline const TValue getLength() const
 	{
-		return sqrt(getLength2());
+		return std::sqrt(getLength2());
 	}
 
 	template <class S>
@@ -175,7 +175,7 @@ public:
 	template <class S>
 	inline const TValue getDistance(const TVector2<S> &v2)  const 
 	{
-		return sqrt(
+		return std::sqrt(
 				(v2.x - x) * (v2.x - x) +
 				(v2.y - y) * (v2.y - y)
 				);
@@ -184,7 +184,7 @@ public:
 	template <class S>
 	inline const TValue getAngle(const TVector2<S> &v2)  const
 	{
-		return acos( DotProduct(v2) / (getLength() * v2.getLength()));
+		return std::acos( DotProduct(v2) / (getLength() * v2.getLength()));
 	}
 
 	// Z component of the 2D cross product (scalar). Positive when this->v2 is CCW.
@@ -216,7 +216,7 @@ public:
 	{
 		TValue dx = (TValue)b.x - a.x;
 		TValue dy = (TValue)b.y - a.y;
-		return sqrt(dx * dx + dy * dy);
+		return std::sqrt(dx * dx + dy * dy);
 	}
 
 	// Signed angle from `from` to `to` via atan2, in [-pi, pi].
@@ -227,20 +227,20 @@ public:
 	{
 		TValue tox = (TValue)to.x;
 		TValue toy = (TValue)to.y;
-		return atan2(from.x * toy - from.y * tox,
-		             from.x * tox + from.y * toy);
+		return std::atan2(from.x * toy - from.y * tox,
+		                  from.x * tox + from.y * toy);
 	}
 
 	//
 	// IOstream
 	//
 
-	friend ostream & operator << ( ostream & out, const TVector2<TValue> &right)
+	friend std::ostream & operator << ( std::ostream & out, const TVector2<TValue> &right)
 	{
 		return out << "( " << right.x << " , " << right.y <<" )";
 	}
 
-	friend istream & operator >> (istream & in, TVector2<TValue> &right)
+	friend std::istream & operator >> (std::istream & in, TVector2<TValue> &right)
 	{
 		return in >> right.x >> right.y;
 	}

@@ -3,18 +3,12 @@
 #include <stdlib.h>
 #if defined(__cplusplus)
 #include <cmath>
+#include <limits>
 #else
 #include <math.h>
 #endif
 #include <float.h>
 
-#ifdef _MSC_VER
-
-#pragma warning (disable : 4244) // disable : "conversion from 'double' to 'float', possible loss of data
-#pragma warning (disable : 4305) // disable : "truncation from 'double' to 'float'
-#pragma warning (disable : 4530) // disable : "C++ exception handler used"
-
-#endif // _MSC_VER
 
 // Constants rounded for 21 decimals
 #ifndef M_E
@@ -173,7 +167,7 @@ private:
 //const double NAN = (std::numeric_limits<double>::quiet_NaN());
 
 #ifndef INFINITY
-#define INFINITY numeric_limits<float>::infinity()
+#define INFINITY std::numeric_limits<float>::infinity()
 #endif // INFINITY
 
 #ifdef WIN32

@@ -1,8 +1,8 @@
 #pragma once
 #include "TVector4.h"
 
+#include <cmath>
 #include <iostream>
-using namespace std;
 
 // TMatrix4[n][m] addresses the following element :
 // n = row
@@ -74,7 +74,7 @@ public:
 		FLOAT32 theta = RS_DEGTORAD(angle);
 		
 		// Normalize
-		length = sqrtf(x*x + y*y + z*z);
+		length = std::sqrt(x*x + y*y + z*z);
 		
 		// Too close to 0, can't make a normalized vector
 		if (length < 0.000001f)
@@ -83,8 +83,8 @@ public:
 		x /= length; y /= length; z /= length;
 		
 		// Do the trig
-		c = cosf(theta);
-		s = sinf(theta);
+		c = std::cos(theta);
+		s = std::sin(theta);
 		t = 1-c;   
 		
 		// Build the rotation matrix
@@ -110,8 +110,8 @@ public:
 	*/
 	void SetRotation_X( TValue angle )
 	{
-		TValue s = (TValue)sin(RS_DEGTORAD(angle));
-		TValue c = (TValue)cos(RS_DEGTORAD(angle));
+		TValue s = (TValue)std::sin(RS_DEGTORAD(angle));
+		TValue c = (TValue)std::cos(RS_DEGTORAD(angle));
 
 		SetIdentity();
 
@@ -124,8 +124,8 @@ public:
 	*/
 	void SetRotation_Y( TValue angle )
 	{
-		TValue s = (TValue)sin(RS_DEGTORAD(angle));
-		TValue c = (TValue)cos(RS_DEGTORAD(angle));
+		TValue s = (TValue)std::sin(RS_DEGTORAD(angle));
+		TValue c = (TValue)std::cos(RS_DEGTORAD(angle));
 
 		SetIdentity();
 
@@ -138,8 +138,8 @@ public:
 	*/
 	void SetRotation_Z( TValue angle )
 	{
-		TValue s = (TValue)sin(RS_DEGTORAD(angle));
-		TValue c = (TValue)cos(RS_DEGTORAD(angle));
+		TValue s = (TValue)std::sin(RS_DEGTORAD(angle));
+		TValue c = (TValue)std::cos(RS_DEGTORAD(angle));
 
 		SetIdentity();
 

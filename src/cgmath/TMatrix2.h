@@ -1,8 +1,8 @@
 #pragma once
 
-#include <string.h>
+#include <cmath>
+#include <cstring>
 #include <iostream>
-using namespace std;
 
 #include "TVector2.h"
 
@@ -29,7 +29,7 @@ public:
 
 	TMatrix2<TValue>(TValue *mat)
 	{
-		memcpy( m_matrix, mat, 4*sizeof(TValue) );
+		std::memcpy( m_matrix, mat, 4*sizeof(TValue) );
 	}
 
 	TMatrix2<TValue>(	TValue m0, TValue m2,
@@ -53,13 +53,13 @@ public:
 
 	inline TMatrix2<TValue>& operator=(TValue *mat)
 	{
-		memcpy( m_matrix, mat, 4*sizeof(TValue) );
+		std::memcpy( m_matrix, mat, 4*sizeof(TValue) );
 		return *this;
 	}
 
 	inline TMatrix2<TValue>& operator=(const TMatrix2<TValue> &src)
 	{
-		memcpy( m_matrix, src.m_matrix, 4*sizeof(TValue) );
+		std::memcpy( m_matrix, src.m_matrix, 4*sizeof(TValue) );
 		return *this;
 	}
 
@@ -345,7 +345,7 @@ public:
 			return false;
 		}
 
-		evalues.Set (((a+d) + sqrt(delta)) / 2.0, ((a+d) - sqrt(delta)) / 2.0);
+		evalues.Set (((a+d) + std::sqrt(delta)) / 2.0, ((a+d) - std::sqrt(delta)) / 2.0);
 
 		if (b == 0.0)
 			evector1.Set (1.0, -c / (d - evalues.x));
@@ -366,9 +366,9 @@ public:
 	// IOstream
 	//
 
-	friend ostream & operator << ( ostream & out, const TMatrix2<TValue> &right)
+	friend std::ostream & operator << ( std::ostream & out, const TMatrix2<TValue> &right)
 	{
-		return out << "( " << right.m_matrix[0][0] << " , " << right.m_matrix[0][1] << " )" << endl \
+		return out << "( " << right.m_matrix[0][0] << " , " << right.m_matrix[0][1] << " )" << std::endl \
 			<< "( " << right.m_matrix[1][0] << " , " << right.m_matrix[1][1] << " )";
 	}
 
