@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include <memory>
+
 #include "../cgmesh/cgmesh.h"
 #include "raytracer.h"
 
@@ -52,15 +54,23 @@ int Raytracer::GetColorWithRay (const Vector3f &vOrig, const Vector3f &vDirectio
 	// todo : check what type of material it is
 	MaterialColorExt* pMaterial = (MaterialColorExt*)pObject->GetMaterial ();
 
+	// Repond au « TODO : fix memory leak » qui se trouvait ici. Le point delicat
+	// est que pMaterial a DEUX provenances : emprunte a l'objet (non possede) ou
+	// cree ici par defaut (possede). Un seul pointeur ne pouvait pas porter les
+	// deux regimes, d'ou la fuite a chaque pixel touchant un objet sans materiau
+	// (cpp:S3584, raytracer.cpp:167).
+	//
+	// Le unique_ptr ne detient QUE le materiau par defaut ; pMaterial reste un
+	// pointeur d'observation dans les deux cas.
+	std::unique_ptr<MaterialColorExt> defaultMaterial;
 	if (pMaterial == nullptr)
 	{
 		// default material
-		pMaterial = new MaterialColorExt();
-		pMaterial->SetAmbient(0.7, 0.1, 0.3, 1.f);
-		pMaterial->SetDiffuse(0.7, 0.3, 0.2, 1.f);
-		pMaterial->SetSpecular(0.5, 0.1, 0.1, 1.f);
-
-		// TODO : fix memory leak...
+		defaultMaterial.reset (new MaterialColorExt());
+		defaultMaterial->SetAmbient(0.7, 0.1, 0.3, 1.f);
+		defaultMaterial->SetDiffuse(0.7, 0.3, 0.2, 1.f);
+		defaultMaterial->SetSpecular(0.5, 0.1, 0.1, 1.f);
+		pMaterial = defaultMaterial.get ();
 	}
 
 	//MaterialColorExt *pMaterial = new MaterialColorExt ();//pObject->m_pMaterial;

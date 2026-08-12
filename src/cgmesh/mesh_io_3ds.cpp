@@ -297,7 +297,14 @@ void ProcessNextChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 				char strName[255];
                 string tempStr;
 				currentChunk.bytesRead += GetString(tempStr);
-                snprintf(strName, sizeof(strName), "%s", tempStr.c_str());
+                // Recopie bornee, sans passer par une chaine de FORMAT : il n'y a rien a
+                // formater ici. snprintf("%s") faisait de tempStr -- une chaine lue DANS le
+                // fichier 3DS, donc non fiable -- l'argument d'une fonction de format
+                // (cpp:S5145). string::copy borne sans interpreter.
+                {
+                	const size_t n = tempStr.copy (strName, sizeof(strName) - 1);
+                	strName[n] = '\0';
+                }
 				ProcessNextObjectChunk_3DS(pModel, strName, &currentChunk);
 			}
 			break;
@@ -879,7 +886,14 @@ void ProcessKeyFrameChunk_3DS (t3DSModel* pModel, t3DSChunk *pPreviousChunk)
 				//cout << " (10) CHK3DS_B_NODE_HDR : ";
                 string tempStr;
 				currentChunk.bytesRead += GetString (tempStr);
-                snprintf(strName, sizeof(strName), "%s", tempStr.c_str());
+                // Recopie bornee, sans passer par une chaine de FORMAT : il n'y a rien a
+                // formater ici. snprintf("%s") faisait de tempStr -- une chaine lue DANS le
+                // fichier 3DS, donc non fiable -- l'argument d'une fonction de format
+                // (cpp:S5145). string::copy borne sans interpreter.
+                {
+                	const size_t n = tempStr.copy (strName, sizeof(strName) - 1);
+                	strName[n] = '\0';
+                }
 				//cout << strName;
 				ReadINT16 (&flag1, &currentChunk);
 				ReadINT16 (&flag2, &currentChunk);
@@ -1103,7 +1117,14 @@ void ParseKfNode_3DS (t3DSModel *pModel, t3DSKfNode *pNode, t3DSChunk *pPrevious
 				char strName[255] = {0};
                 string tempStr;
 				currentChunk.bytesRead += GetString (tempStr);
-                snprintf(strName, sizeof(strName), "%s", tempStr.c_str());
+                // Recopie bornee, sans passer par une chaine de FORMAT : il n'y a rien a
+                // formater ici. snprintf("%s") faisait de tempStr -- une chaine lue DANS le
+                // fichier 3DS, donc non fiable -- l'argument d'une fonction de format
+                // (cpp:S5145). string::copy borne sans interpreter.
+                {
+                	const size_t n = tempStr.copy (strName, sizeof(strName) - 1);
+                	strName[n] = '\0';
+                }
                 
                 // Safe bounded copy
                 size_t len = strlen(strName);
@@ -1652,7 +1673,14 @@ void ReadObjectMaterial_3DS(t3DSModel *pModel, t3DSObject *pObject, t3DSChunk *p
 	// material name that is assigned to the current object.
     string tempStr;
 	pPreviousChunk->bytesRead += GetString(tempStr);
-    snprintf(strMaterial, sizeof(strMaterial), "%s", tempStr.c_str());
+    // Recopie bornee, sans passer par une chaine de FORMAT : il n'y a rien a
+    // formater ici. snprintf("%s") faisait de tempStr -- une chaine lue DANS le
+    // fichier 3DS, donc non fiable -- l'argument d'une fonction de format
+    // (cpp:S5145). string::copy borne sans interpreter.
+    {
+    	const size_t n = tempStr.copy (strMaterial, sizeof(strMaterial) - 1);
+    	strMaterial[n] = '\0';
+    }
 
 	// Now that we have a material name, we need to go through all of the materials
 	// and check the name against each material.  When we find a material in our material

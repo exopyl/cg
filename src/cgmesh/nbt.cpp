@@ -1105,7 +1105,15 @@ int nbt_set_list(nbt_tag *t, void **v, int len, nbt_type type)
 
     memcpy(temp.content, v, sizeof(void *) * len);
 
-    return nbt_change_value(t, &temp, sizeof(temp));
+    // nbt_change_value ne reprend la propriete de temp.content QU'EN CAS DE
+    // SUCCES : sur echec d'allocation interne il renvoie 1 sans rien reprendre, et
+    // le tampon ci-dessus etait alors perdu (cpp:S3584, nbt.cpp:1108).
+    if (nbt_change_value(t, &temp, sizeof(temp)) != 0)
+    {
+        free (temp.content);
+        return 1;
+    }
+    return 0;
 }
 
 int nbt_set_byte_array(nbt_tag *t, unsigned char *v, int len)
@@ -1122,7 +1130,13 @@ int nbt_set_byte_array(nbt_tag *t, unsigned char *v, int len)
 
     memcpy(temp.content, v, len);
 
-    return nbt_change_value(t, &temp, sizeof(temp));
+    // Meme transfert conditionnel que ci-dessus (cpp:S3584, nbt.cpp:1125).
+    if (nbt_change_value(t, &temp, sizeof(temp)) != 0)
+    {
+        free (temp.content);
+        return 1;
+    }
+    return 0;
 }
 
 int nbt_set_compound(nbt_tag *t, nbt_tag *tags, int len)
@@ -1137,9 +1151,20 @@ int nbt_set_compound(nbt_tag *t, nbt_tag *tags, int len)
     if (temp.tags == nullptr)
         return 1;
 
+    // NOTE non corrigee : ce memcpy copie `len` OCTETS alors que la destination
+    // fait sizeof(nbt_tag*) * len, et la source est declaree `nbt_tag*` quand la
+    // destination est `nbt_tag**`. Il y a une confusion de type dans la signature
+    // elle-meme ; ajuster la taille sans la resoudre rendrait le defaut pire.
+    // Signale plutot que rustine -- la fonction n'a aucun appelant.
     memcpy(temp.tags, tags, len);
 
-    return nbt_change_value(t, &temp, sizeof(temp));
+    // Meme transfert conditionnel que ci-dessus (cpp:S3584, nbt.cpp:1142).
+    if (nbt_change_value(t, &temp, sizeof(temp)) != 0)
+    {
+        free (temp.tags);
+        return 1;
+    }
+    return 0;
 }
 
 int nbt_get_length(nbt_tag *t)

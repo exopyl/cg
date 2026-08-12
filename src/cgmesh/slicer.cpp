@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <string.h>
 #include <math.h>
+#include <memory>
 #include <vector>
 
 #include "slicer.h"
@@ -54,7 +55,10 @@ Cmodel3d_half_edge_sliced::scan_model_along_Oz (void)
 	assert (n_contours);
 	
 	/* scan the model */
-	Cmodel3d_half_edge_clipper *clipper = new Cmodel3d_half_edge_clipper (model);
+	// Le clipper n'etait jamais detruit : une fuite par appel, et la classe est
+	// instanciee a chaque construction du slicer (cpp:S3584, slicer.cpp:99).
+	std::unique_ptr<Cmodel3d_half_edge_clipper> clipper
+		(new Cmodel3d_half_edge_clipper (model));
 	float z_walk= z_min;
 	k=0;
 	while (z_walk < z_max) /* for each slice */
@@ -68,11 +72,12 @@ Cmodel3d_half_edge_sliced::scan_model_along_Oz (void)
 		clipper->set_plane (pt, n);
 		clipper->get_intersections (&n_intersections, &n_vertices, &intersections);
 		
-		slices[k] = (Polygon2**)malloc(n_intersections*sizeof(Polygon2*));
-		assert (slices[k]);
-		
 		if (n_intersections)
 		{
+			// L'allocation etait faite AVANT ce test, puis perdue par le
+			// `slices[k] = nullptr` de la branche else : une fuite par tranche vide.
+			slices[k] = (Polygon2**)malloc(n_intersections*sizeof(Polygon2*));
+			assert (slices[k]);
 			n_contours[k] = n_intersections;
 			for (i=0; i<n_intersections; i++) /* for each contour in the current slice */
 			{
@@ -127,7 +132,9 @@ Cmodel3d_half_edge_sliced::scan_model_along_Ox (void)
 	assert (n_contours);
 	
 	/* scan the model */
-	Cmodel3d_half_edge_clipper *clipper = new Cmodel3d_half_edge_clipper (model);
+	// Meme fuite que dans la variante Oz (cpp:S3584, slicer.cpp:172).
+	std::unique_ptr<Cmodel3d_half_edge_clipper> clipper
+		(new Cmodel3d_half_edge_clipper (model));
 	float x_walk= x_min;
 	k=0;
 	while (x_walk < x_max) /* for each slice */
@@ -141,11 +148,12 @@ Cmodel3d_half_edge_sliced::scan_model_along_Ox (void)
 		clipper->set_plane (pt, n);
 		clipper->get_intersections (&n_intersections, &n_vertices, &intersections);
 		
-		slices[k] = (Polygon2**)malloc(n_intersections*sizeof(Polygon2*));
-		assert (slices[k]);
-		
 		if (n_intersections)
 		{
+			// L'allocation etait faite AVANT ce test, puis perdue par le
+			// `slices[k] = nullptr` de la branche else : une fuite par tranche vide.
+			slices[k] = (Polygon2**)malloc(n_intersections*sizeof(Polygon2*));
+			assert (slices[k]);
 			n_contours[k] = n_intersections;
 			for (i=0; i<n_intersections; i++) /* for each contour in the current slice */
 			{
@@ -238,21 +246,27 @@ void
 Cmodel3d_half_edge_sliced::look_at_symmetry (void)
 {
 	int i,j;
-	float *areas;
-	int *iareas;
-	
+
 	/* interval for the histogram */
 	float t = 50.0;
-	
-	//printf ("number of slices : %d\n", n_slices);
-	areas = (float*)malloc(n_slices*sizeof(float));
-	assert (areas);
-	iareas = (int*)malloc(n_slices*sizeof(float));
-	assert (iareas);
-	
+
+	if (n_slices <= 0)
+		return;
+
+	// Les trois tableaux etaient des malloc jamais liberes : cpp:S3584 aux
+	// lignes 281 (iareas), 302 (histo) et 321 (areas). iareas etait meme
+	// dimensionne en sizeof(float) pour un int* -- juste par coincidence de taille.
+	//
+	// Le remplissage a zero corrige au passage une lecture de memoire non
+	// initialisee : le `case 0` ci-dessous n'affecte QUE iareas[i], laissant
+	// areas[i] indetermine, valeur ensuite comparee puis divisee pour indexer
+	// l'histogramme.
+	std::vector<float> areas  (n_slices, 0.0f);
+	std::vector<int>   iareas (n_slices, -1);
+
 	/* get the areas */
 	for (i=0; i<n_slices; i++)
-    {
+	{
 		switch (n_contours[i])
 		{
 		case 0:
@@ -268,56 +282,66 @@ Cmodel3d_half_edge_sliced::look_at_symmetry (void)
 				for (j=1; j<n_contours[i]; j++)
 					if (fabs (slices[i][imax]->area ()) < fabs (slices[i][j]->area ()))
 						imax = j;
-					iareas[i] = imax;
-					areas[i]  = fabs (slices[i][imax]->area ());
+				iareas[i] = imax;
+				areas[i]  = fabs (slices[i][imax]->area ());
 			}
 		}
 		//printf ("area[%d][%d] : %f\n", i, iareas[i], areas[i]);
-    }
-	
+	}
+
 	/* find the area appearing the most often */
-	
+
 	/* find the higher area */
 	float area_max = areas[0];
 	for (i=0; i<n_slices; i++)
 		if (areas[i] > area_max) area_max = areas[i];
-		
-		/* alloc memory for histogram */
-		int n_histo = (int)(area_max / t);
-		int *histo  = (int*)malloc(n_histo*sizeof(int));
-		//printf ("n_histo : %d\n", n_histo);
-		
-		/* init the histogram */
-		for (i=0; i<n_histo; i++)
-			histo[i] = 0;
-		
-		/* fill the histogram */
-		for (i=0; i<n_slices; i++)
-			histo[(int)(areas[i]/t)]++;
-		
-		/* find the maximal value in the histogram */
-		int imax = 0;
-		for (i=1; i<n_histo; i++)
-			if (histo[i] > histo[imax]) imax = i;
-			float mean_area = imax*t;
-			//printf ("%f\n", mean_area);
-			
-			/* list of the polygons whose the area is near of area_mean  */
-			for (i=0; i<n_slices; i++)
-			{
-				if (fabs(areas[i]-mean_area) < t/2.0)
-				{
-					//printf ("-> %d\n", i);
-					float xc, yc;
-					float theta;
-					Polygon2 *pol = new Polygon2 ();
-					pol->input (slices[i][0], INTERPOLATION_LINEAR, 200);
-					pol->centerize ();
-					pol->search_symmetry_zabrodsky (&xc, &yc, &theta);
-					//printf ("symmetry = %f\n", theta);
-					//printf ("%f*x\n", sin(theta)/cos(theta));
-				}
-			}
+
+	/* alloc memory for histogram */
+	// n_histo valait 0 des que area_max < t, et l'increment ci-dessous ecrivait
+	// alors hors du tableau.
+	int n_histo = (int)(area_max / t);
+	if (n_histo <= 0)
+		return;
+	std::vector<int> histo (n_histo, 0);
+
+	/* fill the histogram */
+	for (i=0; i<n_slices; i++)
+	{
+		// areas[i] peut valoir area_max, donc l'indice atteignait n_histo :
+		// une case au-dela du tableau. On le ramene dans le dernier casier.
+		int bin = (int)(areas[i]/t);
+		if (bin < 0)        bin = 0;
+		if (bin >= n_histo) bin = n_histo - 1;
+		histo[bin]++;
+	}
+
+	/* find the maximal value in the histogram */
+	int imax = 0;
+	for (i=1; i<n_histo; i++)
+		if (histo[i] > histo[imax]) imax = i;
+	float mean_area = imax*t;
+	//printf ("%f\n", mean_area);
+
+	/* list of the polygons whose the area is near of area_mean  */
+	for (i=0; i<n_slices; i++)
+	{
+		if (fabs(areas[i]-mean_area) < t/2.0)
+		{
+			if (n_contours[i] <= 0 || slices[i] == nullptr)
+				continue;
+			//printf ("-> %d\n", i);
+			float xc, yc;
+			float theta;
+			// Etait un `new Polygon2` jamais detruit, donc une fuite par tranche
+			// retenue. Un objet local suffit : il ne sort pas de la boucle.
+			Polygon2 pol;
+			pol.input (slices[i][0], INTERPOLATION_LINEAR, 200);
+			pol.centerize ();
+			pol.search_symmetry_zabrodsky (&xc, &yc, &theta);
+			//printf ("symmetry = %f\n", theta);
+			//printf ("%f*x\n", sin(theta)/cos(theta));
+		}
+	}
 }
 
 void

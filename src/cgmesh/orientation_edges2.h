@@ -1,4 +1,6 @@
 #pragma once
+#include <vector>
+
 #include "orientation.h"
 
 class Cmesh_orientation_edges2 : public Cmesh_orientation
@@ -10,7 +12,7 @@ class Cmesh_orientation_edges2 : public Cmesh_orientation
   void apply_orientation (void);
   void output_model      (char *filename);
 
-  int  *get_accumulator (void) { return accumulator_int; };
+  int  *get_accumulator (void) { return accumulator_int.data(); };
   void set_iphi_itheta (int _iphi, int _itheta)
   {
     iphi_max = _iphi;
@@ -40,8 +42,9 @@ class Cmesh_orientation_edges2 : public Cmesh_orientation
   Mesh_half_edge *model;
 
   int w, h;
-  float *accumulator;
-  int *accumulator_int;
+  // Etaient des tableaux malloc'es sans destructeur pour les liberer.
+  std::vector<float> accumulator;
+  std::vector<int>   accumulator_int;
 
   float phi, theta;
   int iphi_max, itheta_max;

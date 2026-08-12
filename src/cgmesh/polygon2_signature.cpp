@@ -141,7 +141,18 @@ Polygon2::search_symmetry_signature (int signature_type, int interpolation_type,
 	{
 		float ac = i*length/nbins;
 		while (j+1 < n && xx[j+1] < ac) j++;   // bound j (was OOB read xx[n])
-		
+
+		// La garde ci-dessus borne j, mais les deux interpolations lisent
+		// xx[j+1] et yy[j+1] SANS condition : avec n == 1, j vaut 0 et xx[1]
+		// sortait du tableau (cpp:S3519, polygon2_signature.cpp:150 et 156).
+		// Le meme couple sert de denominateur, nul des que deux abscisses
+		// coincident -- d'ou le second test.
+		if (j+1 >= n || xx[j+1] == xx[j])
+		{
+			signal[i] = yy[j];
+			continue;
+		}
+
 		/*** interpolations ***/
 		switch (interpolation_type)
 		{
@@ -190,6 +201,9 @@ Polygon2::search_symmetry_signature (int signature_type, int interpolation_type,
 	float a = yp/xp;
 	printf ("%f*x\n", a);
 	
-	delete (xx);
-	delete (yy);
+	// xx et yy viennent de malloc() (lignes 18-19) : les rendre par delete est un
+	// comportement indefini -- les deux allocateurs n'ont pas a partager le meme
+	// arriere-plan.
+	free (xx);
+	free (yy);
 }

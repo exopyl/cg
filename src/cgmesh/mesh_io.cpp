@@ -388,22 +388,38 @@ int MeshIO::export_dae (Mesh& mesh, const char *filename)
 int MeshIO::export_cpp (Mesh& mesh, const char *filename)
 {
 	int i;
+  // Cette fonction cumulait quatre defauts, corriges ensemble parce qu'ils
+  // s'enchainent :
+  //
+  //   1. `return false` sur les chemins d'ERREUR. La convention du module est
+  //      0 = succes / -1 = echec (cf. export_obj), et false vaut 0 : l'appelant
+  //      qui testait le code de retour croyait l'export reussi alors que le
+  //      fichier n'avait meme pas pu etre ouvert. C'est le plus grave des quatre,
+  //      et Sonar ne le signalait pas.
+  //   2. La seconde boucle de recherche evaluait `modelname[i]` AVANT de borner
+  //      `i>=0` : a i==0 sans '/', elle decrementait puis lisait modelname[-1]
+  //      (cpp:S3519, mesh_io.cpp:400).
+  //   3. `modelname = &modelname[i+1]` perdait le pointeur de base du strdup,
+  //      rendant tout free() impossible (cpp:S3584).
+  //   4. Le retour ligne 405 sautait le fclose (cpp:S2095, mesh_io.cpp:404).
+  //
+  // std::filesystem::path fait le travail des deux boucles sans arithmetique de
+  // pointeur, donc sans aucun de ces quatre pieges.
   FILE *ptr = fopen (filename, "w");
   if (!ptr)
     {
-      printf ("unable to open %s\n", filename);
-      return false;
+      fprintf (stderr, "export_cpp: unable to open %s\n", filename);
+      return -1;
     }
-  char *modelname = strdup (filename);
-  for (i=strlen (modelname); modelname[i]!='.' && i>0; i--);
-  if (i!=0 && modelname[i-1]!='/') modelname[i] = '\0';
-  for (i=strlen (modelname); modelname[i]!='/' && i>=0; i--);
-  if (i!=-1) modelname = &modelname[i+1];
-  if (strlen(modelname)==0)
+
+  const std::string stem = std::filesystem::path(filename).stem().string();
+  if (stem.empty())
     {
-      printf ("unable to extract name of the file\n");
-      return false;
+      fprintf (stderr, "export_cpp: unable to extract name of the file\n");
+      fclose (ptr);
+      return -1;
     }
+  const char *modelname = stem.c_str();
 
   fprintf (ptr, "/* model coming from %s */\n\n", filename);
 

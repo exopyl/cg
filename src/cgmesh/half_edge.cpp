@@ -117,6 +117,11 @@ Che_edge::Che_edge ()
 	m_visited = false;
 	m_valid = 1;
 	m_data = nullptr;
+	// m_flag etait le seul membre laisse indetermine par ce constructeur
+	// (cpp:S2107, half_edge.cpp:119). Il n'est aujourd'hui ni lu ni ecrit ailleurs
+	// dans le depot, donc l'omission ne se manifestait pas -- mais elle attendait
+	// le premier lecteur.
+	m_flag = 0;
 }
 
 void Che_edge::dump (int index)

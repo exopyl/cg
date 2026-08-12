@@ -678,6 +678,13 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 			if (f1 < 0 || f2 < 0 || f1 >= (int)nf0 || f2 >= (int)nf0)
 				continue;
 
+			// f1 et f2 sont bornes juste au-dessus, mais m_pFaces est un tableau de
+			// POINTEURS : une entree nulle passait le test d'indice et se faisait
+			// dereferencer pour lire m_iMaterialId (cpp:S2259,
+			// simplification.cpp:682).
+			if (!mesh->m_pFaces[f1] || !mesh->m_pFaces[f2])
+				continue;
+
 			bool crease = Vector3f(fn[3*f1], fn[3*f1+1], fn[3*f1+2]).DotProduct(Vector3f(fn[3*f2], fn[3*f2+1], fn[3*f2+2])) < cos_thr;
 			bool seam = (mesh->m_pFaces[f1]->m_iMaterialId != mesh->m_pFaces[f2]->m_iMaterialId);
 			if (!crease && !seam)

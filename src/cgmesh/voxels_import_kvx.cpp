@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string>
+
+#include "io_path_guard.h"
 
 // KVX = Ken Silverman's Build-engine / SLAB6 / Voxlap voxel model format.
 // Layout: [numbytes][xsiz][ysiz][zsiz][xpiv][ypiv][zpiv]  (7 x int32)
@@ -19,7 +22,7 @@ Voxels* loadkvx (char *filename)
 	FILE *fil = fopen (filename, "rb");
 	if (!fil)
 	{
-		printf ("loadkvx: can't open %s\n", filename);
+		fprintf (stderr, "loadkvx: can't open %s\n", io_guard::forLog (filename).c_str());
 		return nullptr;
 	}
 
@@ -38,7 +41,10 @@ Voxels* loadkvx (char *filename)
 	if (xsiz <= 0 || ysiz <= 0 || zsiz <= 0 ||
 	    xsiz > MAXXSIZ || ysiz > MAXYSIZ || zsiz > LIMZSIZ)
 	{
-		printf ("loadkvx: invalid dimensions %dx%dx%d in %s\n", xsiz, ysiz, zsiz, filename);
+		// Les trois dimensions sont deja validees juste au-dessus, et %d d'un entier
+		// ne peut rien injecter ; c'est le NOM qui devait etre assaini.
+		fprintf (stderr, "loadkvx: invalid dimensions %dx%dx%d in %s\n",
+			 xsiz, ysiz, zsiz, io_guard::forLog (filename).c_str());
 		fclose (fil);
 		return nullptr;
 	}

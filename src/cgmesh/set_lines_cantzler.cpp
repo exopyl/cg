@@ -3,7 +3,10 @@
 #include <assert.h>
 #include <string.h>
 
+#include <vector>
+
 #include "set_lines.h"
+#include "set_lines_internal.h"
 
 #include "mesh_half_edge.h"
 
@@ -93,14 +96,13 @@ Cset_lines::cantzler_merge_edges (int n_candidates, float tolerance)
 
 	/* new extracted lines */
 	//int n_extracted_lines_new2;
-    Cextracted_line **extracted_lines_new = (Cextracted_line**)malloc(n_candidates*sizeof(Cextracted_line*));
-	assert (extracted_lines_new);
-
-	Vector3f *v1, *v2, *dir;
-	v1  = (Vector3f*)malloc(n_candidates*sizeof(Vector3f));
-	v2  = (Vector3f*)malloc(n_candidates*sizeof(Vector3f));
-	dir = (Vector3f*)malloc(n_candidates*sizeof(Vector3f));
-	assert (v1 && v2 && dir);
+    // Le tableau de lignes n'etait jamais libere : ses elements partaient soit
+	// dans extracted_lines_new2 soit au delete, mais le TABLEAU restait
+	// (cpp:S3584, set_lines_cantzler.cpp:232).
+	if (n_candidates <= 0)
+		return;
+	std::vector<Cextracted_line*> lines (n_candidates, nullptr);
+	std::vector<Vector3f> v1 (n_candidates), v2 (n_candidates), dir (n_candidates);
 
 	// half candidates are edges
 	for (i=0; i<n_candidates/2; i++)
@@ -120,10 +122,10 @@ Cset_lines::cantzler_merge_edges (int n_candidates, float tolerance)
 		ivertices_in_the_line[1] = extracted_lines[index]->ivertices[1];
 		vertices_in_the_line[0] = v1[i];
 		vertices_in_the_line[1] = v2[i];
-		extracted_lines_new[i] = new Cextracted_line (dir[i], cross, v1[i], v2[i], n_vertices_in_the_line, ivertices_in_the_line, vertices_in_the_line);
+		lines[i] = new Cextracted_line (dir[i], cross, v1[i], v2[i], n_vertices_in_the_line, ivertices_in_the_line, vertices_in_the_line);
 		Vector3f v1v2 = v1[i] - v2[i];
 		float length = v1v2.getLength ();
-		extracted_lines_new[i]->set_weight (length);
+		lines[i]->set_weight (length);
 	}
 
 	// half candidates are vertices belonging to edges randomly chosen
@@ -161,17 +163,23 @@ Cset_lines::cantzler_merge_edges (int n_candidates, float tolerance)
 		ivertices_in_the_line[1] = extracted_lines[index12]->ivertices[index22-1];
 		vertices_in_the_line[0] = v1[i];
 		vertices_in_the_line[1] = v2[i];
-		extracted_lines_new[i] = new Cextracted_line (dir[i], cross, v1[i], v2[i], n_vertices_in_the_line, ivertices_in_the_line, vertices_in_the_line);
-		extracted_lines_new[i]->set_weight (0.0);
+		lines[i] = new Cextracted_line (dir[i], cross, v1[i], v2[i], n_vertices_in_the_line, ivertices_in_the_line, vertices_in_the_line);
+		lines[i]->set_weight (0.0);
 	}
 
 
 	// participation of the candidates
-	float *n_candidates_for = (float*)malloc(n_candidates*sizeof(float));
-	n_candidates_for = (float*)memset ((void*)n_candidates_for, 0, n_candidates*sizeof(float));
-	int **candidates_for = (int**)malloc(n_candidates*sizeof(int));
-	for (i=0; i<n_candidates; i++)
-		candidates_for[i] = (int*)malloc(1000*sizeof(int));;
+	// candidates_for etait un int** alloue avec n_candidates*sizeof(int) au lieu
+	// de sizeof(int*) : en 64 bits, la MOITIE de la place requise, donc la boucle
+	// d'initialisation ecrivait hors du tas des la seconde moitie des indices.
+	// Meme defaut que set_lines_new_method.cpp:163.
+	//
+	// La largeur des lignes garde la borne 1000 d'origine (cf. l'assert plus bas),
+	// elargie a n_candidates si celui-ci depasse : la borne fixe n'etait pas
+	// verifiee en release.
+	const size_t row = (n_candidates > 1000) ? (size_t)n_candidates : (size_t)1000;
+	std::vector<float> n_candidates_for (n_candidates, 0.0f);
+	std::vector<std::vector<int> > candidates_for (n_candidates, std::vector<int>(row, 0));
 
 	/* evaluate each candidate line */
 	for (i=0; i<n_candidates; i++)
@@ -180,10 +188,10 @@ Cset_lines::cantzler_merge_edges (int n_candidates, float tolerance)
 		{
 			if (i == j) continue;
 			Vector3f pos1, dir1, pos21, pos22;
-			extracted_lines_new[i]->get_begin (pos1);
-			extracted_lines_new[i]->get_direction (dir1);
-			extracted_lines_new[j]->get_begin (pos21);
-			extracted_lines_new[j]->get_end (pos22);
+			lines[i]->get_begin (pos1);
+			lines[i]->get_direction (dir1);
+			lines[j]->get_begin (pos21);
+			lines[j]->get_end (pos22);
 			if (distance_line_point (pos1, dir1, pos21) < tolerance &&
 				distance_line_point (pos1, dir1, pos22) < tolerance)
 			{
@@ -195,14 +203,14 @@ Cset_lines::cantzler_merge_edges (int n_candidates, float tolerance)
 	}
 	
 	// merge the lines
-	int *sorted = quicksort_indices (n_candidates_for, n_candidates);
+	int *sorted = quicksort_indices (n_candidates_for.data(), n_candidates);
 	for (i=n_candidates-1; i>=0; i--)
 	{
 		int index1 = sorted[i];
 		for (j=0; j<(int)n_candidates_for[index1]; j++)
 		{
 			int index2 = candidates_for[index1][j];
-			extracted_lines_new[index1]->merge (extracted_lines_new[index2]);
+			lines[index1]->merge (lines[index2]);
 			n_candidates_for[index2] = 0; // we exclude the j-th line
 			// ...and delete the participation of the j-th line in all the other lines
 			for (int k=0; k<(int)n_candidates; k++)
@@ -217,32 +225,24 @@ Cset_lines::cantzler_merge_edges (int n_candidates, float tolerance)
 	}
 	free (sorted);
 
-    Cextracted_line **extracted_lines_new2 = (Cextracted_line**)malloc(n_candidates*sizeof(Cextracted_line*));
-	assert (extracted_lines_new2);
-	for (i=0,j=0; i<n_candidates; i++)
+    std::vector<Cextracted_line*> kept;
+	kept.reserve (n_candidates);
+	for (i=0; i<n_candidates; i++)
 	{
 		if (n_candidates_for[i] != 0)
-		{
-			extracted_lines_new2[j] = extracted_lines_new[i];
-			j++;
-		}
+			kept.push_back (lines[i]);
 		else
-			delete extracted_lines_new[i];
+			delete lines[i];
 	}
-	n_candidates = j;
 
+	// n_candidates etait ecrase ici par le nombre de lignes RETENUES, puis reutilise
+	// comme borne de la boucle qui liberait candidates_for : les lignes au-dela
+	// n'etaient jamais liberees. Les vector rendent le probleme sans objet.
+	n_candidates      = (int)kept.size();
 	n_extracted_lines = n_candidates;
-    extracted_lines = extracted_lines_new2;
+	extracted_lines   = set_lines_detail::to_raw_array (kept);
 
 	apply_least_square_fitting ();
     compute_extremities ();
-
-	free (n_candidates_for);
-	for (i=0; i<n_candidates; i++)
-		free (candidates_for[i]);
-	free (candidates_for);
-    free (v1);
-	free (v2);
-	free (dir);
 }
 

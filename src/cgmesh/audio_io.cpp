@@ -2,6 +2,9 @@
 #include <math.h>
 #include <string.h>
 
+#include <string>
+
+#include "io_path_guard.h"
 #include "../cgmath/cgmath.h"
 
 #include "audio.h"
@@ -100,8 +103,13 @@ int Audio::import_wav (char const *filename, int verbose)
 
 	if (verbose)
 	{
-	     printf("Subchunk2ID: \"%c%c%c%c\"\n", hdr.Subchunk2ID[0], hdr.Subchunk2ID[1], hdr.Subchunk2ID[2], hdr.Subchunk2ID[3]);
-	     printf("datasize %d\n", hdr.Subchunk2Size);
+		// Les quatre octets viennent BRUTS de l'en-tete du fichier : rien ne
+		// garantit qu'ils soient imprimables, et %c laissait passer tels quels
+		// retours chariot et autres caracteres de controle
+		// (cpp:S5145, audio_io.cpp:103).
+		const std::string id (hdr.Subchunk2ID, hdr.Subchunk2ID + 4);
+		fprintf (stderr, "Subchunk2ID: \"%s\"\n", io_guard::forLog (id).c_str());
+		fprintf (stderr, "datasize %d\n", hdr.Subchunk2Size);
 	}
 
 	if (hdr.bps != 16 && hdr.bps != 8) {
@@ -113,6 +121,16 @@ int Audio::import_wav (char const *filename, int verbose)
 	// convert audio data to NSArray
 	unsigned int datasize = hdr.Subchunk2Size;
 	unsigned int NumChannels = hdr.NumChannels;
+	// hdr.bps est deja borne a 8 ou 16 juste au-dessus, donc bps/8 vaut 1 ou 2.
+	// hdr.NumChannels, lui, sort de l'en-tete WAV sans aucun controle : a 0, le
+	// diviseur devenait nul (cpp:S3518, audio_io.cpp, « division by tainted
+	// value »).
+	if (hdr.NumChannels == 0)
+	{
+		fprintf (stderr, "audio: NumChannels nul dans l'en-tete\n");
+		fclose (f);
+		return 0;
+	}
 	unsigned int length = datasize / (hdr.NumChannels * hdr.bps / 8);
 
 	init (length, NumChannels, hdr.samplerate);

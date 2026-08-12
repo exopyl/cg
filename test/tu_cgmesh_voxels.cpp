@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include <algorithm>
+#include <string>
 #include "../src/cgmesh/voxels.h"
 #include "../src/cgmesh/cgmesh.h"             // Mesh (for ToMesh) + loadkvx (voxels_import_kvx.h)
 #include "../src/cgmesh/voxels_import_kvx.h"
@@ -86,6 +88,34 @@ TEST(TEST_cgmesh_voxels, kvx_colors_are_per_face)
 
     delete m;
     delete v;
+}
+
+// Un nom de fichier recopie tel quel dans un diagnostic permet d'en FORGER :
+// "a\nloadkvx: everything is fine" produisait deux lignes, dont une qui se lisait
+// comme un message du programme (cpp:S5145). Le nom est desormais assaini avant
+// d'atteindre la sortie.
+//
+// On verifie la propriete qui compte -- une entree d'UNE ligne ne peut pas produire
+// PLUSIEURS lignes -- et non la graphie exacte du remplacement.
+TEST(TEST_cgmesh_voxels, kvx_load_error_cannot_forge_log_lines)
+{
+    // Nom inexistant : loadkvx echoue au fopen et diagnostique le nom.
+    char path[] = "./test/data/kvx/nexiste\npas\rloadkvx: tout va bien\t.kvx";
+
+    testing::internal::CaptureStderr();
+    Voxels* v = loadkvx(path);
+    const std::string err = testing::internal::GetCapturedStderr();
+
+    EXPECT_EQ(v, nullptr);
+    delete v;
+
+    // Un seul retour a la ligne : celui que le message termine lui-meme.
+    EXPECT_EQ(std::count(err.begin(), err.end(), '\n'), 1)
+        << "le nom injecte des sauts de ligne dans la sortie : [" << err << "]";
+    EXPECT_EQ(err.find('\r'), std::string::npos) << "retour chariot non neutralise";
+    EXPECT_EQ(err.find('\t'), std::string::npos) << "tabulation non neutralisee";
+    // Le nom reste identifiable : seuls les caracteres de controle sont remplaces.
+    EXPECT_NE(err.find("nexiste?pas"), std::string::npos);
 }
 
 // End-to-end: .kvx now imports through the standard VMeshes::load dispatch —

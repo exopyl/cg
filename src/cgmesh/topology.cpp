@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <math.h>
 
+#include <vector>
+
 #include "topology.h"
 
 typedef struct PointInfo
@@ -115,13 +117,12 @@ void remove_unused_vertices (Vector3f **pVertices, unsigned int *nVerticesNew, u
 	unsigned int i=0;
 	unsigned int nVertices = 3*nFaces;
 
-	int *pNewIndices = (int*)malloc(nVertices*sizeof(int));
-	if (pNewIndices == nullptr)
+	// Etait un malloc jamais rendu : la fonction n'a aucune liberation
+	// (cpp:S3584, topology.cpp:151). Ce n'est qu'un tableau de travail local, donc
+	// un vector -- qui supprime aussi le chemin d'echec d'allocation a gerer.
+	if (nVertices == 0)
 		return;
-
-	// init
-	for (i=0; i<nVertices; i++)
-		pNewIndices[i] = -1;
+	std::vector<int> pNewIndices (nVertices, -1);
 
 	// identify the vertices used
 	for (i=0; i<3*nFaces; i++)

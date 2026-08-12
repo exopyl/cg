@@ -366,13 +366,21 @@ Mesh* CreateCylinder (float fHeight, float fRadius, unsigned int nVertices, bool
 		}
 		if (bCap)
 		{
-			for (unsigned int i=1; i<nVertices-1; i++)
+			// `i<nVertices-1` sur un unsigned : a nVertices == 0, la soustraction
+			// deborde vers UINT_MAX, la boucle tourne, et le `%nVertices` du corps
+			// divise par zero (cpp:S3518, surface_basic.cpp:372). La forme `i+1 <
+			// nVertices` est equivalente des nVertices >= 1 et ne deborde pas.
+			for (unsigned int i=1; i+1<nVertices; i++)
 			{
 				Face *pFaceTop = new Face ();
 				pFaceTop->SetTriangle (nVertices, nVertices+i, nVertices+(i+1)%nVertices);
 				mesh->m_pFaces[fi++] = pFaceTop;
 			}
-			for (unsigned int i=1; i<nVertices-1; i++)
+			// `i<nVertices-1` sur un unsigned : a nVertices == 0, la soustraction
+			// deborde vers UINT_MAX, la boucle tourne, et le `%nVertices` du corps
+			// divise par zero (cpp:S3518, surface_basic.cpp:372). La forme `i+1 <
+			// nVertices` est equivalente des nVertices >= 1 et ne deborde pas.
+			for (unsigned int i=1; i+1<nVertices; i++)
 			{
 				Face *pFaceBottom = new Face ();
 				pFaceBottom->SetTriangle (0, nVertices-i, nVertices-(i+1)%nVertices);

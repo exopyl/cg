@@ -34,7 +34,14 @@ float MeshAlgoAmbientOcclusion::clampOcclusion (float fOcclusion)
 class CallbackTraverse: public Octree::Callback
 {
 public:
-	CallbackTraverse(int iCurrentPatch):m_iCurrentPatch(iCurrentPatch){};
+	// m_fDistanceMax n'etait pas initialise ici (cpp:S2107,
+	// ambient_occlusion.cpp:37) : il n'est renseigne que par SetMaxDistance, appele
+	// ligne 199. Correct sur ce seul chemin, mais la comparaison ligne 74
+	// (`fShortestDistance > m_fDistanceMax`) portait sur une valeur indeterminee
+	// pour toute construction qui oublierait le setter. 0 est le defaut
+	// conservateur : aucune contribution retenue.
+	CallbackTraverse(int iCurrentPatch)
+		: m_iCurrentPatch(iCurrentPatch), m_fDistanceMax(0.f) {};
 	virtual bool operator()(Octree *pOctree, void *data)
 	{
 		MeshAlgoAmbientOcclusion *pAlgo = (MeshAlgoAmbientOcclusion*)data;

@@ -370,6 +370,15 @@ void TGAImg::BGRtoRGB() // Convert BGR to RGB (or back again)
   // Get pixel size in bytes
   iPixelSize=iBPP/8;
 
+  // L'echange touche l'octet 0 et l'octet 2 de CHAQUE pixel : il n'a de sens que
+  // si le pixel fait au moins 3 octets. En 8 bits (niveaux de gris) iPixelSize
+  // vaut 1, donc `*(bCur+2)` lisait ET ecrivait deux octets au-dela du pixel
+  // courant -- et au-dela du tampon sur le dernier (cpp:S3519, image_tga.cpp:375).
+  // En 16 bits il empietait sur le pixel suivant. Rien a echanger dans ces deux
+  // cas : les composantes ne sont pas rangees en BGR.
+  if (iPixelSize < 3)
+    return;
+
    for(Index=0;Index!=nPixels;Index++)  // For each pixel
     {
      bTemp=*bCur;      // Get Blue value

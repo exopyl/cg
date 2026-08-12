@@ -78,11 +78,17 @@ void
 Cregions_faces::export_selected_region_cloud_points (char *filename)
 {
 	int i,j;
-	int *selected_vertices;
+	// Etait un `int*` local rempli par new int[] et jamais libere : une fuite par
+	// appel (cpp:S3584, regions_faces.cpp:154). Un vector local n'a pas ce
+	// probleme, et il n'y a plus de chemin de sortie qui puisse l'oublier.
+	std::vector<int> selected_vertices;
 	int n_selected_vertices;
 
 	FILE *ptr = fopen (filename,"wt");
-	assert (ptr);
+	// assert() disparait en release : l'echec d'ouverture menait alors droit a un
+	// fprintf sur pointeur nul. Un vrai test le remplace.
+	if (!ptr)
+		return;
 
 	int n_vertices;
 	float *vertices = nullptr;
@@ -96,10 +102,11 @@ Cregions_faces::export_selected_region_cloud_points (char *filename)
 		faces      = mesh_half_edge->m_pMesh->m_pFaces;
 		normales   = mesh_half_edge->m_pMesh->m_pVertexNormals.data();
 	}
-	if (!vertices) return;
+	// Ce retour anticipe sautait le fclose de fin de fonction
+	// (cpp:S2095, regions_faces.cpp:99).
+	if (!vertices) { fclose (ptr); return; }
 
-	selected_vertices = new int[n_vertices];
-	assert (selected_vertices);
+	selected_vertices.assign ((size_t)n_vertices, 0);
 	n_selected_vertices = 0;
 
 	for (i=0; i<size; i++)
@@ -464,7 +471,9 @@ Cregions_faces::dilate_regions (void)
 		}
 	}
 
-	delete regions;
+	// `regions` vient de `new int[size]` : le liberer par delete scalaire est un
+	// comportement indefini. Le destructeur, lui, utilise deja delete[].
+	delete[] regions;
 	regions = res;
 }
 
@@ -501,7 +510,9 @@ Cregions_faces::erode_regions (void)
 		}
 	}
 
-	delete regions;
+	// `regions` vient de `new int[size]` : le liberer par delete scalaire est un
+	// comportement indefini. Le destructeur, lui, utilise deja delete[].
+	delete[] regions;
 	regions = res;
 }
 
@@ -581,7 +592,8 @@ Cregions_faces::dilate_selected_region (void)
 		}
 	}
 
-	delete selected_region;
+	// Meme defaut : `new int[size]` libere par delete scalaire.
+	delete[] selected_region;
 	selected_region = res;
 }
 
@@ -618,7 +630,8 @@ Cregions_faces::erode_selected_region (void)
 		}
 	}
 
-	delete selected_region;
+	// Meme defaut : `new int[size]` libere par delete scalaire.
+	delete[] selected_region;
 	selected_region = res;
 }
 
@@ -708,6 +721,11 @@ Plane* Cregions_faces::plane_fitting  (void)
 		fn = mesh_half_edge->m_pMesh->m_pFaceNormals.data();
 	}
 
+	// `v` et `fn` restent nuls quand mesh_half_edge l'est, et la boucle ci-dessous
+	// les indexe sans condition (cpp:S2259, regions_faces.cpp:716).
+	if (v == nullptr || fn == nullptr || f.empty())
+		return nullptr;
+
 	for (i=0; i<size; i++)
     {
 		if (selected_region[i] == 1)
@@ -728,6 +746,11 @@ Plane* Cregions_faces::plane_fitting  (void)
 			n_selected_faces++;
 		}
 	}
+
+	// Aucune face selectionnee : la moyenne divisait par zero. Non signale par
+	// Sonar, mais sur le meme chemin que le garde ci-dessus.
+	if (n_selected_faces == 0)
+		return nullptr;
 
 	center.x /= n_selected_faces;
 	center.y /= n_selected_faces;

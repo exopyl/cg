@@ -56,20 +56,43 @@ public:
 	unsigned int get_nx () const { return m_nx; }
 	unsigned int get_ny () const { return m_ny; }
 	unsigned int get_nz () const { return m_nz; }
-	bool is_activated (unsigned int i, unsigned int j, unsigned int k) const { return m_pVoxels[i][j][k].m_bActivated; }
-	unsigned int get_label (unsigned int i, unsigned int j, unsigned int k) const { return m_pVoxels[i][j][k].m_iLabel; }
-	void set_data (unsigned int i, unsigned int j, unsigned int k, float data) { m_pVoxels[i][j][k].m_fData = data; }
+	// Ces six accesseurs indexaient m_pVoxels SANS borner leurs arguments, alors
+	// que les indices arrivent de fichiers de modeles : loadkvx les tire de
+	// l'en-tete KVX (cpp:S3519, voxels.h:68, « tainted index that may be too
+	// large »). Un fichier malforme ecrivait donc hors de la grille.
+	//
+	// La grille est un Voxel*** : un indice trop grand ne depasse pas d'une case,
+	// il dereference un pointeur pris n'importe ou en memoire. D'ou un test, et
+	// non un assert -- celui-ci disparaitrait en release, la ou le fichier
+	// malforme arrive.
+	inline bool in_range (unsigned int i, unsigned int j, unsigned int k) const
+	{
+		return i < m_nx && j < m_ny && k < m_nz;
+	}
+
+	bool is_activated (unsigned int i, unsigned int j, unsigned int k) const
+	{
+		return in_range (i, j, k) ? m_pVoxels[i][j][k].m_bActivated : false;
+	}
+	unsigned int get_label (unsigned int i, unsigned int j, unsigned int k) const
+	{
+		return in_range (i, j, k) ? m_pVoxels[i][j][k].m_iLabel : 0u;
+	}
+	void set_data (unsigned int i, unsigned int j, unsigned int k, float data)
+	{
+		if (in_range (i, j, k)) m_pVoxels[i][j][k].m_fData = data;
+	}
 
 	void smooth_data (int n);
 	void threshold_data (float threshold);
 
 	inline void activate (unsigned int xi, unsigned int yi, unsigned int zi)
 	{
-		m_pVoxels[xi][yi][zi].m_bActivated = true;
+		if (in_range (xi, yi, zi)) m_pVoxels[xi][yi][zi].m_bActivated = true;
 	};
 	inline void set_label (unsigned int xi, unsigned int yi, unsigned int zi, unsigned int ilabel)
 	{
-		m_pVoxels[xi][yi][zi].m_iLabel = ilabel;
+		if (in_range (xi, yi, zi)) m_pVoxels[xi][yi][zi].m_iLabel = ilabel;
 	};
 	void inverse_activation (void);
 

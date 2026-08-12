@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <vector>
+
 #include "common.h"
 
 float search_max (float *array, int n)
@@ -157,21 +159,26 @@ int*
 quicksort_indices (float *array, int size)
 {
   int i;
+  // `indices` est rendu a l'appelant, donc il reste en malloc : c'est lui qui le
+  // libere (les appelants font free(sorted)).
   int *indices = (int*)malloc(size*sizeof(int));
   if (!indices) return nullptr;
   for (i=0; i<size; i++)
     indices[i] = i;
 
-  float *array_copy = (float*)malloc(size*sizeof(float));
-  if (!array_copy) return nullptr;
-  for (i=0; i<size; i++)
-    array_copy[i] = array[i];
+  // `array_copy` n'est qu'un tampon de travail. Il posait DEUX fuites :
+  //   - son echec d'allocation renvoyait nullptr sans rendre `indices`
+  //     (cpp:S3584, common.cpp:166) ;
+  //   - il n'etait jamais libere en sortie de fonction (common.cpp:180).
+  // Un vector regle les deux : plus de chemin d'echec a gerer, et liberation
+  // automatique quel que soit le retour.
+  std::vector<float> array_copy (array, array + size);
   /*
   printf ("before\n");
   for (int i=0; i<size; i++)
     printf ("%d -> %d -> %f\n", i, indices[i], array[i]);
   */
-  _quicksort_indices_aux (array_copy, indices, 0, size-1);
+  _quicksort_indices_aux (array_copy.data(), indices, 0, size-1);
   /*
   printf ("after\n");
   for (int i=0; i<size; i++)

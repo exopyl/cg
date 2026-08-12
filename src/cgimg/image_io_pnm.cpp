@@ -53,6 +53,13 @@ int ImgIO::import_pbm (Img& img, FILE *ptr, unsigned int levels, int binary)
 
 int ImgIO::import_pgm (Img& img, FILE *ptr, unsigned int levels, int binary)
 {
+	// `levels` est la valeur maximale declaree dans l'en-tete PNM, donc une donnee
+	// du FICHIER. A 0, les quatre divisions `(float)c/(float)levels` de cette
+	// fonction produisaient un inf ou un NaN, converti ensuite en char
+	// (cpp:S3518, image_io_pnm.cpp:74, « division by tainted value »).
+	if (levels == 0)
+		return -1;
+
 	if (binary)
 		for (unsigned int j=0; j<img.m_iHeight; j++)
 			for (unsigned int i=0; i<img.m_iWidth; i++)
@@ -83,6 +90,11 @@ int ImgIO::import_pgm (Img& img, FILE *ptr, unsigned int levels, int binary)
 
 int ImgIO::import_ppm (Img& img, FILE *ptr, unsigned int levels, int binary)
 {
+	// Meme donnee d'en-tete, six divisions dans cette fonction
+	// (cpp:S3518, image_io_pnm.cpp:106).
+	if (levels == 0)
+		return -1;
+
 	if (binary)
 	{
 		for (unsigned int j=0; j<img.m_iHeight; j++)
@@ -135,8 +147,13 @@ int ImgIO::import_pnm (Img& img, const char *filename)
 	sscanf (buffer, "%d %d\n", &width, &height);
 	fscanf (ptr, "%d\n", &levels);
 
+	// Ce retour anticipe sautait le fclose de fin de fonction
+	// (cpp:S2095, image_io_pnm.cpp:139).
 	if (img.resize_memory (width, height) == -1)
+	{
+		fclose (ptr);
 		return -1;
+	}
 
 	switch (header[1])
 	{

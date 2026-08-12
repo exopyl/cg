@@ -64,4 +64,18 @@ ListNPRSegments& NPRManager::GetSegments (NPRSegmentType eType)
 
 	if (eType == NPR_SEGMENT_SILHOUETTE && m_pNPRSilhouette)
 		return m_pNPRSilhouette->GetSegments ();
+
+	// Aucune des trois branches ne correspond quand le type est inconnu ou que le
+	// generateur correspondant n'est pas instancie. La fonction tombait alors en
+	// fin de corps EN PROMETTANT UNE REFERENCE : l'appelant en recevait une
+	// invalide, et la moindre lecture partait en comportement indefini
+	// (cpp:S935, NPRManager.cpp:67).
+	//
+	// Une liste vide a duree de vie statique donne une reference valide et une
+	// semantique lisible : « aucun segment pour ce type ». La signature rend une
+	// reference non const, donc un appelant peut techniquement y ecrire ; c'est le
+	// prix de ne pas changer l'interface, et cela reste preferable a une reference
+	// pendante.
+	static ListNPRSegments emptySegments;
+	return emptySegments;
 }

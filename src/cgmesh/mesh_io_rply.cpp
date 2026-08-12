@@ -1528,11 +1528,19 @@ static void ply_error_cb(p_ply ply, const char *message) {
     fprintf(stderr, "RPly: %s\n", message);
 }
 
+/* Les messages d'erreur interpolent des donnees VENANT DU FICHIER (noms d'element
+ * et de propriete, jetons non reconnus). vsprintf n'a aucune borne : la seule chose
+ * qui gardait ce tampon dans ses limites etait la taille maximale d'un mot
+ * (ply_check_word rejette au-dela de WORDSIZE), verifiee dans une autre fonction.
+ * Le pire site d'appel actuel -- "Failed writing %s of %s %d (%s: %s)" -- plafonne
+ * ainsi vers 570 octets, donc rien ne debordait ; mais la marge est un accident de
+ * calcul, pas une garantie : un troisieme %s ou un WORDSIZE plus grand suffisait a
+ * transformer ce vsprintf en depassement de tampon de PILE. vsnprintf tronque. */
 static void ply_ferror(p_ply ply, const char *fmt, ...) {
     char buffer[1024];
     va_list ap;
     va_start(ap, fmt);
-    vsprintf(buffer, fmt, ap);
+    vsnprintf(buffer, sizeof(buffer), fmt, ap);
     va_end(ap);
     ply->error_cb(ply, buffer);
 }

@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <cassert>
 
 #include "image.h"
 #include "image_histogram.h"   // get_median_value s'appuie sur ImgHistogram::compute
@@ -35,8 +36,21 @@ int Img::resize_memory (unsigned int width, unsigned int height, bool use_palett
 	if (width == m_iWidth && height == m_iHeight)
 		return 0;
 	
+	// Remise a nullptr indispensable : sans elle, un appelant qui aurait deja
+	// libere le tampon voyait ce test reussir sur un pointeur pendouillant. C'est
+	// exactement ce que faisait palettize().
 	if (m_pPixels)
+	{
 		free (m_pPixels);
+		m_pPixels = nullptr;
+	}
+	// La palette etait ECRASEE sans etre detruite, dans les deux branches : une
+	// fuite par redimensionnement, et palettize() passe justement use_palette.
+	if (m_pPalette)
+	{
+		delete m_pPalette;
+		m_pPalette = nullptr;
+	}
 
 	m_iWidth = width;
 	m_iHeight = height;
@@ -51,7 +65,6 @@ int Img::resize_memory (unsigned int width, unsigned int height, bool use_palett
 	{
 		m_pPixels = (unsigned char*)malloc(4*m_iWidth*m_iHeight*sizeof(unsigned char));
 		bUsePalette = false;
-		m_pPalette = nullptr;
 	}
 	
 	return (m_pPixels)? 0 : -1;
@@ -129,14 +142,13 @@ int Img::init_color (unsigned char r, unsigned char g, unsigned char b, unsigned
 	return 0;
 }
 
-void Img::set_pixel (unsigned int i, unsigned int j,
+bool Img::set_pixel (unsigned int i, unsigned int j,
 		     unsigned char r, unsigned char g, unsigned char b, unsigned char a)
 {
+	assert (i < m_iWidth && j < m_iHeight);
 	if (i>=m_iWidth || j>=m_iHeight)
-	{
-		printf ("!!! [Img::set_pixel] %d %d in %d %d\n", i, j, m_iWidth, m_iHeight);
-		return;
-	}
+		return false;
+
 	unsigned int index = j*m_iWidth+i;
 	if (bUsePalette)
 	{
@@ -150,38 +162,40 @@ void Img::set_pixel (unsigned int i, unsigned int j,
 		m_pPixels[index+2] = b;
 		m_pPixels[index+3] = a;
 	}
+	return true;
 }
 
-void Img::set_pixel_int (unsigned int i, unsigned int j, int c)
+bool Img::set_pixel_int (unsigned int i, unsigned int j, int c)
 {
 	RGBc rgb;
 	Color::Int2RGBc (c, rgb);
-	set_pixel (i, j, rgb.r, rgb.g, rgb.b, 255);
+	return set_pixel (i, j, rgb.r, rgb.g, rgb.b, 255);
 }
 
-void Img::set_pixel_index (unsigned int i, unsigned int j, unsigned int index)
+bool Img::set_pixel_index (unsigned int i, unsigned int j, unsigned int index)
 {
+	assert (i < m_iWidth && j < m_iHeight);
 	if (i>=m_iWidth || j>=m_iHeight)
-	{
-		printf ("!!! [Img::set_pixel_index] %d %d in %d %d\n", i, j, m_iWidth, m_iHeight);
-		return;
-	}
+		return false;
+
+	// Sans palette, m_pPixels est du RGBA8 : y ecrire un INDICE ecraserait un
+	// canal. L'echec est donc bien un refus, pas seulement un cas hors limites.
+	assert (bUsePalette);
 	if (!bUsePalette)
-	{
-		printf ("!!! [Img::set_pixel_index] bUsePalette = %d\n", bUsePalette);
-		return;
-	}
+		return false;
+
 	m_pPixels[j*m_iWidth+i] = index;
+	return true;
 }
 
-void Img::get_pixel (unsigned int i, unsigned int j,
+bool Img::get_pixel (unsigned int i, unsigned int j,
 		     unsigned char *r, unsigned char *g, unsigned char *b, unsigned char *a) const
 {
+	assert (i < m_iWidth && j < m_iHeight);
 	if (i>=m_iWidth || j>= m_iHeight)
 	{
-		printf ("!!! [Img::get_pixel] %d %d in %d %d\n", i, j, m_iWidth, m_iHeight);
 		*r = 0; *g = 0; *b = 0; *a = 0;
-		return;
+		return false;
 	}
 	unsigned int index = j*m_iWidth+i;
 	if (!bUsePalette)
@@ -199,6 +213,7 @@ void Img::get_pixel (unsigned int i, unsigned int j,
 		*b = m_pPalette->m_pColors[icolor].b();
 		*a = m_pPalette->m_pColors[icolor].a();
 	}
+	return true;
 }
 
 int Img::get_pixel_int (unsigned int i, unsigned int j) const
@@ -221,41 +236,37 @@ int Img::get_pixel_index (unsigned int i, unsigned int j) const
 
 unsigned char Img::get_r (unsigned int i, unsigned int j) const
 {
+	// 0 vaut "hors limites" comme "pixel noir" : l'assert est le seul signal.
+	assert (i < m_iWidth && j < m_iHeight);
 	if (i>=m_iWidth || j>= m_iHeight)
-	{
-		printf ("!!! [Img::get_pixel] %d %d in %d %d\n", i, j, m_iWidth, m_iHeight);
 		return 0;
-	}
 	return m_pPixels[4*(j*m_iWidth+i)];
 }
 
 unsigned char Img::get_g (unsigned int i, unsigned int j) const
 {
+	// 0 vaut "hors limites" comme "pixel noir" : l'assert est le seul signal.
+	assert (i < m_iWidth && j < m_iHeight);
 	if (i>=m_iWidth || j>= m_iHeight)
-	{
-		printf ("!!! [Img::get_pixel] %d %d in %d %d\n", i, j, m_iWidth, m_iHeight);
 		return 0;
-	}
 	return m_pPixels[4*(j*m_iWidth+i)+1];
 }
 
 unsigned char Img::get_b (unsigned int i, unsigned int j) const
 {
+	// 0 vaut "hors limites" comme "pixel noir" : l'assert est le seul signal.
+	assert (i < m_iWidth && j < m_iHeight);
 	if (i>=m_iWidth || j>= m_iHeight)
-	{
-		printf ("!!! [Img::get_pixel] %d %d in %d %d\n", i, j, m_iWidth, m_iHeight);
 		return 0;
-	}
 	return m_pPixels[4*(j*m_iWidth+i)+2];
 }
 
 unsigned char Img::get_a (unsigned int i, unsigned int j) const
 {
+	// 0 vaut "hors limites" comme "pixel noir" : l'assert est le seul signal.
+	assert (i < m_iWidth && j < m_iHeight);
 	if (i>=m_iWidth || j>= m_iHeight)
-	{
-		printf ("!!! [Img::get_pixel] %d %d in %d %d\n", i, j, m_iWidth, m_iHeight);
 		return 0;
-	}
 	return m_pPixels[4*(j*m_iWidth+i)+3];
 }
 
@@ -365,6 +376,13 @@ void Img::contrast (float k)
 		if (max < m_pPixels[4*i])
 			max = m_pPixels[4*i];
 	}
+
+	// Image uniforme : min == max, donc (max-min) == 0 et la division ci-dessous
+	// produisait un inf ou un NaN, converti ensuite en unsigned char -- un
+	// comportement indefini (cpp:S3518, image.cpp:391). Il n'y a rien a etaler
+	// quand toutes les valeurs sont egales.
+	if (max == min)
+		return;
 
 	unsigned char r, g, b, a;
 	float T = 1.;
@@ -939,11 +957,18 @@ int Img::multiply (const Img &src)
 
 int Img::palettize (const Img &src)
 {
-	if (m_pPixels)
-		free (m_pPixels);
+	// La liberation qui se trouvait ici laissait m_pPixels PENDOUILLANT :
+	// resize_memory teste `if (m_pPixels)` -- toujours non nul -- et liberait une
+	// SECONDE fois (cpp:S3520, image.cpp:40). resize_memory libere deja l'ancien
+	// tampon, il n'y avait donc rien a faire ici.
+	//
+	// Les deux mises a zero restent : elles neutralisent le court-circuit sur
+	// tailles egales en tete de resize_memory, pour forcer la reallocation en
+	// mode palette.
 	m_iWidth = 0;
 	m_iHeight = 0;
-	resize_memory (src.width(), src.height(), true);
+	if (resize_memory (src.width(), src.height(), true) != 0)
+		return -1;
 
 	unsigned char r, g, b, a;
 	for (unsigned int j=0; j<m_iHeight; j++)

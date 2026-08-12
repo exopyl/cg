@@ -480,10 +480,16 @@ void InitLSystems (std::map<int,LSystemData*>& mapLSystems)
 	t->AddRule ("A", "[&FL!A]/////'[&FL!A]///////'[&FL!A]");
 	t->AddRule ("F", "S/////F");
 	t->AddRule ("S", "FL");
-	pLSystemData = new LSystemData;
-	pLSystemData->bClosed = false;
-	pLSystemData->nNberIterations = 26;
-	pLSystemData->pLSystem = t;
+	// L'insertion dans mapLSystems -- qui est ce qui reprend la propriete dans
+	// tous les autres blocs de cette fonction -- est commentee juste en dessous.
+	// L'objet etait donc construit, renseigne, puis abandonne : une fuite a chaque
+	// appel, et c'est le dernier `new LSystemData` de la fonction, donc personne ne
+	// le reprenait plus tard (cpp:S3584, lsysteminit.cpp:488). Le bloc rejoint la
+	// ligne qu'il servait ; le reactiver, c'est decommenter les cinq lignes.
+	//pLSystemData = new LSystemData;
+	//pLSystemData->bClosed = false;
+	//pLSystemData->nNberIterations = 26;
+	//pLSystemData->pLSystem = t;
 	//mapLSystems[LSYSTEM_3D] = pLSystemData;
 	t->AddRule ("L", "['''^^{-f+f+f-|-f+f+f}]");
 	for (int j=0; j<5; j++)

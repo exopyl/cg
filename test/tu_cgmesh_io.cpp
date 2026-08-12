@@ -1269,6 +1269,52 @@ TEST(TEST_cgmesh_io, obj_zip_omits_the_mtl_when_there_is_no_material)
     EXPECT_EQ(rd16(eocd + 10), 1u) << "une seule entree attendue : le .obj";
 }
 
+// L'export ZIP passe par un fichier temporaire (MeshIO ecrit par NOM DE FICHIER).
+// Ce chemin fut longtemps PREVISIBLE et dans un repertoire PARTAGE -- /tmp/model.obj,
+// le radical venant d'un defaut fixe -- ce qui laissait un tiers y deposer un lien
+// symbolique avant nous : l'export suivait le lien et tronquait sa cible (cpp:S5443).
+// Le detour passe desormais par un sous-repertoire prive au nom imprevisible.
+//
+// Deux proprietes se verifient de l'exterieur, et ce sont celles qui portent la
+// correction : deux exports du MEME radical ne se marchent plus dessus, et rien ne
+// subsiste dans le repertoire temporaire.
+TEST(TEST_cgmesh_io, obj_zip_uses_a_private_temp_dir_and_leaves_nothing_behind)
+{
+    Mesh mesh;
+    float verts[] = { 0,0,0, 1,0,0, 1,1,0 };
+    mesh.SetVertices(3, verts);
+    unsigned int faces[] = { 0,1,2 };
+    mesh.SetFaces(1, 3, faces);
+
+    auto countTempDirs = [] {
+        std::error_code ec;
+        const std::filesystem::path base = std::filesystem::temp_directory_path(ec);
+        if (ec) return (size_t)0;
+        size_t n = 0;
+        for (std::filesystem::directory_iterator it(base, ec), end; !ec && it != end; it.increment(ec))
+            if (it->path().filename().string().rfind("cg_obj_", 0) == 0) ++n;
+        return n;
+    };
+    const size_t before = countTempDirs();
+
+    // Meme radical deux fois : avec un chemin previsible, le second export reutilisait
+    // le premier fichier.
+    const std::string a = MeshIO::export_obj_zip_bytes(mesh, "collision");
+    const std::string b = MeshIO::export_obj_zip_bytes(mesh, "collision");
+    ASSERT_FALSE(a.empty());
+    ASSERT_FALSE(b.empty());
+    EXPECT_EQ(a, b) << "deux exports du meme maillage doivent donner la meme archive";
+
+    // Un radical qui tenterait de sortir du repertoire prive est ramene a son dernier
+    // composant : l'archive reste valide et l'entree s'appelle "evade.obj".
+    const std::string esc = MeshIO::export_obj_zip_bytes(mesh, "../../evade");
+    ASSERT_FALSE(esc.empty());
+    EXPECT_NE(esc.find("evade.obj"), std::string::npos);
+    EXPECT_EQ(esc.find(".."), std::string::npos) << "aucun composant de remontee dans l'archive";
+
+    EXPECT_EQ(countTempDirs(), before) << "le repertoire temporaire doit etre nettoye";
+}
+
 // ===========================================================================
 //  Import MTL : les VALEURS
 // ===========================================================================
@@ -1311,6 +1357,69 @@ namespace
         std::remove((stem + ".obj").c_str());
         std::remove((stem + ".mtl").c_str());
     }
+}
+
+// `mtllib` est une chaine lue DANS le fichier OBJ, donc une donnee non fiable, et
+// elle etait concatenee au repertoire de l'OBJ puis passee a fopen : un
+// `mtllib ../secret.mtl` faisait OUVRIR un fichier hors du repertoire du modele
+// (cpp:S2083). Les sous-repertoires restent autorises -- `map_Kd textures/x.png`
+// est courant -- donc seule la REMONTEE est refusee.
+//
+// Le test pose un vrai .mtl a l'exterieur : s'il etait ouvert, son materiau
+// apparaitrait dans le maillage. C'est ce qui donne des dents a l'assertion.
+TEST(TEST_cgmesh_io, obj_mtllib_cannot_escape_the_model_directory)
+{
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path base = fs::temp_directory_path(ec) / "tu_obj_traversal";
+    ASSERT_FALSE(ec);
+    fs::remove_all(base, ec);
+    ASSERT_TRUE(fs::create_directories(base / "model", ec));
+
+    // La cible convoitee, DEHORS : un MTL parfaitement valide.
+    {
+        std::ofstream f(base / "secret.mtl");
+        ASSERT_TRUE(f.is_open());
+        f << "newmtl SECRET\nKd 1.0 0.0 0.0\n";
+    }
+    // Un MTL legitime a cote de l'OBJ, pour verifier que la garde ne casse rien.
+    {
+        std::ofstream f(base / "model" / "ok.mtl");
+        ASSERT_TRUE(f.is_open());
+        f << "newmtl OK\nKd 0.0 1.0 0.0\n";
+    }
+
+    auto writeObj = [&](const char *name, const char *mtllib) {
+        std::ofstream f(base / "model" / name);
+        ASSERT_TRUE(f.is_open());
+        f << "mtllib " << mtllib << "\n"
+             "v 0 0 0\nv 1 0 0\nv 1 1 0\n"
+             "usemtl whatever\nf 1 2 3\n";
+    };
+
+    writeObj("escape.obj", "../secret.mtl");
+    writeObj("legit.obj",  "ok.mtl");
+
+    // Remontee : le modele se charge, mais SANS le materiau exterieur.
+    {
+        Mesh mesh;
+        ASSERT_EQ(mesh.load((base / "model" / "escape.obj").string().c_str()), 0)
+            << "le refus du mtllib ne doit pas faire echouer tout l'import";
+        for (unsigned int k = 0; k < mesh.GetNMaterials(); k++)
+            EXPECT_NE(mesh.GetMaterial(k)->GetName(), "SECRET")
+                << "un fichier hors du repertoire du modele a ete ouvert";
+        EXPECT_EQ(mesh.GetNMaterials(), 0u);
+    }
+
+    // Cas legitime : meme repertoire, toujours charge.
+    {
+        Mesh mesh;
+        ASSERT_EQ(mesh.load((base / "model" / "legit.obj").string().c_str()), 0);
+        ASSERT_EQ(mesh.GetNMaterials(), 1u) << "la garde ne doit pas refuser un nom simple";
+        EXPECT_EQ(mesh.GetMaterial(0)->GetName(), "OK");
+    }
+
+    fs::remove_all(base, ec);
 }
 
 // Les six champs numeriques que import_mtl declare parser : Ka, Kd, Ks, Ke, Ns.

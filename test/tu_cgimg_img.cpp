@@ -6,6 +6,85 @@
 #include <vector>
 
 // ===========================================================================
+//  Contrat des accesseurs par pixel
+// ===========================================================================
+// Les accesseurs signalaient un (i,j) hors limites par un printf -- depuis un
+// accesseur appele une fois par pixel, donc une boucle fautive noyait la console,
+// et la valeur journalisee constituait un sink de taint (cpp:S5145). Ils rendent
+// desormais un booleen.
+//
+// Le hors-limites est un bug d'APPELANT : l'assert le fait remonter au
+// developpement, et le booleen sert l'appelant qui veut traiter le cas en release.
+// Consequence directe : le retour false n'est PAS observable en Debug, ou l'assert
+// interrompt avant. D'ou les deux moities de ce test.
+TEST(TEST_cgimg_img, pixel_accessors_report_success_by_return_value)
+{
+	Img img (4, 3);   // RGBA8, sans palette
+	ASSERT_EQ(img.width(), 4u);
+	ASSERT_EQ(img.height(), 3u);
+
+	// Dans les limites : succes annonce, et l'ecriture a bien eu lieu.
+	EXPECT_TRUE(img.set_pixel(3, 2, 10, 20, 30, 40));
+	unsigned char r, g, b, a;
+	EXPECT_TRUE(img.get_pixel(3, 2, &r, &g, &b, &a));
+	EXPECT_EQ(r, 10); EXPECT_EQ(g, 20); EXPECT_EQ(b, 30); EXPECT_EQ(a, 40);
+	EXPECT_TRUE(img.set_pixel_int(0, 0, 0));
+
+#ifdef NDEBUG
+	// Hors limites, asserts desactives : echec annonce, aucune ecriture, et
+	// get_pixel met les quatre canaux a 0 (comportement historique conserve).
+	EXPECT_FALSE(img.set_pixel(4, 0, 1, 2, 3, 4));
+	EXPECT_FALSE(img.set_pixel(0, 3, 1, 2, 3, 4));
+	EXPECT_FALSE(img.set_pixel_int(4, 3, 0));
+
+	unsigned char o[4] = { 9, 9, 9, 9 };
+	EXPECT_FALSE(img.get_pixel(4, 3, &o[0], &o[1], &o[2], &o[3]));
+	EXPECT_EQ(o[0], 0); EXPECT_EQ(o[1], 0); EXPECT_EQ(o[2], 0); EXPECT_EQ(o[3], 0);
+
+	// Sans palette, set_pixel_index refuse : ecrire un indice dans du RGBA8
+	// ecraserait un canal.
+	EXPECT_FALSE(img.set_pixel_index(0, 0, 1));
+#endif
+}
+
+// palettize() liberait m_pPixels PUIS appelait resize_memory(), qui teste
+// `if (m_pPixels)` -- toujours non nul, donc pendouillant -- et liberait une
+// seconde fois : double free (cpp:S3520, image.cpp:40). Les deux `= 0` qui
+// precedent l'appel montrent que le passage par resize_memory est voulu, donc
+// le chemin etait bien atteint.
+//
+// Le test appelle palettize sur une image qui possede DEJA un tampon, et deux
+// fois de suite : sous l'allocateur de debug, la double liberation faisait
+// echouer le processus. C'est ce qui donne des dents a l'assertion.
+TEST(TEST_cgimg_img, palettize_frees_the_previous_buffer_exactly_once)
+{
+	Img src (4, 3);
+	for (unsigned y = 0; y < src.height(); y++)
+		for (unsigned x = 0; x < src.width(); x++)
+			EXPECT_TRUE(src.set_pixel(x, y, (unsigned char)(10*x), (unsigned char)(20*y), 30, 255));
+
+	// dst porte deja un tampon RGBA : c'est celui que palettize doit liberer.
+	Img dst (2, 2);
+	ASSERT_EQ(dst.palettize(src), 0);
+	EXPECT_TRUE(dst.uses_palette());
+	EXPECT_EQ(dst.width(),  4u);
+	EXPECT_EQ(dst.height(), 3u);
+
+	// Second appel : re-libere le tampon palette du premier.
+	ASSERT_EQ(dst.palettize(src), 0);
+	EXPECT_TRUE(dst.uses_palette());
+	EXPECT_EQ(dst.width(),  4u);
+	EXPECT_EQ(dst.height(), 3u);
+
+	// Les couleurs ont bien traverse la palettisation.
+	unsigned char r, g, b, a;
+	ASSERT_TRUE(dst.get_pixel(3, 2, &r, &g, &b, &a));
+	EXPECT_EQ(r, 30);
+	EXPECT_EQ(g, 40);
+	EXPECT_EQ(b, 30);
+}
+
+// ===========================================================================
 //  Oracles partages
 // ===========================================================================
 // Ces tests exercaient les algorithmes puis ecrivaient un fichier, sans rien

@@ -10,24 +10,40 @@
 #include <assert.h>
 #include <iostream>
 #include <fstream>
+#include <string>
 using namespace std;
 
 #include "mesh_io_3ds_structures.h"
 #include "mesh_io_3ds_defines.h"
 
 // common functions
-static char* getHexColor (FLOAT32 red, FLOAT32 green, FLOAT32 blue)
+// Renvoie "#rrggbb". Etait un char* malloc'e, avec DEUX defauts :
+//
+//   - malloc(7) pour une chaine de 8 octets ('#' + 6 chiffres + le '\0') : un
+//     depassement de tas d'au moins un octet a chaque appel, et davantage des
+//     qu'une composante depasse 255, ou "%02x" produit plus de deux chiffres ;
+//   - les quatre sites d'appel inseraient le resultat dans un flux sans jamais
+//     le liberer (cpp:S3584, lignes 91, 101, 111, 121).
+//
+// std::string dimensionne et libere seul, et `ofs << ...` l'accepte tel quel.
+static std::string getHexColor (INT32 red, INT32 green, INT32 blue)
 {
-	char *res = (char*)malloc(7*sizeof(char));
-	sprintf (res, "#%02x%02x%02x", (int)(red*255), (int)(green*255), (int)(blue*255));
-	return res;
+	// Bornage explicite : les composantes arrivent en INT32 et rien ne garantit
+	// qu'elles tiennent dans un octet.
+	auto clamp255 = [](INT32 v) -> int {
+		if (v < 0)   return 0;
+		if (v > 255) return 255;
+		return (int)v;
+	};
+	char buf[8];
+	snprintf (buf, sizeof(buf), "#%02x%02x%02x",
+		  clamp255 (red), clamp255 (green), clamp255 (blue));
+	return std::string (buf);
 }
 
-static char* getHexColor (INT32 red, INT32 green, INT32 blue)
+static std::string getHexColor (FLOAT32 red, FLOAT32 green, FLOAT32 blue)
 {
-	char *res = (char*)malloc(7*sizeof(char));
-	sprintf (res, "#%02x%02x%02x", red, green, blue);
-	return res;
+	return getHexColor ((INT32)(red*255), (INT32)(green*255), (INT32)(blue*255));
 }
 
 //*****************************************************************************

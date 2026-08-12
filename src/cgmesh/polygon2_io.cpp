@@ -4,7 +4,10 @@
 #include <assert.h>
 #include <ctype.h>
 
+#include <string>
+
 #include "polygon2.h"
+#include "io_path_guard.h"
 #include "../cgmath/cgmath.h"
 #include "../cgimg/cgimg.h"
 
@@ -575,7 +578,10 @@ static void _TreatCommand (char command, float *parameters, unsigned int nParame
 		bPreviousValid = 0;
 		break;
 	default:
-		printf ("!!! unknown command: %c\n", command);
+		// `command` est UN caractere issu du fichier SVG. %c d'un caractere de
+		// controle le laisse passer tel quel dans la sortie ; on le rend lisible.
+		fprintf (stderr, "!!! unknown command: %s\n",
+			 io_guard::forLog (std::string (1, command)).c_str());
 		break;
 	}
 }
@@ -598,14 +604,29 @@ void Polygon2::input_from_svg_path (char *filename)
 {
 	FILE *ptr = fopen (filename, "r");
 	if (!ptr)
-		printf ("couldn't open the contour file\n");
+	{
+		// Le message etait emis SANS return : le fgets qui suit recevait alors un
+		// pointeur nul. Tout appel sur un fichier absent plantait.
+		fprintf (stderr, "input_from_svg_path: couldn't open the contour file\n");
+		return;
+	}
 
-	char path[4096];
-	fgets (path, 4096, ptr);
-	for (int i=0; i<strlen(path); i++)
+	// `path` etait lu par strlen() avant d'avoir ete ecrit quand fgets echouait
+	// (fichier vide) : lecture de memoire indeterminee.
+	char path[4096] = { 0 };
+	if (fgets (path, sizeof(path), ptr) == nullptr)
+	{
+		fclose (ptr);
+		return;
+	}
+	for (size_t i=0; i<strlen(path); i++)
 		if (path[i] == '\n')
 			path[i] = '\0';
-	printf ("\"%s\"\n", path);
+	// `path` est la premiere ligne du FICHIER : la recopier telle quelle dans un
+	// diagnostic laissait ses caracteres de controle atteindre la sortie
+	// (cpp:S5145, polygon2_io.cpp:608). Les sauts de ligne sont deja retires
+	// ci-dessus, mais pas les retours chariot ni le reste.
+	fprintf (stderr, "input_from_svg_path: \"%s\"\n", io_guard::forLog (path).c_str());
 
 	fclose(ptr);
 

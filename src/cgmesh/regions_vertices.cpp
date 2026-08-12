@@ -172,7 +172,10 @@ Cregions_vertices::export_selected_region_cloud_points (char *filename)
 {
   int i,n_selected_vertices;
   FILE *ptr = fopen (filename,"wt");
-  assert (ptr);
+  // assert() disparait en release : l'echec d'ouverture menait alors droit a un
+  // fprintf sur pointeur nul.
+  if (!ptr)
+    return;
 
   float *v = nullptr;
   float *vn = nullptr;
@@ -183,7 +186,9 @@ Cregions_vertices::export_selected_region_cloud_points (char *filename)
       v  = mesh_half_edge->m_pMesh->m_pVertices.data();
       vn = mesh_half_edge->m_pMesh->m_pVertexNormals.data();
    }
-  if (!v || !vn) return;
+  // Ce retour anticipe sautait le fclose de fin de fonction
+  // (cpp:S2095, regions_vertices.cpp:186).
+  if (!v || !vn) { fclose (ptr); return; }
  
   n_selected_vertices = 0;
   for (i=0; i<size; i++)
@@ -697,11 +702,15 @@ Cregions_vertices::closing_selected_region (void)
 void
 Cregions_vertices::skeletonize_selected_region (void)
 {
+  // Le corps de cette fonction est commente en entier depuis longtemps, mais les
+  // trois allocations etaient restees DEHORS : chaque appel allouait 3*size ints
+  // pour ne rien en faire et ne jamais les rendre (cpp:S3584, lignes 702-767).
+  // Elles rejoignent le bloc qu'elles servaient.
+/*
   int i,j;
   int *res     = new int[size];
   int *disks   = new int[size];
   int *centers = new int[size];
-/*
   do {
     modified = 0;
     int n_adj_vertices;

@@ -86,6 +86,12 @@ void ProjectiveTexturer::texture(Mesh&                           mesh,
     std::vector<int>          nmat;    nmat.reserve(nf);
     std::vector<unsigned char> ntex;   ntex.reserve(nf);
 
+    // Vsrc vient de m_pVertices.data() : nul sur un maillage sans sommet. Le bloc
+    // d'occlusion plus haut le teste (`nf > 0 && Vsrc`), cette boucle non, et elle
+    // l'indexe juste en dessous (cpp:S2259, recon_texture.cpp:94).
+    if (Vsrc == nullptr)
+        return;
+
     for (unsigned fi = 0; fi < nf; ++fi)
     {
         Face* f = mesh.GetFace(fi);
@@ -158,8 +164,10 @@ void ProjectiveTexturer::texture(Mesh&                           mesh,
     }
 
     if (occlusion)
-        std::printf("texture: occlusion ON - %zu/%u faces dont la camera la plus frontale etait occultee (repli sur une autre vue)\n",
-                    nOccludedFaces, nf);
+        // Uniquement des entiers (%zu/%u) : rien a injecter par la. Reste qu'une
+        // bibliotheque n'a pas a ecrire ses diagnostics sur stdout.
+        std::fprintf(stderr, "texture: occlusion ON - %zu/%u faces dont la camera la plus frontale etait occultee (repli sur une autre vue)\n",
+                     nOccludedFaces, nf);
 
     // Reconstruit la géométrie éclatée (UV vertex-parallèles).
     mesh.SetVertices((unsigned)(nverts.size()/3), nverts.data());

@@ -73,12 +73,25 @@ public:
 	inline bool uses_palette (void) const { return bUsePalette != 0; }
 
 	int init_color (unsigned char r, unsigned char g, unsigned char b, unsigned char a);
-	void set_pixel (unsigned int i, unsigned int j,
+
+	// Acces par pixel. Un (i,j) hors limites est un bug d'APPELANT, pas une
+	// condition de donnee : ces methodes renvoient false et ne touchent a rien,
+	// et un assert le fait remonter au developpement. Elles n'ecrivent PLUS sur
+	// la console -- une bibliotheque n'a pas a le faire, et le diagnostic partait
+	// d'un accesseur appele une fois par pixel : une boucle fautive noyait la
+	// sortie sous des millions de lignes.
+	bool set_pixel (unsigned int i, unsigned int j,
 			unsigned char r, unsigned char g, unsigned char b, unsigned char a);
-	void set_pixel_int (unsigned int i, unsigned int j, int c);
-	void set_pixel_index (unsigned int i, unsigned int j, unsigned int index);
-	void get_pixel (unsigned int i, unsigned int j,
+	bool set_pixel_int (unsigned int i, unsigned int j, int c);
+	bool set_pixel_index (unsigned int i, unsigned int j, unsigned int index);
+	// En echec, les quatre canaux sont mis a 0 (comportement conserve).
+	bool get_pixel (unsigned int i, unsigned int j,
 			unsigned char *r, unsigned char *g, unsigned char *b, unsigned char *a) const;
+
+	// Ces six-la portent la VALEUR dans leur retour : il n'y reste pas de place
+	// pour un booleen. Hors limites, get_r/g/b/a renvoient 0 -- indistinguable
+	// d'un pixel noir legitime -- et get_pixel_index renvoie -1. Preferer
+	// get_pixel() quand l'appelant doit pouvoir detecter l'echec.
 	int get_pixel_int (unsigned int i, unsigned int j) const;
 	int get_pixel_index (unsigned int i, unsigned int j) const;
 	unsigned char get_r (unsigned int i, unsigned int j) const;

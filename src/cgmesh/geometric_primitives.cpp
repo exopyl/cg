@@ -54,15 +54,24 @@ Cgeometric_primitives::Cgeometric_primitives (Mesh_half_edge *_model, char *file
 	{
 printf ("igp = %d / %d\n", igp, ngp);
 		buffer[0]='\0';
-      buffer = fgets (buffer, 512, ptr);
-      buffer = fgets (buffer, 512, ptr); // don't ask me why there are the same line twice
-      //if (feof(ptr)) break;
+      // `buffer = fgets (buffer, ...)` PERDAIT le pointeur du malloc des que fgets
+      // renvoyait nullptr en fin de fichier : le bloc n'etait plus joignable, le
+      // free() final portait sur nullptr, et le sscanf suivant deferencait nullptr
+      // (cpp:S3584, geometric_primitives.cpp:60). On teste le retour sans ecraser
+      // le pointeur.
+      if (fgets (buffer, 512, ptr) == nullptr)
+        break;
+      // don't ask me why there are the same line twice
+      if (fgets (buffer, 512, ptr) == nullptr)
+        break;
       sscanf (buffer, "%s", prefix);
 	  printf ("%s\n", buffer);
 
       if (!strcmp(prefix, "s")) // read a simple point as a geometric primitive
 	{
-	  Vector3f *pt = (Vector3f*)malloc(sizeof(Vector3f));
+	  // `pt` etait alloue puis JAMAIS utilise : la position part directement de
+	  // x/y/z dans m_position.Set() ci-dessous. Une fuite par primitive lue
+	  // (cpp:S3584, geometric_primitives.cpp:66).
 	  float x, y, z;
 
 	  // read the informations about the point

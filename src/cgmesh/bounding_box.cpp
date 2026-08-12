@@ -99,6 +99,12 @@ bool BoundingBox::GetCenter(float center[3]) const
 
 	for (int i = 0; i < 3; i++)
 		center[i] = .5f * (m_min[i] + m_max[i]);
+
+	// La fonction tombait en fin de corps sans rien renvoyer alors qu'elle promet
+	// un bool : l'appelant qui testait le retour lisait une valeur indeterminee, et
+	// pouvait donc rejeter un centre correctement calcule (cpp:S935,
+	// bounding_box.cpp:102).
+	return true;
 }
 
 float BoundingBox::GetDiagonalLength() const

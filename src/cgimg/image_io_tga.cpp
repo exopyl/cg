@@ -143,6 +143,25 @@ int ImgIO::import_tga (Img& img, const char *filename)
 	/*******************/
 	if (image_type == TGA_TYPE_MAPPED)
 	{
+		// `color_map` n'est alloue qu'a DEUX conditions reunies (cf. le bloc
+		// `if (color_map_type)` plus haut) : un color_map_type non nul, ET une
+		// taille d'entree parmi 8/24/32. Deux fichiers le laissaient donc a
+		// nullptr tout en entrant ici :
+		//
+		//   - un TGA qui se declare « mappe » avec color_map_type == 0 ;
+		//   - une entree de 16 bits, taille legale que le switch ne couvre pas.
+		//
+		// Le fread ci-dessous ECRIVAIT alors a l'adresse nulle
+		// (cpp:S3807, image_io_tga.cpp:151), et les quatre boucles de pixels la
+		// lisaient (cpp:S2259, lignes 167/177/187/197).
+		if (color_map == nullptr || color_map_length == 0)
+		{
+			fprintf (stderr, "import_tga: image mappee sans table de couleurs exploitable\n");
+			delete[] color_map;
+			fclose (ptr);
+			return -1;
+		}
+
 		// read the color map
 		for (i=0; i<color_map_length; i++)
 		{
@@ -163,7 +182,7 @@ int ImgIO::import_tga (Img& img, const char *filename)
 	      {
 			unsigned char index;
 			fread (&index, sizeof(unsigned char), 1, ptr);
-			if (color_map_entry_size == 24)
+			if (color_map_entry_size == 24 && index < color_map_length)
 				  img.set_pixel (i, j, color_map[3*index], color_map[3*index+1], color_map[3*index+2], 255);
 	      }
 	  break;
@@ -173,7 +192,7 @@ int ImgIO::import_tga (Img& img, const char *filename)
 	      {
 			unsigned char index;
 			fread (&index, sizeof(unsigned char), 1, ptr);
-			if (color_map_entry_size == 24)
+			if (color_map_entry_size == 24 && index < color_map_length)
 			  img.set_pixel (i, j, color_map[3*index], color_map[3*index+1], color_map[3*index+2], 255);
 	      }
 	  break;
@@ -183,7 +202,7 @@ int ImgIO::import_tga (Img& img, const char *filename)
 	      {
 		unsigned char index;
 		fread (&index, sizeof(unsigned char), 1, ptr);
-		if (color_map_entry_size == 24)
+		if (color_map_entry_size == 24 && index < color_map_length)
 			  img.set_pixel (i, j, color_map[3*index], color_map[3*index+1], color_map[3*index+2], 255);
 	      }
 	  break;
@@ -193,7 +212,7 @@ int ImgIO::import_tga (Img& img, const char *filename)
 	      {
 		unsigned char index;
 		fread (&index, sizeof(unsigned char), 1, ptr);
-		if (color_map_entry_size == 24)
+		if (color_map_entry_size == 24 && index < color_map_length)
 		  img.set_pixel (i, j, color_map[3*index], color_map[3*index+1], color_map[3*index+2], 255);
 	      }
 	  break;

@@ -2,6 +2,8 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include <vector>
+
 #include "descriptor_distribution_around_axis.h"
 
 #include "mesh_half_edge.h"
@@ -36,8 +38,13 @@ Cdistribution_around_axis::compute_length_dmean_variance_deviation (const Vector
   float  *v = model->m_pMesh->m_pVertices.data();
   float length, dmean, variance, deviation;
   Vector3f pt;
-  float *positions = (float*)malloc(nv*sizeof(float));
-  float *distances = (float*)malloc(nv*sizeof(float));
+  // Les deux etaient malloc'es et jamais rendus : la fonction n'a aucune
+  // liberation (cpp:S3584, descriptor_distribution_around_axis.cpp:66 et 79).
+  // Un vector local n'a plus de chemin de sortie qui puisse l'oublier -- et la
+  // fonction lit positions[0] sans verifier nv, d'ou le garde.
+  if (nv <= 0) return;
+  std::vector<float> positions ((size_t)nv, 0.0f);
+  std::vector<float> distances ((size_t)nv, 0.0f);
 
   // init the distances
   for (i=0; i<nv; i++)

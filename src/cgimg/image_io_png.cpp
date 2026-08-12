@@ -25,7 +25,14 @@ int ImgIO::import_png (Img& img, const char *filename)
 		return -1;
 	}
 
-	img.resize_memory (w, h);
+	// Le code de retour etait ignore : sur echec d'allocation, les dimensions
+	// sont posees mais le tampon reste nul, et les set_pixel qui suivent
+	// ecrivaient dedans.
+	if (img.resize_memory (w, h) != 0)
+	{
+		stbi_image_free (data);
+		return -1;
+	}
 	for (int y = 0; y < h; y++)
 	{
 		for (int x = 0; x < w; x++)

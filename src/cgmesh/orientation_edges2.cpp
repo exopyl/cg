@@ -4,14 +4,13 @@
 #include <math.h>
 
 #include "orientation_edges2.h"
+#include "orientation_peak.h"
 
 Cmesh_orientation_edges2::Cmesh_orientation_edges2 (Mesh *_model, int _w, int _h)
   : Cmesh_orientation(_model)
 {
   w = _w;
   h = _h;
-  accumulator     = nullptr;
-  accumulator_int = nullptr;
   mesh = _model;
   model3d_half_edge = nullptr;
 }
@@ -21,8 +20,6 @@ Cmesh_orientation_edges2::Cmesh_orientation_edges2 (Mesh_half_edge *_model, int 
 {
   w = _w;
   h = _h;
-  accumulator     = nullptr;
-  accumulator_int = nullptr;
   mesh = nullptr;
   model3d_half_edge = _model;
 }
@@ -80,15 +77,10 @@ Cmesh_orientation_edges2::compute_orientation2 (void)
 
   float x,y,z;
 
-  if (accumulator) free (accumulator);
-  accumulator = (float*)malloc(w*h*sizeof(float));
-  assert (accumulator);
-  /* init the accumulator */
-  for (i=0; i<w*h; i++) accumulator[i] = 0.0;
-
-  if (accumulator_int) free (accumulator_int);
-  accumulator_int = (int*)malloc(w*h*sizeof(int));
-  assert (accumulator_int);
+  // assign() libere l'allocation precedente et initialise en une fois.
+  if (w <= 0 || h <= 0) return;
+  accumulator.assign ((size_t)w*h, 0.0f);
+  accumulator_int.assign ((size_t)w*h, 0);
 
   /* fill the accumulator */
   n = model->m_pMesh->m_nFaces;
@@ -130,7 +122,13 @@ Cmesh_orientation_edges2::compute_orientation2 (void)
 	theta_pos = (int) (h*theta / 3.14159);
 	if (theta_pos == h) theta_pos = 0;
 	if (phi_pos == w) phi_pos = 0;
-	accumulator[theta_pos*h+phi_pos] += r;
+	// Pas d'indexation laisse tel quel (`h` la ou le reste indexe en `w*j+i`) :
+	// seules les ecritures hors tableau, possibles des que w != h, sont ecartees.
+	{
+	  const long index = (long)theta_pos*h + phi_pos;
+	  if (index < 0 || index >= (long)w*h) continue;
+	  accumulator[index] += r;
+	}
       }
   }
   
@@ -151,111 +149,18 @@ Cmesh_orientation_edges2::compute_orientation2 (void)
 void
 Cmesh_orientation_edges2::find_orientation (int id)
 {
-  int i,j,k,l;
-  switch (id)
-    {
-    case 0: // max
-      {
-	float max = 0;
-	for (i=0; i<w; i++)
-	  for (j=0; j<h; j++)
-	    if (accumulator[w*j+i] > max)
-	      {
-		iphi_max   = i;
-		itheta_max = j;
-		max = accumulator[w*j+i];
-	      }
-	printf ("max -> %d %d\n", itheta_max, iphi_max);
-      }
-      break;
-      
-    case 1: //projection
-      {
-	/* look at the maximum of each projection */
-	float *projection_phi   = (float*)malloc(w*sizeof(float));
-	for (i=0; i<w; i++) projection_phi[i] = 0;
-	for (i=0; i<w; i++)
-	  for (j=0; j<h; j++)
-	    projection_phi[i] += accumulator[w*j+i];
-	iphi_max = 0;
-	for (i=1; i<w; i++)
-	  if (projection_phi[i] > projection_phi[iphi_max])
-	    iphi_max = i;
-	
-	float *projection_theta = (float*)malloc(h*sizeof(float));
-	for (i=0; i<h; i++) projection_theta[i] = 0;
-	for (j=0; j<h; j++)
-	  for (i=0; i<w; i++)
-	    projection_theta[j] += accumulator[w*j+i];
-	itheta_max = 0;
-	for (i=1; i<h; i++)
-	  if (projection_theta[i] > projection_theta[itheta_max])
-	    itheta_max = i;
-	printf ("projection -> %d %d\n", itheta_max, iphi_max);
-      }
-      break;
-      
-    case 2: // max neighborough
-      {
-	/* look at the maximum in a small neighborough */
-	float max_global = 0;
-	float max_local;
-	for (i=0; i<w; i++)
-	  for (j=0; j<h; j++)
-	    {
-	      max_local = 0;
-	      for (k=-5; k<6; k++)
-		for (l=-5; l<6; l++)
-		  {
-		    int offset = (w*(j+k)+(i+l)+w*h)%(w*h);
-		    max_local += accumulator[offset];
-		  }
-	      if (max_local > max_global)
-		{
-		  max_global = max_local;
-		  iphi_max = i;
-		  itheta_max = j;
-		}
-	    }
-	printf ("max neighborough -> %d %d\n", itheta_max, iphi_max);
-      }
-      break;
-    case 3: // mean shift
-      {
-	/* mean shift to have a better estimation */
-	int n_iterations = 5;
-	int r = 5;
-	for (i=0; i<n_iterations; i++)
-	  {
-	    float phi_acc   = 0;
-	    float theta_acc = 0;
-	    float n_points  = 0;
-	    for (j=itheta_max-r; j<=itheta_max+r; j++)
-	      for (k=iphi_max-r; k<=iphi_max+r; k++)
-		{
-		  if ((float)sqrt ((float)((iphi_max-k)*(iphi_max-k) + (itheta_max-j)*(itheta_max-j))) > r)
-		    continue;
-		  phi_acc   += accumulator[w*((j+h)%h)+(k+w)%w] * k;
-		  theta_acc += accumulator[w*((j+h)%h)+(k+w)%w] * j;
-		  n_points  += accumulator[w*((j+h)%h)+(k+w)%w];
-		}
-	    iphi_max   = (int)(phi_acc / n_points);
-	    itheta_max = (int)(theta_acc / n_points);
-	    //printf ("%d %d\n", itheta_max, iphi_max);
-	  }
-	printf ("mean shift -> %d %d\n", itheta_max, iphi_max);
-      }
-      break;
-    default:
-      break;
-    }
-  //iphimax = index%w;
-  //ithetamax = (int)(index/w);
-  
+  // Le corps -- une centaine de lignes dupliquees a l'identique dans
+  // orientation_edges.cpp et orientation_edges2.cpp -- vit desormais dans
+  // orientation_peak.h. Le mean shift (id == 3) raffine l'estimation courante,
+  // d'ou le passage du couple (iphi_max, itheta_max) en entree.
+  const orientation_peak::Peak peak =
+    orientation_peak::find (accumulator, w, h, id, { iphi_max, itheta_max });
+  iphi_max   = peak.iphi;
+  itheta_max = peak.itheta;
+
   /* compute the quaternion of rotation from phi and theta */
   phi = (3.14159 * iphi_max / w - 3.14159 / 2.0);
   theta = ((3.14159 * itheta_max) / h);
-  //printf ("%f %f\n", 180.0*phi/3.14159, 180.0*theta/3.14159);
 
   finalize_orientation ();
 }
@@ -278,9 +183,10 @@ Cmesh_orientation_edges2::finalize_orientation (void)
   float teta = acos(ox.x*dir.x + ox.y*dir.y + ox.z*dir.z);
   Quaternion q (axis, teta);
 
-  float *m9_tmp1  = (float*)malloc(9*sizeof(float));
-  float *m16 = (float*)malloc(16*sizeof(float));
-  assert (m9_tmp1 && m16);
+  // Tailles connues a la compilation : des tableaux locaux suffisent, et il n'y
+  // a plus rien a liberer -- donc plus de chemin de sortie qui puisse l'oublier.
+  float m9_tmp1[9];
+  float m16[16];
   q.get_matrix_rotation (m16);
   m9_tmp1[0] = m16[0];   m9_tmp1[1] = m16[1];   m9_tmp1[2] = m16[2];
   m9_tmp1[3] = m16[4];   m9_tmp1[4] = m16[5];   m9_tmp1[5] = m16[6];
@@ -308,8 +214,10 @@ Cmesh_orientation_edges2::finalize_orientation (void)
   /*
    * rotate the vertices, project them and compute PCA for the final rotation
    */
-  int n_vertices;
-  float *v_orig;
+  // Les deux etaient declares SANS valeur et affectes seulement dans les if :
+  // sans modele, `new float[2*n_vertices]` prenait une taille indeterminee.
+  int n_vertices = 0;
+  float *v_orig  = nullptr;
   if (model)
     {
       n_vertices = model->m_pMesh->m_nVertices;
@@ -320,10 +228,11 @@ Cmesh_orientation_edges2::finalize_orientation (void)
       n_vertices = model3d_half_edge->m_pMesh->m_nVertices;
       v_orig = model3d_half_edge->m_pMesh->m_pVertices.data();
     }
-  
+  if (n_vertices <= 0 || v_orig == nullptr)
+    return;
+
   /* create a array with all the rotated and projected vertices */
-  float *v = new float[2*n_vertices];
-  assert (v);
+  std::vector<float> v (2*(size_t)n_vertices);
   for (i=0; i<n_vertices; i++)
     {
       Vector3 tmp (v_orig[3*i], v_orig[3*i+1], v_orig[3*i+2]);
@@ -360,8 +269,7 @@ Cmesh_orientation_edges2::finalize_orientation (void)
   Vector2 ev1, ev2, evalues;
   m2.SolveEigensystem (ev1, ev2, evalues);
 
-  float *m9_tmp2 = (float*)malloc(9*sizeof(float));
-  assert (m9_tmp2);
+  float m9_tmp2[9];
 
   m9_tmp2[0] = 1.0;
   m9_tmp2[1] = m9_tmp2[2] = 0.0;
@@ -385,9 +293,7 @@ Cmesh_orientation_edges2::finalize_orientation (void)
     }
 
   /* compose the final matrix of rotation */
-  float *m9_final = (float*)malloc(9*sizeof(float));
-  assert (m9_final);
-  m9_final = (float*)memset(m9_final, 0, 9*sizeof(float));
+  // m9_final etait alloue, mis a zero, puis libere sans avoir jamais ete relu.
 
   mrot[0] = m9_tmp2[0]*m9_tmp1[0] + m9_tmp2[1]*m9_tmp1[3] + m9_tmp2[2]*m9_tmp1[6];
   mrot[1] = m9_tmp2[0]*m9_tmp1[1] + m9_tmp2[1]*m9_tmp1[4] + m9_tmp2[2]*m9_tmp1[7];
@@ -399,11 +305,6 @@ Cmesh_orientation_edges2::finalize_orientation (void)
   mrot[7] = m9_tmp2[6]*m9_tmp1[1] + m9_tmp2[7]*m9_tmp1[4] + m9_tmp2[8]*m9_tmp1[7];
   mrot[8] = m9_tmp2[6]*m9_tmp1[2] + m9_tmp2[7]*m9_tmp1[5] + m9_tmp2[8]*m9_tmp1[8];
 
-  free (m9_tmp1);
-  free (m16);
-  free (m9_tmp2);
-  free (m9_final);
-  delete[] v;
 }
 
 void

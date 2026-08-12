@@ -126,8 +126,15 @@ double StrangeAttractor::convert (char c)
 	case '': return  5.0; break;*/
 	default: break;
 	}
+
+	// Le `default` retombait ici, et la fonction tombait en fin de corps sans rien
+	// renvoyer alors qu'elle promet un float : tout caractere hors de la table
+	// produisait une valeur indeterminee (cpp:S935,
+	// points_strange_attractor.cpp:129). 0 est le choix neutre : c'est deja ce que
+	// la table associe au premier caractere reconnu de la serie.
+	return 0.f;
 }
-	
+
 void StrangeAttractor::export_obj (char *filename, unsigned int npts)
 {
 	  FILE *ptr = fopen (filename, "w");

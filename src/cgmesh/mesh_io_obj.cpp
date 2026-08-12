@@ -2,15 +2,20 @@
 #include <string.h>
 #include <ctype.h>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
+#include <random>
+#include <sstream>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include "mesh.h"
 #include "mesh_io.h"
+#include "io_path_guard.h"
 #include "../cgmath/cgmath.h"
 #include "zip_manager.h"
 
@@ -139,6 +144,16 @@ int MeshIO::import_mtl (Mesh& mesh, const char *filename, const char *path)
 		else if (sscanf(line, " Ni %f", &r) == 1) {} // ...
 		else if (sscanf(line, " illum %d", &dummy) == 1) {} // ...
 		else if (sscanf(line, " map_Kd %s", name) == 1) { // diffuse texture
+			// Meme faille que `mtllib`, second vecteur : ce nom sort du MTL et
+			// MaterialTexture le concatene a `path` pour ouvrir l'image. Un
+			// `map_Kd ../../../../etc/passwd` aurait ete ouvert. On garde les
+			// sous-repertoires, courants et legitimes (`map_Kd textures/wood.png`).
+			if (!io_guard::isContainedRelativePath (name))
+			{
+				fprintf (stderr, "import_mtl: map_Kd refuse (sort du repertoire) : %s\n",
+					 io_guard::forLog (name).c_str());
+				continue;
+			}
 			MaterialTexture *tex = new MaterialTexture (name, path);
 			if (mat)
 				tex->SetName (mat->GetName());
@@ -176,8 +191,17 @@ int MeshIO::import_mtl (Mesh& mesh, const char *filename, const char *path)
 		// sans elle il n'y a pas de MaterialTexture pour la porter, et un
 		// materiau purement reflechissant sort du modele de rendu actuel.
 		else if (sscanf(line, " refl %s", name) == 1) {
+			// Troisieme vecteur du meme probleme : SetReflectionMap concatene ce
+			// nom a `path` pour ouvrir l'image.
+			if (!io_guard::isContainedRelativePath (name))
+			{
+				fprintf (stderr, "import_mtl: refl refuse (sort du repertoire) : %s\n",
+					 io_guard::forLog (name).c_str());
+				continue;
+			}
 			if (texMat && !texMat->SetReflectionMap (name, path))
-				printf ("MTL line %d: carte de reflexion introuvable : %s\n", line_count, name);
+				fprintf (stderr, "MTL line %u: carte de reflexion introuvable : %s\n",
+					 line_count, io_guard::forLog (name).c_str());
 		}
 		// Maps reconnues mais NON exploitees : on les avale en silence.
 		//
@@ -195,7 +219,10 @@ int MeshIO::import_mtl (Mesh& mesh, const char *filename, const char *path)
 		else if (sscanf(line, " map_bump %s", name) == 1) {} // idem, autre casse
 		else if (sscanf(line, " bump %s",     name) == 1) {} // idem, forme courte
 		else
-			printf("MTL parse error line %d: '%s'", line_count, line);
+			// `line` est la ligne BRUTE du fichier, saut de ligne compris : la
+			// recopier telle quelle permettait de forger des lignes de sortie.
+			fprintf (stderr, "MTL parse error line %u: '%s'\n",
+				 line_count, io_guard::forLog (line).c_str());
 	}
 
 	fclose (ptr);
@@ -271,7 +298,10 @@ int MeshIO::import_obj (Mesh& mesh, const char *filename)
 				
 				std::string mtlLine(q);
 				mtlLine.erase(mtlLine.find_last_not_of(" \t\r\n") + 1);
-				snprintf(mtlfile, BUFFER_SIZE, "%s", mtlLine.c_str());
+				// Recopie bornee plutot qu'une chaine de format : mtlLine sort du
+				// fichier OBJ (cpp:S5145, mesh_io_obj.cpp:278).
+				const size_t nm = mtlLine.copy (mtlfile, sizeof(mtlfile) - 1);
+				mtlfile[nm] = '\0';
 			}
 			else if (strcmp(prefix, "v") == 0)
 				nPoints++;
@@ -287,8 +317,22 @@ int MeshIO::import_obj (Mesh& mesh, const char *filename)
 
 	if (strlen (mtlfile) != 0)
 	{
-		auto dir = std::filesystem::path(filename).parent_path();
-		MeshIO::import_mtl(mesh, mtlfile, dir.string().c_str());
+		// `mtlfile` sort du fichier OBJ, donc d'une source non fiable, et il est
+		// concatene au repertoire de l'OBJ avant d'atteindre fopen. Sans ce test,
+		// `mtllib ../../../../etc/passwd` faisait OUVRIR un fichier arbitraire
+		// (cpp:S2083, mesh_io_obj.cpp:79 et 82).
+		//
+		// La contrainte est celle que l'export applique deja : le .mtl est un
+		// compagnon ecrit a cote de l'OBJ. Un nom qui sort du repertoire est donc
+		// refuse, et le modele se charge sans materiaux plutot que pas du tout.
+		if (io_guard::isContainedRelativePath (mtlfile))
+		{
+			auto dir = std::filesystem::path(filename).parent_path();
+			MeshIO::import_mtl(mesh, mtlfile, dir.string().c_str());
+		}
+		else
+			fprintf (stderr, "import_obj: mtllib refuse (sort du repertoire) : %s\n",
+				 io_guard::forLog (mtlfile).c_str());
 	}
 
 	if (nTexCoords)
@@ -406,7 +450,9 @@ int MeshIO::import_obj (Mesh& mesh, const char *filename)
 					i0--;
 
 				if (i0 < 0 || (unsigned int) i0 >= mesh.m_nVertices) {
-					printf ("invalid vertex index %d (vn=%d)\n", i0, mesh.m_nVertices);
+					// Deux entiers en %d : aucune injection possible. Le diagnostic
+					// part sur stderr, comme le reste du module.
+					fprintf (stderr, "invalid vertex index %d (vn=%u)\n", i0, mesh.m_nVertices);
 					continue;
 				}
 
@@ -640,7 +686,13 @@ int MeshIO::export_obj (Mesh& mesh, const char *filename, bool emitObjectGroups)
 	{
 		fp = fopen(filematname,"w");
 		if (fp == nullptr)
+		{
+			// Ce retour anticipe sautait le free(filematname) de fin de bloc :
+			// le strdup fuyait des que le .mtl n'etait pas inscriptible
+			// (cpp:S3584, mesh_io_obj.cpp:647 et 715).
+			free (filematname);
 			return -1;
+		}
 
 		fprintf (fp, "\n");
 		fprintf (fp, "# Wavefront material file\n");
@@ -721,6 +773,10 @@ int MeshIO::export_obj (Mesh& mesh, const char *filename, bool emitObjectGroups)
 // un repertoire temporaire, puis on les relit et on les zippe. Un seul ecrivain,
 // donc un seul comportement a maintenir et a tester.
 //
+// Ce repertoire temporaire est PRIVE et cree pour la duree du seul export : voir
+// makePrivateTempDir ci-dessous pour ce que coutait la version precedente, qui
+// ecrivait un nom previsible directement dans le repertoire partage.
+//
 // Sous Emscripten, temp_directory_path() est /tmp en MEMFS : le detour ne touche
 // aucun disque.
 
@@ -752,19 +808,96 @@ std::string stemOf (const std::string& path)
 	return path.substr (start, dot - start);
 }
 
+// Cree un repertoire temporaire PRIVE. Chemin vide en cas d'echec.
+//
+// Le detour par le disque ecrivait un chemin PREVISIBLE dans un repertoire
+// PARTAGE (/tmp/model.obj : le radical vient d'un defaut fixe ou du nom de
+// l'archive). Trois problemes, du plus grave au plus benin :
+//
+//   - un tiers pouvait deposer ce nom EN LIEN SYMBOLIQUE avant nous ; export_obj
+//     ouvre en fopen(..., "w"), suivait le lien et TRONQUAIT sa cible ;
+//   - le maillage restait lisible par tous les comptes de la machine ;
+//   - deux exports simultanes du meme radical s'ecrasaient.
+//
+// D'ou un sous-repertoire au nom imprevisible. Le point porteur n'est PAS le hasard
+// du nom mais le fait que create_directory ne renvoie true que s'il a REELLEMENT
+// cree le repertoire : mkdir echoue avec EEXIST si le nom existe deja, lien
+// symbolique compris, donc une creation reussie prouve que personne n'avait prepare
+// le terrain. Le repertoire nous appartient : les noms a l'interieur peuvent
+// redevenir lisibles.
+std::filesystem::path makePrivateTempDir ()
+{
+	std::error_code ec;
+	const std::filesystem::path base = std::filesystem::temp_directory_path (ec);
+	if (ec)
+		return std::filesystem::path();
+
+	// Le compteur garantit a lui seul l'unicite DANS le processus, meme si
+	// random_device s'avere faible (cas d'une implementation degradee sous
+	// Emscripten) ; le hasard couvre la concurrence ENTRE processus.
+	static std::atomic<unsigned long long> counter{0};
+	std::random_device rd;
+
+	for (int attempt = 0; attempt < 8; ++attempt)
+	{
+		const unsigned long long bits =
+			((unsigned long long)rd() << 32) | (unsigned long long)rd();
+		std::ostringstream name;
+		name << "cg_obj_" << std::hex << bits << '_'
+		     << counter.fetch_add (1, std::memory_order_relaxed);
+
+		const std::filesystem::path dir = base / name.str();
+		if (std::filesystem::create_directory (dir, ec) && !ec)
+		{
+			// Proprietaire seul (0700) : sans effet utile sous Windows et en
+			// MEMFS, mais c'est ce qui ferme la lecture par les autres comptes
+			// la ou /tmp est reellement partage.
+			std::filesystem::permissions (dir, std::filesystem::perms::owner_all,
+						      std::filesystem::perm_options::replace, ec);
+			return dir;
+		}
+	}
+	return std::filesystem::path();
+}
+
+// Le repertoire doit disparaitre par TOUS les chemins de sortie. Les deux
+// std::remove qui suffisaient avant etaient sautes par le retour anticipe de
+// l'echec d'export_obj : chaque echec laissait un repertoire derriere lui.
+struct TempDirGuard
+{
+	std::filesystem::path dir;
+
+	~TempDirGuard ()
+	{
+		if (dir.empty())
+			return;
+		std::error_code ec;
+		std::filesystem::remove_all (dir, ec);
+	}
+};
+
 } // namespace
 
 std::string MeshIO::export_obj_zip_bytes (Mesh& mesh, const std::string& basename,
 					  bool emitObjectGroups)
 {
 	// Un radical vide donnerait des entrees nommees ".obj" : on garde un defaut.
-	const std::string stem = basename.empty() ? std::string("model") : basename;
+	//
+	// On ne retient que le DERNIER composant : la fonction est publique, et un
+	// basename tel que "../evade" ecrirait sinon hors du repertoire prive ouvert
+	// ci-dessous -- ce qui ramenerait exactement le probleme qu'il ferme. Les
+	// appelants reels n'y perdent rien : export_obj_zip passe deja un radical sans
+	// repertoire (stemOf) et les ponts WASM filtrent sur alnum/'-'/'_'.
+	std::string stem = std::filesystem::path(basename).filename().string();
+	if (stem.empty() || stem == "." || stem == "..")
+		stem = "model";
 
-	const std::string dir = std::filesystem::temp_directory_path().string();
-	const std::string sep = (!dir.empty() && (dir.back() == '/' || dir.back() == '\\'))
-				? std::string() : std::string("/");
-	const std::string objPath = dir + sep + stem + ".obj";
-	const std::string mtlPath = dir + sep + stem + ".mtl";
+	TempDirGuard tmp{ makePrivateTempDir() };
+	if (tmp.dir.empty())
+		return std::string();
+
+	const std::string objPath = (tmp.dir / (stem + ".obj")).string();
+	const std::string mtlPath = (tmp.dir / (stem + ".mtl")).string();
 
 	if (export_obj (mesh, objPath.c_str(), emitObjectGroups) != 0)
 		return std::string();
@@ -779,8 +912,7 @@ std::string MeshIO::export_obj_zip_bytes (Mesh& mesh, const std::string& basenam
 	if (!mtl.empty())
 		entries.push_back ({ stem + ".mtl", mtl });
 
-	std::remove (objPath.c_str());
-	std::remove (mtlPath.c_str());
+	// Nettoyage : TempDirGuard emporte les deux fichiers avec le repertoire.
 
 	if (entries.empty())
 		return std::string();

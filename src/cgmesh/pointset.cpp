@@ -43,8 +43,14 @@ void PointSet::dump (void)
 void PointSet::export_obj (char *filename)
 {
 	FILE *ptr = fopen (filename, "w");
+	// Le flux n'etait jamais ferme (cpp:S2095, pointset.cpp:48), et rien ne
+	// verifiait l'ouverture : sur un chemin non inscriptible, le fprintf partait
+	// sur un pointeur nul.
+	if (!ptr)
+		return;
 	for (int i=0; i<m_nPoints; i++)
 		fprintf (ptr, "v %f %f %f\n", m_pPoints[3*i], m_pPoints[3*i+1], m_pPoints[3*i+2]);
+	fclose (ptr);
 }
 
 

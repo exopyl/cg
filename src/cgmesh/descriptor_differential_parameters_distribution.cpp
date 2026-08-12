@@ -2,6 +2,8 @@
 #include <assert.h>
 #include <math.h>
 
+#include <vector>
+
 #include "descriptor_differential_parameters_distribution.h"
 #include "DiffParamEvaluator.h"
 
@@ -43,8 +45,11 @@ Cdifferential_parameters_distribution::compute_distribution (shape_function_type
 	  size = nv;
   data = (float*)malloc(size*sizeof(float));
   assert (data);
-  float *weights = (float*)malloc(size*sizeof(float)); // only used for Besl's histogram
-  assert (weights);
+  // Etait un malloc jamais rendu, et la fonction a TROIS sorties (le retour de la
+  // branche Besl, la fin, et le `if (sum == 0.0) return`) : aucune ne le liberait
+  // (cpp:S3584, descriptor_differential_parameters_distribution.cpp:172). Un
+  // vector couvre les trois d'un coup.
+  std::vector<float> weights ((size_t)size, 0.0f); // only used for Besl's histogram
  
   int iwalk = 0; // only used for BESL's histogram
   switch (type)

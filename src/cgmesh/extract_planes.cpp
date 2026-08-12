@@ -1,5 +1,7 @@
 #include <stdlib.h>
 #include <assert.h>
+#include <memory>
+#include <vector>
 
 #include "extract_planes.h"
 #include "regions_faces.h"
@@ -52,18 +54,26 @@ void Cextract_planes::compute (float threshold, float percentage)
 		  printf ("%f\n", area = area);
 		  model3d_regions->select_faces_by_id_region (iregion);
           Plane *plane = model3d_regions->plane_fitting ();
-		  VectorizedPlane *vPlane = new VectorizedPlane(nullptr, 0, plane);
+		  // Le consommateur de vPlane -- l'appel a add_plane() -- est commente
+		  // juste en dessous : l'objet etait construit, renseigne, puis abandonne
+		  // sans etre detruit, une fuite par region retenue
+		  // (cpp:S3584, extract_planes.cpp:58). unique_ptr le detruit en sortie de
+		  // bloc, ce que add_plane devra reprendre le jour ou il sera reactive.
+		  std::unique_ptr<VectorizedPlane> vPlane
+			  (new VectorizedPlane(nullptr, 0, plane));
 		  vPlane->set_area (area);
 
 		  int *selected_region = model3d_regions->get_selected_region ();
 
 		  // identify the faces selected
-		  int *ftmp = nullptr, nftmp = 0;
+		  // Etait un malloc jamais libere, pour la meme raison
+		  // (cpp:S3584, extract_planes.cpp:79).
+		  int nftmp = 0;
 		  for (i=0; i<nf; i++)
 			  if (selected_region[i] == 1)
 				  nftmp++;
 
-		  ftmp = (int*)malloc(nftmp*sizeof(int));
+		  std::vector<int> ftmp ((size_t)nftmp);
 		  int iwalk = 0;
 		  for (i=0; i<nf; i++)
 			  if (selected_region[i] == 1)

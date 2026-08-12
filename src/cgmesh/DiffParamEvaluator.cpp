@@ -1,3 +1,5 @@
+#include <vector>
+
 #include "DiffParamEvaluator.h"
 
 //
@@ -149,7 +151,10 @@ bool MeshAlgoTensorEvaluator::GetCurvaturesHistogram (CurvatureType id, int nbin
 	GetExtremalCurvature (id, 1, &max);
 	GetCurvatures (id, &nCurvatures, &curvatures);
 
-	if (nCurvatures == 0) return false;
+	// GetCurvatures alloue `curvatures` ; ce retour anticipe etait le SEUL des
+	// quatre sorties de la fonction a ne pas le rendre
+	// (cpp:S3584, DiffParamEvaluator.cpp:152).
+	if (nCurvatures == 0) { if (curvatures) free (curvatures); return false; }
 
 	// init : the histogram has nbins bins (NOT nCurvatures)
 	float *histogram = (float*)malloc(nbins*sizeof(float));
@@ -290,8 +295,11 @@ void MeshAlgoTensorEvaluator::EvaluateColors (CurvatureType type)
 
 	int i;
 	float r, g, b;
-	float *array = (float*)malloc(nv*sizeof(float));
-	int *defined = (int*)malloc(nv*sizeof(int));
+	// Les deux etaient malloc'es et jamais rendus : la fonction n'a aucune
+	// liberation (cpp:S3584, DiffParamEvaluator.cpp:351, deux fois).
+	if (nv <= 0) return;
+	std::vector<float> array ((size_t)nv, 0.0f);
+	std::vector<int>   defined ((size_t)nv, 0);
 	
 	// build the array of the curvatures
 	for (i=0; i<nv; i++)
