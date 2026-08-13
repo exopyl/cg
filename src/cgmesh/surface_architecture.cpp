@@ -695,12 +695,22 @@ Polygon2* Rosace::Generate (void)
 Polygon2* ArcBrise::Generate (void)
 {
 	unsigned int npts = 32;
-	float *p = (float*)malloc(3*npts*sizeof(float));
-	float *t = (float*)malloc(3*npts*sizeof(float));
 
+	// VALIDER AVANT D'ALLOUER : ce refus sortait apres les deux malloc et sans
+	// les liberer, donc toute geometrie invalide fuyait 768 octets
+	// (cpp:S3584, surface_architecture.cpp:703).
 	if (m_fWidth2 > m_fWidth/2.)
 	{
 		printf ("!!! m_fWidth2 > m_fWidth/2.");
+		return nullptr;
+	}
+
+	float *p = (float*)malloc(3*npts*sizeof(float));
+	float *t = (float*)malloc(3*npts*sizeof(float));
+	if (p == nullptr || t == nullptr)
+	{
+		free (p);
+		free (t);
 		return nullptr;
 	}
 
@@ -804,6 +814,11 @@ Polygon2* ArcBrise::Generate (void)
 		pol->set_point (1, i, p[2*(npts-i-1)], p[2*(npts-i-1)+1]);
 
 	pol->output ((char*)"polygon1.ppm");
+
+	// create_arc_brise / create_arc_circle ecrivent dans les tampons fournis sans
+	// en prendre la propriete : ils reviennent a l'appelant.
+	free (p);
+	free (t);
 	return pol;
 	//pol->dump ();
 

@@ -558,33 +558,32 @@ int MeshIO::export_obj (Mesh& mesh, const char *filename, bool emitObjectGroups)
 	fprintf (fp, "\n");
 
 	// materials
-	char *filematname = nullptr;
+	//
+	// std::string plutot que strdup : la liberation etait conditionnee a une
+	// SECONDE evaluation de `m_pMaterials.empty()`, 120 lignes plus bas. Toute
+	// divergence entre les deux tests -- et tout retour ajoute entre les deux --
+	// perdait le buffer (cpp:S3584, mesh_io_obj.cpp:763). La duree de vie suit
+	// desormais la portee, sans free a placer.
+	std::string filematname;
 	if (!mesh.m_pMaterials.empty())
 	{
-		filematname = strdup (filename);
-		if (filematname == nullptr)
-		{
-			fclose (fp);
-			return -1;
-		}
-		// Remplace l'extension sur place. Le buffer strdup laisse exactement
-		// 3 octets + le '\0' a partir de len-3, d'ou la borne a 4 ; et un nom de
-		// moins de 3 caracteres ferait reculer le pointeur AVANT le buffer.
-		size_t lenmat = strlen (filematname);
-		if (lenmat >= 3)
-			snprintf (filematname + lenmat - 3, 4, "mtl");
+		filematname = filename;
+		// Remplace l'extension sur place : exactement les 3 derniers caracteres,
+		// et rien du tout pour un nom plus court.
+		if (filematname.size() >= 3)
+			filematname.replace (filematname.size() - 3, 3, "mtl");
 
 		// `mtllib` doit designer le .mtl par son NOM SEUL : il est ecrit a cote du
 		// .obj, et un chemin absolu ne resoudrait plus des que le couple est
 		// deplace ou envoye ailleurs.
 		//
 		// Cherche les DEUX separateurs. Ne tester que '/' laissait passer tout
-		// chemin Windows (`C:\...\model.obj`) : `strrchr` renvoyait nullptr et le
+		// chemin Windows (`C:\...\model.obj`) : la recherche echouait et le
 		// mtllib recevait le chemin ABSOLU de la machine qui avait exporte.
-		char *slash     = strrchr (filematname, '/');
-		char *backslash = strrchr (filematname, '\\');
-		char *s = (slash > backslash) ? slash : backslash;
-		fprintf (fp, "mtllib %s\n\n", (s != nullptr) ? &s[1] : filematname);
+		const size_t sep = filematname.find_last_of ("/\\");
+		fprintf (fp, "mtllib %s\n\n",
+			 (sep != std::string::npos) ? filematname.c_str() + sep + 1
+						    : filematname.c_str());
 	}
 
 	//
@@ -684,15 +683,9 @@ int MeshIO::export_obj (Mesh& mesh, const char *filename, bool emitObjectGroups)
 	//
 	if (!mesh.m_pMaterials.empty())
 	{
-		fp = fopen(filematname,"w");
+		fp = fopen(filematname.c_str(),"w");
 		if (fp == nullptr)
-		{
-			// Ce retour anticipe sautait le free(filematname) de fin de bloc :
-			// le strdup fuyait des que le .mtl n'etait pas inscriptible
-			// (cpp:S3584, mesh_io_obj.cpp:647 et 715).
-			free (filematname);
 			return -1;
-		}
 
 		fprintf (fp, "\n");
 		fprintf (fp, "# Wavefront material file\n");
@@ -756,8 +749,6 @@ int MeshIO::export_obj (Mesh& mesh, const char *filename, bool emitObjectGroups)
 		}
 		
 		fclose (fp);
-
-		free (filematname);
 	}
 
 	return 0;

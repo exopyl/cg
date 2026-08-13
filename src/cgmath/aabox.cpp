@@ -99,7 +99,13 @@ bool AABox::contains (const Triangle &tri) const
   if(x2<min) min=x2;\
   if(x2>max) max=x2;
 
-static int planeBoxOverlap(float normal[3], float vert[3], float maxbox[3])
+// Les trois arguments sont des Vector3f chez l'unique appelant (ligne 248). Les
+// declarer `float[3]` obligeait a passer par la conversion implicite de TVector3,
+// qui publie `&x` comme base d'un tableau : les lectures en [1] et [2] sortaient
+// alors de l'objet designe (cpp:S3519, aabox.cpp:108). En prenant des references
+// on garde l'ecriture indicielle -- TVector3::operator[] fait de la selection de
+// membre, pas de l'arithmetique de pointeur -- sans quitter l'objet.
+static int planeBoxOverlap(const Vector3f& normal, const Vector3f& vert, const Vector3f& maxbox)
 {
   int q;
   float vmin[3],vmax[3],v;
@@ -119,7 +125,7 @@ static int planeBoxOverlap(float normal[3], float vert[3], float maxbox[3])
   }
   if(DOT(normal,vmin)>0.0f) return 0;
   if(DOT(normal,vmax)>=0.0f) return 1;
-  
+
   return 0;
 }
 

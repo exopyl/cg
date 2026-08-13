@@ -42,11 +42,32 @@ public:
 	void SetDirectionMin (float x, float y, float z) { direction_min.Set (x, y, z);  };
 	void SetDirectionMin (const float *dmin) { direction_min.Set (dmin[0], dmin[1], dmin[2]); };
 
+	// Pendants VECTEUR des trois setters : meme raison que pour les getters plus
+	// bas -- un Vector3 passe a la version `float*` faisait LIRE n[1] et n[2] hors
+	// de l'objet.
+	void SetNormal (const Vector3f& n) { normal = n; };
+	void SetDirectionMax (const Vector3f& dmax) { direction_max = dmax; };
+	void SetDirectionMin (const Vector3f& dmin) { direction_min = dmin; };
+
 	void  GetNormal (float *n) { n[0]=normal.x; n[1]=normal.y; n[2]=normal.z; };
 	float GetKappaMax (void) { return kappa_max; };
 	float GetKappaMin (void) { return kappa_min; };
 	void  GetDirectionMax (float *dmax) { dmax[0]=direction_max.x; dmax[1]=direction_max.y; dmax[2]=direction_max.z; };
 	void  GetDirectionMin (float *dmin) { dmin[0]=direction_min.x; dmin[1]=direction_min.y; dmin[2]=direction_min.z; };
+
+	// Surcharges VECTEUR des trois accesseurs ci-dessus.
+	//
+	// Passer un Vector3 aux versions `float*` empruntait la conversion implicite
+	// de TVector3, qui publie `&x` comme base d'un tableau de trois scalaires (cf.
+	// TVector3.h:319) : les ecritures en n[1] et n[2] sortaient alors de l'objet
+	// designe, un acces hors bornes releve a chaque site d'appel (cpp:S3519,
+	// tensor.h:45 et 48). La copie se fait desormais membre a membre, sans
+	// arithmetique de pointeur.
+	//
+	// Les versions `float*` restent pour les appelants qui ont un vrai float[3].
+	const Vector3f& GetNormal (void) const { return normal; };
+	const Vector3f& GetDirectionMax (void) const { return direction_max; };
+	const Vector3f& GetDirectionMin (void) const { return direction_min; };
 
 	//
 	// derived curvatures

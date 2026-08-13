@@ -48,12 +48,37 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 		Quaternionf rot (axis, theta);
 
 		// allocate memory for the matrices
+		//
+		// n_neighbours dimensionne A (21 flottants par voisin) et B (3), mais la
+		// marche du ring plus bas n'etait bornee que par la topologie. Deux cas
+		// ecrivaient hors des tampons (cpp:S3519,
+		// DiffParamEvaluator_goldfeather.cpp:88) :
+		//
+		//   - un compte nul, qui alloue zero octet alors que le do-while s'execute
+		//     au moins une fois ;
+		//   - un ring reellement plus long que le compte annonce.
+		//
+		// Le garde-fou `iwalk != n_neighbours` existait deja mais ne s'appliquait
+		// qu'APRES les ecritures : il rejetait le sommet, pas le debordement.
 		int n_neighbours = m_pModel->get_n_neighbours (i);
+		if (n_neighbours <= 0)
+		{
+			Tensors ()[i] = nullptr;
+			continue;
+		}
 		float *A = (float*)malloc(n_neighbours*7*3*sizeof(float));
-		for (j=0; j<n_neighbours*7*3; j++) A[j] = 0.0;
 		float *B = (float*)malloc(n_neighbours*3*sizeof(float));
+		if (A == nullptr || B == nullptr)
+		{
+			free (A);
+			free (B);
+			Tensors ()[i] = nullptr;
+			continue;
+		}
+		for (j=0; j<n_neighbours*7*3; j++) A[j] = 0.0;
 		for (j=0; j<n_neighbours*3; j++) B[j] = 0.0;
 
+		bool ring_overflow = false;
 		int iwalk = 0;
 		int e = m_pModel->GetCheMesh()->m_edges_vertex[i];
 		int e_walk = e;
@@ -83,6 +108,14 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 			float nyi = nrot.y;
 			float nzi = nrot.z;
 			
+			// Le ring depasse le compte annonce : on s'arrete AVANT d'ecrire, et le
+			// sommet est rejete plus bas comme un ring incoherent.
+			if (iwalk >= n_neighbours)
+			{
+				ring_overflow = true;
+				break;
+			}
+
 			// fill A
 			A[21*iwalk]    = xi*xi/2.0;
 			A[21*iwalk+1]  = xi*yi;
@@ -118,11 +151,11 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 			e_walk = m_pModel->GetCheMesh()->edge(m_pModel->GetCheMesh()->edge(he_next).m_he_next).m_pair;
 		} while (e_walk >= 0 && e_walk != e);
 		
-		if (iwalk != n_neighbours)
+		if (ring_overflow || iwalk != n_neighbours)
 		{
 			Tensors ()[i] = nullptr;
-			if (A) free (A);
-			if (B) free (B);
+			free (A);
+			free (B);
 			continue;
 		}
 		

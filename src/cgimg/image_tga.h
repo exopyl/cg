@@ -27,9 +27,13 @@ class TGAImg
   private:
    short int iWidth,iHeight,iBPP;
    unsigned long lImageSize;
+   // Taille du fichier charge dans pData. Les decodeurs en ont besoin pour ne pas
+   // lire au-dela : le flux RLE se decrit lui-meme, donc un fichier tronque le
+   // fait deborder sans que rien ne l'arrete.
+   unsigned long lDataSize;
    char bEnc;
    unsigned char *pImage, *pPalette, *pData;
-   
+
    // Internal workers
    int ReadHeader();
    int LoadRawData();

@@ -17,15 +17,15 @@ bool MeshAlgoTensorEvaluator::ApplyHybrid (void)
 	ApplyDesbrun ();
 	for (i=0; i<nv; i++)
     {
-		Vector3 n;
 		if (!Tensors ()[i])
 		{
 			hybrid[i] = nullptr;
 			continue;
 		}
 
-		Tensors ()[i]->GetNormal (n);
-		hybrid[i]->SetNormal (n);
+		// Surcharges vecteur : la version `float*` de ces accesseurs indexait
+		// `&n.x` comme un tableau de trois flottants (cpp:S3519, tensor.h:45/48).
+		hybrid[i]->SetNormal (Tensors ()[i]->GetNormal ());
 		hybrid[i]->SetKappaMax (Tensors ()[i]->GetKappaMax ());
 		hybrid[i]->SetKappaMin (Tensors ()[i]->GetKappaMin ());
     }
@@ -34,19 +34,14 @@ bool MeshAlgoTensorEvaluator::ApplyHybrid (void)
 	ApplySteiner ();
 	for (i=0; i<nv; i++)
     {
-		Vector3 tmax, tmin;
-
 		if (!Tensors ()[i])
 		{
 			hybrid[i] = nullptr;
 			continue;
 		}
 
-		Tensors ()[i]->GetDirectionMax (tmax);
-		hybrid[i]->SetDirectionMax (tmax.x, tmax.y, tmax.z);
-
-		Tensors ()[i]->GetDirectionMin (tmin);
-		hybrid[i]->SetDirectionMin (tmin.x, tmin.y, tmin.z);
+		hybrid[i]->SetDirectionMax (Tensors ()[i]->GetDirectionMax ());
+		hybrid[i]->SetDirectionMin (Tensors ()[i]->GetDirectionMin ());
     }
 
 	/* save the differential parameters */
@@ -58,19 +53,12 @@ bool MeshAlgoTensorEvaluator::ApplyHybrid (void)
 			continue;
 		}
 
-		Vector3 n;
-		hybrid[i]->GetNormal (n);
-		Tensors ()[i]->SetNormal (n);
+		Tensors ()[i]->SetNormal (hybrid[i]->GetNormal ());
 		Tensors ()[i]->SetKappaMax (hybrid[i]->GetKappaMax ());
 		Tensors ()[i]->SetKappaMin (hybrid[i]->GetKappaMin ());
 
-		Vector3 tmax, tmin;
-
-		hybrid[i]->GetDirectionMax (tmax);
-		Tensors ()[i]->SetDirectionMax (tmax.x, tmax.y, tmax.z);
-
-		hybrid[i]->GetDirectionMin (tmin);
-		Tensors ()[i]->SetDirectionMin (tmin.x, tmin.y, tmin.z);
+		Tensors ()[i]->SetDirectionMax (hybrid[i]->GetDirectionMax ());
+		Tensors ()[i]->SetDirectionMin (hybrid[i]->GetDirectionMin ());
     }
 
 	return true;

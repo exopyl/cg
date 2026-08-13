@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <vector>
 
 #include "chull.h"
 
@@ -515,7 +516,7 @@ void
 Chull3D::clean_vertices (Chull3D_vertex **pvnext)
 {
   Chull3D_edge *e = nullptr;
-  Chull3D_vertex *v = nullptr, *t = nullptr;
+  Chull3D_vertex *v = nullptr;
 
   /* mark all vertices incident to some undeleted edge as
      on the hull */
@@ -528,39 +529,52 @@ Chull3D::clean_vertices (Chull3D_vertex **pvnext)
       } while (e != edges);
     }
 
-  /* delete all vertices that have been processed but are
-     not on the hull */
-  while (vertices && vertices->processed && !vertices->on_hull)
-    {
-      /* if about to delete vnext, advance it first.
-         On compare la TETE de liste -- c'est elle qu'on s'apprete a supprimer.
-         L'ancien code comparait `v`, qui valait nullptr a la premiere iteration
-         puis designait le sommet deja libere : la garde ne protegeait rien. */
-      if (pvnext && *pvnext == vertices)
-        *pvnext = vertices->next;
-      delete_vertex (vertices);
-    }
   if (!vertices)
     {
-      /* liste videe : le `next` releve ci-dessus designe un sommet libere */
       if (pvnext)
         *pvnext = nullptr;
       return;
     }
 
-  v = vertices->next;
+  /* delete all vertices that have been processed but are not on the hull.
+
+     DEUX PASSES. Supprimer en marchant l'anneau melangeait la marche et les
+     relachements : `delete_vertex` recable les voisins du noeud supprime via
+     la macro DELETE, si bien que la tete `vertices` et le `next` releve juste
+     avant pouvaient l'un comme l'autre designer un sommet deja libere -- lu
+     ensuite par la boucle de remise a zero des drapeaux (cpp:S3529,
+     chull.cpp:575). On recense d'abord, on supprime ensuite : la marche se fait
+     sur une liste intacte. */
+  std::vector<Chull3D_vertex*> doomed;
+  v = vertices;
   do {
     if (v->processed && !v->on_hull)
-      {
-	t = v;
-	v = v->next;
-	if (pvnext && *pvnext == t)
-	  *pvnext = t->next;
-	delete_vertex (t);
-      }
-    else
-      v = v->next;
-  } while (vertices && v != vertices);
+      doomed.push_back (v);
+    v = v->next;
+  } while (v != vertices);
+
+  /* Faire avancer vnext AVANT toute suppression, sinon construct_hull
+     repartirait d'un sommet libere. Son successeur immediat peut lui aussi etre
+     condamne, d'ou la marche jusqu'au premier survivant -- et nullptr si la
+     liste part entierement. */
+  if (pvnext && *pvnext)
+    {
+      Chull3D_vertex *const start = *pvnext;
+      Chull3D_vertex *n = start;
+      while (n->processed && !n->on_hull)
+        {
+          n = n->next;
+          if (n == start)
+            {
+              n = nullptr;
+              break;
+            }
+        }
+      *pvnext = n;
+    }
+
+  for (Chull3D_vertex *d : doomed)
+    delete_vertex (d);
 
   if (!vertices)
     {

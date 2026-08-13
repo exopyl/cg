@@ -154,6 +154,17 @@ Cset_lines::merge_close_lines_mean_shift (float hd, float hp,
   int i,j;
   float scaling = 1.0;
 
+  /* Rien a fusionner : toute la suite dimensionne ses tableaux sur
+     n_extracted_lines, y compris l'octree et l'historique, et la phase de fusion
+     finale indexe positions[i] / directions[i] -- des tampons de taille nulle
+     quand aucune ligne n'a ete extraite (cpp:S3519, set_lines.cpp:294). Sortir
+     ici rend le compte strictement positif pour tout ce qui suit. */
+  if (n_extracted_lines <= 0)
+    {
+      *n_ite = 0;
+      return;
+    }
+
   /* create the history */
 #ifdef MEAN_SHIFT_KEEP_HISTORY
   Vector3f **positions_history = (Vector3f**)malloc(50*sizeof(Vector3f*));

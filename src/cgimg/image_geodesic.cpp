@@ -1,4 +1,5 @@
 #include <queue> // to use a priority queue
+#include <vector>
 using namespace std;
 
 #include "image.h"
@@ -37,14 +38,21 @@ static void _compute_offsets_for_neighbours (int offset_neighbours[4], int i, in
 // geodesic
 int ImgGeodesic::apply (Img& img)
 {
+	// Deux tampons de la taille de l'image, vivants jusqu'au retour. En malloc ils
+	// n'etaient jamais liberes -- la fonction rend 0 sans passer par un free
+	// (cpp:S3584, image_geodesic.cpp:209) -- et le memset qui suivait ecrivait a
+	// l'adresse nulle si l'allocation echouait. std::vector regle les deux, et le
+	// zero initial est celui du conteneur.
+	const size_t npixels = (size_t)img.m_iWidth * (size_t)img.m_iHeight;
+
 	// distances
-	float *d = (float*)malloc(img.m_iWidth*img.m_iHeight*sizeof(float));
-	memset (d, 0, img.m_iWidth*img.m_iHeight*sizeof(float));
+	std::vector<float> d_storage (npixels, 0.f);
+	float *d = d_storage.data ();
 
 	// labels : 0 -> unprocessed / 1 -> close / 2 -> fixed
-	char *l = (char*)malloc(img.m_iWidth*img.m_iHeight*sizeof(char));
-	memset (l, 0, img.m_iWidth*img.m_iHeight*sizeof(char));
-	
+	std::vector<char> l_storage (npixels, 0);
+	char *l = l_storage.data ();
+
 	//
 	// init d & l
 	//

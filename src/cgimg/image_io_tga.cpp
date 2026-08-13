@@ -1,3 +1,5 @@
+#include <vector>
+
 #include "image.h"
 #include "image_io.h"
 
@@ -30,7 +32,11 @@ int ImgIO::import_tga (Img& img, const char *filename)
 	FILE *ptr;
 	int w, h;
 	int i,j;
-	unsigned char *color_map = nullptr;
+	// La palette n'etait liberee que sur les chemins du bloc MAPPED. Un TGA
+	// annonce « vide » (cpp:S3584, image_io_tga.cpp:136), et plus generalement
+	// tout TGA non mappe declarant une palette, sortait sans la rendre : cette
+	// fonction a onze retours. Le conteneur supprime la question.
+	std::vector<unsigned char> color_map;
 
 	if ((ptr = fopen (filename, "rb")) == nullptr)
 	{
@@ -94,20 +100,15 @@ int ImgIO::import_tga (Img& img, const char *filename)
 		switch (color_map_entry_size)
 		{
 		case 8:
-			color_map = new unsigned char[color_map_length];
-			//datas = new unsigned char[w*h];
+			color_map.resize (color_map_length);
 			break;
 		case 24:
-			color_map = new unsigned char[3*color_map_length];
-			//datas = new unsigned char[3*w*h];
+			color_map.resize (3*(size_t)color_map_length);
 			break;
 		case 32:
-			color_map = new unsigned char[4*color_map_length];
-			//datas = new unsigned char[4*w*h];
+			color_map.resize (4*(size_t)color_map_length);
 			break;
 		}
-		//assert (color_map);
-		//assert (datas);
     }
 	else
     {
@@ -143,10 +144,10 @@ int ImgIO::import_tga (Img& img, const char *filename)
 	/*******************/
 	if (image_type == TGA_TYPE_MAPPED)
 	{
-		// `color_map` n'est alloue qu'a DEUX conditions reunies (cf. le bloc
+		// `color_map` n'est dimensionne qu'a DEUX conditions reunies (cf. le bloc
 		// `if (color_map_type)` plus haut) : un color_map_type non nul, ET une
-		// taille d'entree parmi 8/24/32. Deux fichiers le laissaient donc a
-		// nullptr tout en entrant ici :
+		// taille d'entree parmi 8/24/32. Deux fichiers le laissaient donc vide
+		// tout en entrant ici :
 		//
 		//   - un TGA qui se declare « mappe » avec color_map_type == 0 ;
 		//   - une entree de 16 bits, taille legale que le switch ne couvre pas.
@@ -154,10 +155,14 @@ int ImgIO::import_tga (Img& img, const char *filename)
 		// Le fread ci-dessous ECRIVAIT alors a l'adresse nulle
 		// (cpp:S3807, image_io_tga.cpp:151), et les quatre boucles de pixels la
 		// lisaient (cpp:S2259, lignes 167/177/187/197).
-		if (color_map == nullptr || color_map_length == 0)
+		//
+		// La condition porte sur la TAILLE reellement disponible, et non plus sur
+		// « non nul » : la lecture comme les quatre boucles indexent en 3*index+2,
+		// donc une palette a entrees de 8 bits (un octet par entree) etait bien
+		// allouee mais deux fois trop courte pour ces acces.
+		if (color_map.size() < 3*(size_t)color_map_length || color_map_length == 0)
 		{
 			fprintf (stderr, "import_tga: image mappee sans table de couleurs exploitable\n");
-			delete[] color_map;
 			fclose (ptr);
 			return -1;
 		}
@@ -219,14 +224,8 @@ int ImgIO::import_tga (Img& img, const char *filename)
 	default:
 	  printf ("WARNING!!! bad \"image origin\" (%d)\n", image_origin);
 	  fclose (ptr);
-	  delete[] color_map;            // était fuité sur ce chemin d'erreur
 	  return -1;
 	}
-
-      // Palette TGA : allouée sous color_map_type, utilisée uniquement par ce
-      // bloc MAPPED. Libérée ici (chemin nominal) — était fuitée.
-      delete[] color_map;
-      color_map = nullptr;
     }
 
   /***********************/
@@ -515,6 +514,12 @@ void ImgIO::compute_colormap (Img& img, unsigned char **_colormap, unsigned shor
   unsigned int i,j;
   unsigned short colormap_length = 0;
   unsigned char *colormap = (unsigned char*)malloc(3*sizeof(unsigned char));
+  if (colormap == nullptr)
+    {
+      *_colormap_length = 0;
+      *_colormap = nullptr;
+      return;
+    }
   colormap_length++;
   colormap[0] = img.m_pPixels[0];
   colormap[1] = img.m_pPixels[1];
@@ -533,7 +538,13 @@ void ImgIO::compute_colormap (Img& img, unsigned char **_colormap, unsigned shor
 	}
       if (j == colormap_length)
 	{
-	  colormap = (unsigned char*)realloc(colormap,3*(colormap_length+1)*sizeof(unsigned char));
+	  // Tampon intermediaire : affecter directement le retour de realloc perdait
+	  // l'ancien bloc en cas d'echec, puis ecrivait a l'adresse nulle.
+	  unsigned char *grown =
+	    (unsigned char*)realloc(colormap,3*(colormap_length+1)*sizeof(unsigned char));
+	  if (grown == nullptr)
+	    break;
+	  colormap = grown;
 	  colormap[3*colormap_length]   = r_walk;
 	  colormap[3*colormap_length+1] = g_walk;
 	  colormap[3*colormap_length+2] = b_walk;
@@ -566,8 +577,13 @@ int ImgIO::export_tga (Img& img, const char *filename)
     case TGA_TYPE_TRUE_COLOR:
 		{
       // header
-      unsigned char *id = (unsigned char*)strdup ("created by cgimg\0");
-      size_t id_length = strlen ((char*)id)+1;
+      //
+      // Chaine litterale plutot que strdup : l'identifiant est ecrit tel quel et
+      // n'a pas besoin d'etre modifiable, alors que la copie n'etait jamais
+      // liberee (cpp:S3584, image_io_tga.cpp:602). sizeof compte le '\0' final,
+      // comme le strlen+1 precedent.
+      static const char id[] = "created by cgimg";
+      const size_t id_length = sizeof (id);
       fwrite (&id_length, sizeof(unsigned char), 1, ptr);
 
       unsigned char color_map_type = 0;
@@ -620,9 +636,9 @@ int ImgIO::export_tga (Img& img, const char *filename)
 	break;
     case TGA_TYPE_MAPPED:
 		{
-      // header
-      unsigned char *id = (unsigned char*)strdup ("created by cl\0");
-      size_t id_length = strlen ((char*)id)+1;
+      // header — cf. la branche TRUE_COLOR pour le litteral.
+      static const char id[] = "created by cl";
+      const size_t id_length = sizeof (id);
       fwrite (&id_length, sizeof(unsigned char), 1, ptr);
 
       unsigned char color_map_type = 1;
@@ -633,8 +649,13 @@ int ImgIO::export_tga (Img& img, const char *filename)
 
       // color map specifications
       unsigned char *colormap=nullptr;
-      unsigned short colormap_length;
+      unsigned short colormap_length = 0;
       compute_colormap (img, &colormap, &colormap_length);
+      if (colormap == nullptr)
+	{
+	  fclose (ptr);
+	  return -1;
+	}
 
       unsigned short color_map_origin     = 0;
       unsigned short color_map_length     = colormap_length;
@@ -681,6 +702,9 @@ int ImgIO::export_tga (Img& img, const char *filename)
 		  break;
 		}
 	    }
+
+      // La table construite par compute_colormap appartient a l'appelant.
+      free (colormap);
 		}
 		break;
 	default:

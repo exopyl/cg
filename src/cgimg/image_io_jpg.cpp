@@ -34,10 +34,13 @@ int ImgIO::import_jpg (Img& img, const char *filename)
 		stbi_image_free (data);
 		return -1;
 	}
+	// Calcul de l'offset en size_t, et non en int : stb accepte jusqu'a 2^24 par
+	// cote, donc `4 * (y * w + x)` debordait un int 32 bits bien avant cette limite
+	// -- un debordement signe, comportement indefini, avant meme d'indexer.
 	for (int y = 0; y < h; y++)
 		for (int x = 0; x < w; x++)
 		{
-			const unsigned char *p = data + 4 * (y * w + x);
+			const unsigned char *p = data + 4 * ((size_t)y * (size_t)w + (size_t)x);
 			img.set_pixel (x, y, p[0], p[1], p[2], p[3]);
 		}
 
