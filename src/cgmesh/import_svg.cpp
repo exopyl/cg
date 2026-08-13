@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "stroke_contours.h"
+#include "../cgmath/bezier_flatten.h"
 
 // nanosvg is a single-header library; expand its implementation here.
 #define NANOSVG_IMPLEMENTATION
@@ -18,76 +19,43 @@
 // ============================================================================
 //  Bezier flattening
 // ============================================================================
+//
+// L'algorithme lui-meme vit desormais dans cgmath/bezier_flatten.h : meme
+// subdivision de De Casteljau, meme critere de platitude, meme garde-fou de
+// profondeur -- il est simplement partage avec les contours de glyphes
+// (text_extrude.cpp), qui en ont besoin en variante QUADRATIQUE. Ne reste ici
+// que ce qui est propre a nanosvg : le parcours du tableau de points.
 
 namespace {
-
-// Standard "flatness" measure for a cubic Bezier: maximum perpendicular
-// distance of the control points to the chord (x0,y0)-(x3,y3). Below the
-// tolerance, the segment can be approximated by a straight chord.
-bool cubicFlatEnough(float x0, float y0, float x1, float y1,
-                     float x2, float y2, float x3, float y3,
-                     float tol)
-{
-    const float ux = 3.0f * x1 - 2.0f * x0 - x3;
-    const float uy = 3.0f * y1 - 2.0f * y0 - y3;
-    const float vx = 3.0f * x2 - 2.0f * x3 - x0;
-    const float vy = 3.0f * y2 - 2.0f * y3 - y0;
-    const float du = ux * ux + uy * uy;
-    const float dv = vx * vx + vy * vy;
-    return std::max(du, dv) <= tol * tol;
-}
-
-void flattenCubic(std::vector<std::array<float, 2>>& out,
-                  float x0, float y0, float x1, float y1,
-                  float x2, float y2, float x3, float y3,
-                  float tol, int depth)
-{
-    if (depth > 12 || cubicFlatEnough(x0, y0, x1, y1, x2, y2, x3, y3, tol))
-    {
-        out.push_back({ x3, y3 });
-        return;
-    }
-
-    // De Casteljau subdivision at t=0.5
-    const float x01  = (x0 + x1) * 0.5f, y01  = (y0 + y1) * 0.5f;
-    const float x12  = (x1 + x2) * 0.5f, y12  = (y1 + y2) * 0.5f;
-    const float x23  = (x2 + x3) * 0.5f, y23  = (y2 + y3) * 0.5f;
-    const float x012 = (x01 + x12) * 0.5f, y012 = (y01 + y12) * 0.5f;
-    const float x123 = (x12 + x23) * 0.5f, y123 = (y12 + y23) * 0.5f;
-    const float xmid = (x012 + x123) * 0.5f, ymid = (y012 + y123) * 0.5f;
-
-    flattenCubic(out, x0, y0, x01, y01, x012, y012, xmid, ymid, tol, depth + 1);
-    flattenCubic(out, xmid, ymid, x123, y123, x23, y23, x3, y3, tol, depth + 1);
-}
 
 // Flatten one NSVGpath into a list of 2D points (the first point is the
 // start, then one point per Bezier segment endpoint after subdivision).
 // Returns empty if the path has fewer than 2 Bezier points.
-std::vector<std::array<float, 2>> flattenPath(const NSVGpath* path, float tol)
+std::vector<Vector2f> flattenPath(const NSVGpath* path, float tol)
 {
-    std::vector<std::array<float, 2>> pts;
+    std::vector<Vector2f> pts;
     if (path->npts < 2) return pts;
 
-    pts.push_back({ path->pts[0], path->pts[1] });
+    pts.emplace_back(path->pts[0], path->pts[1]);
 
     // Each cubic segment uses 6 floats (cp1x, cp1y, cp2x, cp2y, x, y),
     // appended after the starting (x0,y0).
     for (int i = 0; i + 3 < path->npts; i += 3)
     {
-        const float x0 = path->pts[i*2 + 0], y0 = path->pts[i*2 + 1];
-        const float x1 = path->pts[i*2 + 2], y1 = path->pts[i*2 + 3];
-        const float x2 = path->pts[i*2 + 4], y2 = path->pts[i*2 + 5];
-        const float x3 = path->pts[i*2 + 6], y3 = path->pts[i*2 + 7];
-        flattenCubic(pts, x0, y0, x1, y1, x2, y2, x3, y3, tol, 0);
+        const Vector2f p0(path->pts[i*2 + 0], path->pts[i*2 + 1]);
+        const Vector2f c0(path->pts[i*2 + 2], path->pts[i*2 + 3]);
+        const Vector2f c1(path->pts[i*2 + 4], path->pts[i*2 + 5]);
+        const Vector2f p1(path->pts[i*2 + 6], path->pts[i*2 + 7]);
+        flattenCubic(pts, p0, c0, c1, p1, tol);
     }
 
     // Remove a trailing duplicate of the start (some SVG authoring tools
     // close paths by repeating the first vertex).
     if (pts.size() >= 2)
     {
-        const auto& a = pts.front();
-        const auto& b = pts.back();
-        if (std::fabs(a[0] - b[0]) < 1e-6f && std::fabs(a[1] - b[1]) < 1e-6f)
+        const Vector2f& a = pts.front();
+        const Vector2f& b = pts.back();
+        if (std::fabs(a.x - b.x) < 1e-6f && std::fabs(a.y - b.y) < 1e-6f)
             pts.pop_back();
     }
     return pts;
@@ -106,16 +74,16 @@ std::vector<std::array<float, 2>> flattenPath(const NSVGpath* path, float tol)
 
 // Recenter on the XY bbox and scale so the longest XY dimension equals 1.0
 // (consistent with the other parameterized geometries in sinaia).
-void recenterAndFit(std::vector<std::vector<std::array<float, 2>>>& shapes)
+void recenterAndFit(std::vector<std::vector<Vector2f>>& shapes)
 {
     bool any = false;
     float minX = 0.f, minY = 0.f, maxX = 0.f, maxY = 0.f;
     for (const auto& pts : shapes)
         for (const auto& v : pts)
         {
-            if (!any) { minX = maxX = v[0]; minY = maxY = v[1]; any = true; continue; }
-            minX = std::min(minX, v[0]); maxX = std::max(maxX, v[0]);
-            minY = std::min(minY, v[1]); maxY = std::max(maxY, v[1]);
+            if (!any) { minX = maxX = v.x; minY = maxY = v.y; any = true; continue; }
+            minX = std::min(minX, v.x); maxX = std::max(maxX, v.x);
+            minY = std::min(minY, v.y); maxY = std::max(maxY, v.y);
         }
     if (!any) return;
 
@@ -128,9 +96,33 @@ void recenterAndFit(std::vector<std::vector<std::array<float, 2>>>& shapes)
     for (auto& pts : shapes)
         for (auto& v : pts)
         {
-            v[0] = (v[0] - cx) * scale;
-            v[1] = (v[1] - cy) * scale;
+            v.x = (v.x - cx) * scale;
+            v.y = (v.y - cy) * scale;
         }
+}
+
+// ============================================================================
+//  Frontiere avec strokeToContours
+// ============================================================================
+//
+// stroke_contours.h parle en std::array<float,2> et sert aussi
+// parameterized_shapes.cpp : changer sa signature deborderait de ce fichier. On
+// convertit donc de part et d'autre de l'appel, sur les seuls traces ouverts.
+
+std::vector<std::array<float, 2>> toArrays(const std::vector<Vector2f>& pts)
+{
+    std::vector<std::array<float, 2>> out;
+    out.reserve(pts.size());
+    for (const Vector2f& p : pts) out.push_back({ p.x, p.y });
+    return out;
+}
+
+std::vector<Vector2f> fromArrays(const std::vector<std::array<float, 2>>& pts)
+{
+    std::vector<Vector2f> out;
+    out.reserve(pts.size());
+    for (const auto& p : pts) out.emplace_back(p[0], p[1]);
+    return out;
 }
 
 } // namespace
@@ -147,7 +139,7 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
     // One entry per fillable shape: its contours flattened to polylines. Kept
     // per shape because the fill rule (and hence the winding rule handed to the
     // tessellator) is a per-shape property.
-    std::vector<std::vector<std::vector<std::array<float, 2>>>> shapeContours;
+    std::vector<std::vector<std::vector<Vector2f>>> shapeContours;
     std::vector<bool> shapeEvenOdd;
 
     for (NSVGshape* shape = image->shapes; shape; shape = shape->next)
@@ -176,7 +168,7 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
         // d'office pour etre remplie. Sur un trace qui se replie sur lui-meme
         // (courbe du dragon) le remplissage degenere en damier, faute de pouvoir
         // designer un interieur.
-        std::vector<std::vector<std::array<float, 2>>> filled;
+        std::vector<std::vector<Vector2f>> filled;
         std::vector<std::vector<std::array<float, 2>>> openPaths;
 
         for (const NSVGpath* path = shape->paths; path; path = path->next)
@@ -191,7 +183,7 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
             else if (opt.strokeToVolume && hasStroke)
             {
                 if (pts.size() < 2) continue;
-                openPaths.push_back(std::move(pts));
+                openPaths.push_back(toArrays(pts));
             }
             else if (hasFill && pts.size() >= 3)
             {
@@ -220,10 +212,14 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
             const StrokeCap  cap  = (shape->strokeLineCap == NSVG_CAP_BUTT)   ? StrokeCap::Butt
                                   : (shape->strokeLineCap == NSVG_CAP_SQUARE) ? StrokeCap::Square
                                                                               : StrokeCap::Round;
-            auto ribbons = strokeToContours(openPaths, w, join, cap);
+            const auto ribbons = strokeToContours(openPaths, w, join, cap);
             if (!ribbons.empty())
             {
-                shapeContours.push_back(std::move(ribbons));
+                std::vector<std::vector<Vector2f>> converted;
+                converted.reserve(ribbons.size());
+                for (const auto& r : ribbons)
+                    converted.push_back(fromArrays(r));
+                shapeContours.push_back(std::move(converted));
                 // Les contours sortis de Clipper2 portent leur propre orientation :
                 // enveloppes en sens positif, trous en sens inverse -- exactement la
                 // convention de NonZero, qui soustrait donc les trous (l'interieur
@@ -244,7 +240,7 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
     if (opt.centerAndFit)
     {
         // Fit over ALL shapes at once so their relative placement survives.
-        std::vector<std::vector<std::array<float, 2>>> flat;
+        std::vector<std::vector<Vector2f>> flat;
         for (auto& contours : shapeContours)
             for (auto& pts : contours)
                 flat.push_back(std::move(pts));
@@ -264,8 +260,8 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
         {
             ExtrudeContour c;
             c.pts.reserve(pts.size());
-            for (const auto& p : pts)
-                c.pts.emplace_back(p[0], opt.invertY ? -p[1] : p[1]);
+            for (const Vector2f& p : pts)
+                c.pts.emplace_back(p.x, opt.invertY ? -p.y : p.y);
             contours.push_back(std::move(c));
         }
 

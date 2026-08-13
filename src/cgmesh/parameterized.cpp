@@ -31,6 +31,16 @@ Parameter Parameter::MakeBool(const std::string &name, bool *value)
 	return p;
 }
 
+Parameter Parameter::MakeString(const std::string &name, std::string *value, bool multiline)
+{
+	Parameter p;
+	p.m_type = STRING;
+	p.m_name = name;
+	p.m_pString = value;
+	p.m_multiline = multiline;
+	return p;
+}
+
 Parameter Parameter::MakeEnum(const std::string &name, int *value, const std::vector<std::string> &choices)
 {
 	Parameter p;

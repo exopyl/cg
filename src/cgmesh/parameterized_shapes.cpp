@@ -12,6 +12,8 @@
 #include "architecture_gothic.h"
 #include "extrude_contours.h"
 #include "stroke_contours.h"
+#include "text_extrude.h"
+#include "../cgmath/font.h"
 #include <nlohmann/json.hpp>
 #include <cmath>
 
@@ -571,6 +573,88 @@ void ParameterizedImageRelief::Regenerate()
 
 	// image_to_relief() already computes the normals and the bbox.
 	m_pMesh = image_to_relief(m_filename, opt);
+}
+
+// ===========================================================================
+// Texte 3D
+// ===========================================================================
+
+ParameterizedText3D::ParameterizedText3D(const std::string& fontFilename,
+                                         const std::string& text)
+	: m_pFont(new Font)
+	, m_text(text)
+{
+	// Un echec de chargement n'est PAS fatal ici : l'objet existe, Regenerate()
+	// ne produira simplement aucun maillage. L'appelant le constate par
+	// TakeMesh() == nullptr, comme pour un SVG illisible.
+	m_pFont->loadFromFile(fontFilename);
+	Regenerate();
+}
+
+// Hors-ligne parce que Font est incomplet dans l'en-tete : le destructeur de
+// unique_ptr<Font> a besoin du type complet, et c'est ici qu'il l'a.
+ParameterizedText3D::~ParameterizedText3D() = default;
+
+bool ParameterizedText3D::IsFontLoaded() const { return m_pFont && m_pFont->isValid(); }
+
+int ParameterizedText3D::GetKerningStatus() const
+{
+	return m_pFont ? (int)m_pFont->kerningStatus() : (int)KerningStatus::None;
+}
+
+std::vector<Parameter> ParameterizedText3D::GetParameters()
+{
+	return {
+		// LE parametre de cette forme : la chaine a extruder. Multiligne, un
+		// retour a la ligne ouvrant une nouvelle ligne de texte (text_layout.cpp).
+		// La police, elle, reste fixee a la construction -- c'est un FICHIER, du
+		// meme ordre que le SVG de ParameterizedSvgExtrusion, pas une valeur que
+		// l'on regle au curseur.
+		Parameter::MakeString("Text",          &m_text,          /*multiline*/ true),
+		// Le corps typographique, en unites du maillage.
+		Parameter::MakeFloat("Size",           &m_size,          0.1f,  10.f),
+		// Borne haute a une demi-hauteur d'em : au-dela le texte devient une
+		// barre dont on ne lit plus la lettre de face.
+		Parameter::MakeFloat("Depth",          &m_depth,         0.01f, 0.5f),
+		// En unites MONDE, et non en unites de police : la finesse ne depend donc
+		// ni de l'em de la police ni de la taille demandee. A 1/100e du corps un
+		// contour est deja visuellement lisse ; en dessous de 1/1000e on paie des
+		// sommets que l'oeil ne distingue plus.
+		Parameter::MakeFloat("Flatten tol",    &m_flattenTol,    0.001f, 0.1f),
+		Parameter::MakeFloat("Letter spacing", &m_letterSpacing, -0.5f, 0.5f),
+		Parameter::MakeFloat("Line spacing",   &m_lineSpacing,    0.5f, 3.f),
+		Parameter::MakeEnum ("Align",          &m_align, { "Left", "Center", "Right" }),
+		// Sans effet quand la police porte son crenage dans un format que nous ne
+		// savons pas lire (cf. GetKerningStatus).
+		Parameter::MakeBool ("Kerning",        &m_kerning),
+		// Couteux : ne sert qu'aux interlettrages tres serres, ou les glyphes se
+		// recouvrent reellement.
+		Parameter::MakeBool ("Union overlaps", &m_unionOverlaps),
+		Parameter::MakeBool ("Center",         &m_centerOnOrigin),
+	};
+}
+
+void ParameterizedText3D::Regenerate()
+{
+	delete m_pMesh;
+	m_pMesh = nullptr;
+	if (!IsFontLoaded()) return;
+
+	TextExtrudeOptions opt;
+	opt.size           = m_size;
+	opt.depth          = m_depth;
+	opt.flattenTol     = m_flattenTol;
+	opt.letterSpacing  = m_letterSpacing;
+	opt.lineSpacing    = m_lineSpacing;
+	opt.align          = (m_align == 1) ? TextAlign::Center
+	                   : (m_align == 2) ? TextAlign::Right
+	                                    : TextAlign::Left;
+	opt.kerning        = m_kerning;
+	opt.unionOverlaps  = m_unionOverlaps;
+	opt.centerOnOrigin = m_centerOnOrigin;
+
+	// text_to_extruded_mesh() calcule deja les normales (ExtrudedMeshBuilder::Build).
+	m_pMesh = text_to_extruded_mesh(*m_pFont, m_text, opt);
 }
 
 // ===========================================================================

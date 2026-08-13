@@ -57,6 +57,17 @@ add_custom_command(TARGET maker POST_BUILD
             "${CMAKE_CURRENT_SOURCE_DIR}/web/data/joconde.jpg"
     COMMENT "Copie de l'image par defaut dans maker/web/data/")
 
+# Police servie par defaut a la page « Texte 3D », pour qu'elle ouvre sur un
+# resultat plutot que sur un viewer vide -- l'utilisateur reste libre d'importer
+# la sienne. BloomingGrove.otf (Nathan Eady) est du DOMAINE PUBLIC, ce qui
+# autorise sa redistribution avec la page. Meme montage que les deux copies
+# ci-dessus : source unique dans test/data/, copie en artefact de build.
+add_custom_command(TARGET maker POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/test/data/fonts/BloomingGrove.otf"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/data/BloomingGrove.otf"
+    COMMENT "Copie de la police par defaut dans maker/web/data/")
+
 # Exceptions : nanosvg / STL en levent (cf. ANALYSE sec.9.3).
 target_compile_options(maker PRIVATE -fexceptions)
 

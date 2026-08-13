@@ -80,6 +80,38 @@ function buildParamWidget(Module, id, p, onChange, refreshers, refresh) {
     return wrap;
   }
 
+  if (p.type === "string") {
+    const row = document.createElement("div");
+    row.className = "row";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = p.name;
+    row.appendChild(name);
+    wrap.appendChild(row);
+
+    // Un parametre textuel multiligne (le texte a extruder) a besoin d'un
+    // textarea : un <input> avalerait les retours a la ligne, qui ouvrent
+    // justement une nouvelle ligne de texte.
+    const field = document.createElement(p.multiline ? "textarea" : "input");
+    if (p.multiline) field.rows = 3; else field.type = "text";
+    field.value = p.value;
+    field.spellcheck = false;
+
+    // « input » et non « change » : la forme se reconstruit a la frappe, comme
+    // un curseur se suit en direct. Le cout reste tenable parce que la police
+    // est deja parsee -- seules la mise en page, l'aplatissement et la
+    // tessellation sont rejoues.
+    //
+    // setParamString et NON setParam : une chaine n'a pas de valeur numerique,
+    // et le pont refuse explicitement le second chemin (cf. wasm_api.cpp).
+    field.addEventListener("input", () => {
+      Module.setParamString(id, p.name, field.value);
+      onChange();
+    });
+    wrap.appendChild(field);
+    return wrap;
+  }
+
   // int / float -> slider + valeur
   const isInt = p.type === "int";
   const row = document.createElement("div");

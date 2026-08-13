@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Texte 3D — maker</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./vendor/o3dv.min.js" onerror="window.__o3dvMissing = true"></script>
+</head>
+<body>
+  <aside class="panel" id="panel">
+    <div id="pageControls">
+      <section class="group">
+        <label class="lbl" for="fontInput">Police (TTF, OTF, TTC)</label>
+        <input type="file" id="fontInput" accept=".ttf,.otf,.ttc,.otc,font/ttf,font/otf">
+        <p class="hint-sm" id="fontInfo">Aucune police chargée.</p>
+        <p class="hint-sm">Le <b>texte</b> est un paramètre de la forme, comme la
+          profondeur ou le corps : il se saisit dans le panneau ci-dessous et le
+          volume suit à la frappe. Un retour à la ligne ouvre une nouvelle ligne.</p>
+      </section>
+    </div>
+  </aside>
+
+  <main id="viewer" class="viewer">
+    <div id="viewerHint" class="hint">Chargement du module…</div>
+  </main>
+
+  <script type="module" src="./js/pages/text.js"></script>
+</body>
+</html>

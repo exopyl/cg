@@ -79,6 +79,23 @@ void PropertyPanel::Rebuild()
 			m_pGrid->Append(new wxEnumProperty(name, name, labels, values, p.GetInt()));
 			break;
 		}
+		case Parameter::STRING:
+		{
+			// UTF-8 explicite dans les DEUX sens : le moteur stocke de l'UTF-8
+			// (la mise en page du texte 3D le decode elle-meme), wxString est en
+			// unites natives. Sans conversion nommee, un « e accent aigu » saisi
+			// dans la grille ressortirait en deux octets CP1252 et la police n'y
+			// trouverait aucun glyphe.
+			const wxString value = wxString::FromUTF8(p.GetString().c_str());
+			// wxLongStringProperty ouvre un editeur MULTILIGNE : c'est ce qui rend
+			// un texte a plusieurs lignes saisissable, la grille elle-meme ne
+			// gerant qu'une ligne. wxStringProperty sinon.
+			if (p.IsMultiline())
+				m_pGrid->Append(new wxLongStringProperty(name, name, value));
+			else
+				m_pGrid->Append(new wxStringProperty(name, name, value));
+			break;
+		}
 		}
 	}
 }
@@ -153,6 +170,10 @@ void PropertyPanel::OnPropertyChanged(wxPropertyGridEvent &event)
 			break;
 		case Parameter::BOOL:
 			p.SetBool(prop->GetValue().GetBool());
+			break;
+		case Parameter::STRING:
+			// Retour en UTF-8 : cf. la remarque symetrique dans Rebuild().
+			p.SetString(std::string(prop->GetValue().GetString().utf8_str()));
 			break;
 		}
 		break;

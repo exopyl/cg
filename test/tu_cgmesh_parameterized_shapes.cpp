@@ -158,6 +158,7 @@ TEST(TEST_cgmesh_parameterized_shapes, every_parameter_is_self_consistent)
                     EXPECT_FALSE(c.empty()) << "choix d'enum vide";
                 break;
             case Parameter::BOOL:
+            case Parameter::STRING:
                 break;   // rien a borner
             }
         }
@@ -447,6 +448,117 @@ TEST(TEST_cgmesh_parameterized_shapes, file_based_wrappers_survive_a_missing_fil
         ParameterizedImagePixelBlocks blocks("./tu_param_does_not_exist.ppm");
         EXPECT_EQ(blocks.GetMesh(), nullptr);
     });
+    EXPECT_NO_THROW({
+        ParameterizedText3D text("./tu_param_does_not_exist.ttf");
+        EXPECT_EQ(text.GetMesh(), nullptr);
+        EXPECT_FALSE(text.IsFontLoaded());
+    });
+}
+
+// ---------------------------------------------------------------------------
+//  ParameterizedText3D : le texte EST un paramètre
+// ---------------------------------------------------------------------------
+//
+// C'est ce qui distingue cette forme des autres enveloppes à fichier : le SVG et
+// l'image n'exposent que des nombres, ici la chaîne à extruder se règle comme un
+// curseur. Elle a exigé un type `Parameter::STRING` — jusque-là le paramétrage
+// ne savait porter que des valeurs numériques.
+
+namespace
+{
+    const char* kTextFont = "./test/data/fonts/BloomingGrove.otf";
+
+    // Le paramètre portant ce nom, ou nullptr. Les Parameter référencent les
+    // membres de la forme par pointeur : écrire dans celui-ci écrit dans l'objet.
+    Parameter* findParam(std::vector<Parameter>& params, const char* name)
+    {
+        for (Parameter& p : params)
+            if (p.GetName() == name) return &p;
+        return nullptr;
+    }
+}
+
+TEST(TEST_cgmesh_parameterized_shapes, text3d_exposes_its_text_as_a_string_parameter)
+{
+    ParameterizedText3D shape(kTextFont, "AB");
+    ASSERT_TRUE(shape.IsFontLoaded()) << kTextFont;
+
+    std::vector<Parameter> params = shape.GetParameters();
+    const Parameter* text = findParam(params, "Text");
+    ASSERT_NE(text, nullptr) << "aucun parametre nomme Text";
+    EXPECT_EQ(text->GetType(), Parameter::STRING);
+    EXPECT_EQ(text->GetString(), "AB");
+    // Multiligne : un retour à la ligne ouvre une nouvelle ligne de texte, une
+    // interface qui n'offrirait qu'un champ d'une ligne le rendrait inaccessible.
+    EXPECT_TRUE(text->IsMultiline());
+}
+
+// L'aller-retour complet, celui dont dépend le panneau de propriétés : on écrit
+// par le Parameter, on régénère, et la géométrie doit avoir suivi.
+TEST(TEST_cgmesh_parameterized_shapes, writing_the_text_parameter_rebuilds_the_geometry)
+{
+    ParameterizedText3D shape(kTextFont, "A");
+    ASSERT_TRUE(shape.IsFontLoaded());
+
+    Mesh* before = shape.GetMesh();
+    ASSERT_NE(before, nullptr);
+    const unsigned int nvOne = before->GetNVertices();
+    ASSERT_GT(nvOne, 0u);
+
+    std::vector<Parameter> params = shape.GetParameters();
+    Parameter* text = findParam(params, "Text");
+    ASSERT_NE(text, nullptr);
+
+    text->SetString("AAAA");
+    std::vector<Parameter> reread = shape.GetParameters();
+    EXPECT_EQ(findParam(reread, "Text")->GetString(), "AAAA")
+        << "l'ecriture n'a pas atteint le membre de la forme";
+
+    shape.Regenerate();
+    Mesh* after = shape.GetMesh();
+    ASSERT_NE(after, nullptr);
+    // Quatre fois la meme lettre : quatre fois les sommets d'un A.
+    EXPECT_EQ(after->GetNVertices(), 4u * nvOne);
+    EXPECT_TRUE(allFinite(*after));
+}
+
+// Un texte vidé ne produit plus rien -- ce n'est PAS une erreur, et surtout ce
+// n'est pas un état dont on ne revient pas : retaper une lettre doit rendre la
+// géométrie. Le cas se produit dès qu'on sélectionne tout et qu'on retape.
+TEST(TEST_cgmesh_parameterized_shapes, emptying_the_text_is_recoverable)
+{
+    ParameterizedText3D shape(kTextFont, "A");
+    ASSERT_TRUE(shape.IsFontLoaded());
+    ASSERT_NE(shape.GetMesh(), nullptr);
+
+    std::vector<Parameter> params = shape.GetParameters();
+    Parameter* text = findParam(params, "Text");
+    ASSERT_NE(text, nullptr);
+
+    text->SetString("");
+    EXPECT_NO_THROW(shape.Regenerate());
+    EXPECT_EQ(shape.GetMesh(), nullptr) << "un texte vide n'a aucune geometrie";
+
+    text->SetString("B");
+    EXPECT_NO_THROW(shape.Regenerate());
+    EXPECT_NE(shape.GetMesh(), nullptr) << "la geometrie doit revenir";
+}
+
+// Le texte traverse en UTF-8 : une lettre accentuée doit rester UN glyphe, et
+// non deux octets pris pour deux caractères.
+TEST(TEST_cgmesh_parameterized_shapes, the_text_parameter_carries_utf8)
+{
+    ParameterizedText3D shape(kTextFont, "A");
+    ASSERT_TRUE(shape.IsFontLoaded());
+
+    std::vector<Parameter> params = shape.GetParameters();
+    Parameter* text = findParam(params, "Text");
+    ASSERT_NE(text, nullptr);
+
+    // « e accent aigu » en UTF-8 : deux octets, un seul point de code.
+    text->SetString("\xC3\xA9");
+    EXPECT_EQ(text->GetString().size(), 2u) << "la chaine doit rester telle quelle";
+    EXPECT_NO_THROW(shape.Regenerate());
 }
 
 // ---------------------------------------------------------------------------

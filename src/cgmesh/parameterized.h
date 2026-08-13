@@ -13,13 +13,22 @@ class Mesh;
 class Parameter
 {
 public:
-	enum Type { INT, FLOAT, BOOL, ENUM };
+	// STRING : une valeur TEXTUELLE, sans bornes ni choix. C'est le seul type qui
+	// ne se ramene pas a un nombre, d'ou son ajout tardif -- il a fallu le texte
+	// 3D, dont la chaine a extruder EST le parametre principal, pour qu'il ait
+	// une raison d'exister. Les interfaces doivent donc l'ecrire par un chemin
+	// distinct de leur ecriture numerique habituelle.
+	enum Type { INT, FLOAT, BOOL, ENUM, STRING };
 
 	// Factory helpers
 	static Parameter MakeInt(const std::string &name, int *value, int minV, int maxV);
 	static Parameter MakeFloat(const std::string &name, float *value, float minV, float maxV);
 	static Parameter MakeBool(const std::string &name, bool *value);
 	static Parameter MakeEnum(const std::string &name, int *value, const std::vector<std::string> &choices);
+	// `multiline` n'est qu'un INDICE de presentation : l'interface est libre de
+	// l'ignorer, la valeur reste une chaine dans les deux cas.
+	static Parameter MakeString(const std::string &name, std::string *value,
+	                            bool multiline = false);
 
 	// Accessors used by the UI
 	Type                            GetType() const      { return m_type; }
@@ -30,13 +39,17 @@ public:
 	int                             GetMinInt() const    { return m_minInt; }
 	int                             GetMaxInt() const    { return m_maxInt; }
 
+	bool  IsMultiline() const      { return m_multiline; }
+
 	int   GetInt() const           { return *m_pInt; }
 	float GetFloat() const         { return *m_pFloat; }
 	bool  GetBool() const          { return *m_pBool; }
+	const std::string& GetString() const { return *m_pString; }
 
 	void  SetInt(int v)            { *m_pInt = v; }
 	void  SetFloat(float v)        { *m_pFloat = v; }
 	void  SetBool(bool v)          { *m_pBool = v; }
+	void  SetString(const std::string &v) { *m_pString = v; }
 
 private:
 	Type m_type;
@@ -47,9 +60,11 @@ private:
 	int *m_pInt = nullptr;
 	float *m_pFloat = nullptr;
 	bool *m_pBool = nullptr;
+	std::string *m_pString = nullptr;
 
 	int m_minInt = 0, m_maxInt = 0;
 	float m_minFloat = 0.f, m_maxFloat = 0.f;
+	bool m_multiline = false;
 };
 
 //

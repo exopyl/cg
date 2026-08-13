@@ -130,6 +130,7 @@ class MyFrame : public wxFrame
 	ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE,
 	ID_GEOMETRY_NEW_PARAM_LSYSTEM,
 	ID_GEOMETRY_NEW_PARAM_SVG,
+	ID_GEOMETRY_NEW_PARAM_TEXT3D,
 	ID_GEOMETRY_NEW_PARAM_IMPLICIT,
 	ID_GEOMETRY_CUBE,
 	ID_GEOMETRY_SPHERE,
@@ -248,6 +249,7 @@ private:
     void OnNewGeometry(wxCommandEvent& evt);
     void OnNewParameterizedGeometry(wxCommandEvent& evt);
     void OnNewParameterizedSvg(wxCommandEvent& evt);
+    void OnNewParameterizedText3D(wxCommandEvent& evt);
     void OnNewParameterizedImplicit(wxCommandEvent& evt);
     void OnParameterChanged();
     void OnSettings(wxCommandEvent& evt);

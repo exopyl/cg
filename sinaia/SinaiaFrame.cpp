@@ -47,6 +47,7 @@
 #include "../src/cgmesh/DiffParamEvaluator.h"
 #include "../src/cgmesh/mesh_data_manager.h"
 #include "../src/cgmesh/parameterized_shapes.h"
+#include "../src/cgmath/font.h"   // KerningStatus : signaler un crenage illisible
 #include "../src/cgmesh/normals.h"
 
 namespace {
@@ -214,6 +215,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_MENGER_SPONGE, MyFrame::OnNewParameterizedGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_LSYSTEM, MyFrame::OnNewParameterizedGeometry)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_SVG,           MyFrame::OnNewParameterizedSvg)
+    EVT_MENU(ID_GEOMETRY_NEW_PARAM_TEXT3D,        MyFrame::OnNewParameterizedText3D)
     EVT_MENU(ID_GEOMETRY_NEW_PARAM_IMPLICIT,      MyFrame::OnNewParameterizedImplicit)
     EVT_MENU(ID_Settings, MyFrame::OnSettings)
     EVT_MENU(wxID_EXIT, MyFrame::OnExit)
@@ -423,6 +425,9 @@ MyFrame::MyFrame(wxWindow* parent,
     wxMenu* svg_shapes_menu = new wxMenu;
     svg_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_SVG, wxT("SVG extrusion..."));
 
+    wxMenu* text_shapes_menu = new wxMenu;
+    text_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_TEXT3D, wxT("Import from font..."));
+
     wxMenu* pointcloud_shapes_menu = new wxMenu;
     pointcloud_shapes_menu->Append(ID_GEOMETRY_NEW_PARAM_IMPLICIT, wxT("Implicit surface (PLY)..."));
 
@@ -433,6 +438,7 @@ MyFrame::MyFrame(wxWindow* parent,
     geometry_menu->AppendSubMenu(parametric_surfaces_menu, wxT("Parametric Surfaces"));
     geometry_menu->AppendSubMenu(fractal_shapes_menu, wxT("Fractal Shapes"));
     geometry_menu->AppendSubMenu(svg_shapes_menu, wxT("From SVG"));
+    geometry_menu->AppendSubMenu(text_shapes_menu, wxT("From Font"));
     geometry_menu->AppendSubMenu(pointcloud_shapes_menu, wxT("From Point Cloud"));
 
 
@@ -2375,6 +2381,75 @@ void MyFrame::OnNewParameterizedSvg(wxCommandEvent& WXUNUSED(event))
 	IParameterized* pRaw = pParam.get();
 	m_paramByCanvas[pCanvas] = std::move(pParam);
 	m_pParamPanel->Bind(pRaw);
+
+	UpdatePropertiesGrid();
+	UpdateContextualPanes();
+}
+
+//
+// Import from font: pick a font file and get a PARAMETERIZED geometry whose
+// main parameter is the text itself. Same shape of code as the SVG extrusion
+// above -- the only dialog is the file picker.
+//
+// ONE dialog and not two: the string is a Parameter::STRING (see
+// parameterized.h), so it is typed and retyped live in the Properties panel,
+// like every other setting of the geometry. Only the FONT is fixed at
+// construction, because it is a file -- same contract as the SVG and image
+// geometries, which take their path the same way. That is also what keeps
+// editing cheap: the font is parsed once, and each keystroke replays only the
+// layout, the flattening and the tessellation.
+//
+void MyFrame::OnNewParameterizedText3D(wxCommandEvent& WXUNUSED(event))
+{
+	wxFileDialog dlg(this, _("Select a font"), wxEmptyString, wxEmptyString,
+	                 wxT("Fonts (*.ttf;*.otf;*.ttc;*.otc)|*.ttf;*.otf;*.ttc;*.otc|All files (*.*)|*.*"),
+	                 wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+	if (dlg.ShowModal() != wxID_OK)
+		return;
+
+	const std::string path = std::string(dlg.GetPath().mb_str(wxConvUTF8));
+
+	auto pParam = std::make_unique<ParameterizedText3D>(path);
+
+	// Releve AVANT de ceder la propriete au registre.
+	const bool kerningUnreadable =
+		pParam->GetKerningStatus() == (int)KerningStatus::Unsupported;
+
+	Mesh* pMesh = pParam->TakeMesh();
+	if (!pMesh)
+	{
+		// Deux causes distinctes, et l'utilisateur ne peut pas les deviner : soit
+		// le format est hors perimetre (WOFF, Type 1, bitmap), soit la police n'a
+		// aucun des glyphes du texte par defaut.
+		const wxString why = pParam->IsFontLoaded()
+			? _("None of the default characters exists in this font.")
+			: _("Unsupported or unreadable font (WOFF, WOFF2, Type 1 and bitmap fonts are out of scope).");
+		wxMessageBox(why, _("Font import error"), wxOK | wxICON_ERROR, this);
+		return;
+	}
+
+	MyGLCanvas* pCanvas = new MyGLCanvas(m_pCtrl, m_pWndLogging,
+	                                     (int*)MyGLCanvas::GetDefaultAttributes());
+	auto* pVMeshes = new VMeshes();
+	pVMeshes->AddMesh(pMesh);
+	pCanvas->SetVMeshes(pVMeshes);
+	// L'onglet porte le nom de la POLICE : le texte, lui, va changer a chaque
+	// frappe, un titre qui le suivrait serait illisible.
+	m_pCtrl->AddPage(pCanvas, dlg.GetFilename(), true);
+
+	IParameterized* pRaw = pParam.get();
+	m_paramByCanvas[pCanvas] = std::move(pParam);
+	m_pParamPanel->Bind(pRaw);
+
+	// Le crenage est « au mieux » : certaines polices le portent dans un format
+	// que nous ne savons pas lire (kern Apple v1.0, sous-tables de format 2, ou
+	// GPOS seul). Le dire ici plutot que de laisser decouvrir un texte mal
+	// espace -- c'est une limite ASSUMEE, pas un defaut a cacher.
+	if (kerningUnreadable)
+	{
+		wxLogMessage(_("This font carries kerning in a format we do not read; "
+		               "spacing falls back to plain advances."));
+	}
 
 	UpdatePropertiesGrid();
 	UpdateContextualPanes();

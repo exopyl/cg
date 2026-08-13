@@ -1,8 +1,12 @@
 #pragma once
+#include <memory>
+
 #include "parameterized.h"
 #include "mesh.h"
 #include "image_pixel_blocks.h"   // ImagePixelBlocksOptions
 #include "surface_implicit_pointcloud.h"
+
+class Font;   // cgmath/font.h -- garde stb_truetype hors de cet en-tete
 
 //
 // Common base for parameterized objects that own a Mesh*. Handles
@@ -427,6 +431,59 @@ private:
 	bool  m_internalWalls = true;
 	bool  m_emitBase      = true;    // plaque de support
 	bool  m_emitWall      = true;    // mur perimetrique
+};
+
+// ---------------------------------------------------------------------------
+// Texte 3D
+// ---------------------------------------------------------------------------
+
+// Charge une police a contours (TTF / OTF / TTC) et extrude une chaine de
+// caracteres (cf. text_extrude.h).
+//
+// Le TEXTE est un Parameter a part entiere (Parameter::STRING) : c'est meme LE
+// parametre de cette forme, et il se modifie en direct comme n'importe quel
+// curseur. La POLICE, elle, reste fixee a la construction -- c'est un FICHIER,
+// du meme ordre que le SVG de ParameterizedSvgExtrusion ou l'image de
+// ParameterizedImageRelief. D'ou l'ergonomie retenue cote applications :
+// « importer une police » cree l'objet, puis tout se regle dans le panneau.
+//
+// La police est chargee UNE fois, a la construction, et conservee : contrairement
+// a ParameterizedImageRelief qui relit son fichier a chaque Regenerate(),
+// re-parser une police a chaque frappe serait du gaspillage pur. Seuls la mise
+// en page, l'aplatissement et la tessellation sont rejoues.
+class ParameterizedText3D : public ParameterizedMesh
+{
+public:
+	// `text` n'est que la valeur INITIALE du parametre du meme nom.
+	ParameterizedText3D(const std::string& fontFilename,
+	                    const std::string& text = "Text");
+	~ParameterizedText3D() override;
+
+	std::vector<Parameter> GetParameters() override;
+	void Regenerate() override;
+	std::string GetName() const override { return "Text 3D"; }
+
+	// Ce que l'on a su faire du crenage de CETTE police, pour qu'une interface
+	// puisse le signaler plutot que de laisser decouvrir la limite. Valeurs :
+	// cf. KerningStatus (cgmath/font.h) -- 0 aucun, 1 applique, 2 non lisible.
+	int GetKerningStatus() const;
+	bool IsFontLoaded() const;
+
+private:
+	// unique_ptr et non un Font membre : cela garde font.h -- et donc
+	// stb_truetype -- hors de cet en-tete, inclus par des dizaines de fichiers.
+	std::unique_ptr<Font> m_pFont;
+	std::string m_text;
+
+	float m_size          = 1.f;
+	float m_depth         = 0.2f;
+	float m_flattenTol    = 0.01f;
+	float m_letterSpacing = 0.f;
+	float m_lineSpacing   = 1.f;
+	int   m_align         = 0;      // 0 = Left, 1 = Center, 2 = Right
+	bool  m_kerning       = true;
+	bool  m_unionOverlaps = false;
+	bool  m_centerOnOrigin = true;
 };
 
 // ---------------------------------------------------------------------------

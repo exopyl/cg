@@ -8,8 +8,11 @@
 //   listShapes(category)       -> JSON : catalogue d'une categorie ("" = tout)
 //   createShape(name)          -> id entier (registre cote C++), -1 si inconnu
 //   createSvgExtrusion(svg)    -> id, a partir du texte SVG (via MEMFS)
+//   createTextExtrusion(fontBytes, filename, text)
+//                              -> id, texte 3D : police en Uint8Array, texte en string
 //   getParams(id)              -> JSON : parametres typees (name/type/value/min/max/choices)
 //   setParam(id, name, value)  -> bool : ecrit la valeur (par nom, jamais de pointeur cru)
+//   setParamString(id, name, s)-> bool : idem pour un parametre TEXTUEL
 //   regenerate(id)             -> string OBJ : Regenerate() puis export du maillage
 //   destroyShape(id)           -> libere l'objet
 //
@@ -300,6 +303,51 @@ int createImageRelief(emscripten::val bytes, const std::string& filename)
 #endif
 
 #ifdef __EMSCRIPTEN__
+// Cree un texte 3D a partir des OCTETS d'une police et d'une chaine.
+//
+// Deux protocoles DIFFERENTS dans le meme appel, et c'est voulu :
+//
+//   - la POLICE est binaire -> Uint8Array (convertJSArrayToNumberVector). Une
+//     std::string la ferait passer par la conversion UTF-8 d'embind, qui
+//     DETRUIRAIT les octets -- meme piege que pour les octets d'image.
+//   - le TEXTE est du texte -> std::string, et c'est justement cette conversion
+//     UTF-8 que l'on veut : la mise en page decode l'UTF-8 (text_layout.cpp).
+//
+// Contrairement au SVG et a l'image, le fichier MEMFS peut etre supprime
+// AUSSITOT : ParameterizedText3D garde la police EN MEMOIRE et ne relit jamais
+// son fichier. C'est aussi ce qui rend chaque mouvement de curseur bon marche.
+int createTextExtrusion(emscripten::val fontBytes, const std::string& filename,
+                        const std::string& text)
+{
+    std::vector<unsigned char> data =
+        emscripten::convertJSArrayToNumberVector<unsigned char>(fontBytes);
+    if (data.empty() || text.empty()) return -1;
+
+    // L'extension n'a aucune importance pour le chargement (le format est
+    // reconnu a la signature, cf. font.cpp) ; on la conserve pour la lisibilite
+    // des messages d'erreur.
+    std::string ext;
+    const size_t dot = filename.find_last_of('.');
+    if (dot != std::string::npos) ext = filename.substr(dot);
+    if (ext.empty()) ext = ".ttf";
+
+    static int counter = 0;
+    const std::string path = "/tmp/maker_font_" + std::to_string(counter++) + ext;
+    {
+        std::ofstream f(path, std::ios::binary);
+        if (!f) return -1;
+        f.write((const char*)data.data(), (std::streamsize)data.size());
+    }
+
+    auto obj = std::unique_ptr<IParameterized>(new ParameterizedText3D(path, text));
+    std::remove(path.c_str());   // la police est deja en memoire
+
+    if (!meshOf(obj.get())) return -1;
+    return registerObject(std::move(obj));
+}
+#endif
+
+#ifdef __EMSCRIPTEN__
 // Cree des blocs pixelises a partir des OCTETS d'une image. Meme protocole que
 // createImageRelief : Uint8Array (une image est binaire), extension conservee
 // pour que Img::load sache dispatcher son decodeur, fichier MEMFS garde vivant
@@ -498,6 +546,12 @@ std::string getParams(int id)
                 j += "\"type\":\"bool\",\"value\":";
                 j += (p.GetBool() ? "true" : "false");
                 break;
+            case Parameter::STRING:
+                j += "\"type\":\"string\",\"value\":\"";
+                j += jsonEscape(p.GetString());
+                j += "\",\"multiline\":";
+                j += (p.IsMultiline() ? "true" : "false");
+                break;
             case Parameter::ENUM: {
                 j += "\"type\":\"enum\",\"value\":" + std::to_string(p.GetInt());
                 j += ",\"choices\":[";
@@ -531,7 +585,34 @@ bool setParam(int id, const std::string& name, double value)
             case Parameter::ENUM:  p.SetInt((int)value); break;
             case Parameter::FLOAT: p.SetFloat((float)value); break;
             case Parameter::BOOL:  p.SetBool(value != 0.0); break;
+            // Un parametre TEXTUEL n'a pas de valeur numerique : l'ecrire par ce
+            // chemin serait une erreur d'appel cote JS, pas une conversion a
+            // deviner. On refuse plutot que d'ecraser la chaine par du vide.
+            case Parameter::STRING: return false;
         }
+        return true;
+    }
+    return false;
+}
+
+// Ecrit un parametre TEXTUEL. Fonction distincte et non une surcharge : embind
+// resout par arite et par type, et une surcharge double/string sur le meme nom
+// exposerait au JS un appel dont le comportement dependrait du type dynamique de
+// l'argument -- exactement le genre d'ambiguite que le pont evite ailleurs.
+//
+// La chaine traverse en std::string, donc en UTF-8 : c'est bien ce que l'on veut
+// ici (contrairement aux OCTETS d'une police ou d'une image, que cette meme
+// conversion detruirait).
+bool setParamString(int id, const std::string& name, const std::string& value)
+{
+    IParameterized* obj = find(id);
+    if (!obj) return false;
+
+    std::vector<Parameter> params = obj->GetParameters();
+    for (Parameter& p : params) {
+        if (p.GetName() != name) continue;
+        if (p.GetType() != Parameter::STRING) return false;
+        p.SetString(value);
         return true;
     }
     return false;
@@ -638,11 +719,13 @@ EMSCRIPTEN_BINDINGS(maker)
     emscripten::function("createSvgExtrusion",&createSvgExtrusion);
     emscripten::function("createImageRelief", &createImageRelief);
     emscripten::function("createImagePixelBlocks", &createImagePixelBlocks);
+    emscripten::function("createTextExtrusion", &createTextExtrusion);
     emscripten::function("exportPixelBlocks",      &exportPixelBlocks);
     emscripten::function("createGothicFromJson",&createGothicFromJson);
     emscripten::function("exportGothicJson",  &exportGothicJson);
     emscripten::function("getParams",         &getParams);
     emscripten::function("setParam",          &setParam);
+    emscripten::function("setParamString",    &setParamString);
     emscripten::function("regenerate",        &regenerate);
     emscripten::function("exportObj",         &exportObj);
     emscripten::function("meshData",          &meshData);

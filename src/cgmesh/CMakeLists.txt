@@ -48,6 +48,10 @@ if (EMSCRIPTEN)
         ${PROJECT_SOURCE_DIR}/import_svg.cpp
         ${PROJECT_SOURCE_DIR}/extrude_contours.cpp
         ${PROJECT_SOURCE_DIR}/stroke_contours.cpp   # epaississement des traces, requis par import_svg
+        # texte -> solide extrude. SEUL fichier du chantier « texte 3D » a
+        # declarer ici : font.cpp, text_layout.cpp et bezier_flatten.cpp vivent
+        # dans cgmath, dont le CMakeLists globe *.cpp sans branche EMSCRIPTEN.
+        ${PROJECT_SOURCE_DIR}/text_extrude.cpp
         # image -> relief colore (quantification + vectorisation + extrusion)
         ${PROJECT_SOURCE_DIR}/image_region_pipeline.cpp   # tronc commun relief / pixel blocks
         ${PROJECT_SOURCE_DIR}/image_relief.cpp
