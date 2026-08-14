@@ -26,7 +26,26 @@ class Mesh;
 struct SvgExtrudeOptions
 {
     float height       = 1.0f;  // extrusion depth along +Z
-    float flattenTol   = 0.5f;  // pixel-space tolerance for bezier flattening
+
+    // ------------------------------------------------------------------------
+    //  Tolerance d'aplatissement des courbes
+    // ------------------------------------------------------------------------
+    // Exprimee dans les unites du MAILLAGE PRODUIT, et non dans celles du
+    // document source. Avec `centerAndFit`, l'objet fait 1.0 unite : 0.005 est
+    // donc le 1/200e de sa plus grande dimension, quelle que soit l'echelle du
+    // fichier -- icone de 24 ou plan de travail de 2048. C'est la meme convention
+    // que TextExtrudeOptions::flattenTol (text_extrude.h), et les deux valeurs
+    // sont desormais comparables.
+    //
+    // Jusqu'au 2026-08-14 cette tolerance etait consommee dans les unites du
+    // DOCUMENT, la mise a l'echelle n'intervenant qu'apres l'aplatissement. La
+    // finesse des courbes dependait donc d'un nombre que l'utilisateur ne
+    // choisit pas : sur un plan de travail de 2048, la course entiere du curseur
+    // tenait sous 0.005 unite monde -- impossible de degrossir ; sur une icone de
+    // 24, son maximum donnait 42 % d'ecart. La conversion est faite dans
+    // import_svg.cpp, ou la circularite qu'elle contourne est expliquee.
+    float flattenTol   = 0.005f;
+
     bool  centerAndFit = true;  // recenter on XY bbox and normalize size
     bool  invertY      = true;  // SVG Y points down; flip it
 

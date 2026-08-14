@@ -344,7 +344,11 @@ private:
 	// un centieme de cette taille -- l'epaisseur d'une plaque gravee. A 0.2 le
 	// resultat etait un pave dont le relief se lisait mal.
 	float       m_height     = 0.01f;
-	float       m_flattenTol = 0.5f;
+	// 0.005 : un 200e de la taille normalisee, dans les unites du maillage produit
+	// et non dans celles du document (cf. SvgExtrudeOptions::flattenTol). C'est ce
+	// que valait l'ancien 0.5 sur un canevas de 100 -- soit les fichiers d'essai du
+	// depot -- de sorte que le rendu habituel ne change pas.
+	float       m_flattenTol = 0.005f;
 };
 
 // ---------------------------------------------------------------------------

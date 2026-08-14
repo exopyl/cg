@@ -72,6 +72,54 @@ std::vector<Vector2f> flattenPath(const NSVGpath* path, float tol)
 // derives cap and wall orientation from the world geometry itself, so doing this
 // before rather than after tessellation is equivalent.
 
+// ============================================================================
+//  Emprise du document, SANS aplatir
+// ============================================================================
+//
+// Une Bezier est contenue dans l'enveloppe convexe de ses points de controle :
+// l'emprise lue sur ces points CONTIENT donc celle du trace, et lui est egale
+// des que les extremums sont des points d'ancrage -- le cas courant. On connait
+// ainsi l'ordre de grandeur du document AVANT toute subdivision, ce qui casse la
+// circularite : recenterAndFit a besoin de la geometrie aplatie, et la
+// subdivision aurait besoin du facteur d'echelle.
+//
+// Les memes formes sont parcourues que dans la boucle principale -- meme filtre
+// d'identifiant, meme test remplissage / trait -- pour que l'estimation porte sur
+// l'encre reellement produite. L'ecart residuel (chemins trop courts pour etre
+// retenus, epaisseur ajoutee par strokeToContours) ne joue QUE sur la densite de
+// tessellation, jamais sur la position d'un sommet : cette valeur ne sert qu'a
+// convertir une tolerance.
+//
+// Renvoie 0 quand il n'y a rien a mesurer.
+float controlHullLargestExtent(const NSVGimage* image, const SvgExtrudeOptions& opt)
+{
+    bool any = false;
+    float minX = 0.f, minY = 0.f, maxX = 0.f, maxY = 0.f;
+
+    for (const NSVGshape* shape = image->shapes; shape; shape = shape->next)
+    {
+        if (!opt.ignoreShapeId.empty() && opt.ignoreShapeId == shape->id)
+            continue;
+
+        const bool hasFill   = (shape->fill.type   != NSVG_PAINT_NONE);
+        const bool hasStroke = (shape->stroke.type != NSVG_PAINT_NONE);
+        if (!hasFill && !(hasStroke && opt.strokeToVolume)) continue;
+
+        for (const NSVGpath* path = shape->paths; path; path = path->next)
+            for (int i = 0; i < path->npts; ++i)
+            {
+                const float x = path->pts[i*2 + 0];
+                const float y = path->pts[i*2 + 1];
+                if (!any) { minX = maxX = x; minY = maxY = y; any = true; continue; }
+                minX = std::min(minX, x); maxX = std::max(maxX, x);
+                minY = std::min(minY, y); maxY = std::max(maxY, y);
+            }
+    }
+
+    if (!any) return 0.f;
+    return std::max(maxX - minX, maxY - minY);
+}
+
 // Recenter on the XY bbox and scale so the longest XY dimension equals 1.0
 // (consistent with the other parameterized geometries in sinaia).
 void recenterAndFit(std::vector<std::vector<Vector2f>>& shapes)
@@ -136,6 +184,36 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
         return nullptr;
     }
 
+    // ------------------------------------------------------------------------
+    //  Tolerance : des unites de SORTIE vers celles du document
+    // ------------------------------------------------------------------------
+    // `flattenTol` s'exprime dans les unites du MAILLAGE PRODUIT (cf.
+    // import_svg.h), alors que la subdivision travaille sur les coordonnees du
+    // document. Sans conversion, la finesse des courbes dependrait de l'echelle
+    // du fichier source : 0.5 unite de document vaut 2 % d'une icone de 24 et
+    // 0.05 % d'un logo de 1024, alors que l'objet final fait 1.0 dans les deux
+    // cas.
+    //
+    // L'ideal serait de mettre les points de controle a l'echelle AVANT de
+    // subdiviser, comme le fait text_extrude.cpp -- mais la, l'echelle est connue
+    // d'avance (size / unitsPerEm). Ici elle se lit sur l'emprise de l'encre, qui
+    // n'existe qu'une fois les courbes aplaties. On convertit donc la tolerance
+    // en sens inverse, avec une emprise ESTIMEE sur les points de controle.
+    //
+    // Ce que cette estimation peut et ne peut pas gater : elle ne sert QU'A
+    // choisir un pas de subdivision. Le recentrage-ajustement final, lui, reste
+    // calcule sur la geometrie aplatie exacte -- aucun sommet ne bouge, seule la
+    // densite varie de quelques pour cent.
+    //
+    // Sans `centerAndFit`, la sortie EST dans les unites du document : la
+    // tolerance y est deja exprimee, il n'y a rien a convertir.
+    float flattenTolSrc = opt.flattenTol;
+    if (opt.centerAndFit)
+    {
+        const float largest = controlHullLargestExtent(image, opt);
+        if (largest > 1e-9f) flattenTolSrc = opt.flattenTol * largest;
+    }
+
     // One entry per fillable shape: its contours flattened to polylines. Kept
     // per shape because the fill rule (and hence the winding rule handed to the
     // tessellator) is a per-shape property.
@@ -173,7 +251,7 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
 
         for (const NSVGpath* path = shape->paths; path; path = path->next)
         {
-            auto pts = flattenPath(path, opt.flattenTol);
+            auto pts = flattenPath(path, flattenTolSrc);
             const bool closed = (path->closed != 0);
             if (closed && hasFill)
             {

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Le dessin de circle_small.svg, a l'echelle 20 : chaque coordonnee est
+     multipliee par 20, canevas compris. Le maillage produit doit donc etre le
+     meme, aux arrondis pres -- c'est tout l'objet du test. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="2000" viewBox="0 0 2000 2000">
+  <path fill="#000" d="M 1800,1000
+    C 1800,1441.84 1441.84,1800 1000,1800
+    C 558.16,1800 200,1441.84 200,1000
+    C 200,558.16 558.16,200 1000,200
+    C 1441.84,200 1800,558.16 1800,1000 Z"/>
+</svg>

@@ -488,7 +488,13 @@ std::vector<Parameter> ParameterizedSvgExtrusion::GetParameters()
 		// une course de curseur ou toute la plage utile tenait dans le premier
 		// centieme.
 		Parameter::MakeFloat("Height",         &m_height,     0.01f, 0.1f),
-		Parameter::MakeFloat("Flatten Tol",    &m_flattenTol, 0.05f,  10.f),
+		// Meme cause, meme remede que ci-dessus, et meme plage que le texte 3D :
+		// la tolerance est desormais exprimee dans les unites du maillage produit
+		// (SvgExtrudeOptions::flattenTol), donc en fraction de l'objet normalise.
+		// L'ancienne plage 0.05 .. 10 etait en unites du DOCUMENT : selon le
+		// fichier importe, la meme course de curseur allait de « toujours trop
+		// fin » a « 42 % d'ecart des le milieu ».
+		Parameter::MakeFloat("Flatten Tol",    &m_flattenTol, 0.001f, 0.1f),
 	};
 }
 void ParameterizedSvgExtrusion::Regenerate()
