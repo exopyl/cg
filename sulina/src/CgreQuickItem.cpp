@@ -14,6 +14,8 @@
 #include "cgre2/Vertex.hpp"
 
 #include "mesh.h"
+#include "mesh_raycast.h"
+#include "octree.h"
 #include "vmeshes.h"
 #include "mesh_half_edge.h"
 #include "DiffParamEvaluator.h"
@@ -33,6 +35,7 @@
 #include <array>
 #include <cstring>
 #include <filesystem>
+#include <utility>
 
 namespace {
 
@@ -188,25 +191,11 @@ void CgreQuickItem::setPickingEnabled(bool on)
         return;
     m_pickingEnabled = on;
 
-    if (on && m_meshModel) {
-        // The cgmesh octree picker needs triangle faces (m_nFaces aligned with
-        // GetTriangles()). Triangulate non-triangle meshes once — no-op for
-        // meshes that are already triangular — and re-upload matching buffers.
-        if (VMeshes *meshes = m_meshModel->internalMeshes()) {
-            bool changed = false;
-            for (Mesh *mesh : meshes->GetMeshes()) {
-                if (mesh && mesh->GetNVertices() > 0 && !mesh->IsTriangleMesh()) {
-                    mesh->Triangulate();
-                    changed = true;
-                }
-            }
-            if (changed) {
-                m_uploadedMeshes = nullptr;
-                rebuildMeshBuffers();
-                if (auto *w = window()) w->update();
-            }
-        }
-    }
+    // ⚠ NE PAS TRIANGULER LES MAILLAGES ICI. Activer l'outil de mesure ne doit
+    // pas modifier la geometrie : Triangulate() remplace chaque n-gon par (N-2)
+    // triangles en place, lui fait perdre son identite de polygone et force un
+    // re-televersement complet des buffers GPU. BuildRaycastOctree() derive la
+    // triangulation dont le picking a besoin, sans toucher au maillage.
 
     if (!on && m_hoverValid) {
         m_hoverValid = false;
@@ -273,11 +262,68 @@ void CgreQuickItem::cameraMatrices(QMatrix4x4 &proj, QMatrix4x4 &view, QMatrix4x
     model.translate(-center);
 }
 
+// ============================================================================
+//  ⚠ CODE NON COMPILE DEPUIS LE 2026-08-17
+// ============================================================================
+//
+// invalidatePickOctrees(), ensurePickOctree() et le corps de updatePick() ont ete
+// ECRITS SANS JAMAIS ETRE COMPILES : Qt 6.11 est absent de la machine de
+// developpement et `ENABLE_SULINA` n'est active par aucun preset. Le picking n'a
+// pas ete essaye.
+//
+// A VERIFIER A LA PREMIERE CONSTRUCTION REELLE DE SULINA :
+//   - que ca compile ;
+//   - que le survol renvoie bien un point sur la surface ;
+//   - qu'un maillage a n-gons est pique correctement SANS etre triangule
+//     (cf. setPickingEnabled).
+//
+// ============================================================================
+
+void CgreQuickItem::invalidatePickOctrees()
+{
+    m_pickOctrees.clear();
+    m_pickOctreesSource = nullptr;
+}
+
+Octree *CgreQuickItem::ensurePickOctree(Mesh *mesh)
+{
+    if (!mesh || mesh->GetNVertices() == 0 || mesh->GetNFaces() == 0)
+        return nullptr;
+
+    // Lue AVANT la construction : c'est l'etat de geometrie que l'octree
+    // representera.
+    const uint64_t revision = mesh->GetRevision();
+
+    for (PickOctree &entry : m_pickOctrees) {
+        if (entry.mesh != mesh)
+            continue;
+        if (!entry.octree || entry.revision != revision) {
+            entry.octree   = BuildRaycastOctree(*mesh);
+            entry.revision = revision;
+        }
+        return entry.octree.get();
+    }
+
+    PickOctree entry;
+    entry.mesh     = mesh;
+    entry.octree   = BuildRaycastOctree(*mesh);
+    entry.revision = revision;
+    m_pickOctrees.push_back(std::move(entry));
+    return m_pickOctrees.back().octree.get();
+}
+
 void CgreQuickItem::updatePick(const QPointF &posItem)
 {
     const float w = float(width());
     const float h = float(height());
     VMeshes *meshes = m_meshModel ? m_meshModel->internalMeshes() : nullptr;
+
+    // Un changement de VMeshes invalide tous les octrees : les Mesh* d'avant
+    // sont detruits, et une nouvelle allocation peut recycler leur adresse.
+    if (meshes != m_pickOctreesSource) {
+        invalidatePickOctrees();
+        m_pickOctreesSource = meshes;
+    }
 
     auto invalidate = [this]() {
         if (m_hoverValid) { m_hoverValid = false; }
@@ -311,8 +357,7 @@ void CgreQuickItem::updatePick(const QPointF &posItem)
     const QVector3D o = invModel.map(nearW);
     const QVector3D d = (invModel.map(farW) - o).normalized();
 
-    // Mesh::GetIntersectionWithRay prend des Vector3f depuis la migration de
-    // l'algebre (vec3/float[3] -> TVector3) ; ne pas repasser par des float[3].
+    // Le lancer de rayon prend des Vector3f : ne pas repasser par des float[3].
     const Vector3f oo (o.x(), o.y(), o.z());
     const Vector3f dd (d.x(), d.y(), d.z());
 
@@ -322,10 +367,18 @@ void CgreQuickItem::updatePick(const QPointF &posItem)
     for (Mesh *mesh : meshes->GetMeshes()) {
         if (!mesh || mesh->GetNVertices() == 0)
             continue;
+
+        // Ne pas appeler mesh->GetIntersectionWithRay() : c'est le chemin non
+        // accelere, qui teste tous les triangles a chaque rayon. Le survol a la
+        // souris exige l'octree.
+        Octree *octree = ensurePickOctree(mesh);
+        if (!octree)
+            continue;
+
         float    t = -1.0f;
         Vector3f hit (0.f, 0.f, 0.f);
         Vector3f nrm (0.f, 0.f, 0.f);
-        if (mesh->GetIntersectionWithRay(oo, dd, &t, hit, nrm) > 0 && t > 0.0f) {
+        if (::GetIntersectionWithRay(*mesh, *octree, oo, dd, &t, hit, nrm) > 0 && t > 0.0f) {
             if (!found || t < bestT) {
                 bestT = t;
                 bestHit = QVector3D(hit.x, hit.y, hit.z);
@@ -395,18 +448,22 @@ bool CgreQuickItem::evaluateCurvature(const QString &type)
             MeshAlgoTensorEvaluator eval;
             if (!eval.Init(&mhe))
                 continue;
-            eval.Evaluate(TENSOR_DESBRUN);   // → mhe.m_pMesh->m_pTensors
+            eval.Evaluate(TENSOR_DESBRUN);   // → tenseurs de mhe.m_pMesh
 
             // Cache the per-vertex tensors on the rendered mesh (same vertex
             // order/count) so re-colouring for another curvature type is cheap
             // (recolorCurvature, no re-evaluation). Then colour from `cid`.
-            mesh->m_pTensors = std::move(mhe.m_pMesh->m_pTensors);
-            // The tensors were computed for this mesh's current geometry
-            // (same vertex order/count); stamp them valid on the destination
-            // so the staleness check and recolorCurvature() accept them.
-            mesh->MarkTensorsComputed();
+            //
+            // ⚠ CODE NON COMPILE : Qt 6.11 est absent de la machine de
+            // developpement et `ENABLE_SULINA` n'est active par aucun preset.
+            //
+            // AdoptTensorsFrom copie en profondeur, un Tensor par sommet, et
+            // pose le tampon de validite elle-meme (MarkTensorsComputed). Elle
+            // exige que le nombre de sommets concorde, sinon elle vide les
+            // tenseurs plutot que d'en laisser de faux.
+            mesh->AdoptTensorsFrom(*mhe.m_pMesh);
             mesh->InitVertexColorsFromCurvatures(cid);
-            if (!mesh->m_pVertexColors.empty())
+            if (!mesh->GetVertexColors ().empty())
                 any = true;
         } catch (const std::exception &e) {
             cgre2::Logger::warn("Viewer",
@@ -441,10 +498,11 @@ bool CgreQuickItem::recolorCurvature(const QString &type)
 
     bool any = false;
     for (Mesh *mesh : meshes->GetMeshes()) {
-        if (!mesh || mesh->m_pTensors.empty())
+        // ⚠ CODE NON COMPILE : voir evaluateCurvature().
+        if (!mesh || mesh->GetNTensors() == 0)
             continue;
         mesh->InitVertexColorsFromCurvatures(cid);
-        if (!mesh->m_pVertexColors.empty())
+        if (!mesh->GetVertexColors ().empty())
             any = true;
     }
 
@@ -490,7 +548,7 @@ bool CgreQuickItem::evaluateThickness(const QString &method,
                 ? MeshAlgoThickness::ColorizeWallThickness(*mesh, thickness, defined, lo, hi)
                 : MeshAlgoThickness::ColorizeShapeDiameter(*mesh, thickness, defined,
                                                            16, 60.f, 1, lo, hi);
-            if (ok && !mesh->m_pVertexColors.empty())
+            if (ok && !mesh->GetVertexColors ().empty())
                 any = true;
         } catch (const std::exception &e) {
             cgre2::Logger::warn("Viewer",
@@ -632,7 +690,7 @@ void CgreQuickItem::ensurePipeline()
 
         // Line + point pipelines: unlit shaders (no sampler → no descriptor
         // sets), same VertexPBR vertex layout, different primitive topology.
-        // They draw Mesh::m_pLines / m_pPoints as part of the mesh.
+        // They draw the mesh line segments / isolated points as part of the mesh.
         cgre2::ShaderModule &uvert = m_shaderManager->load(kUnlitVertSpv, VK_SHADER_STAGE_VERTEX_BIT);
         cgre2::ShaderModule &ufrag = m_shaderManager->load(kUnlitFragSpv, VK_SHADER_STAGE_FRAGMENT_BIT);
         m_unlitDescriptorLayouts = std::make_unique<cgre2::DescriptorLayouts>(
@@ -830,7 +888,7 @@ void CgreQuickItem::rebuildMeshBuffers()
             // surface path below `continue`s and would otherwise emit nothing.
             // They index the raw mesh vertices, so they get their own VBO built
             // straight from m_pVertices (flat colour; the 0.5 grey placeholder
-            // Mesh::Init writes into m_pVertexColors is not a usable colour).
+            // Mesh::Init writes into GetVertexColors () is not a usable colour).
             {
                 const unsigned int nV = mesh->GetNVertices();
                 auto buildPrim = [&](const std::vector<unsigned int> &idx,
@@ -849,9 +907,9 @@ void CgreQuickItem::rebuildMeshBuffers()
                     std::vector<cgre2::VertexPBR> verts(nV);
                     for (unsigned int i = 0; i < nV; ++i) {
                         verts[i] = cgre2::VertexPBR{};
-                        verts[i].position[0] = mesh->m_pVertices[3 * i + 0];
-                        verts[i].position[1] = mesh->m_pVertices[3 * i + 1];
-                        verts[i].position[2] = mesh->m_pVertices[3 * i + 2];
+                        verts[i].position[0] = mesh->GetVertices ()[3 * i + 0];
+                        verts[i].position[1] = mesh->GetVertices ()[3 * i + 1];
+                        verts[i].position[2] = mesh->GetVertices ()[3 * i + 2];
                         verts[i].normal[1]   = 1.0f;   // unused by the unlit shader
                         verts[i].color[0] = r; verts[i].color[1] = g; verts[i].color[2] = b;
                     }
@@ -862,9 +920,9 @@ void CgreQuickItem::rebuildMeshBuffers()
                     ibs.push_back(std::make_unique<cgre2::IndexBuffer>(dctx, indices));
                     counts.push_back(static_cast<uint32_t>(indices.size()));
                 };
-                buildPrim(mesh->m_pLines, 0.15f, 0.45f, 0.85f,
+                buildPrim(mesh->GetLines(), 0.15f, 0.45f, 0.85f,
                           m_lineVertexBuffers, m_lineIndexBuffers, m_lineIndexCounts);
-                buildPrim(mesh->m_pPoints, 0.90f, 0.20f, 0.20f,
+                buildPrim(mesh->GetPoints(), 0.90f, 0.20f, 0.20f,
                           m_pointVertexBuffers, m_pointIndexBuffers, m_pointIndexCounts);
             }
 
@@ -1005,6 +1063,10 @@ void CgreQuickItem::onMeshChanged()
     // Any picked points belong to the previous mesh's coordinate space — drop
     // them so a stale anchor/hover doesn't reproject onto the new model.
     clearAnchor();
+    // Idem pour les octrees de picking : ils referencent les positions des
+    // maillages precedents, qui viennent d'etre detruits. Les garder serait un
+    // pointeur pendant, pas un cache perime.
+    invalidatePickOctrees();
     if (m_hoverValid) {
         m_hoverValid = false;
         emit hoverChanged();

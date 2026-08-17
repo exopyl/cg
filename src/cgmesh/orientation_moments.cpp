@@ -20,10 +20,9 @@ Cmesh_orientation_moments::Cmesh_orientation_moments (Mesh_half_edge *mesh)
 void
 Cmesh_orientation_moments::compute_orientation (void)
 {
-  int   nf      = model3d_half_edge->m_pMesh->m_nFaces;
-  float *v      = model3d_half_edge->m_pMesh->m_pVertices.data();
-  Face **f      = model3d_half_edge->m_pMesh->m_pFaces;
-  float *norm_f = model3d_half_edge->m_pMesh->m_pFaceNormals.data();
+  int   nf      = model3d_half_edge->m_pMesh->GetNFaces ();
+  const float *v      = model3d_half_edge->m_pMesh->GetVertices ().data();
+  const float *norm_f = model3d_half_edge->m_pMesh->GetFaceNormals ().data();
 
   int A;   /* alpha */
   int B;   /* beta */
@@ -64,10 +63,11 @@ Cmesh_orientation_moments::compute_orientation (void)
       
       for (j=0; j<3; j++)
 	{
-		a0 = v[3*f[i]->GetVertex(j)+A];
-		b0 = v[3*f[i]->GetVertex(j)+B];
-		a1 = v[3*f[i]->GetVertex(((j+1)%3))+A];
-		b1 = v[3*f[i]->GetVertex(((j+1)%3))+B];
+		auto fc = model3d_half_edge->m_pMesh->FaceAt (i);
+		a0 = v[3*fc->GetVertex(j)+A];
+		b0 = v[3*fc->GetVertex(j)+B];
+		a1 = v[3*fc->GetVertex(((j+1)%3))+A];
+		b1 = v[3*fc->GetVertex(((j+1)%3))+B];
 	  da = a1 - a0;
 	  db = b1 - b0;
 	  a0_2 = a0 * a0; a0_3 = a0_2 * a0; a0_4 = a0_3 * a0;
@@ -107,10 +107,11 @@ Cmesh_orientation_moments::compute_orientation (void)
       Pabb /= -60.0;
       /*** end compute projection integrals ***/
       
-      w = 
-	      -norm_f[3*i] * v[3*f[i]->GetVertex(0)]
-	      -norm_f[3*i+1] * v[3*f[i]->GetVertex(0)+1]
-	      -norm_f[3*i+2] * v[3*f[i]->GetVertex(0)+2];
+      auto fc = model3d_half_edge->m_pMesh->FaceAt (i);
+      w =
+	      -norm_f[3*i] * v[3*fc->GetVertex(0)]
+	      -norm_f[3*i+1] * v[3*fc->GetVertex(0)+1]
+	      -norm_f[3*i+2] * v[3*fc->GetVertex(0)+2];
       
       k1 = 1 / norm_f[3*i+C]; k2 = k1 * k1; k3 = k2 * k1; k4 = k3 * k1;
       

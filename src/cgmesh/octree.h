@@ -1,9 +1,11 @@
 #pragma once
 #include "../cgmath/cgmath.h"
 
+// Octree ne connait pas Mesh : il est bati depuis des tableaux bruts, et
+// interroge en lecture seule (cf. mesh_raycast.h). Ne pas y introduire de
+// dependance vers Mesh, ni d'amitie -- les lectures qu'il expose suffisent.
 class Octree
 {
-	friend class Mesh;
 public:
 	Octree ();
 	~Octree ();
@@ -12,24 +14,25 @@ public:
 	void GetMinMax (float vecMin[3], float vecMax[3]) const;
 
 	// Fill the octree with the points
-	int Build (float *pPoints, int nPoints,
+	int Build (const float *pPoints, int nPoints,
 		   unsigned int maxPoints,
 		   unsigned int maxDepth, unsigned int currentDepth = 0);
 
 
 	// Same as former, but use an array of indices
-	int BuildWithIndices (float *pPoints, int nPoints,
+	int BuildWithIndices (const float *pPoints, int nPoints,
 			      unsigned int maxPoints, unsigned int maxDepth,
 			      unsigned int *pIndices = 0, int nIndices = 0, unsigned int currentDepth = 0);
 
 	// Fill the octree with the triangles
-	int BuildForTriangles (float *pPoints, int nPoints,
+	int BuildForTriangles (const float *pPoints, int nPoints,
 			      unsigned int maxTriangles, unsigned int maxDepth,
 			      unsigned int *pTriangles, int nTriangles, unsigned int currentDepth = 0); // pTriangles contains indices
 
 	Octree** GetChildren (void) { return m_pChildren; };
+	const Octree* const* GetChildren (void) const { return m_pChildren; };
 	int GetNLeaves (void);
-	bool IsLeaf (void);
+	bool IsLeaf (void) const;
 	int GetMaxDepth (void);
 
 	// deal with coordinates
@@ -42,11 +45,12 @@ public:
 	// deal with indices
 	unsigned int GetNIndices (void) { return m_nIndices; };
 	unsigned int* GetIndices (void) { return m_pIndices; };
-	int GetClosestIndicesPoints (float *pVertices, const Vector3f &pt, float distance, unsigned int **pNeighbours, unsigned int *nNeighbours);
+	int GetClosestIndicesPoints (const float *pVertices, const Vector3f &pt, float distance, unsigned int **pNeighbours, unsigned int *nNeighbours);
 
 	// deal with triangles
-	unsigned int GetNTriangles (void) { return m_nTriangles; };
+	unsigned int GetNTriangles (void) const { return m_nTriangles; };
 	unsigned int* GetTriangles (void) { return m_pTriangles; };
+	const unsigned int* GetTriangles (void) const { return m_pTriangles; };
 
 	void Dump (void);
 
@@ -77,9 +81,9 @@ public:
 	}    
 
 private:
-	void ComputeBounding (float *pPoints, int nPoints, float min[3], float max[3]);
-	void ComputeBoundingWithIndices (float *pPoints, int nPoints, unsigned int *pIndices, int nIndices, float min[3], float max[3]);
-	void ComputeBoundinForTriangles (float *pPoints, int nPoints, unsigned int *pTriangles, int nTriangles, float min[3], float max[3]);
+	void ComputeBounding (const float *pPoints, int nPoints, float min[3], float max[3]);
+	void ComputeBoundingWithIndices (const float *pPoints, int nPoints, unsigned int *pIndices, int nIndices, float min[3], float max[3]);
+	void ComputeBoundinForTriangles (const float *pPoints, int nPoints, unsigned int *pTriangles, int nTriangles, float min[3], float max[3]);
 
 	Octree *m_pFather;
 	Octree *m_pChildren[8];

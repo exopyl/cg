@@ -24,6 +24,19 @@ public:
 	Geometry();
 	virtual ~Geometry() = default;
 
+	// Copie PROFONDE de la boite englobante.
+	//
+	// ⚠ NE PAS SUPPRIMER : sans ces deux membres, le unique_ptr ci-dessous rend
+	// TOUTE la hierarchie Geometry non copiable, Mesh comprise.
+	Geometry (const Geometry &g)
+		: m_pAABox (g.m_pAABox ? std::make_unique<AABox> (*g.m_pAABox) : nullptr) {}
+	Geometry& operator= (const Geometry &g)
+		{
+			if (this != &g)
+				m_pAABox = g.m_pAABox ? std::make_unique<AABox> (*g.m_pAABox) : nullptr;
+			return *this;
+		}
+
 	virtual bool GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d);
 
 	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) = 0;

@@ -5,8 +5,8 @@
 //
 bool MeshAlgoSmoothingLaplacian::Apply (Mesh_half_edge *model)
 {
-	int nv = model->m_pMesh->m_nVertices;
-	float *v = model->m_pMesh->m_pVertices.data();
+	int nv = model->m_pMesh->GetNVertices ();
+	const float *v = model->m_pMesh->GetVertices ().data();
 
 	int i;
 	float *vnew;
@@ -48,7 +48,7 @@ bool MeshAlgoSmoothingLaplacian::Apply (Mesh_half_edge *model)
 		}
     }
 
-	model->m_pMesh->m_pVertices.assign(vnew, vnew + 3*nv);
+	model->m_pMesh->SetVertices ((unsigned int)nv, vnew);
 	delete[] vnew;
 
 	return true;

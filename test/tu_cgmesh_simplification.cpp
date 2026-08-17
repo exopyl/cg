@@ -26,22 +26,22 @@ static Mesh_half_edge *load_rabbit()
 // Every face must index existing vertices and be a non-degenerate triangle.
 static void expect_valid_triangle_mesh(Mesh *m)
 {
-	ASSERT_GT(m->m_nFaces, 0u);
-	ASSERT_GT(m->m_nVertices, 0u);
-	for (unsigned int f = 0; f < m->m_nFaces; f++)
+	ASSERT_GT(m->GetNFaces (), 0u);
+	ASSERT_GT(m->GetNVertices (), 0u);
+	for (unsigned int f = 0; f < m->GetNFaces (); f++)
 	{
-		Face *face = m->m_pFaces[f];
-		ASSERT_NE(face, nullptr) << "face " << f << " is null (hole)";
-		ASSERT_EQ(face->m_nVertices, 3u) << "face " << f << " is not a triangle";
-		int a = face->m_pVertices[0];
-		int b = face->m_pVertices[1];
-		int c = face->m_pVertices[2];
+		auto face = m->FaceAt (f);
+		ASSERT_TRUE(face.IsValid ()) << "face " << f << " is null (hole)";
+		ASSERT_EQ(face->GetNVertices (), 3u) << "face " << f << " is not a triangle";
+		int a = face->GetVertex (0);
+		int b = face->GetVertex (1);
+		int c = face->GetVertex (2);
 		EXPECT_GE(a, 0);
 		EXPECT_GE(b, 0);
 		EXPECT_GE(c, 0);
-		EXPECT_LT((unsigned int)a, m->m_nVertices);
-		EXPECT_LT((unsigned int)b, m->m_nVertices);
-		EXPECT_LT((unsigned int)c, m->m_nVertices);
+		EXPECT_LT((unsigned int)a, m->GetNVertices ());
+		EXPECT_LT((unsigned int)b, m->GetNVertices ());
+		EXPECT_LT((unsigned int)c, m->GetNVertices ());
 		EXPECT_TRUE(a != b && b != c && a != c) << "degenerate face " << f;
 	}
 }
@@ -49,14 +49,14 @@ static void expect_valid_triangle_mesh(Mesh *m)
 TEST(TEST_cgmesh_simplification, halve_rabbit)
 {
 	Mesh_half_edge *he = load_rabbit();
-	unsigned int nf0 = he->m_pMesh->m_nFaces;
-	unsigned int nv0 = he->m_pMesh->m_nVertices;
+	unsigned int nf0 = he->m_pMesh->GetNFaces ();
+	unsigned int nv0 = he->m_pMesh->GetNVertices ();
 	ASSERT_GT(nf0, 0u);
 
 	he->simplify(0.5f);
 
-	unsigned int nf1 = he->m_pMesh->m_nFaces;
-	unsigned int nv1 = he->m_pMesh->m_nVertices;
+	unsigned int nf1 = he->m_pMesh->GetNFaces ();
+	unsigned int nv1 = he->m_pMesh->GetNVertices ();
 	printf("decimation 0.5 : faces %u -> %u, vertices %u -> %u\n", nf0, nf1, nv0, nv1);
 
 	// Faces reduced and reasonably close to the target (not every collapse is
@@ -78,11 +78,11 @@ TEST(TEST_cgmesh_simplification, halve_rabbit)
 TEST(TEST_cgmesh_simplification, aggressive_rabbit)
 {
 	Mesh_half_edge *he = load_rabbit();
-	unsigned int nf0 = he->m_pMesh->m_nFaces;
+	unsigned int nf0 = he->m_pMesh->GetNFaces ();
 
 	he->simplify(0.1f);
 
-	unsigned int nf1 = he->m_pMesh->m_nFaces;
+	unsigned int nf1 = he->m_pMesh->GetNFaces ();
 	printf("decimation 0.1 : faces %u -> %u\n", nf0, nf1);
 
 	EXPECT_LT(nf1, nf0 / 2);
@@ -94,11 +94,11 @@ TEST(TEST_cgmesh_simplification, aggressive_rabbit)
 TEST(TEST_cgmesh_simplification, ratio_one_is_noop)
 {
 	Mesh_half_edge *he = load_rabbit();
-	unsigned int nf0 = he->m_pMesh->m_nFaces;
+	unsigned int nf0 = he->m_pMesh->GetNFaces ();
 
 	he->simplify(1.0f); // target == current face count: no collapse
 
-	EXPECT_EQ(he->m_pMesh->m_nFaces, nf0);
+	EXPECT_EQ(he->m_pMesh->GetNFaces (), nf0);
 	expect_valid_triangle_mesh(he->m_pMesh);
 	delete he;
 }
@@ -139,12 +139,12 @@ static Mesh_half_edge *make_material_seam_grid(int N)
 	Mesh_half_edge *he = new Mesh_half_edge((int)(verts.size() / 3), verts.data(),
 	                                        (int)(faces.size() / 3), faces.data());
 
-	for (unsigned int f = 0; f < he->m_pMesh->m_nFaces; f++)
+	for (unsigned int f = 0; f < he->m_pMesh->GetNFaces (); f++)
 	{
-		Face *fc = he->m_pMesh->m_pFaces[f];
-		float cx = (verts[3 * fc->m_pVertices[0]] +
-		            verts[3 * fc->m_pVertices[1]] +
-		            verts[3 * fc->m_pVertices[2]]) / 3.f;
+		auto fc = he->m_pMesh->FaceAt (f);
+		float cx = (verts[3 * fc->GetVertex (0)] +
+		            verts[3 * fc->GetVertex (1)] +
+		            verts[3 * fc->GetVertex (2)]) / 3.f;
 		fc->SetMaterialId(cx < 0.5f ? 0u : 1u);
 	}
 	he->create_half_edge();
@@ -154,8 +154,8 @@ static Mesh_half_edge *make_material_seam_grid(int N)
 static int count_on_seam(Mesh *m)
 {
 	int c = 0;
-	for (unsigned int i = 0; i < m->m_nVertices; i++)
-		if (fabs(m->m_pVertices[3 * i] - 0.5f) < 1e-4f)
+	for (unsigned int i = 0; i < m->GetNVertices (); i++)
+		if (fabs(m->GetVertices ()[3 * i] - 0.5f) < 1e-4f)
 			c++;
 	return c;
 }
@@ -216,12 +216,10 @@ static Mesh_half_edge *make_colored_grid(int N)
 	                                        (int)(faces.size() / 3), faces.data());
 
 	Mesh *m = he->m_pMesh;
-	m->m_pVertexColors.resize(m->m_nVertices * 3);
-	for (unsigned int i = 0; i < m->m_nVertices; i++)
+	m->InitVertexColors ();
+	for (unsigned int i = 0; i < m->GetNVertices (); i++)
 	{
-		m->m_pVertexColors[3 * i] = m->m_pVertices[3 * i];     // r = x
-		m->m_pVertexColors[3 * i + 1] = m->m_pVertices[3 * i + 1]; // g = y
-		m->m_pVertexColors[3 * i + 2] = 0.f;
+		m->SetVertexColor (i, m->GetVertices ()[3 * i], m->GetVertices ()[3 * i + 1], 0.f);
 	}
 	he->create_half_edge();
 	return he;
@@ -234,14 +232,14 @@ TEST(TEST_cgmesh_simplification, attributes_linear_color_preserved)
 	he->simplify(0.3f, {/*preserve_features*/ false, 45.0f, /*preserve_attributes*/ true});
 
 	Mesh *m = he->m_pMesh;
-	ASSERT_EQ(m->m_pVertexColors.size(), m->m_nVertices * 3u)
+	ASSERT_EQ(m->GetVertexColors ().size(), m->GetNVertices () * 3u)
 		<< "colours were not carried into the result";
 
 	float max_err = 0.f;
-	for (unsigned int i = 0; i < m->m_nVertices; i++)
+	for (unsigned int i = 0; i < m->GetNVertices (); i++)
 	{
-		float er = fabs(m->m_pVertexColors[3 * i] - m->m_pVertices[3 * i]);
-		float eg = fabs(m->m_pVertexColors[3 * i + 1] - m->m_pVertices[3 * i + 1]);
+		float er = fabs(m->GetVertexColors ()[3 * i] - m->GetVertices ()[3 * i]);
+		float eg = fabs(m->GetVertexColors ()[3 * i + 1] - m->GetVertices ()[3 * i + 1]);
 		if (er > max_err) max_err = er;
 		if (eg > max_err) max_err = eg;
 	}
@@ -259,7 +257,7 @@ TEST(TEST_cgmesh_simplification, attributes_off_drops_colors)
 	he->simplify(0.3f, {/*preserve_features*/ false, 45.0f, /*preserve_attributes*/ false});
 
 	// Colours are not carried; the rebuilt mesh has no per-vertex colours.
-	EXPECT_NE(he->m_pMesh->m_pVertexColors.size(), he->m_pMesh->m_nVertices * 3u);
+	EXPECT_NE(he->m_pMesh->GetVertexColors ().size(), he->m_pMesh->GetNVertices () * 3u);
 	expect_valid_triangle_mesh(he->m_pMesh);
 	delete he;
 }
@@ -298,12 +296,10 @@ static Mesh_half_edge *make_step_colored_grid(int N)
 	Mesh_half_edge *he = new Mesh_half_edge((int)(verts.size() / 3), verts.data(),
 	                                        (int)(faces.size() / 3), faces.data());
 	Mesh *m = he->m_pMesh;
-	m->m_pVertexColors.resize(m->m_nVertices * 3);
-	for (unsigned int i = 0; i < m->m_nVertices; i++)
+	m->InitVertexColors ();
+	for (unsigned int i = 0; i < m->GetNVertices (); i++)
 	{
-		m->m_pVertexColors[3 * i] = (m->m_pVertices[3 * i] < 0.5f) ? 0.f : 1.f;
-		m->m_pVertexColors[3 * i + 1] = 0.f;
-		m->m_pVertexColors[3 * i + 2] = 0.f;
+		m->SetVertexColor (i, (m->GetVertices ()[3 * i] < 0.5f) ? 0.f : 1.f, 0.f, 0.f);
 	}
 	he->create_half_edge();
 	return he;
@@ -313,8 +309,8 @@ static Mesh_half_edge *make_step_colored_grid(int N)
 static int count_on_half(Mesh *m)
 {
 	int c = 0;
-	for (unsigned int i = 0; i < m->m_nVertices; i++)
-		if (fabs(m->m_pVertices[3 * i] - 0.5f) < 1e-4f)
+	for (unsigned int i = 0; i < m->GetNVertices (); i++)
+		if (fabs(m->GetVertices ()[3 * i] - 0.5f) < 1e-4f)
 			c++;
 	return c;
 }
@@ -327,12 +323,12 @@ TEST(TEST_cgmesh_simplification, attribute_metric_linear_color_exact)
 	he->simplify(0.3f, {false, 45.0f, true, true});
 
 	Mesh *m = he->m_pMesh;
-	ASSERT_EQ(m->m_pVertexColors.size(), m->m_nVertices * 3u);
+	ASSERT_EQ(m->GetVertexColors ().size(), m->GetNVertices () * 3u);
 	float max_err = 0.f;
-	for (unsigned int i = 0; i < m->m_nVertices; i++)
+	for (unsigned int i = 0; i < m->GetNVertices (); i++)
 	{
-		float er = fabs(m->m_pVertexColors[3 * i] - m->m_pVertices[3 * i]);
-		float eg = fabs(m->m_pVertexColors[3 * i + 1] - m->m_pVertices[3 * i + 1]);
+		float er = fabs(m->GetVertexColors ()[3 * i] - m->GetVertices ()[3 * i]);
+		float eg = fabs(m->GetVertexColors ()[3 * i + 1] - m->GetVertices ()[3 * i + 1]);
 		if (er > max_err) max_err = er;
 		if (eg > max_err) max_err = eg;
 	}
@@ -378,7 +374,7 @@ TEST(TEST_cgmesh_simplification, max_error_stops_early)
 	Mesh_half_edge *ref = load_rabbit(); // pristine copy for error measurement
 
 	Mesh_half_edge *he = load_rabbit();
-	unsigned int nf0 = he->m_pMesh->m_nFaces;
+	unsigned int nf0 = he->m_pMesh->GetNFaces ();
 
 	// Very aggressive target (2%) but a tight error bound (0.5% of bbox diag):
 	// the error bound must halt decimation well before the face target.
@@ -388,7 +384,7 @@ TEST(TEST_cgmesh_simplification, max_error_stops_early)
 	opt.max_error = 0.005f;
 	he->simplify(0.02f, opt);
 
-	unsigned int nf = he->m_pMesh->m_nFaces;
+	unsigned int nf = he->m_pMesh->GetNFaces ();
 	float rel = mesh_hausdorff_relative(*ref->m_pMesh, *he->m_pMesh);
 	printf("max_error stop : faces %u -> %u (2%% target = %u), relative Hausdorff = %g\n",
 	       nf0, nf, (unsigned)(nf0 * 0.02f), rel);
@@ -408,7 +404,7 @@ TEST(TEST_cgmesh_simplification, exact_error_bounds_surface)
 {
 	Mesh_half_edge *ref = load_rabbit();
 	Mesh_half_edge *he = load_rabbit();
-	unsigned int nf0 = he->m_pMesh->m_nFaces;
+	unsigned int nf0 = he->m_pMesh->GetNFaces ();
 
 	ref->m_pMesh->computebbox();
 	float diag = ref->m_pMesh->bbox_diagonal_length();
@@ -420,17 +416,17 @@ TEST(TEST_cgmesh_simplification, exact_error_bounds_surface)
 	opt.exact_error = true;    // reliable surface bound
 	he->simplify(0.05f, opt);
 
-	unsigned int nf = he->m_pMesh->m_nFaces;
+	unsigned int nf = he->m_pMesh->GetNFaces ();
 
 	// What the gate guarantees: every decimated VERTEX lies within max_error of
 	// the original surface. Measure that directly (BVH on the original).
 	BVH bref;
 	bref.build(*ref->m_pMesh);
 	float worst_vertex = 0.f;
-	for (unsigned int i = 0; i < he->m_pMesh->m_nVertices; i++)
+	for (unsigned int i = 0; i < he->m_pMesh->GetNVertices (); i++)
 	{
 		Vector3f p;
-		p.Set ( he->m_pMesh->m_pVertices[3*i], he->m_pMesh->m_pVertices[3*i+1], he->m_pMesh->m_pVertices[3*i+2]);
+		p.Set ( he->m_pMesh->GetVertices ()[3*i], he->m_pMesh->GetVertices ()[3*i+1], he->m_pMesh->GetVertices ()[3*i+2]);
 		float d = sqrtf(bref.closest_distance2(p));
 		if (d > worst_vertex) worst_vertex = d;
 	}
@@ -462,23 +458,22 @@ TEST(TEST_cgmesh_simplification, uv_seam_split)
 	unsigned int F[] = {0,1,2, 0,2,3};
 	m->SetVertices(4, V);
 	m->SetFaces(2, 3, F);
-	m->m_nTextureCoordinates = 5;
-	m->m_pTextureCoordinates = {0.f,0.f, 1.f,0.f, 1.f,1.f, 0.5f,0.5f, 0.f,1.f};
+	m->SetTextureCoordinates (std::vector<float>{0.f,0.f, 1.f,0.f, 1.f,1.f, 0.5f,0.5f, 0.f,1.f}, 5);
 
-	Face *f0 = m->m_pFaces[0];
-	f0->m_bUseTextureCoordinates = true; f0->ActivateTextureCoordinatesIndices();
+	auto f0 = m->FaceAt (0);
+	f0->SetUsesTextureCoordinates (true); f0->ActivateTextureCoordinatesIndices();
 	f0->SetTexCoord(0u, 0u); f0->SetTexCoord(1u, 1u); f0->SetTexCoord(2u, 2u);
-	Face *f1 = m->m_pFaces[1];
-	f1->m_bUseTextureCoordinates = true; f1->ActivateTextureCoordinatesIndices();
+	auto f1 = m->FaceAt (1);
+	f1->SetUsesTextureCoordinates (true); f1->ActivateTextureCoordinatesIndices();
 	f1->SetTexCoord(0u, 3u); f1->SetTexCoord(1u, 2u); f1->SetTexCoord(2u, 4u);
 
 	m->SplitVerticesByUVSeams();
 
-	EXPECT_EQ(m->m_nVertices, 5u);                          // v0 split into two
-	EXPECT_EQ(m->m_pTextureCoordinates.size(), 10u);        // now vertex-parallel
+	EXPECT_EQ(m->GetNVertices (), 5u);                          // v0 split into two
+	EXPECT_EQ(m->GetTextureCoordinates ().size(), 10u);        // now vertex-parallel
 	// Idempotent: a second call changes nothing.
 	m->SplitVerticesByUVSeams();
-	EXPECT_EQ(m->m_nVertices, 5u);
+	EXPECT_EQ(m->GetNVertices (), 5u);
 	delete m;
 }
 
@@ -504,12 +499,14 @@ static Mesh_half_edge *make_uv_grid(int N)
 		}
 	Mesh_half_edge *he = new Mesh_half_edge((int)(verts.size()/3), verts.data(), (int)(faces.size()/3), faces.data());
 	Mesh *m = he->m_pMesh;
-	m->m_nTextureCoordinates = m->m_nVertices;
-	m->m_pTextureCoordinates.resize(m->m_nVertices * 2);
-	for (unsigned int i = 0; i < m->m_nVertices; i++)
 	{
-		m->m_pTextureCoordinates[2*i]   = m->m_pVertices[3*i];   // u = x
-		m->m_pTextureCoordinates[2*i+1] = m->m_pVertices[3*i+1]; // v = y
+		std::vector<float> uv (m->GetNVertices () * 2);
+		for (unsigned int i = 0; i < m->GetNVertices (); i++)
+		{
+			uv[2*i]   = m->GetVertices ()[3*i];   // u = x
+			uv[2*i+1] = m->GetVertices ()[3*i+1]; // v = y
+		}
+		m->SetTextureCoordinates (std::move (uv), m->GetNVertices ());
 	}
 	he->create_half_edge();
 	return he;
@@ -525,13 +522,13 @@ TEST(TEST_cgmesh_simplification, preserve_uv_linear_exact)
 	he->simplify(0.3f, opt);
 
 	Mesh *m = he->m_pMesh;
-	ASSERT_EQ(m->m_pTextureCoordinates.size(), m->m_nVertices * 2u) << "UV not emitted vertex-parallel";
+	ASSERT_EQ(m->GetTextureCoordinates ().size(), m->GetNVertices () * 2u) << "UV not emitted vertex-parallel";
 
 	float max_err = 0.f;
-	for (unsigned int i = 0; i < m->m_nVertices; i++)
+	for (unsigned int i = 0; i < m->GetNVertices (); i++)
 	{
-		float eu = fabs(m->m_pTextureCoordinates[2*i]   - m->m_pVertices[3*i]);
-		float ev = fabs(m->m_pTextureCoordinates[2*i+1] - m->m_pVertices[3*i+1]);
+		float eu = fabs(m->GetTextureCoordinates ()[2*i]   - m->GetVertices ()[3*i]);
+		float ev = fabs(m->GetTextureCoordinates ()[2*i+1] - m->GetVertices ()[3*i+1]);
 		if (eu > max_err) max_err = eu;
 		if (ev > max_err) max_err = ev;
 	}
@@ -553,12 +550,12 @@ TEST(TEST_cgmesh_simplification, attribute_metric_uv_linear_exact)
 	he->simplify(0.3f, opt);
 
 	Mesh *m = he->m_pMesh;
-	ASSERT_EQ(m->m_pTextureCoordinates.size(), m->m_nVertices * 2u);
+	ASSERT_EQ(m->GetTextureCoordinates ().size(), m->GetNVertices () * 2u);
 	float max_err = 0.f;
-	for (unsigned int i = 0; i < m->m_nVertices; i++)
+	for (unsigned int i = 0; i < m->GetNVertices (); i++)
 	{
-		float eu = fabs(m->m_pTextureCoordinates[2*i]   - m->m_pVertices[3*i]);
-		float ev = fabs(m->m_pTextureCoordinates[2*i+1] - m->m_pVertices[3*i+1]);
+		float eu = fabs(m->GetTextureCoordinates ()[2*i]   - m->GetVertices ()[3*i]);
+		float ev = fabs(m->GetTextureCoordinates ()[2*i+1] - m->GetVertices ()[3*i+1]);
 		if (eu > max_err) max_err = eu;
 		if (ev > max_err) max_err = ev;
 	}
@@ -574,12 +571,10 @@ TEST(TEST_cgmesh_simplification, attribute_metric_uv_and_color_exact)
 	// UV fields must both be reproduced exactly.
 	Mesh_half_edge *he = make_uv_grid(20);
 	Mesh *m = he->m_pMesh;
-	m->m_pVertexColors.resize(m->m_nVertices * 3);
-	for (unsigned int i = 0; i < m->m_nVertices; i++)
+	m->InitVertexColors ();
+	for (unsigned int i = 0; i < m->GetNVertices (); i++)
 	{
-		m->m_pVertexColors[3*i]   = m->m_pVertices[3*i];     // r = x
-		m->m_pVertexColors[3*i+1] = m->m_pVertices[3*i+1];   // g = y
-		m->m_pVertexColors[3*i+2] = 0.f;
+		m->SetVertexColor (i, m->GetVertices ()[3*i], m->GetVertices ()[3*i+1], 0.f);
 	}
 
 	Mesh_half_edge::SimplifyOptions opt;
@@ -589,16 +584,16 @@ TEST(TEST_cgmesh_simplification, attribute_metric_uv_and_color_exact)
 	he->simplify(0.3f, opt);
 
 	m = he->m_pMesh; // simplify() replaced the mesh; re-fetch (old pointer freed)
-	ASSERT_EQ(m->m_pTextureCoordinates.size(), m->m_nVertices * 2u);
-	ASSERT_EQ(m->m_pVertexColors.size(), m->m_nVertices * 3u);
+	ASSERT_EQ(m->GetTextureCoordinates ().size(), m->GetNVertices () * 2u);
+	ASSERT_EQ(m->GetVertexColors ().size(), m->GetNVertices () * 3u);
 	float max_err = 0.f;
-	for (unsigned int i = 0; i < m->m_nVertices; i++)
+	for (unsigned int i = 0; i < m->GetNVertices (); i++)
 	{
-		float ex = m->m_pVertices[3*i], ey = m->m_pVertices[3*i+1];
-		float e1 = fabs(m->m_pTextureCoordinates[2*i] - ex);
-		float e2 = fabs(m->m_pTextureCoordinates[2*i+1] - ey);
-		float e3 = fabs(m->m_pVertexColors[3*i] - ex);
-		float e4 = fabs(m->m_pVertexColors[3*i+1] - ey);
+		float ex = m->GetVertices ()[3*i], ey = m->GetVertices ()[3*i+1];
+		float e1 = fabs(m->GetTextureCoordinates ()[2*i] - ex);
+		float e2 = fabs(m->GetTextureCoordinates ()[2*i+1] - ey);
+		float e3 = fabs(m->GetVertexColors ()[3*i] - ex);
+		float e4 = fabs(m->GetVertexColors ()[3*i+1] - ey);
 		if (e1 > max_err) max_err = e1;
 		if (e2 > max_err) max_err = e2;
 		if (e3 > max_err) max_err = e3;
@@ -616,11 +611,11 @@ TEST(TEST_cgmesh_simplification, diag_stl_decimation)
 	Mesh_half_edge *he = new Mesh_half_edge();
 	he->m_pMesh->load("./test/data/rabbit.obj");
 	Mesh *m = he->m_pMesh;
-	printf("STL loaded: %u verts, %u faces\n", m->m_nVertices, m->m_nFaces);
+	printf("STL loaded: %u verts, %u faces\n", m->GetNVertices (), m->GetNFaces ());
 
-	unsigned int vBefore = m->m_nVertices;
+	unsigned int vBefore = m->GetNVertices ();
 	m->MergeVertices();
-	printf("after merge: %u verts (was %u), %u faces\n", m->m_nVertices, vBefore, m->m_nFaces);
+	printf("after merge: %u verts (was %u), %u faces\n", m->GetNVertices (), vBefore, m->GetNFaces ());
 
 	std::vector<unsigned int> nonManifold, borders;
 	m->GetTopologicIssues(nonManifold, borders);
@@ -631,19 +626,19 @@ TEST(TEST_cgmesh_simplification, diag_stl_decimation)
 
 	Mesh *r = he->m_pMesh;
 	int degenerate = 0, badIndex = 0;
-	for (unsigned int f = 0; f < r->m_nFaces; f++)
+	for (unsigned int f = 0; f < r->GetNFaces (); f++)
 	{
-		Face *face = r->m_pFaces[f];
+		auto face = r->FaceAt (f);
 		if (!face) { degenerate++; continue; }
-		int a = face->m_pVertices[0], b = face->m_pVertices[1], c = face->m_pVertices[2];
+		int a = face->GetVertex (0), b = face->GetVertex (1), c = face->GetVertex (2);
 		if (a == b || b == c || a == c) degenerate++;
-		if ((unsigned)a >= r->m_nVertices || (unsigned)b >= r->m_nVertices || (unsigned)c >= r->m_nVertices) badIndex++;
+		if ((unsigned)a >= r->GetNVertices () || (unsigned)b >= r->GetNVertices () || (unsigned)c >= r->GetNVertices ()) badIndex++;
 	}
 	std::vector<unsigned int> nmAfter, bAfter;
 	r->GetTopologicIssues(nmAfter, bAfter);
 	printf("decimated: %u verts, %u faces, %d degenerate, %d bad-index, "
 	       "%zu non-manifold edges, %zu border edges\n",
-	       r->m_nVertices, r->m_nFaces, degenerate, badIndex, nmAfter.size(), bAfter.size());
+	       r->GetNVertices (), r->GetNFaces (), degenerate, badIndex, nmAfter.size(), bAfter.size());
 
 	// Guarantee: a manifold input (bunny after merge: 0 non-manifold) stays
 	// manifold after decimation. Edge-collapse cannot CREATE non-manifold edges

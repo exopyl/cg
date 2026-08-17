@@ -29,8 +29,8 @@ Cmodel3d_half_edge_sliced::~Cmodel3d_half_edge_sliced ()
 void
 Cmodel3d_half_edge_sliced::scan_model_along_Oz (void)
 {
-	float *vertices = model->m_pMesh->m_pVertices.data();
-	int n_vertices  = model->m_pMesh->m_nVertices;
+	const float *vertices = model->m_pMesh->GetVertices ().data();
+	int n_vertices  = model->m_pMesh->GetNVertices ();
 	int i,j,k;
 
 	/* look for the extremities in the Oz direction */
@@ -106,8 +106,8 @@ Cmodel3d_half_edge_sliced::scan_model_along_Oz (void)
 void
 Cmodel3d_half_edge_sliced::scan_model_along_Ox (void)
 {
-	float *vertices = model->m_pMesh->m_pVertices.data();
-	int n_vertices  = model->m_pMesh->m_nVertices;
+	const float *vertices = model->m_pMesh->GetVertices ().data();
+	int n_vertices  = model->m_pMesh->GetNVertices ();
 	int i,j,k;
 
 	/* look for the extremities in the Oz direction */

@@ -5,9 +5,9 @@
 //
 bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 {
-	int nv = m_pModel->m_pMesh->m_nVertices;
-	float *v = m_pModel->m_pMesh->m_pVertices.data();
-	float *vn = m_pModel->m_pMesh->m_pVertexNormals.data();
+	int nv = m_pModel->m_pMesh->GetNVertices ();
+	const float *v = m_pModel->m_pMesh->GetVertices ().data();
+	const float *vn = m_pModel->m_pMesh->GetVertexNormals ().data();
 	int i;
 	float mat[9];
 	Vector3f right, solution;
@@ -16,7 +16,7 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
     {
 		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
-			Tensors ()[i] = nullptr;
+			SetTensorAt (i, nullptr);
 			continue;
 		}
 
@@ -119,7 +119,7 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 			pDiffParamWalk->SetKappaMin (1000000.0);
 			pDiffParamWalk->SetDirectionMax (b1[0], b1[1], b1[2]);
 			pDiffParamWalk->SetDirectionMin (b2[0], b2[1], b2[2]);
-			Tensors ()[i].reset (pDiffParamWalk);
+			SetTensorAt (i, pDiffParamWalk);
 			continue;
 		}
 
@@ -187,7 +187,7 @@ bool MeshAlgoTensorEvaluator::ApplyHamann (void)
 			pDiffParamWalk->SetDirectionMax (d1[0], d1[1], d1[2]);
 			pDiffParamWalk->SetDirectionMin (d2[0], d2[1], d2[2]);
 		}
-		Tensors ()[i].reset (pDiffParamWalk);
+		SetTensorAt (i, pDiffParamWalk);
     }
 
 	return true;

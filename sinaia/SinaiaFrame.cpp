@@ -1998,9 +1998,9 @@ void MyFrame::UpdatePropertiesGrid()
         for (auto& mesh : pObject->GetMeshes())
         {
             wxTreeItemId currentItem = m_hierarchyMeshes->AppendItem(root, wxString(mesh->m_name), 0);
-            sprintf(n, "%d vertices\n", mesh->m_nVertices);
+            sprintf(n, "%d vertices\n", mesh->GetNVertices ());
             m_hierarchyMeshes->AppendItem(currentItem, wxString(n), 1);
-            sprintf(n, "%d faces\n", mesh->m_nFaces);
+            sprintf(n, "%d faces\n", mesh->GetNFaces ());
             m_hierarchyMeshes->AppendItem(currentItem, wxString(n), 1);
         }
 
@@ -2939,7 +2939,7 @@ void MyFrame::UpdateGeometry (void)
 		}
 	if (geometry)
 	{
-		printf ("%d %d\n", geometry->m_nVertices, geometry->m_nFaces);
+		printf ("%d %d\n", geometry->GetNVertices (), geometry->GetNFaces ());
 		geometry->ComputeNormals ();
 		pGLCanvas->SetMesh (geometry);
 	}
@@ -3359,11 +3359,11 @@ void MyFrame::OnTreatmentSmoothingTaubin(wxCommandEvent& WXUNUSED(event))
 		algo.Apply(pMeshHE);
 
 		// Copy smoothed vertices back
-		for (unsigned int i = 0; i < pMesh->m_nVertices; i++)
+		for (unsigned int i = 0; i < pMesh->GetNVertices (); i++)
 		{
-			pMesh->m_pVertices[3 * i]     = pMeshHE->m_pMesh->m_pVertices[3 * i];
-			pMesh->m_pVertices[3 * i + 1] = pMeshHE->m_pMesh->m_pVertices[3 * i + 1];
-			pMesh->m_pVertices[3 * i + 2] = pMeshHE->m_pMesh->m_pVertices[3 * i + 2];
+			pMesh->SetVertexComponent (i, 0, pMeshHE->m_pMesh->GetVertices ()[3 * i]);
+			pMesh->SetVertexComponent (i, 1, pMeshHE->m_pMesh->GetVertices ()[3 * i + 1]);
+			pMesh->SetVertexComponent (i, 2, pMeshHE->m_pMesh->GetVertices ()[3 * i + 2]);
 		}
 		pMesh->ComputeNormals();
 		pMesh->IncrementRevision();
@@ -3390,11 +3390,11 @@ void MyFrame::OnTreatmentSmoothingLaplacian(wxCommandEvent& WXUNUSED(event))
 		algo.Apply(pMeshHE);
 
 		// Copy smoothed vertices back
-		for (unsigned int i = 0; i < pMesh->m_nVertices; i++)
+		for (unsigned int i = 0; i < pMesh->GetNVertices (); i++)
 		{
-			pMesh->m_pVertices[3 * i]     = pMeshHE->m_pMesh->m_pVertices[3 * i];
-			pMesh->m_pVertices[3 * i + 1] = pMeshHE->m_pMesh->m_pVertices[3 * i + 1];
-			pMesh->m_pVertices[3 * i + 2] = pMeshHE->m_pMesh->m_pVertices[3 * i + 2];
+			pMesh->SetVertexComponent (i, 0, pMeshHE->m_pMesh->GetVertices ()[3 * i]);
+			pMesh->SetVertexComponent (i, 1, pMeshHE->m_pMesh->GetVertices ()[3 * i + 1]);
+			pMesh->SetVertexComponent (i, 2, pMeshHE->m_pMesh->GetVertices ()[3 * i + 2]);
 		}
 		pMesh->ComputeNormals();
 		pMesh->IncrementRevision();
@@ -3414,35 +3414,26 @@ void MyFrame::OnTreatmentSmoothingLaplacian(wxCommandEvent& WXUNUSED(event))
 static void ReplaceMeshGeometry (Mesh *pMesh, Mesh *pNewMesh)
 {
 	// Build flat triangle index list from the new mesh's Face** array.
-	std::vector<unsigned int> faces (3 * pNewMesh->m_nFaces);
-	for (unsigned int f = 0; f < pNewMesh->m_nFaces; ++f)
+	std::vector<unsigned int> faces (3 * pNewMesh->GetNFaces ());
+	for (unsigned int f = 0; f < pNewMesh->GetNFaces (); ++f)
 	{
-		faces[3*f+0] = (unsigned int)pNewMesh->m_pFaces[f]->GetVertex(0);
-		faces[3*f+1] = (unsigned int)pNewMesh->m_pFaces[f]->GetVertex(1);
-		faces[3*f+2] = (unsigned int)pNewMesh->m_pFaces[f]->GetVertex(2);
+		faces[3*f+0] = (unsigned int)pNewMesh->FaceAt (f)->GetVertex(0);
+		faces[3*f+1] = (unsigned int)pNewMesh->FaceAt (f)->GetVertex(1);
+		faces[3*f+2] = (unsigned int)pNewMesh->FaceAt (f)->GetVertex(2);
 	}
 
-	// Delete the existing per-Face objects on the destination ; SetFaces frees
-	// the outer pointer array but leaks the inner Face* without this cleanup.
-	if (pMesh->m_pFaces)
-	{
-		for (unsigned int i = 0; i < pMesh->m_nFaces; ++i)
-			delete pMesh->m_pFaces[i];
-	}
-
-	pMesh->SetVertices (pNewMesh->m_nVertices, pNewMesh->m_pVertices.data());
-	pMesh->SetFaces (pNewMesh->m_nFaces, 3, faces.data());
+	pMesh->SetVertices (pNewMesh->GetNVertices (), pNewMesh->GetVertices ().data());
+	pMesh->SetFaces (pNewMesh->GetNFaces (), 3, faces.data());
 	pMesh->ComputeNormals ();
 
 	// Carry per-vertex appearance attributes when the new mesh provides them
 	// vertex-parallel (e.g. attribute-preserving decimation). Colours/UVs are
 	// otherwise lost; normals are recomputed above.
-	if (pNewMesh->m_pVertexColors.size() == 3u * (size_t)pNewMesh->m_nVertices)
-		pMesh->m_pVertexColors = pNewMesh->m_pVertexColors;
-	if (pNewMesh->m_pTextureCoordinates.size() == 2u * (size_t)pNewMesh->m_nVertices)
+	if (pNewMesh->GetVertexColors ().size() == 3u * (size_t)pNewMesh->GetNVertices ())
+		pMesh->SetVertexColors (pNewMesh->GetVertexColors ());
+	if (pNewMesh->GetTextureCoordinates ().size() == 2u * (size_t)pNewMesh->GetNVertices ())
 	{
-		pMesh->m_pTextureCoordinates = pNewMesh->m_pTextureCoordinates;
-		pMesh->m_nTextureCoordinates = pNewMesh->m_nTextureCoordinates;
+		pMesh->SetTextureCoordinates (pNewMesh->GetTextureCoordinates (), pNewMesh->GetNTextureCoordinates ());
 	}
 
 	pMesh->IncrementRevision ();
@@ -3580,8 +3571,8 @@ void MyFrame::OnTreatmentApplyNormals(wxCommandEvent& WXUNUSED(event))
 				continue;
 			algo.EvalOnVertices(pMeshHE, method);
 			// Same vertex order/count as pMesh; copy the unit normals back.
-			if (pMeshHE->m_pMesh->m_pVertexNormals.size() == pMesh->m_pVertexNormals.size())
-				pMesh->m_pVertexNormals = pMeshHE->m_pMesh->m_pVertexNormals;
+			if (pMeshHE->m_pMesh->GetVertexNormals ().size() == pMesh->GetVertexNormals ().size())
+				pMesh->SetVertexNormals (pMeshHE->m_pMesh->GetVertexNormals ());
 		}
 		pMesh->IncrementRevision();
 	}
@@ -3662,12 +3653,11 @@ void MyFrame::ApplyDecimation(void)
 		// vertex-parallel attributes so decimation can preserve them. (Same
 		// vertex order/count as pMesh at this point.)
 		Mesh* src = pMeshHE->m_pMesh;
-		if (pMesh->m_pVertexColors.size() == 3u * (size_t)src->m_nVertices)
-			src->m_pVertexColors = pMesh->m_pVertexColors;
-		if (pMesh->m_pTextureCoordinates.size() == 2u * (size_t)src->m_nVertices)
+		if (pMesh->GetVertexColors ().size() == 3u * (size_t)src->GetNVertices ())
+			src->SetVertexColors (pMesh->GetVertexColors ());
+		if (pMesh->GetTextureCoordinates ().size() == 2u * (size_t)src->GetNVertices ())
 		{
-			src->m_pTextureCoordinates = pMesh->m_pTextureCoordinates;
-			src->m_nTextureCoordinates = pMesh->m_nTextureCoordinates;
+			src->SetTextureCoordinates (pMesh->GetTextureCoordinates (), pMesh->GetNTextureCoordinates ());
 		}
 
 		pMeshHE->simplify(ratio, opt);
@@ -3728,7 +3718,7 @@ static void restoreCurvatureColors(VMeshes* pVMeshes, const std::vector<std::vec
 	std::vector<Mesh*>& meshes = pVMeshes->GetMeshes();
 	for (size_t i = 0; i < meshes.size(); i++)
 	{
-		meshes[i]->m_pVertexColors = (i < saved.size()) ? saved[i] : std::vector<float>();
+		meshes[i]->SetVertexColors ((i < saved.size()) ? saved[i] : std::vector<float>());
 		meshes[i]->IncrementRevision();
 		meshes[i]->MarkTensorsComputed();
 	}
@@ -3758,7 +3748,7 @@ void MyFrame::ApplyCurvature(MyGLCanvas* pCanvas, TensorMethodId method, Curvatu
 	{
 		state.savedColors.clear();
 		for (auto& pMesh : pVMeshes->GetMeshes())
-			state.savedColors.push_back(pMesh->m_pVertexColors);
+			state.savedColors.push_back(pMesh->GetVertexColors ());
 		state.savedValid = true;
 	}
 

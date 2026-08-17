@@ -29,7 +29,7 @@ bool GeodesicWrapper::input (char *filename)
 	return true;
 }
 
-bool GeodesicWrapper::SetMesh (unsigned int _nvertices, float *_vertices, unsigned int _nfaces, unsigned int *_faces)
+bool GeodesicWrapper::SetMesh (unsigned int _nvertices, const float *_vertices, unsigned int _nfaces, unsigned int *_faces)
 {
 	std::vector<double> points;	
 	std::vector<unsigned> faces;

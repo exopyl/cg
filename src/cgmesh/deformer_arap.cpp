@@ -18,12 +18,12 @@ void DeformerARAP::SetMesh(Mesh_half_edge *pMesh)
 	m_pMesh = pMesh;
 
 	isFixed.clear();
-	isFixed.resize(m_pMesh->m_pMesh->m_nVertices, false);
+	isFixed.resize(m_pMesh->m_pMesh->GetNVertices (), false);
 }
 
 void DeformerARAP::SetBordersAsFixed()
 {
-	for (int i=0; i<m_pMesh->m_pMesh->m_nVertices; i++)
+	for (int i=0; i<m_pMesh->m_pMesh->GetNVertices (); i++)
 		if (m_pMesh->get_n_neighbours(i) == -1)
 			SetFixed(i);
 }
@@ -34,7 +34,7 @@ void DeformerARAP::ComputeCotangentWeights()
 	double wij = 0.;
 
 	wij_weight.clear(); // clear the current map
-	for (i=0; i<m_pMesh->m_pMesh->m_nVertices; i++)
+	for (i=0; i<m_pMesh->m_pMesh->GetNVertices (); i++)
 	{
 		if (m_pMesh->get_n_neighbours(i) == -1) // topology not correct or vertex i is on the border
 			continue;
@@ -64,10 +64,10 @@ double DeformerARAP::GetWij(int i, int j)
 void DeformerARAP::PreFactor()
 {
 	// Laplace-Beltrami operator : L matrix, n by n, weights
-	Eigen::SparseMatrix<double> L(m_pMesh->m_pMesh->m_nVertices, m_pMesh->m_pMesh->m_nVertices);
+	Eigen::SparseMatrix<double> L(m_pMesh->m_pMesh->GetNVertices (), m_pMesh->m_pMesh->GetNVertices ());
 
 	float v[3];
-	for (int i=0; i<m_pMesh->m_pMesh->m_nVertices; i++)
+	for (int i=0; i<m_pMesh->m_pMesh->GetNVertices (); i++)
 	{
 		m_pMesh->m_pMesh->GetVertex(i, v);
 		m_OrigMesh[i] = Eigen::Vector3d(v[0],v[1],v[2]);
@@ -104,16 +104,16 @@ void DeformerARAP::PreProcess()
 {
 	// reset data
 	R.clear();
-	R.resize(m_pMesh->m_pMesh->m_nVertices, Eigen::Matrix3d::Identity());
+	R.resize(m_pMesh->m_pMesh->GetNVertices (), Eigen::Matrix3d::Identity());
 
 	xyz.clear();
-	xyz.resize(3, Eigen::VectorXd::Zero(m_pMesh->m_pMesh->m_nVertices));
+	xyz.resize(3, Eigen::VectorXd::Zero(m_pMesh->m_pMesh->GetNVertices ()));
 
 	b.clear();
-	b.resize(3, Eigen::VectorXd::Zero(m_pMesh->m_pMesh->m_nVertices));
+	b.resize(3, Eigen::VectorXd::Zero(m_pMesh->m_pMesh->GetNVertices ()));
 
 	m_OrigMesh.clear();
-	m_OrigMesh.resize(m_pMesh->m_pMesh->m_nVertices, Eigen::Vector3d::Zero());
+	m_OrigMesh.resize(m_pMesh->m_pMesh->GetNVertices (), Eigen::Vector3d::Zero());
 
 	// precompute cotangent weights (wij)
 	ComputeCotangentWeights();
@@ -126,7 +126,7 @@ void DeformerARAP::SVDRotation(void)
 {
 	Eigen::Matrix3d eye = Eigen::Matrix3d::Identity();
 
-	for (int i=0; i<m_pMesh->m_pMesh->m_nVertices; i++)
+	for (int i=0; i<m_pMesh->m_pMesh->GetNVertices (); i++)
 	{
 		int he = m_pMesh->GetCheMesh()->get_edge_from_vertex(i);
 		int valence = m_pMesh->get_n_neighbours(i);
@@ -183,7 +183,7 @@ void DeformerARAP::Deform(int nIterations)
 	{       
 		// update vector b = wij/2 * (Ri+Rj) * (pi - pj), where pi and pj are coordinates of the original mesh
 		// cf Equation (8)
-		for (int i=0; i<m_pMesh->m_pMesh->m_nVertices; i++)
+		for (int i=0; i<m_pMesh->m_pMesh->GetNVertices (); i++)
 		{
 			Vector3f v;
 			m_pMesh->m_pMesh->GetVertex(i, v);
@@ -231,7 +231,7 @@ void DeformerARAP::Deform(int nIterations)
 	}
 
 	// update vertex coordinates 
-	for (int i=0; i<m_pMesh->m_pMesh->m_nVertices; i++)
+	for (int i=0; i<m_pMesh->m_pMesh->GetNVertices (); i++)
 	{
 		if (isFixed[i])
 			continue;

@@ -45,12 +45,12 @@ TEST(TEST_cgmesh_voxels, import_kvx_duke)
 
     // palette colours are applied: per-vertex colours are present and not all
     // left at the default grey (0.5, 0.5, 0.5)
-    ASSERT_EQ(m->m_pVertexColors.size(), 3u * m->GetNVertices());
+    ASSERT_EQ(m->GetVertexColors ().size(), 3u * m->GetNVertices());
     bool anyColoured = false;
-    for (size_t c = 0; c + 2 < m->m_pVertexColors.size(); c += 3)
-        if (m->m_pVertexColors[c]   != 0.5f ||
-            m->m_pVertexColors[c+1] != 0.5f ||
-            m->m_pVertexColors[c+2] != 0.5f) { anyColoured = true; break; }
+    for (size_t c = 0; c + 2 < m->GetVertexColors ().size(); c += 3)
+        if (m->GetVertexColors ()[c]   != 0.5f ||
+            m->GetVertexColors ()[c+1] != 0.5f ||
+            m->GetVertexColors ()[c+2] != 0.5f) { anyColoured = true; break; }
     EXPECT_TRUE(anyColoured) << "KVX palette colours were not applied to the mesh";
 
     delete m;
@@ -69,17 +69,17 @@ TEST(TEST_cgmesh_voxels, kvx_colors_are_per_face)
     ASSERT_NE(v, nullptr);
     Mesh* m = v->ToMesh();
     ASSERT_NE(m, nullptr);
-    ASSERT_EQ(m->m_pVertexColors.size(), 3u * m->GetNVertices());
+    ASSERT_EQ(m->GetVertexColors ().size(), 3u * m->GetNVertices());
 
     auto sameColor = [&](int p, int q){
-        return m->m_pVertexColors[3*p]   == m->m_pVertexColors[3*q]   &&
-               m->m_pVertexColors[3*p+1] == m->m_pVertexColors[3*q+1] &&
-               m->m_pVertexColors[3*p+2] == m->m_pVertexColors[3*q+2];
+        return m->GetVertexColors ()[3*p]   == m->GetVertexColors ()[3*q]   &&
+               m->GetVertexColors ()[3*p+1] == m->GetVertexColors ()[3*q+1] &&
+               m->GetVertexColors ()[3*p+2] == m->GetVertexColors ()[3*q+2];
     };
     unsigned int mixed = 0;
     for (unsigned int fidx = 0; fidx < m->GetNFaces(); ++fidx)
     {
-        Face* f = m->m_pFaces[fidx];
+        auto f = m->FaceAt (fidx);
         const int a = f->GetVertex(0), b = f->GetVertex(1), c = f->GetVertex(2);
         if (!sameColor(a, b) || !sameColor(a, c)) ++mixed;
     }

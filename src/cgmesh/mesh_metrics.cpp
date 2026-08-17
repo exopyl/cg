@@ -24,17 +24,17 @@ namespace
 			if (out) out->push_back (sqrtf (d2));
 		};
 
-		for (unsigned int i = 0; i < from.m_nVertices; i++)
-			sample (from.m_pVertices[3*i], from.m_pVertices[3*i+1], from.m_pVertices[3*i+2]);
+		for (unsigned int i = 0; i < from.GetNVertices (); i++)
+			sample (from.GetVertices ()[3*i], from.GetVertices ()[3*i+1], from.GetVertices ()[3*i+2]);
 
-		for (unsigned int f = 0; f < from.m_nFaces; f++)
+		for (unsigned int f = 0; f < from.GetNFaces (); f++)
 		{
-			Face *face = from.m_pFaces[f];
-			if (!face || face->m_nVertices < 3) continue;
-			int a = face->m_pVertices[0], b = face->m_pVertices[1], c = face->m_pVertices[2];
-			sample ((from.m_pVertices[3*a]   + from.m_pVertices[3*b]   + from.m_pVertices[3*c])   / 3.f,
-			        (from.m_pVertices[3*a+1] + from.m_pVertices[3*b+1] + from.m_pVertices[3*c+1]) / 3.f,
-			        (from.m_pVertices[3*a+2] + from.m_pVertices[3*b+2] + from.m_pVertices[3*c+2]) / 3.f);
+			auto face = from.FaceAt (f);
+			if (!face || face->GetNVertices () < 3) continue;
+			int a = face->GetVertex (0), b = face->GetVertex (1), c = face->GetVertex (2);
+			sample ((from.GetVertices ()[3*a]   + from.GetVertices ()[3*b]   + from.GetVertices ()[3*c])   / 3.f,
+			        (from.GetVertices ()[3*a+1] + from.GetVertices ()[3*b+1] + from.GetVertices ()[3*c+1]) / 3.f,
+			        (from.GetVertices ()[3*a+2] + from.GetVertices ()[3*b+2] + from.GetVertices ()[3*c+2]) / 3.f);
 		}
 
 		return sqrtf (worst2);
@@ -89,10 +89,10 @@ std::vector<float> mesh_pointwise_distance (Mesh &from, Mesh &to)
 {
 	BVH bvh;
 	bvh.build (to);
-	std::vector<float> d (from.m_nVertices, 0.f);
-	for (unsigned int i = 0; i < from.m_nVertices; i++)
+	std::vector<float> d (from.GetNVertices (), 0.f);
+	for (unsigned int i = 0; i < from.GetNVertices (); i++)
 	{
-		Vector3f p (from.m_pVertices[3*i], from.m_pVertices[3*i+1], from.m_pVertices[3*i+2]);
+		Vector3f p (from.GetVertices ()[3*i], from.GetVertices ()[3*i+1], from.GetVertices ()[3*i+2]);
 		float d2 = bvh.closest_distance2 (p);
 		d[i] = (d2 > 0.f) ? sqrtf (d2) : 0.f;
 	}

@@ -1054,11 +1054,10 @@ Mesh* Voxels::ToMesh (void)
 
 		mesh = new Mesh(nvo, nf);
 		mesh->SetVertices(nvo, vo);
-		mesh->m_pVertexColors.assign(co, co + 3 * nvo);
+		mesh->SetVertexColors(std::vector<float>(co, co + 3 * nvo));
 		for (unsigned int t = 0; t < nf; ++t)
 		{
-			mesh->m_pFaces[t] = new Face();
-			mesh->m_pFaces[t]->SetTriangle(3*t, 3*t+1, 3*t+2);
+			mesh->FaceAt (t)->SetTriangle(3*t, 3*t+1, 3*t+2);
 		}
 
 		free(vo);
@@ -1097,8 +1096,7 @@ Mesh* Voxels::ToMesh (void)
 		mesh->SetVertices(nv2, v2);
 		for (unsigned int i = 0; i < nf; i++)
 		{
-			mesh->m_pFaces[i] = new Face();
-			mesh->m_pFaces[i]->SetTriangle(f2[3*i], f2[3*i+1], f2[3*i+2]);
+			mesh->FaceAt (i)->SetTriangle(f2[3*i], f2[3*i+1], f2[3*i+2]);
 		}
 
 		free(v_used);

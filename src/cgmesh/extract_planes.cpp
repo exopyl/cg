@@ -26,11 +26,11 @@ Cextract_planes::add_plane (VectorizedPlane *plane)
 void Cextract_planes::compute (float threshold, float percentage)
 {
   int i,j,k;
-  float *v = model->m_pMesh->m_pVertices.data();
-  int nv = model->m_pMesh->m_nVertices;
+  const float *v = model->m_pMesh->GetVertices ().data();
+  int nv = model->m_pMesh->GetNVertices ();
   //float *vc = model->get_vertices_colors ();
   std::vector<unsigned int> f = model->m_pMesh->GetTriangles ();
-  int nf = model->m_pMesh->m_nFaces;
+  int nf = model->m_pMesh->GetNFaces ();
 
   Cregions_faces *model3d_regions = new Cregions_faces (model);
   model3d_regions->init_segmentation (threshold);

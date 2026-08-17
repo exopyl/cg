@@ -42,11 +42,11 @@ void ParameterizedCube::Regenerate()
 	delete m_pMesh;
 	m_pMesh = CreateCube(m_triangulated);
 	float scale = m_edgeLength / 2.f;
-	for (unsigned int i = 0; i < m_pMesh->m_nVertices; i++)
+	for (unsigned int i = 0; i < m_pMesh->GetNVertices (); i++)
 	{
-		m_pMesh->m_pVertices[3*i]     *= scale;
-		m_pMesh->m_pVertices[3*i + 1] *= scale;
-		m_pMesh->m_pVertices[3*i + 2] *= scale;
+		m_pMesh->SetVertexComponent (i, 0, m_pMesh->GetVertices ()[3*i+0] * (scale));
+		m_pMesh->SetVertexComponent (i, 1, m_pMesh->GetVertices ()[3*i+1] * (scale));
+		m_pMesh->SetVertexComponent (i, 2, m_pMesh->GetVertices ()[3*i+2] * (scale));
 	}
 	m_pMesh->ComputeNormals();
 }
@@ -749,7 +749,7 @@ ParameterizedImplicitFromPoints::ParameterizedImplicitFromPoints(const std::stri
 	// extension and fills m_pVertices even for a face-less point cloud.
 	Mesh tmp;
 	if (tmp.load(m_filename.c_str()) == 0 && tmp.GetNVertices() > 0)
-		m_field.Build(tmp.m_pVertices.data(), (int)tmp.GetNVertices());
+		m_field.Build(tmp.GetVertices ().data(), (int)tmp.GetNVertices());
 
 	Regenerate();
 }

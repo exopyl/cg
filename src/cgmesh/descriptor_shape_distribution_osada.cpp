@@ -7,7 +7,7 @@
 //
 //
 //
-Cshape_distribution_osada::Cshape_distribution_osada (int _nv, float *_v, int _nf, unsigned int *_f)
+Cshape_distribution_osada::Cshape_distribution_osada (int _nv, const float *_v, int _nf, unsigned int *_f)
 {
   nv = _nv;
   nf = _nf;

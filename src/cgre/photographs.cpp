@@ -11,9 +11,9 @@ take_photographs (Mesh *model, char *filefront, char *fileside, char *fileup)
 	float l, r, b, t;
 	float near_plane, far_plane;
 	
-	int nv = model->m_nVertices;
-	float *v = model->m_pVertices.data();
-	int nf = model->m_nFaces;
+	int nv = model->GetNVertices ();
+	const float *v = model->GetVertices ().data();
+	int nf = model->GetNFaces ();
 	const BoundingBox& bbox= model->bbox ();
 	float min[3], max[3];
 	bbox.GetMinMax(min, max);

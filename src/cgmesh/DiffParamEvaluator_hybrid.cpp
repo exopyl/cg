@@ -5,11 +5,11 @@
 //
 bool MeshAlgoTensorEvaluator::ApplyHybrid (void)
 {
-	int nv = m_pModel->m_pMesh->m_nVertices;
+	int nv = m_pModel->m_pMesh->GetNVertices ();
 	int i;
 
 	// Local accumulation buffer (owns its tensors; freed at scope exit).
-	// The shared per-vertex store is the mesh's Tensors().
+	// The shared per-vertex store is the mesh's tensor cache.
 	std::vector<std::unique_ptr<Tensor>> hybrid (nv);
 	for (i=0; i<nv; i++) hybrid[i] = std::make_unique<Tensor> ();
 
@@ -17,7 +17,7 @@ bool MeshAlgoTensorEvaluator::ApplyHybrid (void)
 	ApplyDesbrun ();
 	for (i=0; i<nv; i++)
     {
-		if (!Tensors ()[i])
+		if (!TensorAt (i))
 		{
 			hybrid[i] = nullptr;
 			continue;
@@ -25,40 +25,40 @@ bool MeshAlgoTensorEvaluator::ApplyHybrid (void)
 
 		// Surcharges vecteur : la version `float*` de ces accesseurs indexait
 		// `&n.x` comme un tableau de trois flottants (cpp:S3519, tensor.h:45/48).
-		hybrid[i]->SetNormal (Tensors ()[i]->GetNormal ());
-		hybrid[i]->SetKappaMax (Tensors ()[i]->GetKappaMax ());
-		hybrid[i]->SetKappaMin (Tensors ()[i]->GetKappaMin ());
+		hybrid[i]->SetNormal (TensorAt (i)->GetNormal ());
+		hybrid[i]->SetKappaMax (TensorAt (i)->GetKappaMax ());
+		hybrid[i]->SetKappaMin (TensorAt (i)->GetKappaMin ());
     }
 
 	/* principal directions */
 	ApplySteiner ();
 	for (i=0; i<nv; i++)
     {
-		if (!Tensors ()[i])
+		if (!TensorAt (i))
 		{
 			hybrid[i] = nullptr;
 			continue;
 		}
 
-		hybrid[i]->SetDirectionMax (Tensors ()[i]->GetDirectionMax ());
-		hybrid[i]->SetDirectionMin (Tensors ()[i]->GetDirectionMin ());
+		hybrid[i]->SetDirectionMax (TensorAt (i)->GetDirectionMax ());
+		hybrid[i]->SetDirectionMin (TensorAt (i)->GetDirectionMin ());
     }
 
 	/* save the differential parameters */
 	for (i=0; i<nv; i++)
     {
-		if (!Tensors ()[i] || !hybrid[i])
+		if (!TensorAt (i) || !hybrid[i])
 		{
-			Tensors ()[i] = nullptr;
+			SetTensorAt (i, nullptr);
 			continue;
 		}
 
-		Tensors ()[i]->SetNormal (hybrid[i]->GetNormal ());
-		Tensors ()[i]->SetKappaMax (hybrid[i]->GetKappaMax ());
-		Tensors ()[i]->SetKappaMin (hybrid[i]->GetKappaMin ());
+		TensorAt (i)->SetNormal (hybrid[i]->GetNormal ());
+		TensorAt (i)->SetKappaMax (hybrid[i]->GetKappaMax ());
+		TensorAt (i)->SetKappaMin (hybrid[i]->GetKappaMin ());
 
-		Tensors ()[i]->SetDirectionMax (hybrid[i]->GetDirectionMax ());
-		Tensors ()[i]->SetDirectionMin (hybrid[i]->GetDirectionMin ());
+		TensorAt (i)->SetDirectionMax (hybrid[i]->GetDirectionMax ());
+		TensorAt (i)->SetDirectionMin (hybrid[i]->GetDirectionMin ());
     }
 
 	return true;

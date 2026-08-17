@@ -411,7 +411,7 @@ TEST(TEST_cgmesh_thickness, ColorizeFillsVertexColors)
 	ASSERT_TRUE(MeshAlgoThickness::ColorizeWallThickness(*m, thick, defined));
 
 	// The existing colour-map path must have produced one RGB triple/vertex.
-	EXPECT_EQ(m->m_pVertexColors.size(), 3u * m->GetNVertices());
+	EXPECT_EQ(m->GetVertexColors ().size(), 3u * m->GetNVertices());
 	delete m;
 }
 
@@ -433,7 +433,7 @@ TEST(TEST_cgmesh_thickness, ColorizeThinIsRedThickIsBlue)
 	ASSERT_GT(t[imax], t[imin]);             // there is a thickness spread
 
 	ASSERT_TRUE(MeshAlgoThickness::ColorizeWallThickness(*m, t, d));   // auto scale
-	const std::vector<float> &c = m->m_pVertexColors;
+	const std::vector<float> &c = m->GetVertexColors ();
 	EXPECT_GT(c[3*imin],     c[3*imin + 2]); // thin  -> red  (R > B)
 	EXPECT_GT(c[3*imax + 2], c[3*imax]);     // thick -> blue (B > R)
 	delete m;
@@ -448,7 +448,7 @@ TEST(TEST_cgmesh_thickness, ColorizeRespectsExplicitScale)
 	std::vector<float> t; std::vector<char> d;
 	ASSERT_TRUE(MeshAlgoThickness::ColorizeWallThickness(*m, t, d,
 	                                                     /*scaleMin*/1.5f, /*scaleMax*/1.6f));
-	const std::vector<float> &c = m->m_pVertexColors;
+	const std::vector<float> &c = m->GetVertexColors ();
 	EXPECT_GT(c[3*kBottomCentre], c[3*kBottomCentre + 2]);   // clamped -> red
 	delete m;
 }

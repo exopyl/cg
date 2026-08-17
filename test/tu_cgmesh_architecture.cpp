@@ -347,7 +347,7 @@ TEST(TEST_cgmesh_architecture, block)
 {
 	Mesh *block = CreateBlock ();
 	EXPECT_NE(block, nullptr);
-	EXPECT_GT(block->m_nVertices, 0);
+	EXPECT_GT(block->GetNVertices (), 0);
 	// block->save ((char*)"block.obj");
 	delete block;
 }
@@ -371,7 +371,7 @@ TEST(TEST_cgmesh_architecture, wall)
 			wall->Append (b);
 		}
 	}
-	EXPECT_GT(wall->m_nVertices, 0);
+	EXPECT_GT(wall->GetNVertices (), 0);
 	wall->save ((char*)"architecture_wall.obj");
 	delete wall;
 }
@@ -380,13 +380,13 @@ TEST(TEST_cgmesh_architecture, arch)
 {
 	Mesh *arch = CreateArch ();
 	EXPECT_NE(arch, nullptr);
-	EXPECT_GT(arch->m_nVertices, 0);
+	EXPECT_GT(arch->GetNVertices (), 0);
 	arch->save ((char*)"architecture_arch.obj");
 	delete arch;
 
 	Mesh *arch2 = CreateArch2 ();
 	EXPECT_NE(arch2, nullptr);
-	EXPECT_GT(arch2->m_nVertices, 0);
+	EXPECT_GT(arch2->GetNVertices (), 0);
 	arch2->save ((char*)"architecture_arch2.obj");
 	delete arch2;
 }

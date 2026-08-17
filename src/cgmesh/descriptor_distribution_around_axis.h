@@ -51,8 +51,8 @@ class Cdistribution_around_axis
 
   Mesh_half_edge *model;
   int nv, nf;
-  float *v;
-  Face **f;
+  const float *v;
+  Mesh *pm;
 
   /* first order distributions */
   float lengths[3], dmeans[3], variances[3], deviations[3];

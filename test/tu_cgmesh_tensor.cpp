@@ -90,8 +90,8 @@ static Mesh_half_edge* build_torus (unsigned int nu, unsigned int nv, float R, f
 	he->create_half_edge ();
 
 	// SetVertices only sizes m_pVertices; EvalOnVertices writes into
-	// m_pVertexNormals, so allocate it first (load() would normally do this).
-	he->m_pMesh->m_pVertexNormals.assign (3 * (size_t)nVerts, 0.0f);
+	// GetVertexNormals (), so allocate it first (load() would normally do this).
+	he->m_pMesh->InitVertexNormals ();
 
 	Normals normals;
 	normals.EvalOnVertices (he, Normals::THURMER);
@@ -224,4 +224,110 @@ TEST (TensorSaddle_Steiner, is_currently_a_noop_stub)
 		<< "TENSOR_STEINER now produces curvature — implement a real accuracy test";
 
 	delete he;
+}
+
+// ============================================================================
+//  Contrat de l'API de tenseurs de Mesh
+// ============================================================================
+//
+// Le stockage est vertex-parallele : un emplacement par sommet, un emplacement
+// nul signifiant « pas de tenseur ici » (sommet de bord ou non manifold). Les
+// tests ci-dessous fixent les trois points de ce contrat qui ne se devinent pas
+// a la lecture d'une signature.
+
+namespace {
+
+// Remplissage par reference : Mesh n'est ni copiable ni deplacable, donc un
+// retour par valeur depuis une variable nommee ne compile pas.
+void MakeTwoTriangles (Mesh &m)
+{
+	m.Init (4, 2);
+	float v[12] = { 0.f,0.f,0.f,  1.f,0.f,0.f,  1.f,1.f,0.f,  0.f,1.f,0.f };
+	m.SetVertices (4, v);
+	m.SetFace (0, 0, 1, 2);
+	m.SetFace (1, 0, 2, 3);
+}
+
+} // namespace
+
+TEST (TEST_cgmesh_tensor_api, init_gives_one_null_slot_per_vertex)
+{
+	Mesh m;
+	MakeTwoTriangles (m);
+	EXPECT_EQ (m.GetNTensors (), 0u) << "aucun tenseur avant InitTensors";
+
+	m.InitTensors ();
+	ASSERT_EQ (m.GetNTensors (), m.GetNVertices ());
+	for (unsigned int i = 0; i < m.GetNTensors (); i++)
+		EXPECT_EQ (m.GetTensor (i), nullptr) << "emplacement " << i;
+}
+
+// SetTensor PREND POSSESSION. Un indice hors bornes ne fait donc pas croitre le
+// tableau -- ce qui casserait le parallelisme avec les sommets -- mais DETRUIT
+// l'objet confie, faute de quoi l'appelant fuirait sans le savoir.
+TEST (TEST_cgmesh_tensor_api, set_tensor_out_of_range_is_a_no_op)
+{
+	Mesh m;
+	MakeTwoTriangles (m);
+	m.InitTensors ();
+	const unsigned int n = m.GetNTensors ();
+
+	m.SetTensor (n + 100, new Tensor ());
+
+	EXPECT_EQ (m.GetNTensors (), n) << "le tableau ne doit pas croitre";
+	EXPECT_EQ (m.GetTensor (n + 100), nullptr);
+}
+
+TEST (TEST_cgmesh_tensor_api, set_tensor_replaces_the_slot)
+{
+	Mesh m;
+	MakeTwoTriangles (m);
+	m.InitTensors ();
+
+	Tensor *t = new Tensor ();
+	t->SetKappaMax (2.5f);
+	m.SetTensor (1, t);
+
+	ASSERT_NE (m.GetTensor (1), nullptr);
+	EXPECT_FLOAT_EQ (m.GetTensor (1)->GetKappaMax (), 2.5f);
+	EXPECT_EQ (m.GetTensor (0), nullptr) << "les autres emplacements sont intacts";
+
+	// Remplacer par nullptr est licite : c'est ainsi que les estimateurs
+	// marquent un sommet de bord.
+	m.SetTensor (1, nullptr);
+	EXPECT_EQ (m.GetTensor (1), nullptr);
+}
+
+// Le cache est estampille contre la revision de GEOMETRIE. Ecrire un tenseur ne
+// la modifie pas : si c'etait le cas, le tampon ne concorderait jamais et le
+// cache ne pourrait jamais etre valide.
+TEST (TEST_cgmesh_tensor_api, writing_tensors_leaves_the_geometry_revision_alone)
+{
+	Mesh m;
+	MakeTwoTriangles (m);
+	const uint64_t revision = m.GetRevision ();
+
+	m.InitTensors ();
+	m.SetTensor (0, new Tensor ());
+	m.MarkTensorsComputed ();
+	EXPECT_EQ (m.GetRevision (), revision);
+	EXPECT_TRUE (m.AreTensorsValid ());
+
+	m.ClearTensors ();
+	EXPECT_EQ (m.GetRevision (), revision);
+	EXPECT_FALSE (m.AreTensorsValid ()) << "ClearTensors invalide le tampon";
+}
+
+// Muter la geometrie, en revanche, perime le cache.
+TEST (TEST_cgmesh_tensor_api, a_geometry_edit_makes_the_tensors_stale)
+{
+	Mesh m;
+	MakeTwoTriangles (m);
+	m.InitTensors ();
+	m.SetTensor (0, new Tensor ());
+	m.MarkTensorsComputed ();
+	ASSERT_TRUE (m.AreTensorsValid ());
+
+	m.IncrementRevision ();
+	EXPECT_FALSE (m.AreTensorsValid ());
 }

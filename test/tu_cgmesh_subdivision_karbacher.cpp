@@ -106,7 +106,7 @@ make_flat_triangle ()
 static std::array<float,3>
 get_vertex (Mesh *m, int i)
 {
-	return { m->m_pVertices[3*i], m->m_pVertices[3*i+1], m->m_pVertices[3*i+2] };
+	return { m->GetVertices ()[3*i], m->GetVertices ()[3*i+1], m->GetVertices ()[3*i+2] };
 }
 
 struct BBox { std::array<float,3> mn, mx; };
@@ -114,12 +114,12 @@ static BBox
 bbox (Mesh *m)
 {
 	BBox b;
-	b.mn = { m->m_pVertices[0], m->m_pVertices[1], m->m_pVertices[2] };
+	b.mn = { m->GetVertices ()[0], m->GetVertices ()[1], m->GetVertices ()[2] };
 	b.mx = b.mn;
-	for (unsigned int i = 1; i < m->m_nVertices; ++i)
+	for (unsigned int i = 1; i < m->GetNVertices (); ++i)
 		for (int k = 0; k < 3; ++k)
 		{
-			float x = m->m_pVertices[3*i+k];
+			float x = m->GetVertices ()[3*i+k];
 			if (x < b.mn[k]) b.mn[k] = x;
 			if (x > b.mx[k]) b.mx[k] = x;
 		}
@@ -130,14 +130,14 @@ static double
 total_area (Mesh *m)
 {
 	double s = 0.0;
-	for (unsigned int f = 0; f < m->m_nFaces; ++f)
+	for (unsigned int f = 0; f < m->GetNFaces (); ++f)
 	{
-		Face *F = m->m_pFaces[f];
+		auto F = m->FaceAt (f);
 		if (F->GetNVertices() != 3) continue;
 		int a = F->GetVertex(0), b = F->GetVertex(1), c = F->GetVertex(2);
-		double ax = m->m_pVertices[3*a],   ay = m->m_pVertices[3*a+1], az = m->m_pVertices[3*a+2];
-		double bx = m->m_pVertices[3*b],   by = m->m_pVertices[3*b+1], bz = m->m_pVertices[3*b+2];
-		double cx = m->m_pVertices[3*c],   cy = m->m_pVertices[3*c+1], cz = m->m_pVertices[3*c+2];
+		double ax = m->GetVertices ()[3*a],   ay = m->GetVertices ()[3*a+1], az = m->GetVertices ()[3*a+2];
+		double bx = m->GetVertices ()[3*b],   by = m->GetVertices ()[3*b+1], bz = m->GetVertices ()[3*b+2];
+		double cx = m->GetVertices ()[3*c],   cy = m->GetVertices ()[3*c+1], cz = m->GetVertices ()[3*c+2];
 		double ux = bx-ax, uy = by-ay, uz = bz-az;
 		double vx = cx-ax, vy = cy-ay, vz = cz-az;
 		double nx = uy*vz - uz*vy, ny = uz*vx - ux*vz, nz = ux*vy - uy*vx;
@@ -150,9 +150,9 @@ static int
 count_unique_edges (Mesh *m)
 {
 	std::set<std::pair<int,int>> uniq;
-	for (unsigned int f = 0; f < m->m_nFaces; ++f)
+	for (unsigned int f = 0; f < m->GetNFaces (); ++f)
 	{
-		Face *F = m->m_pFaces[f];
+		auto F = m->FaceAt (f);
 		if (F->GetNVertices() != 3) continue;
 		int a = F->GetVertex(0), b = F->GetVertex(1), c = F->GetVertex(2);
 		auto add = [&](int u, int v) {
@@ -184,8 +184,8 @@ TEST(TEST_cgmesh_subdivision_karbacher, FlatTriangleNewVertexIsCentroid)
 	ASSERT_TRUE (algo.Apply (he));
 
 	// 1->3 split : nv = 3 + 1 = 4, nf = 3 * 1 = 3
-	ASSERT_EQ ((int)m->m_nVertices, 4);
-	ASSERT_EQ ((int)m->m_nFaces, 3);
+	ASSERT_EQ ((int)m->GetNVertices (), 4);
+	ASSERT_EQ ((int)m->GetNFaces (), 3);
 
 	// Original 3 vertices must be unchanged.
 	auto v0 = get_vertex (m, 0); auto v1 = get_vertex (m, 1); auto v2 = get_vertex (m, 2);
@@ -208,14 +208,14 @@ TEST(TEST_cgmesh_subdivision_karbacher, TetrahedronCounts)
 	Mesh_half_edge *he = make_tetrahedron ();
 	Mesh *m = he->m_pMesh;
 
-	const int nv0 = (int)m->m_nVertices;
-	const int nf0 = (int)m->m_nFaces;
+	const int nv0 = (int)m->GetNVertices ();
+	const int nf0 = (int)m->GetNFaces ();
 
 	MeshAlgoSubdivisionKarbacher algo;
 	ASSERT_TRUE (algo.Apply (he));
 
-	EXPECT_EQ ((int)m->m_nVertices, nv0 + nf0);
-	EXPECT_EQ ((int)m->m_nFaces, 3 * nf0);
+	EXPECT_EQ ((int)m->GetNVertices (), nv0 + nf0);
+	EXPECT_EQ ((int)m->GetNFaces (), 3 * nf0);
 
 	delete he;
 }
@@ -250,14 +250,14 @@ TEST(TEST_cgmesh_subdivision_karbacher, CubeCounts)
 	Mesh_half_edge *he = make_unit_cube ();
 	Mesh *m = he->m_pMesh;
 
-	const int nv0 = (int)m->m_nVertices;
-	const int nf0 = (int)m->m_nFaces;
+	const int nv0 = (int)m->GetNVertices ();
+	const int nf0 = (int)m->GetNFaces ();
 
 	MeshAlgoSubdivisionKarbacher algo;
 	ASSERT_TRUE (algo.Apply (he));
 
-	EXPECT_EQ ((int)m->m_nVertices, nv0 + nf0);
-	EXPECT_EQ ((int)m->m_nFaces, 3 * nf0);
+	EXPECT_EQ ((int)m->GetNVertices (), nv0 + nf0);
+	EXPECT_EQ ((int)m->GetNFaces (), 3 * nf0);
 
 	delete he;
 }
@@ -277,9 +277,9 @@ TEST(TEST_cgmesh_subdivision_karbacher, CubeOriginalCornersPreserved)
 
 	for (int i = 0; i < 8; ++i)
 	{
-		EXPECT_NEAR (m->m_pVertices[3*i+0], corners[i][0], 1e-5f);
-		EXPECT_NEAR (m->m_pVertices[3*i+1], corners[i][1], 1e-5f);
-		EXPECT_NEAR (m->m_pVertices[3*i+2], corners[i][2], 1e-5f);
+		EXPECT_NEAR (m->GetVertices ()[3*i+0], corners[i][0], 1e-5f);
+		EXPECT_NEAR (m->GetVertices ()[3*i+1], corners[i][1], 1e-5f);
+		EXPECT_NEAR (m->GetVertices ()[3*i+2], corners[i][2], 1e-5f);
 	}
 
 	delete he;
@@ -295,28 +295,28 @@ TEST(TEST_cgmesh_subdivision_karbacher, NewVerticesNearTriangleBarycenters)
 
 	// Capture original face barycenters before subdivision.
 	std::vector<std::array<double,3>> bary;
-	for (unsigned int f = 0; f < m->m_nFaces; ++f)
+	for (unsigned int f = 0; f < m->GetNFaces (); ++f)
 	{
-		Face *F = m->m_pFaces[f];
+		auto F = m->FaceAt (f);
 		int a = F->GetVertex(0), b = F->GetVertex(1), c = F->GetVertex(2);
-		double bx = (m->m_pVertices[3*a+0] + m->m_pVertices[3*b+0] + m->m_pVertices[3*c+0]) / 3.0;
-		double by = (m->m_pVertices[3*a+1] + m->m_pVertices[3*b+1] + m->m_pVertices[3*c+1]) / 3.0;
-		double bz = (m->m_pVertices[3*a+2] + m->m_pVertices[3*b+2] + m->m_pVertices[3*c+2]) / 3.0;
+		double bx = (m->GetVertices ()[3*a+0] + m->GetVertices ()[3*b+0] + m->GetVertices ()[3*c+0]) / 3.0;
+		double by = (m->GetVertices ()[3*a+1] + m->GetVertices ()[3*b+1] + m->GetVertices ()[3*c+1]) / 3.0;
+		double bz = (m->GetVertices ()[3*a+2] + m->GetVertices ()[3*b+2] + m->GetVertices ()[3*c+2]) / 3.0;
 		bary.push_back ({bx, by, bz});
 	}
 
-	const int nv0 = (int)m->m_nVertices;
+	const int nv0 = (int)m->GetNVertices ();
 
 	MeshAlgoSubdivisionKarbacher algo;
 	ASSERT_TRUE (algo.Apply (he));
 
 	// For each new vertex, find the closest original-face barycenter and check
 	// the distance is small.
-	for (unsigned int i = nv0; i < m->m_nVertices; ++i)
+	for (unsigned int i = nv0; i < m->GetNVertices (); ++i)
 	{
-		double x = m->m_pVertices[3*i+0];
-		double y = m->m_pVertices[3*i+1];
-		double z = m->m_pVertices[3*i+2];
+		double x = m->GetVertices ()[3*i+0];
+		double y = m->GetVertices ()[3*i+1];
+		double z = m->GetVertices ()[3*i+2];
 		double best = 1e9;
 		for (auto &b : bary)
 		{
@@ -339,17 +339,17 @@ TEST(TEST_cgmesh_subdivision_karbacher, NewVerticesInsideUnitCube)
 	Mesh_half_edge *he = make_unit_cube ();
 	Mesh *m = he->m_pMesh;
 
-	const int nv0 = (int)m->m_nVertices;
+	const int nv0 = (int)m->GetNVertices ();
 
 	MeshAlgoSubdivisionKarbacher algo;
 	ASSERT_TRUE (algo.Apply (he));
 
 	// All new vertex coords stay finite and within an envelope around [0,1]^3.
-	for (unsigned int i = nv0; i < m->m_nVertices; ++i)
+	for (unsigned int i = nv0; i < m->GetNVertices (); ++i)
 	{
-		float x = m->m_pVertices[3*i+0];
-		float y = m->m_pVertices[3*i+1];
-		float z = m->m_pVertices[3*i+2];
+		float x = m->GetVertices ()[3*i+0];
+		float y = m->GetVertices ()[3*i+1];
+		float z = m->GetVertices ()[3*i+2];
 		EXPECT_TRUE (std::isfinite (x));
 		EXPECT_TRUE (std::isfinite (y));
 		EXPECT_TRUE (std::isfinite (z));
@@ -371,14 +371,14 @@ TEST(TEST_cgmesh_subdivision_karbacher, FaceIndicesValid)
 	MeshAlgoSubdivisionKarbacher algo;
 	ASSERT_TRUE (algo.Apply (he));
 
-	for (unsigned int f = 0; f < m->m_nFaces; ++f)
+	for (unsigned int f = 0; f < m->GetNFaces (); ++f)
 	{
-		Face *F = m->m_pFaces[f];
+		auto F = m->FaceAt (f);
 		ASSERT_EQ (F->GetNVertices(), 3);
 		int a = F->GetVertex(0), b = F->GetVertex(1), c = F->GetVertex(2);
-		EXPECT_GE (a, 0); EXPECT_LT ((unsigned)a, m->m_nVertices);
-		EXPECT_GE (b, 0); EXPECT_LT ((unsigned)b, m->m_nVertices);
-		EXPECT_GE (c, 0); EXPECT_LT ((unsigned)c, m->m_nVertices);
+		EXPECT_GE (a, 0); EXPECT_LT ((unsigned)a, m->GetNVertices ());
+		EXPECT_GE (b, 0); EXPECT_LT ((unsigned)b, m->GetNVertices ());
+		EXPECT_GE (c, 0); EXPECT_LT ((unsigned)c, m->GetNVertices ());
 		EXPECT_NE (a, b);
 		EXPECT_NE (b, c);
 		EXPECT_NE (a, c);
@@ -394,7 +394,7 @@ TEST(TEST_cgmesh_subdivision_karbacher, EulerCharacteristicPreservedOnCube)
 	Mesh *m = he->m_pMesh;
 
 	auto chi = [](Mesh *mm) {
-		return (int)mm->m_nVertices - count_unique_edges (mm) + (int)mm->m_nFaces;
+		return (int)mm->GetNVertices () - count_unique_edges (mm) + (int)mm->GetNFaces ();
 	};
 	EXPECT_EQ (chi (m), 2);
 
@@ -411,7 +411,7 @@ TEST(TEST_cgmesh_subdivision_karbacher, EulerCharacteristicPreservedOnTetrahedro
 	Mesh *m = he->m_pMesh;
 
 	auto chi = [](Mesh *mm) {
-		return (int)mm->m_nVertices - count_unique_edges (mm) + (int)mm->m_nFaces;
+		return (int)mm->GetNVertices () - count_unique_edges (mm) + (int)mm->GetNFaces ();
 	};
 	EXPECT_EQ (chi (m), 2);
 
@@ -450,7 +450,7 @@ TEST(TEST_cgmesh_subdivision_karbacher, MultipleIterationsRequireFreshTopology)
 {
 	// Karbacher modifies the cached half-edge structure in place but does NOT
 	// recompute vertex normals. Iterating naively after a single Apply() would
-	// read past the (stale) m_pVertexNormals array. To iterate safely the
+	// read past the (stale) GetVertexNormals () array. To iterate safely the
 	// caller must :
 	//   1. recompute vertex normals (mesh now has new vertices)
 	//   2. invalidate the half-edge cache so it is rebuilt from the new mesh
@@ -459,33 +459,33 @@ TEST(TEST_cgmesh_subdivision_karbacher, MultipleIterationsRequireFreshTopology)
 	Mesh_half_edge *he = make_tetrahedron ();
 	Mesh *m = he->m_pMesh;
 
-	const int nf0 = (int)m->m_nFaces;
-	const int nv0 = (int)m->m_nVertices;
+	const int nf0 = (int)m->GetNFaces ();
+	const int nv0 = (int)m->GetNVertices ();
 
 	MeshAlgoSubdivisionKarbacher algo;
 	ASSERT_TRUE (algo.Apply (he));
 
 	// After iter 1 : nv0+nf0 vertices, 3*nf0 faces.
-	EXPECT_EQ ((int)m->m_nVertices, nv0 + nf0);
-	EXPECT_EQ ((int)m->m_nFaces, 3 * nf0);
+	EXPECT_EQ ((int)m->GetNVertices (), nv0 + nf0);
+	EXPECT_EQ ((int)m->GetNFaces (), 3 * nf0);
 
 	// Prepare for iter 2 : recompute normals (was stale-sized) ; rebuild HE.
 	m->ComputeNormals ();
 	he->create_half_edge ();
 	(void)he->GetCheMesh ();
 
-	const int nf1 = (int)m->m_nFaces;
-	const int nv1 = (int)m->m_nVertices;
+	const int nf1 = (int)m->GetNFaces ();
+	const int nv1 = (int)m->GetNVertices ();
 
 	ASSERT_TRUE (algo.Apply (he));
 
 	// After iter 2 : counts grow by 1->3 again.
-	EXPECT_EQ ((int)m->m_nVertices, nv1 + nf1);
-	EXPECT_EQ ((int)m->m_nFaces, 3 * nf1);
+	EXPECT_EQ ((int)m->GetNVertices (), nv1 + nf1);
+	EXPECT_EQ ((int)m->GetNFaces (), 3 * nf1);
 
 	// Closed manifold property preserved.
 	auto chi = [](Mesh *mm) {
-		return (int)mm->m_nVertices - count_unique_edges (mm) + (int)mm->m_nFaces;
+		return (int)mm->GetNVertices () - count_unique_edges (mm) + (int)mm->GetNFaces ();
 	};
 	EXPECT_EQ (chi (m), 2);
 

@@ -172,8 +172,8 @@ Sources : [GeomCaliper whitepaper](https://geomcaliper.geometricglobal.com/files
 
 | Besoin | Existant dans `src/cgmesh` | Référence |
 |---|---|---|
-| **Ray-cast maillage** | `Mesh::GetIntersectionWithRay(o,d,*t,i,n)` + variante octree `GetIntersectionWithRayInOctree(...)` — ⚠️ **back-face culling** (cf. note ci-dessous), inutilisable telle quelle pour un rayon interne | `mesh.cpp:1448`, `mesh.cpp:1385` |
-| **Accélération spatiale** | `Mesh::m_pOctree` + `Octree::BuildForTriangles(...)`, requêtes `GetClosestPoints` / `GetClosestIndicesPoints` | `mesh.h:405`, `octree.h:26`, `octree.h:40,45` |
+| **Ray-cast maillage** | ⚠️ **déplacé par la phase 1a** (cf. `cgmesh_refacto_implementation.md` §5) : `GetIntersectionWithRay(const Mesh&, const Octree&, …)`, fonction **libre**, et `GetIntersectionWithRayBruteForce(const Mesh&, …)`. `Mesh::GetIntersectionWithRay` subsiste comme chemin non accéléré (virtuelle pure de `Geometry`) ; `GetIntersectionWithRayInOctree` n'existe plus. ⚠️ **back-face culling** dans les deux cas (cf. note ci-dessous), donc inutilisable telle quelle pour un rayon interne | `mesh_raycast.h` |
+| **Accélération spatiale** | ⚠️ `Mesh::m_pOctree` **n'existe plus** (phase 1a) : l'appelant détient son octree, construit par `BuildRaycastOctree(Mesh&)`. `Octree::BuildForTriangles(...)`, requêtes `GetClosestPoints` / `GetClosestIndicesPoints` inchangées | `mesh_raycast.h`, `octree.h:26`, `octree.h:40,45` |
 | **Test bbox du rayon** | `Mesh::GetIntersectionBboxWithRay` | `mesh.h:119` |
 | **Normales par sommet/face** + inversion (pour −n) | `Normals::EvalOnVertices/EvalOnFaces`, `invert_vertices_normales` ; `Mesh::ComputeNormals` | `normals.h:27-30`, `mesh.h:317` |
 | **Barycentre de face** (point de tir pour SDF par face) | `Mesh::GetFaceBarycenter` | `mesh.h:217` |
@@ -200,7 +200,7 @@ Sources : [GeomCaliper whitepaper](https://geomcaliper.geometricglobal.com/files
 
 ## 2. Ce qui manque (et discipline vérifié / hypothèse)
 
-1. **Algorithme SDF lui-même** (M1) — **n'existe pas**. À écrire : génération d'un cône de directions autour de −n, tir de K rayons via `GetIntersectionWithRayInOctree`, agrégation robuste (médiane + rejet d'aberrants + moyenne pondérée), puis lissage sur le voisinage demi-arête. **Vérifié** : aucune fonction `sdf`/`thickness`/`diameter` trouvée dans `src/cgmesh` (grep).
+1. **Algorithme SDF lui-même** (M1) — **n'existe pas**. À écrire : génération d'un cône de directions autour de −n, tir de K rayons via la fonction libre `GetIntersectionWithRay(const Mesh&, const Octree&, …)` de `mesh_raycast.h` — l'octree se construit une fois avec `BuildRaycastOctree()` et se garde pour tous les rayons —, agrégation robuste (médiane + rejet d'aberrants + moyenne pondérée), puis lissage sur le voisinage demi-arête. **Vérifié** : aucune fonction `sdf`/`thickness`/`diameter` trouvée dans `src/cgmesh` (grep).
 2. **`export_ply` n'écrit PAS les couleurs** — **vérifié par lecture** (`mesh_io.cpp:1620-1657`) : seules `x,y,z` et `nx,ny,nz` sont déclarées/écrites, alors que la *lecture* PLY gère `diffuse_red/green/blue` (`mesh_io.cpp:1595-1597`). ⇒ V2 nécessite d'ajouter les propriétés couleur (et idéalement une propriété scalaire `thickness`) à l'export.
 3. **Pas de colormap perceptuelle** — **vérifié** : seul `color_jet` existe (`cgimg/color.cpp:230`). `InitVertexColorsFromArray` appelle `color_jet` en dur (`mesh.cpp:245`). ⇒ V1 « propre » impose d'ajouter `color_viridis` (table 256 entrées) dans `cgimg/color.*` et de rendre la colormap paramétrable.
 4. **Robustesse aux pré-requis** (M1/M2) — *hypothèse à valider par exécution* : sur maillage non watertight ou normales mal orientées, le rayon « fuit » → valeurs aberrantes. La détection existe (`GetTopologicIssues`, `is_border`) mais **le garde-fou n'est pas branché** sur un futur calcul d'épaisseur. À router vers `debugger` si comportement anormal observé.

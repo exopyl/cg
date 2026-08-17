@@ -19,7 +19,7 @@ class BVH
 {
 public:
 	// Build over the mesh's CURRENT geometry. Vertex positions are referenced
-	// (mesh.m_pVertices must outlive the BVH and stay un-reallocated); the
+	// (mesh.GetVertices () must outlive the BVH and stay un-reallocated); the
 	// triangle vertex indices are copied. Triangle meshes only (faces use
 	// vertices 0..2).
 	void build (Mesh &mesh);

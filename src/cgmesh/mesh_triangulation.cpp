@@ -16,6 +16,6 @@ void Mesh::triangulate_regular_heightfield (unsigned int width, unsigned int hei
 		for (unsigned int i=0; i<width-1; i++)
 		{
 			SetFace ((width-1)*j+i, (width)*j+i, (width)*(j+1)+i, (width)*(j+1)+i+1, (width)*j+i+1);
-			m_pFaces[(width-1)*j+i]->SetTexCoord ((width-1)*j+i, i/(width-1), j/(height-1));
+			FaceAt ((width-1)*j+i)->SetTexCoord ((width-1)*j+i, i/(width-1), j/(height-1));
 		}
 }

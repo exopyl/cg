@@ -89,16 +89,16 @@ Cmesh_orientation_edges::compute_orientation2 (void)
   accumulator_int.assign ((size_t)w*h, 0);
 
   /* fill the accumulator */
-  n = mesh->m_nFaces;
-  float *vertices = model3d_half_edge->m_pMesh->m_pVertices.data();
-  Face **faces = model3d_half_edge->m_pMesh->m_pFaces;
+  n = mesh->GetNFaces ();
+  const float *vertices = model3d_half_edge->m_pMesh->GetVertices ().data();
 
   int indices[3];
   for (i=0; i<n; i++)
   {
-	  indices[0] = faces[i]->GetVertex(0);
-	  indices[1] = faces[i]->GetVertex(1);
-	  indices[2] = faces[i]->GetVertex(2);
+	  auto fc = model3d_half_edge->m_pMesh->FaceAt (i);
+	  indices[0] = fc->GetVertex(0);
+	  indices[1] = fc->GetVertex(1);
+	  indices[2] = fc->GetVertex(2);
     
     float r;
     int phi_pos, theta_pos;
@@ -224,11 +224,11 @@ Cmesh_orientation_edges::finalize_orientation (void)
   // Les deux etaient declares SANS valeur et affectes seulement dans le if :
   // sans modele, `new float[2*n_vertices]` prenait une taille indeterminee.
   int n_vertices = 0;
-  float *v_orig  = nullptr;
+  const float *v_orig  = nullptr;
   if (model3d_half_edge)
     {
-      n_vertices = model3d_half_edge->m_pMesh->m_nVertices;
-      v_orig = model3d_half_edge->m_pMesh->m_pVertices.data();
+      n_vertices = model3d_half_edge->m_pMesh->GetNVertices ();
+      v_orig = model3d_half_edge->m_pMesh->GetVertices ().data();
     }
   if (n_vertices <= 0 || v_orig == nullptr)
     return;

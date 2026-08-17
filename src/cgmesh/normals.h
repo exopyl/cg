@@ -25,9 +25,12 @@ enum MethodId {
 	~Normals () {};
 
 	int EvalOnVertices (Mesh_half_edge *mesh, MethodId par_id);
-	int EvalOnFaces (Mesh_half_edge *mesh);
 
-	void invert_vertices_normales (Mesh_half_edge *mesh);
+	// Les normales PAR FACE ne sont pas calculees ici : Mesh::ComputeNormals()
+	// est la seule implementation, et elle produit les deux jeux en un passage.
+	// Ne pas ajouter d'equivalent dans cette classe : EvalOnVertices() choisit
+	// une ponderation par sommet (Thurmer, Max...), qu'un recalcul global
+	// ecraserait par la moyenne de Gouraud.
 
 private:
 };

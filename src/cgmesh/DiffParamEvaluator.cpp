@@ -40,13 +40,13 @@ bool MeshAlgoTensorEvaluator::Init (Mesh_half_edge *mesh)
 	m_pModel = mesh;
 
 	// Prepare the mesh's per-vertex tensor storage: one default Tensor per
-	// vertex. The Apply* methods overwrite each slot (reset() to a computed
-	// tensor, or = nullptr for border / non-manifold vertices).
-	auto& tensors = mesh->m_pMesh->m_pTensors;
-	tensors.clear ();
-	tensors.resize (mesh->m_pMesh->m_nVertices);
-	for (auto& t : tensors)
-		t = std::make_unique<Tensor> ();
+	// vertex. The Apply* methods overwrite each slot (a computed tensor, or
+	// nullptr for border / non-manifold vertices).
+	Mesh *pMesh = mesh->m_pMesh;
+	pMesh->InitTensors ();
+	const int n = (int)pMesh->GetNTensors ();
+	for (int i = 0; i < n; i++)
+		pMesh->SetTensor ((unsigned int)i, new Tensor ());
 	return true;
 }
 
@@ -55,9 +55,9 @@ bool MeshAlgoTensorEvaluator::Init (Mesh_half_edge *mesh)
 //
 Tensor* MeshAlgoTensorEvaluator::GetDiffParam (int index)
 {
-	if (m_pModel && index >= 0 && index < NTensors ())
-		return Tensors ()[index].get ();
-	return nullptr;
+	if (m_pModel == nullptr || index < 0)
+		return nullptr;
+	return TensorAt (index);
 }
 
 ///////////////////////////////////
@@ -78,20 +78,20 @@ bool MeshAlgoTensorEvaluator::GetExtremalCurvature (CurvatureType id, int extrem
 	int i=0;
 	float fCurvature=0.0;
 
-	while (i<n && !Tensors ()[i])
+	while (i<n && !TensorAt (i))
 	{
 		i++;
 	}
 	if (i == n) return false;
 
 	// init
-	fCurvature = Tensors ()[i]->GetCurvature (id);
+	fCurvature = TensorAt (i)->GetCurvature (id);
 
 	//
 	for (; i<n; i++)
 	{
-		if (!Tensors ()[i]) continue;
-		float fCurvatureTemp = Tensors ()[i]->GetCurvature (id);
+		if (!TensorAt (i)) continue;
+		float fCurvatureTemp = TensorAt (i)->GetCurvature (id);
 
 		switch (extremal)
 		{
@@ -128,8 +128,8 @@ bool MeshAlgoTensorEvaluator::GetCurvatures (CurvatureType id, int *_nCurvatures
 	//
 	for (int i=0; i<n; i++)
 	{
-		if (Tensors ()[i])
-			curvatures[nCurvatures++] = Tensors ()[i]->GetCurvature (id);
+		if (TensorAt (i))
+			curvatures[nCurvatures++] = TensorAt (i)->GetCurvature (id);
 	}
 
 	*_nCurvatures = nCurvatures;
@@ -203,7 +203,7 @@ void MeshAlgoTensorEvaluator::Dump (void)
 	for (int i=0; i<n; i++)
 	{
 		printf ("%d / %d\n", i, n);
-		if (Tensors ()[i]) Tensors ()[i]->Dump ();
+		if (TensorAt (i)) TensorAt (i)->Dump ();
 	}
 }
 
@@ -291,7 +291,7 @@ static get_jet_color (float index, float *r, float *g, float *b)
 
 void MeshAlgoTensorEvaluator::EvaluateColors (CurvatureType type)
 {
-	int nv = m_pModel->m_pMesh->m_nVertices;
+	int nv = m_pModel->m_pMesh->GetNVertices ();
 
 	int i;
 	float r, g, b;
@@ -304,13 +304,13 @@ void MeshAlgoTensorEvaluator::EvaluateColors (CurvatureType type)
 	// build the array of the curvatures
 	for (i=0; i<nv; i++)
 	{
-		if (!Tensors ()[i])
+		if (!TensorAt (i))
 		{
 			defined[i] = 0;
 			continue;
 		}
 		defined[i] = 1;
-		array[i] = fabs (Tensors ()[i]->GetCurvature (type));
+		array[i] = fabs (TensorAt (i)->GetCurvature (type));
 	}
 	//for (i=0; i<nv; i++)
 	//array[i] = (array[i] > 1.0)? 1.0 : array[i];
@@ -345,15 +345,11 @@ void MeshAlgoTensorEvaluator::EvaluateColors (CurvatureType type)
 		if (defined[i])
 		{
 			get_jet_color (array[i]/max_value, &r, &g, &b);
-			m_pModel->m_pMesh->m_pVertexColors[3*i]   = r;
-			m_pModel->m_pMesh->m_pVertexColors[3*i+1] = g;
-			m_pModel->m_pMesh->m_pVertexColors[3*i+2] = b;
+			m_pModel->m_pMesh->SetVertexColor (i, r, g, b);
 		}
 		else
 		{
-			m_pModel->m_pMesh->m_pVertexColors[3*i]   = 0.0;
-			m_pModel->m_pMesh->m_pVertexColors[3*i+1] = 0.0;
-			m_pModel->m_pMesh->m_pVertexColors[3*i+2] = 0.0;
+			m_pModel->m_pMesh->SetVertexColor (i, 0.0f, 0.0f, 0.0f);
 		}
 	}
 }

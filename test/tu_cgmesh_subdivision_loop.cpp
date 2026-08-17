@@ -72,7 +72,7 @@ make_unit_cube ()
 static std::array<float,3>
 get_vertex (Mesh *m, int i)
 {
-	return { m->m_pVertices[3*i], m->m_pVertices[3*i+1], m->m_pVertices[3*i+2] };
+	return { m->GetVertices ()[3*i], m->GetVertices ()[3*i+1], m->GetVertices ()[3*i+2] };
 }
 
 // Compare two vec3 for near-equality.
@@ -90,13 +90,13 @@ static BBox
 bbox (Mesh *m)
 {
 	BBox b;
-	b.mn = { m->m_pVertices[0], m->m_pVertices[1], m->m_pVertices[2] };
+	b.mn = { m->GetVertices ()[0], m->GetVertices ()[1], m->GetVertices ()[2] };
 	b.mx = b.mn;
-	for (unsigned int i = 1; i < m->m_nVertices; ++i)
+	for (unsigned int i = 1; i < m->GetNVertices (); ++i)
 	{
 		for (int k = 0; k < 3; ++k)
 		{
-			float x = m->m_pVertices[3*i+k];
+			float x = m->GetVertices ()[3*i+k];
 			if (x < b.mn[k]) b.mn[k] = x;
 			if (x > b.mx[k]) b.mx[k] = x;
 		}
@@ -109,14 +109,14 @@ static double
 total_area (Mesh *m)
 {
 	double s = 0.0;
-	for (unsigned int f = 0; f < m->m_nFaces; ++f)
+	for (unsigned int f = 0; f < m->GetNFaces (); ++f)
 	{
-		Face *F = m->m_pFaces[f];
+		auto F = m->FaceAt (f);
 		if (F->GetNVertices() != 3) continue;
 		int a = F->GetVertex(0), b = F->GetVertex(1), c = F->GetVertex(2);
-		double ax = m->m_pVertices[3*a],   ay = m->m_pVertices[3*a+1], az = m->m_pVertices[3*a+2];
-		double bx = m->m_pVertices[3*b],   by = m->m_pVertices[3*b+1], bz = m->m_pVertices[3*b+2];
-		double cx = m->m_pVertices[3*c],   cy = m->m_pVertices[3*c+1], cz = m->m_pVertices[3*c+2];
+		double ax = m->GetVertices ()[3*a],   ay = m->GetVertices ()[3*a+1], az = m->GetVertices ()[3*a+2];
+		double bx = m->GetVertices ()[3*b],   by = m->GetVertices ()[3*b+1], bz = m->GetVertices ()[3*b+2];
+		double cx = m->GetVertices ()[3*c],   cy = m->GetVertices ()[3*c+1], cz = m->GetVertices ()[3*c+2];
 		double ux = bx-ax, uy = by-ay, uz = bz-az;
 		double vx = cx-ax, vy = cy-ay, vz = cz-az;
 		double nx = uy*vz - uz*vy, ny = uz*vx - ux*vz, nz = ux*vy - uy*vx;
@@ -130,17 +130,17 @@ static std::array<double,3>
 vertex_centroid (Mesh *m)
 {
 	std::array<double,3> c { 0,0,0 };
-	for (unsigned int i = 0; i < m->m_nVertices; ++i)
+	for (unsigned int i = 0; i < m->GetNVertices (); ++i)
 	{
-		c[0] += m->m_pVertices[3*i];
-		c[1] += m->m_pVertices[3*i+1];
-		c[2] += m->m_pVertices[3*i+2];
+		c[0] += m->GetVertices ()[3*i];
+		c[1] += m->GetVertices ()[3*i+1];
+		c[2] += m->GetVertices ()[3*i+2];
 	}
-	if (m->m_nVertices > 0)
+	if (m->GetNVertices () > 0)
 	{
-		c[0] /= m->m_nVertices;
-		c[1] /= m->m_nVertices;
-		c[2] /= m->m_nVertices;
+		c[0] /= m->GetNVertices ();
+		c[1] /= m->GetNVertices ();
+		c[2] /= m->GetNVertices ();
 	}
 	return c;
 }
@@ -150,9 +150,9 @@ static int
 count_unique_edges (Mesh *m)
 {
 	std::set<std::pair<int,int>> uniq;
-	for (unsigned int f = 0; f < m->m_nFaces; ++f)
+	for (unsigned int f = 0; f < m->GetNFaces (); ++f)
 	{
-		Face *F = m->m_pFaces[f];
+		auto F = m->FaceAt (f);
 		if (F->GetNVertices() != 3) continue;
 		int a = F->GetVertex(0), b = F->GetVertex(1), c = F->GetVertex(2);
 		auto add = [&](int u, int v) {
@@ -171,8 +171,8 @@ TEST(TEST_cgmesh_subdivision_loop, CubeBaseline)
 	Mesh_half_edge *he = make_unit_cube ();
 	Mesh *m = he->m_pMesh;
 
-	EXPECT_EQ (m->m_nVertices, 8u);
-	EXPECT_EQ (m->m_nFaces, 12u);
+	EXPECT_EQ (m->GetNVertices (), 8u);
+	EXPECT_EQ (m->GetNFaces (), 12u);
 	EXPECT_EQ (count_unique_edges (m), 18);
 	// Surface area of the unit cube : 6.
 	EXPECT_NEAR (total_area (m), 6.0, 1e-5);
@@ -185,8 +185,8 @@ TEST(TEST_cgmesh_subdivision_loop, MidpointModeCounts)
 	Mesh_half_edge *he = make_unit_cube ();
 	Mesh *m = he->m_pMesh;
 
-	const int nv0 = m->m_nVertices;
-	const int nf0 = m->m_nFaces;
+	const int nv0 = m->GetNVertices ();
+	const int nf0 = m->GetNFaces ();
 	const int ne0 = count_unique_edges (m);
 
 	MeshAlgoSubdivisionLoop algo;
@@ -194,8 +194,8 @@ TEST(TEST_cgmesh_subdivision_loop, MidpointModeCounts)
 	ASSERT_TRUE (algo.Apply (he));
 
 	// 1->4 split : faces *= 4, vertices += unique_edges, edges *= 2 + 3*old_faces.
-	EXPECT_EQ ((int)m->m_nFaces, 4 * nf0);
-	EXPECT_EQ ((int)m->m_nVertices, nv0 + ne0);
+	EXPECT_EQ ((int)m->GetNFaces (), 4 * nf0);
+	EXPECT_EQ ((int)m->GetNVertices (), nv0 + ne0);
 
 	// All 8 original cube corners must remain at their original positions.
 	const float corners[8][3] = {
@@ -204,21 +204,21 @@ TEST(TEST_cgmesh_subdivision_loop, MidpointModeCounts)
 	};
 	for (int i = 0; i < 8; ++i)
 	{
-		EXPECT_NEAR (m->m_pVertices[3*i+0], corners[i][0], 1e-5f);
-		EXPECT_NEAR (m->m_pVertices[3*i+1], corners[i][1], 1e-5f);
-		EXPECT_NEAR (m->m_pVertices[3*i+2], corners[i][2], 1e-5f);
+		EXPECT_NEAR (m->GetVertices ()[3*i+0], corners[i][0], 1e-5f);
+		EXPECT_NEAR (m->GetVertices ()[3*i+1], corners[i][1], 1e-5f);
+		EXPECT_NEAR (m->GetVertices ()[3*i+2], corners[i][2], 1e-5f);
 	}
 
 	// New vertices (from index 8 onward) must lie inside the unit cube
 	// (they are midpoints of edges between cube corners on the unit cube surface).
-	for (unsigned int i = 8; i < m->m_nVertices; ++i)
+	for (unsigned int i = 8; i < m->GetNVertices (); ++i)
 	{
-		EXPECT_GE (m->m_pVertices[3*i+0], 0.0f - 1e-5f);
-		EXPECT_LE (m->m_pVertices[3*i+0], 1.0f + 1e-5f);
-		EXPECT_GE (m->m_pVertices[3*i+1], 0.0f - 1e-5f);
-		EXPECT_LE (m->m_pVertices[3*i+1], 1.0f + 1e-5f);
-		EXPECT_GE (m->m_pVertices[3*i+2], 0.0f - 1e-5f);
-		EXPECT_LE (m->m_pVertices[3*i+2], 1.0f + 1e-5f);
+		EXPECT_GE (m->GetVertices ()[3*i+0], 0.0f - 1e-5f);
+		EXPECT_LE (m->GetVertices ()[3*i+0], 1.0f + 1e-5f);
+		EXPECT_GE (m->GetVertices ()[3*i+1], 0.0f - 1e-5f);
+		EXPECT_LE (m->GetVertices ()[3*i+1], 1.0f + 1e-5f);
+		EXPECT_GE (m->GetVertices ()[3*i+2], 0.0f - 1e-5f);
+		EXPECT_LE (m->GetVertices ()[3*i+2], 1.0f + 1e-5f);
 	}
 
 	// Surface area is preserved by midpoint refinement (no smoothing).
@@ -250,11 +250,11 @@ TEST(TEST_cgmesh_subdivision_loop, MidpointPositionsAreEdgeMidpoints)
 	MeshAlgoSubdivisionLoop algo;
 	ASSERT_TRUE (algo.Apply (he));
 
-	for (unsigned int i = 8; i < m->m_nVertices; ++i)
+	for (unsigned int i = 8; i < m->GetNVertices (); ++i)
 	{
-		float x = m->m_pVertices[3*i+0];
-		float y = m->m_pVertices[3*i+1];
-		float z = m->m_pVertices[3*i+2];
+		float x = m->GetVertices ()[3*i+0];
+		float y = m->GetVertices ()[3*i+1];
+		float z = m->GetVertices ()[3*i+2];
 		bool found = false;
 		for (int a = 0; a < 8 && !found; ++a)
 			for (int b = a+1; b < 8 && !found; ++b)
@@ -279,19 +279,19 @@ TEST(TEST_cgmesh_subdivision_loop, MidpointModeIterations)
 	Mesh_half_edge *he = make_unit_cube ();
 	Mesh *m = he->m_pMesh;
 
-	int nv = m->m_nVertices;
-	int nf = m->m_nFaces;
+	int nv = m->GetNVertices ();
+	int nf = m->GetNFaces ();
 
 	MeshAlgoSubdivisionLoop algo;
 	for (int it = 0; it < 3; ++it)
 	{
 		ASSERT_TRUE (algo.Apply (he));
 		// faces *= 4 each iteration
-		EXPECT_EQ ((int)m->m_nFaces, 4 * nf);
-		nf = m->m_nFaces;
+		EXPECT_EQ ((int)m->GetNFaces (), 4 * nf);
+		nf = m->GetNFaces ();
 		// vertex count strictly increases
-		EXPECT_GT ((int)m->m_nVertices, nv);
-		nv = m->m_nVertices;
+		EXPECT_GT ((int)m->GetNVertices (), nv);
+		nv = m->GetNVertices ();
 		// surface area preserved
 		EXPECT_NEAR (total_area (m), 6.0, 1e-3);
 	}
@@ -304,8 +304,8 @@ TEST(TEST_cgmesh_subdivision_loop, WarrenModeCounts)
 	Mesh_half_edge *he = make_unit_cube ();
 	Mesh *m = he->m_pMesh;
 
-	const int nv0 = m->m_nVertices;
-	const int nf0 = m->m_nFaces;
+	const int nv0 = m->GetNVertices ();
+	const int nf0 = m->GetNFaces ();
 	const int ne0 = count_unique_edges (m);
 
 	MeshAlgoSubdivisionLoop algo;
@@ -313,8 +313,8 @@ TEST(TEST_cgmesh_subdivision_loop, WarrenModeCounts)
 	ASSERT_TRUE (algo.Apply (he));
 
 	// Same combinatorial result as midpoint mode : 4f, +ne vertices.
-	EXPECT_EQ ((int)m->m_nFaces, 4 * nf0);
-	EXPECT_EQ ((int)m->m_nVertices, nv0 + ne0);
+	EXPECT_EQ ((int)m->GetNFaces (), 4 * nf0);
+	EXPECT_EQ ((int)m->GetNVertices (), nv0 + ne0);
 
 	delete he;
 }
@@ -399,11 +399,11 @@ TEST(TEST_cgmesh_subdivision_loop, WarrenMidpointStencilOnCube)
 
 	Mesh *m = he->m_pMesh;
 	bool found = false;
-	for (unsigned int i = 8; i < m->m_nVertices; ++i)
+	for (unsigned int i = 8; i < m->GetNVertices (); ++i)
 	{
-		float x = m->m_pVertices[3*i+0];
-		float y = m->m_pVertices[3*i+1];
-		float z = m->m_pVertices[3*i+2];
+		float x = m->GetVertices ()[3*i+0];
+		float y = m->GetVertices ()[3*i+1];
+		float z = m->GetVertices ()[3*i+2];
 		if (std::fabs(x - expected[0]) < 1e-4f
 		 && std::fabs(y - expected[1]) < 1e-4f
 		 && std::fabs(z - expected[2]) < 1e-4f)
@@ -504,15 +504,15 @@ TEST(TEST_cgmesh_subdivision_loop, FaceIndicesAreInRange)
 	algo.SetUseWarrenMask (true);
 	ASSERT_TRUE (algo.Apply (he));
 
-	for (unsigned int f = 0; f < m->m_nFaces; ++f)
+	for (unsigned int f = 0; f < m->GetNFaces (); ++f)
 	{
-		Face *F = m->m_pFaces[f];
+		auto F = m->FaceAt (f);
 		ASSERT_EQ (F->GetNVertices(), 3);
 		for (int k = 0; k < 3; ++k)
 		{
 			int v = F->GetVertex(k);
 			EXPECT_GE (v, 0);
-			EXPECT_LT ((unsigned)v, m->m_nVertices);
+			EXPECT_LT ((unsigned)v, m->GetNVertices ());
 		}
 		// No degenerate triangles (no repeated index).
 		int a = F->GetVertex(0), b = F->GetVertex(1), c = F->GetVertex(2);
@@ -531,7 +531,7 @@ TEST(TEST_cgmesh_subdivision_loop, EulerCharacteristicPreserved)
 	Mesh *m = he->m_pMesh;
 
 	auto chi = [](Mesh *mm) {
-		return (int)mm->m_nVertices - count_unique_edges (mm) + (int)mm->m_nFaces;
+		return (int)mm->GetNVertices () - count_unique_edges (mm) + (int)mm->GetNFaces ();
 	};
 	EXPECT_EQ (chi (m), 2);
 

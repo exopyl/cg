@@ -24,7 +24,7 @@
 class Cshape_distribution_osada
 {
  public:
-  Cshape_distribution_osada (int nv, float *v, int nf, unsigned int *f);
+  Cshape_distribution_osada (int nv, const float *v, int nf, unsigned int *f);
   ~Cshape_distribution_osada ();
 
   enum shape_function_type {A3, D1, D2, D3, D4};
@@ -58,7 +58,7 @@ class Cshape_distribution_osada
 
  private:
   int nv, nf;
-  float *v;
+  const float *v;
   unsigned int *f;
   
   float *cumulative_areas;

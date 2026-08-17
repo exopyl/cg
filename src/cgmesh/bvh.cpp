@@ -53,7 +53,7 @@ namespace
 
 void BVH::build (Mesh &mesh)
 {
-	m_verts = mesh.m_pVertices.data ();
+	m_verts = mesh.GetVertices ().data ();
 	m_nv    = mesh.GetNVertices ();
 	const unsigned int nf = mesh.GetNFaces ();
 

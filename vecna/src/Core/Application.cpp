@@ -946,7 +946,7 @@ void Application::loadModel(const std::filesystem::path& path) {
     }
 
     cgre2::Logger::info("Loader", "Parsed " + std::to_string(mesh.m_nVertices) + " vertices, " +
-                 std::to_string(mesh.m_nFaces) + " faces");
+                 std::to_string(mesh.GetNFaces ()) + " faces");
 
     // Center model at origin using bounding box center
     mesh.computebbox();
@@ -1024,8 +1024,8 @@ void Application::loadModel(const std::filesystem::path& path) {
 
     // Build index array, triangulating quads (fan triangulation)
     unsigned int skippedFaces = 0;
-    for (unsigned int fi = 0; fi < mesh.m_nFaces; fi++) {
-        Face* face = mesh.GetFace(fi);
+    for (unsigned int fi = 0; fi < mesh.GetNFaces (); fi++) {
+        auto face = mesh.FaceAt (fi);
         unsigned int nv = face->GetNVertices();
 
         if (nv < 3) {

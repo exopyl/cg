@@ -38,9 +38,9 @@ bool MeshAlgoSubdivisionSqrt3::Apply (Mesh_half_edge *model)
 	Che_mesh *che = model->GetCheMesh ();
 	if (!che) return false;
 
-	const int nv = (int)model->m_pMesh->m_nVertices;
-	const int nf = (int)model->m_pMesh->m_nFaces;
-	const float *v_old = model->m_pMesh->m_pVertices.data();
+	const int nv = (int)model->m_pMesh->GetNVertices ();
+	const int nf = (int)model->m_pMesh->GetNFaces ();
+	const float *v_old = model->m_pMesh->GetVertices ().data();
 	if (nv <= 0 || nf <= 0 || !v_old) return false;
 
 	//
@@ -49,7 +49,7 @@ bool MeshAlgoSubdivisionSqrt3::Apply (Mesh_half_edge *model)
 	std::vector<float> centroids (3 * nf);
 	for (int f = 0; f < nf; ++f)
 	{
-		Face *F = model->m_pMesh->m_pFaces[f];
+		auto F = model->m_pMesh->FaceAt (f);
 		int a = F->GetVertex(0), b = F->GetVertex(1), c = F->GetVertex(2);
 		for (int k = 0; k < 3; ++k)
 		{
@@ -176,14 +176,6 @@ bool MeshAlgoSubdivisionSqrt3::Apply (Mesh_half_edge *model)
 		}
 	}
 
-	//
-	// Step 4 : install new mesh data.
-	//
-	if (model->m_pMesh->m_pFaces)
-	{
-		for (unsigned int i = 0; i < model->m_pMesh->m_nFaces; ++i)
-			delete model->m_pMesh->m_pFaces[i];
-	}
 
 	model->m_pMesh->SetVertices ((unsigned)nv_new, v_new.data());
 	model->m_pMesh->SetFaces ((unsigned)nf_new, 3, faces.data());

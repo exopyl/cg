@@ -21,19 +21,19 @@ public:
 		//glPolygonMode (GL_FRONT_AND_BACK, GL_POINT);
 		//glLineWidth (2.0);
 
-		float *vertices = mesh->m_pVertices.data();
-		float *verticesNormals = mesh->m_pVertexNormals.data();
-		float *verticesColors = mesh->m_pVertexColors.data();
-		int nFaces = mesh->m_nFaces;
-		Face **faces = mesh->m_pFaces;
+		const float *vertices = mesh->GetVertices ().data();
+		const float *verticesNormals = mesh->GetVertexNormals ().data();
+		const float *verticesColors = mesh->GetVertexColors ().data();
+		int nFaces = mesh->GetNFaces ();
 		int a, b, c;
 
 		glBegin(GL_TRIANGLES);
 		for (int i=0; i<nFaces; i++)
 		{
-			a = 3*faces[i]->m_pVertices[0];
-			b = 3*faces[i]->m_pVertices[1];
-			c = 3*faces[i]->m_pVertices[2];
+			auto fc = mesh->FaceAt (i);
+			a = 3*fc->GetVertex (0);
+			b = 3*fc->GetVertex (1);
+			c = 3*fc->GetVertex (2);
 
 			glNormal3f (verticesNormals[a], verticesNormals[a+1], verticesNormals[a+2]);
 			if (verticesColors)

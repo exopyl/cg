@@ -37,8 +37,8 @@ Cregions_vertices::init_from_belyaev (void)
   Tensor **pDiffParam = mesh_half_edge->m_pDiffParam;
   if (!pDiffParam)
     return;
-  float *v  = mesh_half_edge->m_pVertices.data();
-  float *vn = mesh_half_edge->m_pVertexNormals.data();
+  float *v  = mesh_half_edge->GetVertices ().data();
+  float *vn = mesh_half_edge->GetVertexNormals ().data();
 
   for (i=0; i<size; i++)
     {

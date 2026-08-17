@@ -11,10 +11,10 @@ void VertexBuffer::Draw (bool bColor)
 	if (!m_pMesh)
 		return;
 
-	if (!m_pMesh->m_pVertexColors.empty() && bColor)
+	if (!m_pMesh->GetVertexColors ().empty() && bColor)
 	{
 		glEnableClientState (GL_COLOR_ARRAY);
-		glColorPointer  (3, GL_FLOAT, 0, m_pMesh->m_pVertexColors.data());
+		glColorPointer  (3, GL_FLOAT, 0, m_pMesh->GetVertexColors ().data());
 
 #if 0
 		if (Material *pMaterial = m_pMesh->GetMaterial ())
@@ -32,21 +32,21 @@ void VertexBuffer::Draw (bool bColor)
 	{
 		glDisableClientState (GL_COLOR_ARRAY);
 	}
-	if (!m_pMesh->m_pVertexNormals.empty())
+	if (!m_pMesh->GetVertexNormals ().empty())
 	{
 		glEnableClientState (GL_NORMAL_ARRAY);
-		glNormalPointer (GL_FLOAT, 0, m_pMesh->m_pVertexNormals.data());
+		glNormalPointer (GL_FLOAT, 0, m_pMesh->GetVertexNormals ().data());
 	}
 	else
 	{
 		glDisableClientState (GL_NORMAL_ARRAY);
 	}
-	if (!m_pMesh->m_pVertices.empty())
+	if (!m_pMesh->GetVertices ().empty())
 	{
 		glEnableClientState (GL_VERTEX_ARRAY);
-		glVertexPointer (3, GL_FLOAT, 0, m_pMesh->m_pVertices.data());
+		glVertexPointer (3, GL_FLOAT, 0, m_pMesh->GetVertices ().data());
 	}
 	
 	// TODO : convert array of faces to array of indices
-	//glDrawElements (GL_TRIANGLES, 3*m_pMesh->m_nFaces, GL_UNSIGNED_INT, m_pMesh->m_pFaces);
+	//glDrawElements (GL_TRIANGLES, 3*m_pMesh->GetNFaces (), GL_UNSIGNED_INT, m_pMesh->m_pFaces);
 }

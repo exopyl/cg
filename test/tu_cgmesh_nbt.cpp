@@ -160,10 +160,10 @@ TEST(TEST_cgmesh_nbt, import_structure_to_mesh)
     EXPECT_GT(m->GetNVertices(), 0u);
     EXPECT_GT(m->GetNFaces(),    0u);
     // per-material colours applied (3 floats per vertex, not all identical)
-    ASSERT_EQ(m->m_pVertexColors.size(), 3u * (size_t)m->GetNVertices());
+    ASSERT_EQ(m->GetVertexColors ().size(), 3u * (size_t)m->GetNVertices());
     bool coloured = false;
-    for (size_t i = 3; i < m->m_pVertexColors.size(); ++i)
-        if (m->m_pVertexColors[i] != m->m_pVertexColors[i % 3]) { coloured = true; break; }
+    for (size_t i = 3; i < m->GetVertexColors ().size(); ++i)
+        if (m->GetVertexColors ()[i] != m->GetVertexColors ()[i % 3]) { coloured = true; break; }
     EXPECT_TRUE(coloured) << "NBT palette colours were not applied to the mesh";
     delete m;
 }

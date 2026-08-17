@@ -42,9 +42,9 @@ bool MeshAlgoSubdivisionLoop::Apply (Mesh_half_edge *model)
 	Che_mesh *che = model->GetCheMesh ();
 	if (!che) return false;
 
-	const int nv = (int)model->m_pMesh->m_nVertices;
-	const int nf = (int)model->m_pMesh->m_nFaces;
-	const float *v_old = model->m_pMesh->m_pVertices.data();
+	const int nv = (int)model->m_pMesh->GetNVertices ();
+	const int nf = (int)model->m_pMesh->GetNFaces ();
+	const float *v_old = model->m_pMesh->GetVertices ().data();
 	if (nv <= 0 || nf <= 0 || !v_old) return false;
 
 	const int ne = che->m_ne;
@@ -209,16 +209,6 @@ bool MeshAlgoSubdivisionLoop::Apply (Mesh_half_edge *model)
 		p3[0] = (unsigned)m01; p3[1] = (unsigned)m12; p3[2] = (unsigned)m20;
 	}
 
-	//
-	// Step 4 : install new mesh data.
-	//
-	// Delete the existing per-Face objects (SetFaces frees the outer array
-	// but leaks the inner Face* — we cleanup the inner pointers ourselves).
-	if (model->m_pMesh->m_pFaces)
-	{
-		for (unsigned int i = 0; i < model->m_pMesh->m_nFaces; ++i)
-			delete model->m_pMesh->m_pFaces[i];
-	}
 
 	model->m_pMesh->SetVertices ((unsigned)nv_new, v_new.data());
 	model->m_pMesh->SetFaces ((unsigned)nf_new, 3, faces.data());

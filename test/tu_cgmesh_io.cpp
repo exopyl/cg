@@ -47,13 +47,13 @@ TEST(TEST_cgmesh_io, obj_texcoords_per_face)
     m->load(path);
     ASSERT_EQ(m->GetNFaces(), 1u);
 
-    Face* f = m->m_pFaces[0];
-    ASSERT_TRUE(f->m_bUseTextureCoordinates);
-    ASSERT_NE(f->m_pTextureCoordinatesIndices, nullptr);
+    auto f = m->FaceAt (0);
+    ASSERT_TRUE(f->UsesTextureCoordinates ());
+    ASSERT_TRUE(f->HasTexCoordIndices ());
     for (int k = 0; k < f->GetNVertices(); k++)
     {
-        unsigned int ti = f->m_pTextureCoordinatesIndices[k];
-        EXPECT_LT(2u*ti + 1u, (unsigned)m->m_pTextureCoordinates.size());
+        unsigned int ti = f->GetTexCoordIndex (k);
+        EXPECT_LT(2u*ti + 1u, (unsigned)m->GetTextureCoordinates ().size());
         EXPECT_EQ(ti, (unsigned)k); // 1/1 2/2 3/3 -> 0,1,2
     }
 
@@ -77,14 +77,14 @@ TEST(TEST_cgmesh_io, obj_multiple_objects)
     ASSERT_EQ(m->GetNFaces(),    2u);
 
     // First object's face -> vertices 0,1,2.
-    Face* fA = m->m_pFaces[0];
+    auto fA = m->FaceAt (0);
     ASSERT_EQ(fA->GetNVertices(), 3);
     EXPECT_EQ(fA->GetVertex(0), 0);
     EXPECT_EQ(fA->GetVertex(1), 1);
     EXPECT_EQ(fA->GetVertex(2), 2);
 
     // Second object's face -> file-global vertices 3,4,5.
-    Face* fB = m->m_pFaces[1];
+    auto fB = m->FaceAt (1);
     ASSERT_EQ(fB->GetNVertices(), 3);
     EXPECT_EQ(fB->GetVertex(0), 3);
     EXPECT_EQ(fB->GetVertex(1), 4);
@@ -126,9 +126,9 @@ TEST(TEST_cgmesh_io, vmeshes_obj_split_objects)
 
     // Local re-indexing: object B's face references local 0,1,2 even though the
     // file used the global indices 4,5,6.
-    EXPECT_EQ(b->m_pFaces[0]->GetVertex(0), 0);
-    EXPECT_EQ(b->m_pFaces[0]->GetVertex(1), 1);
-    EXPECT_EQ(b->m_pFaces[0]->GetVertex(2), 2);
+    EXPECT_EQ(b->FaceAt (0)->GetVertex(0), 0);
+    EXPECT_EQ(b->FaceAt (0)->GetVertex(1), 1);
+    EXPECT_EQ(b->FaceAt (0)->GetVertex(2), 2);
 
     // ...and that local vertex 0 holds the coordinates declared as "v 2 0 0".
     Vector3f v;
@@ -160,8 +160,8 @@ TEST(TEST_cgmesh_io, vmeshes_obj_split_materials)
     EXPECT_EQ(b->GetMaterial(0)->GetName(), "blue");
 
     // The face points at its submesh-local material id (0 here).
-    EXPECT_EQ(a->m_pFaces[0]->GetMaterialId(), 0u);
-    EXPECT_EQ(b->m_pFaces[0]->GetMaterialId(), 0u);
+    EXPECT_EQ(a->FaceAt (0)->GetMaterialId(), 0u);
+    EXPECT_EQ(b->FaceAt (0)->GetMaterialId(), 0u);
 }
 
 // When several submeshes reference the same textured material, they must SHARE
@@ -232,39 +232,39 @@ TEST(TEST_cgmesh_io, obj_cube_tex_texture)
 
     // (2) 14 texture coordinates, stored as (u, 1-v). vt #1 = "0.25 1.00" ->
     // (0.25, 0.0); vt #10 = "0.75 0.50" -> (0.75, 0.50).
-    EXPECT_EQ(m->m_nTextureCoordinates, 14u);
-    ASSERT_EQ(m->m_pTextureCoordinates.size(), 28u);
-    EXPECT_FLOAT_EQ(m->m_pTextureCoordinates[0],       0.25f);
-    EXPECT_FLOAT_EQ(m->m_pTextureCoordinates[1],       0.0f);
-    EXPECT_FLOAT_EQ(m->m_pTextureCoordinates[2*9],     0.75f);
-    EXPECT_FLOAT_EQ(m->m_pTextureCoordinates[2*9 + 1], 0.50f);
+    EXPECT_EQ(m->GetNTextureCoordinates (), 14u);
+    ASSERT_EQ(m->GetTextureCoordinates ().size(), 28u);
+    EXPECT_FLOAT_EQ(m->GetTextureCoordinates ()[0],       0.25f);
+    EXPECT_FLOAT_EQ(m->GetTextureCoordinates ()[1],       0.0f);
+    EXPECT_FLOAT_EQ(m->GetTextureCoordinates ()[2*9],     0.75f);
+    EXPECT_FLOAT_EQ(m->GetTextureCoordinates ()[2*9 + 1], 0.50f);
 
     // (3) Per-corner texcoord indices. First face is
     //   f 3/10/1 7/6/1 8/5/1  ->  vertices {2,6,7}, texcoords {9,5,4} (0-based).
-    Face* f0 = m->m_pFaces[0];
-    ASSERT_TRUE(f0->m_bUseTextureCoordinates);
-    ASSERT_NE(f0->m_pTextureCoordinatesIndices, nullptr);
+    auto f0 = m->FaceAt (0);
+    ASSERT_TRUE(f0->UsesTextureCoordinates ());
+    ASSERT_TRUE(f0->HasTexCoordIndices ());
     ASSERT_EQ(f0->GetNVertices(), 3);
     EXPECT_EQ(f0->GetVertex(0), 2);
     EXPECT_EQ(f0->GetVertex(1), 6);
     EXPECT_EQ(f0->GetVertex(2), 7);
-    EXPECT_EQ(f0->m_pTextureCoordinatesIndices[0], 9u);
-    EXPECT_EQ(f0->m_pTextureCoordinatesIndices[1], 5u);
-    EXPECT_EQ(f0->m_pTextureCoordinatesIndices[2], 4u);
+    EXPECT_EQ(f0->GetTexCoordIndex (0), 9u);
+    EXPECT_EQ(f0->GetTexCoordIndex (1), 5u);
+    EXPECT_EQ(f0->GetTexCoordIndex (2), 4u);
 
     // The texcoord index differs from the vertex index -> the mapping is truly
     // per-corner, not the per-vertex collapse that scrambled the UVs.
-    EXPECT_NE(f0->m_pTextureCoordinatesIndices[0], (unsigned int)f0->GetVertex(0));
+    EXPECT_NE(f0->GetTexCoordIndex (0), (unsigned int)f0->GetVertex(0));
 
     // Every corner of every textured face must reference an in-range UV.
     for (unsigned int fi = 0; fi < m->GetNFaces(); ++fi)
     {
-        Face* f = m->m_pFaces[fi];
-        if (!f->m_bUseTextureCoordinates || !f->m_pTextureCoordinatesIndices)
+        auto f = m->FaceAt (fi);
+        if (!f->UsesTextureCoordinates () || !f->HasTexCoordIndices ())
             continue;
         for (int k = 0; k < f->GetNVertices(); ++k)
-            EXPECT_LT(2u * f->m_pTextureCoordinatesIndices[k] + 1u,
-                      (unsigned int)m->m_pTextureCoordinates.size());
+            EXPECT_LT(2u * f->GetTexCoordIndex (k) + 1u,
+                      (unsigned int)m->GetTextureCoordinates ().size());
     }
 
     delete m;
@@ -291,13 +291,13 @@ TEST(TEST_cgmesh_io, obj_negative_indices)
     ASSERT_EQ(m->GetNVertices(), 6u);
     ASSERT_EQ(m->GetNFaces(), 2u);
 
-    EXPECT_EQ(m->m_pFaces[0]->GetVertex(0), 0);
-    EXPECT_EQ(m->m_pFaces[0]->GetVertex(1), 1);
-    EXPECT_EQ(m->m_pFaces[0]->GetVertex(2), 2);
+    EXPECT_EQ(m->FaceAt (0)->GetVertex(0), 0);
+    EXPECT_EQ(m->FaceAt (0)->GetVertex(1), 1);
+    EXPECT_EQ(m->FaceAt (0)->GetVertex(2), 2);
 
-    EXPECT_EQ(m->m_pFaces[1]->GetVertex(0), 3);
-    EXPECT_EQ(m->m_pFaces[1]->GetVertex(1), 4);
-    EXPECT_EQ(m->m_pFaces[1]->GetVertex(2), 5);
+    EXPECT_EQ(m->FaceAt (1)->GetVertex(0), 3);
+    EXPECT_EQ(m->FaceAt (1)->GetVertex(1), 4);
+    EXPECT_EQ(m->FaceAt (1)->GetVertex(2), 5);
 
     delete m;
     std::remove(path);
@@ -319,11 +319,11 @@ TEST(TEST_cgmesh_io, obj_lines_and_points)
     // Every segment / point index must reference a real vertex.
     for (unsigned int i = 0; i < m->GetNLines(); ++i)
     {
-        EXPECT_LT(m->m_pLines[2*i],   m->GetNVertices());
-        EXPECT_LT(m->m_pLines[2*i+1], m->GetNVertices());
+        EXPECT_LT(m->GetLines()[2*i],   m->GetNVertices());
+        EXPECT_LT(m->GetLines()[2*i+1], m->GetNVertices());
     }
     for (unsigned int i = 0; i < m->GetNPoints(); ++i)
-        EXPECT_LT(m->m_pPoints[i], m->GetNVertices());
+        EXPECT_LT(m->GetPoints()[i], m->GetNVertices());
 
     // Round-trip: l/p must survive export_obj + reload.
     ASSERT_EQ(m->save("./exported_lines_and_points.obj"), 0);
@@ -498,24 +498,24 @@ TEST(TEST_cgmesh_io, asc_points)
     EXPECT_EQ(m->GetNFaces(), 0u);
 
     // positions match the first PLY row verbatim
-    ASSERT_EQ(m->m_pVertices.size(), 3u * 8000u);
-    EXPECT_NEAR(m->m_pVertices[0],  0.148893f, 1e-5f);
-    EXPECT_NEAR(m->m_pVertices[1], -0.981710f, 1e-5f);
-    EXPECT_NEAR(m->m_pVertices[2],  0.118643f, 1e-5f);
+    ASSERT_EQ(m->GetVertices ().size(), 3u * 8000u);
+    EXPECT_NEAR(m->GetVertices ()[0],  0.148893f, 1e-5f);
+    EXPECT_NEAR(m->GetVertices ()[1], -0.981710f, 1e-5f);
+    EXPECT_NEAR(m->GetVertices ()[2],  0.118643f, 1e-5f);
 
     // per-vertex colors are decoded to [0,1] : first row was "146 2 142"
-    ASSERT_EQ(m->m_pVertexColors.size(), 3u * 8000u);
-    EXPECT_NEAR(m->m_pVertexColors[0], 146.f / 255.f, 1e-3f);
-    EXPECT_NEAR(m->m_pVertexColors[1],   2.f / 255.f, 1e-3f);
-    EXPECT_NEAR(m->m_pVertexColors[2], 142.f / 255.f, 1e-3f);
+    ASSERT_EQ(m->GetVertexColors ().size(), 3u * 8000u);
+    EXPECT_NEAR(m->GetVertexColors ()[0], 146.f / 255.f, 1e-3f);
+    EXPECT_NEAR(m->GetVertexColors ()[1],   2.f / 255.f, 1e-3f);
+    EXPECT_NEAR(m->GetVertexColors ()[2], 142.f / 255.f, 1e-3f);
 
     // every point lies on the unit sphere and its normal is unit-length
-    ASSERT_EQ(m->m_pVertexNormals.size(), 3u * 8000u);
+    ASSERT_EQ(m->GetVertexNormals ().size(), 3u * 8000u);
     for (unsigned int i = 0; i < m->GetNVertices(); ++i)
     {
-        float x = m->m_pVertices[3*i], y = m->m_pVertices[3*i+1], z = m->m_pVertices[3*i+2];
+        float x = m->GetVertices ()[3*i], y = m->GetVertices ()[3*i+1], z = m->GetVertices ()[3*i+2];
         EXPECT_NEAR(sqrtf(x*x + y*y + z*z), 1.f, 1e-3f);
-        float nx = m->m_pVertexNormals[3*i], ny = m->m_pVertexNormals[3*i+1], nz = m->m_pVertexNormals[3*i+2];
+        float nx = m->GetVertexNormals ()[3*i], ny = m->GetVertexNormals ()[3*i+1], nz = m->GetVertexNormals ()[3*i+2];
         EXPECT_NEAR(sqrtf(nx*nx + ny*ny + nz*nz), 1.f, 1e-3f);
     }
 
@@ -537,18 +537,18 @@ TEST(TEST_cgmesh_io, pset_points)
     EXPECT_EQ(m->GetNFaces(), 0u);
 
     // positions match the first PLY row verbatim
-    ASSERT_EQ(m->m_pVertices.size(), 3u * 8000u);
-    EXPECT_NEAR(m->m_pVertices[0],  0.148893f, 1e-5f);
-    EXPECT_NEAR(m->m_pVertices[1], -0.981710f, 1e-5f);
-    EXPECT_NEAR(m->m_pVertices[2],  0.118643f, 1e-5f);
+    ASSERT_EQ(m->GetVertices ().size(), 3u * 8000u);
+    EXPECT_NEAR(m->GetVertices ()[0],  0.148893f, 1e-5f);
+    EXPECT_NEAR(m->GetVertices ()[1], -0.981710f, 1e-5f);
+    EXPECT_NEAR(m->GetVertices ()[2],  0.118643f, 1e-5f);
 
     // every point lies on the unit sphere and its normal is unit-length
-    ASSERT_EQ(m->m_pVertexNormals.size(), 3u * 8000u);
+    ASSERT_EQ(m->GetVertexNormals ().size(), 3u * 8000u);
     for (unsigned int i = 0; i < m->GetNVertices(); ++i)
     {
-        float x = m->m_pVertices[3*i], y = m->m_pVertices[3*i+1], z = m->m_pVertices[3*i+2];
+        float x = m->GetVertices ()[3*i], y = m->GetVertices ()[3*i+1], z = m->GetVertices ()[3*i+2];
         EXPECT_NEAR(sqrtf(x*x + y*y + z*z), 1.f, 1e-3f);
-        float nx = m->m_pVertexNormals[3*i], ny = m->m_pVertexNormals[3*i+1], nz = m->m_pVertexNormals[3*i+2];
+        float nx = m->GetVertexNormals ()[3*i], ny = m->GetVertexNormals ()[3*i+1], nz = m->GetVertexNormals ()[3*i+2];
         EXPECT_NEAR(sqrtf(nx*nx + ny*ny + nz*nz), 1.f, 1e-3f);
     }
 
@@ -637,8 +637,8 @@ TEST(TEST_cgmesh_io, 3ds_display)
     // Check materials are assigned to faces
     bool foundFaceWithMaterial = false;
     for (auto pMesh : meshes) {
-        for (unsigned int i = 0; i < pMesh->m_nFaces; i++) {
-            if (pMesh->m_pFaces[i]->GetMaterialId() != MATERIAL_NONE) {
+        for (unsigned int i = 0; i < pMesh->GetNFaces (); i++) {
+            if (pMesh->FaceAt (i)->GetMaterialId() != MATERIAL_NONE) {
                 foundFaceWithMaterial = true;
                 break;
             }
@@ -693,7 +693,7 @@ TEST(TEST_cgmesh_io, glb_duck)
         if (pMesh->GetNMaterials() > 0) {
             foundMaterial = true;
         }
-        if (pMesh->m_nTextureCoordinates > 0) {
+        if (pMesh->GetNTextureCoordinates () > 0) {
             foundTexCoords = true;
         }
         for (unsigned int i = 0; i < pMesh->GetNMaterials(); ++i) {
@@ -723,9 +723,9 @@ TEST(TEST_cgmesh_io, glb_fox_non_indexed)
     ASSERT_EQ(meshes.size(), 1u);
 
     Mesh* pMesh = meshes[0];
-    EXPECT_EQ(pMesh->m_nVertices, 1728u);
-    EXPECT_EQ(pMesh->m_nFaces, 576u);
-    EXPECT_GT(pMesh->m_nTextureCoordinates, 0u);
+    EXPECT_EQ(pMesh->GetNVertices (), 1728u);
+    EXPECT_EQ(pMesh->GetNFaces (), 576u);
+    EXPECT_GT(pMesh->GetNTextureCoordinates (), 0u);
     EXPECT_GT(pMesh->GetNMaterials(), 0u);
 
     delete pVMeshes;
@@ -821,11 +821,11 @@ TEST_P(TEST_cgmesh_io_iges_wireframe, imports_free_wireframe)
     {
         for (unsigned int i = 0; i < m->GetNLines(); ++i)
         {
-            EXPECT_LT(m->m_pLines[2*i],     m->GetNVertices());
-            EXPECT_LT(m->m_pLines[2*i + 1], m->GetNVertices());
+            EXPECT_LT(m->GetLines()[2*i],     m->GetNVertices());
+            EXPECT_LT(m->GetLines()[2*i + 1], m->GetNVertices());
         }
         for (unsigned int i = 0; i < m->GetNPoints(); ++i)
-            EXPECT_LT(m->m_pPoints[i], m->GetNVertices());
+            EXPECT_LT(m->GetPoints()[i], m->GetNVertices());
     }
 
     delete pVMeshes;
@@ -1466,7 +1466,7 @@ TEST(TEST_cgmesh_io, obj_mtl_import_reads_every_colour_channel)
 
     // La face pointe bien sur ce materiau, et non sur MATERIAL_NONE.
     ASSERT_EQ(mesh.GetNFaces(), 1u);
-    EXPECT_EQ(mesh.m_pFaces[0]->GetMaterialId(), 0u);
+    EXPECT_EQ(mesh.FaceAt (0)->GetMaterialId(), 0u);
 
     removeObjWithMtl(stem);
 }
@@ -1558,7 +1558,7 @@ TEST(TEST_cgmesh_io, obj_mtl_import_keeps_materials_separate)
 
     // `usemtl second` doit resoudre vers l'id 1, pas vers le premier materiau.
     ASSERT_EQ(mesh.GetNFaces(), 1u);
-    EXPECT_EQ(mesh.m_pFaces[0]->GetMaterialId(), 1u);
+    EXPECT_EQ(mesh.FaceAt (0)->GetMaterialId(), 1u);
 
     removeObjWithMtl(stem);
 }
@@ -1589,7 +1589,7 @@ TEST(TEST_cgmesh_io, obj_survives_a_missing_mtllib)
     EXPECT_EQ(mesh.GetNFaces(), 1u);
     EXPECT_EQ(mesh.GetNMaterials(), 0u) << "aucun materiau ne peut avoir ete lu";
     ASSERT_EQ(mesh.GetNFaces(), 1u);
-    EXPECT_EQ(mesh.m_pFaces[0]->GetMaterialId(), MATERIAL_NONE)
+    EXPECT_EQ(mesh.FaceAt (0)->GetMaterialId(), MATERIAL_NONE)
         << "la face doit rester sans materiau, pas pointer sur un id inexistant";
 
     std::remove((stem + ".obj").c_str());
@@ -1597,7 +1597,7 @@ TEST(TEST_cgmesh_io, obj_survives_a_missing_mtllib)
 
 // `usemtl` nommant un materiau absent du .mtl : GetMaterialId renvoie -1. La face
 // ne doit PAS se retrouver avec un id hors bornes, qui ferait deborder toute
-// boucle indexant m_pMaterials.
+// boucle indexant les materiaux.
 TEST(TEST_cgmesh_io, obj_usemtl_naming_an_unknown_material_leaves_the_face_unassigned)
 {
     const std::string stem = "./tu_obj_badusemtl";
@@ -1609,11 +1609,11 @@ TEST(TEST_cgmesh_io, obj_usemtl_naming_an_unknown_material_leaves_the_face_unass
     ASSERT_EQ(mesh.GetNMaterials(), 1u) << "le materiau declare doit quand meme etre lu";
     EXPECT_EQ(mesh.GetMaterial(0)->GetName(), "present");
 
-    // import_obj fait `if (usemtl != -1) pFace->m_iMaterialId = usemtl;` : sur un
+    // import_obj fait `if (usemtl != -1) pFace->SetMaterialId (usemtl);` : sur un
     // nom non resolu la face garde son defaut, MATERIAL_NONE. Sans cette garde,
     // le -1 de GetMaterialId deviendrait un id non signe enorme.
     ASSERT_EQ(mesh.GetNFaces(), 1u);
-    EXPECT_EQ(mesh.m_pFaces[0]->GetMaterialId(), MATERIAL_NONE)
+    EXPECT_EQ(mesh.FaceAt (0)->GetMaterialId(), MATERIAL_NONE)
         << "un usemtl non resolu a tout de meme affecte un id a la face";
 
     removeObjWithMtl(stem);
@@ -1683,10 +1683,10 @@ TEST(TEST_cgmesh_io, 3ds_texmap_keeps_the_first_map_name)
     EXPECT_EQ(m->GetNVertices(), 9999u);
     EXPECT_EQ(m->GetNFaces(),    18112u);
 
-    // TRI_MAPPINGCOORDS : une UV par sommet. Note : m_nTextureCoordinates reste a
+    // TRI_MAPPINGCOORDS : une UV par sommet. Note : GetNTextureCoordinates () reste a
     // 0 sur ce chemin, seul le vecteur est renseigne (import_3ds ne met pas le
     // compteur a jour).
-    EXPECT_EQ(m->m_pTextureCoordinates.size(), 2u * 9999u) << "coordonnees de texture perdues";
+    EXPECT_EQ(m->GetTextureCoordinates ().size(), 2u * 9999u) << "coordonnees de texture perdues";
 
     ASSERT_EQ(m->GetNMaterials(), 2u);
     EXPECT_EQ(m->GetMaterial(0)->GetName(), "BLACKChair_C");
@@ -1873,7 +1873,7 @@ TEST(TEST_cgmesh_io, 3ds_material_groups_are_assigned_per_face)
     unsigned int counts[2] = { 0, 0 }, none = 0;
     for (unsigned int f = 0; f < m->GetNFaces(); f++)
     {
-        const unsigned int id = m->m_pFaces[f]->GetMaterialId();
+        const unsigned int id = m->FaceAt (f)->GetMaterialId();
         if (id == MATERIAL_NONE) none++;
         else { ASSERT_LT(id, 2u); counts[id]++; }
     }

@@ -13,14 +13,57 @@ enum MaterialType {
 };
 
 //
+// MaterialPtr -- un pointeur possedant qui se COPIE en clonant.
+//
+// Confiner la copie polymorphe dans un type valeur est ce qui permet aux classes
+// qui detiennent des materiaux d'etre copiables sans constructeur de copie ecrit
+// a la main. Meme surface que unique_ptr<Material> : get, operator->,
+// operator bool, reset.
+//
+class Material;
+
+class MaterialPtr
+{
+public:
+	MaterialPtr () = default;
+	explicit MaterialPtr (Material *p) : m_p (p) {}
+
+	MaterialPtr (const MaterialPtr &o);
+	MaterialPtr& operator= (const MaterialPtr &o);
+	MaterialPtr (MaterialPtr &&) = default;
+	MaterialPtr& operator= (MaterialPtr &&) = default;
+
+	Material* get (void) const { return m_p.get (); }
+	Material* operator-> (void) const { return m_p.get (); }
+	Material& operator* (void) const { return *m_p; }
+	explicit operator bool (void) const { return (bool)m_p; }
+	void reset (Material *p = nullptr) { m_p.reset (p); }
+
+private:
+	std::unique_ptr<Material> m_p;
+};
+
+//
 //
 //
 class Material
 {
 public:
 	Material () = default;
-	Material (const Material &m) {}; // constructor of copy
 	virtual ~Material () = default; // required: subclasses (MaterialTexture) hold resources
+
+	// ⚠ NE PAS ECRIRE DE CONSTRUCTEUR DE COPIE ICI ni dans les sous-classes : les
+	// implicites sont corrects et complets. Ceux qui s'y trouvaient oubliaient
+	// m_name, chacun a sa maniere.
+
+	// Copie POLYMORPHE, sans laquelle une copie par valeur trancherait les
+	// sous-objets.
+	//
+	// ⚠ L'IMAGE d'une MaterialTexture est PARTAGEE, pas dupliquee (cf. le
+	// shared_ptr<Img>) : elle est traitee comme immuable. Tout l'etat MUTABLE, lui,
+	// est bien duplique.
+	virtual std::unique_ptr<Material> clone (void) const
+		{ return std::make_unique<Material> (*this); }
 
 	virtual MaterialType GetType (void) { return MATERIAL_NONE; };
 	virtual void Dump (void) {};
@@ -32,6 +75,17 @@ protected:
 	std::string m_name;
 };
 
+// Apres Material : clone () doit etre connue.
+inline MaterialPtr::MaterialPtr (const MaterialPtr &o)
+	: m_p (o.m_p ? o.m_p->clone () : nullptr) {}
+
+inline MaterialPtr& MaterialPtr::operator= (const MaterialPtr &o)
+{
+	if (this != &o)
+		m_p = o.m_p ? o.m_p->clone () : nullptr;
+	return *this;
+}
+
 //
 //
 //
@@ -40,9 +94,10 @@ class MaterialColor : public Material
 public:
 	MaterialColor ();
 	MaterialColor (unsigned char r, unsigned char g, unsigned char b, unsigned char a=255);
-	MaterialColor (const MaterialColor &m); // constructor of copy
 
 	//virtual ~MaterialColor () {};
+	std::unique_ptr<Material> clone (void) const override
+		{ return std::make_unique<MaterialColor> (*this); }
 	MaterialType GetType (void);
 
 	float GetFloatRed() const { return m_r / 255.f; };
@@ -103,15 +158,9 @@ public:
 				m_fShininess[0] = 0.;
 			}
 		};
-	MaterialColorExt (const MaterialColorExt &m) // constructor of copy
-		{
-			memcpy (m_fAmbient, m.m_fAmbient, 4*sizeof(float));
-			memcpy (m_fDiffuse, m.m_fDiffuse, 4*sizeof(float));
-			memcpy (m_fSpecular, m.m_fSpecular, 4*sizeof(float));
-			memcpy (m_fEmission, m.m_fEmission, 4*sizeof(float));
-			memcpy (m_fShininess, m.m_fShininess, 1*sizeof(float));
-		};
 	//virtual ~MaterialColorExt () {};
+	std::unique_ptr<Material> clone (void) const override
+		{ return std::make_unique<MaterialColorExt> (*this); }
 
 	inline void SetAmbient (float fR, float fG, float fB, float fA)
 	{
@@ -181,6 +230,8 @@ public:
 	MaterialTexture (const MaterialTexture &m); // constructor of copy
 	virtual ~MaterialTexture ();
 
+	std::unique_ptr<Material> clone (void) const override
+		{ return std::make_unique<MaterialTexture> (*this); }
 	MaterialType GetType (void);
 	void Dump (void);
 	std::string GetFilename ();

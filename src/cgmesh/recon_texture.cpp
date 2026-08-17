@@ -45,7 +45,7 @@ void ProjectiveTexturer::texture(Mesh&                           mesh,
 
     // On ÉCLATE le mesh : chaque face -> 3 sommets propres avec UV par sommet.
     // (cgre/BuildPolygonRenderData n'exploite que des UV vertex-parallèles.)
-    const float*   Vsrc = mesh.m_pVertices.data();
+    const float*   Vsrc = mesh.GetVertices ().data();
     const unsigned nf   = mesh.GetNFaces();
 
     // BVH sur la géométrie d'entrée pour le test d'occlusion (rayon d'ombre
@@ -94,7 +94,7 @@ void ProjectiveTexturer::texture(Mesh&                           mesh,
 
     for (unsigned fi = 0; fi < nf; ++fi)
     {
-        Face* f = mesh.GetFace(fi);
+        auto f = mesh.FaceAt (fi);
         if (!f || f->GetNVertices() != 3) continue;
         const int ia=f->GetVertex(0), ib=f->GetVertex(1), ic=f->GetVertex(2);
         const float vx[3]={Vsrc[3*ia],Vsrc[3*ib],Vsrc[3*ic]};
@@ -171,18 +171,17 @@ void ProjectiveTexturer::texture(Mesh&                           mesh,
 
     // Reconstruit la géométrie éclatée (UV vertex-parallèles).
     mesh.SetVertices((unsigned)(nverts.size()/3), nverts.data());
-    mesh.m_pTextureCoordinates = nuv;
-    mesh.m_nTextureCoordinates = (unsigned)(nuv.size()/2);
+    mesh.SetTextureCoordinates (nuv, (unsigned)(nuv.size()/2));
     mesh.SetFaces((unsigned)(nfaces.size()/3), 3, nfaces.data());
     for (unsigned fi=0; fi<(unsigned)nmat.size(); ++fi)
     {
         mesh.SetFaceMaterialId(fi, (unsigned)nmat[fi]);
         if (ntex[fi])
         {
-            Face* f=mesh.GetFace(fi);
+            auto f = mesh.FaceAt (fi);
             f->ActivateTextureCoordinatesIndices();
             for (unsigned k=0;k<3;++k) f->SetTexCoord(k, 3*fi+k);
-            f->m_bUseTextureCoordinates=true;
+            f->SetUsesTextureCoordinates (true);
         }
     }
     mesh.ComputeNormals();

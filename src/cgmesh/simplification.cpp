@@ -40,9 +40,9 @@ const int RING_WALK_MAX = 100000;
 
 inline void get_pos(const Mesh *m, int vi, Vector3f &p)
 {
-	p[0] = m->m_pVertices[3 * vi];
-	p[1] = m->m_pVertices[3 * vi + 1];
-	p[2] = m->m_pVertices[3 * vi + 2];
+	p[0] = m->GetVertices ()[3 * vi];
+	p[1] = m->GetVertices ()[3 * vi + 1];
+	p[2] = m->GetVertices ()[3 * vi + 2];
 }
 
 // Collect the one-ring vertex neighbours of vi (the m_v_end of each outgoing
@@ -92,12 +92,12 @@ void mark_nonmanifold_vertices(Mesh *mesh, unsigned int nv, std::vector<char> &n
 	nm.assign(nv, 0);
 
 	std::vector<std::vector<std::pair<int, int>>> link(nv);
-	for (unsigned int f = 0; f < mesh->m_nFaces; f++)
+	for (unsigned int f = 0; f < mesh->GetNFaces (); f++)
 	{
-		Face *face = mesh->m_pFaces[f];
-		if (!face || face->m_nVertices < 3)
+		auto face = mesh->FaceAt (f);
+		if (!face || face->GetNVertices () < 3)
 			continue;
-		int a = face->m_pVertices[0], b = face->m_pVertices[1], c = face->m_pVertices[2];
+		int a = face->GetVertex (0), b = face->GetVertex (1), c = face->GetVertex (2);
 		if (a < 0 || b < 0 || c < 0) continue;
 		if ((unsigned)a < nv) link[a].push_back(std::make_pair(b, c));
 		if ((unsigned)b < nv) link[b].push_back(std::make_pair(a, c));
@@ -493,7 +493,7 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 	const bool preserve_attributes = options.preserve_attributes;
 
 	Mesh *mesh = m_pMesh;
-	if (!mesh || mesh->m_nFaces == 0)
+	if (!mesh || mesh->GetNFaces () == 0)
 		return;
 
 	if (target_ratio < 0.f) target_ratio = 0.f;
@@ -509,14 +509,14 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 	create_half_edge();
 	Che_mesh *che = GetCheMesh();
 
-	unsigned int nv = mesh->m_nVertices;
-	unsigned int nf0 = mesh->m_nFaces;
+	unsigned int nv = mesh->GetNVertices ();
+	unsigned int nf0 = mesh->GetNFaces ();
 	unsigned int target_faces = (unsigned int)(nf0 * target_ratio);
 
 	// Appearance attributes present and transportable as per-vertex data.
-	bool have_colors = preserve_attributes && mesh->m_pVertexColors.size() == 3 * (size_t)nv;
-	bool have_normals = preserve_attributes && mesh->m_pVertexNormals.size() == 3 * (size_t)nv;
-	bool have_uv = options.preserve_uv && mesh->m_pTextureCoordinates.size() == 2 * (size_t)nv;
+	bool have_colors = preserve_attributes && mesh->GetVertexColors ().size() == 3 * (size_t)nv;
+	bool have_normals = preserve_attributes && mesh->GetVertexNormals ().size() == 3 * (size_t)nv;
+	bool have_uv = options.preserve_uv && mesh->GetTextureCoordinates ().size() == 2 * (size_t)nv;
 
 	// Voie B: generalized R^D quadric. attribute_metric folds the present
 	// attributes (colour and/or UV) into the error metric; otherwise they are
@@ -548,23 +548,23 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 	BVH orig_bvh;
 	if (exact)
 	{
-		orig_snapshot.SetVertices(nv, mesh->m_pVertices.data());
+		orig_snapshot.SetVertices(nv, mesh->GetVertices ().data());
 		std::vector<unsigned int> t = mesh->GetTriangles();
 		orig_snapshot.SetFaces(nf0, 3, t.data());
 		orig_bvh.build(orig_snapshot);
 	}
 
-	std::vector<float> col = have_colors ? mesh->m_pVertexColors : std::vector<float>();
-	std::vector<float> nrm = have_normals ? mesh->m_pVertexNormals : std::vector<float>();
-	std::vector<float> uv  = have_uv ? mesh->m_pTextureCoordinates : std::vector<float>();
+	std::vector<float> col = have_colors ? mesh->GetVertexColors () : std::vector<float>();
+	std::vector<float> nrm = have_normals ? mesh->GetVertexNormals () : std::vector<float>();
+	std::vector<float> uv  = have_uv ? mesh->GetTextureCoordinates () : std::vector<float>();
 
 	// Build the nD augmented point of vertex vi: [pos][col?][uv?], attributes
 	// scaled by ndw. Returns the dimension.
 	auto nd_point = [&](int vi, double P[QN_MAX])
 	{
-		P[0] = mesh->m_pVertices[3 * vi];
-		P[1] = mesh->m_pVertices[3 * vi + 1];
-		P[2] = mesh->m_pVertices[3 * vi + 2];
+		P[0] = mesh->GetVertices ()[3 * vi];
+		P[1] = mesh->GetVertices ()[3 * vi + 1];
+		P[2] = mesh->GetVertices ()[3 * vi + 2];
 		if (nd_color)
 		{
 			P[3] = ndw * col[3 * vi];
@@ -590,12 +590,12 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 
 		for (unsigned int f = 0; f < nf0; f++)
 		{
-			Face *face = mesh->m_pFaces[f];
-			if (!face || face->m_nVertices < 3)
+			auto face = mesh->FaceAt (f);
+			if (!face || face->GetNVertices () < 3)
 				continue;
-			int a = face->m_pVertices[0];
-			int b = face->m_pVertices[1];
-			int c = face->m_pVertices[2];
+			int a = face->GetVertex (0);
+			int b = face->GetVertex (1);
+			int c = face->GetVertex (2);
 
 			double Pa[QN_MAX], Pb[QN_MAX], Pc[QN_MAX];
 			nd_point(a, Pa);
@@ -617,13 +617,13 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 
 		for (unsigned int f = 0; f < nf0; f++)
 		{
-			Face *face = mesh->m_pFaces[f];
-			if (!face || face->m_nVertices < 3)
+			auto face = mesh->FaceAt (f);
+			if (!face || face->GetNVertices () < 3)
 				continue;
 
-			int a = face->m_pVertices[0];
-			int b = face->m_pVertices[1];
-			int c = face->m_pVertices[2];
+			int a = face->GetVertex (0);
+			int b = face->GetVertex (1);
+			int c = face->GetVertex (2);
 			Vector3f va, vb, vc;
 			get_pos(mesh, a, va);
 			get_pos(mesh, b, vb);
@@ -650,13 +650,13 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 		std::vector<float> fn(3 * nf0, 0.f);
 		for (unsigned int f = 0; f < nf0; f++)
 		{
-			Face *face = mesh->m_pFaces[f];
-			if (!face || face->m_nVertices < 3)
+			auto face = mesh->FaceAt (f);
+			if (!face || face->GetNVertices () < 3)
 				continue;
 			Vector3f va, vb, vc;
-			get_pos(mesh, face->m_pVertices[0], va);
-			get_pos(mesh, face->m_pVertices[1], vb);
-			get_pos(mesh, face->m_pVertices[2], vc);
+			get_pos(mesh, face->GetVertex (0), va);
+			get_pos(mesh, face->GetVertex (1), vb);
+			get_pos(mesh, face->GetVertex (2), vc);
 			Vector3f nf = Vector3f::evaluate_triangle_normal(va, vb, vc);
 			nf.Normalize();
 			fn[3 * f] = nf[0]; fn[3 * f + 1] = nf[1]; fn[3 * f + 2] = nf[2];
@@ -678,15 +678,14 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 			if (f1 < 0 || f2 < 0 || f1 >= (int)nf0 || f2 >= (int)nf0)
 				continue;
 
-			// f1 et f2 sont bornes juste au-dessus, mais m_pFaces est un tableau de
-			// POINTEURS : une entree nulle passait le test d'indice et se faisait
-			// dereferencer pour lire m_iMaterialId (cpp:S2259,
-			// simplification.cpp:682).
-			if (!mesh->m_pFaces[f1] || !mesh->m_pFaces[f2])
+			// f1 et f2 sont bornes juste au-dessus, mais un emplacement peut etre
+			// TROUE (cf. Mesh::RemoveFace) : sans ce test, la lecture du materiau
+			// dereferencait un pointeur nul (cpp:S2259, simplification.cpp:682).
+			if (!mesh->FaceAt (f1) || !mesh->FaceAt (f2))
 				continue;
 
 			bool crease = Vector3f(fn[3*f1], fn[3*f1+1], fn[3*f1+2]).DotProduct(Vector3f(fn[3*f2], fn[3*f2+1], fn[3*f2+2])) < cos_thr;
-			bool seam = (mesh->m_pFaces[f1]->m_iMaterialId != mesh->m_pFaces[f2]->m_iMaterialId);
+			bool seam = (mesh->FaceAt (f1)->GetMaterialId () != mesh->FaceAt (f2)->GetMaterialId ());
 			if (!crease && !seam)
 				continue;
 
@@ -943,9 +942,9 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 				uv[2 * u + k] = (1.f - t) * uv[2 * u + k] + t * uv[2 * v + k];
 
 		// Commit geometry only after the topology collapse succeeded.
-		mesh->m_pVertices[3 * u] = c.target[0];
-		mesh->m_pVertices[3 * u + 1] = c.target[1];
-		mesh->m_pVertices[3 * u + 2] = c.target[2];
+		mesh->SetVertexComponent (u, 0, c.target[0]);
+		mesh->SetVertexComponent (u, 1, c.target[1]);
+		mesh->SetVertexComponent (u, 2, c.target[2]);
 		if (use_nd)
 			qn_add(Qn[u], Qn[v]);
 		else
@@ -1025,9 +1024,9 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 		if (!v_used[i])
 			continue;
 		remap[i] = new_nv++;
-		new_verts.push_back(mesh->m_pVertices[3 * i]);
-		new_verts.push_back(mesh->m_pVertices[3 * i + 1]);
-		new_verts.push_back(mesh->m_pVertices[3 * i + 2]);
+		new_verts.push_back(mesh->GetVertices ()[3 * i]);
+		new_verts.push_back(mesh->GetVertices ()[3 * i + 1]);
+		new_verts.push_back(mesh->GetVertices ()[3 * i + 2]);
 		if (have_colors)
 		{
 			new_col.push_back(col[3 * i]);
@@ -1057,13 +1056,12 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 	// preserved per-vertex attributes then override what should be kept.
 	pNew->ComputeNormals();
 	if (have_normals)
-		pNew->m_pVertexNormals = new_nrm;
+		pNew->SetVertexNormals (new_nrm);
 	if (have_colors)
-		pNew->m_pVertexColors = new_col;
+		pNew->SetVertexColors (new_col);
 	if (have_uv)
 	{
-		pNew->m_pTextureCoordinates = new_uv;   // vertex-parallel (size 2*new_nv)
-		pNew->m_nTextureCoordinates = (unsigned int)new_nv;
+		pNew->SetTextureCoordinates (new_uv, (unsigned int)new_nv);   // vertex-parallel
 	}
 	pNew->computebbox();
 

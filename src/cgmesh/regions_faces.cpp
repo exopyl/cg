@@ -18,7 +18,7 @@ Cregions_faces::Cregions_faces (Mesh_half_edge *_mesh_half_edge)
 {
 	assert (_mesh_half_edge);
 	mesh_half_edge  = _mesh_half_edge;
-	size            = mesh_half_edge->m_pMesh->m_nFaces;
+	size            = mesh_half_edge->m_pMesh->GetNFaces ();
 	data            = new float[size];
 	regions         = new int[size];
 	selected_region = new int[size];
@@ -90,17 +90,17 @@ Cregions_faces::export_selected_region_cloud_points (char *filename)
 	if (!ptr)
 		return;
 
-	int n_vertices;
-	float *vertices = nullptr;
-	Face **faces;
-	float *normales;
+	int n_vertices = 0;
+	const float *vertices = nullptr;
+	Mesh *pm = nullptr;
+	const float *normales = nullptr;
 
 	if (mesh_half_edge)
     {
-		n_vertices = mesh_half_edge->m_pMesh->m_nVertices;
-		vertices   = mesh_half_edge->m_pMesh->m_pVertices.data();
-		faces      = mesh_half_edge->m_pMesh->m_pFaces;
-		normales   = mesh_half_edge->m_pMesh->m_pVertexNormals.data();
+		pm         = mesh_half_edge->m_pMesh;
+		n_vertices = pm->GetNVertices ();
+		vertices   = pm->GetVertices ().data();
+		normales   = pm->GetVertexNormals ().data();
 	}
 	// Ce retour anticipe sautait le fclose de fin de fonction
 	// (cpp:S2095, regions_faces.cpp:99).
@@ -113,9 +113,9 @@ Cregions_faces::export_selected_region_cloud_points (char *filename)
     {
 		if (selected_region[i] == 1)
 		{
-			int a = faces[i]->GetVertex(0);
-			int b = faces[i]->GetVertex(1);
-			int c = faces[i]->GetVertex(2);
+			int a = pm->FaceAt (i)->GetVertex(0);
+			int b = pm->FaceAt (i)->GetVertex(1);
+			int c = pm->FaceAt (i)->GetVertex(2);
 			for (j=0; j<n_selected_vertices; j++)
 			{
 				if (selected_vertices[j] == a)
@@ -182,7 +182,7 @@ Cregions_faces::init_segmentation (float epsilon)
 		Che_mesh *chePtr = mesh_half_edge->GetCheMesh();
 		FILE* ptr = fopen ("output.txt", "w");
 
-		float *fn = mesh_half_edge->m_pMesh->m_pFaceNormals.data();
+		const float *fn = mesh_half_edge->m_pMesh->GetFaceNormals ().data();
 		for (i=0; i<n_faces; i++)
 		{
 			if (regions[i] == -1)
@@ -245,7 +245,7 @@ Cregions_faces::clean_segmentation (float percentage)
 	float total_area = mesh_half_edge->m_pMesh->GetArea ();
 	float *areas_by_region;
 	int n_regions = 0;
-	int n_faces = mesh_half_edge->m_pMesh->m_nFaces;
+	int n_faces = mesh_half_edge->m_pMesh->GetNFaces ();
 
 	for (i=0; i<n_faces; i++)
 		if (n_regions < regions[i])
@@ -302,19 +302,16 @@ void
 Cregions_faces::refresh_colors (void)
 {
 	int i, j, nv, nf;
-	float *vc = nullptr;
-	Face **f = nullptr;
+	Mesh *pMesh = nullptr;
 
-	// get the array for the colors
 	if (mesh_half_edge)
 	{
-		nv = mesh_half_edge->m_pMesh->m_nVertices;
-		nf = mesh_half_edge->m_pMesh->m_nFaces;
-		f  = mesh_half_edge->m_pMesh->m_pFaces;
-		vc = mesh_half_edge->m_pMesh->m_pVertexColors.data();
+		pMesh  = mesh_half_edge->m_pMesh;
+		nv     = pMesh->GetNVertices ();
+		nf     = pMesh->GetNFaces ();
 	}
-	assert (vc && f);
-	if (!vc || !f) return;
+	assert (pMesh);
+	if (!pMesh || pMesh->GetVertexColors ().empty()) return;
 
 	if (mesh_half_edge)
 	{
@@ -339,17 +336,9 @@ Cregions_faces::refresh_colors (void)
 			} while (e_walk >= 0 && e_walk != e);
 
 			if (is_boundary)
-			{
-				vc[3*i]   = 1.0f;
-				vc[3*i+1] = 0.0f;
-				vc[3*i+2] = 0.0f;
-			}
+				pMesh->SetVertexColor (i, 1.0f, 0.0f, 0.0f);
 			else
-			{
-				vc[3*i]   = 0.5f;
-				vc[3*i+1] = 0.5f;
-				vc[3*i+2] = 0.5f;
-			}
+				pMesh->SetVertexColor (i, 0.5f, 0.5f, 0.5f);
 
 		}
 		// paint the selected region
@@ -357,20 +346,8 @@ Cregions_faces::refresh_colors (void)
 		{
 			if (selected_region[i] == 1)
 			{
-				/* first vertex */
-				vc[3*f[i]->GetVertex(0)]     = 1.0;
-				vc[3*f[i]->GetVertex(0)+1]   = 1.0;
-				vc[3*f[i]->GetVertex(0)+2]   = 0.0;
-
-				/* second vertex */
-				vc[3*f[i]->GetVertex(1)]   = 1.0;
-				vc[3*f[i]->GetVertex(1)+1] = 1.0;
-				vc[3*f[i]->GetVertex(1)+2] = 0.0;
-
-				/* third vertex */
-				vc[3*f[i]->GetVertex(2)]   = 1.0;
-				vc[3*f[i]->GetVertex(2)+1] = 1.0;
-				vc[3*f[i]->GetVertex(2)+2] = 0.0;
+				for (int k=0; k<3; k++)
+					pMesh->SetVertexColor (pMesh->FaceAt (i)->GetVertex(k), 1.0f, 1.0f, 0.0f);
 			}
 		}
 
@@ -710,15 +687,15 @@ Plane* Cregions_faces::plane_fitting  (void)
 	Vector3f center (0.0, 0.0, 0.0);
 	Vector3f normale (0.0, 0.0, 0.0);
 	int i, n_selected_faces = 0;
-	float *v = nullptr;
+	const float *v = nullptr;
 	std::vector<unsigned int> f;
-	float *fn = nullptr;
+	const float *fn = nullptr;
 
 	if (mesh_half_edge)
 	{
-		v  = mesh_half_edge->m_pMesh->m_pVertices.data();
+		v  = mesh_half_edge->m_pMesh->GetVertices ().data();
 		f  = mesh_half_edge->m_pMesh->GetTriangles ();
-		fn = mesh_half_edge->m_pMesh->m_pFaceNormals.data();
+		fn = mesh_half_edge->m_pMesh->GetFaceNormals ().data();
 	}
 
 	// `v` et `fn` restent nuls quand mesh_half_edge l'est, et la boucle ci-dessous

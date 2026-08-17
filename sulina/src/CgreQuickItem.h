@@ -6,11 +6,17 @@
 
 class VMeshes;
 class MaterialTexture;
+// Declarations avancees suffisantes pour les octrees de picking : les
+// unique_ptr<Octree> ne sont detruits que dans le .cpp, ou octree.h est inclus et
+// ou ~CgreQuickItem est defini hors ligne.
+class Mesh;
+class Octree;
 
 #include <QQuickItem>
 #include <QQuickWindow>  // moc registers QQuickWindow* metatype for slots
 #include <QtQmlIntegration/qqmlintegration.h>
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -170,7 +176,7 @@ private:
     std::unique_ptr<cgre2::Pipeline>          m_pipeline;
 
     // Unlit pipelines for the mesh's line ('l') and point ('p') primitives
-    // (Mesh::m_pLines / m_pPoints). Same VertexPBR buffer layout as the
+    // (segments de ligne / points isoles). Same VertexPBR buffer layout as the
     // surface, different primitive topology, no descriptor sets (the unlit
     // shaders sample no texture).
     std::unique_ptr<cgre2::DescriptorLayouts> m_unlitDescriptorLayouts;
@@ -195,7 +201,7 @@ private:
     std::vector<uint32_t>                              m_indexCounts;
 
     // Line / point primitive buffers, one entry per sub-mesh that carries
-    // m_pLines / m_pPoints. These index the raw mesh vertices (not the
+    // lignes / points. These index the raw mesh vertices (not the
     // triangle-expanded surface vertices), so they need their own VBOs.
     std::vector<std::unique_ptr<cgre2::VertexBuffer>> m_lineVertexBuffers;
     std::vector<std::unique_ptr<cgre2::IndexBuffer>>  m_lineIndexBuffers;
@@ -237,6 +243,39 @@ private:
     void cameraMatrices(QMatrix4x4 &proj, QMatrix4x4 &view, QMatrix4x4 &model) const;
     // Ray-cast the cursor (item-local pixels) against the mesh; update hover*.
     void updatePick(const QPointF &posItem);
+
+    // -- octrees de picking -------------------------------------------------
+    //
+    // ⚠ CODE NON COMPILE DEPUIS LE 2026-08-17 : voir le bloc en tete de
+    // updatePick() dans le .cpp.
+    //
+    // Le maillage ne detient pas d'octree ; c'est a l'appelant de detenir son
+    // accelerateur et de le reconstruire quand la geometrie change
+    // (src/cgmesh/mesh_raycast.h).
+    //
+    // UN OCTREE PAR MAILLAGE, et non un seul : updatePick() parcourt tous les
+    // sous-maillages de la VMeshes.
+    struct PickOctree
+    {
+        Mesh                   *mesh     = nullptr;
+        uint64_t                revision = 0;   // revision du maillage a la construction
+        std::unique_ptr<Octree> octree;
+    };
+    std::vector<PickOctree> m_pickOctrees;
+
+    // VMeshes pour laquelle m_pickOctrees a ete bati. Un changement de modele
+    // invalide TOUT : les Mesh* precedents sont detruits, et une nouvelle
+    // allocation peut recycler la meme adresse -- une comparaison de pointeurs
+    // ne suffirait pas a s'en apercevoir.
+    VMeshes *m_pickOctreesSource = nullptr;
+
+    // Rend l'octree de `mesh`, construit ou reconstruit si sa revision a change.
+    // nullptr si le maillage est vide. Le maillage doit survivre a son octree :
+    // les deux sont detenus cote a cote, l'un par la VMeshes et l'autre par
+    // l'item, et invalidatePickOctrees() est appele avant tout changement de
+    // modele.
+    Octree *ensurePickOctree(Mesh *mesh);
+    void    invalidatePickOctrees();
 
     bool      m_pickingEnabled = false;
     bool      m_hoverValid     = false;

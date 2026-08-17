@@ -180,23 +180,14 @@ namespace
 		return line.substr(i, end - i);
 	}
 
-	// Deep-copy a Mesh material (only the concrete types cgmesh instantiates).
-	// A Mesh owns its materials (unique_ptr), so submeshes need their own copies.
+	// Deep-copy a Mesh material. A Mesh owns its materials, so submeshes need
+	// their own copies.
+	//
+	// Material::clone() plutot qu'un switch sur GetType() : un switch rendait
+	// nullptr pour toute sous-classe qu'il ne connaissait pas.
 	Material* objCloneMaterial(Material* m)
 	{
-		if (!m) return nullptr;
-		Material* copy = nullptr;
-		switch (m->GetType())
-		{
-		case MATERIAL_TEXTURE:   copy = new MaterialTexture(*static_cast<MaterialTexture*>(m)); break;
-		case MATERIAL_COLOR_ADV: copy = new MaterialColorExt(*static_cast<MaterialColorExt*>(m)); break;
-		case MATERIAL_COLOR:     copy = new MaterialColor(*static_cast<MaterialColor*>(m)); break;
-		default:                 return nullptr;
-		}
-		// The material copy-ctors don't carry the base m_name over, so set it
-		// explicitly to keep name-based lookups / export working per submesh.
-		if (copy) copy->SetName(m->GetName());
-		return copy;
+		return m ? m->clone().release() : nullptr;
 	}
 
 	// Parse the vertex refs of an OBJ 'l'/'p' element line into resolved 0-based
@@ -314,7 +305,7 @@ bool VMeshesIO::import_obj(VMeshes& vm, const char* filename)
 
 	// Safety: the face count must match the flattened mesh. If parsing drifted,
 	// fall back to the single-mesh behaviour rather than mis-assign faces.
-	if ((unsigned int)faceObject.size() != flat->m_nFaces)
+	if ((unsigned int)faceObject.size() != flat->GetNFaces ())
 		nObjects = (nObjects <= 1) ? nObjects : 0;
 
 	// 3a. Zero/one object -> keep the flattened mesh (fast path, no remap).
@@ -329,7 +320,7 @@ bool VMeshesIO::import_obj(VMeshes& vm, const char* filename)
 	for (int obj = 0; obj < nObjects; obj++)
 	{
 		std::vector<unsigned int> faces;
-		for (unsigned int fi = 0; fi < flat->m_nFaces; fi++)
+		for (unsigned int fi = 0; fi < flat->GetNFaces (); fi++)
 			if (faceObject[fi] == obj)
 				faces.push_back(fi);
 
@@ -347,7 +338,7 @@ bool VMeshesIO::import_obj(VMeshes& vm, const char* filename)
 		};
 		for (unsigned int fi : faces)
 		{
-			Face* f = flat->m_pFaces[fi];
+			auto f = flat->FaceAt (fi);
 			for (int c = 0; c < f->GetNVertices(); c++)
 				localVert(f->GetVertex(c));
 		}
@@ -366,12 +357,12 @@ bool VMeshesIO::import_obj(VMeshes& vm, const char* filename)
 		bool anyUV = false;
 		for (unsigned int fi : faces)
 		{
-			Face* f = flat->m_pFaces[fi];
-			if (f->m_bUseTextureCoordinates && f->m_pTextureCoordinatesIndices)
+			auto f = flat->FaceAt (fi);
+			if (f->UsesTextureCoordinates () && f->HasTexCoordIndices ())
 			{
 				anyUV = true;
 				for (int c = 0; c < f->GetNVertices(); c++)
-					localUV((int)f->m_pTextureCoordinatesIndices[c]);
+					localUV((int)f->GetTexCoordIndex (c));
 			}
 		}
 
@@ -382,25 +373,25 @@ bool VMeshesIO::import_obj(VMeshes& vm, const char* filename)
 		for (auto& kv : vmap)
 		{
 			int g = kv.first, l = kv.second;
-			sub->m_pVertices[3 * l]     = flat->m_pVertices[3 * g];
-			sub->m_pVertices[3 * l + 1] = flat->m_pVertices[3 * g + 1];
-			sub->m_pVertices[3 * l + 2] = flat->m_pVertices[3 * g + 2];
+			sub->SetVertexComponent (l, 0, flat->GetVertices ()[3 * g]);
+			sub->SetVertexComponent (l, 1, flat->GetVertices ()[3 * g + 1]);
+			sub->SetVertexComponent (l, 2, flat->GetVertices ()[3 * g + 2]);
 		}
 
 		if (anyUV && !uvmap.empty())
 		{
 			unsigned int nUV = (unsigned int)uvmap.size();
-			sub->m_nTextureCoordinates = nUV;
-			sub->m_pTextureCoordinates.assign(2 * nUV, 0.0f);
+			std::vector<float> subUV (2 * (size_t)nUV, 0.0f);
 			for (auto& kv : uvmap)
 			{
 				int g = kv.first, l = kv.second;
-				if (2u * (unsigned int)g + 1u < flat->m_pTextureCoordinates.size())
+				if (2u * (unsigned int)g + 1u < flat->GetTextureCoordinates ().size())
 				{
-					sub->m_pTextureCoordinates[2 * l]     = flat->m_pTextureCoordinates[2 * g];
-					sub->m_pTextureCoordinates[2 * l + 1] = flat->m_pTextureCoordinates[2 * g + 1];
+					subUV[2 * l]     = flat->GetTextureCoordinates ()[2 * g];
+					subUV[2 * l + 1] = flat->GetTextureCoordinates ()[2 * g + 1];
 				}
 			}
+			sub->SetTextureCoordinates (std::move (subUV), nUV);
 		}
 
 		// materials actually used by this object (cloned; only the used ones)
@@ -418,33 +409,32 @@ bool VMeshesIO::import_obj(VMeshes& vm, const char* filename)
 
 		for (unsigned int k = 0; k < (unsigned int)faces.size(); k++)
 		{
-			Face* src = flat->m_pFaces[faces[k]];
-			Face* dst = sub->m_pFaces[k];
+			auto src = flat->FaceAt (faces[k]);
+			auto dst = sub->FaceAt (k);
 			int nv = src->GetNVertices();
 			dst->SetNVertices((unsigned int)nv);
 			for (int c = 0; c < nv; c++)
 				dst->SetVertex((unsigned int)c, (unsigned int)localVert(src->GetVertex(c)));
 
-			if (src->m_bUseTextureCoordinates && src->m_pTextureCoordinatesIndices)
+			if (src->UsesTextureCoordinates () && src->HasTexCoordIndices ())
 			{
-				dst->m_bUseTextureCoordinates = true;
+				dst->SetUsesTextureCoordinates (true);
 				dst->ActivateTextureCoordinatesIndices();
 				for (int c = 0; c < nv; c++)
 					dst->SetTexCoord((unsigned int)c,
-					                 (unsigned int)localUV((int)src->m_pTextureCoordinatesIndices[c]));
+					                 (unsigned int)localUV((int)src->GetTexCoordIndex (c)));
 			}
 
-			dst->SetMaterialId(localMat(src->m_iMaterialId));
+			dst->SetMaterialId(localMat(src->GetMaterialId ()));
 		}
 
 		for (auto& pl : objPolylines[obj])
 			for (size_t i = 1; i < pl.size(); i++)
 			{
-				sub->m_pLines.push_back((unsigned int)localVert(pl[i - 1]));
-				sub->m_pLines.push_back((unsigned int)localVert(pl[i]));
+				sub->AddLine((unsigned int)localVert(pl[i - 1]), (unsigned int)localVert(pl[i]));
 			}
 		for (int g : objPoints[obj])
-			sub->m_pPoints.push_back((unsigned int)localVert(g));
+			sub->AddPoint((unsigned int)localVert(g));
 
 		sub->ComputeNormals();
 		vm.AddMesh(sub);
@@ -498,12 +488,12 @@ namespace
 			for (size_t k = 0; k + 2 < idx.size(); k += 3)
 			{
 				const unsigned int a = idx[k], b = idx[k+1], c = idx[k+2];
-				if (a >= m->m_nVertices || b >= m->m_nVertices || c >= m->m_nVertices) continue;
+				if (a >= m->GetNVertices () || b >= m->GetNVertices () || c >= m->GetNVertices ()) continue;
 
 				Tri t;
-				t.ax = m->m_pVertices[3*a];   t.ay = m->m_pVertices[3*a+1]; t.az = m->m_pVertices[3*a+2];
-				t.bx = m->m_pVertices[3*b];   t.by = m->m_pVertices[3*b+1]; t.bz = m->m_pVertices[3*b+2];
-				t.cx = m->m_pVertices[3*c];   t.cy = m->m_pVertices[3*c+1]; t.cz = m->m_pVertices[3*c+2];
+				t.ax = m->GetVertices ()[3*a];   t.ay = m->GetVertices ()[3*a+1]; t.az = m->GetVertices ()[3*a+2];
+				t.bx = m->GetVertices ()[3*b];   t.by = m->GetVertices ()[3*b+1]; t.bz = m->GetVertices ()[3*b+2];
+				t.cx = m->GetVertices ()[3*c];   t.cy = m->GetVertices ()[3*c+1]; t.cz = m->GetVertices ()[3*c+2];
 
 				float ux = t.bx - t.ax, uy = t.by - t.ay, uz = t.bz - t.az;
 				float vx = t.cx - t.ax, vy = t.cy - t.ay, vz = t.cz - t.az;
@@ -713,15 +703,15 @@ bool VMeshesIO::import_3ds(VMeshes& vm, const char* filename)
 				TVector4<float> v(ex, -ez, ey, 1.0f);
 				TVector4<float> w = display * v;
 				// Re-apply the swap on the assembled world position.
-				pMesh->m_pVertices[3 * i]     = w.x;
-				pMesh->m_pVertices[3 * i + 1] = w.z;
-				pMesh->m_pVertices[3 * i + 2] = -w.y;
+				pMesh->SetVertexComponent (i, 0, w.x);
+				pMesh->SetVertexComponent (i, 1, w.z);
+				pMesh->SetVertexComponent (i, 2, -w.y);
 			}
 			else
 			{
-				pMesh->m_pVertices[3 * i]     = object.pVerts[i].fX;
-				pMesh->m_pVertices[3 * i + 1] = object.pVerts[i].fY;
-				pMesh->m_pVertices[3 * i + 2] = object.pVerts[i].fZ;
+				pMesh->SetVertexComponent (i, 0, object.pVerts[i].fX);
+				pMesh->SetVertexComponent (i, 1, object.pVerts[i].fY);
+				pMesh->SetVertexComponent (i, 2, object.pVerts[i].fZ);
 			}
 		}
 
@@ -730,9 +720,7 @@ bool VMeshesIO::import_3ds(VMeshes& vm, const char* filename)
 		{
 			for (unsigned int i = 0; i < nVertices; i++)
 			{
-				pMesh->m_pVertexNormals[3 * i] = object.pNormals[i].fX;
-				pMesh->m_pVertexNormals[3 * i + 1] = object.pNormals[i].fY;
-				pMesh->m_pVertexNormals[3 * i + 2] = object.pNormals[i].fZ;
+				pMesh->SetVertexNormal (i, object.pNormals[i].fX, object.pNormals[i].fY, object.pNormals[i].fZ);
 			}
 		}
 
@@ -740,9 +728,9 @@ bool VMeshesIO::import_3ds(VMeshes& vm, const char* filename)
 		{
 			auto face = object.pFaces[i];
 
-			pMesh->m_pFaces[i]->SetNVertices(3);
+			pMesh->FaceAt (i)->SetNVertices(3);
 			for (unsigned int j = 0; j < 3; j++)
-				pMesh->m_pFaces[i]->SetVertex(j, face.vertIndex[j]);
+				pMesh->FaceAt (i)->SetVertex(j, face.vertIndex[j]);
 		}
 
 		pMesh->m_name = std::string(object.strName);
@@ -754,19 +742,23 @@ bool VMeshesIO::import_3ds(VMeshes& vm, const char* filename)
 		if (object.pTexVerts && object.numTexVertex > 0)
 		{
 			const unsigned int nUV = (unsigned int)object.numTexVertex;
-			pMesh->m_pTextureCoordinates.assign(2 * nVertices, 0.0f);
+			// ⚠ Le COMPTE reste a zero sur ce chemin alors que le tableau est
+			// renseigne. Epingle par tu_cgmesh_io ; cf. GetNTextureCoordinates()
+			// dans mesh.h.
+			std::vector<float> uv3ds (2 * (size_t)nVertices, 0.0f);
 			for (unsigned int i = 0; i < nVertices && i < nUV; i++)
 			{
-				pMesh->m_pTextureCoordinates[2 * i]     = object.pTexVerts[i].fU;
+				uv3ds[2 * i]     = object.pTexVerts[i].fU;
 				// 3DS stores V with origin at the bottom; OpenGL samples the
 				// first uploaded row at V=0 (top of the image). Flip V.
-				pMesh->m_pTextureCoordinates[2 * i + 1] = 1.0f - object.pTexVerts[i].fV;
+				uv3ds[2 * i + 1] = 1.0f - object.pTexVerts[i].fV;
 			}
+			pMesh->SetTextureCoordinates (std::move (uv3ds), pMesh->GetNTextureCoordinates ());
 			for (unsigned int i = 0; i < nFaces; i++)
 			{
-				Face* pFace = pMesh->m_pFaces[i];
+				auto pFace = pMesh->FaceAt (i);
 				pFace->ActivateTextureCoordinatesIndices();
-				pFace->m_bUseTextureCoordinates = true;
+				pFace->SetUsesTextureCoordinates (true);
 				pFace->InitTexCoord(); // index = vertex index (UVs are per-vertex)
 			}
 		}
@@ -869,7 +861,7 @@ bool VMeshesIO::import_3ds(VMeshes& vm, const char* filename)
 				{
 					unsigned int faceIdx = matList.pFacesMaterialsList[i];
 					if (faceIdx < nFaces)
-						pMesh->m_pFaces[faceIdx]->SetMaterialId(meshMatId);
+						pMesh->FaceAt (faceIdx)->SetMaterialId(meshMatId);
 				}
 			}
 		}
@@ -1133,9 +1125,7 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
                     normAccessor.type == TINYGLTF_TYPE_VEC3 &&
                     normAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT) {
                     for (size_t i = 0; i < normAccessor.count; i++) {
-                        pMesh->m_pVertexNormals[i * 3] = normals[i * 3];
-                        pMesh->m_pVertexNormals[i * 3 + 1] = normals[i * 3 + 1];
-                        pMesh->m_pVertexNormals[i * 3 + 2] = normals[i * 3 + 2];
+                        pMesh->SetVertexNormal ((unsigned int)i, normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]);
                     }
                     hasNormals = true;
                 }
@@ -1149,25 +1139,25 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
                 const tinygltf::Accessor& texAccessor = model.accessors[texCoordIt->second];
                 if (CopyFloatAccessorVec2(textureCoordinates, model, texAccessor))
                 {
-                    pMesh->m_nTextureCoordinates = static_cast<unsigned int>(texAccessor.count);
-                    pMesh->m_pTextureCoordinates = textureCoordinates;
+                    pMesh->SetTextureCoordinates (textureCoordinates,
+                                                  static_cast<unsigned int>(texAccessor.count));
                 }
             }
 
             if (!hasIndices)
             {
                 for (size_t i = 0; i < triangleCount; i++) {
-                    pMesh->m_pFaces[i]->SetNVertices(3);
-                    pMesh->m_pFaces[i]->SetVertex(0, static_cast<unsigned int>(i * 3));
-                    pMesh->m_pFaces[i]->SetVertex(1, static_cast<unsigned int>(i * 3 + 1));
-                    pMesh->m_pFaces[i]->SetVertex(2, static_cast<unsigned int>(i * 3 + 2));
-                    if (!pMesh->m_pTextureCoordinates.empty())
+                    pMesh->FaceAt (i)->SetNVertices(3);
+                    pMesh->FaceAt (i)->SetVertex(0, static_cast<unsigned int>(i * 3));
+                    pMesh->FaceAt (i)->SetVertex(1, static_cast<unsigned int>(i * 3 + 1));
+                    pMesh->FaceAt (i)->SetVertex(2, static_cast<unsigned int>(i * 3 + 2));
+                    if (!pMesh->GetTextureCoordinates ().empty())
                     {
-                        pMesh->m_pFaces[i]->m_bUseTextureCoordinates = true;
-                        pMesh->m_pFaces[i]->ActivateTextureCoordinatesIndices();
-                        pMesh->m_pFaces[i]->SetTexCoord(0, static_cast<unsigned int>(i * 3));
-                        pMesh->m_pFaces[i]->SetTexCoord(1, static_cast<unsigned int>(i * 3 + 1));
-                        pMesh->m_pFaces[i]->SetTexCoord(2, static_cast<unsigned int>(i * 3 + 2));
+                        pMesh->FaceAt (i)->SetUsesTextureCoordinates (true);
+                        pMesh->FaceAt (i)->ActivateTextureCoordinatesIndices();
+                        pMesh->FaceAt (i)->SetTexCoord(0, static_cast<unsigned int>(i * 3));
+                        pMesh->FaceAt (i)->SetTexCoord(1, static_cast<unsigned int>(i * 3 + 1));
+                        pMesh->FaceAt (i)->SetTexCoord(2, static_cast<unsigned int>(i * 3 + 2));
                     }
                 }
             }
@@ -1179,33 +1169,33 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
                 if (indexAccessor.componentType == 5123) { // TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT = 5123
                     const uint16_t* indices = reinterpret_cast<const uint16_t*>(&indexBuffer.data[indexView.byteOffset + indexAccessor.byteOffset]);
                     for (size_t i = 0; i < triangleCount; i++) {
-                        pMesh->m_pFaces[i]->SetNVertices(3);
-                        pMesh->m_pFaces[i]->SetVertex(0, indices[i * 3]);
-                        pMesh->m_pFaces[i]->SetVertex(1, indices[i * 3 + 1]);
-                        pMesh->m_pFaces[i]->SetVertex(2, indices[i * 3 + 2]);
-                        if (!pMesh->m_pTextureCoordinates.empty())
+                        pMesh->FaceAt (i)->SetNVertices(3);
+                        pMesh->FaceAt (i)->SetVertex(0, indices[i * 3]);
+                        pMesh->FaceAt (i)->SetVertex(1, indices[i * 3 + 1]);
+                        pMesh->FaceAt (i)->SetVertex(2, indices[i * 3 + 2]);
+                        if (!pMesh->GetTextureCoordinates ().empty())
                         {
-                            pMesh->m_pFaces[i]->m_bUseTextureCoordinates = true;
-                            pMesh->m_pFaces[i]->ActivateTextureCoordinatesIndices();
-                            pMesh->m_pFaces[i]->SetTexCoord(0, indices[i * 3]);
-                            pMesh->m_pFaces[i]->SetTexCoord(1, indices[i * 3 + 1]);
-                            pMesh->m_pFaces[i]->SetTexCoord(2, indices[i * 3 + 2]);
+                            pMesh->FaceAt (i)->SetUsesTextureCoordinates (true);
+                            pMesh->FaceAt (i)->ActivateTextureCoordinatesIndices();
+                            pMesh->FaceAt (i)->SetTexCoord(0, indices[i * 3]);
+                            pMesh->FaceAt (i)->SetTexCoord(1, indices[i * 3 + 1]);
+                            pMesh->FaceAt (i)->SetTexCoord(2, indices[i * 3 + 2]);
                         }
                     }
                 } else if (indexAccessor.componentType == 5125) { // TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT = 5125
                     const uint32_t* indices = reinterpret_cast<const uint32_t*>(&indexBuffer.data[indexView.byteOffset + indexAccessor.byteOffset]);
                     for (size_t i = 0; i < triangleCount; i++) {
-                        pMesh->m_pFaces[i]->SetNVertices(3);
-                        pMesh->m_pFaces[i]->SetVertex(0, indices[i * 3]);
-                        pMesh->m_pFaces[i]->SetVertex(1, indices[i * 3 + 1]);
-                        pMesh->m_pFaces[i]->SetVertex(2, indices[i * 3 + 2]);
-                        if (!pMesh->m_pTextureCoordinates.empty())
+                        pMesh->FaceAt (i)->SetNVertices(3);
+                        pMesh->FaceAt (i)->SetVertex(0, indices[i * 3]);
+                        pMesh->FaceAt (i)->SetVertex(1, indices[i * 3 + 1]);
+                        pMesh->FaceAt (i)->SetVertex(2, indices[i * 3 + 2]);
+                        if (!pMesh->GetTextureCoordinates ().empty())
                         {
-                            pMesh->m_pFaces[i]->m_bUseTextureCoordinates = true;
-                            pMesh->m_pFaces[i]->ActivateTextureCoordinatesIndices();
-                            pMesh->m_pFaces[i]->SetTexCoord(0, indices[i * 3]);
-                            pMesh->m_pFaces[i]->SetTexCoord(1, indices[i * 3 + 1]);
-                            pMesh->m_pFaces[i]->SetTexCoord(2, indices[i * 3 + 2]);
+                            pMesh->FaceAt (i)->SetUsesTextureCoordinates (true);
+                            pMesh->FaceAt (i)->ActivateTextureCoordinatesIndices();
+                            pMesh->FaceAt (i)->SetTexCoord(0, indices[i * 3]);
+                            pMesh->FaceAt (i)->SetTexCoord(1, indices[i * 3 + 1]);
+                            pMesh->FaceAt (i)->SetTexCoord(2, indices[i * 3 + 2]);
                         }
                     }
                 }

@@ -123,9 +123,9 @@ int tessellateAndAppend(const TopoDS_Shape& shape, std::vector<Mesh*>& out)
         // Nodes — OCCT indices are 1-based; translate to cgmesh's 0-based.
         for (Standard_Integer i = 1; i <= tri->NbNodes(); ++i) {
             gp_Pnt p = tri->Node(i).Transformed(trsf);
-            m->m_pVertices[3 * (i - 1) + 0] = static_cast<float>(p.X());
-            m->m_pVertices[3 * (i - 1) + 1] = static_cast<float>(p.Y());
-            m->m_pVertices[3 * (i - 1) + 2] = static_cast<float>(p.Z());
+            m->SetVertexComponent ((i - 1), 0, static_cast<float>(p.X()));
+            m->SetVertexComponent ((i - 1), 1, static_cast<float>(p.Y()));
+            m->SetVertexComponent ((i - 1), 2, static_cast<float>(p.Z()));
         }
 
         // Normals — OCCT can carry them on Poly_Triangulation. If the
@@ -136,12 +136,13 @@ int tessellateAndAppend(const TopoDS_Shape& shape, std::vector<Mesh*>& out)
             for (Standard_Integer i = 1; i <= tri->NbNodes(); ++i) {
                 gp_Dir n(tri->Normal(i));
                 if (reversed) n.Reverse();
-                m->m_pVertexNormals[3 * (i - 1) + 0] = static_cast<float>(n.X());
-                m->m_pVertexNormals[3 * (i - 1) + 1] = static_cast<float>(n.Y());
-                m->m_pVertexNormals[3 * (i - 1) + 2] = static_cast<float>(n.Z());
+                m->SetVertexNormal (static_cast<unsigned int>(i - 1),
+                                    static_cast<float>(n.X()),
+                                    static_cast<float>(n.Y()),
+                                    static_cast<float>(n.Z()));
             }
         }
-        // If absent, m_pVertexNormals stays at the zero values set by
+        // If absent, GetVertexNormals () stays at the zero values set by
         // Mesh::InitVertices — the consumer typically falls back to
         // Mesh::ComputeNormals before rendering.
 
@@ -152,7 +153,7 @@ int tessellateAndAppend(const TopoDS_Shape& shape, std::vector<Mesh*>& out)
             Standard_Integer n1, n2, n3;
             tri->Triangle(t).Get(n1, n2, n3);
             if (reversed) std::swap(n2, n3);
-            Face* f = m->m_pFaces[t - 1];
+            auto f = m->FaceAt (t - 1);
             f->SetVertex(0, static_cast<unsigned int>(n1 - 1));
             f->SetVertex(1, static_cast<unsigned int>(n2 - 1));
             f->SetVertex(2, static_cast<unsigned int>(n3 - 1));
@@ -177,8 +178,8 @@ int tessellateAndAppend(const TopoDS_Shape& shape, std::vector<Mesh*>& out)
     // MapShapesAndAncestors gives each edge its owner faces (empty list => free)
     // and each vertex its owner edges (empty list => explicit point).
     //
-    // Line vertices go into m_pVertices (indexed by m_pLines); only genuinely
-    // standalone points go into m_pPoints — same convention as the OBJ l/p path.
+    // Line vertices go into m_pVertices (indexed by the line segments); only genuinely
+    // standalone points go into the mesh point list — same convention as the OBJ l/p path.
     std::vector<float>        wireVerts;   // xyz, flat
     std::vector<unsigned int> wireLines;   // two vertex indices per segment
     std::vector<unsigned int> wirePoints;  // one vertex index per explicit point
@@ -231,10 +232,9 @@ int tessellateAndAppend(const TopoDS_Shape& shape, std::vector<Mesh*>& out)
         const unsigned int nv = static_cast<unsigned int>(wireVerts.size() / 3);
         Mesh* w = new Mesh();
         w->Init(nv, 0);   // 0 faces: a pure wireframe / point mesh
-        for (size_t k = 0; k < wireVerts.size(); ++k)
-            w->m_pVertices[k] = wireVerts[k];
-        w->m_pLines  = std::move(wireLines);
-        w->m_pPoints = std::move(wirePoints);
+        w->SetVertices (nv, wireVerts.data());
+        w->SetLines(std::move(wireLines));
+        w->SetPoints(std::move(wirePoints));
         w->computebbox();
 
         out.push_back(w);

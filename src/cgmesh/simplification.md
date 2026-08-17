@@ -418,7 +418,7 @@ La structure (`half_edge.h:11-78`) est une SoA indexée par entiers (`m_pair`, `
 
 ### Méthode 5 (évaluation) — Distance de Hausdorff : briques spatiales présentes, métrique à écrire
 
-**[VÉRIFIÉ]** `bvh.{h,cpp}` et `octree.{h,cpp}` existent (requêtes spatiales / plus-proche-triangle). `Mesh::GetIntersectionWithRayInOctree` (`mesh.cpp:1407+`) montre l'usage octree. NON lus en détail (déclaré). Manque : échantillonnage + plus-proche-point sur maillage cible, puis max des distances (one-sided + symétrique). **[OPINION]** réservé à l'évaluation/critère d'arrêt qualité ; pas sur le chemin critique du MVP.
+**[VÉRIFIÉ]** `bvh.{h,cpp}` et `octree.{h,cpp}` existent (requêtes spatiales / plus-proche-triangle). `mesh_raycast.{h,cpp}` montre l'usage octree (la phase 1a y a déplacé l'ancienne `Mesh::GetIntersectionWithRayInOctree`). NON lus en détail (déclaré). Manque : échantillonnage + plus-proche-point sur maillage cible, puis max des distances (one-sided + symétrique). **[OPINION]** réservé à l'évaluation/critère d'arrêt qualité ; pas sur le chemin critique du MVP.
 
 ### Brique transverse n.3 — File de priorité : ABSENTE dans cgmesh
 

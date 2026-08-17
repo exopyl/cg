@@ -267,20 +267,18 @@ Mesh* CreateDisk (unsigned int nVertices)
 {
 	Mesh *mesh = new Mesh (nVertices, 1);
 
-	float *pVertices = mesh->m_pVertices.data();
 	for (unsigned int i=0; i<nVertices; i++)
 	{
 		float fAngle = i*2*M_PI/(nVertices);
-		pVertices[3*i+0] = cos(fAngle);
-		pVertices[3*i+1] = sin(fAngle);
-		pVertices[3*i+2] = 0.;
+		mesh->SetVertexComponent (i, 0, cos(fAngle));
+		mesh->SetVertexComponent (i, 1, sin(fAngle));
+		mesh->SetVertexComponent (i, 2, 0.);
 	}
 
-	Face *pFace = new Face ();
+	auto pFace = mesh->FaceAt (0);
 	pFace->SetNVertices (nVertices);
 	for (unsigned int i=0; i<nVertices; i++)
-		pFace->m_pVertices[i] = i;
-	mesh->m_pFaces[0] = pFace;
+		pFace->SetVertex (i, i);
 
 	return mesh;
 }
@@ -294,31 +292,28 @@ Mesh* CreateCone (float fHeight, float fRadius, unsigned int nVertices, bool bCa
 	unsigned int nf = (bCap)? nVertices+1 : nVertices;
 	Mesh *mesh = new Mesh (nv, nf);
 
-	float *pVertices = mesh->m_pVertices.data();
-	pVertices[0] = 0.;
-	pVertices[1] = 0.;
-	pVertices[2] = fHeight;
+	mesh->SetVertexComponent (0, 0, 0.);
+	mesh->SetVertexComponent (0, 1, 0.);
+	mesh->SetVertexComponent (0, 2, fHeight);
 	for (unsigned int i=1; i<=nVertices; i++)
 	{
 		float fAngle = (i-1)*2*M_PI/(nVertices);
-		pVertices[3*i+0] = fRadius * cos(fAngle);
-		pVertices[3*i+1] = fRadius * sin(fAngle);
-		pVertices[3*i+2] = 0.;
+		mesh->SetVertexComponent (i, 0, fRadius * cos(fAngle));
+		mesh->SetVertexComponent (i, 1, fRadius * sin(fAngle));
+		mesh->SetVertexComponent (i, 2, 0.);
 	}
 
 	for (unsigned int i=0; i<nVertices; i++)
 	{
-		Face *pFace = new Face ();
+		auto pFace = mesh->FaceAt (i);
 		pFace->SetTriangle (0, i+1, (i==(nVertices-1))? 1 : i+2);
-		mesh->m_pFaces[i] = pFace;
 	}
 	if (bCap)
 	{
-		Face *pFace = new Face ();
+		auto pFace = mesh->FaceAt (nVertices);
 		pFace->SetNVertices (nVertices);
 		for (unsigned int i=0; i<nVertices; i++)
-			pFace->m_pVertices[i] = nVertices-i;
-		mesh->m_pFaces[nVertices] = pFace;
+			pFace->SetVertex (i, nVertices-i);
 	
 	}
 
@@ -338,17 +333,16 @@ Mesh* CreateCylinder (float fHeight, float fRadius, unsigned int nVertices, bool
 		nf = (bCap)? 2*nVertices+2*(nVertices-2) : 2*nVertices;
 	Mesh *mesh = new Mesh (nv, nf);
 
-	float *pVertices = mesh->m_pVertices.data();
 	for (unsigned int i=0; i<nVertices; i++)
 	{
 		float fAngle = i*2*M_PI/(nVertices);
-		pVertices[3*i+0] = fRadius * cos(fAngle);
-		pVertices[3*i+1] = fRadius * sin(fAngle);
-		pVertices[3*i+2] = 0.;
+		mesh->SetVertexComponent (i, 0, fRadius * cos(fAngle));
+		mesh->SetVertexComponent (i, 1, fRadius * sin(fAngle));
+		mesh->SetVertexComponent (i, 2, 0.);
 
-		pVertices[3*(nVertices+i)+0] = pVertices[3*i+0];
-		pVertices[3*(nVertices+i)+1] = pVertices[3*i+1];
-		pVertices[3*(nVertices+i)+2] = fHeight;
+		mesh->SetVertexComponent ((nVertices+i), 0, mesh->GetVertices ()[3*i+0]);
+		mesh->SetVertexComponent ((nVertices+i), 1, mesh->GetVertices ()[3*i+1]);
+		mesh->SetVertexComponent ((nVertices+i), 2, fHeight);
 	}
 
 	if (bTriangular)
@@ -356,13 +350,11 @@ Mesh* CreateCylinder (float fHeight, float fRadius, unsigned int nVertices, bool
 		unsigned int fi = 0;
 		for (unsigned int i=0; i<nVertices; i++)
 		{
-			Face *pFace1 = new Face ();
+			auto pFace1 = mesh->FaceAt (fi++);
 			pFace1->SetTriangle (i, (i+1)%nVertices, nVertices+(i+1)%nVertices);
-			mesh->m_pFaces[fi++] = pFace1;
 
-			Face *pFace2 = new Face ();
+			auto pFace2 = mesh->FaceAt (fi++);
 			pFace2->SetTriangle (i, nVertices+(i+1)%nVertices, nVertices+i);
-			mesh->m_pFaces[fi++] = pFace2;
 		}
 		if (bCap)
 		{
@@ -372,9 +364,8 @@ Mesh* CreateCylinder (float fHeight, float fRadius, unsigned int nVertices, bool
 			// nVertices` est equivalente des nVertices >= 1 et ne deborde pas.
 			for (unsigned int i=1; i+1<nVertices; i++)
 			{
-				Face *pFaceTop = new Face ();
+				auto pFaceTop = mesh->FaceAt (fi++);
 				pFaceTop->SetTriangle (nVertices, nVertices+i, nVertices+(i+1)%nVertices);
-				mesh->m_pFaces[fi++] = pFaceTop;
 			}
 			// `i<nVertices-1` sur un unsigned : a nVertices == 0, la soustraction
 			// deborde vers UINT_MAX, la boucle tourne, et le `%nVertices` du corps
@@ -382,9 +373,8 @@ Mesh* CreateCylinder (float fHeight, float fRadius, unsigned int nVertices, bool
 			// nVertices` est equivalente des nVertices >= 1 et ne deborde pas.
 			for (unsigned int i=1; i+1<nVertices; i++)
 			{
-				Face *pFaceBottom = new Face ();
+				auto pFaceBottom = mesh->FaceAt (fi++);
 				pFaceBottom->SetTriangle (0, nVertices-i, nVertices-(i+1)%nVertices);
-				mesh->m_pFaces[fi++] = pFaceBottom;
 			}
 		}
 	}
@@ -392,28 +382,25 @@ Mesh* CreateCylinder (float fHeight, float fRadius, unsigned int nVertices, bool
 	{
 		for (unsigned int i=0; i<nVertices; i++)
 		{
-			Face *pFace = new Face ();
+			auto pFace = mesh->FaceAt (i);
 			pFace->SetQuad (i, i+1, nVertices+i+1, nVertices+i);
 			if (i==nVertices-1)
 			{
-				pFace->m_pVertices[1] = 0;
-				pFace->m_pVertices[2] = nVertices;
+				pFace->SetVertex (1, 0);
+				pFace->SetVertex (2, nVertices);
 			}
-			mesh->m_pFaces[i] = pFace;
 		}
 		if (bCap)
 		{
-			Face *pFaceTop = new Face ();
+			auto pFaceTop = mesh->FaceAt (nVertices);
 			pFaceTop->SetNVertices (nVertices);
-			Face *pFaceBottom = new Face ();
+			auto pFaceBottom = mesh->FaceAt (nVertices+1);
 			pFaceBottom->SetNVertices (nVertices);
 			for (unsigned int i=0; i<nVertices; i++)
 			{
-				pFaceTop->m_pVertices[i] = nVertices+i;
-				pFaceBottom->m_pVertices[i] = nVertices-i-1;
+				pFaceTop->SetVertex (i, nVertices+i);
+				pFaceBottom->SetVertex (i, nVertices-i-1);
 			}
-			mesh->m_pFaces[nVertices] = pFaceTop;
-			mesh->m_pFaces[nVertices+1] = pFaceBottom;
 		}
 	}
 
@@ -439,7 +426,7 @@ Mesh* CreateCapsule (unsigned int n, float height, float radius)
 	// juste par coincidence pour n PAIR (ou nhalf = n/2 annule l'ecart), mais deux
 	// faces de trop pour n IMPAIR. Comme InitFaces() pre-alloue un Face() par slot,
 	// ces deux slots restaient des faces a ZERO sommet, et ComputeNormals() lisait
-	// pFace->m_pVertices[0] hors bornes -- crash sur toute capsule a n impair.
+	// pFace->GetVertices ()[0] hors bornes -- crash sur toute capsule a n impair.
 	unsigned int nFaces = 4*n*nhalf;
 	Mesh *mesh = new Mesh (nVertices, nFaces);
 
@@ -522,14 +509,12 @@ Mesh* CreateCapsule (unsigned int n, float height, float radius)
             a = voffsettop + j*n+i;
             b = voffsettop + j*n+(i+1)%n;
             c = voffsettop + (j+1)*n+(i+1)%n;
-	    mesh->m_pFaces[iface] = new Face ();
-	    mesh->m_pFaces[iface++]->SetTriangle (a, b, c);
+	    mesh->FaceAt (iface++)->SetTriangle (a, b, c);
 
             a = voffsettop + j*n+i;
             b = voffsettop + (j+1)*n+(i+1)%n;
             c = voffsettop + (j+1)*n+i;
-            mesh->m_pFaces[iface] = new Face ();
-	    mesh->m_pFaces[iface++]->SetTriangle (a, b, c);
+	    mesh->FaceAt (iface++)->SetTriangle (a, b, c);
         }
 
     for (unsigned int i=0; i<n; i++)
@@ -537,8 +522,7 @@ Mesh* CreateCapsule (unsigned int n, float height, float radius)
         a = voffsettop + n*nhalf;
         b = voffsettop + n*(nhalf-1) + i;
         c = voffsettop + n*(nhalf-1) + (i+1)%n;
-        mesh->m_pFaces[iface] = new Face ();
-	mesh->m_pFaces[iface++]->SetTriangle (a, b, c);
+	mesh->FaceAt (iface++)->SetTriangle (a, b, c);
     }
 
     // bottom
@@ -549,14 +533,12 @@ Mesh* CreateCapsule (unsigned int n, float height, float radius)
             a = voffsettop + j*n+i;
             b = voffsettop + (j+1)*n+(i+1)%n;
             c = voffsettop + j*n+(i+1)%n;
-            mesh->m_pFaces[iface] = new Face ();
-	    mesh->m_pFaces[iface++]->SetTriangle (a, b, c);
+	    mesh->FaceAt (iface++)->SetTriangle (a, b, c);
 
             a = voffsettop + j*n+i;
             b = voffsettop + (j+1)*n+i;
             c = voffsettop + (j+1)*n+(i+1)%n;
-            mesh->m_pFaces[iface] = new Face ();
-	    mesh->m_pFaces[iface++]->SetTriangle (a, b, c);
+	    mesh->FaceAt (iface++)->SetTriangle (a, b, c);
         }
 
     for (unsigned int i=0; i<n; i++)
@@ -564,8 +546,7 @@ Mesh* CreateCapsule (unsigned int n, float height, float radius)
         a = voffsettop + n*nhalf;
         b = voffsettop + n*(nhalf-1) + (i+1)%n;
         c = voffsettop + n*(nhalf-1) + i;
-        mesh->m_pFaces[iface] = new Face ();
-	mesh->m_pFaces[iface++]->SetTriangle (a, b, c);
+	mesh->FaceAt (iface++)->SetTriangle (a, b, c);
     }
 
     // body
@@ -574,14 +555,12 @@ Mesh* CreateCapsule (unsigned int n, float height, float radius)
         a = (j+1)%n;
         b = j;
         c = voffsettop+j;
-        mesh->m_pFaces[iface] = new Face ();
-	mesh->m_pFaces[iface++]->SetTriangle (a, b, c);
+	mesh->FaceAt (iface++)->SetTriangle (a, b, c);
 
         a = (j+1)%n;
         b = voffsettop+j;
         c = voffsettop+(j+1)%n;
-        mesh->m_pFaces[iface] = new Face ();
-	mesh->m_pFaces[iface++]->SetTriangle (a, b, c);
+	mesh->FaceAt (iface++)->SetTriangle (a, b, c);
     }
 
     return mesh;
@@ -598,17 +577,16 @@ Mesh* CreateTeapot (void)
 	// create vertices
 	for (unsigned int i=0; i<nVertices; i++)
 	{
-		mesh->m_pVertices[3*i+0] = TeapotData_Vertex[i][0];
-		mesh->m_pVertices[3*i+1] = TeapotData_Vertex[i][1];
-		mesh->m_pVertices[3*i+2] = TeapotData_Vertex[i][2];
+		mesh->SetVertexComponent (i, 0, TeapotData_Vertex[i][0]);
+		mesh->SetVertexComponent (i, 1, TeapotData_Vertex[i][1]);
+		mesh->SetVertexComponent (i, 2, TeapotData_Vertex[i][2]);
 	}
 
 	// create faces
 	for (unsigned int i=0; i<nFaces; i++)
 	{
-		Face *pFace = new Face ();
+		auto pFace = mesh->FaceAt (i);
 		pFace->SetTriangle (TeapotData_Face[3*i], TeapotData_Face[3*i+1], TeapotData_Face[3*i+2]);
-		mesh->m_pFaces[i] = pFace;
 	}
 
 	return mesh;
@@ -706,10 +684,8 @@ Mesh* CreateKleinBottle (int ThetaResolution, int PhiResolution)
 				i4 -= nVerticesInSlice;
 			}
 
-			mesh->m_pFaces[fi] = new Face ();
-			mesh->m_pFaces[fi++]->SetTriangle (i1, i2, i3);
-			mesh->m_pFaces[fi] = new Face ();
-			mesh->m_pFaces[fi++]->SetTriangle (i2, i4, i3);
+			mesh->FaceAt (fi++)->SetTriangle (i1, i2, i3);
+			mesh->FaceAt (fi++)->SetTriangle (i2, i4, i3);
 		}
 	}
 
@@ -725,23 +701,20 @@ Mesh* CreateKleinBottle (int ThetaResolution, int PhiResolution)
 		if (i4<0)
 			i4 = nVerticesInSlice-(i+1-nVerticesInSlice/2);
 
-		mesh->m_pFaces[fi] = new Face ();
-		mesh->m_pFaces[fi++]->SetTriangle (i1, i2, i3);
-		mesh->m_pFaces[fi] = new Face ();
-		mesh->m_pFaces[fi++]->SetTriangle (i2, i4, i3);
+		mesh->FaceAt (fi++)->SetTriangle (i1, i2, i3);
+		mesh->FaceAt (fi++)->SetTriangle (i2, i4, i3);
 	}
 	i1 = i1+1;
 	i2 = i2+1-nVerticesInSlice;
 	i3 = (i3 == 0)? nVerticesInSlice-1 : i3-1;
 	i4 = (i4 == 0)? nVerticesInSlice-1 : i4-1;
-	mesh->m_pFaces[fi] = new Face ();
-	mesh->m_pFaces[fi++]->SetTriangle (i1, i2, i3);
-	mesh->m_pFaces[fi] = new Face ();
-	mesh->m_pFaces[fi++]->SetTriangle (i2, i4, i3);
+	mesh->FaceAt (fi++)->SetTriangle (i1, i2, i3);
+	mesh->FaceAt (fi++)->SetTriangle (i2, i4, i3);
 
-	mesh->m_nVertices = vi;
-	mesh->m_nFaces = fi;
-
+	// Ni le compte de sommets ni celui de faces n'est ajuste ici : les boucles
+	// entieres produisent exactement vn = T*P sommets et fn = 2*T*P faces, ce que
+	// le constructeur a deja pose. Les affectations qui se trouvaient ici etaient
+	// des no-ops.
 	return mesh;
 }
 

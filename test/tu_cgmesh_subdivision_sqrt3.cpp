@@ -90,16 +90,16 @@ make_flat_triangle ()
 static std::array<float,3>
 get_vertex (Mesh *m, int i)
 {
-	return { m->m_pVertices[3*i], m->m_pVertices[3*i+1], m->m_pVertices[3*i+2] };
+	return { m->GetVertices ()[3*i], m->GetVertices ()[3*i+1], m->GetVertices ()[3*i+2] };
 }
 
 static int
 count_unique_edges (Mesh *m)
 {
 	std::set<std::pair<int,int>> uniq;
-	for (unsigned int f = 0; f < m->m_nFaces; ++f)
+	for (unsigned int f = 0; f < m->GetNFaces (); ++f)
 	{
-		Face *F = m->m_pFaces[f];
+		auto F = m->FaceAt (f);
 		if (F->GetNVertices() != 3) continue;
 		int a = F->GetVertex(0), b = F->GetVertex(1), c = F->GetVertex(2);
 		auto add = [&](int u, int v) {
@@ -115,9 +115,9 @@ count_unique_edges (Mesh *m)
 static bool
 has_edge (Mesh *m, int a, int b)
 {
-	for (unsigned int f = 0; f < m->m_nFaces; ++f)
+	for (unsigned int f = 0; f < m->GetNFaces (); ++f)
 	{
-		Face *F = m->m_pFaces[f];
+		auto F = m->FaceAt (f);
 		if (F->GetNVertices() != 3) continue;
 		int x = F->GetVertex(0), y = F->GetVertex(1), z = F->GetVertex(2);
 		if ((x == a && y == b) || (y == a && x == b)) return true;
@@ -139,15 +139,15 @@ TEST(TEST_cgmesh_subdivision_sqrt3, CubeCounts)
 	Mesh_half_edge *he = make_unit_cube ();
 	Mesh *m = he->m_pMesh;
 
-	const int nv0 = (int)m->m_nVertices;
-	const int nf0 = (int)m->m_nFaces;
+	const int nv0 = (int)m->GetNVertices ();
+	const int nf0 = (int)m->GetNFaces ();
 
 	MeshAlgoSubdivisionSqrt3 algo;
 	EXPECT_TRUE (algo.GetSmoothOriginal ());   // default on
 	ASSERT_TRUE (algo.Apply (he));
 
-	EXPECT_EQ ((int)m->m_nVertices, nv0 + nf0);
-	EXPECT_EQ ((int)m->m_nFaces, 3 * nf0);
+	EXPECT_EQ ((int)m->GetNVertices (), nv0 + nf0);
+	EXPECT_EQ ((int)m->GetNFaces (), 3 * nf0);
 
 	delete he;
 }
@@ -157,14 +157,14 @@ TEST(TEST_cgmesh_subdivision_sqrt3, TetrahedronCounts)
 	Mesh_half_edge *he = make_tetrahedron ();
 	Mesh *m = he->m_pMesh;
 
-	const int nv0 = (int)m->m_nVertices;
-	const int nf0 = (int)m->m_nFaces;
+	const int nv0 = (int)m->GetNVertices ();
+	const int nf0 = (int)m->GetNFaces ();
 
 	MeshAlgoSubdivisionSqrt3 algo;
 	ASSERT_TRUE (algo.Apply (he));
 
-	EXPECT_EQ ((int)m->m_nVertices, nv0 + nf0);
-	EXPECT_EQ ((int)m->m_nFaces, 3 * nf0);
+	EXPECT_EQ ((int)m->GetNVertices (), nv0 + nf0);
+	EXPECT_EQ ((int)m->GetNFaces (), 3 * nf0);
 
 	delete he;
 }
@@ -186,9 +186,9 @@ TEST(TEST_cgmesh_subdivision_sqrt3, NoSmoothingPreservesCorners)
 
 	for (int i = 0; i < 8; ++i)
 	{
-		EXPECT_NEAR (m->m_pVertices[3*i+0], corners[i][0], 1e-5f);
-		EXPECT_NEAR (m->m_pVertices[3*i+1], corners[i][1], 1e-5f);
-		EXPECT_NEAR (m->m_pVertices[3*i+2], corners[i][2], 1e-5f);
+		EXPECT_NEAR (m->GetVertices ()[3*i+0], corners[i][0], 1e-5f);
+		EXPECT_NEAR (m->GetVertices ()[3*i+1], corners[i][1], 1e-5f);
+		EXPECT_NEAR (m->GetVertices ()[3*i+2], corners[i][2], 1e-5f);
 	}
 
 	delete he;
@@ -233,18 +233,18 @@ TEST(TEST_cgmesh_subdivision_sqrt3, CentroidPlacement)
 	Mesh_half_edge *he = make_unit_cube ();
 	Mesh *m = he->m_pMesh;
 
-	const int nv0 = (int)m->m_nVertices;
+	const int nv0 = (int)m->GetNVertices ();
 
 	// Capture original face centroids.
 	std::vector<std::array<double,3>> bary;
-	for (unsigned int f = 0; f < m->m_nFaces; ++f)
+	for (unsigned int f = 0; f < m->GetNFaces (); ++f)
 	{
-		Face *F = m->m_pFaces[f];
+		auto F = m->FaceAt (f);
 		int a = F->GetVertex(0), b = F->GetVertex(1), c = F->GetVertex(2);
 		bary.push_back ({
-			(m->m_pVertices[3*a]   + m->m_pVertices[3*b]   + m->m_pVertices[3*c])   / 3.0,
-			(m->m_pVertices[3*a+1] + m->m_pVertices[3*b+1] + m->m_pVertices[3*c+1]) / 3.0,
-			(m->m_pVertices[3*a+2] + m->m_pVertices[3*b+2] + m->m_pVertices[3*c+2]) / 3.0
+			(m->GetVertices ()[3*a]   + m->GetVertices ()[3*b]   + m->GetVertices ()[3*c])   / 3.0,
+			(m->GetVertices ()[3*a+1] + m->GetVertices ()[3*b+1] + m->GetVertices ()[3*c+1]) / 3.0,
+			(m->GetVertices ()[3*a+2] + m->GetVertices ()[3*b+2] + m->GetVertices ()[3*c+2]) / 3.0
 		});
 	}
 
@@ -253,11 +253,11 @@ TEST(TEST_cgmesh_subdivision_sqrt3, CentroidPlacement)
 	ASSERT_TRUE (algo.Apply (he));
 
 	// Each of the 12 new vertices must coincide with one of the 12 captured centroids.
-	for (unsigned int i = nv0; i < m->m_nVertices; ++i)
+	for (unsigned int i = nv0; i < m->GetNVertices (); ++i)
 	{
-		double x = m->m_pVertices[3*i+0];
-		double y = m->m_pVertices[3*i+1];
-		double z = m->m_pVertices[3*i+2];
+		double x = m->GetVertices ()[3*i+0];
+		double y = m->GetVertices ()[3*i+1];
+		double z = m->GetVertices ()[3*i+2];
 		double best = 1e9;
 		for (auto &b : bary)
 		{
@@ -304,8 +304,8 @@ TEST(TEST_cgmesh_subdivision_sqrt3, BoundaryEdgesNotFlipped)
 	ASSERT_TRUE (algo.Apply (he));
 
 	// nv : 3 -> 4, nf : 1 -> 3
-	ASSERT_EQ ((int)m->m_nVertices, 4);
-	ASSERT_EQ ((int)m->m_nFaces, 3);
+	ASSERT_EQ ((int)m->GetNVertices (), 4);
+	ASSERT_EQ ((int)m->GetNFaces (), 3);
 
 	// All 3 original edges {0,1}, {1,2}, {2,0} must STILL be present
 	// (boundary edges aren't flipped).
@@ -367,14 +367,14 @@ TEST(TEST_cgmesh_subdivision_sqrt3, FaceIndicesValid)
 	MeshAlgoSubdivisionSqrt3 algo;
 	ASSERT_TRUE (algo.Apply (he));
 
-	for (unsigned int f = 0; f < m->m_nFaces; ++f)
+	for (unsigned int f = 0; f < m->GetNFaces (); ++f)
 	{
-		Face *F = m->m_pFaces[f];
+		auto F = m->FaceAt (f);
 		ASSERT_EQ (F->GetNVertices(), 3);
 		int a = F->GetVertex(0), b = F->GetVertex(1), c = F->GetVertex(2);
-		EXPECT_GE (a, 0); EXPECT_LT ((unsigned)a, m->m_nVertices);
-		EXPECT_GE (b, 0); EXPECT_LT ((unsigned)b, m->m_nVertices);
-		EXPECT_GE (c, 0); EXPECT_LT ((unsigned)c, m->m_nVertices);
+		EXPECT_GE (a, 0); EXPECT_LT ((unsigned)a, m->GetNVertices ());
+		EXPECT_GE (b, 0); EXPECT_LT ((unsigned)b, m->GetNVertices ());
+		EXPECT_GE (c, 0); EXPECT_LT ((unsigned)c, m->GetNVertices ());
 		EXPECT_NE (a, b);
 		EXPECT_NE (b, c);
 		EXPECT_NE (a, c);
@@ -389,7 +389,7 @@ TEST(TEST_cgmesh_subdivision_sqrt3, EulerCharacteristicPreservedOnCube)
 	Mesh *m = he->m_pMesh;
 
 	auto chi = [](Mesh *mm) {
-		return (int)mm->m_nVertices - count_unique_edges (mm) + (int)mm->m_nFaces;
+		return (int)mm->GetNVertices () - count_unique_edges (mm) + (int)mm->GetNFaces ();
 	};
 	EXPECT_EQ (chi (m), 2);
 
@@ -417,7 +417,7 @@ TEST(TEST_cgmesh_subdivision_sqrt3, MultipleIterationsGrowAs3Power)
 	{
 		ASSERT_TRUE (algo.Apply (he));
 		nf_expected *= 3;
-		EXPECT_EQ ((int)m->m_nFaces, nf_expected) << "iter " << it;
+		EXPECT_EQ ((int)m->GetNFaces (), nf_expected) << "iter " << it;
 	}
 
 	delete he;
@@ -432,7 +432,7 @@ TEST(TEST_cgmesh_subdivision_sqrt3, NewVerticesHaveValenceSix)
 	Mesh_half_edge *he = make_unit_cube ();
 	Mesh *m = he->m_pMesh;
 
-	const int nv0 = (int)m->m_nVertices;
+	const int nv0 = (int)m->GetNVertices ();
 
 	MeshAlgoSubdivisionSqrt3 algo;
 	algo.SetSmoothOriginal (false);
@@ -440,17 +440,17 @@ TEST(TEST_cgmesh_subdivision_sqrt3, NewVerticesHaveValenceSix)
 
 	// For each new vertex (index >= nv0), count incident faces (= valence
 	// in our face-based connectivity check).
-	std::vector<std::set<int>> nbrs (m->m_nVertices);
-	for (unsigned int f = 0; f < m->m_nFaces; ++f)
+	std::vector<std::set<int>> nbrs (m->GetNVertices ());
+	for (unsigned int f = 0; f < m->GetNFaces (); ++f)
 	{
-		Face *F = m->m_pFaces[f];
+		auto F = m->FaceAt (f);
 		int a = F->GetVertex(0), b = F->GetVertex(1), c = F->GetVertex(2);
 		nbrs[a].insert(b); nbrs[a].insert(c);
 		nbrs[b].insert(a); nbrs[b].insert(c);
 		nbrs[c].insert(a); nbrs[c].insert(b);
 	}
 
-	for (int v = nv0; v < (int)m->m_nVertices; ++v)
+	for (int v = nv0; v < (int)m->GetNVertices (); ++v)
 	{
 		EXPECT_EQ ((int)nbrs[v].size(), 6) << "new vertex " << v
 			<< " has valence " << nbrs[v].size() << " (expected 6)";

@@ -217,8 +217,8 @@ Cmesh_orientation_curvatures::finalize_orientation (void)
   // zero au calcul du centre.
   if (model3d_half_edge == nullptr)
     return;
-  int n_vertices = model3d_half_edge->m_pMesh->m_nVertices;
-  float *v_orig = model3d_half_edge->m_pMesh->m_pVertices.data();
+  int n_vertices = model3d_half_edge->m_pMesh->GetNVertices ();
+  const float *v_orig = model3d_half_edge->m_pMesh->GetVertices ().data();
   if (n_vertices <= 0 || v_orig == nullptr)
     return;
   

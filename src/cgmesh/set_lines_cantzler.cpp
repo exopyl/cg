@@ -12,10 +12,10 @@
 
 void Cset_lines::cantzler_extract_edges (float threshold)
 {
-	float *fn = model->m_pMesh->m_pFaceNormals.data();
-	float *v = model->m_pMesh->m_pVertices.data();
-	int nv = model->m_pMesh->m_nVertices;
-	int ne = 3*model->m_pMesh->m_nFaces;
+	const float *fn = model->m_pMesh->GetFaceNormals ().data();
+	const float *v = model->m_pMesh->GetVertices ().data();
+	int nv = model->m_pMesh->GetNVertices ();
+	int ne = 3*model->m_pMesh->GetNFaces ();
 	Che_mesh *cheMesh = model->GetCheMesh();
 
 	// visited half edges

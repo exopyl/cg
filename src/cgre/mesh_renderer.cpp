@@ -73,18 +73,18 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 		glColor3f (1., 0., 0.);
 		glPointSize (prop.pointsize);
 		glBegin (GL_POINTS);
-		for (unsigned int i=0; i<mesh->m_nVertices; i++)
+		for (unsigned int i=0; i<mesh->GetNVertices (); i++)
 		{
 			// Lighting is disabled for this pass (above), so per-vertex colours
 			// from a coloured cloud (.ply/.pset/.pts) must be applied whenever
 			// present — gating on !prop.light left coloured clouds all red.
-			if (!mesh->m_pVertexColors.empty())
-				glColor3f (mesh->m_pVertexColors[3*i],
-					   mesh->m_pVertexColors[3*i+1],
-					   mesh->m_pVertexColors[3*i+2]);
-			glVertex3f (mesh->m_pVertices[3*i],
-				    mesh->m_pVertices[3*i+1],
-				    mesh->m_pVertices[3*i+2]);
+			if (!mesh->GetVertexColors ().empty())
+				glColor3f (mesh->GetVertexColors ()[3*i],
+					   mesh->GetVertexColors ()[3*i+1],
+					   mesh->GetVertexColors ()[3*i+2]);
+			glVertex3f (mesh->GetVertices ()[3*i],
+				    mesh->GetVertices ()[3*i+1],
+				    mesh->GetVertices ()[3*i+2]);
 		}
 		glEnd ();
 		glPopAttrib ();
@@ -99,14 +99,14 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 		glLineWidth (2.f);
 		glColor3f (0., 0., 1.);
 		glBegin (GL_LINES);
-		for (unsigned int i=0; i<mesh->m_nVertices; i++)
+		for (unsigned int i=0; i<mesh->GetNVertices (); i++)
 		{
-			glVertex3f (mesh->m_pVertices[3*i],
-				    mesh->m_pVertices[3*i+1],
-				    mesh->m_pVertices[3*i+2]);
-			glVertex3f (mesh->m_pVertices[3*i] + fVertexNormalsScale*mesh->m_pVertexNormals[3*i],
-				    mesh->m_pVertices[3*i+1] + fVertexNormalsScale*mesh->m_pVertexNormals[3*i+1],
-				    mesh->m_pVertices[3*i+2] + fVertexNormalsScale*mesh->m_pVertexNormals[3*i+2]);
+			glVertex3f (mesh->GetVertices ()[3*i],
+				    mesh->GetVertices ()[3*i+1],
+				    mesh->GetVertices ()[3*i+2]);
+			glVertex3f (mesh->GetVertices ()[3*i] + fVertexNormalsScale*mesh->GetVertexNormals ()[3*i],
+				    mesh->GetVertices ()[3*i+1] + fVertexNormalsScale*mesh->GetVertexNormals ()[3*i+1],
+				    mesh->GetVertices ()[3*i+2] + fVertexNormalsScale*mesh->GetVertexNormals ()[3*i+2]);
 		}
 		glEnd ();
 		glPopAttrib ();
@@ -120,9 +120,9 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 
 		int i_current_material = -1;
 
-		for (unsigned int i=0; i<mesh->m_nFaces; i++)
+		for (unsigned int i=0; i<mesh->GetNFaces (); i++)
 		{
-			Face *pFace = mesh->m_pFaces[i];
+			auto pFace = mesh->FaceAt (i);
 			
 			// Material management
 			int meshMatId = pFace->GetMaterialId();
@@ -147,118 +147,118 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 					}
 				}
 			}
-			if (pFace->m_nVertices == 3)
+			if (pFace->GetNVertices () == 3)
 			{
-				unsigned int a = pFace->m_pVertices[0];
-				unsigned int b = pFace->m_pVertices[1];
-				unsigned int c = pFace->m_pVertices[2];
+				unsigned int a = pFace->GetVertex (0);
+				unsigned int b = pFace->GetVertex (1);
+				unsigned int c = pFace->GetVertex (2);
 
 				glBegin (GL_TRIANGLES);
 
 				// Face Normal (always used for FLAT shading or as base)
-				glNormal3f (mesh->m_pFaceNormals[3*i], mesh->m_pFaceNormals[3*i+1], mesh->m_pFaceNormals[3*i+2]);
+				glNormal3f (mesh->GetFaceNormals ()[3*i], mesh->GetFaceNormals ()[3*i+1], mesh->GetFaceNormals ()[3*i+2]);
 
 				// Vertex A
-				if (!mesh->m_pVertexColors.empty() && !prop.light && i_current_material == -1)
-					glColor3f (mesh->m_pVertexColors[3*a], mesh->m_pVertexColors[3*a+1], mesh->m_pVertexColors[3*a+2]);
-				if (pFace->m_bUseTextureCoordinates && pFace->m_pTextureCoordinatesIndices != nullptr && !mesh->m_pTextureCoordinates.empty())
+				if (!mesh->GetVertexColors ().empty() && !prop.light && i_current_material == -1)
+					glColor3f (mesh->GetVertexColors ()[3*a], mesh->GetVertexColors ()[3*a+1], mesh->GetVertexColors ()[3*a+2]);
+				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices () && !mesh->GetTextureCoordinates ().empty())
 				{
 					glColor3f (1., 1., 1.);
-					float u = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[0]];
-					float v = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[0]+1];
+					float u = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (0)];
+					float v = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (0)+1];
 					glTexCoord2f(u, v);
 				}
 				if (prop.smooth)
-					glNormal3f (mesh->m_pVertexNormals[3*a], mesh->m_pVertexNormals[3*a+1], mesh->m_pVertexNormals[3*a+2]);
-				glVertex3f (mesh->m_pVertices[3*a], mesh->m_pVertices[3*a+1], mesh->m_pVertices[3*a+2]);
+					glNormal3f (mesh->GetVertexNormals ()[3*a], mesh->GetVertexNormals ()[3*a+1], mesh->GetVertexNormals ()[3*a+2]);
+				glVertex3f (mesh->GetVertices ()[3*a], mesh->GetVertices ()[3*a+1], mesh->GetVertices ()[3*a+2]);
 				
 				// Vertex B
-				if (!mesh->m_pVertexColors.empty() && !prop.light && i_current_material == -1)
-					glColor3f (mesh->m_pVertexColors[3*b], mesh->m_pVertexColors[3*b+1], mesh->m_pVertexColors[3*b+2]);
-				if (pFace->m_bUseTextureCoordinates && pFace->m_pTextureCoordinatesIndices != nullptr && !mesh->m_pTextureCoordinates.empty())
+				if (!mesh->GetVertexColors ().empty() && !prop.light && i_current_material == -1)
+					glColor3f (mesh->GetVertexColors ()[3*b], mesh->GetVertexColors ()[3*b+1], mesh->GetVertexColors ()[3*b+2]);
+				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices () && !mesh->GetTextureCoordinates ().empty())
 				{
 					glColor3f (1., 1., 1.);
-					float u = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[1]];
-					float v = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[1]+1];
+					float u = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (1)];
+					float v = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (1)+1];
 					glTexCoord2f(u, v);
 				}
 				if (prop.smooth)
-					glNormal3f (mesh->m_pVertexNormals[3*b], mesh->m_pVertexNormals[3*b+1], mesh->m_pVertexNormals[3*b+2]);
-				glVertex3f (mesh->m_pVertices[3*b], mesh->m_pVertices[3*b+1], mesh->m_pVertices[3*b+2]);
+					glNormal3f (mesh->GetVertexNormals ()[3*b], mesh->GetVertexNormals ()[3*b+1], mesh->GetVertexNormals ()[3*b+2]);
+				glVertex3f (mesh->GetVertices ()[3*b], mesh->GetVertices ()[3*b+1], mesh->GetVertices ()[3*b+2]);
 				
 				// Vertex C
-				if (!mesh->m_pVertexColors.empty() && !prop.light && i_current_material == -1)
-					glColor3f (mesh->m_pVertexColors[3*c], mesh->m_pVertexColors[3*c+1], mesh->m_pVertexColors[3*c+2]);
-				if (pFace->m_bUseTextureCoordinates && pFace->m_pTextureCoordinatesIndices != nullptr && !mesh->m_pTextureCoordinates.empty())
+				if (!mesh->GetVertexColors ().empty() && !prop.light && i_current_material == -1)
+					glColor3f (mesh->GetVertexColors ()[3*c], mesh->GetVertexColors ()[3*c+1], mesh->GetVertexColors ()[3*c+2]);
+				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices () && !mesh->GetTextureCoordinates ().empty())
 				{
 					glColor3f (1., 1., 1.);
-					float u = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[2]];
-					float v = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[2]+1];
+					float u = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (2)];
+					float v = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (2)+1];
 					glTexCoord2f(u, v);
 				}
 				if (prop.smooth)
-					glNormal3f (mesh->m_pVertexNormals[3*c], mesh->m_pVertexNormals[3*c+1], mesh->m_pVertexNormals[3*c+2]);
-				glVertex3f (mesh->m_pVertices[3*c], mesh->m_pVertices[3*c+1], mesh->m_pVertices[3*c+2]);
+					glNormal3f (mesh->GetVertexNormals ()[3*c], mesh->GetVertexNormals ()[3*c+1], mesh->GetVertexNormals ()[3*c+2]);
+				glVertex3f (mesh->GetVertices ()[3*c], mesh->GetVertices ()[3*c+1], mesh->GetVertices ()[3*c+2]);
 
 				glEnd ();
 			}
-			else if (pFace->m_nVertices == 4)
+			else if (pFace->GetNVertices () == 4)
 			{
-				unsigned int a = pFace->m_pVertices[0];
-				unsigned int b = pFace->m_pVertices[1];
-				unsigned int c = pFace->m_pVertices[2];
-				unsigned int d = pFace->m_pVertices[3];
+				unsigned int a = pFace->GetVertex (0);
+				unsigned int b = pFace->GetVertex (1);
+				unsigned int c = pFace->GetVertex (2);
+				unsigned int d = pFace->GetVertex (3);
 				glBegin (GL_QUADS);
 
-				glNormal3f (mesh->m_pFaceNormals[3*i], mesh->m_pFaceNormals[3*i+1], mesh->m_pFaceNormals[3*i+2]);
-				//glNormal3f (mesh->m_pVertexNormals[3*a], mesh->m_pVertexNormals[3*a+1], mesh->m_pVertexNormals[3*a+2]);
-				if (pFace->m_bUseTextureCoordinates && pFace->m_pTextureCoordinatesIndices != nullptr)
+				glNormal3f (mesh->GetFaceNormals ()[3*i], mesh->GetFaceNormals ()[3*i+1], mesh->GetFaceNormals ()[3*i+2]);
+				//glNormal3f (mesh->GetVertexNormals ()[3*a], mesh->GetVertexNormals ()[3*a+1], mesh->GetVertexNormals ()[3*a+2]);
+				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices ())
 				{
 					glColor3f (1., 1., 1.);
-					float u = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[0]];
-					float v = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[0]+1];
+					float u = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (0)];
+					float v = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (0)+1];
 					glTexCoord2f(u, v);
 				}
-				glVertex3f (mesh->m_pVertices[3*a], mesh->m_pVertices[3*a+1], mesh->m_pVertices[3*a+2]);
+				glVertex3f (mesh->GetVertices ()[3*a], mesh->GetVertices ()[3*a+1], mesh->GetVertices ()[3*a+2]);
 				
-				//glNormal3f (mesh->m_pVertexNormals[3*b], mesh->m_pVertexNormals[3*b+1], mesh->m_pVertexNormals[3*b+2]);
-				if (pFace->m_bUseTextureCoordinates && pFace->m_pTextureCoordinatesIndices != nullptr)
+				//glNormal3f (mesh->GetVertexNormals ()[3*b], mesh->GetVertexNormals ()[3*b+1], mesh->GetVertexNormals ()[3*b+2]);
+				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices ())
 				{
 					glColor3f (1., 1., 1.);
-					float u = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[1]];
-					float v = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[1]+1];
+					float u = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (1)];
+					float v = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (1)+1];
 					glTexCoord2f(u, v);
 				}
-				glVertex3f (mesh->m_pVertices[3*b], mesh->m_pVertices[3*b+1], mesh->m_pVertices[3*b+2]);
+				glVertex3f (mesh->GetVertices ()[3*b], mesh->GetVertices ()[3*b+1], mesh->GetVertices ()[3*b+2]);
 				
-				//glNormal3f (mesh->m_pVertexNormals[3*c], mesh->m_pVertexNormals[3*c+1], mesh->m_pVertexNormals[3*c+2]);
-				if (pFace->m_bUseTextureCoordinates && pFace->m_pTextureCoordinatesIndices != nullptr)
+				//glNormal3f (mesh->GetVertexNormals ()[3*c], mesh->GetVertexNormals ()[3*c+1], mesh->GetVertexNormals ()[3*c+2]);
+				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices ())
 				{
 					glColor3f (1., 1., 1.);
-					float u = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[2]];
-					float v = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[2]+1];
+					float u = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (2)];
+					float v = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (2)+1];
 					glTexCoord2f(u, v);
 				}
-				glVertex3f (mesh->m_pVertices[3*c], mesh->m_pVertices[3*c+1], mesh->m_pVertices[3*c+2]);
+				glVertex3f (mesh->GetVertices ()[3*c], mesh->GetVertices ()[3*c+1], mesh->GetVertices ()[3*c+2]);
 				
-				//glNormal3f (mesh->m_pVertexNormals[3*d], mesh->m_pVertexNormals[3*d+1], mesh->m_pVertexNormals[3*d+2]);
-				if (pFace->m_bUseTextureCoordinates && pFace->m_pTextureCoordinatesIndices != nullptr)
+				//glNormal3f (mesh->GetVertexNormals ()[3*d], mesh->GetVertexNormals ()[3*d+1], mesh->GetVertexNormals ()[3*d+2]);
+				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices ())
 				{
 					glColor3f (1., 1., 1.);
-					float u = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[3]];
-					float v = mesh->m_pTextureCoordinates[2*pFace->m_pTextureCoordinatesIndices[3]+1];
+					float u = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (3)];
+					float v = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (3)+1];
 					glTexCoord2f(u, v);
 				}
-				glVertex3f (mesh->m_pVertices[3*d], mesh->m_pVertices[3*d+1], mesh->m_pVertices[3*d+2]);
+				glVertex3f (mesh->GetVertices ()[3*d], mesh->GetVertices ()[3*d+1], mesh->GetVertices ()[3*d+2]);
 				glEnd ();
 			}
 			else
 			{
 				glBegin (GL_POLYGON);
-				for (unsigned int j=0; j<pFace->m_nVertices; j++)
+				for (unsigned int j=0; j<pFace->GetNVertices (); j++)
 				{
-					unsigned int a = pFace->m_pVertices[j];
-					glVertex3f (mesh->m_pVertices[3*a], mesh->m_pVertices[3*a+1], mesh->m_pVertices[3*a+2]);
+					unsigned int a = pFace->GetVertex (j);
+					glVertex3f (mesh->GetVertices ()[3*a], mesh->GetVertices ()[3*a+1], mesh->GetVertices ()[3*a+2]);
 				}
 				glEnd ();
 			}
@@ -278,15 +278,15 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 			
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		glBegin (GL_LINES);
-		for (unsigned int i=0; i<mesh->m_nFaces; i++)
+		for (unsigned int i=0; i<mesh->GetNFaces (); i++)
 		{
-			Face *pFace = mesh->m_pFaces[i];
-			for (unsigned int j=0; j<pFace->m_nVertices; j++)
+			auto pFace = mesh->FaceAt (i);
+			for (unsigned int j=0; j<pFace->GetNVertices (); j++)
 			{
-				unsigned int a = pFace->m_pVertices[j];
-				unsigned int b = pFace->m_pVertices[(j+1)%pFace->m_nVertices];
-				glVertex3f (mesh->m_pVertices[3*a], mesh->m_pVertices[3*a+1], mesh->m_pVertices[3*a+2]);
-				glVertex3f (mesh->m_pVertices[3*b], mesh->m_pVertices[3*b+1], mesh->m_pVertices[3*b+2]);
+				unsigned int a = pFace->GetVertex (j);
+				unsigned int b = pFace->GetVertex ((j+1)%pFace->GetNVertices ());
+				glVertex3f (mesh->GetVertices ()[3*a], mesh->GetVertices ()[3*a+1], mesh->GetVertices ()[3*a+2]);
+				glVertex3f (mesh->GetVertices ()[3*b], mesh->GetVertices ()[3*b+1], mesh->GetVertices ()[3*b+2]);
 			}
 		}
 		glEnd ();
@@ -294,45 +294,45 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 	}
 
 	// OBJ line ('l') and point ('p') elements are intrinsic mesh geometry
-	// (Mesh::m_pLines / m_pPoints), not an optional overlay: they belong to the
+	// (segments de ligne / points isoles), not an optional overlay: they belong to the
 	// mesh and are drawn with it whenever present. A lines/points file has no
 	// faces, and the fast face managers (VBO / vertex array) don't know about
 	// these primitives, so the immediate-mode path is the only place that can
 	// emit them — hence they draw unconditionally here, alongside the surface.
-	if (!mesh->m_pLines.empty() || !mesh->m_pPoints.empty())
+	if (!mesh->GetLines ().empty() || !mesh->GetPoints ().empty())
 	{
 		glPushAttrib (GL_ALL_ATTRIB_BITS);
 		glDisable (GL_LIGHTING);
 
-		if (!mesh->m_pLines.empty())
+		if (!mesh->GetLines ().empty())
 		{
 			glEnable (GL_LINE_SMOOTH);
 			glLineWidth (prop.linesize > 0.f ? prop.linesize : 1.f);
 			glColor3f (prop.line_color[0], prop.line_color[1], prop.line_color[2]);
 			glBegin (GL_LINES);
-			const size_t nIdx = mesh->m_pLines.size();
+			const size_t nIdx = mesh->GetLines ().size();
 			for (size_t k = 0; k + 1 < nIdx; k += 2)
 			{
-				unsigned int a = mesh->m_pLines[k];
-				unsigned int b = mesh->m_pLines[k+1];
-				if (a >= mesh->m_nVertices || b >= mesh->m_nVertices)
+				unsigned int a = mesh->GetLines ()[k];
+				unsigned int b = mesh->GetLines ()[k+1];
+				if (a >= mesh->GetNVertices () || b >= mesh->GetNVertices ())
 					continue;
-				glVertex3f (mesh->m_pVertices[3*a], mesh->m_pVertices[3*a+1], mesh->m_pVertices[3*a+2]);
-				glVertex3f (mesh->m_pVertices[3*b], mesh->m_pVertices[3*b+1], mesh->m_pVertices[3*b+2]);
+				glVertex3f (mesh->GetVertices ()[3*a], mesh->GetVertices ()[3*a+1], mesh->GetVertices ()[3*a+2]);
+				glVertex3f (mesh->GetVertices ()[3*b], mesh->GetVertices ()[3*b+1], mesh->GetVertices ()[3*b+2]);
 			}
 			glEnd ();
 		}
 
-		if (!mesh->m_pPoints.empty())
+		if (!mesh->GetPoints ().empty())
 		{
 			glPointSize (prop.pointsize > 0.f ? prop.pointsize : 1.f);
 			glColor3f (prop.point_color[0], prop.point_color[1], prop.point_color[2]);
 			glBegin (GL_POINTS);
-			for (unsigned int idx : mesh->m_pPoints)
+			for (unsigned int idx : mesh->GetPoints ())
 			{
-				if (idx >= mesh->m_nVertices)
+				if (idx >= mesh->GetNVertices ())
 					continue;
-				glVertex3f (mesh->m_pVertices[3*idx], mesh->m_pVertices[3*idx+1], mesh->m_pVertices[3*idx+2]);
+				glVertex3f (mesh->GetVertices ()[3*idx], mesh->GetVertices ()[3*idx+1], mesh->GetVertices ()[3*idx+2]);
 			}
 			glEnd ();
 		}
@@ -359,7 +359,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 			auto mesh = element.first;
 			auto edges = element.second;
 			for (auto index : edges)
-				glVertex3f(mesh->m_pVertices[3 * index], mesh->m_pVertices[3 * index + 1], mesh->m_pVertices[3 * index + 2]);
+				glVertex3f(mesh->GetVertices ()[3 * index], mesh->GetVertices ()[3 * index + 1], mesh->GetVertices ()[3 * index + 2]);
 		}
 		glEnd();
 
@@ -371,7 +371,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 			auto mesh = element.first;
 			auto edges = element.second;
 			for (auto index : edges)
-				glVertex3f(mesh->m_pVertices[3 * index], mesh->m_pVertices[3 * index + 1], mesh->m_pVertices[3 * index + 2]);
+				glVertex3f(mesh->GetVertices ()[3 * index], mesh->GetVertices ()[3 * index + 1], mesh->GetVertices ()[3 * index + 2]);
 		}
 		glEnd();
 

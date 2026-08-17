@@ -39,8 +39,8 @@ ListNPRSegments& NPR_Border::ComputeSegments (void)
 
 	if (m_pMesh)
 	{
-		float *pVertices = m_pMesh->m_pMesh->m_pVertices.data();
-		int nNberEdges = 3 * m_pMesh->m_pMesh->m_nFaces;
+		const float *pVertices = m_pMesh->m_pMesh->GetVertices ().data();
+		int nNberEdges = 3 * m_pMesh->m_pMesh->GetNFaces ();
 		Che_mesh *cheMesh = m_pMesh->GetCheMesh();
 
 		for (int i=0; i<nNberEdges; i++)

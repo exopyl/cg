@@ -325,7 +325,7 @@ immuable (clonage) pour déclencher la réactivité.
 | Panneau → **Réinitialiser** | Restaure les `def` de l'outil + `clearAnalysis()` (retire la heatmap) | Réel |
 | Panneau **Courbure** → **Évaluer** | `CgreQuickItem.evaluateCurvature(type)` : courbure **Desbrun** (cgmesh) → heatmap jet sur le modèle | **Réel** |
 | Panneau **Courbure** → changer le *type* | `recolorCurvature(type)` : recolore en direct depuis les tenseurs cachés (après une 1ʳᵉ évaluation) | **Réel** |
-| **Mesures / Point** (survol) | Picking : déprojection curseur → rayon → espace maillage → `Mesh::GetIntersectionWithRay` (octree cgmesh) ; coordonnées X/Y/Z affichées dans la **carte de légende** (bas‑gauche) | **Réel** |
+| **Mesures / Point** (survol) | Picking : déprojection curseur → rayon → espace maillage → `GetIntersectionWithRay(const Mesh&, const Octree&, …)`, fonction libre de `mesh_raycast.h` ; l'item détient **un octree par sous‑maillage** (`BuildRaycastOctree`), reconstruit quand la révision change. Depuis la phase 1a de `cgmesh`, activer l'outil ne triangule plus destructivement les n‑gons. Coordonnées X/Y/Z affichées dans la **carte de légende** (bas‑gauche) | **Réel**, mais ⚠ **jamais compilé depuis le 2026-08-17** (Qt absent) |
 | Panneau (autres) → **Exporter le rapport** | `console.log` | Stub |
 | Bouton **sun/moon** (haut-droite) | Bascule le thème jour/nuit (`Theme.dark`) | **Réel** |
 | Bouton **share** | — | Stub |

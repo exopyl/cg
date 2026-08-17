@@ -24,8 +24,8 @@ TEST(TEST_cgmesh_he, constructor)
 	Mesh *mesh = new Mesh ();
 	mesh->load (filename.c_str());
 	dElapsedTime = ticker->stop ();
-	cout << mesh->m_nVertices << " vertices" << endl;
-	cout << mesh->m_nFaces << " faces" << endl;
+	cout << mesh->GetNVertices () << " vertices" << endl;
+	cout << mesh->GetNFaces () << " faces" << endl;
 	cout << dElapsedTime << "ms" << endl;
 	delete mesh;
 
@@ -33,12 +33,12 @@ TEST(TEST_cgmesh_he, constructor)
 	ticker->start ();
 	Mesh_half_edge *hemodel = new Mesh_half_edge (filename.c_str());
 	dElapsedTime = ticker->stop ();
-	cout << hemodel->m_pMesh->m_nVertices << " vertices" << endl;
-	cout << hemodel->m_pMesh->m_nFaces << " faces" << endl;
+	cout << hemodel->m_pMesh->GetNVertices () << " vertices" << endl;
+	cout << hemodel->m_pMesh->GetNFaces () << " faces" << endl;
 	cout << dElapsedTime << "ms" << endl;
 
-	EXPECT_EQ(hemodel->m_pMesh->m_nVertices, 453);
-	EXPECT_EQ(hemodel->m_pMesh->m_nFaces, 902);
+	EXPECT_EQ(hemodel->m_pMesh->GetNVertices (), 453);
+	EXPECT_EQ(hemodel->m_pMesh->GetNFaces (), 902);
 
 	delete hemodel;
 }
@@ -275,8 +275,8 @@ static void evaluate_shape_descriptors (Mesh_half_edge *model)
 #ifdef HISTOGRAM_OSADA
 	std::vector<unsigned int> osada_tris = model->m_pMesh->GetTriangles ();
 	Cshape_distribution_osada *osada;
-	osada = new Cshape_distribution_osada (model->m_pMesh->m_nVertices, model->m_pMesh->m_pVertices.data(),
-					       model->m_pMesh->m_nFaces, osada_tris.data());
+	osada = new Cshape_distribution_osada (model->m_pMesh->GetNVertices (), model->m_pMesh->GetVertices ().data(),
+					       model->m_pMesh->GetNFaces (), osada_tris.data());
 #endif /* HISTOGRAM_OSADA */
 	
 #ifdef VERTICES_DISTRIBUTION_PCA_PAQUET
@@ -298,7 +298,7 @@ static void evaluate_shape_descriptors (Mesh_half_edge *model)
 #endif /* CURVATURE_HISTOGRAM */
 	
 	
-	printf ("%d %d\n", model->m_pMesh->m_nVertices, model->m_pMesh->m_nFaces);
+	printf ("%d %d\n", model->m_pMesh->GetNVertices (), model->m_pMesh->GetNFaces ());
 	int n_data = 2000000; // nombre maximal de relevés sur le modèle 3D
 	int istart = 200000;    // nombre de relevés de départ
 	int istep  = 100000;    // pas pour le nombre de relevés
@@ -406,9 +406,9 @@ static void evaluate_shape_descriptors (Mesh_half_edge *model)
 static void evaluate_shape_distribution_osada (Mesh_half_edge *model, int nPoints, int nBins)
 {
 	std::vector<unsigned int> osada_tris = model->m_pMesh->GetTriangles ();
-	Cshape_distribution_osada *osada = new Cshape_distribution_osada (model->m_pMesh->m_nVertices,
-									  model->m_pMesh->m_pVertices.data(),
-									  model->m_pMesh->m_nFaces,
+	Cshape_distribution_osada *osada = new Cshape_distribution_osada (model->m_pMesh->GetNVertices (),
+									  model->m_pMesh->GetVertices ().data(),
+									  model->m_pMesh->GetNFaces (),
 									  osada_tris.data());
 	
 	// A3
@@ -535,4 +535,59 @@ TEST(TEST_cgmesh_he, features)
 	
 	// differential parameters distribution
 	evaluate_differential_parameters_distribution (he);
+}
+
+// ============================================================================
+//  Mesh_half_edge (Mesh *)
+// ============================================================================
+//
+// Envelopper un maillage le copie en PROFONDEUR et ne le triangule pas : tout ce
+// qu'il possede doit survivre, son identite de polygone comprise.
+TEST (TEST_cgmesh_he, wrapping_a_mesh_keeps_everything_it_owns)
+{
+	Mesh src;
+	src.Init (5, 2);
+	float v[15] = { 0,0,0,  1,0,0,  1,1,0,  0,1,0,  2,0,0 };
+	src.SetVertices (5, v);
+	src.SetFace (0, 0, 1, 2, 3);          // un QUAD : son identite doit survivre
+	src.SetFace (1, 1, 4, 2);
+	src.m_name = "enveloppe";
+	src.Material_Add (new MaterialColor (11, 22, 33));
+	src.FaceAt (0)->SetMaterialId (0);
+	src.FaceAt (0)->SetUsesTextureCoordinates (true);
+	src.FaceAt (0)->SetTexCoord (2u, 5u);
+	src.AddLine (0, 4);
+	src.AddPoint (3);
+	src.InitVertexColors (0.5f, 0.25f, 0.125f);
+
+	Mesh_half_edge he (&src);
+	Mesh *m = he.m_pMesh;
+	ASSERT_NE (m, nullptr);
+
+	EXPECT_EQ (m->m_name, "enveloppe");
+	EXPECT_EQ (m->GetNVertices (), 5u);
+
+	// Le QUAD reste un quad : envelopper un maillage ne doit plus detruire son
+	// identite de polygone (decision R2).
+	EXPECT_EQ (m->GetNFaces (), 2u);
+	EXPECT_EQ (m->GetFaceNVertices (0), 4);
+	EXPECT_FALSE (m->IsTriangleMesh ());
+
+	// Materiaux, UV, lignes, points, couleurs.
+	ASSERT_EQ (m->GetNMaterials (), 1u);
+	EXPECT_NE (m->GetMaterial (0u), src.GetMaterial (0u)) << "clone, pas partage";
+	EXPECT_EQ (m->FaceAt (0)->GetMaterialId (), 0);
+	EXPECT_TRUE (m->FaceAt (0)->UsesTextureCoordinates ());
+	EXPECT_EQ (m->FaceAt (0)->GetTexCoordIndex (2), 5);
+	EXPECT_EQ (m->GetLines ().size (), 2u);
+	EXPECT_EQ (m->GetPoints ().size (), 1u);
+	EXPECT_FLOAT_EQ (m->GetVertexColors ()[1], 0.25f);
+
+	// Et la structure demi-arete se construit bien sur le maillage TRIANGULE,
+	// paresseusement : le quad donne deux triangles, soit 3 faces au total.
+	// Passer GetNFaces () au lieu de tris.size()/3 en aurait perdu une.
+	Che_mesh *che = he.GetCheMesh ();
+	ASSERT_NE (che, nullptr);
+	EXPECT_EQ (che->m_edges_face.size (), 3u) << "2 triangles issus du quad + 1 triangle";
+	EXPECT_EQ (che->m_ne, 9) << "3 aretes par triangle";
 }

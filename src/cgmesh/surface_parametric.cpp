@@ -21,25 +21,21 @@ void ParametricSurface::AddFace(unsigned int& fi,
                                  unsigned int v1, unsigned int v2, unsigned int v3,
                                  float u1, float v_1, float u2, float v_2, float u3, float v_3)
 {
-	Face* pFace = new Face();
-	pFace->m_bUseTextureCoordinates = true;
-	if (!pFace->m_pTextureCoordinates)
-		pFace->m_pTextureCoordinates = new float[6];
+	// FaceAt : l'emplacement est deja dimensionne par InitFaces.
+	auto pFace = FaceAt (fi++);
+	pFace->SetUsesTextureCoordinates (true);
+	if (!pFace->HasCornerTexCoords ())
+		pFace->ActivateTextureCoordinates ();
 	pFace->SetMaterialId(MATERIAL_NONE);
 
-	pFace->m_pVertices[0] = v1;
-	pFace->m_pTextureCoordinates[0] = u1;
-	pFace->m_pTextureCoordinates[1] = v_1;
+	pFace->SetVertex (0, v1);
+	pFace->SetTexCoord (0, u1, v_1);
 
-	pFace->m_pVertices[1] = v2;
-	pFace->m_pTextureCoordinates[2] = u2;
-	pFace->m_pTextureCoordinates[3] = v_2;
+	pFace->SetVertex (1, v2);
+	pFace->SetTexCoord (1, u2, v_2);
 
-	pFace->m_pVertices[2] = v3;
-	pFace->m_pTextureCoordinates[4] = u3;
-	pFace->m_pTextureCoordinates[5] = v_3;
-
-	m_pFaces[fi++] = pFace;
+	pFace->SetVertex (2, v3);
+	pFace->SetTexCoord (2, u3, v_3);
 }
 
 // shared function to generate a parametric surface
@@ -84,12 +80,12 @@ bool ParametricSurface::Generate(void)
 
 			// position
 			EvaluatePosition(fU, fV, &diff);
-			m_pVertices[3 * index] = diff.position[0];
-			m_pVertices[3 * index + 1] = diff.position[1];
-			m_pVertices[3 * index + 2] = diff.position[2];
+			SetVertexComponent (index, 0, diff.position[0]);
+			SetVertexComponent (index, 1, diff.position[1]);
+			SetVertexComponent (index, 2, diff.position[2]);
 
 			// tensor
-			m_pTensors[index].reset(EvaluateTensor(diff));
+			SetTensor(index, EvaluateTensor(diff));
 
 			index++;
 		}

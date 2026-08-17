@@ -13,7 +13,7 @@ Cmodel3d_half_edge_clipper::Cmodel3d_half_edge_clipper (Mesh_half_edge *_mesh)
   n = Vector3d (0.0, 0.0, 1.0);
   d = 0.0;
 
-  distances = (float*)malloc(model->m_pMesh->m_nVertices*sizeof(float));
+  distances = (float*)malloc(model->m_pMesh->GetNVertices ()*sizeof(float));
   assert (distances);
 }
 
@@ -33,9 +33,8 @@ Cmodel3d_half_edge_clipper::set_plane (Vector3d pt, Vector3d _n)
 void
 Cmodel3d_half_edge_clipper::get_intersections (int *n_intersections, int **n_vertices, float ***intersections)
 {
-  int i, iwalk, nv = model->m_pMesh->m_nVertices, nf = model->m_pMesh->m_nFaces;
-  Face **f = model->m_pMesh->m_pFaces;
-  float *v = model->m_pMesh->m_pVertices.data();
+  int i, iwalk, nv = model->m_pMesh->GetNVertices (), nf = model->m_pMesh->GetNFaces ();
+  const float *v = model->m_pMesh->GetVertices ().data();
 
   int n_intersections_max = 100;
   int n_vertices_max = 2048;
@@ -84,8 +83,9 @@ Cmodel3d_half_edge_clipper::get_intersections (int *n_intersections, int **n_ver
       visited_faces[i] = 1;
 
       /* is there an intersection between the plane and the current face ? */
-      if (distances[f[i]->GetVertex(0)] * distances[f[i]->GetVertex(1)] > 0.0 &&
-	  distances[f[i]->GetVertex(1)] * distances[f[i]->GetVertex(2)] > 0.0)
+      auto fc = model->m_pMesh->FaceAt (i);
+      if (distances[fc->GetVertex(0)] * distances[fc->GetVertex(1)] > 0.0 &&
+	  distances[fc->GetVertex(1)] * distances[fc->GetVertex(2)] > 0.0)
 	continue; // no intersection
 
       iwalk = 0;
@@ -155,7 +155,7 @@ Cmodel3d_half_edge_clipper::get_intersections (int *n_intersections, int **n_ver
 void
 Cmodel3d_half_edge_clipper::get_vertex_intersection (int i, int j, Vector3d &inter)
 {
-  float *v = model->m_pMesh->m_pVertices.data();
+  const float *v = model->m_pMesh->GetVertices ().data();
   float t = distances[i] / (distances[i] - distances[j]);
   inter.Set ((1.0 - t) * v[3*i]   + t * v[3*j],
 	      (1.0 - t) * v[3*i+1] + t * v[3*j+1],

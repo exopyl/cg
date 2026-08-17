@@ -24,8 +24,8 @@
 void
 Cregions_vertices::init_from_accessibility (int type)
 {
-  float *v  = mesh_half_edge->m_pMesh->m_pVertices.data();
-  float *vn = mesh_half_edge->m_pMesh->m_pVertexNormals.data();
+  const float *v  = mesh_half_edge->m_pMesh->GetVertices ().data();
+  const float *vn = mesh_half_edge->m_pMesh->GetVertexNormals ().data();
   float epsilon = 2.0;
   float offset  = 0.5;
   int i, j;

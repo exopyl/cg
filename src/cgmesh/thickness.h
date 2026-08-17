@@ -47,7 +47,7 @@ public:
 	// scaleMax <= scaleMin (the default) the actual min/max over the defined
 	// vertices is used. A constant field (min == max) maps to the mid (grey)
 	// colour. Undefined vertices are left neutral grey.
-	// Side effect (on top of ComputeWallThickness): overwrites m_pVertexColors.
+	// Side effect (on top of ComputeWallThickness): overwrites GetVertexColors ().
 	static bool ColorizeWallThickness (Mesh &mesh,
 	                                   std::vector<float> &outThickness,
 	                                   std::vector<char>  &outDefined,

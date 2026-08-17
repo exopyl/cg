@@ -25,12 +25,10 @@ Mesh* makeRegularPolygonMesh(unsigned int n)
     }
     m->SetVertices(n, verts.data());
 
-    m->m_nFaces = 1;
-    m->m_pFaces = new Face*[1];
-    m->m_pFaces[0] = new Face();
-    m->m_pFaces[0]->SetNVertices(n);
+    m->SetNFaces (1);
+    m->FaceAt (0)->SetNVertices(n);
     for (unsigned int i = 0; i < n; ++i)
-        m->m_pFaces[0]->SetVertex(i, i);
+        m->FaceAt (0)->SetVertex(i, i);
     return m;
 }
 
@@ -96,12 +94,10 @@ TEST(TEST_cgmesh_triangulation, concave_pentagon_uses_glutess)
         0.0f, 2.0f, 0.0f,
     };
     m->SetVertices(5, const_cast<float*>(verts));
-    m->m_nFaces = 1;
-    m->m_pFaces = new Face*[1];
-    m->m_pFaces[0] = new Face();
-    m->m_pFaces[0]->SetNVertices(5);
+    m->SetNFaces (1);
+    m->FaceAt (0)->SetNVertices(5);
     for (unsigned int i = 0; i < 5; ++i)
-        m->m_pFaces[0]->SetVertex(i, i);
+        m->FaceAt (0)->SetVertex(i, i);
 
     auto idx = m->BuildTriangulation();
 
@@ -134,19 +130,16 @@ TEST(TEST_cgmesh_triangulation, mixed_faces_concatenate)
         2, 0, 0,   3, 0, 0,   3, 1, 0,   2, 1, 0,
     };
     m->SetVertices(7, const_cast<float*>(verts));
-    m->m_nFaces = 2;
-    m->m_pFaces = new Face*[2];
-    m->m_pFaces[0] = new Face();
-    m->m_pFaces[1] = new Face();
+    m->SetNFaces (2);
 
-    m->m_pFaces[0]->SetNVertices(3);
-    m->m_pFaces[0]->SetVertex(0, 0);
-    m->m_pFaces[0]->SetVertex(1, 1);
-    m->m_pFaces[0]->SetVertex(2, 2);
+    m->FaceAt (0)->SetNVertices(3);
+    m->FaceAt (0)->SetVertex(0, 0);
+    m->FaceAt (0)->SetVertex(1, 1);
+    m->FaceAt (0)->SetVertex(2, 2);
 
-    m->m_pFaces[1]->SetNVertices(4);
+    m->FaceAt (1)->SetNVertices(4);
     for (unsigned int i = 0; i < 4; ++i)
-        m->m_pFaces[1]->SetVertex(i, 3 + i);
+        m->FaceAt (1)->SetVertex(i, 3 + i);
 
     auto idx = m->BuildTriangulation();
     EXPECT_EQ(idx.size(), 9u); // 3 + 6 = 9 indices
@@ -180,16 +173,11 @@ TEST(TEST_cgmesh_polygon_render_data, two_triangles_share_topology_slots)
     // NOT duplicate them. Both triangles index into slots 0..2.
     Mesh* m = makeRegularPolygonMesh(3);
 
-    auto faces = new Face*[2];
-    faces[0] = m->m_pFaces[0];
-    faces[1] = new Face();
-    faces[1]->SetNVertices(3);
-    faces[1]->SetVertex(0, 0);
-    faces[1]->SetVertex(1, 1);
-    faces[1]->SetVertex(2, 2);
-    delete[] m->m_pFaces;
-    m->m_pFaces = faces;
-    m->m_nFaces = 2;
+    // Deux faces sur les MEMES trois sommets : makeRegularPolygonMesh (3) a
+    // deja pose (0,1,2), on redimensionne et on repose les deux.
+    m->SetNFaces (2);
+    m->FaceAt (0)->SetTriangle (0, 1, 2);
+    m->FaceAt (1)->SetTriangle (0, 1, 2);
 
     auto rd = m->BuildPolygonRenderData();
 
@@ -206,7 +194,7 @@ TEST(TEST_cgmesh_polygon_render_data, quad_appends_4_render_vertices)
     // Quad: topology has 4 verts, the n-gon expansion appends 4 more.
     // Total = 8 render-verts; indices reference the expansion slots [4..7].
     Mesh* m = makeRegularPolygonMesh(4);
-    m->ComputeNormals(); // populates m_pVertexNormals so output includes normals
+    m->ComputeNormals(); // populates GetVertexNormals () so output includes normals
     auto rd = m->BuildPolygonRenderData();
 
     EXPECT_EQ(rd.positions.size(), 24u); // 4 topology + 4 expansion = 8 * 3
@@ -246,19 +234,16 @@ TEST(TEST_cgmesh_polygon_render_data, two_adjacent_quads_each_get_own_expansion)
         1, 0, 1,  1, 1, 1,                       // quad B extra: 4,5
     };
     m->SetVertices(6, const_cast<float*>(verts));
-    m->m_nFaces = 2;
-    m->m_pFaces = new Face*[2];
-    m->m_pFaces[0] = new Face();
-    m->m_pFaces[1] = new Face();
+    m->SetNFaces (2);
 
-    m->m_pFaces[0]->SetNVertices(4);
-    for (unsigned int i = 0; i < 4; ++i) m->m_pFaces[0]->SetVertex(i, i);
+    m->FaceAt (0)->SetNVertices(4);
+    for (unsigned int i = 0; i < 4; ++i) m->FaceAt (0)->SetVertex(i, i);
 
-    m->m_pFaces[1]->SetNVertices(4);
-    m->m_pFaces[1]->SetVertex(0, 1);
-    m->m_pFaces[1]->SetVertex(1, 4);
-    m->m_pFaces[1]->SetVertex(2, 5);
-    m->m_pFaces[1]->SetVertex(3, 2);
+    m->FaceAt (1)->SetNVertices(4);
+    m->FaceAt (1)->SetVertex(0, 1);
+    m->FaceAt (1)->SetVertex(1, 4);
+    m->FaceAt (1)->SetVertex(2, 5);
+    m->FaceAt (1)->SetVertex(3, 2);
 
     m->ComputeNormals();
     auto rd = m->BuildPolygonRenderData();
@@ -321,11 +306,11 @@ TEST(TEST_cgmesh_triangulate, pentagon_becomes_three_triangles)
 TEST(TEST_cgmesh_triangulate, preserves_material_id)
 {
     Mesh* m = makeRegularPolygonMesh(4);
-    m->m_pFaces[0]->SetMaterialId(7);
+    m->FaceAt (0)->SetMaterialId(7);
     m->Triangulate();
     ASSERT_EQ(m->GetNFaces(), 2u);
-    EXPECT_EQ((unsigned)m->m_pFaces[0]->GetMaterialId(), 7u);
-    EXPECT_EQ((unsigned)m->m_pFaces[1]->GetMaterialId(), 7u);
+    EXPECT_EQ((unsigned)m->FaceAt (0)->GetMaterialId(), 7u);
+    EXPECT_EQ((unsigned)m->FaceAt (1)->GetMaterialId(), 7u);
     delete m;
 }
 
@@ -346,28 +331,28 @@ TEST(TEST_cgmesh_triangulate, propagates_face_relative_uv_indices)
     // the m_bUseTextureCoordinates flag must travel too (the OBJ exporter
     // gates UV emission on it).
     Mesh* m = makeRegularPolygonMesh(4);
-    Face* src = m->m_pFaces[0];
-    src->m_bUseTextureCoordinates = true;
+    auto src = m->FaceAt (0);
+    src->SetUsesTextureCoordinates (true);
     src->ActivateTextureCoordinatesIndices();
-    src->m_pTextureCoordinatesIndices[0] = 100;
-    src->m_pTextureCoordinatesIndices[1] = 101;
-    src->m_pTextureCoordinatesIndices[2] = 102;
-    src->m_pTextureCoordinatesIndices[3] = 103;
+    src->SetTexCoord (0, (unsigned int)(100));
+    src->SetTexCoord (1, (unsigned int)(101));
+    src->SetTexCoord (2, (unsigned int)(102));
+    src->SetTexCoord (3, (unsigned int)(103));
 
     m->Triangulate();
     ASSERT_EQ(m->GetNFaces(), 2u);
 
     // Fan triangulation from vertex 0: (0,1,2) and (0,2,3).
-    EXPECT_EQ(m->m_pFaces[0]->m_pTextureCoordinatesIndices[0], 100u);
-    EXPECT_EQ(m->m_pFaces[0]->m_pTextureCoordinatesIndices[1], 101u);
-    EXPECT_EQ(m->m_pFaces[0]->m_pTextureCoordinatesIndices[2], 102u);
-    EXPECT_EQ(m->m_pFaces[1]->m_pTextureCoordinatesIndices[0], 100u);
-    EXPECT_EQ(m->m_pFaces[1]->m_pTextureCoordinatesIndices[1], 102u);
-    EXPECT_EQ(m->m_pFaces[1]->m_pTextureCoordinatesIndices[2], 103u);
+    EXPECT_EQ(m->FaceAt (0)->GetTexCoordIndex (0), 100u);
+    EXPECT_EQ(m->FaceAt (0)->GetTexCoordIndex (1), 101u);
+    EXPECT_EQ(m->FaceAt (0)->GetTexCoordIndex (2), 102u);
+    EXPECT_EQ(m->FaceAt (1)->GetTexCoordIndex (0), 100u);
+    EXPECT_EQ(m->FaceAt (1)->GetTexCoordIndex (1), 102u);
+    EXPECT_EQ(m->FaceAt (1)->GetTexCoordIndex (2), 103u);
 
     // m_bUseTextureCoordinates must reach both sub-triangles.
-    EXPECT_TRUE(m->m_pFaces[0]->m_bUseTextureCoordinates);
-    EXPECT_TRUE(m->m_pFaces[1]->m_bUseTextureCoordinates);
+    EXPECT_TRUE(m->FaceAt (0)->UsesTextureCoordinates ());
+    EXPECT_TRUE(m->FaceAt (1)->UsesTextureCoordinates ());
 
     delete m;
 }
@@ -375,31 +360,31 @@ TEST(TEST_cgmesh_triangulate, propagates_face_relative_uv_indices)
 TEST(TEST_cgmesh_triangulate, propagates_inline_uv_coordinates)
 {
     Mesh* m = makeRegularPolygonMesh(4);
-    Face* src = m->m_pFaces[0];
+    auto src = m->FaceAt (0);
     src->ActivateTextureCoordinates();
     // Set (u,v) per corner.
-    src->m_pTextureCoordinates[0] = 0.0f; src->m_pTextureCoordinates[1] = 0.0f;
-    src->m_pTextureCoordinates[2] = 1.0f; src->m_pTextureCoordinates[3] = 0.0f;
-    src->m_pTextureCoordinates[4] = 1.0f; src->m_pTextureCoordinates[5] = 1.0f;
-    src->m_pTextureCoordinates[6] = 0.0f; src->m_pTextureCoordinates[7] = 1.0f;
+    src->SetTexCoord (0, 0.0f, 0.0f);
+    src->SetTexCoord (1, 1.0f, 0.0f);
+    src->SetTexCoord (2, 1.0f, 1.0f);
+    src->SetTexCoord (3, 0.0f, 1.0f);
 
     m->Triangulate();
     ASSERT_EQ(m->GetNFaces(), 2u);
 
     // Tri 0 uses src corners 0,1,2 → (0,0) (1,0) (1,1).
-    EXPECT_FLOAT_EQ(m->m_pFaces[0]->m_pTextureCoordinates[0], 0.0f);
-    EXPECT_FLOAT_EQ(m->m_pFaces[0]->m_pTextureCoordinates[1], 0.0f);
-    EXPECT_FLOAT_EQ(m->m_pFaces[0]->m_pTextureCoordinates[2], 1.0f);
-    EXPECT_FLOAT_EQ(m->m_pFaces[0]->m_pTextureCoordinates[3], 0.0f);
-    EXPECT_FLOAT_EQ(m->m_pFaces[0]->m_pTextureCoordinates[4], 1.0f);
-    EXPECT_FLOAT_EQ(m->m_pFaces[0]->m_pTextureCoordinates[5], 1.0f);
+    float uv0[3][2];
+    for (unsigned int k = 0; k < 3; k++)
+        m->FaceAt (0)->GetTexCoord (k, uv0[k]);
+    EXPECT_FLOAT_EQ(uv0[0][0], 0.0f);  EXPECT_FLOAT_EQ(uv0[0][1], 0.0f);
+    EXPECT_FLOAT_EQ(uv0[1][0], 1.0f);  EXPECT_FLOAT_EQ(uv0[1][1], 0.0f);
+    EXPECT_FLOAT_EQ(uv0[2][0], 1.0f);  EXPECT_FLOAT_EQ(uv0[2][1], 1.0f);
     // Tri 1 uses src corners 0,2,3 → (0,0) (1,1) (0,1).
-    EXPECT_FLOAT_EQ(m->m_pFaces[1]->m_pTextureCoordinates[0], 0.0f);
-    EXPECT_FLOAT_EQ(m->m_pFaces[1]->m_pTextureCoordinates[1], 0.0f);
-    EXPECT_FLOAT_EQ(m->m_pFaces[1]->m_pTextureCoordinates[2], 1.0f);
-    EXPECT_FLOAT_EQ(m->m_pFaces[1]->m_pTextureCoordinates[3], 1.0f);
-    EXPECT_FLOAT_EQ(m->m_pFaces[1]->m_pTextureCoordinates[4], 0.0f);
-    EXPECT_FLOAT_EQ(m->m_pFaces[1]->m_pTextureCoordinates[5], 1.0f);
+    float uv1[3][2];
+    for (unsigned int k = 0; k < 3; k++)
+        m->FaceAt (1)->GetTexCoord (k, uv1[k]);
+    EXPECT_FLOAT_EQ(uv1[0][0], 0.0f);  EXPECT_FLOAT_EQ(uv1[0][1], 0.0f);
+    EXPECT_FLOAT_EQ(uv1[1][0], 1.0f);  EXPECT_FLOAT_EQ(uv1[1][1], 1.0f);
+    EXPECT_FLOAT_EQ(uv1[2][0], 0.0f);  EXPECT_FLOAT_EQ(uv1[2][1], 1.0f);
 
     delete m;
 }
@@ -426,14 +411,12 @@ TEST(TEST_cgmesh_triangulation, planar_self_intersecting_quad_does_not_crash)
         0, 0, 0,   1, 1, 0,   1, 0, 0,   0, 1, 0,
     };
     m->SetVertices(4, const_cast<float*>(verts));
-    m->m_nFaces = 1;
-    m->m_pFaces = new Face*[1];
-    m->m_pFaces[0] = new Face();
-    m->m_pFaces[0]->SetNVertices(4);
-    m->m_pFaces[0]->SetVertex(0, 0);
-    m->m_pFaces[0]->SetVertex(1, 1);
-    m->m_pFaces[0]->SetVertex(2, 2);
-    m->m_pFaces[0]->SetVertex(3, 3);
+    m->SetNFaces (1);
+    m->FaceAt (0)->SetNVertices(4);
+    m->FaceAt (0)->SetVertex(0, 0);
+    m->FaceAt (0)->SetVertex(1, 1);
+    m->FaceAt (0)->SetVertex(2, 2);
+    m->FaceAt (0)->SetVertex(3, 3);
 
     auto idx = m->BuildTriangulation();
     for (unsigned int i : idx)
@@ -451,14 +434,11 @@ TEST(TEST_cgmesh_polygon_render_data, mixed_triangle_and_quad)
         2, 0, 0,   3, 0, 0,   3, 1, 0,   2, 1, 0,              // quad (3..6)
     };
     m->SetVertices(7, const_cast<float*>(verts));
-    m->m_nFaces = 2;
-    m->m_pFaces = new Face*[2];
-    m->m_pFaces[0] = new Face();
-    m->m_pFaces[1] = new Face();
-    m->m_pFaces[0]->SetNVertices(3);
-    m->m_pFaces[0]->SetVertex(0, 0); m->m_pFaces[0]->SetVertex(1, 1); m->m_pFaces[0]->SetVertex(2, 2);
-    m->m_pFaces[1]->SetNVertices(4);
-    for (unsigned int i = 0; i < 4; ++i) m->m_pFaces[1]->SetVertex(i, 3 + i);
+    m->SetNFaces (2);
+    m->FaceAt (0)->SetNVertices(3);
+    m->FaceAt (0)->SetVertex(0, 0); m->FaceAt (0)->SetVertex(1, 1); m->FaceAt (0)->SetVertex(2, 2);
+    m->FaceAt (1)->SetNVertices(4);
+    for (unsigned int i = 0; i < 4; ++i) m->FaceAt (1)->SetVertex(i, 3 + i);
 
     auto rd = m->BuildPolygonRenderData();
 

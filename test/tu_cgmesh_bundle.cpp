@@ -88,12 +88,12 @@ TEST(TEST_bundle, load_reads_camera_and_inverts_rotation_in_place)
 
     // Points were loaded into the mesh.
     ASSERT_NE(bundle.mesh, nullptr);
-    ASSERT_EQ(bundle.mesh->m_nVertices, 2u);
-    EXPECT_NEAR(bundle.mesh->m_pVertices[0], 0.5f, 1e-5f);
-    EXPECT_NEAR(bundle.mesh->m_pVertices[1], 0.6f, 1e-5f);
-    EXPECT_NEAR(bundle.mesh->m_pVertices[2], 0.7f, 1e-5f);
-    EXPECT_NEAR(bundle.mesh->m_pVertices[3], 1.5f, 1e-5f);
-    EXPECT_NEAR(bundle.mesh->m_pVertexColors[0], 10.f / 255.f, 1e-5f);
+    ASSERT_EQ(bundle.mesh->GetNVertices (), 2u);
+    EXPECT_NEAR(bundle.mesh->GetVertices ()[0], 0.5f, 1e-5f);
+    EXPECT_NEAR(bundle.mesh->GetVertices ()[1], 0.6f, 1e-5f);
+    EXPECT_NEAR(bundle.mesh->GetVertices ()[2], 0.7f, 1e-5f);
+    EXPECT_NEAR(bundle.mesh->GetVertices ()[3], 1.5f, 1e-5f);
+    EXPECT_NEAR(bundle.mesh->GetVertexColors ()[0], 10.f / 255.f, 1e-5f);
 }
 
 TEST(TEST_bundle, load2_computes_inverse_direction_and_position)

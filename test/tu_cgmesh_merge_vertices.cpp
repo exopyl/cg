@@ -41,8 +41,8 @@ TEST(TEST_cgmesh_merge_vertices, ExactDuplicatesAreMerged)
 	int merged = m->MergeVertices(1e-6f);
 
 	EXPECT_EQ(merged, 1);                          // one duplicate removed
-	EXPECT_EQ(m->m_nVertices, 4u);                 // 5 -> 4
-	EXPECT_EQ(m->m_nFaces, 2u);                    // both triangles still valid
+	EXPECT_EQ(m->GetNVertices (), 4u);                 // 5 -> 4
+	EXPECT_EQ(m->GetNFaces (), 2u);                    // both triangles still valid
 
 	delete m;
 }
@@ -62,7 +62,7 @@ TEST(TEST_cgmesh_merge_vertices, NearDuplicatesWithinToleranceMerge)
 	int merged = m->MergeVertices(0.05f);          // tolerance > 0.01
 
 	EXPECT_EQ(merged, 1);
-	EXPECT_EQ(m->m_nVertices, 3u);
+	EXPECT_EQ(m->GetNVertices (), 3u);
 
 	delete m;
 }
@@ -80,7 +80,7 @@ TEST(TEST_cgmesh_merge_vertices, NearDuplicatesOutsideToleranceKept)
 	int merged = m->MergeVertices(0.05f);          // tolerance < 0.1
 
 	EXPECT_EQ(merged, 0);
-	EXPECT_EQ(m->m_nVertices, 3u);
+	EXPECT_EQ(m->GetNVertices (), 3u);
 
 	delete m;
 }
@@ -104,8 +104,8 @@ TEST(TEST_cgmesh_merge_vertices, DegenerateFacesRemoved)
 	int merged = m->MergeVertices(1e-6f);
 
 	EXPECT_EQ(merged, 1);
-	EXPECT_EQ(m->m_nVertices, 3u);
-	EXPECT_EQ(m->m_nFaces, 1u);                    // degenerate dropped
+	EXPECT_EQ(m->GetNVertices (), 3u);
+	EXPECT_EQ(m->GetNFaces (), 1u);                    // degenerate dropped
 
 	delete m;
 }
@@ -127,7 +127,7 @@ TEST(TEST_cgmesh_merge_vertices, BoundaryCellsAreProbed)
 
 	EXPECT_EQ(merged, 1)
 		<< "Vertices straddling a cell boundary must still be merged when within tolerance";
-	EXPECT_EQ(m->m_nVertices, 1u);
+	EXPECT_EQ(m->GetNVertices (), 1u);
 
 	delete m;
 }
@@ -149,14 +149,14 @@ TEST(TEST_cgmesh_merge_vertices, FaceIndicesAreRemappedConsistently)
 	Mesh *m = makeMesh(verts, faces);
 	m->MergeVertices(1e-6f);
 
-	ASSERT_EQ(m->m_nFaces, 2u);
+	ASSERT_EQ(m->GetNFaces (), 2u);
 	// After merge, vertex 2 should be remapped to 0.
-	for (unsigned int f = 0; f < m->m_nFaces; ++f)
+	for (unsigned int f = 0; f < m->GetNFaces (); ++f)
 		for (int k = 0; k < 3; ++k)
 		{
-			int v = m->m_pFaces[f]->GetVertex(k);
+			int v = m->FaceAt (f)->GetVertex(k);
 			EXPECT_GE(v, 0);
-			EXPECT_LT((unsigned)v, m->m_nVertices);
+			EXPECT_LT((unsigned)v, m->GetNVertices ());
 		}
 
 	delete m;
@@ -202,7 +202,7 @@ TEST(TEST_cgmesh_merge_vertices, ScalesToFiftyThousandVertices)
 	          << " unique + " << nUnique << " duplicates) merged in " << ms << " ms\n";
 
 	EXPECT_EQ(merged, (int)nUnique);
-	EXPECT_EQ(m->m_nVertices, nUnique);
+	EXPECT_EQ(m->GetNVertices (), nUnique);
 	// Sanity time bound : on a debug build we want < 5 seconds. The naive
 	// O(N^2) algorithm would take ~250 seconds on this size.
 	EXPECT_LT(ms, 5000.0)

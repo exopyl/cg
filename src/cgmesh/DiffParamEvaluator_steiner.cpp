@@ -162,11 +162,10 @@ static int is_already_visited (int index, int *array, int n)
 
 void MeshAlgoTensorEvaluator::ApplySteinerAux (int index, float radius, int *_n_edges, int **_edges)
 {
-	int nv = m_pModel->m_pMesh->m_nVertices;
-	int nf = m_pModel->m_pMesh->m_nFaces;
-	float *v = m_pModel->m_pMesh->m_pVertices.data();
-	Face **f = m_pModel->m_pMesh->m_pFaces;
-	float *vn = m_pModel->m_pMesh->m_pVertexNormals.data();
+	int nv = m_pModel->m_pMesh->GetNVertices ();
+	int nf = m_pModel->m_pMesh->GetNFaces ();
+	const float *v = m_pModel->m_pMesh->GetVertices ().data();
+	const float *vn = m_pModel->m_pMesh->GetVertexNormals ().data();
 
 	int j;
 	if (radius == 0.0)

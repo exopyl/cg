@@ -13,7 +13,7 @@ public:
 	~GeodesicWrapper ();
 
 	bool input (char *filename);
-	bool SetMesh (unsigned int nvertices, float *vertices, unsigned int nfaces, unsigned int *faces);
+	bool SetMesh (unsigned int nvertices, const float *vertices, unsigned int nfaces, unsigned int *faces);
 	bool OuputDistances (float *distances);
 
 	inline unsigned int GetNVertices (void) { return mesh.vertices().size(); };

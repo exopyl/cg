@@ -131,24 +131,24 @@ Coffscreen_rendering::draw_object (void)
 
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	glBegin(GL_TRIANGLES);
-	for (unsigned int i=0; i<model->m_nFaces; i++)
+	for (unsigned int i=0; i<model->GetNFaces (); i++)
 	{
-		Face *pFace = model->m_pFaces[i];
+		auto pFace = model->FaceAt (i);
 
-		unsigned int a = pFace->m_pVertices[0];
-		unsigned int b = pFace->m_pVertices[1];
-		unsigned int c = pFace->m_pVertices[2];
-		glVertex3f (model->m_pVertices[3*a], model->m_pVertices[3*a+1], model->m_pVertices[3*a+2]);
-		glVertex3f (model->m_pVertices[3*b], model->m_pVertices[3*b+1], model->m_pVertices[3*b+2]);
-		glVertex3f (model->m_pVertices[3*c], model->m_pVertices[3*c+1], model->m_pVertices[3*c+2]);
+		unsigned int a = pFace->GetVertex (0);
+		unsigned int b = pFace->GetVertex (1);
+		unsigned int c = pFace->GetVertex (2);
+		glVertex3f (model->GetVertices ()[3*a], model->GetVertices ()[3*a+1], model->GetVertices ()[3*a+2]);
+		glVertex3f (model->GetVertices ()[3*b], model->GetVertices ()[3*b+1], model->GetVertices ()[3*b+2]);
+		glVertex3f (model->GetVertices ()[3*c], model->GetVertices ()[3*c+1], model->GetVertices ()[3*c+2]);
 	}
 	glEnd();
 
 
 /*
-  glNormalPointer (GL_FLOAT, 0, model->m_pVertexNormals.data());
+  glNormalPointer (GL_FLOAT, 0, model->GetVertexNormals ().data());
   //glColorPointer  (3, GL_FLOAT, 0, model->get_vertices_colors());
-  glVertexPointer (3, GL_FLOAT, 0, model->m_pVertices.data());
+  glVertexPointer (3, GL_FLOAT, 0, model->GetVertices ().data());
   glDrawElements (GL_TRIANGLES, 3*model->get_n_faces(), GL_UNSIGNED_INT, model->get_faces());
 */
 

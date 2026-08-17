@@ -19,10 +19,10 @@ Cdistribution_around_axis::Cdistribution_around_axis (Mesh_half_edge *_model)
   histogram2k2 = nullptr;
   histogram3k  = nullptr;
 
-  nv = model->m_pMesh->m_nVertices;
-  nf = model->m_pMesh->m_nFaces;
-  v  = model->m_pMesh->m_pVertices.data();
-  f  = model->m_pMesh->m_pFaces;
+  nv = model->m_pMesh->GetNVertices ();
+  nf = model->m_pMesh->GetNFaces ();
+  v  = model->m_pMesh->GetVertices ().data();
+  pm = model->m_pMesh;
 
   compute_cumulative_areas ();
 
@@ -34,8 +34,8 @@ void
 Cdistribution_around_axis::compute_length_dmean_variance_deviation (const Vector3f &axis,
 								    float *_length, float *_dmean, float *_variance, float *_deviation)
 {
-  int i, nv = model->m_pMesh->m_nVertices;
-  float  *v = model->m_pMesh->m_pVertices.data();
+  int i, nv = model->m_pMesh->GetNVertices ();
+  const float  *v = model->m_pMesh->GetVertices ().data();
   float length, dmean, variance, deviation;
   Vector3f pt;
   // Les deux etaient malloc'es et jamais rendus : la fonction n'a aucune
@@ -302,9 +302,9 @@ Cdistribution_around_axis::compute_second_order_distributions_paquet (orientatio
 
   delete opca;
   model->m_pMesh->ComputeNormals ();
-  int i, j, nv = model->m_pMesh->m_nVertices;
-  float *vn = model->m_pMesh->m_pVertexNormals.data();
-  float *fn = model->m_pMesh->m_pFaceNormals.data();
+  int i, j, nv = model->m_pMesh->GetNVertices ();
+  const float *vn = model->m_pMesh->GetVertexNormals ().data();
+  const float *fn = model->m_pMesh->GetFaceNormals ().data();
   assert (vn);
 
   npoints = _npoints;
@@ -341,9 +341,9 @@ Cdistribution_around_axis::compute_second_order_distributions_paquet (orientatio
 	  iwalk = select_random_point (walk);
 
 	  int a,b,c;
-	  a = f[iwalk]->GetVertex(0);
-	  b = f[iwalk]->GetVertex(1);
-	  c = f[iwalk]->GetVertex(2);
+	  a = pm->FaceAt (iwalk)->GetVertex(0);
+	  b = pm->FaceAt (iwalk)->GetVertex(1);
+	  c = pm->FaceAt (iwalk)->GetVertex(2);
 
 	  v1.Set (v[3*a], v[3*a+1], v[3*a+2]);
 	  v2.Set (v[3*b], v[3*b+1], v[3*b+2]);
@@ -494,9 +494,9 @@ Cdistribution_around_axis::compute_cumulative_areas (void)
   for (i=0; i<nf; i++)
     {
       int a, b, c;
-      a = f[i]->GetVertex(0);
-      b = f[i]->GetVertex(1);
-      c = f[i]->GetVertex(2);
+      a = pm->FaceAt (i)->GetVertex(0);
+      b = pm->FaceAt (i)->GetVertex(1);
+      c = pm->FaceAt (i)->GetVertex(2);
 
       Vector3f v1;
       Vector3f v2;
@@ -539,9 +539,9 @@ Cdistribution_around_axis::select_random_point (Vector3f &point)
 
   Vector3f v1, v2, v3;
       int a, b, c;
-      a = f[i]->GetVertex(0);
-      b = f[i]->GetVertex(1);
-      c = f[i]->GetVertex(2);
+      a = pm->FaceAt (i)->GetVertex(0);
+      b = pm->FaceAt (i)->GetVertex(1);
+      c = pm->FaceAt (i)->GetVertex(2);
   v1.Set (v[3*a], v[3*a+1], v[3*a+2]);
   v2.Set (v[3*b], v[3*b+1], v[3*b+2]);
   v3.Set (v[3*c], v[3*c+1], v[3*c+2]);

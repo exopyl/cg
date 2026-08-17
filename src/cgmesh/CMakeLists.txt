@@ -16,6 +16,11 @@ if (EMSCRIPTEN)
         ${PROJECT_SOURCE_DIR}/mesh_transform.cpp
         ${PROJECT_SOURCE_DIR}/mesh_triangulation.cpp
         ${PROJECT_SOURCE_DIR}/mesh_nm.cpp
+        # OBLIGATOIRE bien que le navigateur ne raycaste pas : mesh.cpp appelle
+        # GetIntersectionWithRayBruteForce() depuis Mesh::GetIntersectionWithRay.
+        # L'omettre casse le lien WASM -- et emsdk etant absent de la machine de
+        # developpement, rien ici ne le signalerait.
+        ${PROJECT_SOURCE_DIR}/mesh_raycast.cpp
         ${PROJECT_SOURCE_DIR}/normals.cpp
         ${PROJECT_SOURCE_DIR}/bounding_box.cpp
         ${PROJECT_SOURCE_DIR}/geometric_primitives.cpp

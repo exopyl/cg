@@ -34,5 +34,5 @@ HausdorffResult mesh_hausdorff (Mesh &a, Mesh &b);
 float mesh_hausdorff_relative (Mesh &a, Mesh &b);
 
 // Distance de chaque SOMMET de `from` à la surface de `to` (taille =
-// from.m_nVertices). Pour colorer une heatmap d'erreur.
+// from.GetNVertices ()). Pour colorer une heatmap d'erreur.
 std::vector<float> mesh_pointwise_distance (Mesh &from, Mesh &to);

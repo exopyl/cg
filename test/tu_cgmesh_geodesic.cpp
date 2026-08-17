@@ -66,7 +66,7 @@ TEST(TEST_cgmesh_geodesic, geodesic_no_target)
 	pMesh->load("./test/data/rabbit.obj");
 
 	//bool success = geodesic->input (argv[1]);
-	bool success = geodesic->SetMesh(pMesh->m_nVertices, pMesh->m_pVertices.data(), pMesh->m_nFaces, pMesh->GetTriangles().data());
+	bool success = geodesic->SetMesh(pMesh->GetNVertices (), pMesh->GetVertices ().data(), pMesh->GetNFaces (), pMesh->GetTriangles().data());
 	ASSERT_TRUE(success);
 
 	// set the algorithm
@@ -100,7 +100,7 @@ TEST(TEST_cgmesh_geodesic, geodesic_with_target)
 	pMesh->load("./test/data/rabbit.obj");
 
 	//bool success = geodesic->input (argv[1]);
-	bool success = geodesic->SetMesh(pMesh->m_nVertices, pMesh->m_pVertices.data(), pMesh->m_nFaces, pMesh->GetTriangles().data());
+	bool success = geodesic->SetMesh(pMesh->GetNVertices (), pMesh->GetVertices ().data(), pMesh->GetNFaces (), pMesh->GetTriangles().data());
 	ASSERT_TRUE(success);
 
 	// set the algorithm
@@ -112,7 +112,7 @@ TEST(TEST_cgmesh_geodesic, geodesic_with_target)
 
 	// action : target vertex specified, compute single path
 	unsigned target_vertex_index = 22;
-	geodesic::SurfacePoint target(pMesh->m_pVertices[target_vertex_index]);		//create source
+	geodesic::SurfacePoint target(pMesh->GetVertices ()[target_vertex_index]);		//create source
 
 	std::vector<geodesic::SurfacePoint> path;	//geodesic path is a sequence of SurfacePoints
 

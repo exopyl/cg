@@ -23,8 +23,8 @@ Mesh_half_edge::check_topology (void)
 {
 	if (!m_topology_ok.empty()) return;
 	
-	m_topology_ok.resize(m_pMesh->m_nVertices, 1);
-	for (unsigned int i=0; i<m_pMesh->m_nVertices; i++)
+	m_topology_ok.resize(m_pMesh->GetNVertices (), 1);
+	for (unsigned int i=0; i<m_pMesh->GetNVertices (); i++)
 	{
 		int *visited_edges = nullptr;
 		int n_visited_edges = 0;
@@ -66,8 +66,8 @@ Mesh_half_edge::check_border (void)
 	if (!m_border.empty()) return;
 	check_topology ();
 	
-	m_border.resize(m_pMesh->m_nVertices);
-	for (unsigned int i=0; i<m_pMesh->m_nVertices; i++)
+	m_border.resize(m_pMesh->GetNVertices ());
+	for (unsigned int i=0; i<m_pMesh->GetNVertices (); i++)
 	{
 		if (!m_topology_ok[i])
 			m_border[i] = 1;
@@ -98,7 +98,11 @@ Che_mesh* Mesh_half_edge::GetCheMesh()
 	{
 		m_pCheMesh = std::make_unique<Che_mesh>();
 		std::vector<unsigned int> tris = m_pMesh->GetTriangles();
-		m_pCheMesh->create_half_edge (m_pMesh->m_nVertices, m_pMesh->m_nFaces, tris.data());
+		// ⚠ tris.size()/3, et SURTOUT PAS GetNFaces () : sur un maillage a n-gons la
+		// triangulation produit PLUS de triangles que de faces, et passer le compte
+		// de faces construirait la structure sur les seuls premiers, sans un mot.
+		m_pCheMesh->create_half_edge (m_pMesh->GetNVertices (),
+					      (int)(tris.size () / 3), tris.data());
 	}
 	return m_pCheMesh.get();
 }
@@ -130,20 +134,14 @@ Mesh_half_edge::Mesh_half_edge (int par_nv, float *par_v, int par_nf, unsigned i
 
 Mesh_half_edge::Mesh_half_edge (Mesh *pMesh)
 {
-	m_pMesh = new Mesh();
-
-	m_pMesh->Init();
-
+	// Copie PROFONDE : le maillage enveloppe garde ses materiaux, ses UV, ses
+	// tenseurs, ses lignes, ses points -- et son identite de POLYGONE.
+	//
+	// ⚠ Ne pas trianguler ici. La triangulation appartient a GetCheMesh (), seule a
+	// en avoir besoin, et elle y est paresseuse.
+	m_pMesh = pMesh ? new Mesh (*pMesh) : new Mesh ();
 	if (!pMesh)
-	{
-		return;
-	}
-
-	m_pMesh->SetVertices (pMesh->m_nVertices, pMesh->m_pVertices.data());
-	m_pMesh->SetVertexNormals(pMesh->m_nVertices, pMesh->m_pVertexNormals.data());
-	std::vector<unsigned int> tris = pMesh->GetTriangles();
-	m_pMesh->SetFaces (pMesh->m_nFaces, 3, tris.data());
-	m_pMesh->InitVertexColors();
+		m_pMesh->Init ();
 }
 
 /**
@@ -177,13 +175,13 @@ void Mesh_half_edge::export_statistics (const std::string & filename)
 	fprintf (ptr, "<html>\n");
 	fprintf (ptr, "<head><title></title></head>\n");
 	fprintf (ptr, "<body>\n");
-	fprintf (ptr, "<p>number of vertices : %d\n", m_pMesh->m_nVertices);
-	fprintf (ptr, "<p>number of faces : %d\n", m_pMesh->m_nFaces);
+	fprintf (ptr, "<p>number of vertices : %d\n", m_pMesh->GetNVertices ());
+	fprintf (ptr, "<p>number of faces : %d\n", m_pMesh->GetNFaces ());
 
 
 	m_pMesh->computebbox ();
 	float min[3], max[3];
-	m_pMesh->m_bbox.GetMinMax(min, max);
+	m_pMesh->bbox ().GetMinMax(min, max);
 	fprintf (ptr, "<p>bbox :\n");
 	fprintf (ptr, "<br> x : %f -> %f\n", min[0], max[0]);
 	fprintf (ptr, "<br> y : %f -> %f\n", min[1], max[1]);
@@ -209,10 +207,10 @@ void Mesh_half_edge::export_statistics (const std::string & filename)
 	free(verticesinfaces);
 
 	// materials
-	fprintf (ptr, "<p>Materials : %zu", m_pMesh->m_pMaterials.size());
-	for (size_t i = 0; i < m_pMesh->m_pMaterials.size(); ++i)
+	fprintf (ptr, "<p>Materials : %u", m_pMesh->GetNMaterials ());
+	for (unsigned int i = 0; i < m_pMesh->GetNMaterials (); ++i)
 	{
-		Material *pMaterial = m_pMesh->m_pMaterials[i].get();
+		Material *pMaterial = m_pMesh->GetMaterial (i);
 		if (!pMaterial) continue;
 		fprintf (ptr, "<br>material %u : %s", (unsigned int)i, pMaterial->GetName().c_str());
 	}
@@ -280,13 +278,13 @@ void Mesh_half_edge::edge_flip (int par_edge)
 	unsigned int f2_v2 = GetCheMesh()->edge(pair).m_v_end;
 	unsigned int f2_v3 = GetCheMesh()->edge(GetCheMesh()->edge(pair).m_he_next).m_v_end;
 
-	m_pMesh->m_pFaces[f1]->SetVertex (0, f2_v3);
-	m_pMesh->m_pFaces[f1]->SetVertex (1, f1_v3);
-	m_pMesh->m_pFaces[f1]->SetVertex (2, f1_v1);
+	m_pMesh->FaceAt (f1)->SetVertex (0, f2_v3);
+	m_pMesh->FaceAt (f1)->SetVertex (1, f1_v3);
+	m_pMesh->FaceAt (f1)->SetVertex (2, f1_v1);
 
-	m_pMesh->m_pFaces[f2]->SetVertex (0, f1_v3);
-	m_pMesh->m_pFaces[f2]->SetVertex (1, f2_v3);
-	m_pMesh->m_pFaces[f2]->SetVertex (2, f1_v2);
+	m_pMesh->FaceAt (f2)->SetVertex (0, f1_v3);
+	m_pMesh->FaceAt (f2)->SetVertex (1, f2_v3);
+	m_pMesh->FaceAt (f2)->SetVertex (2, f1_v2);
 
 	// update the half edge mesh
 	GetCheMesh()->edge_flip (par_edge);
@@ -305,9 +303,10 @@ void Mesh_half_edge::edge_contract (int ei)
 	int iv1 = GetCheMesh()->edge(ei).m_v_begin;
 	int iv2 = GetCheMesh()->edge(ei).m_v_end;
 
-	m_pMesh->m_pVertices[3*iv1]   = (m_pMesh->m_pVertices[3*iv1] + m_pMesh->m_pVertices[3*iv2])*0.5;
-	m_pMesh->m_pVertices[3*iv1+1] = (m_pMesh->m_pVertices[3*iv1+1] + m_pMesh->m_pVertices[3*iv2+1])*0.5;
-	m_pMesh->m_pVertices[3*iv1+2] = (m_pMesh->m_pVertices[3*iv1+2] + m_pMesh->m_pVertices[3*iv2+2])*0.5;
+	m_pMesh->SetVertex (iv1,
+	                    (m_pMesh->GetVertices ()[3*iv1]   + m_pMesh->GetVertices ()[3*iv2])   * 0.5f,
+	                    (m_pMesh->GetVertices ()[3*iv1+1] + m_pMesh->GetVertices ()[3*iv2+1]) * 0.5f,
+	                    (m_pMesh->GetVertices ()[3*iv1+2] + m_pMesh->GetVertices ()[3*iv2+2]) * 0.5f);
 
 	// move all the vertices iv2 into iv1
 	int he = GetCheMesh()->m_edges_vertex[iv2];
@@ -315,10 +314,10 @@ void Mesh_half_edge::edge_contract (int ei)
 	do
 	{
 		int f_walk = GetCheMesh()->edge(he_walk).m_face;
-		for (int j=0; j<m_pMesh->m_pFaces[f_walk]->m_nVertices; j++)
+		for (int j=0; j<m_pMesh->FaceAt (f_walk)->GetNVertices (); j++)
 		{
-			if (m_pMesh->m_pFaces[f_walk]->m_pVertices[j] == iv2)
-				m_pMesh->m_pFaces[f_walk]->m_pVertices[j] = iv1;
+			if (m_pMesh->FaceAt (f_walk)->GetVertex (j) == (int)iv2)
+				m_pMesh->FaceAt (f_walk)->SetVertex (j, iv1);
 		}
 		int n1 = GetCheMesh()->edge(he_walk).m_he_next;
 		int n2 = GetCheMesh()->edge(n1).m_he_next;
@@ -329,10 +328,8 @@ void Mesh_half_edge::edge_contract (int ei)
 	int f1 = GetCheMesh()->edge(ei).m_face;
 	int f2 = GetCheMesh()->edge(GetCheMesh()->edge(ei).m_pair).m_face;
 
-	delete m_pMesh->m_pFaces[f1];
-	m_pMesh->m_pFaces[f1] = nullptr;
-	delete m_pMesh->m_pFaces[f2];
-	m_pMesh->m_pFaces[f2] = nullptr;
+	m_pMesh->RemoveFace (f1);
+	m_pMesh->RemoveFace (f2);
 
 	// update the half edge mesh
 	GetCheMesh()->edge_contract (ei);
@@ -352,8 +349,8 @@ float Mesh_half_edge::edge_length (int par_edge)
 
 	int iv1 = GetCheMesh()->edge(par_edge).m_v_begin;
 	int iv2 = GetCheMesh()->edge(par_edge).m_v_end;
-	Vector3f loc_v1 (m_pMesh->m_pVertices[3*iv1], m_pMesh->m_pVertices[3*iv1+1], m_pMesh->m_pVertices[3*iv1+2]);
-	Vector3f loc_v2 (m_pMesh->m_pVertices[3*iv2], m_pMesh->m_pVertices[3*iv2+1], m_pMesh->m_pVertices[3*iv2+2]);
+	Vector3f loc_v1 (m_pMesh->GetVertices ()[3*iv1], m_pMesh->GetVertices ()[3*iv1+1], m_pMesh->GetVertices ()[3*iv1+2]);
+	Vector3f loc_v2 (m_pMesh->GetVertices ()[3*iv2], m_pMesh->GetVertices ()[3*iv2+1], m_pMesh->GetVertices ()[3*iv2+2]);
 	Vector3f loc_v1v2 = loc_v2 - loc_v1;
 	return loc_v1v2.getLength ();
 }
@@ -368,8 +365,8 @@ float Mesh_half_edge::get_average_edges_length (void)
 	for (loc_i=0; loc_i<GetCheMesh()->m_ne; loc_i++)
 	{
 		Che_edge &e = GetCheMesh()->edge(loc_i);
-		Vector3d loc_v1 (m_pMesh->m_pVertices[3*e.m_v_begin], m_pMesh->m_pVertices[3*e.m_v_begin+1], m_pMesh->m_pVertices[3*e.m_v_begin+2]);
-		Vector3d loc_v2 (m_pMesh->m_pVertices[3*e.m_v_end], m_pMesh->m_pVertices[3*e.m_v_end+1], m_pMesh->m_pVertices[3*e.m_v_end+2]);
+		Vector3d loc_v1 (m_pMesh->GetVertices ()[3*e.m_v_begin], m_pMesh->GetVertices ()[3*e.m_v_begin+1], m_pMesh->GetVertices ()[3*e.m_v_begin+2]);
+		Vector3d loc_v2 (m_pMesh->GetVertices ()[3*e.m_v_end], m_pMesh->GetVertices ()[3*e.m_v_end+1], m_pMesh->GetVertices ()[3*e.m_v_end+2]);
 		loc_v1 = loc_v2 - loc_v1;
 		loc_length += loc_v1.getLength ();
 	}
@@ -386,8 +383,8 @@ Mesh_half_edge::get_shortest_edge_length (void)
 	float loc_length = 0.0, loc_length_walk;
 	{
 		Che_edge &e0 = GetCheMesh()->edge(0);
-		Vector3d loc_v1 (m_pMesh->m_pVertices[3*e0.m_v_begin], m_pMesh->m_pVertices[3*e0.m_v_begin+1], m_pMesh->m_pVertices[3*e0.m_v_begin+2]);
-		Vector3d loc_v2 (m_pMesh->m_pVertices[3*e0.m_v_end], m_pMesh->m_pVertices[3*e0.m_v_end+1], m_pMesh->m_pVertices[3*e0.m_v_end+2]);
+		Vector3d loc_v1 (m_pMesh->GetVertices ()[3*e0.m_v_begin], m_pMesh->GetVertices ()[3*e0.m_v_begin+1], m_pMesh->GetVertices ()[3*e0.m_v_begin+2]);
+		Vector3d loc_v2 (m_pMesh->GetVertices ()[3*e0.m_v_end], m_pMesh->GetVertices ()[3*e0.m_v_end+1], m_pMesh->GetVertices ()[3*e0.m_v_end+2]);
 		loc_v1 = loc_v2 - loc_v1;
 		loc_length = loc_v1.getLength ();
 	}
@@ -395,8 +392,8 @@ Mesh_half_edge::get_shortest_edge_length (void)
 	for (loc_i=0; loc_i<GetCheMesh()->m_ne; loc_i++)
 	{
 		Che_edge &e = GetCheMesh()->edge(loc_i);
-		Vector3d loc_v1 (m_pMesh->m_pVertices[3*e.m_v_begin], m_pMesh->m_pVertices[3*e.m_v_begin+1], m_pMesh->m_pVertices[3*e.m_v_begin+2]);
-		Vector3d loc_v2 (m_pMesh->m_pVertices[3*e.m_v_end], m_pMesh->m_pVertices[3*e.m_v_end+1], m_pMesh->m_pVertices[3*e.m_v_end+2]);
+		Vector3d loc_v1 (m_pMesh->GetVertices ()[3*e.m_v_begin], m_pMesh->GetVertices ()[3*e.m_v_begin+1], m_pMesh->GetVertices ()[3*e.m_v_begin+2]);
+		Vector3d loc_v2 (m_pMesh->GetVertices ()[3*e.m_v_end], m_pMesh->GetVertices ()[3*e.m_v_end+1], m_pMesh->GetVertices ()[3*e.m_v_end+2]);
 		loc_v1 = loc_v2 - loc_v1;
 		loc_length_walk = loc_v1.getLength ();
 		loc_length = (loc_length_walk < loc_length)? loc_length_walk : loc_length;
@@ -469,7 +466,7 @@ void Mesh_half_edge::dump (void)
 			GetCheMesh()->edge(i).dump (i);
 
 	check_topology ();
-	for (unsigned int i=0; i<m_pMesh->m_nVertices; i++)
+	for (unsigned int i=0; i<m_pMesh->GetNVertices (); i++)
 		printf ("topology on vertex %d : %d\n", i, m_topology_ok[i]);
 
 }

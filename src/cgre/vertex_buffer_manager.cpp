@@ -20,10 +20,10 @@ int VertexBufferManager::addMesh (Mesh *mesh)
 	if (indices.empty())
 		return -1;
 
-	int nVertices = mesh->m_nVertices;
-	int nTriangles = mesh->m_nFaces;
-	float* pVertices = mesh->m_pVertices.data();
-	float* pVertexNormals = mesh->m_pVertexNormals.data();
+	int nVertices = mesh->GetNVertices ();
+	int nTriangles = mesh->GetNFaces ();
+	const float* pVertices = mesh->GetVertices ().data();
+	const float* pVertexNormals = mesh->GetVertexNormals ().data();
 
 	GLfloat* data = (GLfloat*)malloc(6*nVertices*sizeof(GLfloat));
 	for (int i=0; i<nVertices; i++)
@@ -107,11 +107,11 @@ void VertexArrayManager::Draw (int id)
 	if (triangles.empty())
 		return;
 
-	float* pVertices = mesh->m_pVertices.data();
+	const float* pVertices = mesh->GetVertices ().data();
 
-	const bool bHasNormals   = !mesh->m_pVertexNormals.empty();
-	const bool bHasColors    = !mesh->m_pVertexColors.empty();
-	const bool bHasTexCoords = !mesh->m_pTextureCoordinates.empty();
+	const bool bHasNormals   = !mesh->GetVertexNormals ().empty();
+	const bool bHasColors    = !mesh->GetVertexColors ().empty();
+	const bool bHasTexCoords = !mesh->GetTextureCoordinates ().empty();
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 	if (bHasNormals)
@@ -121,18 +121,18 @@ void VertexArrayManager::Draw (int id)
 	if (bHasTexCoords)
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
-	glVertexPointer(3, GL_FLOAT, 0, mesh->m_pVertices.data());
+	glVertexPointer(3, GL_FLOAT, 0, mesh->GetVertices ().data());
 	if (bHasNormals)
-		glNormalPointer (GL_FLOAT, 0, mesh->m_pVertexNormals.data());
+		glNormalPointer (GL_FLOAT, 0, mesh->GetVertexNormals ().data());
 	if (bHasColors)
-		glColorPointer(3, GL_FLOAT, 0, mesh->m_pVertexColors.data());
+		glColorPointer(3, GL_FLOAT, 0, mesh->GetVertexColors ().data());
 	if (bHasTexCoords)
-		glTexCoordPointer(2, GL_FLOAT, 0, mesh->m_pTextureCoordinates.data());
+		glTexCoordPointer(2, GL_FLOAT, 0, mesh->GetTextureCoordinates ().data());
 
 	glEnable(GL_POLYGON_OFFSET_FILL);
 	glPolygonOffset(1.0, 1.0);
 
-	glDrawElements(GL_TRIANGLES, 3*mesh->m_nFaces, GL_UNSIGNED_INT, triangles.data());
+	glDrawElements(GL_TRIANGLES, 3*mesh->GetNFaces (), GL_UNSIGNED_INT, triangles.data());
 
 	glDisable(GL_POLYGON_OFFSET_FILL);
 

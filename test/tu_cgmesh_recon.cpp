@@ -731,13 +731,13 @@ TEST(TEST_cgmesh_recon, texture_projective_frontal_face)
     const int texId = mesh.GetMaterialId("tex0");
     ASSERT_GE(texId, 0);
     EXPECT_EQ(mesh.GetFaceMaterialId(0), (unsigned)texId);   // texturée par la vue 0
-    EXPECT_TRUE(mesh.GetFace(0)->m_bUseTextureCoordinates);
+    EXPECT_TRUE(mesh.FaceAt (0)->UsesTextureCoordinates ());
 
     // UV attendus : A(0.25,0.25) B(0.75,0.25) C(0.5,0.75) (cf. projection ci-dessus).
-    ASSERT_EQ(mesh.m_pTextureCoordinates.size(), 6u);
+    ASSERT_EQ(mesh.GetTextureCoordinates ().size(), 6u);
     const float expect[6] = { 0.25f,0.25f, 0.75f,0.25f, 0.5f,0.75f };
     for (int i = 0; i < 6; ++i)
-        EXPECT_NEAR(mesh.m_pTextureCoordinates[i], expect[i], 1e-4f);
+        EXPECT_NEAR(mesh.GetTextureCoordinates ()[i], expect[i], 1e-4f);
 }
 
 // Face dos tourné (normale opposée à la caméra) -> aucune vue valide -> repli gris,
@@ -759,7 +759,7 @@ TEST(TEST_cgmesh_recon, texture_projective_fallback_when_not_facing)
     const int fb = mesh.GetMaterialId("fallback");
     ASSERT_GE(fb, 0);
     EXPECT_EQ(mesh.GetFaceMaterialId(0), (unsigned)fb);      // repli, pas la texture
-    EXPECT_FALSE(mesh.GetFace(0)->m_bUseTextureCoordinates);
+    EXPECT_FALSE(mesh.FaceAt (0)->UsesTextureCoordinates ());
 }
 
 // Deux faces frontales alignées sur la ligne de visée : l'avant masque l'arrière.
@@ -797,8 +797,8 @@ TEST(TEST_cgmesh_recon, texture_projective_occlusion_culls_hidden_face)
     ASSERT_GE(texOnId, 0); ASSERT_GE(fbOnId, 0);
     EXPECT_EQ(on.GetFaceMaterialId(0), (unsigned)texOnId);  // avant : texturée
     EXPECT_EQ(on.GetFaceMaterialId(1), (unsigned)fbOnId);   // arrière : occultée -> repli
-    EXPECT_TRUE (on.GetFace(0)->m_bUseTextureCoordinates);
-    EXPECT_FALSE(on.GetFace(1)->m_bUseTextureCoordinates);
+    EXPECT_TRUE (on.FaceAt (0)->UsesTextureCoordinates ());
+    EXPECT_FALSE(on.FaceAt (1)->UsesTextureCoordinates ());
 
     // --- occlusion OFF : la même face arrière est désormais texturée ---
     Mesh off; build(off);
@@ -806,5 +806,5 @@ TEST(TEST_cgmesh_recon, texture_projective_occlusion_culls_hidden_face)
     texOff.texture(off, {texFile}, {cam});
 
     EXPECT_EQ(off.GetFaceMaterialId(1), (unsigned)off.GetMaterialId("tex0"));
-    EXPECT_TRUE(off.GetFace(1)->m_bUseTextureCoordinates);
+    EXPECT_TRUE(off.FaceAt (1)->UsesTextureCoordinates ());
 }

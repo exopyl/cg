@@ -7,7 +7,12 @@
 //
 //
 //
-class wxDrawingArea : wxControl
+// ⚠ CODE MORT : la seule reference a cette classe dans tout le depot est un
+// #include COMMENTE dans SinaiaFrame.cpp.
+//
+// L'heritage doit rester PUBLIC : la table d'evenements wxWidgets convertit un
+// pointeur de methode vers wxEvtHandler::*, ce qu'un heritage prive interdit.
+class wxDrawingArea : public wxControl
 {
 public:
 	wxDrawingArea () {};

@@ -59,9 +59,9 @@ bool BundleSource::estimate(const std::vector<std::string>& imagePaths,
     if (bundle.mesh)
     {
         Mesh* m = bundle.mesh;
-        sparse.positions.assign(m->m_pVertices.begin(), m->m_pVertices.end());
-        if (m->m_pVertexColors.size() == m->m_pVertices.size())
-            sparse.colors.assign(m->m_pVertexColors.begin(), m->m_pVertexColors.end());
+        sparse.positions.assign(m->GetVertices ().begin(), m->GetVertices ().end());
+        if (m->GetVertexColors ().size() == m->GetVertices ().size())
+            sparse.colors.assign(m->GetVertexColors ().begin(), m->GetVertexColors ().end());
     }
 
     return !cameras.empty();

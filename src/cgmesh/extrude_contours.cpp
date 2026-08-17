@@ -413,20 +413,19 @@ Mesh* ExtrudedMeshBuilder::Build(void)
 	}
 
 	auto* m = new Mesh();
+	// Init dimensionne les faces ; la boucle ci-dessous ne fait que les remplir.
+	m->Init((unsigned int)nOut, (unsigned int)m_faces.size());
 	m->SetVertices(nOut, verts.data());
 
-	m->m_nFaces = (unsigned int)m_faces.size();
-	m->m_pFaces = new Face*[m_faces.size()];
 	for (size_t i = 0; i < m_faces.size(); ++i)
 	{
 		const Tri& t = m_faces[i];
-		Face* f = new Face();
+		auto f = m->FaceAt (i);
 		f->SetNVertices(3);
 		f->SetVertex(0, remap[t.a]);
 		f->SetVertex(1, remap[t.b]);
 		f->SetVertex(2, remap[t.c]);
 		f->SetMaterialId(t.materialId);
-		m->m_pFaces[i] = f;
 	}
 
 	m->ComputeNormals();

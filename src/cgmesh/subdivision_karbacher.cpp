@@ -29,12 +29,11 @@ bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 	if (!model || !model->m_pMesh) return false;
 
 	m_pModel = model;
-	const int nv = (int)model->m_pMesh->m_nVertices;
-	const int nf = (int)model->m_pMesh->m_nFaces;
-	const float *v  = model->m_pMesh->m_pVertices.data();
-	const float *vn = model->m_pMesh->m_pVertexNormals.data();
-	Face **f = model->m_pMesh->m_pFaces;
-	if (nv <= 0 || nf <= 0 || !v || !vn || !f) return false;
+	const int nv = (int)model->m_pMesh->GetNVertices ();
+	const int nf = (int)model->m_pMesh->GetNFaces ();
+	const float *v  = model->m_pMesh->GetVertices ().data();
+	const float *vn = model->m_pMesh->GetVertexNormals ().data();
+	if (nv <= 0 || nf <= 0 || !v || !vn) return false;
 
 	const int nv_new = nv + nf;
 	const int nf_new = 3 * nf;
@@ -48,9 +47,10 @@ bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 
 	for (int i = 0; i < nf; ++i)
 	{
-		int iv1 = f[i]->GetVertex(0);
-		int iv2 = f[i]->GetVertex(1);
-		int iv3 = f[i]->GetVertex(2);
+		auto fc = model->m_pMesh->FaceAt (i);
+		int iv1 = fc->GetVertex(0);
+		int iv2 = fc->GetVertex(1);
+		int iv3 = fc->GetVertex(2);
 		int iv4 = nv + i;   // new centroid vertex for face i
 
 		Vector3d V1 (v[3*iv1], v[3*iv1+1], v[3*iv1+2]);
@@ -76,12 +76,6 @@ bool MeshAlgoSubdivisionKarbacher::Apply (Mesh_half_edge *model)
 		p2[0] = (unsigned)iv3; p2[1] = (unsigned)iv1; p2[2] = (unsigned)iv4;
 	}
 
-	// Delete the existing per-Face objects ; SetFaces frees the outer array.
-	if (model->m_pMesh->m_pFaces)
-	{
-		for (unsigned int i = 0; i < model->m_pMesh->m_nFaces; ++i)
-			delete model->m_pMesh->m_pFaces[i];
-	}
 
 	model->m_pMesh->SetVertices ((unsigned)nv_new, v_new.data());
 	model->m_pMesh->SetFaces ((unsigned)nf_new, 3, faces.data());
@@ -130,8 +124,8 @@ void MeshAlgoSubdivisionKarbacher::InitializePosition (Vector3d &pos, Vector3d &
 
 void MeshAlgoSubdivisionKarbacher::DeleteAngles (void)
 {
-	int nf = m_pModel->m_pMesh->m_nFaces;
-	float *v = m_pModel->m_pMesh->m_pVertices.data();
+	int nf = m_pModel->m_pMesh->GetNFaces ();
+	const float *v = m_pModel->m_pMesh->GetVertices ().data();
 	Che_mesh *chePtr = m_pModel->GetCheMesh();
 	int m_ne = chePtr->m_ne;
 

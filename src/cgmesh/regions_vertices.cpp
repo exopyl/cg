@@ -14,7 +14,7 @@ Cregions_vertices::Cregions_vertices (Mesh_half_edge *_mesh_half_edge)
 {
   assert (_mesh_half_edge);
   mesh_half_edge  = _mesh_half_edge;
-  size            = mesh_half_edge->m_pMesh->m_nVertices;
+  size            = mesh_half_edge->m_pMesh->GetNVertices ();
   datas           = new float[size];
   regions         = new int[size];
   selected_region = new int[size];
@@ -177,14 +177,14 @@ Cregions_vertices::export_selected_region_cloud_points (char *filename)
   if (!ptr)
     return;
 
-  float *v = nullptr;
-  float *vn = nullptr;
+  const float *v = nullptr;
+  const float *vn = nullptr;
 
   // get the mesh
   if (mesh_half_edge)
     {
-      v  = mesh_half_edge->m_pMesh->m_pVertices.data();
-      vn = mesh_half_edge->m_pMesh->m_pVertexNormals.data();
+      v  = mesh_half_edge->m_pMesh->GetVertices ().data();
+      vn = mesh_half_edge->m_pMesh->GetVertexNormals ().data();
    }
   // Ce retour anticipe sautait le fclose de fin de fonction
   // (cpp:S2095, regions_vertices.cpp:186).
@@ -482,27 +482,19 @@ Cregions_vertices::init_cylinders (float threshold, float epsilon)
 void
 Cregions_vertices::refresh_colors (void)
 {
-  float *vc = mesh_half_edge->m_pMesh->m_pVertexColors.data();
+  Mesh *pMesh = mesh_half_edge->m_pMesh;
+  if (pMesh->GetVertexColors ().empty())
+    return;
+
   for (int i=0; i<size; i++)
     {
       if (regions[i] == 1)
-	{
-	  vc[3*i]   = r_regions;
-	  vc[3*i+1] = g_regions;
-	  vc[3*i+2] = b_regions;
-	}
+	pMesh->SetVertexColor (i, r_regions, g_regions, b_regions);
       else
-	{
-	  vc[3*i]   = r_common_vertex;
-	  vc[3*i+1] = g_common_vertex;
-	  vc[3*i+2] = b_common_vertex;
-	}
+	pMesh->SetVertexColor (i, r_common_vertex, g_common_vertex, b_common_vertex);
+
       if (selected_region[i] == 1)
-	{
-	  vc[3*i]   = r_selected_region;
-	  vc[3*i+1] = g_selected_region;
-	  vc[3*i+2] = b_selected_region;
-	}
+	pMesh->SetVertexColor (i, r_selected_region, g_selected_region, b_selected_region);
     }
 }
 

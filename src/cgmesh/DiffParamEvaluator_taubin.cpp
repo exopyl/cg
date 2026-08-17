@@ -5,9 +5,9 @@
 //
 bool MeshAlgoTensorEvaluator::ApplyTaubin (void)
 {
-	int nv = m_pModel->m_pMesh->m_nVertices;
-	float *v = m_pModel->m_pMesh->m_pVertices.data();
-	float *vn = m_pModel->m_pMesh->m_pVertexNormals.data();
+	int nv = m_pModel->m_pMesh->GetNVertices ();
+	const float *v = m_pModel->m_pMesh->GetVertices ().data();
+	const float *vn = m_pModel->m_pMesh->GetVertexNormals ().data();
 	int i,k;
 	float eigenvectors[3][3];
 	float eigenvalues[3];
@@ -20,7 +20,7 @@ bool MeshAlgoTensorEvaluator::ApplyTaubin (void)
     {
 		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
-			Tensors ()[i] = nullptr;
+			SetTensorAt (i, nullptr);
 			continue;
 		}
 
@@ -178,7 +178,7 @@ bool MeshAlgoTensorEvaluator::ApplyTaubin (void)
 			}
 			pDiffParamWalk->SetDirectionMax (eigenvectors[0][i_max], eigenvectors[1][i_max], eigenvectors[2][i_max]);
 			pDiffParamWalk->SetDirectionMin (eigenvectors[0][i_min], eigenvectors[1][i_min], eigenvectors[2][i_min]);
-			Tensors ()[i].reset (pDiffParamWalk);
+			SetTensorAt (i, pDiffParamWalk);
     }
 
 	return true;

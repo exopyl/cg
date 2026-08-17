@@ -49,13 +49,12 @@ int MeshIO::load (Mesh& mesh, const char *filename)
 		res = MeshIO::import_u3d(mesh, filename);
 
 	// check coherency
-	if (mesh.m_nTextureCoordinates == 0)
+	if (mesh.GetNTextureCoordinates () == 0)
 	{
 		// desactivate texture coordinates if they are not provided
-		for (unsigned int iFace = 0; iFace < mesh.m_nFaces; iFace++)
+		for (unsigned int iFace = 0; iFace < mesh.GetNFaces (); iFace++)
 		{
-			auto& face = mesh.m_pFaces[iFace];
-			face->m_bUseTextureCoordinates = false;
+			mesh.FaceAt (iFace)->SetUsesTextureCoordinates (false);
 		}
 	}
 
@@ -129,15 +128,11 @@ int MeshIO::import_asc (Mesh& mesh, const char *filename)
 	while (!feof (file))
 	{
 		fscanf (file, "%f %f %f %d %d %d %f %f %f\n", &vx, &vy, &vz, &r, &g, &b, &nx, &ny, &nz);
-		mesh.m_pVertices[3*i+0] = vx;
-		mesh.m_pVertices[3*i+1] = vy;
-		mesh.m_pVertices[3*i+2] = vz;
-		mesh.m_pVertexColors[3*i+0]	= r/255.;
-		mesh.m_pVertexColors[3*i+1]	= g/255.;
-		mesh.m_pVertexColors[3*i+2]	= b/255.;
-		mesh.m_pVertexNormals[3*i+0] = nx;
-		mesh.m_pVertexNormals[3*i+1] = ny;
-		mesh.m_pVertexNormals[3*i+2] = nz;
+		mesh.SetVertexComponent (i, 0, vx);
+		mesh.SetVertexComponent (i, 1, vy);
+		mesh.SetVertexComponent (i, 2, vz);
+		mesh.SetVertexColor (i, r/255., g/255., b/255.);
+		mesh.SetVertexNormal (i, nx, ny, nz);
 		i++;
 	}
 	fclose (file);
@@ -148,30 +143,30 @@ int MeshIO::import_asc (Mesh& mesh, const char *filename)
 int MeshIO::export_asc (Mesh& mesh, const char *filename)
 {
 	FILE *ptr = fopen (filename, "w");
-	printf ("ASC : %d\n", mesh.m_nVertices);
+	printf ("ASC : %d\n", mesh.GetNVertices ());
 	unsigned char r=0, g=0, b=0;
-	if (!mesh.m_pVertexColors.empty())
+	if (!mesh.GetVertexColors ().empty())
 	{
-		for (unsigned int i=0; i<mesh.m_nVertices; i++)
+		for (unsigned int i=0; i<mesh.GetNVertices (); i++)
 		{
-			r = (unsigned char)(255.*mesh.m_pVertexColors[3*i+0]);
-			g = (unsigned char)(255.*mesh.m_pVertexColors[3*i+1]);
-			b = (unsigned char)(255.*mesh.m_pVertexColors[3*i+2]);
+			r = (unsigned char)(255.*mesh.GetVertexColors ()[3*i+0]);
+			g = (unsigned char)(255.*mesh.GetVertexColors ()[3*i+1]);
+			b = (unsigned char)(255.*mesh.GetVertexColors ()[3*i+2]);
 			fprintf (ptr, "%f %f %f %d %d %d %f %f %f\n",
-				 mesh.m_pVertices[3*i+0], mesh.m_pVertices[3*i+1], mesh.m_pVertices[3*i+2],
+				 mesh.GetVertices ()[3*i+0], mesh.GetVertices ()[3*i+1], mesh.GetVertices ()[3*i+2],
 				 r, g, b,
-				 mesh.m_pVertexNormals[3*i+0], mesh.m_pVertexNormals[3*i+1], mesh.m_pVertexNormals[3*i+2]
+				 mesh.GetVertexNormals ()[3*i+0], mesh.GetVertexNormals ()[3*i+1], mesh.GetVertexNormals ()[3*i+2]
 				);
 		}
 	}
 	else
 	{
-		for (unsigned int i=0; i<mesh.m_nVertices; i++)
+		for (unsigned int i=0; i<mesh.GetNVertices (); i++)
 		{
 			fprintf (ptr, "%f %f %f %d %d %d %f %f %f\n",
-				 mesh.m_pVertices[3*i+0], mesh.m_pVertices[3*i+1], mesh.m_pVertices[3*i+2],
+				 mesh.GetVertices ()[3*i+0], mesh.GetVertices ()[3*i+1], mesh.GetVertices ()[3*i+2],
 				 r, g, b,
-				 mesh.m_pVertexNormals[3*i+0], mesh.m_pVertexNormals[3*i+1], mesh.m_pVertexNormals[3*i+2]
+				 mesh.GetVertexNormals ()[3*i+0], mesh.GetVertexNormals ()[3*i+1], mesh.GetVertexNormals ()[3*i+2]
 				);
 		}
 	}
@@ -210,14 +205,14 @@ int MeshIO::import_pset (Mesh& mesh, const char *filename)
 	unsigned int i=0;
 	while (!feof (file))
 	{
-		fscanf (file, "%f %f %f %f %f %f\n",
-			&mesh.m_pVertices[i],
-			&mesh.m_pVertices[i+1],
-			&mesh.m_pVertices[i+2],
-			&mesh.m_pVertexNormals[i],
-			&mesh.m_pVertexNormals[i+1],
-			&mesh.m_pVertexNormals[i+2]);
-		i+=3;
+		// fscanf est variadique : lui passer l'adresse d'un element de la vue
+		// const compilerait sans diagnostic et ecrirait a travers un
+		// `const float*`. On lit dans des locales, puis on ecrit par accesseur.
+		float px, py, pz;
+		fscanf (file, "%f %f %f %f %f %f\n", &px, &py, &pz, &nx, &ny, &nz);
+		mesh.SetVertex (i, px, py, pz);
+		mesh.SetVertexNormal (i, nx, ny, nz);
+		i++;
 	}
 	fclose (file);
 
@@ -228,11 +223,11 @@ int MeshIO::export_pset (Mesh& mesh, const char *filename)
 {
 	FILE *ptr = fopen (filename, "w");
 	
-	for (unsigned int i=0; i<mesh.m_nVertices; i++)
+	for (unsigned int i=0; i<mesh.GetNVertices (); i++)
 	{
 		fprintf (ptr, "%f %f %f %f %f %f\n",
-			 mesh.m_pVertices[3*i+0], mesh.m_pVertices[3*i+1], mesh.m_pVertices[3*i+2],
-			 mesh.m_pVertexNormals[3*i+0], mesh.m_pVertexNormals[3*i+1], mesh.m_pVertexNormals[3*i+2]
+			 mesh.GetVertices ()[3*i+0], mesh.GetVertices ()[3*i+1], mesh.GetVertices ()[3*i+2],
+			 mesh.GetVertexNormals ()[3*i+0], mesh.GetVertexNormals ()[3*i+1], mesh.GetVertexNormals ()[3*i+2]
 			 );
 	}
 
@@ -316,12 +311,12 @@ int MeshIO::export_dae (Mesh& mesh, const char *filename)
 	fprintf (ptr, "    <geometry id=\"GEO01-mesh\" name=\"GEO01\">\n");
 	fprintf (ptr, "      <mesh>\n");
 	fprintf (ptr, "        <source id=\"GEO01-Position\">\n");
-	fprintf (ptr, "          <float_array id=\"GEO01-Position-array\" count=\"%d\">", 3*mesh.m_nVertices);
-	for (int i=0; i<3*mesh.m_nVertices; i++)
-		fprintf (ptr, "%f ", mesh.m_pVertices[i]);
+	fprintf (ptr, "          <float_array id=\"GEO01-Position-array\" count=\"%d\">", 3*mesh.GetNVertices ());
+	for (int i=0; i<3*mesh.GetNVertices (); i++)
+		fprintf (ptr, "%f ", mesh.GetVertices ()[i]);
 	fprintf (ptr, "</float_array>\n");
 	fprintf (ptr, "          <technique_common>\n\n");
-	fprintf (ptr, "            <accessor source=\"#GEO01-Position-array\" count=\"%d\" stride=\"3\">\n", mesh.m_nVertices);
+	fprintf (ptr, "            <accessor source=\"#GEO01-Position-array\" count=\"%d\" stride=\"3\">\n", mesh.GetNVertices ());
 	fprintf (ptr, "              <param name=\"X\" type=\"float\"/>\n");
 	fprintf (ptr, "              <param name=\"Y\" type=\"float\"/>\n");
 	fprintf (ptr, "              <param name=\"Z\" type=\"float\"/>\n");
@@ -329,12 +324,12 @@ int MeshIO::export_dae (Mesh& mesh, const char *filename)
 	fprintf (ptr, "          </technique_common>\n");
 	fprintf (ptr, "        </source>\n");
 	fprintf (ptr, "        <source id=\"GEO01-UV\">\n");
-	fprintf (ptr, "          <float_array id=\"GEO01-UV-array\" count=\"%d\">", 2*mesh.m_nTextureCoordinates);
-	for (int i=0; i<2*mesh.m_nTextureCoordinates; i++)
-		fprintf (ptr, "%f ", mesh.m_pTextureCoordinates[i]);
+	fprintf (ptr, "          <float_array id=\"GEO01-UV-array\" count=\"%d\">", 2*mesh.GetNTextureCoordinates ());
+	for (int i=0; i<2*mesh.GetNTextureCoordinates (); i++)
+		fprintf (ptr, "%f ", mesh.GetTextureCoordinates ()[i]);
 	fprintf (ptr, "</float_array>\n");
 	fprintf (ptr, "          <technique_common>\n");
-	fprintf (ptr, "            <accessor source=\"#GEO01-UV-array\" count=\"%d\" stride=\"2\">\n", mesh.m_nTextureCoordinates);
+	fprintf (ptr, "            <accessor source=\"#GEO01-UV-array\" count=\"%d\" stride=\"2\">\n", mesh.GetNTextureCoordinates ());
 	fprintf (ptr, "              <param name=\"S\" type=\"float\"/>\n");
 	fprintf (ptr, "              <param name=\"T\" type=\"float\"/>\n");
 	fprintf (ptr, "            </accessor>\n");
@@ -343,13 +338,13 @@ int MeshIO::export_dae (Mesh& mesh, const char *filename)
 	fprintf (ptr, "        <vertices id=\"GEO01-Vertex\">\n");
 	fprintf (ptr, "          <input semantic=\"POSITION\" source=\"#GEO01-Position\"/>\n");
 	fprintf (ptr, "        </vertices>\n");
-	fprintf (ptr, "        <triangles material=\"mat0\" count=\"%d\">\n", mesh.m_nFaces);
+	fprintf (ptr, "        <triangles material=\"mat0\" count=\"%d\">\n", mesh.GetNFaces ());
 	fprintf (ptr, "          <input offset=\"0\" semantic=\"VERTEX\" source=\"#GEO01-Vertex\"/>\n");
 	fprintf (ptr, "          <input offset=\"1\" semantic=\"TEXCOORD\" source=\"#GEO01-UV\"/>\n");
 	fprintf (ptr, "          <p>");
-	for (int i=0; i<mesh.m_nFaces; i++)
-		for (int j=0; j<mesh.m_pFaces[i]->m_nVertices; j++)
-			fprintf (ptr, "%d %d ", mesh.m_pFaces[i]->m_pVertices[j], mesh.m_pFaces[i]->m_pTextureCoordinatesIndices[j]);
+	for (int i=0; i<mesh.GetNFaces (); i++)
+		for (int j=0; j<mesh.FaceAt (i)->GetNVertices (); j++)
+			fprintf (ptr, "%d %d ", mesh.FaceAt (i)->GetVertex (j), mesh.FaceAt (i)->GetTexCoordIndex (j));
 	fprintf (ptr, "</p>\n");
 	fprintf (ptr, "        </triangles>\n");
 	fprintf (ptr, "      </mesh>\n");
@@ -424,52 +419,52 @@ int MeshIO::export_cpp (Mesh& mesh, const char *filename)
   fprintf (ptr, "/* model coming from %s */\n\n", filename);
 
   /* n_vertices & n_faces */
-  int n_vertices = mesh.m_nVertices;
-  int n_faces    = mesh.m_nFaces;
+  int n_vertices = mesh.GetNVertices ();
+  int n_faces    = mesh.GetNFaces ();
   fprintf (ptr, "static int %s_n_vertices = %d;\n", modelname, n_vertices);
   fprintf (ptr, "static int %s_n_faces = %d;\n\n", modelname, n_faces);
   
   /* vertices */
   float x, y, z;
   fprintf (ptr, "static float %s_vertices[] = {", modelname);
-  x = mesh.m_pVertices[0];
-  y = mesh.m_pVertices[1];
-  z = mesh.m_pVertices[2];
+  x = mesh.GetVertices ()[0];
+  y = mesh.GetVertices ()[1];
+  z = mesh.GetVertices ()[2];
   fprintf (ptr, "%f, %f, %f,\n", x, y, z);
   for (i=1; i<n_vertices-1; i++)
     {
-  x = mesh.m_pVertices[3*i];
-  y = mesh.m_pVertices[3*i+1];
-  z = mesh.m_pVertices[3*i+2];
+  x = mesh.GetVertices ()[3*i];
+  y = mesh.GetVertices ()[3*i+1];
+  z = mesh.GetVertices ()[3*i+2];
       fprintf (ptr, "\t\t%f, %f, %f,\n", x, y, z);
     }
-  x = mesh.m_pVertices[3*i];
-  y = mesh.m_pVertices[3*i+1];
-  z = mesh.m_pVertices[3*i+2];
+  x = mesh.GetVertices ()[3*i];
+  y = mesh.GetVertices ()[3*i+1];
+  z = mesh.GetVertices ()[3*i+2];
   fprintf (ptr, "\t\t%f, %f, %f};\n\n", x, y, z);
 
   /* faces */
   int a, b, c;
   fprintf (ptr, "static int %s_faces[] = {", modelname);
-  a = mesh.m_pFaces[0]->GetVertex(0);
-  b = mesh.m_pFaces[0]->GetVertex(1);
-  c = mesh.m_pFaces[0]->GetVertex(2);
+  a = mesh.FaceAt (0)->GetVertex(0);
+  b = mesh.FaceAt (0)->GetVertex(1);
+  c = mesh.FaceAt (0)->GetVertex(2);
   fprintf (ptr, "%d, %d, %d,\n", a, b, c);
   for (i=1; i<n_faces-1; i++)
     {
-  a = mesh.m_pFaces[i]->GetVertex(0);
-  b = mesh.m_pFaces[i]->GetVertex(1);
-  c = mesh.m_pFaces[i]->GetVertex(2);
+  a = mesh.FaceAt (i)->GetVertex(0);
+  b = mesh.FaceAt (i)->GetVertex(1);
+  c = mesh.FaceAt (i)->GetVertex(2);
       fprintf (ptr, "\t\t%d, %d, %d,\n", a, b , c);
     }
-  a = mesh.m_pFaces[i]->GetVertex(0);
-  b = mesh.m_pFaces[i]->GetVertex(1);
-  c = mesh.m_pFaces[i]->GetVertex(2);
+  a = mesh.FaceAt (i)->GetVertex(0);
+  b = mesh.FaceAt (i)->GetVertex(1);
+  c = mesh.FaceAt (i)->GetVertex(2);
   fprintf (ptr, "\t\t%d, %d, %d};\n\n", a, b, c);
 
   /* vertices normales */
   fprintf (ptr, "static float %s_vertices_normales[] = {", modelname);
-  float *vertices_normales = mesh.m_pVertexNormals.data();
+  const float *vertices_normales = mesh.GetVertexNormals ().data();
   fprintf (ptr, "%f, %f, %f,\n", vertices_normales[0], vertices_normales[1], vertices_normales[2]);
   for (i=1; i<n_vertices-1; i++)
     fprintf (ptr, "\t\t%f, %f, %f,\n",
@@ -490,25 +485,25 @@ int MeshIO::export_gts (Mesh& mesh, const char *filename)
   int i;
   FILE *ptr = fopen (filename, "w");
   
-  fprintf (ptr, "%d %d %d\n", mesh.m_nVertices, 3*mesh.m_nFaces, mesh.m_nFaces);
+  fprintf (ptr, "%d %d %d\n", mesh.GetNVertices (), 3*mesh.GetNFaces (), mesh.GetNFaces ());
   
   // vertices
-  for (i=0; i<mesh.m_nVertices; i++)
-    fprintf (ptr, "%f %f %f\n", mesh.m_pVertices[3*i], mesh.m_pVertices[3*i+1], mesh.m_pVertices[3*i+2]);
+  for (i=0; i<mesh.GetNVertices (); i++)
+    fprintf (ptr, "%f %f %f\n", mesh.GetVertices ()[3*i], mesh.GetVertices ()[3*i+1], mesh.GetVertices ()[3*i+2]);
 
   // edges
-  for (i=0; i<mesh.m_nFaces; i++)
+  for (i=0; i<mesh.GetNFaces (); i++)
     {
-	    int a = mesh.m_pFaces[i]->GetVertex (0);
-	    int b = mesh.m_pFaces[i]->GetVertex (1);
-	    int c = mesh.m_pFaces[i]->GetVertex (2);
+	    int a = mesh.FaceAt (i)->GetVertex (0);
+	    int b = mesh.FaceAt (i)->GetVertex (1);
+	    int c = mesh.FaceAt (i)->GetVertex (2);
       fprintf (ptr, "%d %d\n", 1+a, 1+b);
       fprintf (ptr, "%d %d\n", 1+b, 1+c);
       fprintf (ptr, "%d %d\n", 1+c, 1+a);
     }
 
   // faces
-  for (i=0; i<mesh.m_nFaces; i++)
+  for (i=0; i<mesh.GetNFaces (); i++)
     fprintf (ptr, "%d %d %d\n", 3*i+1, 3*i+2, 3*i+3);
 
   fclose (ptr);
@@ -548,17 +543,23 @@ int MeshIO::import_off (Mesh& mesh, const char *filename)
   // Get header information
   fgets (id, 4, ptr);
   DASSERT (id[0]=='O' && id[1]=='F' && id[2]=='F');
-  fscanf (ptr, "%d %d %d", &mesh.m_nVertices, &mesh.m_nFaces, &nSegments);
-  
+  unsigned int nv = 0, nf = 0;
+  fscanf (ptr, "%d %d %d", &nv, &nf, &nSegments);
+
   // memory allocation
-  mesh.Init (mesh.m_nVertices, mesh.m_nFaces);
+  mesh.Init (nv, nf);
  
   // Get the vertices
-  for (i=0; i<mesh.m_nVertices; i++)
-    fscanf (ptr, "%f %f %f", &mesh.m_pVertices[3*i], &mesh.m_pVertices[3*i+1], &mesh.m_pVertices[3*i+2]);
+  for (i=0; i<mesh.GetNVertices (); i++)
+    {
+      // fscanf est variadique : pas d'adresse sur la vue const.
+      float px, py, pz;
+      fscanf (ptr, "%f %f %f", &px, &py, &pz);
+      mesh.SetVertex (i, px, py, pz);
+    }
 
   // Get the faces
-  for (i=0; i<mesh.m_nFaces; i++)
+  for (i=0; i<mesh.GetNFaces (); i++)
     {
       //float r_tmp, g_tmp, b_tmp;
       int n_vertices_in_face;
@@ -572,9 +573,13 @@ int MeshIO::import_off (Mesh& mesh, const char *filename)
 	}
 
       // write into the face already allocated by mesh.Init() (do NOT leak a new one)
-      Face *pFace = mesh.m_pFaces[i];
-      fscanf (ptr, "%d %d %d",
-	      &pFace->m_pVertices[0], &pFace->m_pVertices[1], &pFace->m_pVertices[2]);
+      auto pFace = mesh.FaceAt (i);
+      // fscanf est variadique : pas d'adresse sur un accesseur.
+      unsigned int a=0, b=0, c=0;
+      fscanf (ptr, "%d %d %d", &a, &b, &c);
+      pFace->SetVertex (0, a);
+      pFace->SetVertex (1, b);
+      pFace->SetVertex (2, c);
 
     }
   fclose (ptr);
@@ -595,20 +600,20 @@ int MeshIO::export_off (Mesh& mesh, const char *filename)
 
   // header
   fprintf (ptr, "OFF\n");
-  fprintf (ptr, "%ud %ud %d\n", mesh.m_nVertices, mesh.m_nFaces, 0);
+  fprintf (ptr, "%ud %ud %d\n", mesh.GetNVertices (), mesh.GetNFaces (), 0);
 
   // vertices
-  for (i=0; i<mesh.m_nVertices; i++)
-    fprintf (ptr, "%f %f %f\n", mesh.m_pVertices[3*i], mesh.m_pVertices[3*i+1], mesh.m_pVertices[3*i+2]);
+  for (i=0; i<mesh.GetNVertices (); i++)
+    fprintf (ptr, "%f %f %f\n", mesh.GetVertices ()[3*i], mesh.GetVertices ()[3*i+1], mesh.GetVertices ()[3*i+2]);
 
   // faces
   //for (i=0; i<n_faces; i++)
   //  fprintf (ptr, "3 %d %d %d 0.5 0.5 0.5\n",
   //	     f[3*i], f[3*i+1], f[3*i+2]);
-  for (i=0; i<mesh.m_nFaces; i++)
+  for (i=0; i<mesh.GetNFaces (); i++)
   {
 	  fprintf (ptr, "%d %d %d\n",
-		   mesh.m_pFaces[i]->GetVertex (0), mesh.m_pFaces[i]->GetVertex (1), mesh.m_pFaces[i]->GetVertex (2));
+		   mesh.FaceAt (i)->GetVertex (0), mesh.FaceAt (i)->GetVertex (1), mesh.FaceAt (i)->GetVertex (2));
   }
 
   fclose (ptr);
@@ -731,27 +736,27 @@ int MeshIO::import_pgm (Mesh& mesh, const char *filename)
   float y_trans = (1)? -height/2.0 : 0;
 
   // alloc memory
-  mesh.m_nVertices = width*height;
-  mesh.m_nFaces = 2*(width-1)*(height-1);
-  mesh.Init (mesh.m_nVertices, mesh.m_nFaces);
+  const unsigned int nv = (unsigned int)(width*height);
+  const unsigned int nf = (unsigned int)(2*(width-1)*(height-1));
+  mesh.Init (nv, nf);
 
   // fill the structure
   for (j=0; j<height; j++)
     for (i=0; i<width; i++)
 	{
-	  mesh.m_pVertices[3*(j*width+i)]   = (float)i+x_trans;
-	  mesh.m_pVertices[3*(j*width+i)+1] = (float)(height-1-j)+y_trans;
-	  mesh.m_pVertices[3*(j*width+i)+2] = (float)(255-data[j*width+i]/3.0)-150.0;
+	  mesh.SetVertexComponent ((j*width+i), 0, (float)i+x_trans);
+	  mesh.SetVertexComponent ((j*width+i), 1, (float)(height-1-j)+y_trans);
+	  mesh.SetVertexComponent ((j*width+i), 2, (float)(255-data[j*width+i]/3.0)-150.0);
 	}
 
   for (j=0; j<height-1; j++)
     for (i=0; i<width-1; i++)
 	{
-		Face *f1 = mesh.m_pFaces[2*(j*(width-1)+i)];     // reuse faces allocated by mesh.Init (no leak)
+		auto f1 = mesh.FaceAt (2*(j*(width-1)+i));     // reuse faces allocated by mesh.Init (no leak)
 		f1->SetVertex (0, j*width+i);
 		f1->SetVertex (1, (j+1)*width+i);
 		f1->SetVertex (2, j*width+i+1);
-		Face *f2 = mesh.m_pFaces[2*(j*(width-1)+i)+1];
+		auto f2 = mesh.FaceAt (2*(j*(width-1)+i)+1);
 		f2->SetVertex (0, (j+1)*width+i+1);
 		f2->SetVertex (1, j*width+i+1);
 		f2->SetVertex (2, (j+1)*width+i);
@@ -781,15 +786,15 @@ int MeshIO::import_pts (Mesh& mesh, const char *filename)
 	  return -1;
   }
   //
-  mesh.m_nVertices = 0;
+  unsigned int nPoints = 0;
   while (1)
   {
     fgets (buffer, 512, ptr);
     if (feof(ptr)) break;
-    mesh.m_nVertices++;
+    nPoints++;
   }
-  mesh.Init (mesh.m_nVertices, 0);
-  mesh.m_pVertexColors.assign(3*mesh.m_nVertices, 0.0f);
+  mesh.Init (nPoints, 0);
+  mesh.InitVertexColors ();
 
   rewind (ptr);
   unsigned int vertex_walk=0;
@@ -799,14 +804,11 @@ int MeshIO::import_pts (Mesh& mesh, const char *filename)
     fgets (buffer, 512, ptr);
     if (feof(ptr)) break;
 
-	sscanf (buffer, "%f %f %f %d %d %d", 
-		&mesh.m_pVertices[3*vertex_walk],
-		&mesh.m_pVertices[3*vertex_walk+1],
-		&mesh.m_pVertices[3*vertex_walk+2],
-		&r, &g, &b);
-	mesh.m_pVertexColors[3*vertex_walk]   = (float)r/255.0;
-	mesh.m_pVertexColors[3*vertex_walk+1] = (float)g/255.0;
-	mesh.m_pVertexColors[3*vertex_walk+2] = (float)b/255.0;
+	// sscanf est variadique : pas d'adresse sur la vue const.
+	float px, py, pz;
+	sscanf (buffer, "%f %f %f %d %d %d", &px, &py, &pz, &r, &g, &b);
+	mesh.SetVertex (vertex_walk, px, py, pz);
+	mesh.SetVertexColor (vertex_walk, (float)r/255.0, (float)g/255.0, (float)b/255.0);
 
 	vertex_walk++;
   }
@@ -826,13 +828,13 @@ int MeshIO::export_pts (Mesh& mesh, const char *filename)
 	  return false;
 	}
 
-  if (!mesh.m_pVertices.empty() && !mesh.m_pVertexColors.empty())
+  if (!mesh.GetVertices ().empty() && !mesh.GetVertexColors ().empty())
   {
-	  for (int i=0; i<mesh.m_nVertices; i++)
+	  for (int i=0; i<mesh.GetNVertices (); i++)
 	  {
 		  fprintf (ptr, "%f %f %f %d %d %d\n",
-			  mesh.m_pVertices[3*i], mesh.m_pVertices[3*i+1], mesh.m_pVertices[3*i+2],
-			  (int)(mesh.m_pVertexColors[3*i]*255.0), (int)(mesh.m_pVertexColors[3*i+1]*255.0), (int)(mesh.m_pVertexColors[3*i+2]*255.0));
+			  mesh.GetVertices ()[3*i], mesh.GetVertices ()[3*i+1], mesh.GetVertices ()[3*i+2],
+			  (int)(mesh.GetVertexColors ()[3*i]*255.0), (int)(mesh.GetVertexColors ()[3*i+1]*255.0), (int)(mesh.GetVertexColors ()[3*i+2]*255.0));
 	  }
   }
   else
@@ -850,61 +852,83 @@ int MeshIO::export_pts (Mesh& mesh, const char *filename)
 // PLY
 //
 #include "mesh_io_rply.h"
+
+// Contexte de lecture PLY. RPly appelle les rappels UNE COMPOSANTE A LA FOIS, et
+// il faut donc suivre le sommet (resp. la face) en cours de remplissage. Ce
+// curseur vit ici, et non dans le maillage : `Mesh::GetNVertices()` est un
+// NOMBRE de sommets, pas une position d'ecriture.
+//
+// La convention de RPly qu'on exploite : pour un sommet, `dim == 0` marque la
+// premiere composante ; pour une face, `value_index == -1` annonce son arite.
+namespace {
+
+struct PlyReadContext
+{
+    Mesh         *mesh          = nullptr;
+    unsigned int  vertexCursor  = 0;   // sommet en cours de remplissage
+    unsigned int  nVerticesRead = 0;   // sommets commences
+    unsigned int  faceCursor    = 0;
+    unsigned int  nFacesRead    = 0;
+};
+
+} // namespace
+
 static int vertex_cb_coords(p_ply_argument argument) {
     long dim;
-    void *pMesh;
-    ply_get_argument_user_data(argument, &pMesh, &dim);
-    Mesh *mesh = (Mesh*)pMesh;
+    void *ud;
+    ply_get_argument_user_data(argument, &ud, &dim);
+    PlyReadContext *ctx = (PlyReadContext*)ud;
 
-    if (dim == 0) // new vertex
-	    mesh->m_nVertices++;
+    if (dim == 0)   // nouveau sommet
+        ctx->vertexCursor = ctx->nVerticesRead++;
 
-    float coord = ply_get_argument_value(argument);
-    mesh->m_pVertices[3*mesh->m_nVertices+dim] = coord;
-
+    ctx->mesh->SetVertexComponent (ctx->vertexCursor, (unsigned int)dim,
+                                  (float)ply_get_argument_value(argument));
     return 1;
 }
 
 static int vertex_cb_normals(p_ply_argument argument) {
     long dim;
-    void *pMesh;
-    ply_get_argument_user_data(argument, &pMesh, &dim);
-    Mesh *mesh = (Mesh*)pMesh;
-    float coord = ply_get_argument_value(argument);
-    mesh->m_pVertexNormals[3*mesh->m_nVertices+dim] = coord;
+    void *ud;
+    ply_get_argument_user_data(argument, &ud, &dim);
+    PlyReadContext *ctx = (PlyReadContext*)ud;
 
+    ctx->mesh->SetVertexNormalComponent (ctx->vertexCursor, (unsigned int)dim,
+                                         (float)ply_get_argument_value(argument));
     return 1;
 }
 
 static int vertex_cb_colors(p_ply_argument argument) {
     long dim;
-    void *pMesh;
-    ply_get_argument_user_data(argument, &pMesh, &dim);
-    Mesh *mesh = (Mesh*)pMesh;
-    float coord = ply_get_argument_value(argument)/255.;
-    mesh->m_pVertexColors[3*mesh->m_nVertices+dim] = coord;
+    void *ud;
+    ply_get_argument_user_data(argument, &ud, &dim);
+    PlyReadContext *ctx = (PlyReadContext*)ud;
 
+    ctx->mesh->SetVertexColorComponent (ctx->vertexCursor, (unsigned int)dim,
+                                        (float)(ply_get_argument_value(argument)/255.));
     return 1;
 }
 
 static int face_cb(p_ply_argument argument) {
-    void *pMesh;
-    ply_get_argument_user_data(argument, &pMesh, nullptr);
-    Mesh *mesh = (Mesh*)pMesh;
+    void *ud;
+    ply_get_argument_user_data(argument, &ud, nullptr);
+    PlyReadContext *ctx = (PlyReadContext*)ud;
 
-
-   long length, value_index;
+    long length, value_index;
     ply_get_argument_property(argument, nullptr, &length, &value_index);
 
-    if (value_index == -1) // new face
+    if (value_index == -1)   // nouvelle face : la valeur est son arite
     {
-	    mesh->m_nFaces++;
-	    mesh->m_pFaces[mesh->m_nFaces] = new Face ();
-	    mesh->m_pFaces[mesh->m_nFaces]->SetNVertices (ply_get_argument_value(argument));
+        ctx->faceCursor = ctx->nFacesRead++;
+        // L'emplacement est deja dimensionne : ne rien allouer ici.
+        if (auto f = ctx->mesh->FaceAt (ctx->faceCursor))
+            f->SetNVertices ((unsigned int)ply_get_argument_value(argument));
     }
     else
     {
-	    mesh->m_pFaces[mesh->m_nFaces]->m_pVertices[value_index] = ply_get_argument_value(argument);
+        if (auto f = ctx->mesh->FaceAt (ctx->faceCursor))
+            f->SetVertex ((unsigned int)value_index,
+                          (unsigned int)ply_get_argument_value(argument));
     }
     return 1;
 }
@@ -922,35 +946,34 @@ int MeshIO::import_ply (Mesh& mesh, const char *filename)
 	if (!ply_read_header(ply))
 		return -1;
 	
-	nvertices = ply_set_read_cb(ply, "vertex", "x", vertex_cb_coords, &mesh, 0);
-	ply_set_read_cb(ply, "vertex", "y", vertex_cb_coords, &mesh, 1);
-	ply_set_read_cb(ply, "vertex", "z", vertex_cb_coords, &mesh, 2);
-	
-	int bNormals = ply_set_read_cb(ply, "vertex", "nx", vertex_cb_normals, &mesh, 0);
-	ply_set_read_cb(ply, "vertex", "ny", vertex_cb_normals, &mesh, 1);
-	ply_set_read_cb(ply, "vertex", "nz", vertex_cb_normals, &mesh, 2);
-	
-	int bColors = ply_set_read_cb(ply, "vertex", "red", vertex_cb_colors, &mesh, 0);
-	ply_set_read_cb(ply, "vertex", "green", vertex_cb_colors, &mesh, 1);
-	ply_set_read_cb(ply, "vertex", "blue", vertex_cb_colors, &mesh, 2);
-	
-	ntriangles = ply_set_read_cb(ply, "face", "vertex_indices", face_cb, &mesh, 0);
-	
+	PlyReadContext ctx;
+	ctx.mesh = &mesh;
+
+	nvertices = ply_set_read_cb(ply, "vertex", "x", vertex_cb_coords, &ctx, 0);
+	ply_set_read_cb(ply, "vertex", "y", vertex_cb_coords, &ctx, 1);
+	ply_set_read_cb(ply, "vertex", "z", vertex_cb_coords, &ctx, 2);
+
+	int bNormals = ply_set_read_cb(ply, "vertex", "nx", vertex_cb_normals, &ctx, 0);
+	ply_set_read_cb(ply, "vertex", "ny", vertex_cb_normals, &ctx, 1);
+	ply_set_read_cb(ply, "vertex", "nz", vertex_cb_normals, &ctx, 2);
+
+	int bColors = ply_set_read_cb(ply, "vertex", "red", vertex_cb_colors, &ctx, 0);
+	ply_set_read_cb(ply, "vertex", "green", vertex_cb_colors, &ctx, 1);
+	ply_set_read_cb(ply, "vertex", "blue", vertex_cb_colors, &ctx, 2);
+
+	ntriangles = ply_set_read_cb(ply, "face", "vertex_indices", face_cb, &ctx, 0);
+
+	// Init pose les comptes ET alloue. Ils restent justes de bout en bout : les
+	// rappels ecrivent a travers les accesseurs, en suivant leur propre curseur.
 	mesh.Init (nvertices, ntriangles);
 	if (bColors)
 		mesh.InitVertexColors ();
-	
-	mesh.m_nVertices = (unsigned int)(-1);
-	mesh.m_nFaces = (unsigned int)(-1);
-	
+
 	if (!ply_read(ply))
 		return -1;
-	
-	mesh.m_nVertices = nvertices;
-	mesh.m_nFaces = ntriangles;
-	
+
 	ply_close(ply);
-	
+
 	return 0;
 }
 
@@ -961,11 +984,11 @@ int MeshIO::export_ply (Mesh& mesh, const char *filename)
     if (!oply)
 	    return -1;
 
-    ply_add_element(oply, "vertex", mesh.m_nVertices);
+    ply_add_element(oply, "vertex", mesh.GetNVertices ());
     ply_add_property(oply, "x", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
     ply_add_property(oply, "y", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
     ply_add_property(oply, "z", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
-    if (!mesh.m_pVertexNormals.empty())
+    if (!mesh.GetVertexNormals ().empty())
     {
 	    ply_add_property(oply, "nx", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
 	    ply_add_property(oply, "ny", PLY_FLOAT, PLY_FLOAT, PLY_FLOAT);
@@ -976,16 +999,16 @@ int MeshIO::export_ply (Mesh& mesh, const char *filename)
     if (!ply_write_header(oply))
 	    return -1;
 
-    for (unsigned int i=0; i<mesh.m_nVertices; i++)
+    for (unsigned int i=0; i<mesh.GetNVertices (); i++)
     {
-	    ply_write (oply, mesh.m_pVertices[3*i]);
-	    ply_write (oply, mesh.m_pVertices[3*i+1]);
-	    ply_write (oply, mesh.m_pVertices[3*i+2]);
-	    if (!mesh.m_pVertexNormals.empty())
+	    ply_write (oply, mesh.GetVertices ()[3*i]);
+	    ply_write (oply, mesh.GetVertices ()[3*i+1]);
+	    ply_write (oply, mesh.GetVertices ()[3*i+2]);
+	    if (!mesh.GetVertexNormals ().empty())
 	    {
-		    ply_write (oply, mesh.m_pVertexNormals[3*i]);
-		    ply_write (oply, mesh.m_pVertexNormals[3*i+1]);
-		    ply_write (oply, mesh.m_pVertexNormals[3*i+2]);
+		    ply_write (oply, mesh.GetVertexNormals ()[3*i]);
+		    ply_write (oply, mesh.GetVertexNormals ()[3*i+1]);
+		    ply_write (oply, mesh.GetVertexNormals ()[3*i+2]);
 	    }
     }
 
@@ -1029,12 +1052,11 @@ int MeshIO::import_stl_ascii (Mesh& mesh, const char *filename)
 	if (nTriangles == 0)
 		return 0;
 
-	memcpy(mesh.m_pVertices.data(), verts.data(),
-	       (size_t)9 * nTriangles * sizeof(float));
+	mesh.SetVertices (3 * nTriangles, verts.data());
 
 	for (unsigned int iface = 0; iface < nTriangles; iface++)
 	{
-		Face* pFace = mesh.m_pFaces[iface];   // already allocated by Init()
+		auto pFace = mesh.FaceAt (iface);   // already allocated by Init()
 		pFace->SetNVertices(3);
 		for (int j = 0; j < 3; j++)
 			pFace->SetVertex(j, 3*iface+j);
@@ -1092,9 +1114,12 @@ int MeshIO::import_stl (Mesh& mesh, const char *filename)
 			fclose(ptr);
 			return 1;
 		}
-		memcpy(mesh.m_pVertices.data() + 9*iface, coords + 3, 9 * sizeof(float));
+		// Trois sommets par triangle, ecrits par accesseur : le tableau du
+		// maillage n'est plus accessible en ecriture directe.
+		for (int j = 0; j < 3; j++)
+			mesh.SetVertex (3*iface + j, coords[3 + 3*j], coords[4 + 3*j], coords[5 + 3*j]);
 
-		Face* pFace = mesh.m_pFaces[iface];   // already allocated by Init()
+		auto pFace = mesh.FaceAt (iface);   // already allocated by Init()
 		pFace->SetNVertices(3);
 		for (int j = 0; j < 3; j++)
 			pFace->SetVertex(j, 3*iface+j);
@@ -1139,20 +1164,20 @@ int MeshIO::export_stl (Mesh& mesh, const char *filename)
 
 	fprintf(fp, "solid %s\n", solidName.c_str());
 
-	for (unsigned int i = 0; i < mesh.m_nFaces; ++i)
+	for (unsigned int i = 0; i < mesh.GetNFaces (); ++i)
 	{
-		Face *pFace = mesh.m_pFaces[i];
+		auto pFace = mesh.FaceAt (i);
 		if (!pFace || pFace->GetNVertices() != 3) continue;
 
 		int a = pFace->GetVertex(0);
 		int b = pFace->GetVertex(1);
 		int c = pFace->GetVertex(2);
 		if (a < 0 || b < 0 || c < 0) continue;
-		if ((unsigned)a >= mesh.m_nVertices || (unsigned)b >= mesh.m_nVertices || (unsigned)c >= mesh.m_nVertices) continue;
+		if ((unsigned)a >= mesh.GetNVertices () || (unsigned)b >= mesh.GetNVertices () || (unsigned)c >= mesh.GetNVertices ()) continue;
 
-		float ax = mesh.m_pVertices[3*a],   ay = mesh.m_pVertices[3*a+1], az = mesh.m_pVertices[3*a+2];
-		float bx = mesh.m_pVertices[3*b],   by = mesh.m_pVertices[3*b+1], bz = mesh.m_pVertices[3*b+2];
-		float cx = mesh.m_pVertices[3*c],   cy = mesh.m_pVertices[3*c+1], cz = mesh.m_pVertices[3*c+2];
+		float ax = mesh.GetVertices ()[3*a],   ay = mesh.GetVertices ()[3*a+1], az = mesh.GetVertices ()[3*a+2];
+		float bx = mesh.GetVertices ()[3*b],   by = mesh.GetVertices ()[3*b+1], bz = mesh.GetVertices ()[3*b+2];
+		float cx = mesh.GetVertices ()[3*c],   cy = mesh.GetVertices ()[3*c+1], cz = mesh.GetVertices ()[3*c+2];
 
 		// Triangle normal = (b - a) x (c - a), normalized.
 		float ux = bx - ax, uy = by - ay, uz = bz - az;
@@ -1216,29 +1241,29 @@ int MeshIO::export_stl_binary (Mesh& mesh, const char *filename)
 
 	// Count valid triangles first (skip non-triangle faces / out-of-range indices).
 	uint32_t nTri = 0;
-	for (unsigned int i = 0; i < mesh.m_nFaces; ++i)
+	for (unsigned int i = 0; i < mesh.GetNFaces (); ++i)
 	{
-		Face *pFace = mesh.m_pFaces[i];
+		auto pFace = mesh.FaceAt (i);
 		if (!pFace || pFace->GetNVertices() != 3) continue;
 		int a = pFace->GetVertex(0), b = pFace->GetVertex(1), c = pFace->GetVertex(2);
 		if (a < 0 || b < 0 || c < 0) continue;
-		if ((unsigned)a >= mesh.m_nVertices || (unsigned)b >= mesh.m_nVertices || (unsigned)c >= mesh.m_nVertices) continue;
+		if ((unsigned)a >= mesh.GetNVertices () || (unsigned)b >= mesh.GetNVertices () || (unsigned)c >= mesh.GetNVertices ()) continue;
 		++nTri;
 	}
 	fwrite(&nTri, sizeof(uint32_t), 1, fp);
 
 	// Write each triangle.
-	for (unsigned int i = 0; i < mesh.m_nFaces; ++i)
+	for (unsigned int i = 0; i < mesh.GetNFaces (); ++i)
 	{
-		Face *pFace = mesh.m_pFaces[i];
+		auto pFace = mesh.FaceAt (i);
 		if (!pFace || pFace->GetNVertices() != 3) continue;
 		int a = pFace->GetVertex(0), b = pFace->GetVertex(1), c = pFace->GetVertex(2);
 		if (a < 0 || b < 0 || c < 0) continue;
-		if ((unsigned)a >= mesh.m_nVertices || (unsigned)b >= mesh.m_nVertices || (unsigned)c >= mesh.m_nVertices) continue;
+		if ((unsigned)a >= mesh.GetNVertices () || (unsigned)b >= mesh.GetNVertices () || (unsigned)c >= mesh.GetNVertices ()) continue;
 
-		float ax = mesh.m_pVertices[3*a],   ay = mesh.m_pVertices[3*a+1], az = mesh.m_pVertices[3*a+2];
-		float bx = mesh.m_pVertices[3*b],   by = mesh.m_pVertices[3*b+1], bz = mesh.m_pVertices[3*b+2];
-		float cx = mesh.m_pVertices[3*c],   cy = mesh.m_pVertices[3*c+1], cz = mesh.m_pVertices[3*c+2];
+		float ax = mesh.GetVertices ()[3*a],   ay = mesh.GetVertices ()[3*a+1], az = mesh.GetVertices ()[3*a+2];
+		float bx = mesh.GetVertices ()[3*b],   by = mesh.GetVertices ()[3*b+1], bz = mesh.GetVertices ()[3*b+2];
+		float cx = mesh.GetVertices ()[3*c],   cy = mesh.GetVertices ()[3*c+1], cz = mesh.GetVertices ()[3*c+2];
 
 		float ux = bx - ax, uy = by - ay, uz = bz - az;
 		float vx = cx - ax, vy = cy - ay, vz = cz - az;

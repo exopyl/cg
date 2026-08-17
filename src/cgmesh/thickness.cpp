@@ -69,7 +69,7 @@ namespace
 		std::vector<std::vector<unsigned int>> adj (nv);
 		for (unsigned int f = 0; f < nf; ++f)
 		{
-			Face *face = mesh.m_pFaces[f];
+			auto face = mesh.FaceAt (f);
 			int v[3] = { face->GetVertex (0), face->GetVertex (1), face->GetVertex (2) };
 			for (int e = 0; e < 3; ++e)
 			{
@@ -141,14 +141,14 @@ namespace
 	// manufacturing convention THIN = warm/red, THICK = cool/blue. The field is
 	// normalised over [lo, hi] (values clamped); when hi <= lo the actual
 	// min/max over the defined vertices is used. Undefined vertices get a
-	// neutral grey. Writes mesh.m_pVertexColors directly (the render path
+	// neutral grey. Writes mesh.GetVertexColors () directly (the render path
 	// consumes it) — does not touch texture coordinates.
 	void colorizeThicknessField (Mesh &mesh, const std::vector<float> &field,
 	                             const std::vector<char> &defined,
 	                             float lo, float hi)
 	{
 		const unsigned int nv = mesh.GetNVertices ();
-		mesh.m_pVertexColors.assign (3u * nv, 0.6f);   // neutral grey default
+		mesh.InitVertexColors (0.6f, 0.6f, 0.6f);   // neutral grey default
 		if (nv == 0) return;
 		if (field.size () < nv || defined.size () < nv) return;   // size contract
 
@@ -176,9 +176,7 @@ namespace
 			// THIN (t~0) -> warm/red: feed (1 - t) so thin maps to the warm end.
 			float r, g, b;
 			color_coolwarm (1.f - t, &r, &g, &b);
-			mesh.m_pVertexColors[3*i]   = r;
-			mesh.m_pVertexColors[3*i+1] = g;
-			mesh.m_pVertexColors[3*i+2] = b;
+			mesh.SetVertexColor (i, r, g, b);
 		}
 	}
 }
@@ -196,7 +194,7 @@ bool MeshAlgoThickness::ComputeWallThickness (Mesh &mesh,
 
 	// Vertex normals give the surface orientation; -n points into the
 	// material. (Re)compute if absent or stale-sized.
-	if (mesh.m_pVertexNormals.size () < 3u * nv)
+	if (mesh.GetVertexNormals ().size () < 3u * nv)
 		mesh.ComputeNormals ();
 
 	// Length scale for the self-intersection guard: ignore hits closer than a
@@ -216,13 +214,13 @@ bool MeshAlgoThickness::ComputeWallThickness (Mesh &mesh,
 
 	// Per-vertex ray casting is independent: BVH + vertices are read-only,
 	// writes hit disjoint indices. Parallelise across hardware threads.
-	const float *verts = mesh.m_pVertices.data ();
+	const float *verts = mesh.GetVertices ().data ();
 	parallelChunks (nv, /*minParallel*/ 2000u, [&](unsigned int begin, unsigned int end)
 	{
 		for (unsigned int vi = begin; vi < end; ++vi)
 		{
 			Vector3f P (verts[3*vi], verts[3*vi+1], verts[3*vi+2]);
-			Vector3f nrm (mesh.m_pVertexNormals[3*vi], mesh.m_pVertexNormals[3*vi+1], mesh.m_pVertexNormals[3*vi+2]);
+			Vector3f nrm (mesh.GetVertexNormals ()[3*vi], mesh.GetVertexNormals ()[3*vi+1], mesh.GetVertexNormals ()[3*vi+2]);
 
 			if (nrm.getLength () < 1e-12f)
 				continue;                 // no usable normal -> undefined
@@ -256,7 +254,7 @@ bool MeshAlgoThickness::ComputeShapeDiameter (Mesh &mesh,
 	if (!mesh.IsTriangleMesh ())
 		return false;
 
-	if (mesh.m_pVertexNormals.size () < 3u * nv)
+	if (mesh.GetVertexNormals ().size () < 3u * nv)
 		mesh.ComputeNormals ();
 
 	mesh.computebbox ();
@@ -282,7 +280,7 @@ bool MeshAlgoThickness::ComputeShapeDiameter (Mesh &mesh,
 	// threads; each thread keeps its own dists/weights scratch (the former
 	// single shared buffer would otherwise be a data race). Lower threshold
 	// than the single-ray method since each vertex does numRays× the work.
-	const float *verts = mesh.m_pVertices.data ();
+	const float *verts = mesh.GetVertices ().data ();
 	parallelChunks (nv, /*minParallel*/ 500u, [&](unsigned int begin, unsigned int end)
 	{
 		std::vector<float> dists, weights;     // per-thread scratch
@@ -292,7 +290,7 @@ bool MeshAlgoThickness::ComputeShapeDiameter (Mesh &mesh,
 		for (unsigned int vi = begin; vi < end; ++vi)
 		{
 			Vector3f P (verts[3*vi], verts[3*vi+1], verts[3*vi+2]);
-			Vector3f nrm (mesh.m_pVertexNormals[3*vi], mesh.m_pVertexNormals[3*vi+1], mesh.m_pVertexNormals[3*vi+2]);
+			Vector3f nrm (mesh.GetVertexNormals ()[3*vi], mesh.GetVertexNormals ()[3*vi+1], mesh.GetVertexNormals ()[3*vi+2]);
 			if (nrm.getLength () < 1e-12f)
 				continue;
 

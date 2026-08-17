@@ -44,26 +44,25 @@ int Mesh_nm::import_objnm (char *filename)
   if (!ptr) return false;
 
   // determine the number of vertices and the number of faces
-  m_nVertices = 0;
-  m_nFaces = 0;
+  unsigned int nv = 0, nf = 0;
   while (fgets (buffer, sizeof (buffer), ptr))
   {
     prefix[0] = '\0';   // une ligne vide laissait sinon le prefixe precedent
     if (sscanf (buffer, "%63s", prefix) != 1) continue;
-    if (!strcmp(prefix, "v")) m_nVertices++;
-    if (!strcmp(prefix, "f")) m_nFaces++;
+    if (!strcmp(prefix, "v")) nv++;
+    if (!strcmp(prefix, "f")) nf++;
   }
-  Init (m_nVertices, m_nFaces);
+  Init (nv, nf);
 
-  m_pVertexNormals.assign(3*m_nVertices, 0.0f);
-  vt = (float*)malloc(2*m_nVertices*sizeof(float));
+  InitVertexNormals();
+  vt = (float*)malloc(2*GetNVertices ()*sizeof(float));
   assert (vt);
 
-  tangent = (float*)malloc(3*m_nVertices*sizeof(float));
+  tangent = (float*)malloc(3*GetNVertices ()*sizeof(float));
   assert (tangent);
-  binormal = (float*)malloc(3*m_nVertices*sizeof(float));
+  binormal = (float*)malloc(3*GetNVertices ()*sizeof(float));
   assert (binormal);
-  tangentSpaceLight = (float*)malloc(3*m_nVertices*sizeof(float));
+  tangentSpaceLight = (float*)malloc(3*GetNVertices ()*sizeof(float));
   assert (tangentSpaceLight);   // testait `tangent` : copier-coller
 
 
@@ -79,23 +78,19 @@ int Mesh_nm::import_objnm (char *filename)
     // Les deux passes ne comptent pas les lignes de la meme facon (celle-ci
     // consomme 4 lignes de plus par sommet) : sans ces bornes, un fichier avec
     // des lignes vides faisait diverger les compteurs et ecrire hors de
-    // m_pVertices / m_pFaces.
-    if (!strcmp(prefix, "v") && vertex_walk < (int)m_nVertices)
+    // GetVertices () / m_pFaces.
+    if (!strcmp(prefix, "v") && vertex_walk < (int)GetNVertices ())
       {
         // position
-        sscanf (buffer, "%63s %f %f %f", prefix,
-            &m_pVertices[3*vertex_walk],
-            &m_pVertices[3*vertex_walk+1],
-            &m_pVertices[3*vertex_walk+2]);
-        //printf ("%f %f %f\n", v[3*vertex_walk], v[3*vertex_walk+1], v[3*vertex_walk+2]);
+        float p[3] = {};
+        sscanf (buffer, "%63s %f %f %f", prefix, &p[0], &p[1], &p[2]);
+        SetVertex ((unsigned int)vertex_walk, p[0], p[1], p[2]);
 
         // normale
         if (!fgets (buffer, sizeof (buffer), ptr)) break;   // fichier tronque
-        sscanf (buffer, "%63s %f %f %f", prefix,
-            &m_pVertexNormals[3*vertex_walk],
-            &m_pVertexNormals[3*vertex_walk+1],
-            &m_pVertexNormals[3*vertex_walk+2]);
-        //printf ("%f %f %f\n", vn[3*vertex_walk], vn[3*vertex_walk+1], vn[3*vertex_walk+2]);
+        float n[3] = {};
+        sscanf (buffer, "%63s %f %f %f", prefix, &n[0], &n[1], &n[2]);
+        SetVertexNormal ((unsigned int)vertex_walk, n[0], n[1], n[2]);
 
         // tangent
         if (!fgets (buffer, sizeof (buffer), ptr)) break;
@@ -122,7 +117,7 @@ int Mesh_nm::import_objnm (char *filename)
 
         vertex_walk++;
       }
-   if (!strcmp(prefix, "f") && face_walk < (int)m_nFaces)
+   if (!strcmp(prefix, "f") && face_walk < (int)GetNFaces ())
       {
        char i1[64] = {}, i2[64] = {}, i3[64] = {};
         // `&i1` etait un char(*)[64] la ou "%s" attend un char* -- meme adresse,
@@ -138,8 +133,7 @@ int Mesh_nm::import_objnm (char *filename)
 	int b = atoi(t2)-1;
 	int c = atoi(t3)-1;
         //printf ("%d %d %d\n", a, b, c);
-	m_pFaces[face_walk] = new Face ();
-	m_pFaces[face_walk]->SetTriangle (a, b, c);
+	FaceAt (face_walk)->SetTriangle (a, b, c);
 
         face_walk++;
       }

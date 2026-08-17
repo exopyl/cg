@@ -57,10 +57,13 @@ private:
 
 	bool ApplyHybrid (void);
 
-	// Non-owning view onto the model mesh's per-vertex tensor storage.
-	// All the Apply* methods write through this; valid only after Init().
-	std::vector<std::unique_ptr<Tensor>> & Tensors (void) const { return m_pModel->m_pMesh->m_pTensors; }
-	int NTensors (void) const { return (int)m_pModel->m_pMesh->m_pTensors.size (); }
+	// Acces par indice au stockage de tenseurs du maillage modele. Valides
+	// seulement apres Init(). TensorAt rend nullptr pour un indice hors bornes
+	// ou pour un emplacement vide (sommet de bord / non manifold) ;
+	// SetTensorAt prend possession de `t`, qui peut etre nullptr.
+	Tensor* TensorAt (int index) { return m_pModel->m_pMesh->GetTensor ((unsigned int)index); }
+	void SetTensorAt (int index, Tensor *t) { m_pModel->m_pMesh->SetTensor ((unsigned int)index, t); }
+	int NTensors (void) const { return (int)m_pModel->m_pMesh->GetNTensors (); }
 
 	// members
 	Mesh_half_edge *m_pModel;

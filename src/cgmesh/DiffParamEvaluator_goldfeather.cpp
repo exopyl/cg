@@ -6,16 +6,16 @@
 //
 bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 {
-	int nv = m_pModel->m_pMesh->m_nVertices;
-	float *v = m_pModel->m_pMesh->m_pVertices.data();
-	float *vn = m_pModel->m_pMesh->m_pVertexNormals.data();
+	int nv = m_pModel->m_pMesh->GetNVertices ();
+	const float *v = m_pModel->m_pMesh->GetVertices ().data();
+	const float *vn = m_pModel->m_pMesh->GetVertexNormals ().data();
 	int i,j,k,l;
 
 	for (i=0; i<nv; i++)
     {
 		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
-			Tensors ()[i] = nullptr;
+			SetTensorAt (i, nullptr);
 			continue;
 		}
 
@@ -63,7 +63,7 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 		int n_neighbours = m_pModel->get_n_neighbours (i);
 		if (n_neighbours <= 0)
 		{
-			Tensors ()[i] = nullptr;
+			SetTensorAt (i, nullptr);
 			continue;
 		}
 		float *A = (float*)malloc(n_neighbours*7*3*sizeof(float));
@@ -72,7 +72,7 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 		{
 			free (A);
 			free (B);
-			Tensors ()[i] = nullptr;
+			SetTensorAt (i, nullptr);
 			continue;
 		}
 		for (j=0; j<n_neighbours*7*3; j++) A[j] = 0.0;
@@ -153,7 +153,7 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 		
 		if (ring_overflow || iwalk != n_neighbours)
 		{
-			Tensors ()[i] = nullptr;
+			SetTensorAt (i, nullptr);
 			free (A);
 			free (B);
 			continue;
@@ -204,7 +204,7 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 				tensor_walk->SetDirectionMax (b1.x, b1.y, b1.z);
 				tensor_walk->SetDirectionMin (b2.x, b2.y, b2.z);
 				*/
-				Tensors ()[i] = nullptr;
+				SetTensorAt (i, nullptr);
 				continue;
 			}
 			
@@ -296,10 +296,10 @@ bool MeshAlgoTensorEvaluator::ApplyGoldfeather (void)
 				pDiffParam_walk->SetDirectionMin (d2[0], d2[1], d2[2]);
 			}
 			
-			Tensors ()[i].reset (pDiffParam_walk);
+			SetTensorAt (i, pDiffParam_walk);
 
 			if (kappa1 > 1.0)
-				Tensors ()[i] = nullptr;
+				SetTensorAt (i, nullptr);
     }
 
 	return true;

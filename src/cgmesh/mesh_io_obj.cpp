@@ -337,8 +337,7 @@ int MeshIO::import_obj (Mesh& mesh, const char *filename)
 
 	if (nTexCoords)
 	{
-		mesh.m_nTextureCoordinates = nTexCoords;
-		mesh.m_pTextureCoordinates.assign(2*nTexCoords, 0.0f);
+		mesh.SetTextureCoordinates (std::vector<float>(2*(size_t)nTexCoords, 0.0f), nTexCoords);
 	}
 	int ipoint = 0, itexcoord = 0, iface = 0;
 	int usemtl = -1;
@@ -367,20 +366,22 @@ int MeshIO::import_obj (Mesh& mesh, const char *filename)
 		}
 		else if (strcmp (prefix, "v") == 0)
 		{
-			sscanf (buffer, "%s %f %f %f", prefix,
-				&mesh.m_pVertices[3*ipoint],
-				&mesh.m_pVertices[3*ipoint+1],
-				&mesh.m_pVertices[3*ipoint+2]);
+			// sscanf est variadique : lui passer l'adresse d'un element de la vue
+			// const compilerait sans diagnostic et ecrirait a travers un
+			// `const float*`.
+			float px, py, pz;
+			sscanf (buffer, "%s %f %f %f", prefix, &px, &py, &pz);
+			mesh.SetVertex (ipoint, px, py, pz);
 			ipoint++;
 		}
 		else if (strcmp (prefix, "vt") == 0)
 		{
 			float u = 0.f, v = 0.f;
 			sscanf (buffer, "%s %f %f", prefix, &u, &v);
-			mesh.m_pTextureCoordinates[2*itexcoord]   = u;
+			mesh.SetTextureCoordinate (itexcoord, u, 0.0f);   // v renseigne juste apres
 			// OBJ stores V with the origin at the bottom; OpenGL samples the
 			// first uploaded row (top of the image) at V=0. Flip V.
-			mesh.m_pTextureCoordinates[2*itexcoord+1] = 1.0f - v;
+			mesh.SetTextureCoordinate (itexcoord, mesh.GetTextureCoordinates ()[2*itexcoord], 1.0f - v);
 			itexcoord++;
 		}
 		else if (strcmp (prefix, "f") == 0)
@@ -397,9 +398,15 @@ int MeshIO::import_obj (Mesh& mesh, const char *filename)
 					s++;
 				fvn++;
 			}
-			Face *pFace = mesh.m_pFaces[iface];
+			// La passe de comptage ci-dessus a compte les memes lignes « f », donc
+			// l'emplacement existe. Une reference invalide signale une divergence
+			// entre les deux passes.
+			auto pFace = mesh.FaceAt (iface);
 			if (!pFace)
-				pFace = new Face ();
+			{
+				fprintf (stderr, "import_obj: plus de faces que la passe de comptage (%d)\n", iface);
+				continue;
+			}
 
 			if (fvn != 3)
 				pFace->SetNVertices (fvn);
@@ -449,10 +456,10 @@ int MeshIO::import_obj (Mesh& mesh, const char *filename)
 				else
 					i0--;
 
-				if (i0 < 0 || (unsigned int) i0 >= mesh.m_nVertices) {
+				if (i0 < 0 || (unsigned int) i0 >= mesh.GetNVertices ()) {
 					// Deux entiers en %d : aucune injection possible. Le diagnostic
 					// part sur stderr, comme le reste du module.
-					fprintf (stderr, "invalid vertex index %d (vn=%u)\n", i0, mesh.m_nVertices);
+					fprintf (stderr, "invalid vertex index %d (vn=%u)\n", i0, mesh.GetNVertices ());
 					continue;
 				}
 
@@ -465,20 +472,20 @@ int MeshIO::import_obj (Mesh& mesh, const char *filename)
 					else
 						i1--;
 					// Clamp to a valid slot: the index is later used to read
-					// mesh.m_pTextureCoordinates[2*i1] at render time, so an
+					// mesh.GetTextureCoordinates ()[2*i1] at render time, so an
 					// out-of-range value (bad file / under-declared UVs) would
 					// read out of bounds and crash.
-					if (i1 < 0 || (unsigned int) i1 >= mesh.m_nTextureCoordinates)
+					if (i1 < 0 || (unsigned int) i1 >= mesh.GetNTextureCoordinates ())
 						i1 = 0;
-					pFace->m_bUseTextureCoordinates = true;
+					pFace->SetUsesTextureCoordinates (true);
 					// Allocate the per-face texcoord arrays ONCE: these
 					// Activate* calls delete[] and reallocate, so calling them
 					// per corner (as before) wiped the indices already written
 					// for earlier corners, leaving uninitialised garbage that
 					// the textured render path then read out of bounds.
-					if (!pFace->m_pTextureCoordinatesIndices)
+					if (!pFace->HasTexCoordIndices ())
 						pFace->ActivateTextureCoordinatesIndices();
-					if (!pFace->m_pTextureCoordinates)
+					if (!pFace->HasCornerTexCoords ())
 						pFace->ActivateTextureCoordinates();
 					pFace->SetTexCoord (fvn, i1);
 				}
@@ -487,9 +494,8 @@ int MeshIO::import_obj (Mesh& mesh, const char *filename)
 
 			// material
 			if (usemtl != -1)
-				pFace->m_iMaterialId = usemtl;
+				pFace->SetMaterialId (usemtl);
 
-			mesh.m_pFaces[iface] = pFace;
 			iface++;
 		}
 		else if (strcmp (prefix, "l") == 0)
@@ -501,14 +507,13 @@ int MeshIO::import_obj (Mesh& mesh, const char *filename)
 			while (*s && !isspace ((unsigned char)*s)) s++;
 
 			int prev = -1, idx;
-			while (nextObjElementIndex (s, ipoint, mesh.m_nVertices, idx))
+			while (nextObjElementIndex (s, ipoint, mesh.GetNVertices (), idx))
 			{
 				if (idx < 0)
 					continue;   // malformed / out-of-range ref, skip
 				if (prev >= 0)
 				{
-					mesh.m_pLines.push_back ((unsigned int) prev);
-					mesh.m_pLines.push_back ((unsigned int) idx);
+					mesh.AddLine ((unsigned int) prev, (unsigned int) idx);
 				}
 				prev = idx;
 			}
@@ -521,17 +526,17 @@ int MeshIO::import_obj (Mesh& mesh, const char *filename)
 			while (*s && !isspace ((unsigned char)*s)) s++;
 
 			int idx;
-			while (nextObjElementIndex (s, ipoint, mesh.m_nVertices, idx))
+			while (nextObjElementIndex (s, ipoint, mesh.GetNVertices (), idx))
 				if (idx >= 0)
-					mesh.m_pPoints.push_back ((unsigned int) idx);
+					mesh.AddPoint ((unsigned int) idx);
 		}
 	}
 	fclose (file);
 
 	// OBJ vertex normals (vn) are not imported, so compute them from the
 	// geometry. Besides giving proper smooth shading, this guarantees
-	// mesh.m_pFaceNormals / mesh.m_pVertexNormals are populated — the immediate-mode
-	// render path reads mesh.m_pFaceNormals[] unconditionally and would otherwise
+	// the per-face normals / mesh.GetVertexNormals () are populated — the immediate-mode
+	// render path reads the per-face normals unconditionally and would otherwise
 	// read out of bounds on a normal-less mesh.
 	mesh.ComputeNormals ();
 
@@ -552,20 +557,20 @@ int MeshIO::export_obj (Mesh& mesh, const char *filename, bool emitObjectGroups)
 
 	// some comments
 	fprintf (fp, "#\n");
-	fprintf (fp, "# number of vertices : %d\n", mesh.m_nVertices);
-	fprintf (fp, "# number of faces    : %d\n", mesh.m_nFaces);
+	fprintf (fp, "# number of vertices : %d\n", mesh.GetNVertices ());
+	fprintf (fp, "# number of faces    : %d\n", mesh.GetNFaces ());
 	fprintf (fp, "#\n");
 	fprintf (fp, "\n");
 
 	// materials
 	//
 	// std::string plutot que strdup : la liberation etait conditionnee a une
-	// SECONDE evaluation de `m_pMaterials.empty()`, 120 lignes plus bas. Toute
+	// SECONDE evaluation du nombre de materiaux, 120 lignes plus bas. Toute
 	// divergence entre les deux tests -- et tout retour ajoute entre les deux --
 	// perdait le buffer (cpp:S3584, mesh_io_obj.cpp:763). La duree de vie suit
 	// desormais la portee, sans free a placer.
 	std::string filematname;
-	if (!mesh.m_pMaterials.empty())
+	if (mesh.GetNMaterials () > 0)
 	{
 		filematname = filename;
 		// Remplace l'extension sur place : exactement les 3 derniers caracteres,
@@ -589,78 +594,79 @@ int MeshIO::export_obj (Mesh& mesh, const char *filename, bool emitObjectGroups)
 	//
 	// vertices
 	//
-	for (i = 0; i < mesh.m_nVertices; i++)
+	for (i = 0; i < mesh.GetNVertices (); i++)
 		fprintf (fp, "v %f %f %f\n",
-			 mesh.m_pVertices[3*i], mesh.m_pVertices[3*i+1], mesh.m_pVertices[3*i+2]);
-	if (0 && !mesh.m_pVertexNormals.empty())
+			 mesh.GetVertices ()[3*i], mesh.GetVertices ()[3*i+1], mesh.GetVertices ()[3*i+2]);
+	if (0 && !mesh.GetVertexNormals ().empty())
 	{
-		for (i=0; i<mesh.m_nVertices; i++)
+		for (i=0; i<mesh.GetNVertices (); i++)
 		{
 			fprintf (fp, "vn %f %f %f\n",
-				 mesh.m_pVertexNormals[3*i],
-				 mesh.m_pVertexNormals[3*i+1],
-				 mesh.m_pVertexNormals[3*i+2]);
+				 mesh.GetVertexNormals ()[3*i],
+				 mesh.GetVertexNormals ()[3*i+1],
+				 mesh.GetVertexNormals ()[3*i+2]);
 		}
 	}
 	
-	if (!mesh.m_pTextureCoordinates.empty())
+	if (!mesh.GetTextureCoordinates ().empty())
 	{
-		for (i=0; i<mesh.m_nTextureCoordinates; i++)
-			fprintf (fp, "vt %f %f\n", mesh.m_pTextureCoordinates[2*i], mesh.m_pTextureCoordinates[2*i+1]);
+		for (i=0; i<mesh.GetNTextureCoordinates (); i++)
+			fprintf (fp, "vt %f %f\n", mesh.GetTextureCoordinates ()[2*i], mesh.GetTextureCoordinates ()[2*i+1]);
 	}
 
 	//
 	// faces
 	//
 	unsigned int i_current_material = MATERIAL_NONE;
-	for (i = 0; i <mesh.m_nFaces; i++)
+	for (i = 0; i <mesh.GetNFaces (); i++)
 	{
-		if (!mesh.m_pFaces[i])
+		// Un emplacement peut etre TROUE (cf. Mesh::RemoveFace).
+		if (!mesh.FaceAt (i))
 			continue;
 		
-		if (mesh.m_pFaces[i]->GetMaterialId () != MATERIAL_NONE &&
-		    mesh.m_pFaces[i]->GetMaterialId () != i_current_material)
+		if (mesh.FaceAt (i)->GetMaterialId () != MATERIAL_NONE &&
+		    mesh.FaceAt (i)->GetMaterialId () != i_current_material)
 		{
-			const unsigned int mid = (unsigned int)mesh.m_pFaces[i]->GetMaterialId ();
+			const unsigned int mid = (unsigned int)mesh.FaceAt (i)->GetMaterialId ();
 			const std::string mname =
-				objMaterialName (mesh.m_pMaterials[mid].get(), mid);
+				objMaterialName (mesh.GetMaterial (mid), mid);
 			// `o` AVANT `usemtl` : c'est l'ordre attendu, la declaration d'objet
 			// ouvrant le bloc auquel le materiau s'applique.
 			if (emitObjectGroups)
 				fprintf (fp, "o %s\n", mname.c_str());
 			fprintf (fp, "usemtl %s\n", mname.c_str());
-			i_current_material = mesh.m_pFaces[i]->GetMaterialId ();
+			i_current_material = mesh.FaceAt (i)->GetMaterialId ();
 		}
 
-		if (0 && mesh.m_pFaces[i]->m_pTextureCoordinatesIndices)//mesh.m_pFaces[i]->m_bUseTextureCoordinates)
+		if (0 && mesh.FaceAt (i)->HasTexCoordIndices ())//mesh.FaceAt (i)->UsesTextureCoordinates ())
 		{
-			for (unsigned int j=0; j<mesh.m_pFaces[i]->m_nVertices; j++)
+			for (unsigned int j=0; j<mesh.FaceAt (i)->GetNVertices (); j++)
 			{
 				//fprintf (fp, "vt %f %f\n",
-				//	 mesh.m_pTextureCoordinates[2*mesh.m_pFaces[i]->m_pTextureCoordinates[j]],
-				//	 mesh.m_pTextureCoordinates[2*mesh.m_pFaces[i]->m_pTextureCoordinates[j]+1]);
-				fprintf (fp, "vt %f %f\n",
-					 mesh.m_pFaces[i]->m_pTextureCoordinates[2*j],
-					 mesh.m_pFaces[i]->m_pTextureCoordinates[2*j+1]);
+				//	 mesh.GetTextureCoordinates ()[2*mesh.FaceAt (i)->GetTextureCoordinates ()[j]],
+				//	 mesh.GetTextureCoordinates ()[2*mesh.FaceAt (i)->GetTextureCoordinates ()[j]+1]);
+				float uv[2] = { 0.f, 0.f };
+				mesh.FaceAt (i)->GetTexCoord (j, uv);
+				fprintf (fp, "vt %f %f\n", uv[0], uv[1]);
 			}
 		}
 
 		fprintf (fp, "f ");
-		for (unsigned int j=0; j<mesh.m_pFaces[i]->m_nVertices; j++)
+		for (unsigned int j=0; j<mesh.FaceAt (i)->GetNVertices (); j++)
 		{
 			// vertex
-			fprintf (fp, "%d", 1+mesh.m_pFaces[i]->m_pVertices[j]);
+			fprintf (fp, "%d", 1+mesh.FaceAt (i)->GetVertex (j));
 
 			// texture coordinates
-			if (mesh.m_pFaces[i]->m_bUseTextureCoordinates && mesh.m_pFaces[i]->m_pTextureCoordinatesIndices)
-				fprintf (fp, "/%d", 1+mesh.m_pFaces[i]->m_pTextureCoordinatesIndices[j]);//mesh.m_pFaces[i]->m_nVertices);
+			if (mesh.FaceAt (i)->UsesTextureCoordinates () && mesh.FaceAt (i)->HasTexCoordIndices ())
+				fprintf (fp, "/%d", 1+mesh.FaceAt (i)->GetTexCoordIndex (j));//mesh.FaceAt (i)->m_nVertices);
 
 			// normal
-			if (0 && !mesh.m_pVertexNormals.empty())
+			if (0 && !mesh.GetVertexNormals ().empty())
 			{
-				if (!mesh.m_pFaces[i]->m_bUseTextureCoordinates)
+				if (!mesh.FaceAt (i)->UsesTextureCoordinates ())
 					fprintf (fp, "/");
-				fprintf (fp, "/%d\n", mesh.m_pFaces[i]->m_pVertices[j]);
+				fprintf (fp, "/%d\n", mesh.FaceAt (i)->GetVertex (j));
 			}
 			
 			fprintf (fp, " ");
@@ -672,16 +678,16 @@ int MeshIO::export_obj (Mesh& mesh, const char *filename, bool emitObjectGroups)
 	// line segments ('l') and points ('p') — indices are 1-based in OBJ
 	//
 	for (i = 0; i < mesh.GetNLines(); i++)
-		fprintf (fp, "l %u %u\n", 1 + mesh.m_pLines[2*i], 1 + mesh.m_pLines[2*i+1]);
+		fprintf (fp, "l %u %u\n", 1 + mesh.GetLines ()[2*i], 1 + mesh.GetLines ()[2*i+1]);
 	for (i = 0; i < mesh.GetNPoints(); i++)
-		fprintf (fp, "p %u\n", 1 + mesh.m_pPoints[i]);
+		fprintf (fp, "p %u\n", 1 + mesh.GetPoints ()[i]);
 
 	fclose (fp);
 
 	//
 	// materials
 	//
-	if (!mesh.m_pMaterials.empty())
+	if (mesh.GetNMaterials () > 0)
 	{
 		fp = fopen(filematname.c_str(),"w");
 		if (fp == nullptr)
@@ -691,9 +697,9 @@ int MeshIO::export_obj (Mesh& mesh, const char *filename, bool emitObjectGroups)
 		fprintf (fp, "# Wavefront material file\n");
 		fprintf (fp, "\n");
 
-		for (size_t i = 0; i < mesh.m_pMaterials.size(); ++i)
+		for (unsigned int i = 0; i < mesh.GetNMaterials (); ++i)
 		{
-			Material *pMaterial = mesh.m_pMaterials[i].get();
+			Material *pMaterial = mesh.GetMaterial (i);
 			if (!pMaterial)
 				continue;
 			switch (pMaterial->GetType ())

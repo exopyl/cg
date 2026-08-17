@@ -15,107 +15,10 @@
 #include "../cgmath/cgmath.h"
 #include "../cgimg/cgimg.h"
 #include "octree.h"
+#include "mesh_raycast.h"
 
 extern "C" {
 #include "../../extern/glutess/glutess.h"
-}
-
-//
-// Face
-//
-void Face::Init (void)
-{
-	m_nVertices = 0;
-	m_pVertices = nullptr;
-	m_bUseTextureCoordinates = false;
-	m_pTextureCoordinatesIndices = nullptr;
-	m_pTextureCoordinates = nullptr;
-	m_iMaterialId = MATERIAL_NONE;
-};
-
-Face::Face ()
-{
-	Init ();
-	SetNVertices (3);
-}
-
-Face::Face (const Face &f)
-{
-	Init ();
-	SetNVertices(f.m_nVertices);
-
-	m_nVertices = f.m_nVertices;
-	memcpy (m_pVertices, f.m_pVertices, f.m_nVertices*sizeof(unsigned int));
-
-	m_bUseTextureCoordinates = f.m_bUseTextureCoordinates;
-	if (m_bUseTextureCoordinates)
-	{
-		m_pTextureCoordinatesIndices = new unsigned int[2*f.m_nVertices];
-		memcpy (m_pTextureCoordinatesIndices, f.m_pTextureCoordinatesIndices, 2*m_nVertices*sizeof(float));
-
-		m_pTextureCoordinates = new float[2*m_nVertices];
-		memcpy (m_pTextureCoordinates, f.m_pTextureCoordinates, 2*m_nVertices*sizeof(float));
-	}
-	else
-		m_pTextureCoordinates = nullptr;
-
-	m_iMaterialId = f.m_iMaterialId;
-}
-
-Face::~Face ()
-{
-	if (m_pVertices)
-		delete[] m_pVertices;
-	if (m_pTextureCoordinatesIndices)
-		delete[] m_pTextureCoordinatesIndices;
-	if (m_pTextureCoordinates)
-		delete[] m_pTextureCoordinates;
-};
-
-int Face::SetNVertices (unsigned int n)
-{
-	if (m_nVertices == n)
-		return 0;
-
-	m_nVertices = n;
-	if (m_pVertices)
-		delete[] m_pVertices;
-	m_pVertices = new unsigned int[m_nVertices];
-
-	if (m_pTextureCoordinatesIndices)
-		delete[] m_pTextureCoordinatesIndices;
-	m_pTextureCoordinatesIndices = new unsigned int[2*m_nVertices];
-
-	if (m_pTextureCoordinates)
-		delete[] m_pTextureCoordinates;
-	m_pTextureCoordinates = new float[2*m_nVertices];
-
-	return 0;
-}
-
-void Face::SetTriangle (unsigned int a, unsigned int b, unsigned int c)
-{
-	SetNVertices (3);
-	m_pVertices[0] = a;
-	m_pVertices[1] = b;
-	m_pVertices[2] = c;
-}
-
-void Face::SetQuad (unsigned int a, unsigned int b, unsigned int c, unsigned int d)
-{
-	SetNVertices (4);
-	m_pVertices[0] = a;
-	m_pVertices[1] = b;
-	m_pVertices[2] = c;
-	m_pVertices[3] = d;
-}
-
-void Face::dump (void)
-{
-	printf ("%d vertices stored in %p : ", m_nVertices, (void*)m_pVertices);
-	for (unsigned int i=0; i<m_nVertices; i++)
-		printf ("%d ", m_pVertices[i]);
-	printf ("\n");
 }
 
 //
@@ -125,42 +28,40 @@ void Mesh::Init ()
 {
 	m_name = std::string("#NoName#");
 	m_nVertices = 0;
-	m_nFaces = 0;
 	m_pVertices.clear();
-	m_pVertexNormals.clear();
-	m_pVertexColors.clear();
-	m_pFaces = nullptr;
-	m_pFaceNormals.clear();
-	m_pMaterials.clear();
-	m_nTextureCoordinates = 0;
-	m_pTextureCoordinates.clear();
-	m_pLines.clear();
-	m_pPoints.clear();
-	m_pTensors.clear();
-	m_pOctree = nullptr;
+	m_vertexNormals.clear();
+	m_vertexColors.clear();
+	DeleteFaces ();
+	m_faceNormals.clear();
+	m_materials.clear();
+	m_nTexCoords = 0;
+	m_texCoords.clear();
+	m_lines.clear();
+	m_points.clear();
+	m_tensors.clear();
 	m_revision = 0;
 	m_tensorsRevision = (uint64_t)-1;
 }
 
 void Mesh::InitVertexColors (float r, float g, float b)
 {
-	m_pVertexColors.clear();
+	m_vertexColors.clear();
 
 	if (m_nVertices > 0)
 	{
-		m_pVertexColors.resize(3*m_nVertices);
+		m_vertexColors.resize(3*m_nVertices);
 		for (int i=0; i<m_nVertices; i++)
 		{
-			m_pVertexColors[3*i]   = r;
-			m_pVertexColors[3*i+1] = g;
-			m_pVertexColors[3*i+2] = b;
+			m_vertexColors[3*i]   = r;
+			m_vertexColors[3*i+1] = g;
+			m_vertexColors[3*i+2] = b;
 		}
 	}
 }
 
 void Mesh::InitVertexColorsFromCurvatures (CurvatureType curvature)
 {
-	if (m_pTensors.empty() || m_pTensors.size() < m_nVertices)
+	if (m_tensors.empty() || m_tensors.size() < m_nVertices)
 		return;
 
 	if (!AreTensorsValid())
@@ -173,10 +74,10 @@ void Mesh::InitVertexColorsFromCurvatures (CurvatureType curvature)
 		char *defined = (char*)malloc(m_nVertices*sizeof(char));
 		for (int i=0; i<m_nVertices; i++)
 		{
-			if (m_pTensors[i])
+			if (m_tensors[i])
 			{
 				defined[i] = 1;
-				array[i] = m_pTensors[i]->GetCurvature (curvature);
+				array[i] = m_tensors[i]->GetCurvature (curvature);
 			}
 			else
 				defined[i] = 0;
@@ -194,11 +95,11 @@ void Mesh::InitVertexColorsFromArray (float *array, char *defined)
 	if (!array)
 		return;
 
-	m_pVertexColors.clear();
+	m_vertexColors.clear();
 
 	if (m_nVertices > 0)
 	{
-		m_pVertexColors.resize(3*m_nVertices);
+		m_vertexColors.resize(3*m_nVertices);
 
 		float min = array[0];
 		float max = array[0];
@@ -229,29 +130,29 @@ void Mesh::InitVertexColorsFromArray (float *array, char *defined)
 		}
 		else
 		{
-			m_nTextureCoordinates = m_nVertices;
-			m_pTextureCoordinates.assign(2 * m_nTextureCoordinates, 0.0f);
+			m_nTexCoords = m_nVertices;
+			m_texCoords.assign(2 * m_nTexCoords, 0.0f);
 
 			float invdenom = 1./(max-min);
 			for (int i=0; i<m_nVertices; i++)
 			{
-				m_pTextureCoordinates[2 * i] = (array[i] - min)*invdenom;
-				m_pTextureCoordinates[2 * i + 1] = .5f;
+				m_texCoords[2 * i] = (array[i] - min)*invdenom;
+				m_texCoords[2 * i + 1] = .5f;
 
 				if (defined && !defined[i])
 				{
-					m_pVertexColors[3*i]   = 0.;
-					m_pVertexColors[3*i+1] = 0.;
-					m_pVertexColors[3*i+2] = 0.;
+					m_vertexColors[3*i]   = 0.;
+					m_vertexColors[3*i+1] = 0.;
+					m_vertexColors[3*i+2] = 0.;
 				}
-				color_jet((array[i]-min)*invdenom, &m_pVertexColors[3*i], &m_pVertexColors[3*i+1], &m_pVertexColors[3*i+2]);
+				color_jet((array[i]-min)*invdenom, &m_vertexColors[3*i], &m_vertexColors[3*i+1], &m_vertexColors[3*i+2]);
 
 			}
 
 			
-			for (int i = 0; i < m_nFaces; i++)
+			for (int i = 0; i < GetNFaces (); i++)
 			{
-				Face* pFace = m_pFaces[i];
+				auto pFace = FaceAt (i);
 				pFace->ActivateTextureCoordinatesIndices();
 				pFace->InitTexCoord();
 			}
@@ -262,44 +163,245 @@ void Mesh::InitVertexColorsFromArray (float *array, char *defined)
 void Mesh::InitVertices (unsigned int nVertices)
 {
 	m_pVertices.clear();
-	m_pVertexColors.clear();
-	m_pVertexNormals.clear();
+	m_vertexColors.clear();
+	m_vertexNormals.clear();
 
 	m_nVertices = nVertices;
 	if (m_nVertices)
 	{
 		m_pVertices.assign(3*nVertices, 0.0f);
-		m_pVertexNormals.assign(3*nVertices, 0.0f);
-		m_pVertexColors.assign(3*nVertices, 0.5f);
+		m_vertexNormals.assign(3*nVertices, 0.0f);
+		m_vertexColors.assign(3*nVertices, 0.5f);
 	}
+
+	IncrementRevision ();
 }
 
 void Mesh::InitFaces (unsigned int nFaces)
 {
-	m_pFaces = nullptr;
-	m_pFaceNormals.clear();
+	// Arite UNIFORME a 3, sur laquelle les appelants s'appuient : l'importateur
+	// OBJ n'appelle SetNVertices que `if (fvn != 3)`.
+	//
+	// Ni offsets ni UV : un maillage neuf n'en a pas.
+	m_faceVertices.assign (3 * (size_t)nFaces, 0u);
+	m_faceOffsets.clear ();
+	m_faceCorners.clear ();
+	m_faceArity = 3;
+	m_faceMaterial.assign ((size_t)nFaces, (unsigned int)MATERIAL_NONE);
+	m_faceRemoved.clear ();
+	m_faceTexIndices.clear ();
+	m_faceTexCoords.clear ();
+	m_faceHasTex.clear ();
 
-	m_nFaces = nFaces;
-	if (m_nFaces)
+	m_faceNormals.clear();
+	if (nFaces)
+		m_faceNormals.assign(3*(size_t)nFaces, 0.0f);
+
+	AssertFaceStorageFull ();
+}
+
+void Mesh::MaterialiseFaceOffsets (void)
+{
+	if (!m_faceOffsets.empty ())
+		return;   // deja sous forme mixte
+	const unsigned int nf = GetNFaces ();
+	m_faceOffsets.resize (nf);
+	m_faceCorners.assign (nf, m_faceArity);
+	for (unsigned int i = 0; i < nf; i++)
+		m_faceOffsets[i] = i * m_faceArity;
+	m_faceArity = 0;
+}
+
+void Mesh::SetFaceArity (unsigned int fi, unsigned int n)
+{
+	if (!FaceExists (fi) || FaceArity (fi) == n)
+		return;
+
+	// Une seule face : l'arite reste uniforme, il suffit de redimensionner.
+	if (GetNFaces () == 1 && m_faceOffsets.empty ())
 	{
-		m_pFaces = new Face*[m_nFaces];
-		for (int  i=0; i<m_nFaces; i++)
-			m_pFaces[i] = new Face ();
-		m_pFaceNormals.assign(3*m_nFaces, 0.0f);
+		m_faceVertices.assign (n, 0u);
+		m_faceArity = n;
+		if (!m_faceTexIndices.empty ()) m_faceTexIndices.assign (n, 0u);
+		if (!m_faceTexCoords.empty ())  m_faceTexCoords.assign (2*(size_t)n, 0.0f);
+		IncrementRevision ();
+		AssertFaceStorage ();
+		return;
 	}
+
+	MaterialiseFaceOffsets ();
+
+	if (n <= m_faceCorners[fi])
+	{
+		// Reduction : on garde la tranche, on baisse le compte.
+		m_faceCorners[fi] = n;
+	}
+	else
+	{
+		// Agrandissement : AJOUT d'une tranche en fin de pool plutot qu'un decalage
+		// de tout ce qui suit. L'ancienne tranche devient orpheline, ce qui est le
+		// prix du temps constant amorti (cf. mesh.h).
+		const unsigned int oldBegin = m_faceOffsets[fi];
+		const unsigned int oldN     = m_faceCorners[fi];
+		const unsigned int newBegin = (unsigned int)m_faceVertices.size ();
+
+		m_faceVertices.resize ((size_t)newBegin + n, 0u);
+		for (unsigned int i = 0; i < oldN; i++)
+			m_faceVertices[newBegin+i] = m_faceVertices[oldBegin+i];
+
+		if (!m_faceTexIndices.empty ())
+		{
+			m_faceTexIndices.resize ((size_t)newBegin + n, 0u);
+			for (unsigned int i = 0; i < oldN; i++)
+				m_faceTexIndices[newBegin+i] = m_faceTexIndices[oldBegin+i];
+		}
+		if (!m_faceTexCoords.empty ())
+		{
+			m_faceTexCoords.resize (2*((size_t)newBegin + n), 0.0f);
+			for (unsigned int i = 0; i < 2*oldN; i++)
+				m_faceTexCoords[2*(size_t)newBegin+i] = m_faceTexCoords[2*(size_t)oldBegin+i];
+		}
+
+		m_faceOffsets[fi] = newBegin;
+		m_faceCorners[fi] = n;
+	}
+
+	IncrementRevision ();
+	AssertFaceStorage ();
+}
+
+void Mesh::EnsureTexIndices (void)
+{
+	if (m_faceTexIndices.empty ())
+		m_faceTexIndices.assign (m_faceVertices.size (), 0u);
+}
+
+void Mesh::EnsureTexCoords (void)
+{
+	if (m_faceTexCoords.empty ())
+		m_faceTexCoords.assign (2 * m_faceVertices.size (), 0.0f);
+}
+
+void Mesh::EnsureHasTexFlags (void)
+{
+	if (m_faceHasTex.empty ())
+		m_faceHasTex.assign ((size_t)GetNFaces (), (uint8_t)0);
+}
+
+// Invariants de TAILLE, en temps constant.
+//
+// ⚠ Ne RIEN y mettre qui parcoure les faces : SetFaceArity l'appelle une fois par
+// face, donc un parcours ici rendrait tout import quadratique. La version
+// lineaire est AssertFaceStorageFull.
+void Mesh::AssertFaceStorage (void) const
+{
+#ifdef _DEBUG
+	const size_t nf = m_faceMaterial.size ();
+	// Le descripteur d'arite doit correspondre au pool.
+	if (m_faceOffsets.empty ())
+	{
+		assert (m_faceCorners.empty ());
+		assert (m_faceVertices.size () == nf * (size_t)m_faceArity);
+	}
+	else
+	{
+		assert (m_faceArity == 0);
+		assert (m_faceOffsets.size () == nf && m_faceCorners.size () == nf);
+	}
+	if (!m_faceTexIndices.empty ())
+		assert (m_faceTexIndices.size () == m_faceVertices.size ());
+	if (!m_faceTexCoords.empty ())
+		assert (m_faceTexCoords.size () == 2 * m_faceVertices.size ());
+	if (!m_faceHasTex.empty ())
+		assert (m_faceHasTex.size () == nf);
+	if (!m_faceRemoved.empty ())
+		assert (m_faceRemoved.size () == nf);
+#endif
+}
+
+// Verification COMPLETE : chaque tranche doit tenir dans le pool. Lineaire, donc
+// reservee aux operations en masse -- jamais a une operation par face.
+void Mesh::AssertFaceStorageFull (void) const
+{
+#ifdef _DEBUG
+	AssertFaceStorage ();
+	if (m_faceOffsets.empty ())
+		return;
+	for (size_t i = 0; i < m_faceOffsets.size (); i++)
+		assert ((size_t)m_faceOffsets[i] + m_faceCorners[i] <= m_faceVertices.size ());
+#endif
 }
 
 void Mesh::InitTensors (void)
 {
-	m_pTensors.clear();
+	m_tensors.clear();
 	if (m_nVertices)
-		m_pTensors.resize(m_nVertices); // unique_ptr default-constructs to nullptr
+		m_tensors.resize(m_nVertices); // optional se construit VIDE : un emplacement par sommet, tous vides
+}
+
+void Mesh::ClearTensors (void)
+{
+	m_tensors.clear();
+	m_tensorsRevision = (uint64_t)-1;
 }
 
 Tensor* Mesh::GetTensor (unsigned int index)
 {
-	if (index >= m_pTensors.size()) return nullptr;
-	return m_pTensors[index].get();
+	if (index >= m_tensors.size () || !m_tensors[index])
+		return nullptr;
+	return &*m_tensors[index];
+}
+
+const Tensor* Mesh::GetTensor (unsigned int index) const
+{
+	if (index >= m_tensors.size () || !m_tensors[index])
+		return nullptr;
+	return &*m_tensors[index];
+}
+
+void Mesh::SetTensor (unsigned int index, Tensor *t)
+{
+	// Un indice hors bornes libere quand meme : les emplacements sont paralleles
+	// aux sommets, les agrandir romprait ce parallelisme.
+	if (index < m_tensors.size ())
+	{
+		if (t)
+			m_tensors[index] = *t;
+		else
+			m_tensors[index].reset ();
+	}
+	delete t;
+}
+
+void Mesh::SetNFaces (unsigned int nFaces)
+{
+	DeleteFaces ();
+	InitFaces (nFaces);
+	IncrementRevision ();
+}
+
+void Mesh::RemoveFace (unsigned int fi)
+{
+	if (!FaceExists (fi))
+		return;
+	// Le tableau des trous n'existe que s'il y a au moins un trou.
+	if (m_faceRemoved.empty ())
+		m_faceRemoved.assign ((size_t)GetNFaces (), (uint8_t)0);
+	m_faceRemoved[fi] = 1;
+	IncrementRevision ();
+}
+
+void Mesh::DeleteFaces (void)
+{
+	m_faceVertices.clear ();
+	m_faceOffsets.clear ();
+	m_faceCorners.clear ();
+	m_faceArity = 0;
+	m_faceMaterial.clear ();
+	m_faceRemoved.clear ();
+	m_faceTexIndices.clear ();
+	m_faceTexCoords.clear ();
+	m_faceHasTex.clear ();
 }
 
 void Mesh::Init (unsigned int nVertices, unsigned int nFaces)
@@ -309,7 +411,7 @@ void Mesh::Init (unsigned int nVertices, unsigned int nFaces)
 	InitVertices (nVertices);
 	InitFaces (nFaces);
 
-	m_pMaterials.clear();
+	m_materials.clear();
 
 	IncrementRevision();
 }
@@ -324,43 +426,23 @@ Mesh::Mesh (unsigned int nVertices, unsigned int nFaces)
 	Init (nVertices, nFaces);
 }
 
-Mesh::Mesh (Mesh &m)
-{
-}
-
-void Mesh::DeleteFaces (void)
-{
-	if (m_pFaces)
-	{
-		for (unsigned int i=0; i<m_nFaces; i++)
-		{
-			Face *pFace = m_pFaces[i];
-			delete pFace;
-		}
-		delete[] m_pFaces;
-	}
-	m_pFaces = nullptr;
-	m_nFaces = 0;
-}
-
 Mesh::~Mesh ()
 {
-	// vector + unique_ptr members destruct themselves
-	DeleteFaces ();
-	if (m_pOctree) delete m_pOctree;
+	// Tous les membres sont des types valeur : rien a liberer a la main.
 }
 
 void Mesh::Dump ()
 {
 	printf ("nVertices : %d\n", m_nVertices);
 	printf("pVertices : %p\n", (void*)m_pVertices.data());
-	printf ("pVertexNormals : %p\n", (void*)m_pVertexNormals.data());
-	printf("pVertexColors : %p\n", (void*)m_pVertexColors.data());
-	printf ("nFace : %d\n", m_nFaces);
-	printf ("pFaces : %p\n", (void*)m_pFaces);
-	printf ("pTextureCoordinates : %p\n", (void*)m_pTextureCoordinates.data());
-	printf ("nMaterials : %zu\n", m_pMaterials.size());
-	for (const auto& mat : m_pMaterials)
+	printf ("pVertexNormals : %p\n", (void*)m_vertexNormals.data());
+	printf("pVertexColors : %p\n", (void*)m_vertexColors.data());
+	printf ("nFace : %u\n", GetNFaces ());
+	printf ("faceVertices : %zu coins, arite %u, offsets %zu\n",
+		m_faceVertices.size (), m_faceArity, m_faceOffsets.size ());
+	printf ("pTextureCoordinates : %p\n", (void*)m_texCoords.data());
+	printf ("nMaterials : %zu\n", m_materials.size());
+	for (const auto& mat : m_materials)
 		if (mat) mat->Dump();
 }
 
@@ -381,37 +463,31 @@ void Mesh::MarkTensorsComputed()
 
 bool Mesh::AreTensorsValid() const
 {
-	return !m_pTensors.empty() && m_tensorsRevision == m_revision;
+	return !m_tensors.empty() && m_tensorsRevision == m_revision;
 }
 
 void Mesh::AdoptTensorsFrom(const Mesh& src)
 {
 	// Vertex order/count must match: src is the half-edge copy of *this*.
-	if (src.m_pTensors.size() != (size_t)m_nVertices)
+	if (src.m_tensors.size() != (size_t)m_nVertices)
 	{
-		m_pTensors.clear();
+		ClearTensors();
 		return;
 	}
 
-	m_pTensors.clear();
-	m_pTensors.resize(m_nVertices);
-	for (unsigned int i = 0; i < m_nVertices; i++)
-	{
-		// nullptr slots (border / non-manifold vertices) stay null; Tensor is
-		// a value type, so a copy is a plain deep copy.
-		if (src.m_pTensors[i])
-			m_pTensors[i] = std::make_unique<Tensor>(*src.m_pTensors[i]);
-	}
+	// L'affectation du vector EST la copie profonde : les emplacements vides
+	// (sommet de bord / non manifold) le restent.
+	m_tensors = src.m_tensors;
 
 	MarkTensorsComputed();
 }
 
 std::vector<unsigned int> Mesh::GetTriangles (void)
 {
-	// Delegue a BuildTriangulation() : chemin robuste deja present dans le code
-	// (fan pour les faces convexes/triangles, glutess pour les concaves, drop
-	// propre des auto-intersections). L'ancienne version n'emettait qu'UN
-	// triangle par face (v0,v1,v2) -> un quad perdait sa moitie -> trous.
+	// Delegue a BuildTriangulation() : eventail pour les faces convexes et les
+	// triangles, glutess pour les concaves, abandon propre des
+	// auto-intersections. ⚠ N'emettre qu'un triangle par face (v0,v1,v2) laisse
+	// des trous des le premier quad -- il en faut N-2.
 	return BuildTriangulation();
 }
 
@@ -508,7 +584,7 @@ GLUtesselator* makeTess()
 
 // True iff the polygon is convex when projected onto its Newell-method
 // normal. N<4 is trivially convex. Newell handles non-planar faces robustly.
-bool faceIsConvex(Face* face, Mesh& mesh)
+bool faceIsConvex(Mesh::ConstFaceRef face, Mesh& mesh)
 {
     const unsigned int n = face->GetNVertices();
     if (n < 4) return true;
@@ -516,9 +592,9 @@ bool faceIsConvex(Face* face, Mesh& mesh)
     auto vert = [&](unsigned int k) {
         const unsigned int idx = face->GetVertex(k);
         return std::array<double, 3>{
-            mesh.m_pVertices[3*idx + 0],
-            mesh.m_pVertices[3*idx + 1],
-            mesh.m_pVertices[3*idx + 2]
+            mesh.GetVertices ()[3*idx + 0],
+            mesh.GetVertices ()[3*idx + 1],
+            mesh.GetVertices ()[3*idx + 2]
         };
     };
 
@@ -552,14 +628,14 @@ bool faceIsConvex(Face* face, Mesh& mesh)
     return true;
 }
 
-// Iterate the triangles of face m_pFaces[fi], invoking emit(localA, localB,
+// Iterate the triangles of face fi, invoking emit(localA, localB,
 // localC) for each. Local indices are 0..N-1, addressing positions within
 // the face's own vertex list. `tess` is a lazily-allocated, reusable
 // tessellator handle (pass &nullptr on first call; caller cleans up).
 template <class Emit>
 void forEachFaceTriangle(Mesh& mesh, unsigned int fi, GLUtesselator*& tess, Emit&& emit)
 {
-    Face* face = mesh.m_pFaces[fi];
+    auto face = mesh.FaceAt (fi);
     if (!face) return;
     const unsigned int n = face->GetNVertices();
     if (n < 3) return;
@@ -587,9 +663,9 @@ void forEachFaceTriangle(Mesh& mesh, unsigned int fi, GLUtesselator*& tess, Emit
     {
         const unsigned int vi = face->GetVertex(i);
         ctx.coords.push_back({
-            (GLdouble)mesh.m_pVertices[3*vi + 0],
-            (GLdouble)mesh.m_pVertices[3*vi + 1],
-            (GLdouble)mesh.m_pVertices[3*vi + 2]
+            (GLdouble)mesh.GetVertices ()[3*vi + 0],
+            (GLdouble)mesh.GetVertices ()[3*vi + 1],
+            (GLdouble)mesh.GetVertices ()[3*vi + 2]
         });
     }
 
@@ -616,12 +692,12 @@ void forEachFaceTriangle(Mesh& mesh, unsigned int fi, GLUtesselator*& tess, Emit
 std::vector<unsigned int> Mesh::BuildTriangulation()
 {
     std::vector<unsigned int> out;
-    out.reserve(3 * m_nFaces);
+    out.reserve(3 * GetNFaces ());
 
     GLUtesselator* tess = nullptr;
-    for (unsigned int fi = 0; fi < m_nFaces; ++fi)
+    for (unsigned int fi = 0; fi < GetNFaces (); ++fi)
     {
-        Face* face = m_pFaces[fi];
+        auto face = FaceAt (fi);
         if (!face) continue;
         forEachFaceTriangle(*this, fi, tess,
             [&](unsigned int a, unsigned int b, unsigned int c) {
@@ -645,7 +721,7 @@ std::vector<unsigned int> Mesh::BuildTriangulation()
 //
 namespace {
 
-void computeNewellNormal(Face* face, Mesh& mesh, float outN[3])
+void computeNewellNormal(Mesh::ConstFaceRef face, Mesh& mesh, float outN[3])
 {
     const unsigned int n = face->GetNVertices();
     double nx = 0, ny = 0, nz = 0;
@@ -653,12 +729,12 @@ void computeNewellNormal(Face* face, Mesh& mesh, float outN[3])
     {
         const unsigned int viA = face->GetVertex(i);
         const unsigned int viB = face->GetVertex((i + 1) % n);
-        const double ax = mesh.m_pVertices[3*viA + 0];
-        const double ay = mesh.m_pVertices[3*viA + 1];
-        const double az = mesh.m_pVertices[3*viA + 2];
-        const double bx = mesh.m_pVertices[3*viB + 0];
-        const double by = mesh.m_pVertices[3*viB + 1];
-        const double bz = mesh.m_pVertices[3*viB + 2];
+        const double ax = mesh.GetVertices ()[3*viA + 0];
+        const double ay = mesh.GetVertices ()[3*viA + 1];
+        const double az = mesh.GetVertices ()[3*viA + 2];
+        const double bx = mesh.GetVertices ()[3*viB + 0];
+        const double by = mesh.GetVertices ()[3*viB + 1];
+        const double bz = mesh.GetVertices ()[3*viB + 2];
         nx += (ay - by) * (az + bz);
         ny += (az - bz) * (ax + bx);
         nz += (ax - bx) * (ay + by);
@@ -682,13 +758,13 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
 {
     PolygonRenderData out;
 
-    const bool hasNormals = !m_pVertexNormals.empty();
-    const bool hasUV      = !m_pTextureCoordinates.empty();
-    const bool hasColors  = !m_pVertexColors.empty();
+    const bool hasNormals = !m_vertexNormals.empty();
+    const bool hasUV      = !m_texCoords.empty();
+    const bool hasColors  = !m_vertexColors.empty();
 
     // Per-corner UVs (OBJ f v/vt/vn): a shared vertex carries DIFFERENT UVs in
     // different faces, so the UV cannot be stored per vertex. Such a mesh keeps
-    // face->m_pTextureCoordinatesIndices where at least one corner's UV index
+    // face->HasTexCoordIndices () where at least one corner's UV index
     // differs from its vertex index. When present, every face must be expanded
     // into its own corners (no shared slot can hold two UVs) and the UV sourced
     // through those indices. Formats with genuine per-vertex UVs (3DS/3DM set
@@ -697,14 +773,14 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
     bool perCornerUV = false;
     if (hasUV)
     {
-        for (unsigned int fi = 0; fi < m_nFaces && !perCornerUV; ++fi)
+        for (unsigned int fi = 0; fi < GetNFaces () && !perCornerUV; ++fi)
         {
-            Face* f = m_pFaces[fi];
-            if (!f || !f->m_bUseTextureCoordinates || !f->m_pTextureCoordinatesIndices)
+            auto f = FaceAt (fi);
+            if (!f || !f->UsesTextureCoordinates () || !f->HasTexCoordIndices ())
                 continue;
             const unsigned int n = f->GetNVertices();
             for (unsigned int i = 0; i < n; ++i)
-                if (f->m_pTextureCoordinatesIndices[i] != (unsigned int)f->GetVertex(i))
+                if (f->GetTexCoordIndex (i) != (unsigned int)f->GetVertex(i))
                 {
                     perCornerUV = true;
                     break;
@@ -722,11 +798,11 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
     if (!flat && !perCornerUV)
     {
         out.positions.assign(m_pVertices.begin(),           m_pVertices.end());
-        if (hasNormals) out.normals.assign  (m_pVertexNormals.begin(),       m_pVertexNormals.end());
-        if (hasUV)      out.texCoords.assign(m_pTextureCoordinates.begin(),  m_pTextureCoordinates.end());
-        if (hasColors)  out.colors.assign   (m_pVertexColors.begin(),        m_pVertexColors.end());
+        if (hasNormals) out.normals.assign  (m_vertexNormals.begin(),       m_vertexNormals.end());
+        if (hasUV)      out.texCoords.assign(m_texCoords.begin(),  m_texCoords.end());
+        if (hasColors)  out.colors.assign   (m_vertexColors.begin(),        m_vertexColors.end());
     }
-    out.indices.reserve(3u * m_nFaces);
+    out.indices.reserve(3u * GetNFaces ());
 
     // Group triangle indices by material so the VBO path can draw one run per
     // material. std::map keeps a stable material order.
@@ -734,9 +810,9 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
 
     GLUtesselator* tess = nullptr;
 
-    for (unsigned int fi = 0; fi < m_nFaces; ++fi)
+    for (unsigned int fi = 0; fi < GetNFaces (); ++fi)
     {
-        Face* face = m_pFaces[fi];
+        auto face = FaceAt (fi);
         if (!face) continue;
         const unsigned int n = face->GetNVertices();
         if (n < 3) continue;
@@ -777,7 +853,7 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
 
             if (hasNormals)
             {
-                if (useFaceNormal || 3*vi + 2 >= m_pVertexNormals.size())
+                if (useFaceNormal || 3*vi + 2 >= m_vertexNormals.size())
                 {
                     out.normals.push_back(fn[0]);
                     out.normals.push_back(fn[1]);
@@ -785,9 +861,9 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
                 }
                 else
                 {
-                    out.normals.push_back(m_pVertexNormals[3*vi + 0]);
-                    out.normals.push_back(m_pVertexNormals[3*vi + 1]);
-                    out.normals.push_back(m_pVertexNormals[3*vi + 2]);
+                    out.normals.push_back(m_vertexNormals[3*vi + 0]);
+                    out.normals.push_back(m_vertexNormals[3*vi + 1]);
+                    out.normals.push_back(m_vertexNormals[3*vi + 2]);
                 }
             }
 
@@ -796,13 +872,13 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
                 // Per-corner UV index when the face carries one (OBJ), else the
                 // vertex index (per-vertex UVs: 3DS/3DM, scalar-field colouring).
                 unsigned int uvIdx = vi;
-                if (face->m_bUseTextureCoordinates && face->m_pTextureCoordinatesIndices)
-                    uvIdx = face->m_pTextureCoordinatesIndices[i];
+                if (face->UsesTextureCoordinates () && face->HasTexCoordIndices ())
+                    uvIdx = face->GetTexCoordIndex (i);
 
-                if (2*uvIdx + 1 < m_pTextureCoordinates.size())
+                if (2*uvIdx + 1 < m_texCoords.size())
                 {
-                    out.texCoords.push_back(m_pTextureCoordinates[2*uvIdx + 0]);
-                    out.texCoords.push_back(m_pTextureCoordinates[2*uvIdx + 1]);
+                    out.texCoords.push_back(m_texCoords[2*uvIdx + 0]);
+                    out.texCoords.push_back(m_texCoords[2*uvIdx + 1]);
                 }
                 else
                 {
@@ -813,11 +889,11 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
 
             if (hasColors)
             {
-                if (3*vi + 2 < m_pVertexColors.size())
+                if (3*vi + 2 < m_vertexColors.size())
                 {
-                    out.colors.push_back(m_pVertexColors[3*vi + 0]);
-                    out.colors.push_back(m_pVertexColors[3*vi + 1]);
-                    out.colors.push_back(m_pVertexColors[3*vi + 2]);
+                    out.colors.push_back(m_vertexColors[3*vi + 0]);
+                    out.colors.push_back(m_vertexColors[3*vi + 1]);
+                    out.colors.push_back(m_vertexColors[3*vi + 2]);
                 }
                 else
                 {
@@ -857,136 +933,175 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
 // Triangulate() walks faces and replaces every N>=4 polygon with (N-2)
 // triangle Face objects (fan for convex, glutess for concave). Triangle
 // faces are kept as-is. Material ids, face-relative texture-coordinate
-// indices (m_pTextureCoordinatesIndices) and inline per-face UV coordinates
-// (m_pTextureCoordinates) all propagate to each sub-triangle.
+// indices (m_pTexCoordIndices) and inline per-face UV coordinates
+// (m_texCoords) all propagate to each sub-triangle.
 //
 void Mesh::Triangulate()
 {
-    if (m_nFaces == 0) return;
+    const unsigned int nf0 = GetNFaces ();
+    if (nf0 == 0) return;
 
-    std::vector<Face*> newFaces;
-    newFaces.reserve(m_nFaces);
+    // Construction dans des tableaux NEUFS, puis echange. Le resultat est d'arite
+    // uniforme 3, donc sans tableau d'offsets. Les UV ne sont alloues que si la
+    // source en portait.
+    const bool hasTexIdx = !m_faceTexIndices.empty ();
+    const bool hasTexUV  = !m_faceTexCoords.empty ();
+    const bool hasFlags  = !m_faceHasTex.empty ();
 
-    // Emit one triangle Face* from local-to-source-face indices a/b/c.
-    auto emitTriangle = [&](Face* src, unsigned int a, unsigned int b, unsigned int c) {
-        Face* f = new Face();
-        f->SetNVertices(3);
-        f->SetVertex(0, src->GetVertex(a));
-        f->SetVertex(1, src->GetVertex(b));
-        f->SetVertex(2, src->GetVertex(c));
-        f->SetMaterialId((unsigned int)src->GetMaterialId());
+    std::vector<unsigned int> outVerts;
+    std::vector<unsigned int> outMaterial;
+    std::vector<unsigned int> outTexIdx;
+    std::vector<float>        outTexUV;
+    std::vector<uint8_t>      outFlags;
+    outVerts.reserve (3 * (size_t)nf0);
+    outMaterial.reserve (nf0);
 
-        // Propagate the "this face uses texture coords" flag — the OBJ
-        // exporter (mesh_io.cpp) consults it to decide whether to emit
-        // 'vt' indices, so the data alone isn't enough.
-        f->m_bUseTextureCoordinates = src->m_bUseTextureCoordinates;
+    // Emet un triangle depuis les indices LOCAUX a/b/c de la face source fi.
+    auto emitTriangle = [&](unsigned int fi, unsigned int a, unsigned int b, unsigned int c) {
+        auto src = FaceAt (fi);
+        const unsigned int loc[3] = { a, b, c };
 
-        // Propagate face-relative texture-coordinate indices if the source
-        // face owns them.
-        if (src->m_pTextureCoordinatesIndices)
-        {
-            f->ActivateTextureCoordinatesIndices();
-            f->m_pTextureCoordinatesIndices[0] = src->m_pTextureCoordinatesIndices[a];
-            f->m_pTextureCoordinatesIndices[1] = src->m_pTextureCoordinatesIndices[b];
-            f->m_pTextureCoordinatesIndices[2] = src->m_pTextureCoordinatesIndices[c];
-        }
-        // Propagate inline per-face UV coords if the source face owns them.
-        if (src->m_pTextureCoordinates)
-        {
-            f->ActivateTextureCoordinates();
-            f->m_pTextureCoordinates[0] = src->m_pTextureCoordinates[2*a + 0];
-            f->m_pTextureCoordinates[1] = src->m_pTextureCoordinates[2*a + 1];
-            f->m_pTextureCoordinates[2] = src->m_pTextureCoordinates[2*b + 0];
-            f->m_pTextureCoordinates[3] = src->m_pTextureCoordinates[2*b + 1];
-            f->m_pTextureCoordinates[4] = src->m_pTextureCoordinates[2*c + 0];
-            f->m_pTextureCoordinates[5] = src->m_pTextureCoordinates[2*c + 1];
-        }
+        for (int k = 0; k < 3; k++)
+            outVerts.push_back ((unsigned int)src->GetVertex (loc[k]));
 
-        newFaces.push_back(f);
+        outMaterial.push_back ((unsigned int)src->GetMaterialId ());
+
+        // Le drapeau « cette face utilise des UV » doit voyager : l'exportateur OBJ
+        // le consulte pour decider s'il emet des indices 'vt'.
+        if (hasFlags)
+            outFlags.push_back (src->UsesTextureCoordinates () ? 1 : 0);
+
+        if (hasTexIdx)
+            for (int k = 0; k < 3; k++)
+                outTexIdx.push_back ((unsigned int)src->GetTexCoordIndex (loc[k]));
+
+        if (hasTexUV)
+            for (int k = 0; k < 3; k++)
+            {
+                float uv[2] = { 0.f, 0.f };
+                src->GetTexCoord (loc[k], uv);
+                outTexUV.push_back (uv[0]);
+                outTexUV.push_back (uv[1]);
+            }
     };
 
     GLUtesselator* tess = nullptr;
 
-    for (unsigned int fi = 0; fi < m_nFaces; ++fi)
+    for (unsigned int fi = 0; fi < nf0; ++fi)
     {
-        Face* face = m_pFaces[fi];
-        if (!face) continue;
+        auto face = FaceAt (fi);
+        if (!face) continue;                       // trou
 
-        const unsigned int n = face->GetNVertices();
-        if (n < 3)
-        {
-            delete face;
-            m_pFaces[fi] = nullptr; // avoid dangling pointer in the source array
-            continue;
-        }
+        const unsigned int n = (unsigned int)face->GetNVertices ();
+        if (n < 3) continue;                       // face degeneree : abandonnee
 
         if (n == 3)
         {
-            // Reuse the existing Face — no churn.
-            newFaces.push_back(face);
-            m_pFaces[fi] = nullptr;
+            emitTriangle (fi, 0u, 1u, 2u);
             continue;
         }
 
-        forEachFaceTriangle(*this, fi, tess,
+        forEachFaceTriangle (*this, fi, tess,
             [&](unsigned int a, unsigned int b, unsigned int c) {
-                emitTriangle(face, a, b, c);
+                emitTriangle (fi, a, b, c);
             });
-
-        delete face;
-        m_pFaces[fi] = nullptr;
     }
 
-    if (tess) gluDeleteTess(tess);
+    if (tess) gluDeleteTess (tess);
 
-    // Swap the new face array in.
-    delete[] m_pFaces;
-    m_pFaces = new Face*[newFaces.size()];
-    for (size_t i = 0; i < newFaces.size(); ++i)
-        m_pFaces[i] = newFaces[i];
-    m_nFaces = (unsigned int)newFaces.size();
+    m_faceVertices.swap (outVerts);
+    m_faceMaterial.swap (outMaterial);
+    m_faceTexIndices.swap (outTexIdx);
+    m_faceTexCoords.swap (outTexUV);
+    m_faceHasTex.swap (outFlags);
+    m_faceOffsets.clear ();
+    m_faceCorners.clear ();
+    m_faceArity = 3;
+    // Les trous ont disparu avec la reconstruction.
+    m_faceRemoved.clear ();
 
-    ComputeNormals();      // also resizes m_pFaceNormals to 3*m_nFaces
+    AssertFaceStorageFull ();
+    ComputeNormals();      // redimensionne aussi les normales par face
     IncrementRevision();
 }
 
-int Mesh::SetVertices (unsigned int nVertices, float *pVertices)
+int Mesh::SetVertices (unsigned int nVertices, const float *pVertices)
 {
+	const bool countChanged = (nVertices != m_nVertices);
+
 	m_nVertices = nVertices;
 	m_pVertices.assign(pVertices, pVertices + 3*nVertices);
+
+	// Les attributs par sommet sont indexes par sommet : un compte different les
+	// rend structurellement invalides, et les laisser en place ferait lire hors
+	// bornes. Un compte identique les laisse valides -- deplacer des sommets
+	// n'invalide ni leur couleur ni leur normale.
+	if (countChanged)
+	{
+		m_vertexColors.clear();
+		m_vertexNormals.clear();
+	}
+
+	IncrementRevision ();
 	return 0;
 }
 
-int Mesh::SetVertexNormals(unsigned int nVertexNormals, float* pVertexNormals)
+int Mesh::SetVertexNormals(unsigned int nVertexNormals, const float* pVertexNormals)
 {
 	if (nVertexNormals != m_nVertices)
 	{
 		return -1;
 	}
 
-	m_pVertexNormals.assign(pVertexNormals, pVertexNormals + 3*nVertexNormals);
+	m_vertexNormals.assign(pVertexNormals, pVertexNormals + 3*nVertexNormals);
 
 	return 0;
 
 }
 
+int Mesh::SetVertexNormals(std::vector<float> normals)
+{
+	// Vide = pas de normales, licite.
+	if (!normals.empty() && normals.size() != 3*(size_t)m_nVertices)
+		return -1;
+
+	m_vertexNormals = std::move (normals);
+
+	return 0;
+}
+
 int Mesh::SetFaces (unsigned int nFaces, unsigned int nVerticesPerFace, unsigned int *pFaces, unsigned int *pTextureCoordinates)
 {
-	// NB: the caller owns/frees the individual Face* objects (see subdivision_*);
-	// SetFaces only (re)allocates the outer array. Fix the new[]/delete mismatch.
-	if (m_pFaces) delete[] m_pFaces;
-	m_pFaces = new Face*[nFaces];
-	m_nFaces = nFaces;
-	for (unsigned int i=0; i<nFaces; i++)
-	{
-		Face *pFace = new Face ();
-		pFace->SetNVertices (nVerticesPerFace);
-		for (unsigned int j=0; j<nVerticesPerFace; j++)
-			pFace->m_pVertices[j] = pFaces[nVerticesPerFace*i+j];
+	// DeleteFaces + InitFaces : les faces en place sont liberees et m_faceNormals
+	// redimensionne au nouveau compte. La revision est incrementee, les faces
+	// etant de la geometrie.
+	DeleteFaces ();
+	InitFaces (nFaces);
 
-		m_pFaces[i] = pFace;
-	}
+	// Toutes les faces ont la MEME arite : la poser comme arite uniforme, et NON
+	// appeler SetNVertices face par face -- cela materialiserait les offsets des la
+	// premiere face non triangulaire.
+	m_faceArity = nVerticesPerFace;
+	m_faceOffsets.clear ();
+	m_faceCorners.clear ();
+	m_faceVertices.assign ((size_t)nFaces * nVerticesPerFace, 0u);
+	for (size_t k = 0; k < m_faceVertices.size (); k++)
+		m_faceVertices[k] = pFaces[k];
+
+	IncrementRevision ();
+	AssertFaceStorageFull ();
 	return 1;
+}
+
+int Mesh::SetVertexComponent (unsigned int i, unsigned int dim, float value)
+{
+	if (dim > 2 || 3*i+dim >= m_pVertices.size())
+		return -1;
+
+	m_pVertices[3*i+dim] = value;
+
+	IncrementRevision ();
+	return 0;
 }
 
 int Mesh::SetVertex (unsigned int i, float x, float y, float z)
@@ -998,30 +1113,25 @@ int Mesh::SetVertex (unsigned int i, float x, float y, float z)
 	m_pVertices[3*i+1] = y;
 	m_pVertices[3*i+2] = z;
 
+	IncrementRevision ();
 	return 0;
 }
 
 int Mesh::SetFace (unsigned int i,
 		   unsigned int a, unsigned int b, unsigned int c)
 {
-	if (m_pFaces[i])
-		delete m_pFaces[i];
-	m_pFaces[i] = new Face ();
-	m_pFaces[i]->SetNVertices (3);
-	m_pFaces[i]->m_pVertices[0] = a;
-	m_pFaces[i]->m_pVertices[1] = b;
-	m_pFaces[i]->m_pVertices[2] = c;
-
+	// Remplace la face : elle repart d'un materiau vide et sans UV, comme le
+	// faisait `m_pFaces[i] = new Face ()`. Un emplacement troue redevient vivant.
+	ResetFace (i);
+	FaceAt (i)->SetTriangle (a, b, c);
 	return 0;
 }
 
 int Mesh::SetFace (unsigned int i,
 		   unsigned int a, unsigned int b, unsigned int c, unsigned int d)
 {
-	if (m_pFaces[i])
-		delete m_pFaces[i];
-	m_pFaces[i] = new Face ();
-	m_pFaces[i]->SetQuad (a, b, c, d);
+	ResetFace (i);
+	FaceAt (i)->SetQuad (a, b, c, d);
 	return 0;
 }
 
@@ -1032,6 +1142,103 @@ int Mesh::computebbox (void)
 	for (int i = 0; i < m_nVertices; i++)
 		m_bbox.AddPoint(m_pVertices[3 * i], m_pVertices[3 * i + 1], m_pVertices[3 * i + 2]);
 	
+	return 0;
+}
+
+int Mesh::SetVertexColor (unsigned int i, float r, float g, float b)
+{
+	if (3*i+2 >= m_vertexColors.size()) return -1;
+	m_vertexColors[3*i]   = r;
+	m_vertexColors[3*i+1] = g;
+	m_vertexColors[3*i+2] = b;
+	return 0;
+}
+
+int Mesh::SetVertexColorComponent (unsigned int i, unsigned int dim, float value)
+{
+	if (dim > 2 || 3*i+dim >= m_vertexColors.size()) return -1;
+	m_vertexColors[3*i+dim] = value;
+	return 0;
+}
+
+int Mesh::SetVertexColors (std::vector<float> colors)
+{
+	// Vide = pas de couleurs, licite.
+	if (!colors.empty() && colors.size() != 3*(size_t)m_nVertices)
+		return -1;
+
+	m_vertexColors = std::move (colors);
+	return 0;
+}
+
+int Mesh::SetTextureCoordinate (unsigned int i, float u, float v)
+{
+	if (2*i+1 >= m_texCoords.size()) return -1;
+	m_texCoords[2*i]   = u;
+	m_texCoords[2*i+1] = v;
+	return 0;
+}
+
+int Mesh::SetTextureCoordinates (std::vector<float> uv, unsigned int nTexCoords)
+{
+	m_texCoords  = std::move (uv);
+	m_nTexCoords = nTexCoords;
+	IncrementRevision ();
+	return 0;
+}
+
+void Mesh::InitVertexNormals (void)
+{
+	m_vertexNormals.assign (3*m_nVertices, 0.0f);
+}
+
+int Mesh::SetVertexNormal (unsigned int i, float x, float y, float z)
+{
+	if (3*i+2 >= m_vertexNormals.size()) return -1;
+	m_vertexNormals[3*i]   = x;
+	m_vertexNormals[3*i+1] = y;
+	m_vertexNormals[3*i+2] = z;
+	return 0;
+}
+
+int Mesh::SetVertexNormalComponent (unsigned int i, unsigned int dim, float value)
+{
+	if (dim > 2 || 3*i+dim >= m_vertexNormals.size()) return -1;
+	m_vertexNormals[3*i+dim] = value;
+	return 0;
+}
+
+void Mesh::AddPoint (unsigned int v)
+{
+	m_points.push_back (v);
+	IncrementRevision ();
+}
+
+void Mesh::SetPoints (std::vector<unsigned int> points)
+{
+	m_points = std::move (points);
+	IncrementRevision ();
+}
+
+void Mesh::AddLine (unsigned int a, unsigned int b)
+{
+	m_lines.push_back (a);
+	m_lines.push_back (b);
+	IncrementRevision ();
+}
+
+void Mesh::SetLines (std::vector<unsigned int> lines)
+{
+	m_lines = std::move (lines);
+	IncrementRevision ();
+}
+
+int Mesh::SetFaceNormal (unsigned int fi, float x, float y, float z)
+{
+	if (3*fi+2 >= m_faceNormals.size()) return -1;
+	m_faceNormals[3*fi]   = x;
+	m_faceNormals[3*fi+1] = y;
+	m_faceNormals[3*fi+2] = z;
 	return 0;
 }
 
@@ -1055,9 +1262,9 @@ float Mesh::GetLargestLength(void) const
 //
 float Mesh::GetFaceArea (unsigned int fi)
 {
-	unsigned int vi1 = 3*m_pFaces[fi]->m_pVertices[0];
-	unsigned int vi2 = 3*m_pFaces[fi]->m_pVertices[1];
-	unsigned int vi3 = 3*m_pFaces[fi]->m_pVertices[2];
+	unsigned int vi1 = 3*FaceAt (fi)->GetVertex (0);
+	unsigned int vi2 = 3*FaceAt (fi)->GetVertex (1);
+	unsigned int vi3 = 3*FaceAt (fi)->GetVertex (2);
 	Vector3f v1, v2, v3;
 
 	v1.Set (m_pVertices[vi1], m_pVertices[vi1+1], m_pVertices[vi1+2]);
@@ -1070,15 +1277,15 @@ float Mesh::GetFaceArea (unsigned int fi)
 float Mesh::GetArea (void)
 {
 	float area = 0.;
-	for (unsigned int i=0; i<m_nFaces; i++)
+	for (unsigned int i=0; i<GetNFaces (); i++)
 		area += GetFaceArea(i);
 	return area;
 }
 
 float* Mesh::GetAreas (void)
 {
-	float *areas = (float*)malloc(m_nFaces*sizeof(float));
-	for (unsigned int i=0; i<m_nFaces; i++)
+	float *areas = (float*)malloc(GetNFaces ()*sizeof(float));
+	for (unsigned int i=0; i<GetNFaces (); i++)
 		areas[i] = GetFaceArea(i);
 	return areas;
 }
@@ -1086,7 +1293,7 @@ float* Mesh::GetAreas (void)
 float* Mesh::GetCumulativeAreas (void)
 {
 	float *areas = GetAreas ();
-	for (unsigned int i=1; i<m_nFaces; i++)
+	for (unsigned int i=1; i<GetNFaces (); i++)
 		areas[i] += areas[i-1];
 	return areas;
 }
@@ -1094,10 +1301,10 @@ float* Mesh::GetCumulativeAreas (void)
 int Mesh::stats_vertices_in_faces (int *verticesinfaces, int n)
 {	
 	memset (verticesinfaces, 0, n*sizeof(int));
-	for (int i=0; i<m_nFaces; i++)
+	for (int i=0; i<GetNFaces (); i++)
 	{
-		Face *f = m_pFaces[i];
-		if (f == nullptr)
+		auto f = FaceAt (i);
+		if (!f)
 			continue;
 		if (f->GetNVertices() >= n)
 			(verticesinfaces[n-1])++;
@@ -1115,17 +1322,35 @@ unsigned int Mesh::GetNVertices() const
 
 unsigned int Mesh::GetNFaces() const
 {
-	return m_nFaces;
+	// Derive du tableau des materiaux, seul tableau par face toujours present.
+	// Aucun membre de comptage, donc aucune divergence possible.
+	return (unsigned int)m_faceMaterial.size ();
+}
+
+// Remet la face fi a l'etat neuf : triangle, sans materiau, sans UV, et vivante.
+void Mesh::ResetFace (unsigned int fi)
+{
+	if (fi >= m_faceMaterial.size ())
+		return;
+	if (!m_faceRemoved.empty ())
+		m_faceRemoved[fi] = 0;
+	m_faceMaterial[fi] = (unsigned int)MATERIAL_NONE;
+	if (!m_faceHasTex.empty ())
+		m_faceHasTex[fi] = 0;
+	SetFaceArity (fi, 3);
 }
 
 bool Mesh::IsTriangleMesh() const
 {
-	for (int i = 0; i < m_nFaces; i++)
-	{
-		Face* pFace = m_pFaces[i];
-		if (pFace->GetNVertices() != 3)
+	// O(1) quand l'arite est uniforme. La forme mixte exige le parcours : le
+	// descripteur dit « mixte », et non « pas tout triangles » -- une suite
+	// d'editions peut avoir ramene chaque face a 3.
+	if (m_faceCorners.empty ())
+		return m_faceArity == 3;
+	const unsigned int nf = GetNFaces ();
+	for (unsigned int i = 0; i < nf; i++)
+		if (FaceAt (i)->GetNVertices () != 3)
 			return false;
-	}
 	return true;
 }
 
@@ -1134,20 +1359,20 @@ bool Mesh::IsTriangleMesh() const
 //
 void Mesh::ComputeNormals (void)
 {
-	m_pVertexNormals.assign(3*m_nVertices, 0.0f);
-	m_pFaceNormals.assign(3*m_nFaces, 0.0f);
+	m_vertexNormals.assign(3*m_nVertices, 0.0f);
+	m_faceNormals.assign(3*GetNFaces (), 0.0f);
 	
 
 	//
 	int *nfaces = new int[m_nVertices];
 	memset (nfaces, 0, m_nVertices*sizeof(int));
 	
-	for (int i=0; i<m_nFaces; i++)
+	for (int i=0; i<GetNFaces (); i++)
 	{
-		Face *pFace = m_pFaces[i];
-		int k1 = pFace->m_pVertices[0];
-		int k2 = pFace->m_pVertices[1];
-		int k3 = pFace->m_pVertices[2];
+		auto pFace = FaceAt (i);
+		int k1 = pFace->GetVertex (0);
+		int k2 = pFace->GetVertex (1);
+		int k3 = pFace->GetVertex (2);
 		Vector3f p1p2, p1p3, n;
 		p1p2.Set (
 			   m_pVertices[3*k2]   - m_pVertices[3*k1],
@@ -1159,17 +1384,17 @@ void Mesh::ComputeNormals (void)
 			   m_pVertices[3*k3+2] - m_pVertices[3*k1+2]);
 		n = (p1p2).CrossProduct (p1p3);
 		(n).Normalize ();
-		m_pFaceNormals[3*i]   = n[0];
-		m_pFaceNormals[3*i+1] = n[1];
-		m_pFaceNormals[3*i+2] = n[2];
+		m_faceNormals[3*i]   = n[0];
+		m_faceNormals[3*i+1] = n[1];
+		m_faceNormals[3*i+2] = n[2];
 		
-		for (int j=0; j<pFace->m_nVertices; j++)
+		for (int j=0; j<pFace->GetNVertices (); j++)
 		{
-			int k = pFace->m_pVertices[j];
+			int k = pFace->GetVertex (j);
 			
-			m_pVertexNormals[3*k]   += m_pFaceNormals[3*i];
-			m_pVertexNormals[3*k+1] += m_pFaceNormals[3*i+1];
-			m_pVertexNormals[3*k+2] += m_pFaceNormals[3*i+2];
+			m_vertexNormals[3*k]   += m_faceNormals[3*i];
+			m_vertexNormals[3*k+1] += m_faceNormals[3*i+1];
+			m_vertexNormals[3*k+2] += m_faceNormals[3*i+2];
 			
 			nfaces[k]++;
 		}
@@ -1184,7 +1409,7 @@ void Mesh::ComputeNormals (void)
 	// (isolated vertex, or opposite faces cancelling) to avoid NaNs.
 	for (int i=0; i<m_nVertices; i++)
 	{
-		float *vn = &m_pVertexNormals[3*i];
+		float *vn = &m_vertexNormals[3*i];
 		float len = sqrtf(vn[0]*vn[0] + vn[1]*vn[1] + vn[2]*vn[2]);
 		if (len > 1e-12f)
 		{
@@ -1199,13 +1424,13 @@ void Mesh::ComputeNormals (void)
 unsigned int Mesh::CountEdges (void)
 {
 	std::set<std::pair<unsigned int, unsigned int>> edges;
-	for (unsigned int f = 0; f < m_nFaces; f++)
+	for (unsigned int f = 0; f < GetNFaces (); f++)
 	{
-		unsigned int nv = m_pFaces[f]->GetNVertices();
+		unsigned int nv = FaceAt (f)->GetNVertices();
 		for (unsigned int e = 0; e < nv; e++)
 		{
-			unsigned int a = m_pFaces[f]->GetVertex(e);
-			unsigned int b = m_pFaces[f]->GetVertex((e + 1) % nv);
+			unsigned int a = FaceAt (f)->GetVertex(e);
+			unsigned int b = FaceAt (f)->GetVertex((e + 1) % nv);
 			if (a > b) std::swap(a, b);
 			edges.insert({a, b});
 		}
@@ -1218,44 +1443,198 @@ int Mesh::Append (Mesh *m)
 	if (!m)
 		return 0;
 
+	const unsigned int shift = m_nVertices;
+	const unsigned int matOffset = (unsigned int)m_materials.size();
+
 	// vertices
-	unsigned int res_nv = m_nVertices + m->m_nVertices;
 	m_pVertices.insert(m_pVertices.end(),
 	                   m->m_pVertices.begin(),
 	                   m->m_pVertices.begin() + 3 * m->m_nVertices);
 
-	// faces
-	unsigned int res_nf = m_nFaces + m->m_nFaces;
-	Face **res_f = new Face*[res_nf];
+	// ---- faces : concatenation des deux pools ----
+	const bool anyTexIdx  = !m_faceTexIndices.empty () || !m->m_faceTexIndices.empty ();
+	const bool anyTexUV   = !m_faceTexCoords.empty ()  || !m->m_faceTexCoords.empty ();
+	const bool anyFlags   = !m_faceHasTex.empty ()     || !m->m_faceHasTex.empty ();
+	const bool anyRemoved = !m_faceRemoved.empty ()    || !m->m_faceRemoved.empty ();
 
-	for (unsigned int i=0; i<m_nFaces; i++)
-		res_f[i] = m_pFaces[i];
+	std::vector<unsigned int> outVerts, outOffsets, outCorners, outMaterial, outTexIdx;
+	std::vector<float>        outTexUV;
+	std::vector<uint8_t>      outFlags, outRemoved;
 
-	const unsigned int matOffset = (unsigned int)m_pMaterials.size();
-
-	for (unsigned int i=0; i<m->m_nFaces; i++)
+	// Recopie la TRANCHE BRUTE de la face fi : FaceBegin / FaceArity et non FaceAt,
+	// pour transporter aussi les faces trouees.
+	auto copyFace = [&](const Mesh &src, unsigned int fi,
+			    unsigned int vertexShift, unsigned int materialShift)
 	{
-		res_f[m_nFaces+i] = new Face (*m->m_pFaces[i]);
-		for (unsigned int j=0; j<res_f[m_nFaces+i]->m_nVertices; j++)
-			res_f[m_nFaces+i]->m_pVertices[j] += m_nVertices;
-		res_f[m_nFaces+i]->SetMaterialId(matOffset + m->m_pFaces[i]->GetMaterialId());
-	}
+		const unsigned int n = src.FaceArity (fi);
+		const unsigned int b = src.FaceBegin (fi);
+
+		outOffsets.push_back ((unsigned int)outVerts.size ());
+		outCorners.push_back (n);
+
+		for (unsigned int k = 0; k < n; k++)
+			outVerts.push_back (src.m_faceVertices[b+k] + vertexShift);
+
+		// ⚠ MATERIAL_NONE reste MATERIAL_NONE : lui ajouter un decalage le fait
+		// deborder vers un indice de materiau valide et arbitraire.
+		const unsigned int mat = src.m_faceMaterial[fi];
+		outMaterial.push_back (mat == (unsigned int)MATERIAL_NONE
+				       ? mat : mat + materialShift);
+
+		if (anyTexIdx)
+		{
+			const bool has = !src.m_faceTexIndices.empty ();
+			for (unsigned int k = 0; k < n; k++)
+				outTexIdx.push_back (has ? src.m_faceTexIndices[b+k] : 0u);
+		}
+		if (anyTexUV)
+		{
+			const bool has = !src.m_faceTexCoords.empty ();
+			for (unsigned int k = 0; k < n; k++)
+			{
+				outTexUV.push_back (has ? src.m_faceTexCoords[2*((size_t)b+k)]   : 0.0f);
+				outTexUV.push_back (has ? src.m_faceTexCoords[2*((size_t)b+k)+1] : 0.0f);
+			}
+		}
+		if (anyFlags)
+			outFlags.push_back (src.m_faceHasTex.empty () ? 0 : src.m_faceHasTex[fi]);
+		if (anyRemoved)
+			outRemoved.push_back (src.m_faceRemoved.empty () ? 0 : src.m_faceRemoved[fi]);
+	};
+
+	const unsigned int nf0 = GetNFaces ();
+	const unsigned int nf1 = m->GetNFaces ();
+	outVerts.reserve (m_faceVertices.size () + m->m_faceVertices.size ());
+	outOffsets.reserve ((size_t)nf0 + nf1);
+	outCorners.reserve ((size_t)nf0 + nf1);
+	outMaterial.reserve ((size_t)nf0 + nf1);
+
+	for (unsigned int i = 0; i < nf0; i++)
+		copyFace (*this, i, 0u, 0u);
+	for (unsigned int i = 0; i < nf1; i++)
+		copyFace (*m, i, shift, matOffset);
 
 	// Materials: transfer ownership from `m` to `this`. After Append, `m`'s
-	// material array is emptied (it no longer owns them). This is a
-	// behavior change from the previous raw-pointer code which shared
-	// pointers between the two meshes — a guaranteed double-free at
-	// destruction. Append currently has no callers so the swap is safe.
-	for (auto& mat : m->m_pMaterials)
-		m_pMaterials.push_back(std::move(mat));
-	m->m_pMaterials.clear();
+	// material array is emptied (it no longer owns them).
+	for (auto& mat : m->m_materials)
+		m_materials.push_back(std::move(mat));
+	m->m_materials.clear();
 
-	m_nVertices = res_nv;
+	m_nVertices += m->m_nVertices;
 
-	m_nFaces = res_nf;
-	m_pFaces = res_f;
+	// Le compte de sommets change, donc les attributs par sommet ne couvrent plus
+	// que le prefixe : on les invalide. Les concatener serait possible, mais il
+	// faudrait inventer une valeur pour le cas ou un seul des deux maillages en
+	// porte -- a faire le jour ou un appelant en a besoin.
+	m_vertexColors.clear();
+	m_vertexNormals.clear();
 
+	m_faceVertices.swap (outVerts);
+	m_faceMaterial.swap (outMaterial);
+	m_faceTexIndices.swap (outTexIdx);
+	m_faceTexCoords.swap (outTexUV);
+	m_faceHasTex.swap (outFlags);
+	m_faceRemoved.swap (outRemoved);
+	m_faceOffsets.swap (outOffsets);
+	m_faceCorners.swap (outCorners);
+	m_faceArity = 0;
+
+	// La concatenation peut laisser l'arite uniforme, et il ne faut pas payer les
+	// offsets pour rien. Le descripteur etant derivable, on le re-derive.
+	CompactFaceArity ();
+
+	IncrementRevision ();
 	return 1;
+}
+
+void Mesh::KeepFaces (const std::vector<unsigned int> &keep)
+{
+	const bool hasTexIdx  = !m_faceTexIndices.empty ();
+	const bool hasTexUV   = !m_faceTexCoords.empty ();
+	const bool hasFlags   = !m_faceHasTex.empty ();
+
+	std::vector<unsigned int> outVerts, outOffsets, outCorners, outMaterial, outTexIdx;
+	std::vector<float>        outTexUV;
+	std::vector<uint8_t>      outFlags;
+	outOffsets.reserve (keep.size ());
+	outCorners.reserve (keep.size ());
+	outMaterial.reserve (keep.size ());
+
+	for (unsigned int fi : keep)
+	{
+		if (fi >= m_faceMaterial.size ())
+			continue;
+		const unsigned int n = FaceArity (fi);
+		const unsigned int b = FaceBegin (fi);
+
+		outOffsets.push_back ((unsigned int)outVerts.size ());
+		outCorners.push_back (n);
+		for (unsigned int k = 0; k < n; k++)
+			outVerts.push_back (m_faceVertices[b+k]);
+		outMaterial.push_back (m_faceMaterial[fi]);
+		if (hasTexIdx)
+			for (unsigned int k = 0; k < n; k++)
+				outTexIdx.push_back (m_faceTexIndices[b+k]);
+		if (hasTexUV)
+			for (unsigned int k = 0; k < n; k++)
+			{
+				outTexUV.push_back (m_faceTexCoords[2*((size_t)b+k)]);
+				outTexUV.push_back (m_faceTexCoords[2*((size_t)b+k)+1]);
+			}
+		if (hasFlags)
+			outFlags.push_back (m_faceHasTex[fi]);
+	}
+
+	m_faceVertices.swap (outVerts);
+	m_faceOffsets.swap (outOffsets);
+	m_faceCorners.swap (outCorners);
+	m_faceMaterial.swap (outMaterial);
+	m_faceTexIndices.swap (outTexIdx);
+	m_faceTexCoords.swap (outTexUV);
+	m_faceHasTex.swap (outFlags);
+	m_faceArity = 0;
+	// Une compaction retire tous les trous par construction.
+	m_faceRemoved.clear ();
+
+	// Les normales par face sont indexees par la numerotation des faces, que cette
+	// compaction change : les garder les rendrait fausses.
+	m_faceNormals.assign (3 * m_faceMaterial.size (), 0.0f);
+
+	CompactFaceArity ();
+	AssertFaceStorageFull ();
+}
+
+// Repasse a la forme uniforme quand toutes les faces ont la meme arite et que les
+// tranches sont contigues. Toujours legitime : le descripteur est derivable.
+void Mesh::CompactFaceArity (void)
+{
+	if (m_faceCorners.empty ())
+		return;                    // deja uniforme
+
+	const size_t nf = m_faceCorners.size ();
+	if (nf == 0)
+	{
+		m_faceOffsets.clear ();
+		m_faceCorners.clear ();
+		m_faceArity = 0;
+		return;
+	}
+
+	const unsigned int k = m_faceCorners[0];
+	if (k == 0)
+		return;                    // arite uniforme 0 : reservee a « mixte »
+	for (size_t i = 0; i < nf; i++)
+		if (m_faceCorners[i] != k || m_faceOffsets[i] != (unsigned int)(i * k))
+			return;
+	// Les tranches orphelines rendent le pool plus long que nf*k : on le tronque.
+	m_faceVertices.resize (nf * (size_t)k);
+	if (!m_faceTexIndices.empty ()) m_faceTexIndices.resize (nf * (size_t)k);
+	if (!m_faceTexCoords.empty ())  m_faceTexCoords.resize (2 * nf * (size_t)k);
+
+	m_faceOffsets.clear ();
+	m_faceCorners.clear ();
+	m_faceArity = k;
+	AssertFaceStorageFull ();
 }
 
 //
@@ -1275,20 +1654,33 @@ int Mesh::DeleteVertices (funcptr_v func)
 			m_pVertices[3*nVertices+1] = m_pVertices[3*i+1];
 			m_pVertices[3*nVertices+2] = m_pVertices[3*i+2];
 
-			m_pVertexNormals[3*nVertices]   = m_pVertexNormals[3*i];
-			m_pVertexNormals[3*nVertices+1] = m_pVertexNormals[3*i+1];
-			m_pVertexNormals[3*nVertices+2] = m_pVertexNormals[3*i+2];
-			if (!m_pVertexColors.empty())
+			m_vertexNormals[3*nVertices]   = m_vertexNormals[3*i];
+			m_vertexNormals[3*nVertices+1] = m_vertexNormals[3*i+1];
+			m_vertexNormals[3*nVertices+2] = m_vertexNormals[3*i+2];
+			if (!m_vertexColors.empty())
 			{
-				m_pVertexColors[3*nVertices]   = m_pVertexColors[3*i];
-				m_pVertexColors[3*nVertices+1] = m_pVertexColors[3*i+1];
-				m_pVertexColors[3*nVertices+2] = m_pVertexColors[3*i+2];
+				m_vertexColors[3*nVertices]   = m_vertexColors[3*i];
+				m_vertexColors[3*nVertices+1] = m_vertexColors[3*i+1];
+				m_vertexColors[3*nVertices+2] = m_vertexColors[3*i+2];
 			}
 
 			nVertices++;
 		}
 	}
 	m_nVertices = nVertices;
+
+	// Les trois tableaux ont ete COMPACTES en place mais gardaient leur ancienne
+	// taille. Sans ce redimensionnement, size() != 3*m_nVertices, et les
+	// operations ulterieures qui testent ce parallelisme a l'egalite exacte
+	// (MergeVertices, SplitVerticesByUVSeams) abandonnent silencieusement les
+	// couleurs et les normales.
+	m_pVertices.resize (3*m_nVertices);
+	if (!m_vertexNormals.empty())
+		m_vertexNormals.resize (3*m_nVertices);
+	if (!m_vertexColors.empty())
+		m_vertexColors.resize (3*m_nVertices);
+
+	IncrementRevision ();
 	return 0;
 }
 
@@ -1315,7 +1707,7 @@ bool Mesh::ColorizeVerticesDensity_Traverse (Octree &o, void *_data)
 // Treatments on vertices
 int Mesh::ColorizeVerticesDensity (float k)
 {
-	if (m_pVertexColors.empty())
+	if (m_vertexColors.empty())
 		InitVertexColors (m_nVertices);
 
 	unsigned int *neighbours = (unsigned int*)malloc(m_nVertices*sizeof(unsigned int));
@@ -1355,11 +1747,11 @@ int Mesh::ColorizeVerticesDensity (float k)
 	{
 
 		color_jet ((float)neighbours[i]/max,
-			   &m_pVertexColors[3*i], &m_pVertexColors[3*i+1], &m_pVertexColors[3*i+2]);
+			   &m_vertexColors[3*i], &m_vertexColors[3*i+1], &m_vertexColors[3*i+2]);
 		
-		//m_pVertexColors[3*i]   = (float)neighbours[i]/max;
-		//m_pVertexColors[3*i+1] = (float)neighbours[i]/max;
-		//m_pVertexColors[3*i+2] = (float)neighbours[i]/max;
+		//m_vertexColors[3*i]   = (float)neighbours[i]/max;
+		//m_vertexColors[3*i+1] = (float)neighbours[i]/max;
+		//m_vertexColors[3*i+2] = (float)neighbours[i]/max;
 	}
 
 	// cleaning
@@ -1391,9 +1783,9 @@ void Mesh::GetTopologicIssues(std::vector<unsigned int>& nonManifoldEdges, std::
 	borders.clear();
 
 	std::map<unsigned int, std::map<unsigned int, unsigned int>> occurences;
-	for (int i = 0; i < m_nFaces; i++)
+	for (int i = 0; i < GetNFaces (); i++)
 	{
-		Face* pFace = m_pFaces[i];
+		auto pFace = FaceAt (i);
 		unsigned int nVertices = pFace->GetNVertices();
 		for (int j = 0; j < nVertices; j++)
 		{
@@ -1465,120 +1857,11 @@ bool Mesh::GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d)
 	return box.intersection (r, 0., 100.);
 }
 
-int Mesh::GetIntersectionWithRayInOctree (const Vector3f &vOrig, const Vector3f &vDirection, float *_t, Vector3f &vIntersection, Vector3f &vNormal, Octree *pOctree)
-{
-	if (pOctree->IsLeaf ())
-	{
-		unsigned int nTriangles = pOctree->GetNTriangles();
-		unsigned int *pTriangles = pOctree->GetTriangles();
-		float fTCurrent, fT = -1.;
-		Triangle tri;
-		for (unsigned int i=0; i<nTriangles; i++)
-		{
-			Vector3f vIntersectionCurrent, vNormalCurrent;
-
-			unsigned int vi1, vi2, vi3;
-			vi1 = 3*pTriangles[3*i];
-			vi2 = 3*pTriangles[3*i+1];
-			vi3 = 3*pTriangles[3*i+2];
-			tri.Init (m_pVertices[vi1], m_pVertices[vi1+1], m_pVertices[vi1+2],
-						m_pVertices[vi2], m_pVertices[vi2+1], m_pVertices[vi2+2],
-						m_pVertices[vi3], m_pVertices[vi3+1], m_pVertices[vi3+2]);
-			if (tri.GetIntersectionWithRay (vOrig, vDirection, &fTCurrent, vIntersectionCurrent, vNormalCurrent))
-			{
-				if (fT < 0. || fTCurrent < fT)
-				{
-					fT = fTCurrent;
-					vIntersection = vIntersectionCurrent;
-					vNormal = vNormalCurrent;
-				}
-			}
-		}
-
-		*_t = fT;
-		return (fT < 0.)? 0 : 1;
-	}
-	else
-	{
-		Ray ray (vOrig[0], vOrig[1], vOrig[2], vDirection[0], vDirection[1], vDirection[2]);
-		float fTCurrent, fT = -1.;
-		for (int i=0; i<8; i++)
-		{
-			Octree *pChild = pOctree->GetChildren()[i];
-			if (!pChild)
-				continue;
-			AABox AABox(pChild->m_vecMin[0], pChild->m_vecMin[1], pChild->m_vecMin[2]);
-			AABox.AddVertex (pChild->m_vecMax[0], pChild->m_vecMax[1], pChild->m_vecMax[2]);
-			if (AABox.intersection (ray, 0., 10000.))
-			{
-				Vector3f vIntersectionCurrent, vNormalCurrent; 
-				if (GetIntersectionWithRayInOctree (vOrig, vDirection, &fTCurrent, vIntersectionCurrent, vNormalCurrent, pChild))
-				{
-					if (fT < 0. || fTCurrent < fT)
-					{
-						fT = fTCurrent;
-						vIntersection = vIntersectionCurrent;
-						vNormal = vNormalCurrent;
-					}
-				}
-			}
-		}
-		*_t = fT;
-		return (fT < 0.)? 0 : 1;
-	}
-}
-
 int Mesh::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirection, float *_t, Vector3f &vIntersection, Vector3f &vNormal)
 {
-	/*
-	// test the bbox
-	bool bGotBBox = GetIntersectionBboxWithRay (vOrig, vDirection);
-	if (bGotBBox == false)
-		return 0;
-	*/
-
-	if (1 && !m_pOctree)
-	{
-		m_pOctree = new Octree ();
-		std::vector<unsigned int> tris = GetTriangles ();
-		m_pOctree->BuildForTriangles (m_pVertices.data(), m_nVertices,
-									  100, // maxTriangles
-									  5,  // maxDepth
-								      tris.data(), m_nFaces);
-	}
-
-	if (m_pOctree)
-	{
-		return GetIntersectionWithRayInOctree (vOrig, vDirection, _t, vIntersection, vNormal, m_pOctree);
-	}
-	else // test alls the triangles
-	{
-		float fTCurrent, fT = -1.;
-		Triangle tri;
-		for (unsigned int i=0; i<m_nFaces; i++)
-		{
-			Vector3f vIntersectionCurrent, vNormalCurrent;
-
-			unsigned int vi1, vi2, vi3;
-			vi1 = 3*m_pFaces[i]->GetVertex (0);
-			vi2 = 3*m_pFaces[i]->GetVertex (1);
-			vi3 = 3*m_pFaces[i]->GetVertex (2);
-			tri.Init (m_pVertices[vi1], m_pVertices[vi1+1], m_pVertices[vi1+2],
-						m_pVertices[vi2], m_pVertices[vi2+1], m_pVertices[vi2+2],
-						m_pVertices[vi3], m_pVertices[vi3+1], m_pVertices[vi3+2]);
-			if (tri.GetIntersectionWithRay (vOrig, vDirection, &fTCurrent, vIntersectionCurrent, vNormalCurrent))
-			{
-				if (fT < 0. || fTCurrent < fT)
-				{
-					fT = fTCurrent;
-					vIntersection = vIntersectionCurrent;
-					vNormal = vNormalCurrent;
-				}
-			}
-		}
-		*_t = fT;
-		return (fT < 0.)? 0 : 1;
-	}
+	// Chemin non accelere, environ 3,4 fois plus lent que le chemin a octree sur
+	// un maillage de 662 triangles. Voir mesh.h pour la raison de son existence.
+	return GetIntersectionWithRayBruteForce (*this, vOrig, vDirection, _t, vIntersection, vNormal);
 }
 
 int Mesh::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n)
@@ -1588,7 +1871,7 @@ int Mesh::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vE
 
 void* Mesh::GetMaterial (void)
 {
-	if (m_pMaterials.empty())
+	if (m_materials.empty())
 	{
 		// add a default material
 		MaterialColorExt *pMaterial;
@@ -1604,29 +1887,29 @@ void* Mesh::GetMaterial (void)
 // Split vertices along UV seams -> vertex-parallel UVs (see header).
 void Mesh::SplitVerticesByUVSeams (void)
 {
-	if (m_nTextureCoordinates == 0)
+	if (m_nTexCoords == 0)
 		return;                                            // no UV pool: nothing to do
-	if (m_pTextureCoordinates.size() == 2u * (size_t)m_nVertices)
+	if (m_texCoords.size() == 2u * (size_t)m_nVertices)
 		return;                                            // already vertex-parallel
 
-	const bool hasC = m_pVertexColors.size()  == 3u * (size_t)m_nVertices;
-	const bool hasN = m_pVertexNormals.size() == 3u * (size_t)m_nVertices;
+	const bool hasC = m_vertexColors.size()  == 3u * (size_t)m_nVertices;
+	const bool hasN = m_vertexNormals.size() == 3u * (size_t)m_nVertices;
 	const unsigned int NO_UV = 0xFFFFFFFFu;                // sentinel for corners without UV
 
 	std::map<std::pair<unsigned int, unsigned int>, unsigned int> remap; // (vertex, uvIndex) -> new vertex
 	std::vector<float> newV, newUV, newC, newN;
 	unsigned int newNv = 0;
 
-	for (unsigned int f = 0; f < m_nFaces; f++)
+	for (unsigned int f = 0; f < GetNFaces (); f++)
 	{
-		Face *face = m_pFaces[f];
+		auto face = FaceAt (f);
 		if (!face) continue;
-		const bool faceUV = face->m_bUseTextureCoordinates && face->m_pTextureCoordinatesIndices;
+		const bool faceUV = face->UsesTextureCoordinates () && face->HasTexCoordIndices ();
 
-		for (unsigned int c = 0; c < face->m_nVertices; c++)
+		for (unsigned int c = 0; c < face->GetNVertices (); c++)
 		{
-			const unsigned int vi = face->m_pVertices[c];
-			const unsigned int ti = faceUV ? face->m_pTextureCoordinatesIndices[c] : NO_UV;
+			const unsigned int vi = face->GetVertex (c);
+			const unsigned int ti = faceUV ? face->GetTexCoordIndex (c) : NO_UV;
 
 			auto key = std::make_pair(vi, ti);
 			auto it = remap.find(key);
@@ -1640,10 +1923,10 @@ void Mesh::SplitVerticesByUVSeams (void)
 				newV.push_back(m_pVertices[3*vi+1]);
 				newV.push_back(m_pVertices[3*vi+2]);
 
-				if (faceUV && ti < m_nTextureCoordinates)
+				if (faceUV && ti < m_nTexCoords)
 				{
-					newUV.push_back(m_pTextureCoordinates[2*ti]);
-					newUV.push_back(m_pTextureCoordinates[2*ti+1]);
+					newUV.push_back(m_texCoords[2*ti]);
+					newUV.push_back(m_texCoords[2*ti+1]);
 				}
 				else
 				{
@@ -1651,26 +1934,26 @@ void Mesh::SplitVerticesByUVSeams (void)
 					newUV.push_back(0.f);
 				}
 
-				if (hasC) { newC.push_back(m_pVertexColors[3*vi]); newC.push_back(m_pVertexColors[3*vi+1]); newC.push_back(m_pVertexColors[3*vi+2]); }
-				if (hasN) { newN.push_back(m_pVertexNormals[3*vi]); newN.push_back(m_pVertexNormals[3*vi+1]); newN.push_back(m_pVertexNormals[3*vi+2]); }
+				if (hasC) { newC.push_back(m_vertexColors[3*vi]); newC.push_back(m_vertexColors[3*vi+1]); newC.push_back(m_vertexColors[3*vi+2]); }
+				if (hasN) { newN.push_back(m_vertexNormals[3*vi]); newN.push_back(m_vertexNormals[3*vi+1]); newN.push_back(m_vertexNormals[3*vi+2]); }
 			}
 			else
 			{
 				ni = it->second;
 			}
 
-			face->m_pVertices[c] = ni;
-			if (face->m_pTextureCoordinatesIndices)
-				face->m_pTextureCoordinatesIndices[c] = ni; // UV index now == vertex index
+			face->SetVertex (c, ni);
+			if (face->HasTexCoordIndices ())
+				face->SetTexCoord (c, (unsigned int)(ni)); // UV index now == vertex index
 		}
 	}
 
 	m_pVertices = std::move(newV);
 	m_nVertices = newNv;
-	m_pTextureCoordinates = std::move(newUV);
-	m_nTextureCoordinates = newNv;                         // vertex-parallel: one UV per vertex
-	if (hasC) m_pVertexColors  = std::move(newC);
-	if (hasN) m_pVertexNormals = std::move(newN);
+	m_texCoords = std::move(newUV);
+	m_nTexCoords = newNv;                         // vertex-parallel: one UV per vertex
+	if (hasC) m_vertexColors  = std::move(newC);
+	if (hasN) m_vertexNormals = std::move(newN);
 
 	IncrementRevision();
 }
@@ -1696,12 +1979,12 @@ int Mesh::MergeVertices (float tolerance)
 	// are indexed by vertex index, parallel to m_pVertices. Otherwise they
 	// belong to a face-indexed model (typical OBJ flow) and we leave them
 	// untouched.
-	const bool uvParallel    = !m_pTextureCoordinates.empty()
-	                        && m_pTextureCoordinates.size() == 2u * m_nVertices;
-	const bool normParallel  = !m_pVertexNormals.empty()
-	                        && m_pVertexNormals.size()      == 3u * m_nVertices;
-	const bool colorParallel = !m_pVertexColors.empty()
-	                        && m_pVertexColors.size()       == 3u * m_nVertices;
+	const bool uvParallel    = !m_texCoords.empty()
+	                        && m_texCoords.size() == 2u * m_nVertices;
+	const bool normParallel  = !m_vertexNormals.empty()
+	                        && m_vertexNormals.size()      == 3u * m_nVertices;
+	const bool colorParallel = !m_vertexColors.empty()
+	                        && m_vertexColors.size()       == 3u * m_nVertices;
 
 	unsigned int *remap = new unsigned int[m_nVertices];
 	float *newVertices = new float[3 * m_nVertices];
@@ -1776,15 +2059,15 @@ int Mesh::MergeVertices (float tolerance)
 
 				if (uvParallel)
 				{
-					const float du = m_pTextureCoordinates[2 * jOrig    ] - m_pTextureCoordinates[2 * i    ];
-					const float dv = m_pTextureCoordinates[2 * jOrig + 1] - m_pTextureCoordinates[2 * i + 1];
+					const float du = m_texCoords[2 * jOrig    ] - m_texCoords[2 * i    ];
+					const float dv = m_texCoords[2 * jOrig + 1] - m_texCoords[2 * i + 1];
 					if (du * du + dv * dv > uvTol2) continue;
 				}
 				if (colorParallel)
 				{
-					const float dr = m_pVertexColors[3 * jOrig    ] - m_pVertexColors[3 * i    ];
-					const float dg = m_pVertexColors[3 * jOrig + 1] - m_pVertexColors[3 * i + 1];
-					const float db = m_pVertexColors[3 * jOrig + 2] - m_pVertexColors[3 * i + 2];
+					const float dr = m_vertexColors[3 * jOrig    ] - m_vertexColors[3 * i    ];
+					const float dg = m_vertexColors[3 * jOrig + 1] - m_vertexColors[3 * i + 1];
+					const float db = m_vertexColors[3 * jOrig + 2] - m_vertexColors[3 * i + 2];
 					if (dr * dr + dg * dg + db * db > colorTol2) continue;
 				}
 
@@ -1824,11 +2107,11 @@ int Mesh::MergeVertices (float tolerance)
 		for (unsigned int ni = 0; ni < nNewVertices; ++ni)
 		{
 			const unsigned int orig = newOrig[ni];
-			newUVs[2 * ni    ] = m_pTextureCoordinates[2 * orig    ];
-			newUVs[2 * ni + 1] = m_pTextureCoordinates[2 * orig + 1];
+			newUVs[2 * ni    ] = m_texCoords[2 * orig    ];
+			newUVs[2 * ni + 1] = m_texCoords[2 * orig + 1];
 		}
-		m_pTextureCoordinates = std::move(newUVs);
-		m_nTextureCoordinates = nNewVertices;
+		m_texCoords = std::move(newUVs);
+		m_nTexCoords = nNewVertices;
 	}
 
 	if (normParallel)
@@ -1837,17 +2120,17 @@ int Mesh::MergeVertices (float tolerance)
 		for (unsigned int ni = 0; ni < nNewVertices; ++ni)
 		{
 			const unsigned int orig = newOrig[ni];
-			newNormals[3 * ni    ] = m_pVertexNormals[3 * orig    ];
-			newNormals[3 * ni + 1] = m_pVertexNormals[3 * orig + 1];
-			newNormals[3 * ni + 2] = m_pVertexNormals[3 * orig + 2];
+			newNormals[3 * ni    ] = m_vertexNormals[3 * orig    ];
+			newNormals[3 * ni + 1] = m_vertexNormals[3 * orig + 1];
+			newNormals[3 * ni + 2] = m_vertexNormals[3 * orig + 2];
 		}
-		m_pVertexNormals = std::move(newNormals);
+		m_vertexNormals = std::move(newNormals);
 	}
-	else if (!m_pVertexNormals.empty())
+	else if (!m_vertexNormals.empty())
 	{
 		// Best-effort: shrink to new size. Caller typically follows with
 		// ComputeNormals() which fully overwrites this.
-		m_pVertexNormals.assign(3 * nNewVertices, 0.0f);
+		m_vertexNormals.assign(3 * nNewVertices, 0.0f);
 	}
 
 	if (colorParallel)
@@ -1856,57 +2139,54 @@ int Mesh::MergeVertices (float tolerance)
 		for (unsigned int ni = 0; ni < nNewVertices; ++ni)
 		{
 			const unsigned int orig = newOrig[ni];
-			newColors[3 * ni    ] = m_pVertexColors[3 * orig    ];
-			newColors[3 * ni + 1] = m_pVertexColors[3 * orig + 1];
-			newColors[3 * ni + 2] = m_pVertexColors[3 * orig + 2];
+			newColors[3 * ni    ] = m_vertexColors[3 * orig    ];
+			newColors[3 * ni + 1] = m_vertexColors[3 * orig + 1];
+			newColors[3 * ni + 2] = m_vertexColors[3 * orig + 2];
 		}
-		m_pVertexColors = std::move(newColors);
+		m_vertexColors = std::move(newColors);
 	}
-	else if (!m_pVertexColors.empty())
+	else if (!m_vertexColors.empty())
 	{
 		// Size mismatch case: try a best-effort remap and clamp.
 		std::vector<float> newColors(3 * nNewVertices, 0.0f);
-		const size_t srcSize = m_pVertexColors.size();
+		const size_t srcSize = m_vertexColors.size();
 		for (unsigned int i = 0; i < m_nVertices; i++)
 		{
 			if (3u * i + 2 >= srcSize) continue;
 			unsigned int ni = remap[i];
-			newColors[3 * ni    ] = m_pVertexColors[3 * i    ];
-			newColors[3 * ni + 1] = m_pVertexColors[3 * i + 1];
-			newColors[3 * ni + 2] = m_pVertexColors[3 * i + 2];
+			newColors[3 * ni    ] = m_vertexColors[3 * i    ];
+			newColors[3 * ni + 1] = m_vertexColors[3 * i + 1];
+			newColors[3 * ni + 2] = m_vertexColors[3 * i + 2];
 		}
-		m_pVertexColors = std::move(newColors);
+		m_vertexColors = std::move(newColors);
 	}
 
 	unsigned int nOldVertices = m_nVertices;
 	m_nVertices = nNewVertices;
 
 	// Remap face indices and remove degenerate faces
-	unsigned int nNewFaces = 0;
-	for (unsigned int i = 0; i < m_nFaces; i++)
+	const unsigned int nf0 = GetNFaces ();
+	std::vector<unsigned int> keep;
+	keep.reserve (nf0);
+	for (unsigned int i = 0; i < nf0; i++)
 	{
-		Face *f = m_pFaces[i];
-		for (unsigned int v = 0; v < f->m_nVertices; v++)
-			f->m_pVertices[v] = remap[f->m_pVertices[v]];
+		auto f = FaceAt (i);
+		if (!f) continue;                     // trou : disparait avec la compaction
+
+		for (unsigned int v = 0; v < (unsigned int)f->GetNVertices (); v++)
+			f->SetVertex (v, remap[f->GetVertex (v)]);
 
 		// Check for degenerate face (duplicate vertex indices)
 		bool degenerate = false;
-		for (unsigned int a = 0; a < f->m_nVertices && !degenerate; a++)
-			for (unsigned int b = a + 1; b < f->m_nVertices && !degenerate; b++)
-				if (f->m_pVertices[a] == f->m_pVertices[b])
+		for (unsigned int a = 0; a < (unsigned int)f->GetNVertices () && !degenerate; a++)
+			for (unsigned int b = a + 1; b < (unsigned int)f->GetNVertices () && !degenerate; b++)
+				if (f->GetVertex (a) == f->GetVertex (b))
 					degenerate = true;
 
 		if (!degenerate)
-		{
-			m_pFaces[nNewFaces] = m_pFaces[i];
-			nNewFaces++;
-		}
-		else
-		{
-			delete m_pFaces[i];
-		}
+			keep.push_back (i);
 	}
-	m_nFaces = nNewFaces;
+	KeepFaces (keep);
 
 	delete[] remap;
 

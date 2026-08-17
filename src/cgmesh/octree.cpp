@@ -41,7 +41,7 @@ void Octree::GetMinMax (float vecMin[3], float vecMax[3]) const
 	memcpy (vecMax, m_vecMax, 3*sizeof(float));
 }
 
-void Octree::ComputeBounding (float *pPoints, int nPoints, float min[3], float max[3])
+void Octree::ComputeBounding (const float *pPoints, int nPoints, float min[3], float max[3])
 {
 	for (int i=0; i<3; i++)
 	{
@@ -59,7 +59,7 @@ void Octree::ComputeBounding (float *pPoints, int nPoints, float min[3], float m
 }
 
 // basic algorithm (store positions)
-int Octree::Build (float *pPoints, int nPoints,
+int Octree::Build (const float *pPoints, int nPoints,
 				   unsigned int maxPoints,
 				   unsigned int maxDepth, unsigned int currentDepth)
 {
@@ -137,7 +137,7 @@ int Octree::Build (float *pPoints, int nPoints,
 	return 0;
 }
 
-void Octree::ComputeBoundingWithIndices (float *pPoints, int nPoints, unsigned int *pIndices, int nIndices, float min[3], float max[3])
+void Octree::ComputeBoundingWithIndices (const float *pPoints, int nPoints, unsigned int *pIndices, int nIndices, float min[3], float max[3])
 {
 	for (int i=0; i<3; i++)
 	{
@@ -154,7 +154,7 @@ void Octree::ComputeBoundingWithIndices (float *pPoints, int nPoints, unsigned i
 	}
 }
 
-int Octree::BuildWithIndices (float *pPoints, int nPoints,
+int Octree::BuildWithIndices (const float *pPoints, int nPoints,
 								unsigned int maxPoints, unsigned int maxDepth,
 								unsigned int *pIndices, int nIndices, unsigned int currentDepth)
 {
@@ -246,7 +246,7 @@ int Octree::BuildWithIndices (float *pPoints, int nPoints,
 //
 // Fill the octree with triangles
 //
-void Octree::ComputeBoundinForTriangles (float *pPoints, int nPoints, unsigned int *pTriangles, int nTriangles, float min[3], float max[3])
+void Octree::ComputeBoundinForTriangles (const float *pPoints, int nPoints, unsigned int *pTriangles, int nTriangles, float min[3], float max[3])
 {
 	for (int i=0; i<3; i++)
 	{
@@ -263,7 +263,7 @@ void Octree::ComputeBoundinForTriangles (float *pPoints, int nPoints, unsigned i
 	}
 }
 
-int Octree::BuildForTriangles (float *pPoints, int nPoints,
+int Octree::BuildForTriangles (const float *pPoints, int nPoints,
 			      unsigned int maxTriangles, unsigned int maxDepth,
 			      unsigned int *pTriangles, int nTriangles, unsigned int currentDepth)
 {
@@ -461,7 +461,7 @@ int Octree::GetClosestPoints (const Vector3f &pt, float distance, float **pNeigh
 	}
 }
 
-int Octree::GetClosestIndicesPoints (float *pVertices, const Vector3f &pt, float distance, unsigned int **pNeighbours, unsigned int *nNeighbours)
+int Octree::GetClosestIndicesPoints (const float *pVertices, const Vector3f &pt, float distance, unsigned int **pNeighbours, unsigned int *nNeighbours)
 {
 	if (m_nIndices)
 	{
@@ -551,7 +551,7 @@ int Octree::GetNLeaves (void)
 	}
 }
 
-bool Octree::IsLeaf (void)
+bool Octree::IsLeaf (void) const
 {
 	for (int i=0; i<8; i++)
 		if (m_pChildren[i])

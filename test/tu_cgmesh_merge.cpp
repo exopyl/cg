@@ -16,14 +16,9 @@ Mesh* makeQuadOfTwoTriangles()
     };
     m->SetVertices(4, const_cast<float*>(verts));
 
-    m->m_nFaces = 2;
-    m->m_pFaces = new Face*[2];
-    m->m_pFaces[0] = new Face();
-    m->m_pFaces[1] = new Face();
-    m->m_pFaces[0]->SetNVertices(3);
-    m->m_pFaces[0]->SetVertex(0, 0); m->m_pFaces[0]->SetVertex(1, 1); m->m_pFaces[0]->SetVertex(2, 2);
-    m->m_pFaces[1]->SetNVertices(3);
-    m->m_pFaces[1]->SetVertex(0, 1); m->m_pFaces[1]->SetVertex(1, 3); m->m_pFaces[1]->SetVertex(2, 2);
+    m->SetNFaces (2);
+    m->FaceAt (0)->SetTriangle (0, 1, 2);
+    m->FaceAt (1)->SetTriangle (1, 3, 2);
 
     return m;
 }
@@ -39,8 +34,7 @@ TEST(TEST_cgmesh_merge, exact_duplicates_collapse_when_no_attributes)
         1, 2, 3,   1, 2, 3,   1, 2, 3,   1, 2, 3,
     };
     m->SetVertices(4, const_cast<float*>(verts));
-    m->m_nFaces = 0;
-    m->m_pFaces = nullptr;
+    m->SetNFaces (0);
 
     m->MergeVertices(1e-6f);
     EXPECT_EQ(m->GetNVertices(), 1u);
@@ -54,17 +48,17 @@ TEST(TEST_cgmesh_merge, duplicates_with_same_uv_collapse)
     // Force every vertex to the same XYZ + same UV.
     for (unsigned int i = 0; i < 4; ++i)
     {
-        m->m_pVertices[3*i + 0] = 0.0f;
-        m->m_pVertices[3*i + 1] = 0.0f;
-        m->m_pVertices[3*i + 2] = 0.0f;
+        m->SetVertexComponent (i, 0, 0.0f);
+        m->SetVertexComponent (i, 1, 0.0f);
+        m->SetVertexComponent (i, 2, 0.0f);
     }
-    m->m_pTextureCoordinates.assign(8, 0.5f); // (0.5, 0.5) for all 4 verts
+    m->SetTextureCoordinates (std::vector<float>(8, 0.5f), 4); // (0.5, 0.5) partout
 
     m->MergeVertices(1e-6f);
     EXPECT_EQ(m->GetNVertices(), 1u);
-    EXPECT_EQ(m->m_pTextureCoordinates.size(), 2u);
-    EXPECT_FLOAT_EQ(m->m_pTextureCoordinates[0], 0.5f);
-    EXPECT_FLOAT_EQ(m->m_pTextureCoordinates[1], 0.5f);
+    EXPECT_EQ(m->GetTextureCoordinates ().size(), 2u);
+    EXPECT_FLOAT_EQ(m->GetTextureCoordinates ()[0], 0.5f);
+    EXPECT_FLOAT_EQ(m->GetTextureCoordinates ()[1], 0.5f);
     delete m;
 }
 
@@ -75,26 +69,25 @@ TEST(TEST_cgmesh_merge, uv_seam_keeps_vertices_separate)
     auto* m = makeQuadOfTwoTriangles();
     for (unsigned int i = 0; i < 4; ++i)
     {
-        m->m_pVertices[3*i + 0] = 0.0f;
-        m->m_pVertices[3*i + 1] = 0.0f;
-        m->m_pVertices[3*i + 2] = 0.0f;
+        m->SetVertexComponent (i, 0, 0.0f);
+        m->SetVertexComponent (i, 1, 0.0f);
+        m->SetVertexComponent (i, 2, 0.0f);
     }
     // Two pairs: verts 0/1 with UV (0,0); verts 2/3 with UV (1,1).
-    m->m_pTextureCoordinates.resize(8);
-    m->m_pTextureCoordinates[0] = 0.0f; m->m_pTextureCoordinates[1] = 0.0f;
-    m->m_pTextureCoordinates[2] = 0.0f; m->m_pTextureCoordinates[3] = 0.0f;
-    m->m_pTextureCoordinates[4] = 1.0f; m->m_pTextureCoordinates[5] = 1.0f;
-    m->m_pTextureCoordinates[6] = 1.0f; m->m_pTextureCoordinates[7] = 1.0f;
+    m->SetTextureCoordinates (std::vector<float>{ 0.0f, 0.0f,
+                                                 0.0f, 0.0f,
+                                                 1.0f, 1.0f,
+                                                 1.0f, 1.0f }, 4);
 
     m->MergeVertices(1e-6f);
     EXPECT_EQ(m->GetNVertices(), 2u);
-    EXPECT_EQ(m->m_pTextureCoordinates.size(), 4u);
+    EXPECT_EQ(m->GetTextureCoordinates ().size(), 4u);
 
     // The two surviving UVs must be (0,0) and (1,1) — order isn't enforced.
-    const bool firstIsZero  = (m->m_pTextureCoordinates[0] == 0.0f && m->m_pTextureCoordinates[1] == 0.0f);
-    const bool secondIsOne  = (m->m_pTextureCoordinates[2] == 1.0f && m->m_pTextureCoordinates[3] == 1.0f);
-    const bool firstIsOne   = (m->m_pTextureCoordinates[0] == 1.0f && m->m_pTextureCoordinates[1] == 1.0f);
-    const bool secondIsZero = (m->m_pTextureCoordinates[2] == 0.0f && m->m_pTextureCoordinates[3] == 0.0f);
+    const bool firstIsZero  = (m->GetTextureCoordinates ()[0] == 0.0f && m->GetTextureCoordinates ()[1] == 0.0f);
+    const bool secondIsOne  = (m->GetTextureCoordinates ()[2] == 1.0f && m->GetTextureCoordinates ()[3] == 1.0f);
+    const bool firstIsOne   = (m->GetTextureCoordinates ()[0] == 1.0f && m->GetTextureCoordinates ()[1] == 1.0f);
+    const bool secondIsZero = (m->GetTextureCoordinates ()[2] == 0.0f && m->GetTextureCoordinates ()[3] == 0.0f);
     EXPECT_TRUE((firstIsZero && secondIsOne) || (firstIsOne && secondIsZero));
 
     delete m;
@@ -109,13 +102,12 @@ TEST(TEST_cgmesh_merge, normals_are_not_a_merge_criterion)
     auto* m = new Mesh();
     const float verts[] = { 0, 0, 0,   0, 0, 0 };
     m->SetVertices(2, const_cast<float*>(verts));
-    m->m_nFaces = 0;
-    m->m_pFaces = nullptr;
-    m->m_pVertexNormals = { 1, 0, 0,   0, 1, 0 };
+    m->SetNFaces (0);
+    m->SetVertexNormals (std::vector<float>{ 1, 0, 0,   0, 1, 0 });
 
     m->MergeVertices(1e-6f);
     EXPECT_EQ(m->GetNVertices(), 1u);              // welded despite differing normals
-    EXPECT_EQ(m->m_pVertexNormals.size(), 3u);     // normals shrunk to the merged count
+    EXPECT_EQ(m->GetVertexNormals ().size(), 3u);     // normals shrunk to the merged count
     delete m;
 }
 
@@ -124,13 +116,12 @@ TEST(TEST_cgmesh_merge, color_difference_keeps_vertices_separate)
     auto* m = new Mesh();
     const float verts[] = { 0, 0, 0,   0, 0, 0 };
     m->SetVertices(2, const_cast<float*>(verts));
-    m->m_nFaces = 0;
-    m->m_pFaces = nullptr;
-    m->m_pVertexColors = { 1, 0, 0,   0, 1, 0 };
+    m->SetNFaces (0);
+    m->SetVertexColors (std::vector<float>{ 1, 0, 0,   0, 1, 0 });
 
     m->MergeVertices(1e-6f);
     EXPECT_EQ(m->GetNVertices(), 2u);
-    EXPECT_EQ(m->m_pVertexColors.size(), 6u);
+    EXPECT_EQ(m->GetVertexColors ().size(), 6u);
     delete m;
 }
 
@@ -145,13 +136,8 @@ TEST(TEST_cgmesh_merge, face_indices_get_remapped)
         5, 5, 5,
     };
     m->SetVertices(3, const_cast<float*>(verts));
-    m->m_nFaces = 1;
-    m->m_pFaces = new Face*[1];
-    m->m_pFaces[0] = new Face();
-    m->m_pFaces[0]->SetNVertices(3);
-    m->m_pFaces[0]->SetVertex(0, 0);
-    m->m_pFaces[0]->SetVertex(1, 1);
-    m->m_pFaces[0]->SetVertex(2, 2);
+    m->SetNFaces (1);
+    m->FaceAt (0)->SetTriangle (0, 1, 2);
 
     m->MergeVertices(0.001f);
     EXPECT_EQ(m->GetNVertices(), 2u);

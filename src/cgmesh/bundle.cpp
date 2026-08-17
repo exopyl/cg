@@ -78,11 +78,13 @@ int Bundle::Load (char *filename)
 	int r, g, b;
 	for (int i=0; i<nPoints; i++)
 	{
-		fscanf (file, "%f %f %f\n", &mesh->m_pVertices[3*i+0], &mesh->m_pVertices[3*i+1], &mesh->m_pVertices[3*i+2]);
+		// fscanf est variadique : lui passer l'adresse d'un element de la vue const
+		// compilerait sans diagnostic et ecrirait a travers un `const float*`.
+		float px, py, pz;
+		fscanf (file, "%f %f %f\n", &px, &py, &pz);
+		mesh->SetVertex (i, px, py, pz);
 		fscanf (file, "%d %d %d\n", &r, &g, &b);
-		mesh->m_pVertexColors[3*i+0] = (float)r/255.;
-		mesh->m_pVertexColors[3*i+1] = (float)g/255.;
-		mesh->m_pVertexColors[3*i+2] = (float)b/255.;
+		mesh->SetVertexColor (i, (float)r/255., (float)g/255., (float)b/255.);
 		fgets (buffer, BUFFER_SIZE, file);
 	}
 	//models[imodel] = model;
@@ -370,9 +372,9 @@ static void project_texture_on_face (Mesh *mesh, unsigned int fi, unsigned int t
 		//if (u>0. && u<1. && v>0. && v<1.)
 		{
 			mesh->SetFaceMaterialId (fi, ti);
-			Face *face = mesh->GetFace (fi);
+			auto face = mesh->FaceAt (fi);
 			face->SetTexCoord (k, u, v);
-			face->m_bUseTextureCoordinates = true;
+			face->SetUsesTextureCoordinates (true);
 		}
 		//else
 		//	mesh_face_mi (mesh, fi) = bundle->n_cameras;
@@ -408,10 +410,10 @@ int Bundle::project_textures_naive (Mesh *mesh, char *bundleoutfilename, char *i
 	MaterialColor *pMaterialColor = new MaterialColor (255, 0, 0);
 	mesh->Material_Add (pMaterialColor); // color for the faces not reached by the cameras
 
-	for (unsigned int j=0; j<mesh->m_nFaces; j++)
+	for (unsigned int j=0; j<mesh->GetNFaces (); j++)
 	{
 		Vector3f fnormal;
-		fnormal.Set (mesh->m_pFaceNormals[3*j], mesh->m_pFaceNormals[3*j+1], mesh->m_pFaceNormals[3*j+2]);
+		fnormal.Set (mesh->GetFaceNormals ()[3*j], mesh->GetFaceNormals ()[3*j+1], mesh->GetFaceNormals ()[3*j+2]);
 		(fnormal).Normalize ();
 		float dot = 0.3;
 
@@ -523,7 +525,7 @@ static int _smooth_cost_func (int fi1, int fi2, int ti1, int ti2, void *d)
 
 		// walking color in ti1
 		unsigned char r1, g1, b1, a1;
-		MaterialTexture *texture1 = (MaterialTexture*)mesh->m_pMaterials[ti1].get();
+		MaterialTexture *texture1 = (MaterialTexture*)mesh->GetMaterial (ti1);
 		texture1->GetImage()->get_nearest_pixel (u1, v1, &r1, &g1, &b1, &a1);
 
 		// walking texture coordinates in texture ti1
@@ -532,7 +534,7 @@ static int _smooth_cost_func (int fi1, int fi2, int ti1, int ti2, void *d)
 
 		// walking color in ti2
 		unsigned char r2, g2, b2, a2;
-		MaterialTexture *texture2 = (MaterialTexture*)mesh->m_pMaterials[ti2].get();
+		MaterialTexture *texture2 = (MaterialTexture*)mesh->GetMaterial (ti2);
 		texture2->GetImage()->get_nearest_pixel (u2, v2, &r2, &g2, &b2, &a2);
 
 		energy += (int)0.5*sqrt((float)((r1-r2)*(r1-r2)+(g1-g2)*(g1-g2)+(b1-b2)*(b1-b2)));

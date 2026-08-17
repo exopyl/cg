@@ -58,16 +58,16 @@ Cmesh_orientation_pca::compute_pca (void)
 
   // get data
   int nv;
-  float *v;
+  const float *v;
   if (mesh)
   {
-	  nv = mesh->m_nVertices;
-	  v = mesh->m_pVertices.data();
+	  nv = mesh->GetNVertices ();
+	  v = mesh->GetVertices ().data();
   }
   if (model3d_half_edge)
   {
-	  nv = model3d_half_edge->m_pMesh->m_nVertices;
-	  v = model3d_half_edge->m_pMesh->m_pVertices.data();
+	  nv = model3d_half_edge->m_pMesh->GetNVertices ();
+	  v = model3d_half_edge->m_pMesh->GetVertices ().data();
   }
 
   // center
@@ -215,20 +215,24 @@ Cmesh_orientation_pca::compute_pca_weighted_vertices (void)
   int i;
 
   // get the data
-  int nv, nf;
-  float *v;
-  Face **f;
+  // ⚠ Garder ces initialisations et le retour anticipe : sans eux, `new float[nf]`
+  // s'execute sur un nf indetermine quand aucune source n'est posee.
+  int nv = 0, nf = 0;
+  const float *v = nullptr;
+  Mesh *pm = nullptr;
   if (mesh)
   {
 	  return;
   }
   if (model3d_half_edge)
   {
-	  nv = model3d_half_edge->m_pMesh->m_nVertices;
-	  v  = model3d_half_edge->m_pMesh->m_pVertices.data();
-	  nf = model3d_half_edge->m_pMesh->m_nFaces;
-	  f  = model3d_half_edge->m_pMesh->m_pFaces;
+	  pm = model3d_half_edge->m_pMesh;
+	  nv = pm->GetNVertices ();
+	  v  = pm->GetVertices ().data();
+	  nf = pm->GetNFaces ();
   }
+  if (!pm)
+	  return;
 
   // compute the areas of the triangles
   float *a = new float[nf];
@@ -237,9 +241,10 @@ Cmesh_orientation_pca::compute_pca_weighted_vertices (void)
   for (i=0; i<nf; i++)
     {
       // get the vertices of the current face
-	    v1.Set (v[3*f[i]->GetVertex(0)], v[3*f[i]->GetVertex(0)+1], v[3*f[i]->GetVertex(0)+2]);
-	    v2.Set (v[3*f[i]->GetVertex(1)], v[3*f[i]->GetVertex(1)+1], v[3*f[i]->GetVertex(1)+2]);
-	    v3.Set (v[3*f[i]->GetVertex(2)], v[3*f[i]->GetVertex(2)+1], v[3*f[i]->GetVertex(2)+2]);
+	    auto fc = pm->FaceAt (i);
+	    v1.Set (v[3*fc->GetVertex(0)], v[3*fc->GetVertex(0)+1], v[3*fc->GetVertex(0)+2]);
+	    v2.Set (v[3*fc->GetVertex(1)], v[3*fc->GetVertex(1)+1], v[3*fc->GetVertex(1)+2]);
+	    v3.Set (v[3*fc->GetVertex(2)], v[3*fc->GetVertex(2)+1], v[3*fc->GetVertex(2)+2]);
 
 	    // store the current area in a
 	  a[i] = Vector3f::evaluate_triangle_area (v1, v2, v3);
@@ -333,23 +338,23 @@ Cmesh_orientation_pca::compute_pca_barycenter (void)
   int i;
 
   // get the data
-  int nv, nf;
-  float *v;
-  Face **f;
+  // Meme remarque que plus haut sur les initialisations et le retour anticipe.
+  int nv = 0, nf = 0;
+  const float *v = nullptr;
+  Mesh *pm = nullptr;
   if (mesh)
   {
-	  nv = mesh->m_nVertices;
-	  v  = mesh->m_pVertices.data();
-	  nf = mesh->m_nFaces;
-	  f  = mesh->m_pFaces;
+	  pm = mesh;
   }
   if (model3d_half_edge)
   {
-	  nv = model3d_half_edge->m_pMesh->m_nVertices;
-	  v  = model3d_half_edge->m_pMesh->m_pVertices.data();
-	  nf = model3d_half_edge->m_pMesh->m_nFaces;
-	  f  = model3d_half_edge->m_pMesh->m_pFaces;
+	  pm = model3d_half_edge->m_pMesh;
   }
+  if (!pm)
+	  return;
+  nv = pm->GetNVertices ();
+  v  = pm->GetVertices ().data();
+  nf = pm->GetNFaces ();
 
   // compute the weights for the triangles
   float *w = new float[nf];
@@ -358,9 +363,10 @@ Cmesh_orientation_pca::compute_pca_barycenter (void)
   for (i=0; i<nf; i++)
     {
       // get the vertices of the current face
-	    v1.Set (v[3*f[i]->GetVertex(0)],   v[3*f[i]->GetVertex(0)+1],   v[3*f[i]->GetVertex(0)+2]);
-	    v2.Set (v[3*f[i]->GetVertex(1)], v[3*f[i]->GetVertex(1)+1], v[3*f[i]->GetVertex(1)+2]);
-	    v3.Set (v[3*f[i]->GetVertex(2)], v[3*f[i]->GetVertex(2)+1], v[3*f[i]->GetVertex(2)+2]);
+	    auto fc = pm->FaceAt (i);
+	    v1.Set (v[3*fc->GetVertex(0)],   v[3*fc->GetVertex(0)+1],   v[3*fc->GetVertex(0)+2]);
+	    v2.Set (v[3*fc->GetVertex(1)], v[3*fc->GetVertex(1)+1], v[3*fc->GetVertex(1)+2]);
+	    v3.Set (v[3*fc->GetVertex(2)], v[3*fc->GetVertex(2)+1], v[3*fc->GetVertex(2)+2]);
       
       // store the current area in a
 	  w[i] = Vector3f::evaluate_triangle_area (v1, v2, v3);
@@ -374,9 +380,10 @@ Cmesh_orientation_pca::compute_pca_barycenter (void)
   for (i=0; i<nf; i++)
     {
       // get the vertices of the current face
-	    v1.Set (v[3*f[i]->GetVertex(0)],   v[3*f[i]->GetVertex(0)+1],   v[3*f[i]->GetVertex(0)+2]);
-	    v2.Set (v[3*f[i]->GetVertex(1)], v[3*f[i]->GetVertex(1)+1], v[3*f[i]->GetVertex(1)+2]);
-	    v3.Set (v[3*f[i]->GetVertex(2)], v[3*f[i]->GetVertex(2)+1], v[3*f[i]->GetVertex(2)+2]);
+	    auto fc = pm->FaceAt (i);
+	    v1.Set (v[3*fc->GetVertex(0)],   v[3*fc->GetVertex(0)+1],   v[3*fc->GetVertex(0)+2]);
+	    v2.Set (v[3*fc->GetVertex(1)], v[3*fc->GetVertex(1)+1], v[3*fc->GetVertex(1)+2]);
+	    v3.Set (v[3*fc->GetVertex(2)], v[3*fc->GetVertex(2)+1], v[3*fc->GetVertex(2)+2]);
 
       // compute the barycenter
 	    vb.Barycenter (v1, v2, v3);
@@ -401,9 +408,10 @@ Cmesh_orientation_pca::compute_pca_barycenter (void)
       //v1.Set (v[3*f[3*i]] - center[0], v[3*f[3*i]+1] - center[1], v[3*f[3*i]+2] - center[2]);
       //v2.Set (v[3*f[3*i+1]] - center[0], v[3*f[3*i+1]+1] - center[1], v[3*f[3*i+1]+2] - center[2]);
       //v3.Set (v[3*f[3*i+2]] - center[0], v[3*f[3*i+2]+1] - center[1], v[3*f[3*i+2]+2] - center[2]);
-	    v1.Set (v[3*f[i]->GetVertex(0)], v[3*f[i]->GetVertex(0)+1], v[3*f[i]->GetVertex(0)+2]);
-	    v2.Set (v[3*f[i]->GetVertex(1)], v[3*f[i]->GetVertex(1)+1], v[3*f[i]->GetVertex(1)+2]);
-	    v3.Set (v[3*f[i]->GetVertex(2)], v[3*f[i]->GetVertex(2)+1], v[3*f[i]->GetVertex(2)+2]);
+	    auto fc = pm->FaceAt (i);
+	    v1.Set (v[3*fc->GetVertex(0)], v[3*fc->GetVertex(0)+1], v[3*fc->GetVertex(0)+2]);
+	    v2.Set (v[3*fc->GetVertex(1)], v[3*fc->GetVertex(1)+1], v[3*fc->GetVertex(1)+2]);
+	    v3.Set (v[3*fc->GetVertex(2)], v[3*fc->GetVertex(2)+1], v[3*fc->GetVertex(2)+2]);
 
       /* compute the barycenter */
 	    vb.Barycenter (v1, v2, v3);
@@ -445,23 +453,23 @@ void
 Cmesh_orientation_pca::compute_pca_continuous (void)
 {
   // get the data
-  int nv, nf;
-  float *v;
-  Face **f;
+  // Meme remarque que dans les deux fonctions ci-dessus.
+  int nv = 0, nf = 0;
+  const float *v = nullptr;
+  Mesh *pm = nullptr;
   if (mesh)
   {
-	  nv = mesh->m_nVertices;
-	  v  = mesh->m_pVertices.data();
-	  nf = mesh->m_nFaces;
-	  f  = mesh->m_pFaces;
+	  pm = mesh;
   }
   if (model3d_half_edge)
   {
-	  nv = model3d_half_edge->m_pMesh->m_nVertices;
-	  v  = model3d_half_edge->m_pMesh->m_pVertices.data();
-	  nf = model3d_half_edge->m_pMesh->m_nFaces;
-	  f  = model3d_half_edge->m_pMesh->m_pFaces;
+	  pm = model3d_half_edge->m_pMesh;
   }
+  if (!pm)
+	  return;
+  nv = pm->GetNVertices ();
+  v  = pm->GetVertices ().data();
+  nf = pm->GetNFaces ();
   int i;
   
   // center
@@ -484,9 +492,10 @@ Cmesh_orientation_pca::compute_pca_continuous (void)
   for (i=0; i<nf; i++)
     {
       // get the vertices of the current face
-	    v1.Set (v[3*f[i]->GetVertex(0)] - center[0], v[3*f[i]->GetVertex(0)+1] - center[1], v[3*f[i]->GetVertex(0)+2] - center[2]);
-	    v2.Set (v[3*f[i]->GetVertex(1)] - center[0], v[3*f[i]->GetVertex(1)+1] - center[1], v[3*f[i]->GetVertex(1)+2] - center[2]);
-	    v3.Set (v[3*f[i]->GetVertex(2)] - center[0], v[3*f[i]->GetVertex(2)+1] - center[1], v[3*f[i]->GetVertex(2)+2] - center[2]);
+	    auto fc = pm->FaceAt (i);
+	    v1.Set (v[3*fc->GetVertex(0)] - center[0], v[3*fc->GetVertex(0)+1] - center[1], v[3*fc->GetVertex(0)+2] - center[2]);
+	    v2.Set (v[3*fc->GetVertex(1)] - center[0], v[3*fc->GetVertex(1)+1] - center[1], v[3*fc->GetVertex(1)+2] - center[2]);
+	    v3.Set (v[3*fc->GetVertex(2)] - center[0], v[3*fc->GetVertex(2)+1] - center[1], v[3*fc->GetVertex(2)+2] - center[2]);
 
       // get the basis
 	    w1 = v2 - v1;

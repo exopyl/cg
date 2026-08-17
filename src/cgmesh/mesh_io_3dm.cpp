@@ -23,7 +23,7 @@
 //
 // Normals:
 //   * ComputeNormals() is always called after writing faces (populates
-//     m_pFaceNormals which the renderer requires for flat shading).
+//     the per-face normals which the renderer requires for flat shading).
 //   * When every source face mesh carries an m_N array, those vertex
 //     normals are overlaid on top of the per-face-averaged normals so
 //     smooth shading reflects Rhino's surface curvature.
@@ -50,7 +50,7 @@
 //     is filtered out as Rhino's default unconfigured wireframe color.
 //
 // UVs & textures:
-//   * ON_Mesh::m_T copied into Mesh::m_pTextureCoordinates when every
+//   * ON_Mesh::m_T copied into Mesh::GetTextureCoordinates () when every
 //     contributing source mesh has a matching m_T.
 //   * First ON_Texture of type diffuse_texture / bitmap_texture (or
 //     pbr_base_color, same enum value) is loaded via stb_image. Path
@@ -209,7 +209,8 @@ bool writeUVs(std::vector<float>& dst, unsigned int off, const ON_Mesh* src)
     return true;
 }
 
-unsigned int writeFaces(Face** dstFaces, unsigned int faceOff,
+// Prend le maillage, et non son tableau de faces, qui est prive.
+unsigned int writeFaces(Mesh& dstMesh, unsigned int faceOff,
                         const ON_Mesh* src, unsigned int vertexOff, bool reversed)
 {
     unsigned int dst = faceOff;
@@ -217,7 +218,7 @@ unsigned int writeFaces(Face** dstFaces, unsigned int faceOff,
     {
         const ON_MeshFace& f = src->m_F[i];
 
-        Face* face = dstFaces[dst++];
+        auto face = dstMesh.FaceAt (dst++);
         face->SetNVertices(3);
         face->SetVertex(0, vertexOff + f.vi[0]);
         face->SetVertex(1, vertexOff + (reversed ? f.vi[2] : f.vi[1]));
@@ -225,7 +226,7 @@ unsigned int writeFaces(Face** dstFaces, unsigned int faceOff,
 
         if (!f.IsTriangle())
         {
-            face = dstFaces[dst++];
+            face = dstMesh.FaceAt (dst++);
             face->SetNVertices(3);
             face->SetVertex(0, vertexOff + f.vi[0]);
             face->SetVertex(1, vertexOff + (reversed ? f.vi[3] : f.vi[2]));
@@ -241,14 +242,14 @@ unsigned int writeFaces(Face** dstFaces, unsigned int faceOff,
 // glColor3f(1,1,1) override and washes the model out.
 void wireFaceUVsFromVertexIndices(Mesh& dst)
 {
-    if (dst.m_pTextureCoordinates.empty())
+    if (dst.GetTextureCoordinates ().empty())
         return;
-    for (unsigned int i = 0; i < dst.m_nFaces; ++i)
+    for (unsigned int i = 0; i < dst.GetNFaces (); ++i)
     {
-        Face* f = dst.m_pFaces[i];
+        auto f = dst.FaceAt (i);
         const int nv = f->GetNVertices();
         if (nv <= 0) continue;
-        f->m_bUseTextureCoordinates = true;
+        f->SetUsesTextureCoordinates (true);
         f->ActivateTextureCoordinatesIndices();
         for (int j = 0; j < nv; ++j)
             f->SetTexCoord((unsigned int) j, (unsigned int) f->GetVertex((unsigned int) j));
@@ -280,40 +281,49 @@ bool fillFromMeshes(Mesh& dst, const std::vector<MeshSource>& sources,
 
     dst.Init(totalV, totalF);
 
+    // writeVertices et writeUVs remplissent des sous-plages a l'offset vOff : on
+    // prepare les tableaux, on les laisse remplir, on les rend au maillage.
+    std::vector<float> positions (3 * (size_t)totalV, 0.0f);
+    std::vector<float> uvs;
     if (allHaveUVs)
-    {
-        dst.m_nTextureCoordinates = totalV;
-        dst.m_pTextureCoordinates.assign(2 * totalV, 0.0f);
-    }
+        uvs.assign (2 * (size_t)totalV, 0.0f);
 
     unsigned int vOff = 0, fOff = 0;
     bool allHaveN = true;
     for (const auto& s : sources)
     {
-        writeVertices(dst.m_pVertices, vOff, s.mesh, scale);
+        writeVertices(positions, vOff, s.mesh, scale);
         if (allHaveUVs)
-            writeUVs(dst.m_pTextureCoordinates, vOff, s.mesh);
-        fOff += writeFaces(dst.m_pFaces, fOff, s.mesh, vOff, s.reversed);
+            writeUVs(uvs, vOff, s.mesh);
+        fOff += writeFaces(dst, fOff, s.mesh, vOff, s.reversed);
         if (s.mesh->m_N.Count() != s.mesh->VertexCount())
             allHaveN = false;
         vOff += (unsigned int) s.mesh->VertexCount();
     }
 
+    dst.SetVertices (totalV, positions.data());
+    if (allHaveUVs)
+        dst.SetTextureCoordinates (std::move (uvs), totalV);
+
     // Face normals are derived from the (now correctly oriented) winding.
-    // ComputeNormals populates both m_pFaceNormals (required by mesh_renderer
-    // for flat shading) and m_pVertexNormals.
+    // ComputeNormals populates both the per-face normals (required by mesh_renderer
+    // for flat shading) and GetVertexNormals ().
     dst.ComputeNormals();
 
     // Overlay Rhino-provided vertex normals on top when available — they reflect
     // the smooth surface curvature better than the per-face average.
     if (allHaveN)
     {
+        // writeNormals remplit une sous-plage a l'offset vOff : on sort le
+        // tableau, on le laisse remplir, on le rend.
+        std::vector<float> normals = dst.GetVertexNormals ();
         vOff = 0;
         for (const auto& s : sources)
         {
-            writeNormals(dst.m_pVertexNormals, vOff, s.mesh, s.reversed);
+            writeNormals(normals, vOff, s.mesh, s.reversed);
             vOff += (unsigned int) s.mesh->VertexCount();
         }
+        dst.SetVertexNormals (std::move (normals));
     }
 
     dst.m_name = name;

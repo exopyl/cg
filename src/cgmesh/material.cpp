@@ -77,14 +77,6 @@ MaterialColor::MaterialColor (unsigned char r, unsigned char g, unsigned char b,
 	m_a = a;
 }
 
-MaterialColor::MaterialColor (const MaterialColor &m)
-{
-	m_r = m.m_r;
-	m_g = m.m_g;
-	m_b = m.m_b;
-	m_a = m.m_a;
-}
-
 MaterialType MaterialColor::GetType (void)
 {
 	return MATERIAL_COLOR;

@@ -158,7 +158,7 @@ Mesh* meshFromObject (Lib3MF::PMeshObject obj, const Xform& xform, const std::st
 	const unsigned int nv = (unsigned int)verts.size();
 	for (size_t f = 0; f < tris.size(); f++)
 	{
-		Face* face = pMesh->m_pFaces[f];
+		auto face = pMesh->FaceAt (f);
 		face->SetNVertices (3);
 		for (int k = 0; k < 3; k++)
 		{

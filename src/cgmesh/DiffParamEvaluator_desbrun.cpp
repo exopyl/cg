@@ -75,10 +75,9 @@ region_area (const Vector3f &a, const Vector3f &b, const Vector3f &c)
 //
 bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 {
-	int nv = m_pModel->m_pMesh->m_nVertices;
-	float *v = m_pModel->m_pMesh->m_pVertices.data();
-	Face **faces = m_pModel->m_pMesh->m_pFaces;
-	float *vn = m_pModel->m_pMesh->m_pVertexNormals.data();
+	int nv = m_pModel->m_pMesh->GetNVertices ();
+	const float *v = m_pModel->m_pMesh->GetVertices ().data();
+	const float *vn = m_pModel->m_pMesh->GetVertexNormals ().data();
 	int i,a,b,c;
 	Vector3f v1, v2, v3;
 	Tensor *pDiffParam_walk;
@@ -89,7 +88,7 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
     {
 		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
-			Tensors ()[i] = nullptr;
+			SetTensorAt (i, nullptr);
 			continue;
 		}
 
@@ -111,23 +110,23 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 		{
 			Che_edge &ew = m_pModel->GetCheMesh()->edge(e_walk);
 			a = -1;
-			if (i == faces[ew.m_face]->GetVertex(0))
+			if (i == m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(0))
 			{
-				a = faces[ew.m_face]->GetVertex(0);
-				b = faces[ew.m_face]->GetVertex(1);
-				c = faces[ew.m_face]->GetVertex(2);
+				a = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(0);
+				b = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(1);
+				c = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(2);
 			}
-			if (i == faces[ew.m_face]->GetVertex(1))
+			if (i == m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(1))
 			{
-				c = faces[ew.m_face]->GetVertex(0);
-				a = faces[ew.m_face]->GetVertex(1);
-				b = faces[ew.m_face]->GetVertex(2);
+				c = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(0);
+				a = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(1);
+				b = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(2);
 			}
-			if (i == faces[ew.m_face]->GetVertex(2))
+			if (i == m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(2))
 			{
-				b = faces[ew.m_face]->GetVertex(0);
-				c = faces[ew.m_face]->GetVertex(1);
-				a = faces[ew.m_face]->GetVertex(2);
+				b = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(0);
+				c = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(1);
+				a = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(2);
 			}
 			if (a == -1)
 			{
@@ -222,9 +221,9 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 			do
 			{
 				Che_edge &ew = m_pModel->GetCheMesh()->edge(e_walk);
-				a = faces[ew.m_face]->GetVertex(0);
-				b = faces[ew.m_face]->GetVertex(1);
-				c = faces[ew.m_face]->GetVertex(2);
+				a = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(0);
+				b = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(1);
+				c = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(2);
 
 				v1.Set (v[3*a], v[3*a+1], v[3*a+2]);
 				v2.Set (v[3*b], v[3*b+1], v[3*b+2]);
@@ -269,23 +268,23 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 		{
 			Che_edge &ew = m_pModel->GetCheMesh()->edge(e_walk);
 			a = -1;
-			if (i == faces[ew.m_face]->GetVertex(0))
+			if (i == m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(0))
 			{
-				a = faces[ew.m_face]->GetVertex(0);
-				b = faces[ew.m_face]->GetVertex(1);
-				c = faces[ew.m_face]->GetVertex(2);
+				a = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(0);
+				b = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(1);
+				c = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(2);
 			}
-			if (i == faces[ew.m_face]->GetVertex(1))
+			if (i == m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(1))
 			{
-				c = faces[ew.m_face]->GetVertex(0);
-				a = faces[ew.m_face]->GetVertex(1);
-				b = faces[ew.m_face]->GetVertex(2);
+				c = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(0);
+				a = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(1);
+				b = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(2);
 			}
-			if (i == faces[ew.m_face]->GetVertex(2))
+			if (i == m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(2))
 			{
-				b = faces[ew.m_face]->GetVertex(0);
-				c = faces[ew.m_face]->GetVertex(1);
-				a = faces[ew.m_face]->GetVertex(2);
+				b = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(0);
+				c = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(1);
+				a = m_pModel->m_pMesh->FaceAt (ew.m_face)->GetVertex(2);
 			}
 			if (a == -1)
 			{
@@ -390,7 +389,7 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 			pDiffParam_walk->SetKappaMin (kappa2); // minimal curvature
 			pDiffParam_walk->SetDirectionMax (basis1[0], basis1[1], basis1[2]);
 			pDiffParam_walk->SetDirectionMin (basis2[0], basis2[1], basis2[2]);
-			Tensors ()[i].reset (pDiffParam_walk);
+			SetTensorAt (i, pDiffParam_walk);
 		}
 
 		// solve the eigensystem
@@ -451,7 +450,7 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 		pDiffParam_walk->SetKappaMin (kappa2); // minimal curvature
 		pDiffParam_walk->SetDirectionMax (principal_direction1[0], principal_direction1[1], principal_direction1[2]);
 		pDiffParam_walk->SetDirectionMin (principal_direction2[0], principal_direction2[1], principal_direction2[2]);
-		Tensors ()[i].reset (pDiffParam_walk);
+		SetTensorAt (i, pDiffParam_walk);
     }
 
 	return true;

@@ -117,10 +117,10 @@ std::string cmdFace(MyFrame* frame, int n, int f)
     if (n < 0 || (size_t)n >= meshes.size())
         return "ERR mesh index out of range\n";
     Mesh* m = meshes[n];
-    if (!m || f < 0 || (unsigned)f >= m->m_nFaces)
+    if (!m || f < 0 || (unsigned)f >= m->GetNFaces ())
         return "ERR face index out of range\n";
 
-    Face* face = m->m_pFaces[f];
+    auto face = m->FaceAt (f);
     if (!face || face->GetNVertices() < 3)
         return "ERR face is not a triangle\n";
 
@@ -133,17 +133,17 @@ std::string cmdFace(MyFrame* frame, int n, int f)
     os << "positions\n";
     for (unsigned int vi : {a, b, c})
     {
-        if (vi >= m->m_nVertices) { os << "  invalid\n"; continue; }
+        if (vi >= m->GetNVertices ()) { os << "  invalid\n"; continue; }
         char buf[128];
         std::snprintf(buf, sizeof(buf), "  %g %g %g\n",
-                      m->m_pVertices[3*vi], m->m_pVertices[3*vi+1], m->m_pVertices[3*vi+2]);
+                      m->GetVertices ()[3*vi], m->GetVertices ()[3*vi+1], m->GetVertices ()[3*vi+2]);
         os << buf;
     }
-    if (!m->m_pFaceNormals.empty() && (unsigned)f * 3 + 2 < m->m_pFaceNormals.size())
+    if (!m->GetFaceNormals ().empty() && (unsigned)f * 3 + 2 < m->GetFaceNormals ().size())
     {
         char buf[128];
         std::snprintf(buf, sizeof(buf), "face_normal %g %g %g\n",
-                      m->m_pFaceNormals[3*f], m->m_pFaceNormals[3*f+1], m->m_pFaceNormals[3*f+2]);
+                      m->GetFaceNormals ()[3*f], m->GetFaceNormals ()[3*f+1], m->GetFaceNormals ()[3*f+2]);
         os << buf;
     }
     os << "material " << static_cast<int>(face->GetMaterialId()) << "\n";
@@ -159,24 +159,24 @@ std::string cmdVertex(MyFrame* frame, int n, int v)
     if (n < 0 || (size_t)n >= meshes.size())
         return "ERR mesh index out of range\n";
     Mesh* m = meshes[n];
-    if (!m || v < 0 || (unsigned)v >= m->m_nVertices)
+    if (!m || v < 0 || (unsigned)v >= m->GetNVertices ())
         return "ERR vertex index out of range\n";
 
     std::ostringstream os;
     char buf[160];
     std::snprintf(buf, sizeof(buf), "position %g %g %g\n",
-                  m->m_pVertices[3*v], m->m_pVertices[3*v+1], m->m_pVertices[3*v+2]);
+                  m->GetVertices ()[3*v], m->GetVertices ()[3*v+1], m->GetVertices ()[3*v+2]);
     os << buf;
-    if (!m->m_pVertexNormals.empty() && (unsigned)v * 3 + 2 < m->m_pVertexNormals.size())
+    if (!m->GetVertexNormals ().empty() && (unsigned)v * 3 + 2 < m->GetVertexNormals ().size())
     {
         std::snprintf(buf, sizeof(buf), "normal %g %g %g\n",
-                      m->m_pVertexNormals[3*v], m->m_pVertexNormals[3*v+1], m->m_pVertexNormals[3*v+2]);
+                      m->GetVertexNormals ()[3*v], m->GetVertexNormals ()[3*v+1], m->GetVertexNormals ()[3*v+2]);
         os << buf;
     }
-    if (!m->m_pTextureCoordinates.empty() && (unsigned)v * 2 + 1 < m->m_pTextureCoordinates.size())
+    if (!m->GetTextureCoordinates ().empty() && (unsigned)v * 2 + 1 < m->GetTextureCoordinates ().size())
     {
         std::snprintf(buf, sizeof(buf), "uv %g %g\n",
-                      m->m_pTextureCoordinates[2*v], m->m_pTextureCoordinates[2*v+1]);
+                      m->GetTextureCoordinates ()[2*v], m->GetTextureCoordinates ()[2*v+1]);
         os << buf;
     }
     os << "OK\n";
@@ -246,9 +246,9 @@ std::string cmdFlip(MyFrame* frame, int n)
         Mesh* m = meshes[n];
         if (!m) return -2;
 
-        for (unsigned int i = 0; i < m->m_nFaces; ++i)
+        for (unsigned int i = 0; i < m->GetNFaces (); ++i)
         {
-            Face* face = m->m_pFaces[i];
+            auto face = m->FaceAt (i);
             if (!face || face->GetNVertices() != 3) continue;
             const unsigned int v1 = face->GetVertex(1);
             const unsigned int v2 = face->GetVertex(2);
@@ -261,7 +261,7 @@ std::string cmdFlip(MyFrame* frame, int n)
         if (MyGLCanvas* c = frame->GetActiveCanvas())
             c->Refresh(false);
 
-        return static_cast<int>(m->m_nFaces);
+        return static_cast<int>(m->GetNFaces ());
     });
 
     if (result == -1) return "ERR no model loaded\n";

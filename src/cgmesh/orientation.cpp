@@ -22,7 +22,7 @@ void
 Cmesh_orientation::apply_orientation (void)
 {
   int nv;
-  float *v;
+  const float *v;
   if (mesh)
   {
 	  mesh->translate (-center[0], -center[1], -center[2]);
@@ -39,18 +39,16 @@ void
 Cmesh_orientation::normalize (void)
 {
   int i;
-  int nv;
-  float *v;
+  int nv = 0;
+  Mesh *pMesh = nullptr;
   if (mesh)
-  {
-	  nv = mesh->m_nVertices;
-	  v = mesh->m_pVertices.data();
-  }
+	  pMesh = mesh;
   if (model3d_half_edge)
-  {
-	  nv = model3d_half_edge->m_pMesh->m_nVertices;
-	  v = model3d_half_edge->m_pMesh->m_pVertices.data();
-  }
+	  pMesh = model3d_half_edge->m_pMesh;
+  if (!pMesh)
+	  return;
+  nv = pMesh->GetNVertices ();
+  const float *v = pMesh->GetVertices ().data();
   if (nv < 1 || !v)
 	  return;
 
@@ -70,9 +68,10 @@ Cmesh_orientation::normalize (void)
     }
   for (i=0; i<nv; i++)
     {
-      v[3*i]   = (2*v[3*i] - xmin - xmax) / (xmax - xmin);
-      v[3*i+1] = (2*v[3*i+1] - ymin - ymax) / (ymax - ymin);
-      v[3*i+2] = (2*v[3*i+2] - zmin - zmax) / (zmax - zmin);
+      pMesh->SetVertex (i,
+                        (2*v[3*i]   - xmin - xmax) / (xmax - xmin),
+                        (2*v[3*i+1] - ymin - ymax) / (ymax - ymin),
+                        (2*v[3*i+2] - zmin - zmax) / (zmax - zmin));
     }
 }
 
