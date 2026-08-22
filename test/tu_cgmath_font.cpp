@@ -9,40 +9,34 @@
 // ===========================================================================
 //  Chargement de police et extraction de contours
 // ===========================================================================
-// La police livree avec le depot, BloomingGrove.otf (Nathan Eady, domaine
-// public), couvre la voie OpenType/CFF : signature OTTO, em de 1000, contours
-// en CUBIQUES. C'est la moitie qui compte le plus a verrouiller, la voie CFF
-// etant celle dont le support par stb_truetype etait le moins acquis.
+// Les DEUX voies a contours sont couvertes par une police livree avec le depot,
+// sans rien emprunter au systeme : leurs oracles sont donc EXACTS, et aucun de
+// leurs tests ne se saute. Seul font_collections_are_indexed, tout en bas, va
+// encore chercher un fichier sur le systeme -- limite assumee, documentee sur
+// place.
 //
-// La voie TrueType (`glyf`, quadratiques, glyphes composites) n'a PAS de police
-// libre dans le depot. Les tests qui l'exercent cherchent donc une TTF sur le
-// systeme et se DECLARENT SAUTES quand ils n'en trouvent pas, plutot que de
-// passer pour de mauvaises raisons.
+//   BloomingGrove.otf  OpenType/CFF -- signature OTTO, em de 1000, contours en
+//                      CUBIQUES (charstrings Type 2). Sans glyphe accentue, et
+//                      son crenage est dans un format que nous ne lisons pas :
+//                      c'est le temoin de la degradation ANNONCEE.
+//   DejaVuSans.ttf     TrueType -- table `glyf`, em de 2048, contours en
+//                      QUADRATIQUES, glyphes composites, et une table `kern`
+//                      Microsoft v0 lisible : c'est la police qui exerce le
+//                      contournement du crenage.
+//
+// Les deux ems different (1000 / 2048), ce qui est voulu : lire l'em de travers
+// mettrait tout le texte a l'echelle d'un facteur 2, et une seule police ne le
+// revelerait pas.
 
 namespace {
 
-const char* kCffFont = "./test/data/fonts/BloomingGrove.otf";
-
-// Polices TrueType usuelles. La premiere trouvee sert ; aucune n'est requise.
-const char* kTrueTypeCandidates[] = {
-	"C:/Windows/Fonts/arial.ttf",
-	"C:/Windows/Fonts/segoeui.ttf",
-	"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-	"/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-	"/System/Library/Fonts/Supplemental/Arial.ttf",
-};
+const char* kCffFont      = "./test/data/fonts/BloomingGrove.otf";
+const char* kTrueTypeFont = "./test/data/fonts/DejaVuSans.ttf";
 
 bool exists (const char* path)
 {
 	std::ifstream f (path, std::ios::binary);
 	return f.good();
-}
-
-const char* findTrueTypeFont ()
-{
-	for (const char* p : kTrueTypeCandidates)
-		if (exists (p)) return p;
-	return nullptr;
 }
 
 int countSegments (const std::vector<GlyphContour>& contours, GlyphSegment::Kind kind)
@@ -276,23 +270,70 @@ TEST(TEST_cgmath_font, unreadable_kerning_is_reported_not_hidden)
 }
 
 // ---------------------------------------------------------------------------
-// La voie TrueType, quand une police est disponible
+// La voie TrueType
 // ---------------------------------------------------------------------------
 
+TEST(TEST_cgmath_font, truetype_font_loads_with_its_metrics)
+{
+	Font font;
+	ASSERT_TRUE (font.loadFromFile (kTrueTypeFont));
+	ASSERT_TRUE (font.isValid());
+
+	// 2048 est l'em TrueType, contre 1000 pour le CFF ci-dessus. C'est
+	// l'ecart entre les deux polices du depot qui rend un em mal lu visible.
+	EXPECT_EQ (font.unitsPerEm(), 2048);
+	EXPECT_EQ (font.numFonts(), 1);
+	// DejaVu Sans en compte plus de 6000 ; la borne basse suffit a distinguer
+	// une police lue d'une table `maxp` lue de travers.
+	EXPECT_GT (font.numGlyphs(), 1000);
+
+	int asc = 0, desc = 0, gap = 0;
+	font.vMetrics (asc, desc, gap);
+	EXPECT_GT (asc, 0)  << "ascendante";
+	EXPECT_LT (desc, 0) << "descendante, negative par convention";
+
+	EXPECT_NE (font.glyphIndex (U'A'), 0);
+	// U+10FFFE est un non-caractere : aucune police ne le couvre. Contrairement
+	// a la police CFF, DejaVu porte des emoji -- ils ne feraient donc pas un
+	// temoin d'absence.
+	EXPECT_EQ (font.glyphIndex (U'\U0010FFFE'), 0);
+
+	EXPECT_GT (font.advance (font.glyphIndex (U'A')),
+	           font.advance (font.glyphIndex (U'i'))) << "un A est plus large qu'un i";
+}
+
+// Le pendant du test CFF : la table `glyf` doit emettre des QUADRATIQUES, et
+// aucune cubique. Prises ensemble, les deux polices verrouillent le fait que
+// chaque conteneur emprunte bien son propre chemin dans stb_truetype.
 TEST(TEST_cgmath_font, truetype_outlines_are_quadratic)
 {
-	const char* path = findTrueTypeFont();
-	if (!path) GTEST_SKIP() << "aucune police TrueType sur ce systeme";
-
 	Font font;
-	ASSERT_TRUE (font.loadFromFile (path)) << path;
-	EXPECT_GT (font.unitsPerEm(), 0);
+	ASSERT_TRUE (font.loadFromFile (kTrueTypeFont));
 
-	const auto contours = font.glyphContours (font.glyphIndex (U'o'));
-	ASSERT_FALSE (contours.empty());
-	EXPECT_GT (countSegments (contours, GlyphSegment::Kind::Quadratic), 0)
+	const auto o = font.glyphContours (font.glyphIndex (U'o'));
+	ASSERT_FALSE (o.empty());
+	EXPECT_EQ (o.size(), 2u) << "contour exterieur et contre-forme du o";
+	EXPECT_GT (countSegments (o, GlyphSegment::Kind::Quadratic), 0)
 		<< "aucune quadratique : le chemin glyf n'a pas ete emprunte";
-	EXPECT_EQ (contours.size(), 2u) << "contre-forme du o";
+	EXPECT_EQ (countSegments (o, GlyphSegment::Kind::Cubic), 0)
+		<< "une cubique dans une police TrueType";
+}
+
+// Le temoin inverse : un glyphe entierement DROIT ne doit produire que des
+// segments Line. Sans lui, un lecteur qui promouvrait tout point en point de
+// controle passerait le test precedent sans qu'on le voie.
+TEST(TEST_cgmath_font, a_straight_glyph_produces_only_lines)
+{
+	Font font;
+	ASSERT_TRUE (font.loadFromFile (kTrueTypeFont));
+
+	const auto a = font.glyphContours (font.glyphIndex (U'A'));
+	ASSERT_FALSE (a.empty());
+	EXPECT_EQ (a.size(), 2u) << "le A a son triangle interieur";
+	EXPECT_GT (countSegments (a, GlyphSegment::Kind::Line), 0);
+	EXPECT_EQ (countSegments (a, GlyphSegment::Kind::Quadratic), 0)
+		<< "une courbe dans un glyphe polygonal";
+	EXPECT_EQ (countSegments (a, GlyphSegment::Kind::Cubic), 0);
 }
 
 // Un glyphe accentue est COMPOSITE : la lettre de base et l'accent sont deux
@@ -300,19 +341,22 @@ TEST(TEST_cgmath_font, truetype_outlines_are_quadratic)
 // en recursif, et celui qui asserte sur la variante par appariement de points.
 TEST(TEST_cgmath_font, composite_glyphs_resolve_to_several_contours)
 {
-	const char* path = findTrueTypeFont();
-	if (!path) GTEST_SKIP() << "aucune police TrueType sur ce systeme";
-
 	Font font;
-	ASSERT_TRUE (font.loadFromFile (path)) << path;
+	ASSERT_TRUE (font.loadFromFile (kTrueTypeFont));
 
 	// Ecrit en echappement et non litteralement : ce fichier n'a pas de BOM, et
 	// MSVC lirait sinon les deux octets UTF-8 comme deux caracteres CP1252.
 	const int glyph = font.glyphIndex (U'\u00E9');   // e accent aigu
-	if (glyph == 0) GTEST_SKIP() << "cette police n'a pas de e accent aigu";
+	ASSERT_NE (glyph, 0);
 
-	const auto contours = font.glyphContours (glyph);
-	EXPECT_GE (contours.size(), 2u) << "e + accent : au moins deux contours";
+	// Trois exactement : la panse du e, sa contre-forme, et l'accent. Un
+	// composite non resolu en rendrait deux (le e seul) ou zero.
+	const auto composite = font.glyphContours (glyph);
+	EXPECT_EQ (composite.size(), 3u) << "e + contre-forme + accent";
+
+	// Et la preuve que l'accent est bien EN PLUS : le e nu en a un de moins.
+	const auto plain = font.glyphContours (font.glyphIndex (U'e'));
+	EXPECT_EQ (plain.size() + 1, composite.size());
 }
 
 // Sur les polices a table `kern` Microsoft v0, la lecture directe doit rendre
@@ -320,32 +364,60 @@ TEST(TEST_cgmath_font, composite_glyphs_resolve_to_several_contours)
 // dispatch de stb, elle, rend 0 sur ces memes polices.
 TEST(TEST_cgmath_font, microsoft_kern_tables_are_actually_read)
 {
-	const char* path = findTrueTypeFont();
-	if (!path) GTEST_SKIP() << "aucune police TrueType sur ce systeme";
-
 	Font font;
-	ASSERT_TRUE (font.loadFromFile (path)) << path;
+	ASSERT_TRUE (font.loadFromFile (kTrueTypeFont));
 
-	if (font.kerningStatus() != KerningStatus::Applied)
-		GTEST_SKIP() << "cette police n'a pas de table kern lisible";
+	ASSERT_EQ (font.kerningStatus(), KerningStatus::Applied)
+		<< "la table kern de DejaVu doit etre lue, pas seulement detectee";
+	// Elle en porte plus de 2700 ; la borne basse distingue une table lue d'une
+	// poignee de paires tombees d'un en-tete mal interprete.
+	EXPECT_GT (font.kernPairCount(), 1000u);
 
-	EXPECT_GT (font.kernPairCount(), 0u);
-	// A/V est la paire de crenage canonique : les deux diagonales s'emboitent,
-	// la correction est negative.
+	// A/V est la paire canonique : les deux diagonales s'emboitent, la
+	// correction est negative (-131 sur cette police).
 	const int av = font.kern (font.glyphIndex (U'A'), font.glyphIndex (U'V'));
 	EXPECT_LT (av, 0) << "A/V devrait etre resserre";
+
+	// Une paire non creneee rend 0, sans se confondre avec l'absence de table.
+	EXPECT_EQ (font.kern (font.glyphIndex (U'H'), font.glyphIndex (U'H')), 0);
+
+	// Un index hors bornes ne doit pas trouver de paire par accident.
+	EXPECT_EQ (font.kern (font.numGlyphs() + 1000, font.glyphIndex (U'V')), 0);
+}
+
+// Les deux polices du depot doivent tomber dans deux etats DIFFERENTS du
+// tri-etat : sans cela, rien ne distinguerait "lu" de "non lisible".
+TEST(TEST_cgmath_font, the_two_repository_fonts_exercise_two_kerning_states)
+{
+	Font ttf, otf;
+	ASSERT_TRUE (ttf.loadFromFile (kTrueTypeFont));
+	ASSERT_TRUE (otf.loadFromFile (kCffFont));
+
+	EXPECT_EQ (ttf.kerningStatus(), KerningStatus::Applied);
+	EXPECT_NE (otf.kerningStatus(), KerningStatus::Applied);
+	EXPECT_NE (ttf.kerningStatus(), otf.kerningStatus());
 }
 
 // Une collection .ttc expose plusieurs polices sous un seul fichier ; l'index
 // doit reellement selectionner, pas etre ignore.
+//
+// SEUL test du fichier qui emprunte au systeme, et donc le seul a pouvoir se
+// sauter : le depot ne livre pas de collection. C'est une limite de couverture
+// ASSUMEE -- les .ttc pesent plusieurs mega-octets et la voie qu'ils exercent se
+// reduit a un decalage d'offset de table. Un saut ici n'est pas un test casse.
 TEST(TEST_cgmath_font, font_collections_are_indexed)
 {
 	const char* path = "C:/Windows/Fonts/cambria.ttc";
-	if (!exists (path)) GTEST_SKIP() << "aucune collection .ttc sur ce systeme";
+	if (!exists (path))
+		GTEST_SKIP() << "limite de couverture assumee : le depot ne livre aucune "
+		                "collection .ttc, et " << path << " est absent de ce "
+		                "systeme -- l'indexation de collection reste non couverte";
 
 	Font first;
 	ASSERT_TRUE (first.loadFromFile (path, 0));
-	if (first.numFonts() < 2) GTEST_SKIP() << "collection a une seule police";
+	if (first.numFonts() < 2)
+		GTEST_SKIP() << "limite de couverture assumee : " << path << " ne porte "
+		                "qu'une police, il n'y a pas deux polices a departager";
 
 	Font second;
 	ASSERT_TRUE (second.loadFromFile (path, 1));

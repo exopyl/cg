@@ -9,6 +9,7 @@
 #include <cmath>
 #include <memory>
 #include <string>
+#include <vector>
 
 // ===========================================================================
 //  Texte -> solide extrude
@@ -19,16 +20,42 @@
 // DISJOINTS, donc des aretes de bord existent par construction. La mesure est
 // reprise de tu_cgmesh_extrude_contours.cpp, ou elle a deja fait ses preuves :
 // c'est elle qui avait revele que 190 aretes sur 1633 sortaient sans paroi.
+//
+// Les DEUX voies a contours du lecteur de polices sont exercees ici, chacune par
+// une police livree avec le depot :
+//
+//   BloomingGrove.otf  OpenType/CFF -- contours en CUBIQUES, aucun glyphe
+//                      composite, et crenage dans un format que nous ne lisons
+//                      pas (KerningStatus::Unsupported).
+//   DejaVuSans.ttf     TrueType -- contours en QUADRATIQUES, glyphes composites,
+//                      et table `kern` Microsoft v0 lue (KerningStatus::Applied).
+//
+// Une seule des deux ne suffit pas : la branche QUADRATIQUE de l'aplatissement
+// et le contournement du crenage ne sont atteignables que par la TrueType, les
+// glyphes composites non plus.
 
 namespace {
 
-const char* kFont = "./test/data/fonts/BloomingGrove.otf";
+const char* kCffFont      = "./test/data/fonts/BloomingGrove.otf";
+const char* kTrueTypeFont = "./test/data/fonts/DejaVuSans.ttf";
 
-std::unique_ptr<Font> loadFont ()
+std::unique_ptr<Font> loadFont (const char* path)
 {
 	auto font = std::make_unique<Font>();
-	if (!font->loadFromFile (kFont)) return nullptr;
+	if (!font->loadFromFile (path)) return nullptr;
 	return font;
+}
+
+// Sert de garde-fou aux tests qui ciblent UNE branche d'aplatissement : sans lui,
+// un test cense exercer les quadratiques passerait tel quel sur une police
+// cubique, sans rien exercer du tout.
+int countSegments (const std::vector<GlyphContour>& contours, GlyphSegment::Kind kind)
+{
+	int n = 0;
+	for (const GlyphContour& c : contours)
+		for (const GlyphSegment& s : c.segments)
+			if (s.kind == kind) n++;
+	return n;
 }
 
 // Volume signe (theoreme de la divergence) et aire du capot superieur.
@@ -89,7 +116,7 @@ TextExtrudeOptions defaults ()
 // distinguerait pas.
 TEST(TEST_cgmesh_text_extrude, an_extruded_letter_is_watertight)
 {
-	auto font = loadFont();
+	auto font = loadFont (kCffFont);
 	ASSERT_NE (font, nullptr);
 
 	const TextExtrudeOptions opt = defaults();
@@ -107,7 +134,7 @@ TEST(TEST_cgmesh_text_extrude, an_extruded_letter_is_watertight)
 
 TEST(TEST_cgmesh_text_extrude, a_whole_word_is_watertight)
 {
-	auto font = loadFont();
+	auto font = loadFont (kCffFont);
 	ASSERT_NE (font, nullptr);
 
 	const TextExtrudeOptions opt = defaults();
@@ -117,6 +144,72 @@ TEST(TEST_cgmesh_text_extrude, a_whole_word_is_watertight)
 	double volume = 0, topArea = 0;
 	measure (*m, opt.depth, volume, topArea);
 	EXPECT_NEAR (volume, topArea * (double)opt.depth, 1e-6);
+}
+
+// La branche QUADRATIQUE de l'aplatissement n'est atteignable que par une police
+// TrueType : les charstrings Type 2 de la police CFF n'emettent que des
+// cubiques. Le o de DejaVu est decrit uniquement par des quadratiques.
+TEST(TEST_cgmesh_text_extrude, a_quadratic_glyph_is_watertight)
+{
+	auto font = loadFont (kTrueTypeFont);
+	ASSERT_NE (font, nullptr);
+
+	const auto outline = font->glyphContours (font->glyphIndex (U'o'));
+	ASSERT_GT (countSegments (outline, GlyphSegment::Kind::Quadratic), 0)
+		<< "ce glyphe n'exerce pas la branche quadratique";
+	ASSERT_EQ (countSegments (outline, GlyphSegment::Kind::Cubic), 0);
+
+	const TextExtrudeOptions opt = defaults();
+	std::unique_ptr<Mesh> m (text_to_extruded_mesh (*font, "o", opt));
+	ASSERT_NE (m, nullptr);
+
+	double volume = 0, topArea = 0;
+	measure (*m, opt.depth, volume, topArea);
+
+	EXPECT_GT (std::fabs (topArea), 0.0) << "capot vide";
+	EXPECT_NEAR (volume, topArea * (double)opt.depth, 1e-6)
+		<< "volume " << volume << " au lieu de " << (topArea * opt.depth)
+		<< " : des parois manquent";
+
+	// Et la branche SUBDIVISE reellement. Ce glyphe ne porte aucun segment
+	// droit : une quadratique rendue comme une simple corde donnerait donc le
+	// meme nombre de sommets aux deux tolerances.
+	TextExtrudeOptions coarse = opt, fine = opt;
+	coarse.flattenTol = 0.05f;
+	fine.flattenTol   = 0.002f;
+	std::unique_ptr<Mesh> c (text_to_extruded_mesh (*font, "o", coarse));
+	std::unique_ptr<Mesh> f (text_to_extruded_mesh (*font, "o", fine));
+	ASSERT_NE (c, nullptr);
+	ASSERT_NE (f, nullptr);
+	EXPECT_GT (f->GetNVertices(), c->GetNVertices())
+		<< "la tolerance n'agit pas : les quadratiques ne sont pas subdivisees";
+}
+
+// Un glyphe composite reference d'autres glyphes, chacun avec sa translation :
+// l'accent arrive donc comme un contour SEPARE et FLOTTANT, ni imbrique dans la
+// lettre ni connexe a elle. Deux ilots disjoints dans un meme Append sont le cas
+// que la tessellation non-zero et l'emission des parois doivent tenir.
+TEST(TEST_cgmesh_text_extrude, a_composite_glyph_is_watertight)
+{
+	auto font = loadFont (kTrueTypeFont);
+	ASSERT_NE (font, nullptr);
+
+	// Point de code et chaine ecrits en ECHAPPEMENT : ce fichier n'a pas de BOM,
+	// et MSVC lirait sinon les octets UTF-8 comme autant de caracteres CP1252.
+	const auto outline = font->glyphContours (font->glyphIndex (U'\u00E9'));
+	ASSERT_EQ (outline.size(), 3u) << "e + contre-forme + accent";
+
+	const TextExtrudeOptions opt = defaults();
+	std::unique_ptr<Mesh> m (text_to_extruded_mesh (*font, "\xC3\xA9", opt));
+	ASSERT_NE (m, nullptr);
+
+	double volume = 0, topArea = 0;
+	measure (*m, opt.depth, volume, topArea);
+
+	EXPECT_GT (std::fabs (topArea), 0.0) << "capot vide";
+	EXPECT_NEAR (volume, topArea * (double)opt.depth, 1e-6)
+		<< "volume " << volume << " au lieu de " << (topArea * opt.depth)
+		<< " : l'accent flottant a coute des parois";
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +224,7 @@ TEST(TEST_cgmesh_text_extrude, a_whole_word_is_watertight)
 // satisferait pas.
 TEST(TEST_cgmesh_text_extrude, a_counter_stays_open)
 {
-	auto font = loadFont();
+	auto font = loadFont (kCffFont);
 	ASSERT_NE (font, nullptr);
 
 	const TextExtrudeOptions opt = defaults();
@@ -157,13 +250,40 @@ TEST(TEST_cgmesh_text_extrude, a_counter_stays_open)
 	EXPECT_NEAR (volume, topArea * (double)opt.depth, 1e-6);
 }
 
+// Le meme oracle sur la voie TrueType : la contre-forme doit rester ouverte
+// quelle que soit la nature des segments qui la decrivent. Une quadratique
+// aplatie a l'envers reboucherait le trou sans que l'etancheite s'en apercoive.
+TEST(TEST_cgmesh_text_extrude, a_truetype_counter_stays_open)
+{
+	auto font = loadFont (kTrueTypeFont);
+	ASSERT_NE (font, nullptr);
+
+	const TextExtrudeOptions opt = defaults();
+	std::unique_ptr<Mesh> m (text_to_extruded_mesh (*font, "o", opt));
+	ASSERT_NE (m, nullptr);
+
+	double volume = 0, topArea = 0;
+	measure (*m, opt.depth, volume, topArea);
+
+	float lo[3], hi[3];
+	bbox (*m, lo, hi);
+	const double boxArea = (double)(hi[0]-lo[0]) * (double)(hi[1]-lo[1]);
+
+	ASSERT_GT (boxArea, 0.0);
+	EXPECT_LT (std::fabs (topArea), 0.70 * boxArea)
+		<< "aire de capot " << std::fabs (topArea) << " pour une emprise de "
+		<< boxArea << " : la contre-forme semble bouchee";
+
+	EXPECT_NEAR (volume, topArea * (double)opt.depth, 1e-6);
+}
+
 // ---------------------------------------------------------------------------
 // Les parametres agissent
 // ---------------------------------------------------------------------------
 
 TEST(TEST_cgmesh_text_extrude, depth_scales_the_volume_linearly)
 {
-	auto font = loadFont();
+	auto font = loadFont (kCffFont);
 	ASSERT_NE (font, nullptr);
 
 	TextExtrudeOptions thin = defaults(), thick = defaults();
@@ -185,7 +305,7 @@ TEST(TEST_cgmesh_text_extrude, depth_scales_the_volume_linearly)
 
 TEST(TEST_cgmesh_text_extrude, size_scales_the_footprint)
 {
-	auto font = loadFont();
+	auto font = loadFont (kCffFont);
 	ASSERT_NE (font, nullptr);
 
 	TextExtrudeOptions small = defaults(), big = defaults();
@@ -211,7 +331,7 @@ TEST(TEST_cgmesh_text_extrude, size_scales_the_footprint)
 // le contour, donc produire davantage de sommets.
 TEST(TEST_cgmesh_text_extrude, a_tighter_tolerance_refines_the_outline)
 {
-	auto font = loadFont();
+	auto font = loadFont (kCffFont);
 	ASSERT_NE (font, nullptr);
 
 	TextExtrudeOptions coarse = defaults(), fine = defaults();
@@ -229,7 +349,7 @@ TEST(TEST_cgmesh_text_extrude, a_tighter_tolerance_refines_the_outline)
 // Un texte multiligne doit occuper deux fois la hauteur, et rester ferme.
 TEST(TEST_cgmesh_text_extrude, a_second_line_sits_below_the_first)
 {
-	auto font = loadFont();
+	auto font = loadFont (kCffFont);
 	ASSERT_NE (font, nullptr);
 
 	const TextExtrudeOptions opt = defaults();
@@ -252,7 +372,7 @@ TEST(TEST_cgmesh_text_extrude, a_second_line_sits_below_the_first)
 
 TEST(TEST_cgmesh_text_extrude, centering_moves_the_bbox_onto_the_origin)
 {
-	auto font = loadFont();
+	auto font = loadFont (kCffFont);
 	ASSERT_NE (font, nullptr);
 
 	TextExtrudeOptions opt = defaults();
@@ -270,6 +390,51 @@ TEST(TEST_cgmesh_text_extrude, centering_moves_the_bbox_onto_the_origin)
 	EXPECT_LT (std::fabs (0.5f * (lo[1] + hi[1])), 0.25f * opt.size);
 }
 
+// Le crenage est le seul reglage de mise en page dont l'effet exige une police
+// dont la table soit LUE : sur la police CFF du depot, kern() rend 0 et l'option
+// n'a aucun effet observable. C'est donc ici, et nulle part ailleurs, que le
+// contournement du crenage est verifie de bout en bout.
+TEST(TEST_cgmesh_text_extrude, kerning_tightens_the_word)
+{
+	auto font = loadFont (kTrueTypeFont);
+	ASSERT_NE (font, nullptr);
+
+	const int av = font->kern (font->glyphIndex (U'A'), font->glyphIndex (U'V'));
+	ASSERT_EQ (font->kerningStatus(), KerningStatus::Applied);
+	ASSERT_LT (av, 0) << "A/V doit etre resserre, sinon le test ne prouve rien";
+
+	TextExtrudeOptions kerned = defaults(), loose = defaults();
+	kerned.kerning = true;
+	loose.kerning  = false;
+
+	std::unique_ptr<Mesh> a (text_to_extruded_mesh (*font, "AV", kerned));
+	std::unique_ptr<Mesh> b (text_to_extruded_mesh (*font, "AV", loose));
+	ASSERT_NE (a, nullptr);
+	ASSERT_NE (b, nullptr);
+
+	float loA[3], hiA[3], loB[3], hiB[3];
+	bbox (*a, loA, hiA);
+	bbox (*b, loB, hiB);
+
+	EXPECT_LT (hiA[0]-loA[0], hiB[0]-loB[0])
+		<< "le crenage n'a pas resserre le maillage";
+
+	// L'ecart vaut EXACTEMENT la correction de la paire ramenee aux unites
+	// monde : seul le V se deplace, et c'est lui qui porte le bord droit de
+	// l'emprise. La valeur est lue dans la police, non figee ici.
+	const double expected = -(double)av * (double)kerned.size
+	                      / (double)font->unitsPerEm();
+	EXPECT_NEAR ((double)(hiB[0]-loB[0]) - (double)(hiA[0]-loA[0]), expected, 1e-5);
+
+	// Le crenage DEPLACE, il ne deforme pas : chaque glyphe etant extrude par un
+	// Append distinct, la somme des volumes est invariante par translation.
+	double va = 0, ta = 0, vb = 0, tb = 0;
+	measure (*a, kerned.depth, va, ta);
+	measure (*b, loose.depth,  vb, tb);
+	EXPECT_NEAR (va, vb, 1e-6) << "le crenage a change le volume";
+	EXPECT_NEAR (ta, tb, 1e-6) << "le crenage a change le capot";
+}
+
 // ---------------------------------------------------------------------------
 // Fusion des recouvrements
 // ---------------------------------------------------------------------------
@@ -279,7 +444,7 @@ TEST(TEST_cgmesh_text_extrude, centering_moves_the_bbox_onto_the_origin)
 // capots se superposent et l'aire est comptee deux fois.
 TEST(TEST_cgmesh_text_extrude, unioning_overlaps_removes_the_double_count)
 {
-	auto font = loadFont();
+	auto font = loadFont (kCffFont);
 	ASSERT_NE (font, nullptr);
 
 	TextExtrudeOptions apart = defaults(), merged = defaults();
@@ -315,7 +480,7 @@ TEST(TEST_cgmesh_text_extrude, an_unloaded_font_produces_nothing)
 
 TEST(TEST_cgmesh_text_extrude, an_empty_text_produces_nothing)
 {
-	auto font = loadFont();
+	auto font = loadFont (kCffFont);
 	ASSERT_NE (font, nullptr);
 	std::unique_ptr<Mesh> m (text_to_extruded_mesh (*font, "", defaults()));
 	EXPECT_EQ (m, nullptr);
@@ -325,7 +490,7 @@ TEST(TEST_cgmesh_text_extrude, an_empty_text_produces_nothing)
 // contour : il n'y a pas de maillage a produire, et ce n'est pas une erreur.
 TEST(TEST_cgmesh_text_extrude, blanks_alone_produce_nothing)
 {
-	auto font = loadFont();
+	auto font = loadFont (kCffFont);
 	ASSERT_NE (font, nullptr);
 	std::unique_ptr<Mesh> m (text_to_extruded_mesh (*font, "   ", defaults()));
 	EXPECT_EQ (m, nullptr);
@@ -335,7 +500,7 @@ TEST(TEST_cgmesh_text_extrude, blanks_alone_produce_nothing)
 // son avance (nulle pour .notdef ici) et n'emet rien.
 TEST(TEST_cgmesh_text_extrude, a_missing_glyph_degrades_without_failing)
 {
-	auto font = loadFont();
+	auto font = loadFont (kCffFont);
 	ASSERT_NE (font, nullptr);
 
 	// BloomingGrove n'a pas d'emoji.
