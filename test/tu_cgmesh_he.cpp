@@ -551,7 +551,7 @@ TEST (TEST_cgmesh_he, wrapping_a_mesh_keeps_everything_it_owns)
 	src.SetVertices (5, v);
 	src.SetFace (0, 0, 1, 2, 3);          // un QUAD : son identite doit survivre
 	src.SetFace (1, 1, 4, 2);
-	src.m_name = "enveloppe";
+	src.SetName ("enveloppe");
 	src.Material_Add (new MaterialColor (11, 22, 33));
 	src.FaceAt (0)->SetMaterialId (0);
 	src.FaceAt (0)->SetUsesTextureCoordinates (true);
@@ -564,7 +564,7 @@ TEST (TEST_cgmesh_he, wrapping_a_mesh_keeps_everything_it_owns)
 	Mesh *m = he.m_pMesh;
 	ASSERT_NE (m, nullptr);
 
-	EXPECT_EQ (m->m_name, "enveloppe");
+	EXPECT_EQ (m->GetName (), "enveloppe");
 	EXPECT_EQ (m->GetNVertices (), 5u);
 
 	// Le QUAD reste un quad : envelopper un maillage ne doit plus detruire son

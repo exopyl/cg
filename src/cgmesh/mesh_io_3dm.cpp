@@ -326,7 +326,7 @@ bool fillFromMeshes(Mesh& dst, const std::vector<MeshSource>& sources,
         dst.SetVertexNormals (std::move (normals));
     }
 
-    dst.m_name = name;
+    dst.SetName (name);
     return true;
 }
 

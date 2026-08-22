@@ -6,13 +6,13 @@ TEST(TEST_cgmath_sphere, DefaultConstructorInitializesBoundingBox)
 {
     Sphere sphere;
 
-    ASSERT_NE(sphere.m_pAABox, nullptr);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[0].x, -1.f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[0].y, -1.f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[0].z, -1.f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[1].x, 1.f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[1].y, 1.f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[1].z, 1.f);
+    ASSERT_NE(sphere.GetAABox (), nullptr);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[0].x, -1.f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[0].y, -1.f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[0].z, -1.f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[1].x, 1.f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[1].y, 1.f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[1].z, 1.f);
 }
 
 TEST(TEST_cgmath_sphere, DefaultBoundingBoxRejectsFarRay)
@@ -30,13 +30,13 @@ TEST(TEST_cgmath_sphere, SetCenterUpdatesBoundingBox)
 
     sphere.SetCenter(2.f, 3.f, 4.f);
 
-    ASSERT_NE(sphere.m_pAABox, nullptr);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[0].x, 1.f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[0].y, 2.f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[0].z, 3.f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[1].x, 3.f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[1].y, 4.f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[1].z, 5.f);
+    ASSERT_NE(sphere.GetAABox (), nullptr);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[0].x, 1.f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[0].y, 2.f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[0].z, 3.f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[1].x, 3.f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[1].y, 4.f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[1].z, 5.f);
 }
 
 TEST(TEST_cgmath_sphere, SetRadiusUpdatesBoundingBox)
@@ -46,11 +46,11 @@ TEST(TEST_cgmath_sphere, SetRadiusUpdatesBoundingBox)
 
     sphere.SetRadius(2.5f);
 
-    ASSERT_NE(sphere.m_pAABox, nullptr);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[0].x, -0.5f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[0].y, 0.5f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[0].z, 1.5f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[1].x, 4.5f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[1].y, 5.5f);
-    EXPECT_FLOAT_EQ(sphere.m_pAABox->parameters[1].z, 6.5f);
+    ASSERT_NE(sphere.GetAABox (), nullptr);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[0].x, -0.5f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[0].y, 0.5f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[0].z, 1.5f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[1].x, 4.5f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[1].y, 5.5f);
+    EXPECT_FLOAT_EQ(sphere.GetAABox ()->parameters[1].z, 6.5f);
 }

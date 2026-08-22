@@ -115,8 +115,8 @@ TEST(TEST_cgmesh_io, vmeshes_obj_split_objects)
     Mesh* b = vm.GetMeshes()[1];
 
     // Names carried from the 'o' directives.
-    EXPECT_EQ(a->m_name, "triangle_A");
-    EXPECT_EQ(b->m_name, "triangle_B");
+    EXPECT_EQ(a->GetName (), "triangle_A");
+    EXPECT_EQ(b->GetName (), "triangle_B");
 
     // Each submesh: 3 local vertices, 1 face (re-indexed, not the file-global 6).
     ASSERT_EQ(a->GetNVertices(), 3u);
@@ -190,8 +190,8 @@ TEST(TEST_cgmesh_io, vmeshes_obj_split_groups)
     VMeshes vm;
     ASSERT_TRUE(VMeshesIO::load(vm, "./test/data/obj/multi_groups.obj"));
     ASSERT_EQ(vm.GetNMeshes(), 2u);
-    EXPECT_EQ(vm.GetMeshes()[0]->m_name, "left");
-    EXPECT_EQ(vm.GetMeshes()[1]->m_name, "right");
+    EXPECT_EQ(vm.GetMeshes()[0]->GetName (), "left");
+    EXPECT_EQ(vm.GetMeshes()[1]->GetName (), "right");
     EXPECT_EQ(vm.GetMeshes()[0]->GetNVertices(), 3u);
     EXPECT_EQ(vm.GetMeshes()[1]->GetNVertices(), 3u);
 }
@@ -1679,7 +1679,7 @@ TEST(TEST_cgmesh_io, 3ds_texmap_keeps_the_first_map_name)
     ASSERT_EQ(vm.GetNMeshes(), 1u);
 
     Mesh* m = vm.GetMeshes()[0];
-    EXPECT_EQ(m->m_name, "Bar_Chair");
+    EXPECT_EQ(m->GetName (), "Bar_Chair");
     EXPECT_EQ(m->GetNVertices(), 9999u);
     EXPECT_EQ(m->GetNFaces(),    18112u);
 

@@ -1869,18 +1869,11 @@ int Mesh::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vE
 	return 0;
 }
 
-void* Mesh::GetMaterial (void)
+const void* Mesh::GetMaterial (void) const
 {
 	if (m_materials.empty())
-	{
-		// add a default material
-		MaterialColorExt *pMaterial;
-		pMaterial = new MaterialColorExt();
-		pMaterial->Init_From_Library (MaterialColorExt::EMERALD);
-		unsigned int id = Material_Add (pMaterial);
-		ApplyMaterial (id);
-	}
-	return GetMaterial (0);
+		return nullptr;
+	return GetMaterial (0u);
 }
 
 //

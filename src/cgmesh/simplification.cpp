@@ -1051,7 +1051,7 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 	Mesh *pNew = new Mesh();
 	pNew->SetVertices((unsigned int)new_nv, new_verts.data());
 	pNew->SetFaces((unsigned int)(new_faces.size() / 3), 3, new_faces.data());
-	pNew->m_name = mesh->m_name;
+	pNew->SetName (mesh->GetName ());
 	// ComputeNormals populates face normals (and geometric vertex normals); the
 	// preserved per-vertex attributes then override what should be kept.
 	pNew->ComputeNormals();

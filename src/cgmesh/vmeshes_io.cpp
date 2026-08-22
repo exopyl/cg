@@ -311,7 +311,7 @@ bool VMeshesIO::import_obj(VMeshes& vm, const char* filename)
 	// 3a. Zero/one object -> keep the flattened mesh (fast path, no remap).
 	if (nObjects <= 1)
 	{
-		if (nObjects == 1) flat->m_name = objNames[0];
+		if (nObjects == 1) flat->SetName (objNames[0]);
 		vm.AddMesh(flat);
 		return true;
 	}
@@ -368,7 +368,7 @@ bool VMeshesIO::import_obj(VMeshes& vm, const char* filename)
 
 		Mesh* sub = new Mesh();
 		sub->Init((unsigned int)vmap.size(), (unsigned int)faces.size());
-		sub->m_name = objNames[obj];
+		sub->SetName (objNames[obj]);
 
 		for (auto& kv : vmap)
 		{
@@ -733,7 +733,7 @@ bool VMeshesIO::import_3ds(VMeshes& vm, const char* filename)
 				pMesh->FaceAt (i)->SetVertex(j, face.vertIndex[j]);
 		}
 
-		pMesh->m_name = std::string(object.strName);
+		pMesh->SetName (std::string(object.strName));
 
 		// Texture coordinates. 3DS stores one UV per vertex (parallel to the
 		// position array), which is exactly the per-vertex layout the VBO /
@@ -1201,7 +1201,7 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
                 }
             }
 
-            pMesh->m_name = gltfMesh.name;
+            pMesh->SetName (gltfMesh.name);
             if (!hasNormals)
                 pMesh->ComputeNormals();
             vm.AddMesh(pMesh);

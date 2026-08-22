@@ -45,7 +45,7 @@ public:
 	// par l'appelant et la fonction libre qui l'exploite.
 	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
 	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
-	virtual void* GetMaterial (void);
+	virtual const void* GetMaterial (void) const;
 
 private:
 	void DeleteFaces (void);
@@ -644,10 +644,13 @@ public:
 	unsigned int CountEdges (void);
 	int Append (Mesh *m);
 
-public:
-	std::string m_name;
+	// Nom du maillage. Init () le remet a "#NoName#".
+	void SetName (const std::string &name) { m_name = name; };
+	const std::string& GetName (void) const { return m_name; };
 
 private:
+	std::string m_name;
+
 	// =====================================================================
 	//  Stockage des faces -- tableaux plats
 	// =====================================================================

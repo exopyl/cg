@@ -52,7 +52,7 @@ int Raytracer::GetColorWithRay (const Vector3f &vOrig, const Vector3f &vDirectio
 		return 0;
 
 	// todo : check what type of material it is
-	MaterialColorExt* pMaterial = (MaterialColorExt*)pObject->GetMaterial ();
+	const MaterialColorExt* pMaterial = (const MaterialColorExt*)pObject->GetMaterial ();
 
 	// Repond au « TODO : fix memory leak » qui se trouvait ici. Le point delicat
 	// est que pMaterial a DEUX provenances : emprunte a l'objet (non possede) ou

@@ -140,7 +140,7 @@ Mesh* meshFromObject (Lib3MF::PMeshObject obj, const Xform& xform, const std::st
 		return nullptr;
 
 	Mesh* pMesh = new Mesh ((unsigned int)verts.size(), (unsigned int)tris.size());
-	pMesh->m_name = name;
+	pMesh->SetName (name);
 
 	// Sommets : layout identique (3 floats), donc copie en bloc puis
 	// transformation en place.

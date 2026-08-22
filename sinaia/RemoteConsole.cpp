@@ -100,7 +100,7 @@ std::string cmdMesh(MyFrame* frame, int n)
     if (!m) return "ERR mesh slot empty\n";
 
     std::ostringstream os;
-    os << "name \"" << m->m_name << "\"\n";
+    os << "name \"" << m->GetName () << "\"\n";
     os << "vertices " << m->GetNVertices() << "\n";
     os << "faces " << m->GetNFaces() << "\n";
     os << "materials " << m->GetNMaterials() << "\n";

@@ -1997,7 +1997,7 @@ void MyFrame::UpdatePropertiesGrid()
         wxTreeItemId root = m_hierarchyMeshes->AddRoot(wxT("Meshes"), 0);
         for (auto& mesh : pObject->GetMeshes())
         {
-            wxTreeItemId currentItem = m_hierarchyMeshes->AppendItem(root, wxString(mesh->m_name), 0);
+            wxTreeItemId currentItem = m_hierarchyMeshes->AppendItem(root, wxString(mesh->GetName ()), 0);
             sprintf(n, "%d vertices\n", mesh->GetNVertices ());
             m_hierarchyMeshes->AppendItem(currentItem, wxString(n), 1);
             sprintf(n, "%d faces\n", mesh->GetNFaces ());
@@ -2037,7 +2037,7 @@ void MyFrame::UpdatePropertiesGrid()
         {
             if (mesh->GetNMaterials() > 0)
             {
-                wxTreeItemId meshItem = m_hierarchyMaterials->AppendItem(root, wxString(mesh->m_name), kMatIconFolder);
+                wxTreeItemId meshItem = m_hierarchyMaterials->AppendItem(root, wxString(mesh->GetName ()), kMatIconFolder);
                 for (unsigned int i = 0; i < mesh->GetNMaterials(); i++)
                 {
                     Material* mat = mesh->GetMaterial(i);

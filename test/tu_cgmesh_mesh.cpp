@@ -831,7 +831,7 @@ TEST (TEST_cgmesh_mesh_copy, the_copy_is_independent_of_the_original)
     a.SetVertices (4, v);
     a.SetFace (0, 0, 1, 2);
     a.SetFace (1, 0, 2, 3);
-    a.m_name = "original";
+    a.SetName ("original");
 
     // Un membre de chaque famille : geometrie, derivations, donnees d'auteur.
     a.SetVertexNormal (0, 1.f, 0.f, 0.f);
@@ -851,7 +851,7 @@ TEST (TEST_cgmesh_mesh_copy, the_copy_is_independent_of_the_original)
     Mesh b (a);
 
     // --- tout est bien arrive
-    EXPECT_EQ (b.m_name, "original");
+    EXPECT_EQ (b.GetName (), "original");
     EXPECT_EQ (b.GetNVertices (), 4u);
     EXPECT_EQ (b.GetNFaces (),    2u);
     EXPECT_EQ (b.FaceAt (1)->GetVertex (2), 3);
@@ -880,7 +880,7 @@ TEST (TEST_cgmesh_mesh_copy, the_copy_is_independent_of_the_original)
     b.SetVertexColor (0, 1.f, 1.f, 1.f);
     b.GetTensor (2)->SetKappaMax (99.f);
     b.GetMaterial (0u)->SetName ("copie");
-    b.m_name = "copie";
+    b.SetName ("copie");
 
     EXPECT_FLOAT_EQ (a.GetVertices ()[0], 0.f);
     EXPECT_EQ (a.FaceAt (1)->GetVertex (2), 3);
@@ -888,7 +888,7 @@ TEST (TEST_cgmesh_mesh_copy, the_copy_is_independent_of_the_original)
     EXPECT_FLOAT_EQ (a.GetVertexColors ()[0], 0.25f);
     EXPECT_FLOAT_EQ (a.GetTensor (2)->GetKappaMax (), 7.f);
     EXPECT_EQ (a.GetMaterial (0u)->GetName (), std::string ());
-    EXPECT_EQ (a.m_name, "original");
+    EXPECT_EQ (a.GetName (), "original");
 
     // --- et reciproquement
     a.SetVertex (1, 5.f, 5.f, 5.f);
@@ -946,4 +946,33 @@ TEST (TEST_cgmesh_mesh_copy, cloning_a_material_keeps_its_name)
     MaterialColor *cc = dynamic_cast<MaterialColor *>(b.GetMaterial (0u));
     ASSERT_NE (cc, nullptr);
     EXPECT_FLOAT_EQ (cc->GetFloatRed (), 7.f / 255.f);
+}
+
+// ============================================================================
+//  GetMaterial () -- l'accesseur sans argument de Geometry
+// ============================================================================
+//
+// Ce test est le filet qui interdit la reapparition d'une creation paresseuse
+// dans cet accesseur : un maillage sans materiau doit sortir de l'appel
+// rigoureusement inchange, revision comprise -- la revision sert de cle aux
+// caches de rendu.
+TEST (TEST_cgmesh_mesh_materials, reading_the_geometry_material_never_mutates)
+{
+    Mesh m;
+    m.Init (3, 1);
+    m.SetFace (0, 0, 1, 2);
+
+    ASSERT_EQ (m.GetNMaterials (), 0u);
+    const uint64_t revision = m.GetRevision ();
+    const int      faceId   = m.FaceAt (0)->GetMaterialId ();
+    ASSERT_EQ (faceId, (int)MATERIAL_NONE);
+
+    // L'appel passe par une reference const : le type interdit desormais toute
+    // mutation depuis ce chemin de lecture.
+    const Mesh &readOnly = m;
+    EXPECT_EQ (readOnly.GetMaterial (), nullptr) << "aucun materiau : aucun a rendre";
+
+    EXPECT_EQ (m.GetNMaterials (), 0u)            << "l'appel n'a rien alloue";
+    EXPECT_EQ (m.GetRevision (), revision)        << "l'appel n'a pas invalide les caches";
+    EXPECT_EQ (m.FaceAt (0)->GetMaterialId (), faceId) << "l'appel n'a pas reetiquete les faces";
 }

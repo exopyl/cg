@@ -42,8 +42,21 @@ public:
 	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) = 0;
 	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) = 0;
 
-	virtual void* GetMaterial (void) = 0;
+	// Accesseur de LECTURE : il rend le materiau existant, ou nullptr. Il n'en
+	// fabrique aucun -- une lecture ne mute pas l'objet.
+	//
+	// ⚠ LE TYPE DE RETOUR EST `const void*` PAR CONTRAINTE DE COUCHE, PAS PAR
+	// NEGLIGENCE : `Material` est declaree dans `cgmesh`, qui depend de `cgmath`.
+	// Typer ce retour ici inverserait le sens de la dependance. Le
+	// transtypage est donc a la charge de l'appelant, qui connait la couche.
+	virtual const void* GetMaterial (void) const = 0;
 
+	// Lecture seule : la boite est une DERIVATION, tenue a jour par la sous-classe
+	// qui en a la charge. Personne d'autre ne la mute.
+	const AABox* GetAABox (void) const { return m_pAABox.get (); }
+
+protected:
+	// Reserve aux sous-classes : elles seules savent quand la boite est perimee.
 	std::unique_ptr<AABox> m_pAABox;
 };
 
@@ -82,7 +95,7 @@ public:
 	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
 	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
 
-	virtual void* GetMaterial (void) { return nullptr; };
+	virtual const void* GetMaterial (void) const { return nullptr; };
 
 private:
 	// equation of a plane : ax + by + cz + d = 0
@@ -299,7 +312,7 @@ public:
 	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
 	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
 
-	virtual void* GetMaterial (void) { return nullptr; };
+	virtual const void* GetMaterial (void) const { return nullptr; };
 
 private:
 	float m_vCenter[3];
@@ -327,7 +340,7 @@ public:
 	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
 	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
 
-	virtual void* GetMaterial (void) { return nullptr; };
+	virtual const void* GetMaterial (void) const { return nullptr; };
 
 public:
 	float R, r;
@@ -370,7 +383,7 @@ public:
 	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
 	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
 
-	virtual void* GetMaterial (void) { return nullptr; };
+	virtual const void* GetMaterial (void) const { return nullptr; };
 
 public:
 	Vector3f m_v[3];
