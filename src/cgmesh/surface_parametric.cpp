@@ -90,9 +90,6 @@ bool ParametricSurface::Generate(void)
 			index++;
 		}
 
-	// The tensors were computed analytically for this exact geometry.
-	MarkTensorsComputed();
-
 	// create faces
 	unsigned int fi = 0;
 	for (unsigned int v = 0; v < nv - 1; v++)
@@ -174,6 +171,11 @@ bool ParametricSurface::Generate(void)
 		AddFace(fi, (nv - 1) * nu + nu - 1, nu - 1, (nv - 1) * nu, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
 		AddFace(fi, (nv - 1) * nu, nu - 1, 0, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
 	}
+
+	// The tensors were computed analytically for this exact geometry. The stamp
+	// is taken LAST: it must hold the revision reached once every write --
+	// vertices AND faces -- is done, otherwise the faces invalidate it.
+	MarkTensorsComputed();
 
 	return true;
 }

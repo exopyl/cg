@@ -165,7 +165,7 @@ void Plane::fitting (Vector3f *array, int n)
 //
 //
 //
-int Plane::GetIntersectionWithRay (const Vector3f &vO, const Vector3f &vD, float *_t, Vector3f &i, Vector3f &n)
+int Plane::GetIntersectionWithRay (const Vector3f &vO, const Vector3f &vD, float *_t, Vector3f &i, Vector3f &n) const
 {
 	float a = normale[0];
 	float b = normale[1];
@@ -188,7 +188,7 @@ int Plane::GetIntersectionWithRay (const Vector3f &vO, const Vector3f &vD, float
 	return 1;
 }
 
-int Plane::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n)
+int Plane::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const
 {
 	Vector3f vDirection;
 	vDirection[0] = vEnd[0] - vStart[0];

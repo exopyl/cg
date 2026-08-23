@@ -61,7 +61,7 @@ int MeshIO::load (Mesh& mesh, const char *filename)
 	return res;
 }
 
-int MeshIO::save (Mesh& mesh, const char *filename)
+int MeshIO::save (const Mesh& mesh, const char *filename)
 {
 	if (!filename)
 		return -1;
@@ -140,7 +140,7 @@ int MeshIO::import_asc (Mesh& mesh, const char *filename)
 	return 0;
 }
 
-int MeshIO::export_asc (Mesh& mesh, const char *filename)
+int MeshIO::export_asc (const Mesh& mesh, const char *filename)
 {
 	FILE *ptr = fopen (filename, "w");
 	printf ("ASC : %d\n", mesh.GetNVertices ());
@@ -219,7 +219,7 @@ int MeshIO::import_pset (Mesh& mesh, const char *filename)
 	return 0;
 }
 
-int MeshIO::export_pset (Mesh& mesh, const char *filename)
+int MeshIO::export_pset (const Mesh& mesh, const char *filename)
 {
 	FILE *ptr = fopen (filename, "w");
 	
@@ -241,7 +241,7 @@ int MeshIO::export_pset (Mesh& mesh, const char *filename)
 //
 // DAE
 //
-int MeshIO::export_dae (Mesh& mesh, const char *filename)
+int MeshIO::export_dae (const Mesh& mesh, const char *filename)
 {
 	FILE *ptr = fopen (filename, "w");
 
@@ -380,7 +380,7 @@ int MeshIO::export_dae (Mesh& mesh, const char *filename)
 //
 // cpp
 //
-int MeshIO::export_cpp (Mesh& mesh, const char *filename)
+int MeshIO::export_cpp (const Mesh& mesh, const char *filename)
 {
 	int i;
   // Cette fonction cumulait quatre defauts, corriges ensemble parce qu'ils
@@ -480,7 +480,7 @@ int MeshIO::export_cpp (Mesh& mesh, const char *filename)
 //
 // GTS
 //
-int MeshIO::export_gts (Mesh& mesh, const char *filename)
+int MeshIO::export_gts (const Mesh& mesh, const char *filename)
 {
   int i;
   FILE *ptr = fopen (filename, "w");
@@ -590,7 +590,7 @@ int MeshIO::import_off (Mesh& mesh, const char *filename)
 /**
 * export into off file
 */
-int MeshIO::export_off (Mesh& mesh, const char *filename)
+int MeshIO::export_off (const Mesh& mesh, const char *filename)
 {
   FILE *ptr;
   int i;
@@ -819,7 +819,7 @@ int MeshIO::import_pts (Mesh& mesh, const char *filename)
   return 0;
 }
 
-int MeshIO::export_pts (Mesh& mesh, const char *filename)
+int MeshIO::export_pts (const Mesh& mesh, const char *filename)
 {
   FILE *ptr = fopen (filename, "w");
   if (!ptr)
@@ -977,7 +977,7 @@ int MeshIO::import_ply (Mesh& mesh, const char *filename)
 	return 0;
 }
 
-int MeshIO::export_ply (Mesh& mesh, const char *filename)
+int MeshIO::export_ply (const Mesh& mesh, const char *filename)
 {
     const char *value;
     p_ply oply = ply_create(filename, PLY_LITTLE_ENDIAN, nullptr, 0, nullptr);
@@ -1147,7 +1147,7 @@ int MeshIO::import_stl (Mesh& mesh, const char *filename)
 //
 // The solid name is derived from the filename stem.
 //
-int MeshIO::export_stl (Mesh& mesh, const char *filename)
+int MeshIO::export_stl (const Mesh& mesh, const char *filename)
 {
 	if (!filename) return -1;
 
@@ -1214,7 +1214,7 @@ int MeshIO::export_stl (Mesh& mesh, const char *filename)
 //
 // Symmetric with Mesh::import_stl which reads binary STL.
 //
-int MeshIO::export_stl_binary (Mesh& mesh, const char *filename)
+int MeshIO::export_stl_binary (const Mesh& mesh, const char *filename)
 {
 	if (!filename) return -1;
 
@@ -1301,5 +1301,5 @@ int MeshIO::export_3ds (Mesh& mesh, const char *filename)
 // working unchanged.
 // ---------------------------------------------------------------------------
 int Mesh::load (const char *filename)              { return MeshIO::load (*this, filename); }
-int Mesh::save (const char *filename)              { return MeshIO::save (*this, filename); }
-int Mesh::export_stl_binary (const char *filename) { return MeshIO::export_stl_binary (*this, filename); }
+int Mesh::save (const char *filename) const              { return MeshIO::save (*this, filename); }
+int Mesh::export_stl_binary (const char *filename) const { return MeshIO::export_stl_binary (*this, filename); }

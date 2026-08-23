@@ -12,18 +12,19 @@
 // c'est a l'appelant de le garantir. La reference est nue, il n'y a aucun
 // comptage.
 //
-// ⚠ ET IL N'Y A AUCUNE DETECTION DE PEREMPTION. Rien ici ne sait qu'un octree ne
-// correspond plus a son maillage, et `Mesh::GetRevision()` ne suffit pas a le
-// decider : cette revision ne couvre pas toutes les ecritures de geometrie.
-// Mesh::FlipFaces et les mutateurs de Mesh::FaceRef (SetVertex, Flip) reecrivent
-// l'indexation et l'orientation des faces sans l'incrementer -- or l'orientation
-// decide du resultat ici, les faces arriere etant eliminees (voir plus bas).
+// ⚠ ET IL N'Y A AUCUNE DETECTION DE PEREMPTION ICI. Rien dans ce fichier ne sait
+// qu'un octree ne correspond plus a son maillage : l'octree partitionne les
+// positions telles qu'elles etaient a sa construction, et un appelant qui garde
+// le sien apres une edition interroge une geometrie perimee. La derive est
+// SILENCIEUSE -- un indice devenu hors bornes est simplement ignore par
+// Mesh::GetVertex, donc l'erreur se lit en intersections fausses ou manquantes,
+// jamais en plantage.
 //
-// Un appelant qui s'y fie interroge donc une geometrie perimee : l'octree
-// partitionne les positions telles qu'elles etaient a sa construction. Et la
-// derive est SILENCIEUSE -- un indice devenu hors bornes est simplement ignore
-// par Mesh::GetVertex, donc l'erreur se lit en intersections fausses ou
-// manquantes, jamais en plantage.
+// `Mesh::GetRevision()` couvre desormais les ecritures qui comptent ici, dont
+// l'orientation des faces (Mesh::FlipFaces, Mesh::FaceRef::Flip) -- les faces
+// arriere etant eliminees, elle decide du resultat. Un detenteur d'octree peut
+// donc s'en servir comme cle pour decider quand reconstruire ; c'est a lui de le
+// faire, rien ne le fait pour lui.
 //
 // ⚠ NE JAMAIS CONSTRUIRE UN OCTREE DANS UNE REQUETE. Le detenteur le batit quand
 // il adopte ou modifie sa geometrie, pas au premier rayon : une construction
@@ -41,9 +42,8 @@ class Octree;
 // profondeur maximale 5, triangulation robuste (Mesh::GetTriangles(), qui passe
 // par glutess pour les faces concaves).
 //
-// `Mesh&` et non `const Mesh&` parce que GetTriangles() n'est pas const. Le
-// maillage n'est pas mute pour autant : ni ecriture, ni increment de revision.
-std::unique_ptr<Octree> BuildRaycastOctree (Mesh &mesh);
+// Le maillage n'est que LU : ni ecriture, ni increment de revision.
+std::unique_ptr<Octree> BuildRaycastOctree (const Mesh &mesh);
 
 // Lancer de rayon accelere. Renvoie 1 en cas d'intersection (la plus proche), 0
 // sinon ; `_t` recoit le parametre le long du rayon, ou -1 sans intersection.

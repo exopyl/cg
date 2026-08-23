@@ -77,7 +77,7 @@ MaterialColor::MaterialColor (unsigned char r, unsigned char g, unsigned char b,
 	m_a = a;
 }
 
-MaterialType MaterialColor::GetType (void)
+MaterialType MaterialColor::GetType (void) const
 {
 	return MATERIAL_COLOR;
 }
@@ -220,7 +220,7 @@ MaterialTexture::~MaterialTexture ()
 	// last MaterialTexture referencing it is destroyed.
 }
 
-MaterialType MaterialTexture::GetType (void)
+MaterialType MaterialTexture::GetType (void) const
 {
 	return MATERIAL_TEXTURE;
 }
@@ -230,7 +230,7 @@ void MaterialTexture::Dump (void)
 	printf ("MATERIAL_TEXTURE : %s\n", m_filename.c_str());
 }
 
-std::string MaterialTexture::GetFilename ()
+std::string MaterialTexture::GetFilename () const
 {
 	return m_filename;
 }

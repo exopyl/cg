@@ -431,7 +431,7 @@ Mesh::~Mesh ()
 	// Tous les membres sont des types valeur : rien a liberer a la main.
 }
 
-void Mesh::Dump ()
+void Mesh::Dump () const
 {
 	printf ("nVertices : %d\n", m_nVertices);
 	printf("pVertices : %p\n", (void*)m_pVertices.data());
@@ -482,7 +482,7 @@ void Mesh::AdoptTensorsFrom(const Mesh& src)
 	MarkTensorsComputed();
 }
 
-std::vector<unsigned int> Mesh::GetTriangles (void)
+std::vector<unsigned int> Mesh::GetTriangles (void) const
 {
 	// Delegue a BuildTriangulation() : eventail pour les faces convexes et les
 	// triangles, glutess pour les concaves, abandon propre des
@@ -584,7 +584,7 @@ GLUtesselator* makeTess()
 
 // True iff the polygon is convex when projected onto its Newell-method
 // normal. N<4 is trivially convex. Newell handles non-planar faces robustly.
-bool faceIsConvex(Mesh::ConstFaceRef face, Mesh& mesh)
+bool faceIsConvex(Mesh::ConstFaceRef face, const Mesh& mesh)
 {
     const unsigned int n = face->GetNVertices();
     if (n < 4) return true;
@@ -633,7 +633,7 @@ bool faceIsConvex(Mesh::ConstFaceRef face, Mesh& mesh)
 // the face's own vertex list. `tess` is a lazily-allocated, reusable
 // tessellator handle (pass &nullptr on first call; caller cleans up).
 template <class Emit>
-void forEachFaceTriangle(Mesh& mesh, unsigned int fi, GLUtesselator*& tess, Emit&& emit)
+void forEachFaceTriangle(const Mesh& mesh, unsigned int fi, GLUtesselator*& tess, Emit&& emit)
 {
     auto face = mesh.FaceAt (fi);
     if (!face) return;
@@ -689,7 +689,7 @@ void forEachFaceTriangle(Mesh& mesh, unsigned int fi, GLUtesselator*& tess, Emit
 
 } // namespace
 
-std::vector<unsigned int> Mesh::BuildTriangulation()
+std::vector<unsigned int> Mesh::BuildTriangulation() const
 {
     std::vector<unsigned int> out;
     out.reserve(3 * GetNFaces ());
@@ -721,7 +721,7 @@ std::vector<unsigned int> Mesh::BuildTriangulation()
 //
 namespace {
 
-void computeNewellNormal(Mesh::ConstFaceRef face, Mesh& mesh, float outN[3])
+void computeNewellNormal(Mesh::ConstFaceRef face, const Mesh& mesh, float outN[3])
 {
     const unsigned int n = face->GetNVertices();
     double nx = 0, ny = 0, nz = 0;
@@ -754,7 +754,7 @@ void computeNewellNormal(Mesh::ConstFaceRef face, Mesh& mesh, float outN[3])
 
 } // namespace
 
-Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat)
+Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat) const
 {
     PolygonRenderData out;
 
@@ -1176,6 +1176,7 @@ int Mesh::SetTextureCoordinate (unsigned int i, float u, float v)
 	if (2*i+1 >= m_texCoords.size()) return -1;
 	m_texCoords[2*i]   = u;
 	m_texCoords[2*i+1] = v;
+	IncrementRevision ();
 	return 0;
 }
 
@@ -1260,7 +1261,7 @@ float Mesh::GetLargestLength(void) const
 //
 // area
 //
-float Mesh::GetFaceArea (unsigned int fi)
+float Mesh::GetFaceArea (unsigned int fi) const
 {
 	unsigned int vi1 = 3*FaceAt (fi)->GetVertex (0);
 	unsigned int vi2 = 3*FaceAt (fi)->GetVertex (1);
@@ -1274,7 +1275,7 @@ float Mesh::GetFaceArea (unsigned int fi)
 	return Vector3f::evaluate_triangle_area (v1, v2, v3);
 }
 
-float Mesh::GetArea (void)
+float Mesh::GetArea (void) const
 {
 	float area = 0.;
 	for (unsigned int i=0; i<GetNFaces (); i++)
@@ -1282,7 +1283,7 @@ float Mesh::GetArea (void)
 	return area;
 }
 
-float* Mesh::GetAreas (void)
+float* Mesh::GetAreas (void) const
 {
 	float *areas = (float*)malloc(GetNFaces ()*sizeof(float));
 	for (unsigned int i=0; i<GetNFaces (); i++)
@@ -1290,7 +1291,7 @@ float* Mesh::GetAreas (void)
 	return areas;
 }
 
-float* Mesh::GetCumulativeAreas (void)
+float* Mesh::GetCumulativeAreas (void) const
 {
 	float *areas = GetAreas ();
 	for (unsigned int i=1; i<GetNFaces (); i++)
@@ -1298,7 +1299,7 @@ float* Mesh::GetCumulativeAreas (void)
 	return areas;
 }
 
-int Mesh::stats_vertices_in_faces (int *verticesinfaces, int n)
+int Mesh::stats_vertices_in_faces (int *verticesinfaces, int n) const
 {	
 	memset (verticesinfaces, 0, n*sizeof(int));
 	for (int i=0; i<GetNFaces (); i++)
@@ -1421,7 +1422,7 @@ void Mesh::ComputeNormals (void)
 	delete[] nfaces;
 }
 
-unsigned int Mesh::CountEdges (void)
+unsigned int Mesh::CountEdges (void) const
 {
 	std::set<std::pair<unsigned int, unsigned int>> edges;
 	for (unsigned int f = 0; f < GetNFaces (); f++)
@@ -1846,7 +1847,7 @@ void Mesh::GetTopologicIssues(std::vector<unsigned int>& nonManifoldEdges, std::
 //
 // from class Geometry
 //
-bool Mesh::GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d)
+bool Mesh::GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d) const
 {
 	float bbox_min[3];
 	float bbox_max[3];
@@ -1857,14 +1858,14 @@ bool Mesh::GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d)
 	return box.intersection (r, 0., 100.);
 }
 
-int Mesh::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirection, float *_t, Vector3f &vIntersection, Vector3f &vNormal)
+int Mesh::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirection, float *_t, Vector3f &vIntersection, Vector3f &vNormal) const
 {
 	// Chemin non accelere, environ 3,4 fois plus lent que le chemin a octree sur
 	// un maillage de 662 triangles. Voir mesh.h pour la raison de son existence.
 	return GetIntersectionWithRayBruteForce (*this, vOrig, vDirection, _t, vIntersection, vNormal);
 }
 
-int Mesh::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n)
+int Mesh::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const
 {
 	return 0;
 }

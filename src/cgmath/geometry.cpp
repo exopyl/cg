@@ -82,7 +82,7 @@ Geometry::Geometry()
 
 //
 //
-bool Geometry::GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d)
+bool Geometry::GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d) const
 {
 	if (m_pAABox)
 	{
@@ -485,7 +485,7 @@ std::vector<Vector2d> Arc::tessellateAdaptive (double maxAngleRad) const
 //
 
 // Refernce : http://wiki.cgsociety.org/index.php/Ray_Sphere_Intersection
-int Sphere::GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n)
+int Sphere::GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const
 {
 	Vector3f vCO;
 	vCO[0] = o[0] - m_vCenter[0];
@@ -550,7 +550,7 @@ int Sphere::GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float 
 	return 1;
 }
 
-int Sphere::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n)
+int Sphere::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const
 {
 	Vector3f vDirection;
 	vDirection[0] = vEnd[0] - vStart[0];
@@ -567,7 +567,7 @@ int Sphere::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &
 //
 // Torus
 //
-int Torus::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirection, float *_t, Vector3f &i, Vector3f &n)
+int Torus::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirection, float *_t, Vector3f &i, Vector3f &n) const
 {
 	float r2 = r*r;
 	float R2 = R*R;
@@ -623,7 +623,7 @@ int Torus::GetIntersectionWithRay (const Vector3f &vOrig, const Vector3f &vDirec
 	return 1;
 }
 
-int Torus::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n)
+int Torus::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const
 {
 	Vector3f vDirection;
 	vDirection = vEnd - vStart;
@@ -636,7 +636,7 @@ int Torus::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &v
 //
 
 // Reference : http://geomalgorithms.com/a06-_intersect-2.html
-int Triangle::GetIntersectionWithRay (const Vector3f &vO, const Vector3f &vD, float *_t, Vector3f &i, Vector3f &n)
+int Triangle::GetIntersectionWithRay (const Vector3f &vO, const Vector3f &vD, float *_t, Vector3f &i, Vector3f &n) const
 {
     Vector3f u, v;        // triangle vectors
     Vector3f w0, w;       // ray vectors
@@ -698,7 +698,7 @@ int Triangle::GetIntersectionWithRay (const Vector3f &vO, const Vector3f &vD, fl
     return 1;                       // I is in T
 }
 
-int Triangle::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n)
+int Triangle::GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const
 {
 	Vector3f vDirection;
 	vDirection = vEnd - vStart;

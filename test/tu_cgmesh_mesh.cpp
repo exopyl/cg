@@ -411,6 +411,100 @@ TEST (TEST_cgmesh_mesh, revision_changes_when_the_geometry_is_triangulated)
 	    << "Triangulate remplace les faces : la revision doit bouger";
 }
 
+// L'orientation des faces decide du resultat d'un lancer de rayon, les faces
+// arriere etant eliminees : la retourner est une ecriture de geometrie.
+TEST (TEST_cgmesh_mesh, revision_changes_when_the_faces_are_flipped)
+{
+	Mesh m;
+	MakeMixedMesh (m);
+	const uint64_t before = m.GetRevision ();
+
+	m.FlipFaces ();
+
+	EXPECT_NE (m.GetRevision (), before)
+	    << "FlipFaces change l'orientation : la revision doit bouger";
+}
+
+// Le meme increment doit couvrir la face SEULE, sans quoi deplacer l'increment au
+// niveau du lot laisserait ce chemin muet.
+TEST (TEST_cgmesh_mesh, revision_changes_when_a_single_face_is_flipped)
+{
+	Mesh m;
+	MakeMixedMesh (m);
+	const uint64_t before = m.GetRevision ();
+
+	m.FaceAt (0)->Flip ();
+
+	EXPECT_NE (m.GetRevision (), before);
+}
+
+TEST (TEST_cgmesh_mesh, revision_changes_when_a_face_corner_is_reindexed)
+{
+	Mesh m;
+	MakeMixedMesh (m);
+	const uint64_t before = m.GetRevision ();
+
+	m.FaceAt (0)->SetVertex (0, 2);
+
+	EXPECT_NE (m.GetRevision (), before);
+}
+
+// Le piege : l'arite ne change pas, donc SetFaceArity sort sans rien faire. Sans
+// increment porte par SetVertex, remplacer un triangle par un autre triangle
+// laisserait la revision immobile.
+TEST (TEST_cgmesh_mesh, revision_changes_when_a_triangle_replaces_a_triangle)
+{
+	Mesh m;
+	MakeMixedMesh (m);
+	ASSERT_EQ (m.GetFaceNVertices (0), 3);
+	const uint64_t before = m.GetRevision ();
+
+	m.SetFace (0, 3, 1, 0);
+
+	ASSERT_EQ (m.GetFaceNVertices (0), 3) << "l'arite n'a PAS change";
+	EXPECT_NE (m.GetRevision (), before);
+}
+
+TEST (TEST_cgmesh_mesh, revision_changes_when_a_face_material_is_stamped)
+{
+	Mesh m;
+	MakeMixedMesh (m);
+	const uint64_t before = m.GetRevision ();
+
+	m.FaceAt (1)->SetMaterialId (3);
+
+	EXPECT_NE (m.GetRevision (), before)
+	    << "le rendu depend du materiau et les caches de rendu s'indexent sur la revision";
+}
+
+TEST (TEST_cgmesh_mesh, revision_changes_when_a_face_uv_is_written)
+{
+	Mesh m;
+	MakeMixedMesh (m);
+	const uint64_t before = m.GetRevision ();
+
+	m.FaceAt (0)->SetTexCoord (0u, 0.25f, 0.5f);
+
+	EXPECT_NE (m.GetRevision (), before);
+}
+
+// La consequence qui motive tout ce qui precede : les tenseurs sont estampilles
+// contre la revision, donc une reorientation doit les perimer.
+TEST (TEST_cgmesh_mesh, flipping_the_faces_makes_the_tensors_stale)
+{
+	Mesh m;
+	MakeMixedMesh (m);
+	m.InitTensors ();
+	m.SetTensor (0, new Tensor ());
+	m.MarkTensorsComputed ();
+	ASSERT_TRUE (m.AreTensorsValid ());
+
+	m.FlipFaces ();
+
+	EXPECT_FALSE (m.AreTensorsValid ())
+	    << "les tenseurs ont ete calcules sur l'orientation precedente";
+}
+
 TEST (TEST_cgmesh_mesh, tensors_are_invalid_on_a_fresh_mesh)
 {
 	Mesh m;

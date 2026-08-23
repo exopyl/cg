@@ -37,10 +37,10 @@ public:
 			return *this;
 		}
 
-	virtual bool GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d);
+	virtual bool GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d) const;
 
-	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) = 0;
-	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) = 0;
+	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const = 0;
+	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const = 0;
 
 	// Accesseur de LECTURE : il rend le materiau existant, ou nullptr. Il n'en
 	// fabrique aucun -- une lecture ne mute pas l'objet.
@@ -92,8 +92,8 @@ public:
 	void fitting (Vector3f *array, int n);
 
 	// intersections
-	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
-	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
+	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const;
+	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const;
 
 	virtual const void* GetMaterial (void) const { return nullptr; };
 
@@ -309,8 +309,8 @@ public:
 	};
 
 	// intersections
-	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
-	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
+	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const;
+	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const;
 
 	virtual const void* GetMaterial (void) const { return nullptr; };
 
@@ -337,8 +337,8 @@ public:
 	~Torus () = default;
 
 	// intersections
-	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
-	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
+	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const;
+	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const;
 
 	virtual const void* GetMaterial (void) const { return nullptr; };
 
@@ -380,8 +380,8 @@ public:
 	}
 
 	// intersections
-	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
-	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
+	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const;
+	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const;
 
 	virtual const void* GetMaterial (void) const { return nullptr; };
 

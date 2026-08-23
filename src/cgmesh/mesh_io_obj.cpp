@@ -50,7 +50,7 @@
 // Deux garde-fous : un nom vide retombe sur l'index (un `newmtl` sans nom serait
 // invalide), et les blancs deviennent des '_' car `usemtl` s'arrete au premier
 // blanc -- « mon materiau » designerait le materiau « mon ».
-static std::string objMaterialName (Material *mat, size_t index)
+static std::string objMaterialName (const Material *mat, size_t index)
 {
 	std::string name = mat ? mat->GetName() : std::string();
 	if (name.empty())
@@ -546,7 +546,7 @@ int MeshIO::import_obj (Mesh& mesh, const char *filename)
 //
 //
 //
-int MeshIO::export_obj (Mesh& mesh, const char *filename, bool emitObjectGroups)
+int MeshIO::export_obj (const Mesh& mesh, const char *filename, bool emitObjectGroups)
 {
 	FILE *fp;
 	unsigned int i;
@@ -699,14 +699,14 @@ int MeshIO::export_obj (Mesh& mesh, const char *filename, bool emitObjectGroups)
 
 		for (unsigned int i = 0; i < mesh.GetNMaterials (); ++i)
 		{
-			Material *pMaterial = mesh.GetMaterial (i);
+			const Material *pMaterial = mesh.GetMaterial (i);
 			if (!pMaterial)
 				continue;
 			switch (pMaterial->GetType ())
 			{
 			case MATERIAL_COLOR:
 			{
-				MaterialColor *pMaterialColor = dynamic_cast<MaterialColor*> (pMaterial);
+				const MaterialColor *pMaterialColor = dynamic_cast<const MaterialColor*> (pMaterial);
 				fprintf (fp, "newmtl %s\n", objMaterialName (pMaterial, i).c_str());
 				fprintf (fp, "Ka 0.200000 0.200000 0.200000\n");
 				fprintf (fp, "Kd %f %f %f\n",
@@ -731,7 +731,7 @@ int MeshIO::export_obj (Mesh& mesh, const char *filename, bool emitObjectGroups)
 			break;
 			case MATERIAL_TEXTURE:
 			{
-				MaterialTexture *pMaterialTexture = dynamic_cast<MaterialTexture*> (pMaterial);
+				const MaterialTexture *pMaterialTexture = dynamic_cast<const MaterialTexture*> (pMaterial);
 				// Meme fonction que le usemtl : un nom vide ou a espaces cassait
 				// aussi cette branche, plus discretement.
 				fprintf (fp, "newmtl %s\n", objMaterialName (pMaterial, i).c_str());
@@ -875,7 +875,7 @@ struct TempDirGuard
 
 } // namespace
 
-std::string MeshIO::export_obj_zip_bytes (Mesh& mesh, const std::string& basename,
+std::string MeshIO::export_obj_zip_bytes (const Mesh& mesh, const std::string& basename,
 					  bool emitObjectGroups)
 {
 	// Un radical vide donnerait des entrees nommees ".obj" : on garde un defaut.
@@ -916,7 +916,7 @@ std::string MeshIO::export_obj_zip_bytes (Mesh& mesh, const std::string& basenam
 	return ZipManager::BuildStored (entries);
 }
 
-int MeshIO::export_obj_zip (Mesh& mesh, const char *filename, bool emitObjectGroups)
+int MeshIO::export_obj_zip (const Mesh& mesh, const char *filename, bool emitObjectGroups)
 {
 	if (!filename)
 		return -1;

@@ -33,18 +33,18 @@ public:
 	Mesh (const Mesh &) = default;
 	Mesh& operator= (const Mesh &) = default;
 
-	void Dump();
+	void Dump() const;
 
 	// from class Geometry
-	bool GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d);
+	bool GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d) const;
 
 	// Chemin NON ACCELERE : tous les triangles testes, sans structure spatiale.
 	// Existe parce que Geometry la declare virtuelle pure -- la retirer rendrait
 	// Mesh abstraite -- et sert les appelants qui ne voient qu'un `Geometry*`.
 	// Pour du lancer de rayon repete, utiliser mesh_raycast.h : un octree detenu
 	// par l'appelant et la fonction libre qui l'exploite.
-	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n);
-	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n);
+	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const;
+	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const;
 	virtual const void* GetMaterial (void) const;
 
 private:
@@ -77,7 +77,23 @@ public:
 	// Remplace le tableau entier. Taille acceptee : 3 * GetNVertices(), ou 0.
 	int SetVertexColors (std::vector<float> colors);
 
-	// Revision
+	// Revision : compteur MONOTONE des ecritures de DONNEES SOURCE. Sert de cle
+	// aux caches indexes sur le maillage (mesh_data_manager.h, cgre) et de tampon
+	// de validite aux tenseurs de courbure.
+	//
+	// INCREMENTE par : positions, topologie et orientation des faces, attributs
+	// PAR FACE (materiau, UV, drapeau d'UV), UV du maillage, points, segments,
+	// materiaux.
+	//
+	// N'INCREMENTE PAS : les DERIVATIONS mises en cache -- normales par sommet et
+	// par face, bbox, tenseurs -- ni les couleurs par sommet, pour la raison dite
+	// plus haut.
+	//
+	// L'increment est porte par le mutateur le plus FIN. Une operation en lot
+	// (FlipFaces, ApplyMaterial) incremente donc une fois par element et n'ajoute
+	// aucun increment de lot : les caches comparent la revision A LA LECTURE, si
+	// bien que N increments ne declenchent pas N recalculs, et un mutateur
+	// unitaire appele seul reste couvert.
 	uint64_t GetRevision() const;
 	void IncrementRevision();
 
@@ -100,7 +116,7 @@ public:
 	void AdoptTensorsFrom(const Mesh& src);
 
 	// Getters / Setters
-	std::vector<unsigned int> GetTriangles (void);
+	std::vector<unsigned int> GetTriangles (void) const;
 
 	// Triangulation utility: returns a flat triangle-index list covering
 	// every face. Triangles emit as-is; quads fan-triangulate from vertex
@@ -109,7 +125,7 @@ public:
 	// for any code that needs raw triangle topology; the rendering path
 	// uses BuildPolygonRenderData() instead, which preserves polygon
 	// identity (one normal per polygon).
-	std::vector<unsigned int> BuildTriangulation();
+	std::vector<unsigned int> BuildTriangulation() const;
 
 	// Hybrid render data layout:
 	//   - Triangle faces (N==3) index directly into the shared topology
@@ -146,7 +162,7 @@ public:
 	// normals. flat=true: every face (triangles included) is expanded into its
 	// own non-shared corners carrying the face normal, so each triangle is
 	// uniformly shaded (true flat shading, independent of vertex welding).
-	PolygonRenderData BuildPolygonRenderData(bool flat = false);
+	PolygonRenderData BuildPolygonRenderData(bool flat = false) const;
 
 	// Replace every N-gon face (N>=4) with (N-2) triangle Face objects
 	// (fan for convex, glutess for concave). Triangles are kept as-is.
@@ -274,9 +290,12 @@ public:
 			{
 				if (!IsValid () || i >= m_mesh->FaceArity (m_index)) return -1;
 				M ()->m_faceVertices[m_mesh->FaceBegin (m_index) + i] = vi;
+				M ()->IncrementRevision ();
 				return 1;
 			}
 
+		// SetNVertices et SetVertex portent chacun leur increment : ces deux
+		// raccourcis n'en ajoutent pas.
 		void SetTriangle (unsigned int a, unsigned int b, unsigned int c) const
 			{
 				SetNVertices (3);
@@ -288,22 +307,44 @@ public:
 				SetVertex (0, a); SetVertex (1, b); SetVertex (2, c); SetVertex (3, d);
 			}
 
+		// L'orientation decide du resultat d'un lancer de rayon (faces arriere
+		// eliminees) et du sens des normales : c'est de la geometrie, donc la
+		// revision bouge. Une face de moins de deux coins n'a rien a retourner.
 		void Flip (void) const
 			{
 				if (!IsValid ()) return;
 				const unsigned int n = m_mesh->FaceArity (m_index);
+				if (n < 2) return;
 				const unsigned int b = m_mesh->FaceBegin (m_index);
 				Mesh *m = M ();
 				for (unsigned int i = 0; i < n/2; i++)
 					std::swap (m->m_faceVertices[b+i], m->m_faceVertices[b+n-1-i]);
+				m->IncrementRevision ();
 			}
 
 		// Alloues a la demande, dimensionnes sur le pool entier : activer pour une
 		// face active pour tout le maillage.
+		//
+		// L'activation change ce que le maillage EXPOSE -- HasCornerTexCoords ()
+		// bascule, et BuildPolygonRenderData emet des UV la ou il n'en emettait
+		// pas -- donc la revision bouge. Les helpers Ensure* restent de purs
+		// allocateurs : la politique est ici, sur les entrees publiques.
 		int ActivateTextureCoordinatesIndices (void) const
-			{ if (!IsValid ()) return -1; M ()->EnsureTexIndices (); return 1; }
+			{
+				if (!IsValid ()) return -1;
+				Mesh *m = M ();
+				m->EnsureTexIndices ();
+				m->IncrementRevision ();
+				return 1;
+			}
 		int ActivateTextureCoordinates (void) const
-			{ if (!IsValid ()) return -1; M ()->EnsureTexCoords (); return 1; }
+			{
+				if (!IsValid ()) return -1;
+				Mesh *m = M ();
+				m->EnsureTexCoords ();
+				m->IncrementRevision ();
+				return 1;
+			}
 
 		bool InitTexCoord (void) const
 			{
@@ -314,6 +355,7 @@ public:
 				const unsigned int b = m_mesh->FaceBegin (m_index);
 				for (unsigned int i = 0; i < n; i++)
 					m->m_faceTexIndices[b+i] = m->m_faceVertices[b+i];
+				m->IncrementRevision ();
 				return true;
 			}
 
@@ -323,6 +365,7 @@ public:
 				Mesh *m = M ();
 				m->EnsureTexIndices ();
 				m->m_faceTexIndices[m_mesh->FaceBegin (m_index) + i] = ti;
+				m->IncrementRevision ();
 				return 1;
 			}
 		int SetTexCoord (unsigned int i, float u, float v) const
@@ -333,6 +376,7 @@ public:
 				const unsigned int k = 2 * (m_mesh->FaceBegin (m_index) + i);
 				m->m_faceTexCoords[k]   = u;
 				m->m_faceTexCoords[k+1] = v;
+				m->IncrementRevision ();
 				return 1;
 			}
 
@@ -344,12 +388,18 @@ public:
 				Mesh *m = M ();
 				m->EnsureHasTexFlags ();
 				m->m_faceHasTex[m_index] = b ? 1 : 0;
+				m->IncrementRevision ();
 			}
 
+		// Le materiau n'est pas de la geometrie, mais le RENDU en depend et les
+		// caches de rendu s'indexent sur la revision -- meme regle que
+		// Mesh::SetMaterial et Mesh::Material_Add.
 		void SetMaterialId (unsigned int mi) const
 			{
 				if (!IsValid ()) return;
-				M ()->m_faceMaterial[m_index] = mi;
+				Mesh *m = M ();
+				m->m_faceMaterial[m_index] = mi;
+				m->IncrementRevision ();
 			}
 
 	private:
@@ -366,9 +416,9 @@ public:
 		{ return FaceExists (fi) ? ConstFaceRef (this, fi) : ConstFaceRef (); }
 
 	inline int GetFaceNVertices (unsigned int fi) const { return FaceAt (fi)->GetNVertices (); };
-	inline int GetFaceMaterialId (unsigned int fi) { return FaceAt (fi)->GetMaterialId (); };
+	inline int GetFaceMaterialId (unsigned int fi) const { return FaceAt (fi)->GetMaterialId (); };
 	inline void SetFaceMaterialId (unsigned int fi, unsigned int mi) { FaceAt (fi)->SetMaterialId (mi); };
-	void GetFaceBarycenter (unsigned int fi, Vector3f &bar)
+	void GetFaceBarycenter (unsigned int fi, Vector3f &bar) const
 		{
 			auto f = FaceAt (fi);
 			if (f->GetNVertices () == 3)
@@ -453,6 +503,10 @@ public:
 //	bool ColorizeVerticesDensity_Traverse (Octree &o, void *data);
 	int ColorizeVerticesDensity (float k);
 
+	// La revision bouge une fois PAR FACE, Flip () la portant : pas d'increment de
+	// lot ici. Un increment supplementaire serait redondant, et un increment
+	// deplace au niveau du lot laisserait FaceAt (i)->Flip () muet quand il est
+	// appele seul.
 	void FlipFaces (void)
 		{
 			for (unsigned int i=0; i<GetNFaces (); i++)
@@ -488,8 +542,8 @@ public:
 	// (mesh_io.h). The public entry points below are thin delegators.
 public:
 	int load (const char *filename);
-	int save (const char *filename);
-	int export_stl_binary (const char *filename);   // Binary STL (caller chooses format)
+	int save (const char *filename) const;
+	int export_stl_binary (const char *filename) const;   // Binary STL (caller chooses format)
 
 	// bbox
 	//
@@ -504,10 +558,10 @@ public:
 	float GetLargestLength(void) const;
 
 	// area
-	float GetFaceArea (unsigned int fi);
-	float GetArea (void);
-	float* GetAreas (void);
-	float* GetCumulativeAreas (void);
+	float GetFaceArea (unsigned int fi) const;
+	float GetArea (void) const;
+	float* GetAreas (void) const;
+	float* GetCumulativeAreas (void) const;
 
 	//
 	// normals
@@ -528,7 +582,7 @@ public:
 	//
 	// stats
 	//
-	int stats_vertices_in_faces (int *verticesinfaces, int n);
+	int stats_vertices_in_faces (int *verticesinfaces, int n) const;
 
 	unsigned int GetNVertices() const;
 	// Positions : 3 flottants par sommet. Vue en LECTURE ; l'ecriture passe par
@@ -596,7 +650,7 @@ public:
 				return m_materials[id].get();
 			return nullptr;
 		}
-	int GetMaterialId (const std::string & material_name)
+	int GetMaterialId (const std::string & material_name) const
 		{
 			for (size_t i = 0; i < m_materials.size(); ++i)
 				if (m_materials[i] && m_materials[i]->GetName() == material_name)
@@ -622,6 +676,8 @@ public:
 		return (unsigned int)m_materials.size() - 1;
 	};
 
+	// Comme FlipFaces : la revision bouge une fois par face, SetMaterialId la
+	// portant.
 	void ApplyMaterial (unsigned int id)
 	{
 		if (id >= m_materials.size())
@@ -641,7 +697,7 @@ public:
 	void transform (const Matrix3f &m);
 
 	//
-	unsigned int CountEdges (void);
+	unsigned int CountEdges (void) const;
 	int Append (Mesh *m);
 
 	// Nom du maillage. Init () le remet a "#NoName#".

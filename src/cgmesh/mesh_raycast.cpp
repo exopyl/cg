@@ -96,7 +96,7 @@ int RaycastNode (const Mesh &mesh, const Octree &node,
 
 } // namespace
 
-std::unique_ptr<Octree> BuildRaycastOctree (Mesh &mesh)
+std::unique_ptr<Octree> BuildRaycastOctree (const Mesh &mesh)
 {
 	auto pOctree = std::make_unique<Octree> ();
 

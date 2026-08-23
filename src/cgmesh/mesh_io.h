@@ -17,8 +17,8 @@ class MeshIO
 {
 public:
 	static int load (Mesh& mesh, const char *filename);
-	static int save (Mesh& mesh, const char *filename);
-	static int export_stl_binary (Mesh& mesh, const char *filename);   // Binary STL (caller chooses format)
+	static int save (const Mesh& mesh, const char *filename);
+	static int export_stl_binary (const Mesh& mesh, const char *filename);   // Binary STL (caller chooses format)
 
 	// Wavefront OBJ : points d'entree PUBLICS, contrairement aux autres formats.
 	//
@@ -37,7 +37,7 @@ public:
 	// garantit pas le decoupage. Defaut false : aucun appelant existant ne voit son
 	// fichier changer.
 	static int import_obj (Mesh& mesh, const char *filename);
-	static int export_obj (Mesh& mesh, const char *filename,
+	static int export_obj (const Mesh& mesh, const char *filename,
 			       bool emitObjectGroups = false);
 
 	// Le meme export, mais les DEUX fichiers dans UNE archive ZIP : un OBJ ne peut
@@ -49,36 +49,36 @@ public:
 	// contient `foo.obj` et `foo.mtl`, et la ligne `mtllib foo.mtl` resout donc
 	// telle quelle apres extraction. Pas de .mtl dans l'archive si le maillage ne
 	// porte aucun materiau.
-	static int export_obj_zip (Mesh& mesh, const char *filename,
+	static int export_obj_zip (const Mesh& mesh, const char *filename,
 				   bool emitObjectGroups = false);
 
 	// Variante en MEMOIRE : renvoie les octets de l'archive, chaine vide en cas
 	// d'echec. `basename` (sans extension) nomme les entrees internes. Utile la ou
 	// il n'y a pas de fichier de destination -- typiquement le pont WebAssembly,
 	// qui rend les octets au navigateur.
-	static std::string export_obj_zip_bytes (Mesh& mesh, const std::string& basename,
+	static std::string export_obj_zip_bytes (const Mesh& mesh, const std::string& basename,
 						 bool emitObjectGroups = false);
 
 private:
 	static int import_mtl (Mesh& mesh, const char *filename, const char *path);
 	static int export_3ds (Mesh& mesh, const char *filename);
 	static int import_asc (Mesh& mesh, const char *filename);
-	static int export_asc (Mesh& mesh, const char *filename);
+	static int export_asc (const Mesh& mesh, const char *filename);
 	static int import_pset (Mesh& mesh, const char *filename);
-	static int export_pset (Mesh& mesh, const char *filename);
-	static int export_dae (Mesh& mesh, const char *filename);
-	static int export_cpp (Mesh& mesh, const char *filename);
-	static int export_gts (Mesh& mesh, const char *filename);
+	static int export_pset (const Mesh& mesh, const char *filename);
+	static int export_dae (const Mesh& mesh, const char *filename);
+	static int export_cpp (const Mesh& mesh, const char *filename);
+	static int export_gts (const Mesh& mesh, const char *filename);
 	static int import_off (Mesh& mesh, const char *filename);
-	static int export_off (Mesh& mesh, const char *filename);
+	static int export_off (const Mesh& mesh, const char *filename);
 	static int import_pgm (Mesh& mesh, const char *filename);
 	static int import_pts (Mesh& mesh, const char *filename);
-	static int export_pts (Mesh& mesh, const char *filename);
+	static int export_pts (const Mesh& mesh, const char *filename);
 	static int import_ply (Mesh& mesh, const char *filename);
-	static int export_ply (Mesh& mesh, const char *filename);
+	static int export_ply (const Mesh& mesh, const char *filename);
 	static int import_stl (Mesh& mesh, const char *filename);          // auto-detects binary vs ASCII
 	static int import_stl_ascii (Mesh& mesh, const char *filename);
-	static int export_stl (Mesh& mesh, const char *filename);          // ASCII STL (called by save() for .stl)
+	static int export_stl (const Mesh& mesh, const char *filename);          // ASCII STL (called by save() for .stl)
 	static int import_u3d (Mesh& mesh, const char *filename);
 	static int export_u3d (Mesh& mesh, const char *filename);
 };

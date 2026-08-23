@@ -2,15 +2,17 @@
 
 void Mesh::triangulate_regular_heightfield (unsigned int width, unsigned int height)
 {
-	DeleteFaces ();
-	
+	// Precondition verifiee AVANT toute destruction : un echec laisse le maillage
+	// intact, donc a revision inchangee.
 	if (width * height > m_nVertices)
 	{
 		printf ("Not enough vertices to triangulate\n");
 		return;
 	}
 
+	DeleteFaces ();
 	InitFaces ((width-1)*(height-1));
+	IncrementRevision ();
 
 	for (unsigned int j=0; j<height-1; j++)
 		for (unsigned int i=0; i<width-1; i++)

@@ -65,11 +65,11 @@ public:
 	virtual std::unique_ptr<Material> clone (void) const
 		{ return std::make_unique<Material> (*this); }
 
-	virtual MaterialType GetType (void) { return MATERIAL_NONE; };
+	virtual MaterialType GetType (void) const { return MATERIAL_NONE; };
 	virtual void Dump (void) {};
 	
 	void SetName (const std::string & name) { m_name = name; };
-	std::string GetName (void) { return m_name; };
+	std::string GetName (void) const { return m_name; };
 
 protected:
 	std::string m_name;
@@ -98,7 +98,7 @@ public:
 	//virtual ~MaterialColor () {};
 	std::unique_ptr<Material> clone (void) const override
 		{ return std::make_unique<MaterialColor> (*this); }
-	MaterialType GetType (void);
+	MaterialType GetType (void) const;
 
 	float GetFloatRed() const { return m_r / 255.f; };
 	float GetFloatGreen() const { return m_g / 255.f; };
@@ -200,7 +200,7 @@ public:
 	};
 	void Init_From_Library (MaterialColorExtType eType);
 
-	inline MaterialType GetType () { return MATERIAL_COLOR_ADV; };
+	inline MaterialType GetType () const { return MATERIAL_COLOR_ADV; };
 	void Dump () {
 		printf ("MATERIAL_COLOR_ADV :\n");
 		printf ("   ambient : %f %f %f %f\n", m_fAmbient[0], m_fAmbient[1], m_fAmbient[2], m_fAmbient[3]);
@@ -232,9 +232,9 @@ public:
 
 	std::unique_ptr<Material> clone (void) const override
 		{ return std::make_unique<MaterialTexture> (*this); }
-	MaterialType GetType (void);
+	MaterialType GetType (void) const;
 	void Dump (void);
-	std::string GetFilename ();
+	std::string GetFilename () const;
 	Img* GetImage ();
 
 	// Carte de REFLEXION, facultative, en plus de la texture diffuse.
