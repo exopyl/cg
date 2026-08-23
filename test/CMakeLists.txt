@@ -20,20 +20,28 @@ add_executable(${PROJECT_NAME} ${HEADER_FILES} ${SRC_FILES})
 # "img_quant_wu.ppm", ... : 52 noms, plus ~155 SVG produits par les L-systemes) et
 # lisent leurs entrees via "./test/data/..." (63 sites). Entrees et sorties
 # partagent donc le meme repertoire courant, et aucun code de test ne le choisit :
-# il est herite du lanceur. D'ou deux symptomes :
+# il est herite du lanceur. D'ou un repertoire DEDIE, sous lequel test/data est
+# copie et dans lequel les sorties sont confinees -- sans lui elles se deversent
+# dans le repertoire courant du lanceur, soit la racine du depot quand TU est
+# lance a la main ou par coverage.sh. Il est sous build*/, donc ignore par git.
 #
-#   - lance a la main ou par coverage.sh depuis la racine, TU deverse ses 200+
-#     fichiers de sortie DANS la racine du depot ;
-#   - ctest, lui, tournait dans CMAKE_CURRENT_BINARY_DIR (build/<preset>/test)
-#     alors que test/data etait copie dans $<TARGET_FILE_DIR> -- soit un niveau
-#     PLUS BAS en multi-config (build/<preset>/test/Debug). Les tests lisant
-#     test/data echouaient donc sous ctest sur Windows.
+# Ce repertoire est impose A LA FOIS a ctest et au debogueur : les deux voies
+# d'execution doivent viser le meme endroit, faute de quoi les tests lisant
+# test/data passent dans l'une et echouent dans l'autre.
 #
-# Correctif : un sous-repertoire DEDIE, impose a ctest comme au debogueur, sous
-# lequel test/data est copie. Les sorties y sont confinees (et sous build*/, donc
-# ignore par git) ; le chargement des DLL n'est pas affecte, Windows les cherchant
-# dans le dossier de l'exe et non dans le repertoire courant.
-set(TU_RUN_DIR "$<TARGET_FILE_DIR:${PROJECT_NAME}>/test-run")
+# Il est INDEPENDANT DE LA CONFIGURATION, donc exempt d'expression de generateur :
+# Visual Studio en mode "Ouvrir un dossier" lit VS_DEBUGGER_WORKING_DIRECTORY via
+# le CMake File API, qui expose la valeur brute sans l'evaluer. Une expression de
+# generateur y arriverait litteralement et le debogage echouerait sur un
+# repertoire de travail invalide.
+#
+# Consequence : Debug et Release partagent ce repertoire. La copie de test/data y
+# est idempotente ; en revanche les sorties de test portent les memes noms d'une
+# configuration a l'autre, donc ne pas executer les deux suites simultanement.
+#
+# Le chargement des DLL n'est pas concerne : Windows cherche les DLL dans le
+# dossier de l'exe -- lui par configuration -- et non dans le repertoire courant.
+set(TU_RUN_DIR "${CMAKE_CURRENT_BINARY_DIR}/test-run")
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${TU_RUN_DIR}"
@@ -138,9 +146,16 @@ elseif (NOT WIN32)
 endif (WIN32 AND EXTERN_GOOGLETEST)
 
 # WORKING_DIRECTORY explicite : sans lui, ctest utilise CMAKE_CURRENT_BINARY_DIR,
-# qui n'est pas la ou test/data est copie en multi-config (cf. TU_RUN_DIR ci-dessus).
+# le parent de TU_RUN_DIR, ou test/data n'est pas copie (cf. TU_RUN_DIR ci-dessus).
+#
+# DISCOVERY_TIMEOUT : la decouverte lance TU.exe juste apres que les commandes
+# POST_BUILD ci-dessus ont depose ~50 DLL (OCCT, OpenNURBS, lib3mf) a cote de
+# l'executable. A froid, leur chargement depasse les 5 s du defaut et la
+# decouverte echoue sur un timeout, sans sortie. A chaud le listage prend ~2 s :
+# la marge du defaut est trop mince, celle-ci ne coute rien quand tout va bien.
 gtest_discover_tests(${PROJECT_NAME}
     WORKING_DIRECTORY "${TU_RUN_DIR}"
+    DISCOVERY_TIMEOUT 60
 )
 
 target_link_libraries(${PROJECT_NAME} cgmath cgimg cgmesh)

@@ -19,6 +19,30 @@
       "project": "CMakeLists.txt",
       "projectTarget": "sinaia.exe (sinaia\\sinaia.exe)",
       "name": "sinaia.exe (sinaia\\sinaia.exe) - Release"
+    },
+    {
+      "type": "default",
+      "project": "CMakeLists.txt",
+      "projectTarget": "vecna.exe (vecna\\vecna.exe)",
+      "name": "vecna.exe (vecna\\vecna.exe) - Debug"
+    },
+    {
+      "type": "default",
+      "project": "CMakeLists.txt",
+      "projectTarget": "vecna.exe (vecna\\vecna.exe)",
+      "name": "vecna.exe (vecna\\vecna.exe) - Release"
+    },
+    {
+      "type": "default",
+      "project": "CMakeLists.txt",
+      "projectTarget": "TU.exe (test\\Release\\TU.exe)",
+      "name": "TU.exe (test\\Release\\TU.exe)"
+    },
+    {
+      "type": "default",
+      "project": "CMakeLists.txt",
+      "projectTarget": "sinaia.exe (sinaia\\Release\\sinaia.exe)",
+      "name": "sinaia.exe (sinaia\\Release\\sinaia.exe)"
     }
   ]
 }

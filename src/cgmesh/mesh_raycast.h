@@ -13,11 +13,17 @@
 // comptage.
 //
 // ⚠ ET IL N'Y A AUCUNE DETECTION DE PEREMPTION. Rien ici ne sait qu'un octree ne
-// correspond plus a son maillage. `Mesh::GetRevision()` ne suffit pas a le
-// decider : il est incremente en 24 endroits pour 65 fichiers qui ecrivent
-// directement dans la geometrie. Un appelant qui s'y fie peut donc interroger une
-// geometrie perimee -- et si le maillage a REALLOUE ses positions entre-temps,
-// l'octree pointe dans le vide.
+// correspond plus a son maillage, et `Mesh::GetRevision()` ne suffit pas a le
+// decider : cette revision ne couvre pas toutes les ecritures de geometrie.
+// Mesh::FlipFaces et les mutateurs de Mesh::FaceRef (SetVertex, Flip) reecrivent
+// l'indexation et l'orientation des faces sans l'incrementer -- or l'orientation
+// decide du resultat ici, les faces arriere etant eliminees (voir plus bas).
+//
+// Un appelant qui s'y fie interroge donc une geometrie perimee : l'octree
+// partitionne les positions telles qu'elles etaient a sa construction. Et la
+// derive est SILENCIEUSE -- un indice devenu hors bornes est simplement ignore
+// par Mesh::GetVertex, donc l'erreur se lit en intersections fausses ou
+// manquantes, jamais en plantage.
 //
 // ⚠ NE JAMAIS CONSTRUIRE UN OCTREE DANS UNE REQUETE. Le detenteur le batit quand
 // il adopte ou modifie sa geometrie, pas au premier rayon : une construction
