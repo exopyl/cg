@@ -43,6 +43,15 @@
       "project": "CMakeLists.txt",
       "projectTarget": "sinaia.exe (sinaia\\Release\\sinaia.exe)",
       "name": "sinaia.exe (sinaia\\Release\\sinaia.exe)"
+    },
+    {
+      "type": "default",
+      "project": "CMakeLists.txt",
+      "projectTarget": "cggraph-boilerplate.exe (cggraph-boilerplate\\Release\\cggraph-boilerplate.exe)",
+      "name": "cggraph-boilerplate.exe -- fit_document.json",
+      "args": [
+        "${workspaceRoot}\\maker\\probes\\data\\fit_document.json"
+      ]
     }
   ]
 }

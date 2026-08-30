@@ -4,15 +4,21 @@
 
 #include "../src/cgmesh/cgmesh.h"
 
-static Mesh_half_edge* load_mesh()
+// ASSERT_* n'est utilisable que dans un helper a retour void : le maillage
+// ressort donc par parametre. Sans cette verification, un rabbit.obj absent
+// laisse un maillage vide dont les descripteurs de forme ne terminent pas.
+static void load_mesh(Mesh_half_edge** out)
 {
+	*out = nullptr;
+
 	std::string filename("./test/data/rabbit.obj");
 
 	Mesh_half_edge* he = new Mesh_half_edge();
-	he->m_pMesh->load(filename.c_str());
+	ASSERT_EQ(he->m_pMesh->load(filename.c_str()), 0)
+		<< filename << " introuvable ou illisible";
 	he->create_half_edge();
 
-	return he;
+	*out = he;
 }
 
 TEST(TEST_cgmesh_he, constructor)
@@ -22,7 +28,8 @@ TEST(TEST_cgmesh_he, constructor)
 
 	std::string filename("./test/data/rabbit.obj");
 	Mesh *mesh = new Mesh ();
-	mesh->load (filename.c_str());
+	ASSERT_EQ(mesh->load (filename.c_str()), 0)
+		<< filename << " introuvable ou illisible";
 	dElapsedTime = ticker->stop ();
 	cout << mesh->GetNVertices () << " vertices" << endl;
 	cout << mesh->GetNFaces () << " faces" << endl;
@@ -45,7 +52,8 @@ TEST(TEST_cgmesh_he, constructor)
 
 TEST(TEST_cgmesh_he, smoothing)
 {
-	Mesh_half_edge* he = load_mesh();
+	Mesh_half_edge* he = nullptr;
+	ASSERT_NO_FATAL_FAILURE(load_mesh(&he));
 
 	// Laplacian
 	MeshAlgoSmoothingLaplacian *pSmoothingLaplacian = new MeshAlgoSmoothingLaplacian ();
@@ -78,7 +86,8 @@ TEST(TEST_cgmesh_he, smoothing)
 
 TEST(TEST_cgmesh_he, subdivision)
 {
-	Mesh_half_edge* he = load_mesh();
+	Mesh_half_edge* he = nullptr;
+	ASSERT_NO_FATAL_FAILURE(load_mesh(&he));
 
 	// Loop
 	MeshAlgoSubdivisionLoop *pSsubdivisionLoop = new MeshAlgoSubdivisionLoop ();
@@ -107,7 +116,8 @@ TEST(TEST_cgmesh_he, subdivision)
 //
 TEST(TEST_cgmesh_he, normals)
 {
-	Mesh_half_edge* he = load_mesh();
+	Mesh_half_edge* he = nullptr;
+	ASSERT_NO_FATAL_FAILURE(load_mesh(&he));
 
 	Ticker *ticker = new Ticker ();
 	double dElapsedTime = 0;
@@ -132,7 +142,8 @@ TEST(TEST_cgmesh_he, normals)
 // histogrammes.
 static void diff_common(TensorMethodId tensorMethodId, const char* prefix)
 {
-	Mesh_half_edge* he = load_mesh();
+	Mesh_half_edge* he = nullptr;
+	ASSERT_NO_FATAL_FAILURE(load_mesh(&he));
 
 	Normals* normalsEvaluator = new Normals();
 	normalsEvaluator->EvalOnVertices(he, Normals::THURMER);
@@ -220,7 +231,8 @@ TEST(TEST_cgmesh_he, diff_goldfeather)
 
 TEST(TEST_cgmesh_he, clipper)
 {
-	Mesh_half_edge* he = load_mesh();
+	Mesh_half_edge* he = nullptr;
+	ASSERT_NO_FATAL_FAILURE(load_mesh(&he));
 	Cmodel3d_half_edge_clipper *clipper = new Cmodel3d_half_edge_clipper (he);
 
 	clipper->set_plane(Vector3d(0., 0., .3), Vector3d(0., 0., 1.));
@@ -525,7 +537,8 @@ static void evaluate_differential_parameters_distribution (Mesh_half_edge *he)
 
 TEST(TEST_cgmesh_he, features)
 {
-	Mesh_half_edge* he = load_mesh();
+	Mesh_half_edge* he = nullptr;
+	ASSERT_NO_FATAL_FAILURE(load_mesh(&he));
 
 	// shape distributions by Osada
 	evaluate_shape_distribution_osada (he, 100000, 64);
@@ -590,4 +603,170 @@ TEST (TEST_cgmesh_he, wrapping_a_mesh_keeps_everything_it_owns)
 	ASSERT_NE (che, nullptr);
 	EXPECT_EQ (che->m_edges_face.size (), 3u) << "2 triangles issus du quad + 1 triangle";
 	EXPECT_EQ (che->m_ne, 9) << "3 aretes par triangle";
+}
+
+// ---------------------------------------------------------------------------
+//  Empreinte de Che_edge
+// ---------------------------------------------------------------------------
+// Che_edge est instancie 3 fois par triangle : sur 2 M de triangles, chaque
+// octet du type coute 5,7 Mio. Le filet epingle la disposition COMPLETE --
+// taille, alignement et decalage de chaque membre -- contre un temoin qui
+// declare exactement les membres attendus, dans l'ordre attendu.
+//
+// ⚠ Portee EXACTE de ce filet, MESUREE par sabotage (trois variantes compilees
+// et executees) : reintroduire `int m_flag` avant m_data le fait ceder (40
+// contre 32 sur x64). Reintroduire `bool m_visited` ou un `char` ne le fait PAS
+// ceder -- il reste 3 octets de bourrage entre m_valid et m_data, sur x64
+// comme sur wasm32, et jusqu'a trois membres d'un octet s'y logeraient sans
+// couter un octet ni bouger un decalage. Ce filet garde donc l'empreinte, pas
+// la liste des membres : un membre GRATUIT lui echappe par construction.
+namespace {
+struct Che_edge_membres_attendus
+{
+	int m_v_begin;
+	int m_v_end;
+	int m_pair;
+	int m_face;
+	int m_he_next;
+	char m_valid;
+	void *m_data;
+};
+} // namespace
+
+TEST (TEST_cgmesh_he, che_edge_ne_porte_que_les_membres_lus)
+{
+	EXPECT_EQ (sizeof (Che_edge), sizeof (Che_edge_membres_attendus))
+		<< "un membre a ete ajoute ou retire de Che_edge ; il se paie 3 fois par triangle";
+	EXPECT_EQ (alignof (Che_edge), alignof (Che_edge_membres_attendus));
+
+	EXPECT_EQ (offsetof (Che_edge, m_v_begin), offsetof (Che_edge_membres_attendus, m_v_begin));
+	EXPECT_EQ (offsetof (Che_edge, m_v_end),   offsetof (Che_edge_membres_attendus, m_v_end));
+	EXPECT_EQ (offsetof (Che_edge, m_pair),    offsetof (Che_edge_membres_attendus, m_pair));
+	EXPECT_EQ (offsetof (Che_edge, m_face),    offsetof (Che_edge_membres_attendus, m_face));
+	EXPECT_EQ (offsetof (Che_edge, m_he_next), offsetof (Che_edge_membres_attendus, m_he_next));
+	EXPECT_EQ (offsetof (Che_edge, m_valid),   offsetof (Che_edge_membres_attendus, m_valid));
+	EXPECT_EQ (offsetof (Che_edge, m_data),    offsetof (Che_edge_membres_attendus, m_data));
+}
+
+TEST (TEST_cgmesh_he, che_edge_tient_dans_le_bourrage_du_pointeur)
+{
+	// Temoin de la valeur REELLE, pas seulement de l'egalite au temoin : le cas
+	// precedent serait satisfait par deux declarations fausses de la meme facon,
+	// puisque le temoin est ecrit a la main. Ici la disposition est RECALCULEE
+	// depuis les tailles des types : 5 entiers, un octet loge dans le trou
+	// d'alignement du pointeur, puis le pointeur, et aucun bourrage de fin.
+	// 28 octets sur wasm32, 32 sur x64.
+	constexpr std::size_t alignement = alignof (void *);
+	constexpr std::size_t avant_le_pointeur = 5 * sizeof (int) + sizeof (char);
+	constexpr std::size_t decalage_du_pointeur =
+		(avant_le_pointeur + alignement - 1) / alignement * alignement;
+
+	EXPECT_EQ (offsetof (Che_edge, m_data), decalage_du_pointeur);
+	EXPECT_EQ (sizeof (Che_edge), decalage_du_pointeur + sizeof (void *));
+}
+
+// ---------------------------------------------------------------------------
+//  Cartes paresseuses
+// ---------------------------------------------------------------------------
+// create_half_edge ne remplit plus les trois cartes : elles se construisent au
+// premier acces, depuis m_edges / m_edges_vertex / m_edges_face. Ce filet
+// verifie que le CONTENU est le meme qu'avant, pas qu'il arrive plus tard --
+// l'instant de la construction ne s'observe qu'a la memoire, et c'est la sonde
+// WASM (tmp/memprobe) qui le mesure.
+TEST (TEST_cgmesh_he, les_cartes_se_construisent_au_premier_acces_et_repondent)
+{
+	// Tetraedre : 4 sommets, 4 faces, ferme, chaque demi-arete appariee.
+	Mesh mesh;
+	float v[12] = { 0.f,0.f,0.f,  1.f,0.f,0.f,  0.f,1.f,0.f,  0.f,0.f,1.f };
+	unsigned int f[12] = { 0,2,1,  0,1,3,  0,3,2,  1,2,3 };
+	mesh.SetVertices (4, v);
+	mesh.SetFaces (4, 3, f);
+
+	Mesh_half_edge he (&mesh);
+	Che_mesh *che = he.GetCheMesh ();
+	ASSERT_EQ (che->m_ne, 12);
+
+	// Aucun acces aux cartes n'a eu lieu jusqu'ici. La premiere recherche doit
+	// donc les batir et repondre juste sur les DOUZE demi-aretes.
+	for (int i = 0; i < che->m_ne; i++)
+		EXPECT_EQ (che->get_edge (che->edge (i).m_v_begin, che->edge (i).m_v_end), i)
+			<< "demi-arete " << i;
+
+	// Une arete qui n'existe pas reste introuvable : sans ce temoin, une carte
+	// qui rendrait n'importe quoi passerait le cas precedent aussi.
+	EXPECT_EQ (che->get_edge (0, 0), -1);
+	EXPECT_EQ (che->get_edge (3, 99), -1);
+
+	// Et la carte sommet -> arete sortante concorde avec le vecteur dont elle
+	// est tiree.
+	for (unsigned int i = 0; i < 4; i++)
+		EXPECT_EQ (che->get_edge_from_vertex ((int)i), che->m_edges_vertex[i]);
+
+	// Les trois accesseurs rendent des conteneurs peuplés, pas des vides.
+	EXPECT_EQ (che->EdgeMap ()->size (), 12u);
+	EXPECT_EQ (che->VertexEdgeMap ()->size (), 4u);
+	EXPECT_EQ (che->FaceEdgeMap ()->size (), 4u);
+}
+
+TEST (TEST_cgmesh_he, une_contraction_entretient_les_cartes_construites_tardivement)
+{
+	// La contraction ENTRETIENT les cartes en place. Construites tard, elles
+	// doivent l'etre AVANT qu'elle n'y touche, sinon la reconstruction ecraserait
+	// ses mises a jour -- ou pire, partirait de vecteurs qu'elle ne met pas a jour.
+	Mesh mesh;
+	// Octaedre : ferme, variete, chaque sommet de degre 4.
+	float v[18] = {  1.f,0.f,0.f,  -1.f,0.f,0.f,  0.f,1.f,0.f,
+	                 0.f,-1.f,0.f,  0.f,0.f,1.f,   0.f,0.f,-1.f };
+	unsigned int f[24] = { 0,2,4, 2,1,4, 1,3,4, 3,0,4,
+	                       2,0,5, 1,2,5, 3,1,5, 0,3,5 };
+	mesh.SetVertices (6, v);
+	mesh.SetFaces (8, 3, f);
+
+	Mesh_half_edge he (&mesh);
+	Che_mesh *che = he.GetCheMesh ();
+
+	const int ei = che->get_edge (0, 2);
+	ASSERT_GE (ei, 0);
+	ASSERT_EQ (che->edge_contract2 (ei), 0);
+
+	// La cle contractee a disparu de la carte, et la carte sommet -> arete a
+	// perdu le sommet absorbe.
+	EXPECT_EQ (che->get_edge (0, 2), -1);
+	EXPECT_EQ (che->get_edge_from_vertex (2), -1);
+	EXPECT_GE (che->get_edge_from_vertex (0), 0);
+}
+
+// ---------------------------------------------------------------------------
+//  Cession du maillage de travail
+// ---------------------------------------------------------------------------
+TEST (TEST_cgmesh_he, release_cede_le_maillage_et_laisse_l_enveloppe_vide)
+{
+	Mesh source;
+	float v[12] = { 0.f,0.f,0.f,  1.f,0.f,0.f,  0.f,1.f,0.f,  0.f,0.f,1.f };
+	unsigned int f[12] = { 0,2,1,  0,1,3,  0,3,2,  1,2,3 };
+	source.SetVertices (4, v);
+	source.SetFaces (4, 3, f);
+
+	Mesh_half_edge he (&source);
+	Mesh *before = he.m_pMesh;
+	ASSERT_NE (he.GetCheMesh (), nullptr);
+
+	Mesh *released = he.release ();
+
+	// C'est bien le MEME objet qui sort, pas une copie : sans cette egalite de
+	// pointeur, release ne ferait rien economiser.
+	EXPECT_EQ (released, before);
+	EXPECT_NE (released, &source) << "et ce n'est pas l'entree : elle reste a l'appelant";
+	ASSERT_NE (released, nullptr);
+	EXPECT_EQ (released->GetNVertices (), 4u);
+	EXPECT_EQ (released->GetNFaces (), 4u);
+
+	// L'enveloppe repart vide et UTILISABLE : ni pendante, ni porteuse de la
+	// topologie du maillage parti.
+	ASSERT_NE (he.m_pMesh, nullptr);
+	EXPECT_NE (he.m_pMesh, released);
+	EXPECT_EQ (he.m_pMesh->GetNVertices (), 0u);
+	EXPECT_EQ (he.GetCheMesh ()->m_ne, 0);
+
+	delete released;
 }

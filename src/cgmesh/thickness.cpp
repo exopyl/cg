@@ -3,7 +3,10 @@
 #include "bvh.h"
 #include "../cgimg/color.h"
 
+#include "../cgmath/context.h"
+
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <thread>
 #include <vector>
@@ -245,7 +248,8 @@ bool MeshAlgoThickness::ComputeShapeDiameter (Mesh &mesh,
                                               std::vector<char>  &outDefined,
                                               int   numRays,
                                               float coneHalfAngleDeg,
-                                              int   smoothIterations)
+                                              int   smoothIterations,
+                                              const Context *ctx)
 {
 	const unsigned int nv = mesh.GetNVertices ();
 	const unsigned int nf = mesh.GetNFaces ();
@@ -281,6 +285,11 @@ bool MeshAlgoThickness::ComputeShapeDiameter (Mesh &mesh,
 	// single shared buffer would otherwise be a data race). Lower threshold
 	// than the single-ray method since each vertex does numRays× the work.
 	const float *verts = mesh.GetVertices ().data ();
+	// Un drapeau PAR APPEL, pose des qu'un fil voit l'annulation. Il est lu par
+	// les autres fils pour qu'ils abandonnent aussi, et par l'appelant apres la
+	// jointure : c'est le seul etat que les fils partagent en ecriture, et il ne
+	// porte qu'une transition false -> true.
+	std::atomic<bool> aborted (false);
 	parallelChunks (nv, /*minParallel*/ 500u, [&](unsigned int begin, unsigned int end)
 	{
 		std::vector<float> dists, weights;     // per-thread scratch
@@ -289,6 +298,17 @@ bool MeshAlgoThickness::ComputeShapeDiameter (Mesh &mesh,
 
 		for (unsigned int vi = begin; vi < end; ++vi)
 		{
+			// SEUL point de test du jeton, et il est DANS LE LAMBDA : le tester
+			// avant parallelChunks ne dirait rien des fils deja lances, et un
+			// thread_local pose par l'appelant serait vierge ici.
+			if (((vi - begin) & 63u) == 0u
+			    && (aborted.load (std::memory_order_relaxed)
+			        || (ctx != nullptr && ctx->IsAborted ())))
+			{
+				aborted.store (true, std::memory_order_relaxed);
+				return;
+			}
+
 			Vector3f P (verts[3*vi], verts[3*vi+1], verts[3*vi+2]);
 			Vector3f nrm (mesh.GetVertexNormals ()[3*vi], mesh.GetVertexNormals ()[3*vi+1], mesh.GetVertexNormals ()[3*vi+2]);
 			if (nrm.getLength () < 1e-12f)
@@ -333,6 +353,9 @@ bool MeshAlgoThickness::ComputeShapeDiameter (Mesh &mesh,
 			}
 		}
 	});
+
+	if (aborted.load (std::memory_order_relaxed))
+		return false;
 
 	smoothField (mesh, outThickness, outDefined, smoothIterations);
 	return true;

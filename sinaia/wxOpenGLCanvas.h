@@ -31,7 +31,7 @@ public:
 	wxTextCtrl*		m_CtrlLog = nullptr; // TODO : replace with a lambda
 	
 	MyGLCanvas(wxWindow *parent, wxTextCtrl* pCtrlLog, int *args = 0);
-	virtual ~MyGLCanvas();
+	~MyGLCanvas() override;
 	
 	void LoadModel(const wxString& filename, const ImportSettings& settings = ImportSettings());
 	// Ajoute un fichier à la scène COURANTE (nouveau Model) sans remplacer la vue ni

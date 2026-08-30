@@ -70,32 +70,32 @@ public:
 							double par_dir_x, double par_dir_y, double par_dir_z);
 	LineImplPointDirection (Vector3f par_pt, Vector3f par_dir);
 	LineImplPointDirection (const LineImplPluecker &par_linePluecker);
-	~LineImplPointDirection ();
+	~LineImplPointDirection () override;
 
 	// fit
-	virtual void fit (Vector3f *array, int n);
-	virtual void fit (Line **lines, int n);
+	void fit (Vector3f *array, int n) override;
+	void fit (Line **lines, int n) override;
 
 	// getters setters
-	virtual void get_direction (Vector3f &dir);
-	virtual void get_direction (double &x, double &y, double &z);
-	virtual void get_point (Vector3f &pt);
-	virtual void get_point (double &x, double &y, double &z);
+	void get_direction (Vector3f &dir) override;
+	void get_direction (double &x, double &y, double &z) override;
+	void get_point (Vector3f &pt) override;
+	void get_point (double &x, double &y, double &z) override;
 
 	// Projections on planes
-	virtual void projection_on_oxy (void);
+	void projection_on_oxy (void) override;
 
 	// position
-	virtual int get_position_with (Line* line);
+	int get_position_with (Line* line) override;
 
 	// distances
-	virtual double distance_with (Line &line);
-	virtual double distance_with (Vector3f &pt);
-	virtual	void   closest_point (Vector3f &pt, Vector3f &pt_on_line);
-	virtual void   init_shortest_distance (Line* line1, Line* line2);
+	double distance_with (Line &line) override;
+	double distance_with (Vector3f &pt) override;
+	void   closest_point (Vector3f &pt, Vector3f &pt_on_line) override;
+	void   init_shortest_distance (Line* line1, Line* line2) override;
 
 	// dump
-	virtual void dump (void);
+	void dump (void) override;
 
 private:
 	Vector3f m_pt, m_dir;
@@ -116,32 +116,32 @@ public:
 	LineImplPluecker (double par_l1, double par_l2, double par_l3,
 					  double par_l4, double par_l5, double par_l6);
 	LineImplPluecker (const LineImplPointDirection &par_linePointDirection);
-	~LineImplPluecker ();
+	~LineImplPluecker () override;
 
 	// fit
-	virtual void fit (Vector3f *array, int n);
-	virtual void fit (Line **lines, int n);
+	void fit (Vector3f *array, int n) override;
+	void fit (Line **lines, int n) override;
 
 	// getters setters
-	virtual void get_direction (Vector3f &dir);
-	virtual void get_direction (double &x, double &y, double &z);
-	virtual void get_point (Vector3f &pt);
-	virtual void get_point (double &x, double &y, double &z);
+	void get_direction (Vector3f &dir) override;
+	void get_direction (double &x, double &y, double &z) override;
+	void get_point (Vector3f &pt) override;
+	void get_point (double &x, double &y, double &z) override;
 
 	// Projections on planes
-	virtual void projection_on_oxy (void);
+	void projection_on_oxy (void) override;
 
 	// position
-	virtual int get_position_with (Line* line);
+	int get_position_with (Line* line) override;
 
 	// distances
-	virtual double distance_with (Line &line);
-	virtual double distance_with (Vector3f &pt);
-	virtual	void   closest_point (Vector3f &pt, Vector3f &pt_on_line);
-	virtual void   init_shortest_distance (Line* line1, Line* line2);
+	double distance_with (Line &line) override;
+	double distance_with (Vector3f &pt) override;
+	void   closest_point (Vector3f &pt, Vector3f &pt_on_line) override;
+	void   init_shortest_distance (Line* line1, Line* line2) override;
 
 	// dump
-	virtual void dump (void);
+	void dump (void) override;
 
 private:
 	double m_l1, m_l2, m_l3, m_l4, m_l5, m_l6;

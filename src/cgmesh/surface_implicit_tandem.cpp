@@ -103,8 +103,8 @@ static int tandem_update_vertex_quadric (mc_triangulation_t *pTri, int vi)
 	quadric_zero (qv);
 	
 	// iterate over faces adjacent to vi
-	std::map<int,int>::iterator it = he_mesh->map_edges_vertex->find (vi);
-	if (it == he_mesh->map_edges_vertex->end())
+	std::map<int,int>::iterator it = he_mesh->VertexEdgeMap ()->find (vi);
+	if (it == he_mesh->VertexEdgeMap ()->end())
 		return -1;
 
 	int e_idx = it->second;
@@ -198,7 +198,7 @@ static int tandem_update_edge_quadric (mc_triangulation_t *pTri, int he_idx, flo
 			vec0.Set (vertices[3*vi0], vertices[3*vi0+1], vertices[3*vi0+2]);
 			if ((vec0).getDistance (vnew) < EPSILON)
 				continue;
-			std::map<int,int>::iterator it = he_mesh->map_edges_vertex->find (vi0);
+			std::map<int,int>::iterator it = he_mesh->VertexEdgeMap ()->find (vi0);
 			int eidx = it->second;
 			int e_walk_idx = eidx;
 			do
@@ -284,8 +284,8 @@ static void tandem_simplify (mc_triangulation_t *pTri)
 	// takes it; it is not used in any decision (the contraction test is the
 	// absolute threshold edata->m_error <= EPSILON).
 	float errors_range[2] = {INFINITY, -INFINITY};
-	for (std::map<std::pair<int,int>,int>::iterator it=he_mesh->m_map_edges->begin ();
-	     it != he_mesh->m_map_edges->end ();
+	for (std::map<std::pair<int,int>,int>::iterator it=he_mesh->EdgeMap ()->begin ();
+	     it != he_mesh->EdgeMap ()->end ();
 	     it++)
 	{
 		int he_idx = it->second;
@@ -298,21 +298,18 @@ static void tandem_simplify (mc_triangulation_t *pTri)
 	while (bAgain)
 	{
 		bAgain = false;
-		//printf ("%d edges\t %d faces\t %d vertices\n",
-		//he_mesh->m_map_edges->size(), he_mesh->map_edges_face->size(), he_mesh->map_edges_vertex->size());
-		//printf ("%d\n", he_mesh->m_map_edges->size());
 		// Snapshot the edge indices before contracting. edge_contract2() mutates
-		// m_map_edges (erase/insert) -- in particular it erases the key of the
+		// la carte des aretes (erase/insert) -- in particular it erases the key of the
 		// edge being contracted, which is exactly the entry a live iterator into
-		// m_map_edges would point at, triggering the MSVC "cannot increment
+		// cette carte pointerait, triggering the MSVC "cannot increment
 		// value-initialized map/set iterator" crash. The indices are stable
 		// handles into m_edges (contraction never grows that vector); edges that
 		// a contraction invalidates are skipped by the m_valid guard below, and
 		// relabelled edges keep the same index.
 		std::vector<int> edge_indices;
-		edge_indices.reserve (he_mesh->m_map_edges->size ());
-		for (std::map<std::pair<int,int>,int>::iterator ite=he_mesh->m_map_edges->begin ();
-		     ite != he_mesh->m_map_edges->end ();
+		edge_indices.reserve (he_mesh->EdgeMap ()->size ());
+		for (std::map<std::pair<int,int>,int>::iterator ite=he_mesh->EdgeMap ()->begin ();
+		     ite != he_mesh->EdgeMap ()->end ();
 		     ite++)
 			edge_indices.push_back (ite->second);
 
@@ -362,8 +359,8 @@ static void tandem_simplify (mc_triangulation_t *pTri)
 				quadric_copy (pTri->q[v1], edata->q);
 
 				//
-				std::map<int,int>::iterator it = he_mesh->map_edges_vertex->find (v1);
-				if (it == he_mesh->map_edges_vertex->end())
+				std::map<int,int>::iterator it = he_mesh->VertexEdgeMap ()->find (v1);
+				if (it == he_mesh->VertexEdgeMap ()->end())
 					continue; // v1 unexpectedly missing after contraction; skip
 
 				int e_idx = it->second;
@@ -391,8 +388,6 @@ static void tandem_simplify (mc_triangulation_t *pTri)
 				} while (ew_idx != e_idx);
 			}
 		}
-		//printf ("%d edges\t %d faces\t %d vertices\n",
-		//	he_mesh->m_map_edges->size(), he_mesh->map_edges_face->size(), he_mesh->map_edges_vertex->size());
 	}
 }
 
@@ -436,8 +431,8 @@ static void export_tandem (mc_triangulation_t *pTri, char *filename)
 	}
 */
 	fprintf (ptr, "usemtl material\n");
-	for (std::map<int,int>::iterator it=he_mesh->map_edges_face->begin ();
-	     it != he_mesh->map_edges_face->end ();
+	for (std::map<int,int>::iterator it=he_mesh->FaceEdgeMap ()->begin ();
+	     it != he_mesh->FaceEdgeMap ()->end ();
 	     it++)
 	{
 		int he_idx = it->second;
@@ -515,18 +510,18 @@ void ImplicitSurfaceTandem::get_triangulation_post (int *nvertices, float **vert
 	// Rebuild compact output buffers from the *simplified* half-edge mesh.
 	// tandem_simplify() decimated he_mesh in place (contracting edges and
 	// updating the surviving vertex positions in tri->vertices); the surviving
-	// triangles are exactly the entries of map_edges_face, and contracted-away
+	// triangles are exactly the entries of FaceEdgeMap (), and contracted-away
 	// vertices are simply no longer referenced. We gather the still-used
 	// vertices, remap them to a dense range, and emit remapped triangles -- so
 	// the public API returns the decimated mesh instead of the raw MC faces.
 	const int oldNV = tri->nvertices;
 	std::vector<int> remap(oldNV, -1);
 	std::vector<unsigned int> outFaces;
-	outFaces.reserve(3 * he_mesh->map_edges_face->size());
+	outFaces.reserve(3 * he_mesh->FaceEdgeMap ()->size());
 	int newNV = 0;
 
-	for (std::map<int,int>::iterator it = he_mesh->map_edges_face->begin();
-	     it != he_mesh->map_edges_face->end(); ++it)
+	for (std::map<int,int>::iterator it = he_mesh->FaceEdgeMap ()->begin();
+	     it != he_mesh->FaceEdgeMap ()->end(); ++it)
 	{
 		int he_idx = it->second;
 		Che_edge &he = he_mesh->edge(he_idx);

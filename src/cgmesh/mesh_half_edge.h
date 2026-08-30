@@ -1,6 +1,7 @@
 #pragma once
 #include "mesh.h"
 #include "half_edge.h"
+#include "../cgmath/context.h"
 #include <memory>
 #include <vector>
 
@@ -30,7 +31,9 @@ class Mesh_half_edge
 public:
 	Mesh_half_edge ();//!<  Constructor
 	Mesh_half_edge (int par_nv, float *par_v, int par_nf, unsigned int *par_f);
-	Mesh_half_edge (Mesh *pMesh);
+	// const : le corps ne fait qu'une copie profonde du maillage source. Sans
+	// ce const, tout appelant tenant une valeur immuable devrait la forcer.
+	Mesh_half_edge (const Mesh *pMesh);
 	Mesh_half_edge (const char *par_filename);//!<  Constructor
 	~Mesh_half_edge ();//!< Destructor
 
@@ -38,8 +41,17 @@ public:
 	Mesh     *m_pMesh;
 	Che_mesh* GetCheMesh();
 
+	// Cede la propriete du maillage de travail a l'appelant, qui devra le
+	// detruire. L'enveloppe repart VIDE : un Mesh neuf, et toute la topologie
+	// derivee jetee -- elle decrivait le maillage cede, pas le nouveau.
+	//
+	// Raison d'etre : l'enveloppe a deja COPIE l'entree a la construction. Sans
+	// ce transfert, en rendre le resultat imposait une SECONDE copie profonde,
+	// soit 88 Mio de plus sur un maillage de 2 M de triangles, pour un objet que
+	// l'enveloppe s'apprete a detruire.
+	Mesh *release (void);
+
 	void create_half_edge (void);
-	int get_edge (unsigned int v1, unsigned int v2); // returns edge index, -1 if not found
 
 	bool is_manifold (unsigned int i);
 	bool is_border (unsigned int i);
@@ -132,7 +144,12 @@ public:
 	// imbriquée dans un argument par défaut avant la fin de la classe englobante
 	// (MSVC le tolère). Le corps inline ci-dessous est en « contexte de classe
 	// complète », où SimplifyOptions() est valide.
-	void simplify (float target_ratio, const SimplifyOptions &options);
+	//
+	// ctx optionnel : l'annulation interrompt la boucle de contraction, et le
+	// maillage rendu est alors PARTIELLEMENT decime. simplify ne rend rien,
+	// c'est donc le contexte que l'appelant interroge pour le savoir.
+	void simplify (float target_ratio, const SimplifyOptions &options,
+	               const Context *ctx = nullptr);
 	void simplify (float target_ratio = 0.5f)
 	               { simplify (target_ratio, SimplifyOptions()); }
 

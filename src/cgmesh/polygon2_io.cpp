@@ -703,15 +703,26 @@ void Polygon2::input_from_svg_path (char *filename)
 
 void Polygon2::input (char *filename)
 {
-	if (strcmp (filename+(strlen(filename)-5), ".path") == 0)
+	// filename+strlen-5 sort du tampon des que le nom fait moins de 5 caracteres.
+	const size_t n = strlen (filename);
+	if (n >= 5 && strcmp (filename + n - 5, ".path") == 0)
 	  return input_from_svg_path (filename);
 
 	FILE *ptr = fopen (filename, "r");
 	if (!ptr)
-		printf ("couldn't open the contour file\n");
-	
-	int i, nPoints;
-	fscanf (ptr, "# %d\n", &nPoints);
+	{
+		fprintf (stderr, "couldn't open the contour file %s\n", filename);
+		return;
+	}
+
+	// nPoints reste indetermine si l'en-tete manque ou est malformee.
+	int i, nPoints = 0;
+	if (fscanf (ptr, "# %d\n", &nPoints) != 1 || nPoints <= 0)
+	{
+		fprintf (stderr, "en-tete de contour illisible dans %s\n", filename);
+		fclose (ptr);
+		return;
+	}
 	alloc_contours (1);
 
 	m_contours[0].resize (nPoints);

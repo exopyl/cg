@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "chull.h"
+#include "../cgmath/context.h"
 
 // SWAP local a 3 arguments (t = variable temporaire fournie par l'appelant),
 // incompatible avec le SWAP(a, b) de cgmath/common.h que chull.h fait entrer
@@ -224,10 +225,10 @@ Chull3D::export_obj (char *filename)
 /*** Algorithm ***/
 /*****************/
 void
-Chull3D::compute (void)
+Chull3D::compute (const Context *ctx)
 {
   double_triangle ();
-  construct_hull ();
+  construct_hull (ctx);
 }
 
 /* builds the initial double triangle */
@@ -289,7 +290,7 @@ Chull3D::double_triangle (void)
  * construct_hull adds the vertices to the hull one at a time.
  */
 int
-Chull3D::construct_hull (void)
+Chull3D::construct_hull (const Context *ctx)
 {
   Chull3D_vertex *v = nullptr, *vnext = nullptr;
 
@@ -297,7 +298,14 @@ Chull3D::construct_hull (void)
     return 0;
 
   v = vertices;
+  // SEUL point de test du jeton, et il est dans la boucle externe : chaque tour
+  // insere un sommet dans l'enveloppe. Un test place avant la boucle repondrait
+  // le premier pour un drapeau deja pose, et rendrait celui-ci indistinguable
+  // de son absence.
+  unsigned int guard = 0;
   do {
+    if (ctx && (guard++ & 255u) == 0u && ctx->IsAborted ())
+      return 1;
     vnext = v->next;
     if (!v->processed)
       {

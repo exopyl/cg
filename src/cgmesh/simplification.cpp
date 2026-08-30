@@ -486,7 +486,8 @@ struct CandidateGreater
 
 } // namespace
 
-void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options)
+void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options,
+                              const Context *ctx)
 {
 	const bool preserve_features = options.preserve_features;
 	const float feature_angle_deg = options.feature_angle_deg;
@@ -838,6 +839,11 @@ void Mesh_half_edge::simplify(float target_ratio, const SimplifyOptions &options
 	unsigned int cur_faces = nf0;
 	while (cur_faces > target_faces && !pq.empty())
 	{
+		// La compaction qui suit reste executee : le maillage rendu est un
+		// maillage valide, simplement moins decime que demande.
+		if (ctx && ctx->IsAborted ())
+			break;
+
 		Candidate c = pq.top();
 		pq.pop();
 

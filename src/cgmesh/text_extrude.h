@@ -21,6 +21,7 @@
 //
 // ============================================================================
 
+#include <cstddef>
 #include <string>
 
 #include "../cgmath/text_layout.h"   // TextAlign
@@ -53,6 +54,51 @@ struct TextExtrudeOptions
 	// une seule region ne peuvent plus porter de materiau distinct.
 	bool unionOverlaps = false;
 
+	// --- plaque de SUPPORT ---------------------------------------------------
+	//
+	// Un contour de PLUS dans l'union ci-dessus, jamais un second volume a
+	// recoller : le depot n'a aucun booleen 3D sur maillages, et il n'en faut
+	// pas ici. Demander un support ACTIVE l'union, meme si unionOverlaps est
+	// faux -- sans elle le support et les lettres se recouvriraient sans
+	// fusionner, et le solide ne serait pas etanche.
+	//
+	// ⚠ CONTRAINTE, et elle n'est pas adoucie : support et texte partagent la
+	// profondeur d'extrusion. Il n'y a qu'un champ `depth`, et l'union 2D
+	// produit une region PLANE unique, portee de z = 0 a z = depth. Un socle
+	// plus epais que les lettres exige un booleen 3D, c'est-a-dire une capacite
+	// nouvelle -- pas un reglage de plus.
+	//
+	// ⚠ CONSEQUENCE MESUREE, et il faut la connaitre avant de choisir :
+	// `Plate` contient l'emprise du texte, donc a profondeur egale l'union rend
+	// la SILHOUETTE de la plaque et les lettres disparaissent dedans. C'est
+	// exact, ce n'est pas une panne, et c'est ce que « meme profondeur » veut
+	// dire. Les deux formes qui gardent les lettres lisibles sont celles qui ne
+	// les couvrent pas : `Bar` (un bandeau qui mord le bas des lettres et les
+	// relie en une seule piece) et `Frame` (un cadre qui les entoure).
+	enum class Support
+	{
+		None,
+		Plate,    // rectangle plein sous le texte
+		Bar,      // bandeau horizontal, mordant le bas des lettres
+		Frame     // cadre rectangulaire, matiere sur son seul pourtour
+	};
+	Support support = Support::None;
+
+	// Ecart entre l'emprise du texte et le bord du support, en unites monde.
+	float supportMargin = 0.f;
+
+	// Bar / Frame : epaisseur de matiere, en unites monde. Sans effet sur Plate,
+	// qui est plein.
+	float supportThickness = 0.1f;
+
+	// Bar : hauteur a laquelle le bandeau MORD dans les lettres, en unites
+	// monde, mesuree au-dessus du bas de l'emprise. Zero laisse le bandeau
+	// tangent -- donc une union qui ne fusionne rien de fiable.
+	float supportOverlap = 0.02f;
+
+	// Plate / Frame : rayon d'arrondi des coins EXTERIEURS. Zero = coins vifs.
+	float supportCornerRadius = 0.f;
+
 	// Recentre l'emprise typographique sur l'origine. Utile a une interface qui
 	// place l'objet dans une scene ; laisse a false, l'origine du maillage est
 	// celle de la premiere ligne de base.
@@ -63,11 +109,32 @@ struct TextExtrudeOptions
 	unsigned int materialId = (unsigned int)-1;
 };
 
+// Declare par cgmath, a la base de la chaine : voir cgmath/context.h.
+class Context;
+
+// Ce que la passe a REELLEMENT execute. `glyphsFlattened` compte les
+// aplatissements, un par glyphe DISTINCT : c'est la memoisation par glyphe qui
+// se mesure ici, et rien d'autre. « MISSISSIPPI » place onze glyphes et n'en
+// aplatit que quatre.
+struct TextExtrudeStats
+{
+	std::size_t glyphsPlaced = 0;
+	std::size_t glyphsFlattened = 0;
+};
+
 // Maillage alloue sur le tas (l'appelant en devient proprietaire), normales
 // calculees. nullptr quand rien n'a pu etre produit : police invalide, texte
 // vide, ou texte entierement compose de glyphes blancs.
 //
 // Un glyphe absent de la police degrade proprement -- il occupe son avance et
 // n'emet aucun contour, comme une espace.
+//
+// stats optionnel : rempli quand la mise en page a produit au moins un glyphe.
+//
+// ctx optionnel, en DERNIER parametre : la boucle de placement des glyphes teste
+// le jeton d'annulation et rend nullptr sans rien construire. Un appelant qui
+// n'annule rien compile inchange.
 Mesh* text_to_extruded_mesh (const Font& font, const std::string& utf8,
-                             const TextExtrudeOptions& opt);
+                             const TextExtrudeOptions& opt,
+                             TextExtrudeStats* stats = nullptr,
+                             const Context* ctx = nullptr);

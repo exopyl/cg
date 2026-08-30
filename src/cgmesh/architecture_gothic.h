@@ -7,6 +7,7 @@
 
 #include "polygon2.h"
 #include "mesh.h"
+#include "profile2d.h"
 
 //
 // Gothic architecture mesh : 2D contour -> 3D triangulated Mesh
@@ -140,14 +141,11 @@ void tessellateToMesh (Polygon2 &polygon, Mesh &out, double z = 0.0);
 // Throws std::runtime_error if the tessellator produces no output.
 void extrudeToMesh (Polygon2 &polygon, Mesh &out, double zBottom, double zTop);
 
-// Like extrudeToMesh but sweeps a CHAMFER moulding along every field border
-// instead of a vertical wall : the front face stays flat at zTop, each opening
-// edge is bevelled back into the stone by (chamW in-plane, chamD in depth), then
-// runs straight to zBottom (a splayed opening). Gives the 3D "carved stone" look
-// (Havemann §5.4 profiles, flat style) instead of a flat extruded plate.
-// Caps + moulding use distinct vertices (correct flat / smooth normals).
-void extrudeProfiledToMesh (Polygon2 &polygon, Mesh &out,
-                            double zBottom, double zTop, double chamW, double chamD);
+// extrudeProfiledToMesh -- l'extrusion a moulure -- vit dans profile2d.h, ou
+// elle est parametree par un Profile2D au lieu du couple (chamW, chamD). Elle
+// n'est plus une fonction du gothique : trois consommateurs la demandaient, et
+// le gothique n'est que l'un d'eux. L'en-tete est inclus ci-dessus pour que les
+// appelants historiques -- qui incluent celui-ci -- continuent de la voir.
 
 
 //

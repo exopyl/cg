@@ -363,7 +363,9 @@ TEST(TEST_cgmesh_polygon, InputFromFile)
 	pol.input(filename);
 
 	// expectations
-	EXPECT_GE(pol.m_contours.size(), 1u);
+	// input() ne rend rien : l'absence du fichier ne se lit que sur le resultat,
+	// et m_contours[0] ci-dessous n'est indexable qu'une fois ce point etabli.
+	ASSERT_GE(pol.m_contours.size(), 1u) << filename << " introuvable ou illisible";
 	EXPECT_GT(pol.m_contours[0].size(), 0u);
 	EXPECT_NE(pol.m_contours[0].data(), nullptr);
 }

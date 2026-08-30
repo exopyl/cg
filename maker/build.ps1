@@ -1,20 +1,45 @@
 # Build du module WASM `maker` (moteur natif via Emscripten).
 # Usage :  .\maker\build.ps1
 # Prerequis : emsdk, cmake, et Visual Studio (nmake) installes.
-# Ajuste les 3 chemins ci-dessous si ton installation differe.
+# Ajoute ton installation aux listes de candidats ci-dessous si elle n'y est pas.
 
 $ErrorActionPreference = "Stop"
 
-$EMSDK_DIR = "C:\home\bin\emsdk-6.0.3"
-$CMAKE_BIN = "C:\home\bin\cmake-4.2.0-windows-x86_64\bin"
+# CANDIDATS, essayes dans l'ordre, et non un chemin unique en dur : un chemin
+# unique finit par ne designer aucune installation reelle, et le script echoue
+# alors avant meme d'atteindre cmake. $env:EMSDK, s'il est pose, passe devant.
+$EMSDK_CANDIDATES = @(
+  $env:EMSDK,
+  "C:\home\dev\extern\emsdk",
+  "C:\home\bin\emsdk-6.0.3"
+)
+$CMAKE_CANDIDATES = @(
+  "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin",
+  "C:\home\bin\cmake-4.2.0-windows-x86_64\bin"
+)
 # Repertoire de nmake (Visual Studio). Detecte automatiquement la version MSVC.
 $MSVC_ROOT = "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC"
 
 function Fail($msg) { Write-Error $msg; exit 1 }
 
-if (-not (Test-Path $EMSDK_DIR))            { Fail "emsdk introuvable : $EMSDK_DIR" }
-if (-not (Test-Path "$CMAKE_BIN\cmake.exe")) { Fail "cmake introuvable : $CMAKE_BIN" }
-if (-not (Test-Path $MSVC_ROOT))             { Fail "MSVC introuvable : $MSVC_ROOT" }
+$EMSDK_DIR = $EMSDK_CANDIDATES |
+  Where-Object { $_ -and (Test-Path (Join-Path $_ "upstream\emscripten\emcc.py")) } |
+  Select-Object -First 1
+if (-not $EMSDK_DIR) { Fail "emsdk introuvable. Essayes : $($EMSDK_CANDIDATES -join ', ')" }
+
+$CMAKE_BIN = $CMAKE_CANDIDATES |
+  Where-Object { $_ -and (Test-Path (Join-Path $_ "cmake.exe")) } |
+  Select-Object -First 1
+if (-not $CMAKE_BIN) {
+  $onPath = Get-Command cmake -ErrorAction SilentlyContinue
+  if ($onPath) { $CMAKE_BIN = Split-Path -Parent $onPath.Source }
+}
+if (-not $CMAKE_BIN) { Fail "cmake introuvable. Essayes : $($CMAKE_CANDIDATES -join ', ')" }
+
+if (-not (Test-Path $MSVC_ROOT)) { Fail "MSVC introuvable : $MSVC_ROOT" }
+
+Write-Host "emsdk : $EMSDK_DIR"
+Write-Host "cmake : $CMAKE_BIN"
 
 # nmake : prend la version MSVC la plus recente disponible.
 $nmakeDir = Get-ChildItem $MSVC_ROOT -Directory |

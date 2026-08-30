@@ -14,7 +14,9 @@ int Audio::load (char *filename)
 	if (!filename)
 		return -1;
 
-	if (strcmp (filename+(strlen(filename)-4), ".wav") == 0)
+	// filename+strlen-4 sort du tampon des que le nom fait moins de 4 caracteres.
+	const size_t n = strlen (filename);
+	if (n >= 4 && strcmp (filename + n - 4, ".wav") == 0)
 	     return import_wav (filename, 1);
 
 	return -1;
@@ -62,12 +64,17 @@ int Audio::import_wav (char const *filename, int verbose)
 	wav_hdr_t hdr;
 
 	FILE *f = fopen(filename, "rb");
+	if (!f)
+	{
+		fprintf (stderr, "could not open %s\n", filename);
+		return -1;
+	}
 
 	if (fread(&hdr, sizeof(hdr), 1, f) != 1)
 	{
 		printf ("could not read %s\n", filename);
 		fclose(f);
-		return 0;
+		return -1;
 	}
 
 	if (verbose)
@@ -115,7 +122,7 @@ int Audio::import_wav (char const *filename, int verbose)
 	if (hdr.bps != 16 && hdr.bps != 8) {
 		printf("invalid format (%d bps)\n", hdr.bps);
 		fclose(f);
-		return 0;
+		return -1;
 	}
   
 	// convert audio data to NSArray
@@ -129,7 +136,7 @@ int Audio::import_wav (char const *filename, int verbose)
 	{
 		fprintf (stderr, "audio: NumChannels nul dans l'en-tete\n");
 		fclose (f);
-		return 0;
+		return -1;
 	}
 	unsigned int length = datasize / (hdr.NumChannels * hdr.bps / 8);
 

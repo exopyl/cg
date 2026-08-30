@@ -14,94 +14,96 @@
 
 #include "half_edge.h"
 
-/*** Begin class Cedges_visited ***/
-Cedges_visited::Cedges_visited (int par_nv)
+/**
+ * Apparie les demi-aretes opposees, en place, dans m_pair.
+ *
+ * SEMANTIQUE, reproduite a l'identique de l'ancien cache Cedges_visited :
+ * pour une paire de sommets NON ORIENTEE {a,b}, les demi-aretes qui la portent
+ * s'apparient DEUX A DEUX dans l'ordre des indices -- la 1re avec la 2e, la 3e
+ * avec la 4e --, et une derniere impaire reste sans opposee (m_pair == -1).
+ * Ce n'est pas une hypothese de variete : le cache n'admettait qu'une entree a
+ * la fois par cle (il l'effacait des qu'il appariait), donc c'est exactement ce
+ * qu'il faisait, y compris sur un maillage non variete ou mal oriente. Et une
+ * demi-arete (a,b) peut s'apparier a une autre (a,b) de MEME sens : la cle est
+ * non orientee.
+ *
+ * REPRESENTATION : un rangement CSR, DEUX allocations et 4*(nv+1+ne) octets.
+ * Les demi-aretes sont rangees dans le seau de min(v_begin, v_end) ; a
+ * l'interieur d'un seau, l'ordre des indices est conserve, ce qui rend
+ * l'appariement deux-a-deux directement lisible. Le cache precedent faisait
+ * nv+3 allocations, pesait 3,3 fois plus, et ne liberait pas son tableau de
+ * tetes.
+ *
+ * PRECONDITION : m_pair vaut -1 partout a l'entree. C'est ce qui sert de
+ * marque « deja appariee », et create_half_edge le garantit en reconstruisant
+ * chaque Che_edge avant d'appeler.
+ *
+ * Un sommet hors bornes n'a pas de seau : sa demi-arete reste sans opposee,
+ * plutot que d'ecrire hors du tableau -- l'ancien cache indexait sans garde.
+ *
+ * COUT : le seau d'un sommet a la taille de son degre. L'appariement y est
+ * quadratique, donc sum(d^2) au total -- de l'ordre de 36*nv sur un maillage
+ * triangulaire ordinaire. Un sommet de degre pathologique le paierait ; c'est
+ * le meme profil que le balayage lineaire de l'ancien cache.
+ */
+static void pair_half_edges (std::vector<Che_edge> &edges, int ne, int nv)
 {
-	int i;
-	m_nv = par_nv;
-	m_n_connected_to    = (int*)malloc(m_nv*sizeof(int));
-	m_n_connections_max = (int*)malloc(m_nv*sizeof(int));
-	m_connected_to      = (int**)malloc(m_nv*sizeof(int*));
-	for (i=0; i<m_nv; i++)
+	if (ne <= 0 || nv <= 0)
+		return;
+
+	// Comptage decale d'un cran : head[v+1] recoit le compte de v, de sorte que
+	// la somme prefixe fasse de head[v] le debut du seau de v. Le remplissage
+	// s'en sert ensuite comme CURSEUR -- head[v] finit donc sur la FIN du seau
+	// de v, qui est le debut de celui de v+1. Aucun troisieme tableau : c'est ce
+	// decalage qui evite le vecteur de curseurs, et 4 octets par sommet avec.
+	std::vector<int> head (nv + 1, 0);
+	for (int i = 0; i < ne; i++)
 	{
-		m_n_connections_max[i] = 9;
-		m_connected_to[i] = (int*)malloc(2*m_n_connections_max[i]*sizeof(int));
-		m_n_connected_to[i] = 0;
+		const int a = edges[i].m_v_begin, b = edges[i].m_v_end;
+		if (a < 0 || b < 0 || a >= nv || b >= nv)
+			continue; // sommet hors bornes : demi-arete laissee sans opposee
+		head[(a < b ? a : b) + 1]++;
 	}
-}
+	for (int v = 0; v < nv; v++)
+		head[v + 1] += head[v];
+	const int total = head[nv];
 
-Cedges_visited::~Cedges_visited ()
-{
-	for (int i=0; i<m_nv; i++)
-		if (m_connected_to[i])
-			free (m_connected_to[i]);
-	if (m_n_connected_to)
-		free (m_n_connected_to);
-	if (m_n_connections_max)
-		free (m_n_connections_max);
-}
-
-void Cedges_visited::add_edge (int par_a, int par_b, int par_index)
-{
-	// update the connections to par_a
-	if (m_n_connected_to[par_a] == m_n_connections_max[par_a])
+	std::vector<int> items (total);
+	for (int i = 0; i < ne; i++)
 	{
-		m_n_connections_max[par_a] *= 2;
-		m_connected_to[par_a] = (int*)realloc ((void*)m_connected_to[par_a], 2*m_n_connections_max[par_a]*sizeof(int));
+		const int a = edges[i].m_v_begin, b = edges[i].m_v_end;
+		if (a < 0 || b < 0 || a >= nv || b >= nv)
+			continue;
+		items[head[a < b ? a : b]++] = i;
 	}
-	m_connected_to[par_a][2*m_n_connected_to[par_a]]   = par_b;
-	m_connected_to[par_a][2*m_n_connected_to[par_a]+1] = par_index;
-	m_n_connected_to[par_a]++;
 
-	// update the connections to par_b
-	if (m_n_connected_to[par_b] == m_n_connections_max[par_b])
+	for (int v = 0, begin = 0; v < nv; v++)
 	{
-		m_n_connections_max[par_b] *= 2;
-		m_connected_to[par_b] = (int*)realloc ((void*)m_connected_to[par_b], 2*m_n_connections_max[par_b]*sizeof(int));
-	}
-	m_connected_to[par_b][2*m_n_connected_to[par_b]]   = par_a;
-	m_connected_to[par_b][2*m_n_connected_to[par_b]+1] = par_index;
-	m_n_connected_to[par_b]++;
-}
-
-void Cedges_visited::delete_edge (int par_a, int par_b)
-{
-	int i;
-
-	// update the connections to a
-	for (i=0; i<m_n_connected_to[par_a]; i++)
-	{
-		if (m_connected_to[par_a][2*i] == par_b)
+		const int end = head[v];
+		for (int p = begin; p < end; p++)
 		{
-			m_connected_to[par_a][2*i]   = m_connected_to[par_a][2*(m_n_connected_to[par_a]-1)];
-			m_connected_to[par_a][2*i+1] = m_connected_to[par_a][2*(m_n_connected_to[par_a]-1)+1];
-			m_n_connected_to[par_a]--;
-			break;
+			const int i = items[p];
+			if (edges[i].m_pair >= 0)
+				continue; // deja apparie par un tour precedent
+			const int a = edges[i].m_v_begin, b = edges[i].m_v_end;
+			const int other = a > b ? a : b;
+			for (int q = p + 1; q < end; q++)
+			{
+				const int k = items[q];
+				if (edges[k].m_pair >= 0)
+					continue;
+				const int ka = edges[k].m_v_begin, kb = edges[k].m_v_end;
+				if ((ka > kb ? ka : kb) != other)
+					continue;
+				edges[i].m_pair = k;
+				edges[k].m_pair = i;
+				break;
+			}
 		}
-	}
-
-	// update the connections to b
-	for (i=0; i<m_n_connected_to[par_b]; i++)
-	{
-		if (m_connected_to[par_b][2*i] == par_a)
-		{
-			m_connected_to[par_b][2*i]   = m_connected_to[par_b][2*(m_n_connected_to[par_b]-1)];
-			m_connected_to[par_b][2*i+1] = m_connected_to[par_b][2*(m_n_connected_to[par_b]-1)+1];
-			m_n_connected_to[par_b]--;
-			break;
-		}
+		begin = end;
 	}
 }
 
-int Cedges_visited::is_edge_visited (int par_a, int par_b)
-{
-	int i;
-	for (i=0; i<m_n_connected_to[par_a]; i++)
-		if (m_connected_to[par_a][2*i] == par_b)
-			return m_connected_to[par_a][2*i+1];
-		return -1;
-}
-/*** End class Cedges_visited ***/
 
 
 /**
@@ -114,14 +116,8 @@ Che_edge::Che_edge ()
 	m_pair = -1;
 	m_face = -1;
 	m_he_next = -1;
-	m_visited = false;
 	m_valid = 1;
 	m_data = nullptr;
-	// m_flag etait le seul membre laisse indetermine par ce constructeur
-	// (cpp:S2107, half_edge.cpp:119). Il n'est aujourd'hui ni lu ni ecrit ailleurs
-	// dans le depot, donc l'omission ne se manifestait pas -- mais elle attendait
-	// le premier lecteur.
-	m_flag = 0;
 }
 
 void Che_edge::dump (int index)
@@ -143,6 +139,7 @@ void Che_edge::dump (int index)
 Che_mesh::Che_mesh ()
 {
 	m_ne = 0;
+	m_maps_built = false;
 	m_map_edges = new map_edges;
 	map_edges_vertex = new std::map<int,int>;
 	map_edges_face = new std::map<int,int>;
@@ -155,11 +152,57 @@ Che_mesh::~Che_mesh ()
 	if (map_edges_face) delete map_edges_face;
 }
 
+void Che_mesh::EnsureMaps ()
+{
+	if (m_maps_built)
+		return;
+	// Pose AVANT le remplissage : les insertions ci-dessous n'appellent pas les
+	// accesseurs, mais un futur editeur qui le ferait boucherait sinon a
+	// l'infini.
+	m_maps_built = true;
+
+	m_map_edges->clear ();
+	map_edges_vertex->clear ();
+	map_edges_face->clear ();
+
+	// m_ne, et non m_edges.size () : add_face pousse dans m_edges sans toucher
+	// m_ne, et remplit lui-meme les cartes pour ce qu'il ajoute. La borne est
+	// donc celle de create_half_edge, mot pour mot.
+	for (int i = 0; i < m_ne; i++)
+		m_map_edges->insert (std::make_pair (
+			std::make_pair (m_edges[i].m_v_begin, m_edges[i].m_v_end), i));
+	for (size_t i = 0; i < m_edges_vertex.size (); i++)
+		if (m_edges_vertex[i] >= 0)
+			map_edges_vertex->insert (std::make_pair ((int)i, m_edges_vertex[i]));
+	for (size_t i = 0; i < m_edges_face.size (); i++)
+		if (m_edges_face[i] >= 0)
+			map_edges_face->insert (std::make_pair ((int)i, m_edges_face[i]));
+}
+
+Che_mesh::map_edges *Che_mesh::EdgeMap ()
+{
+	EnsureMaps ();
+	return m_map_edges;
+}
+
+std::map<int,int> *Che_mesh::VertexEdgeMap ()
+{
+	EnsureMaps ();
+	return map_edges_vertex;
+}
+
+std::map<int,int> *Che_mesh::FaceEdgeMap ()
+{
+	EnsureMaps ();
+	return map_edges_face;
+}
+
 void Che_mesh::dump (void)
 {
 	printf ("map_edges :\n");
-	for (map_edges::iterator it=m_map_edges->begin ();
-	     it != m_map_edges->end ();
+	map_edges *edge_map = EdgeMap ();
+	for (map_edges::iterator it=edge_map->begin ();
+	     it != edge_map->end ();
 	     it++)
 	{
 		int idx = it->second;
@@ -170,8 +213,9 @@ void Che_mesh::dump (void)
 
 void Che_mesh::dump_around_vertex (unsigned int vi)
 {
-	std::map<int,int>::iterator it = map_edges_vertex->find (vi);
-	if (it == map_edges_vertex->end())
+	std::map<int,int> *vertex_map = VertexEdgeMap ();
+	std::map<int,int>::iterator it = vertex_map->find (vi);
+	if (it == vertex_map->end())
 	{
 		printf ("no edge starting from %d\n", vi);
 		return;
@@ -198,6 +242,12 @@ void Che_mesh::dump_around_vertex (unsigned int vi)
 
 void Che_mesh::add_face (int fi, int v1, int v2, int v3)
 {
+	// AVANT les push_back, et l'ordre compte : EnsureMaps () indexe m_edges sur
+	// [0, m_ne[, et les trois aretes ajoutees ici sont au-dela. Les construire
+	// apres les insertions les manquerait ; les construire apres les push_back
+	// mais avant les insertions les indexerait deux fois.
+	EnsureMaps ();
+
 	// Push 3 new edges into m_edges and record their indices
 	int idx_v1v2 = (int)m_edges.size();
 	m_edges.push_back(Che_edge());
@@ -253,8 +303,9 @@ void Che_mesh::add_face (int fi, int v1, int v2, int v3)
 
 int Che_mesh::is_border (int vi)
 {
-	std::map<int,int>::iterator it = map_edges_vertex->find (vi);
-	if (it == map_edges_vertex->end())
+	std::map<int,int> *vertex_map = VertexEdgeMap ();
+	std::map<int,int>::iterator it = vertex_map->find (vi);
+	if (it == vertex_map->end())
 		return -1;
 
 	int e = it->second;
@@ -276,8 +327,9 @@ int Che_mesh::is_border (int vi)
 
 int Che_mesh::vertex_is_near_border (int vi)
 {
-	std::map<int,int>::iterator it = map_edges_vertex->find (vi);
-	if (it == map_edges_vertex->end ())
+	std::map<int,int> *vertex_map = VertexEdgeMap ();
+	std::map<int,int>::iterator it = vertex_map->find (vi);
+	if (it == vertex_map->end ())
 		return -1;
 
 	int e = it->second;
@@ -298,22 +350,16 @@ int Che_mesh::vertex_is_near_border (int vi)
 // search - returns edge index, -1 if not found
 int Che_mesh::get_edge (int v1, int v2)
 {
-	map_edges::iterator it = m_map_edges->find (std::make_pair(v1, v2));
-	return (it == m_map_edges->end())? -1 : it->second;
+	map_edges *edge_map = EdgeMap ();
+	map_edges::iterator it = edge_map->find (std::make_pair(v1, v2));
+	return (it == edge_map->end())? -1 : it->second;
 }
 
 int Che_mesh::get_edge_from_vertex (int vi)
 {
-	std::map<int,int>::iterator it = map_edges_vertex->find (vi);
-	if (it == map_edges_vertex->end())
-		return -1;
-	return it->second;
-}
-
-int Che_mesh::get_edge_from_face (int fi)
-{
-	std::map<int,int>::iterator it = map_edges_face->find (fi);
-	if (it == map_edges_face->end())
+	std::map<int,int> *vertex_map = VertexEdgeMap ();
+	std::map<int,int>::iterator it = vertex_map->find (vi);
+	if (it == vertex_map->end())
 		return -1;
 	return it->second;
 }
@@ -372,43 +418,15 @@ void Che_mesh::create_half_edge (unsigned int nVertices, unsigned int nFaces, un
 	}
 
 	// build the pair links
-	Cedges_visited *loc_ev = new Cedges_visited (nVertices);
-	for (i=0; i<3*(int)nFaces; i++)
-	{
-		int loc_a = m_edges[i].m_v_begin;
-		int loc_b = m_edges[i].m_v_end;
+	pair_half_edges (m_edges, m_ne, (int)nVertices);
 
-		int index = loc_ev->is_edge_visited (loc_a, loc_b);
-		if (index != -1)
-		{
-			m_edges[i].m_pair     = index;
-			m_edges[index].m_pair = i;
-			loc_ev->delete_edge (loc_a, loc_b);
-		}
-		else
-			loc_ev->add_edge (loc_a, loc_b, i);
-	}
-	delete loc_ev;
-
-	// populate the maps from m_edges for lookup functions
+	// Les cartes NE SONT PAS remplies ici : elles le seront au premier acces,
+	// depuis ces memes vecteurs (Che_mesh::EnsureMaps). Les vider maintenant
+	// rend la memoire d'une construction precedente sur le meme objet.
 	m_map_edges->clear();
 	map_edges_vertex->clear();
 	map_edges_face->clear();
-	for (i=0; i<m_ne; i++)
-	{
-		m_map_edges->insert(std::make_pair(
-			std::make_pair(m_edges[i].m_v_begin, m_edges[i].m_v_end), i));
-	}
-	for (i=0; i<(int)nVertices; i++)
-	{
-		if (m_edges_vertex[i] >= 0)
-			map_edges_vertex->insert(std::make_pair(i, m_edges_vertex[i]));
-	}
-	for (i=0; i<(int)nFaces; i++)
-	{
-		if (m_edges_face[i] >= 0)
-			map_edges_face->insert(std::make_pair(i, m_edges_face[i]));
-	}
+	m_maps_built = false;
 }
 
 
@@ -419,6 +437,15 @@ void Che_mesh::edge_flip (int par_edge)
 {
 	if (m_edges[par_edge].m_pair < 0)
 		return;
+
+	// ⚠ Ce basculement ecrit dans m_edges et dans m_edges_vertex / m_edges_face,
+	// mais PAS dans les cartes : elles restent telles qu'elles etaient avant.
+	// C'etait deja le cas quand elles etaient construites d'office. Les
+	// construire ici preserve exactement ce comportement -- sans cet appel, un
+	// premier acces posterieur les batirait sur les vecteurs DEJA bascules, ce
+	// qui n'est pas la meme chose. C'est le prix de l'equivalence, et il ne se
+	// paie que sur les chemins qui basculent des aretes.
+	EnsureMaps ();
 
 	// get the half edges
 	int loc_e1 = m_edges[par_edge].m_he_next;
@@ -472,6 +499,10 @@ void Che_mesh::edge_contract (int ei)
 {
 	if (m_edges[ei].m_pair < 0)
 		return;
+
+	// Meme raison que dans edge_flip : cette contraction-ci ecrit dans les
+	// vecteurs et laisse les cartes intactes. Les figer maintenant.
+	EnsureMaps ();
 
 	// vertices implied in the edge
 	int iv1 = m_edges[ei].m_v_begin;
@@ -563,6 +594,12 @@ int Che_mesh::edge_contract2 (int ei)
 {
 	if (!is_edge_contract2_valid (ei))
 		return -1;
+
+	// Cette contraction ENTRETIENT les cartes en place (erase/insert) au lieu de
+	// les refaire : il faut donc qu'elles existent. is_edge_contract2_valid les
+	// a deja construites via get_edge_from_vertex, mais ne pas s'appuyer
+	// la-dessus -- un futur raccourci de validation les laisserait absentes.
+	EnsureMaps ();
 
 	int iv1 = m_edges[ei].m_v_begin;
 	int iv2 = m_edges[ei].m_v_end;

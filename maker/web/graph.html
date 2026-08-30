@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Graphe nodal — maker</title>
+  <link rel="stylesheet" href="./style.css">
+  <style>
+    /* La page du graphe ne partage pas le shell des six pages de formes : son
+       module vit dans un worker et son canvas lui est TRANSFERE, donc rien du
+       montage de shell.js ne s'y applique. */
+    body { display: flex; height: 100vh; margin: 0; }
+    #panel { width: 20rem; overflow: auto; padding: .75rem; box-sizing: border-box; }
+    #stage { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    #view { flex: 1; width: 100%; display: block; background: #16181d; outline: none; }
+    #log { height: 8rem; overflow: auto; font: 11px/1.45 ui-monospace, monospace;
+           white-space: pre-wrap; padding: .5rem; }
+    .row { display: flex; gap: .25rem; flex-wrap: wrap; margin: .35rem 0; }
+    h2 { font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; margin: .9rem 0 .3rem; }
+    #summary { font-weight: 700; }
+    kbd { font: 11px ui-monospace, monospace; border: 1px solid #555; border-radius: 3px;
+          padding: 0 .25rem; }
+  </style>
+</head>
+<body>
+  <aside id="panel">
+    <h1>Graphe</h1>
+    <p>
+      Le module de cette page vit dans un <strong>Web Worker</strong>, qui possède
+      aussi le rendu : le canvas lui est transféré. L'éditeur nodal y est dessiné
+      par ImGui, et les gestes de la souris lui sont routés par messages.
+    </p>
+    <p>
+      Battements du thread UI : <strong id="beat">0</strong> — ils continuent
+      pendant un calcul long. Frames rendues : <strong id="frames">0</strong>.
+    </p>
+
+    <h2>Document</h2>
+    <div id="summary">—</div>
+
+    <h2>Édition</h2>
+    <p>
+      Tout se fait <strong>dans le canvas</strong> : la palette crée les nœuds,
+      un lien se tire d'une sortie vers une entrée, <kbd>Suppr</kbd> retire ce qui
+      est sélectionné, et l'inspecteur règle les paramètres puis lance le calcul.
+    </p>
+
+    <h2>Fichier</h2>
+    <input type="file" id="file">
+
+    <h2>Outils</h2>
+    <div class="row">
+      <button id="overlay">masquer l'éditeur</button>
+      <button id="stats">mémoire</button>
+    </div>
+    <div class="row">
+      <button id="export">exporter le document</button>
+      <button id="reset">vider</button>
+    </div>
+    <div class="row">
+      <label for="open">ouvrir un document</label>
+      <input type="file" id="open" accept=".json,application/json">
+    </div>
+  </aside>
+
+  <main id="stage">
+    <canvas id="view" tabindex="0"></canvas>
+    <div id="log"></div>
+  </main>
+
+  <script type="module" src="./js/graph-host.js"></script>
+</body>
+</html>

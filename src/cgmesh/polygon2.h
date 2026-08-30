@@ -39,10 +39,19 @@ public:
 	int set_point (unsigned int iContour, unsigned int iPoint, float x, float y);
 	int get_point (unsigned int iContour, unsigned int iPoint, float *x, float *y);
 
-	int    get_n_contours (void) { return (int)m_contours.size(); };
+	// Surface de LECTURE, const. Ces quatre-la ne modifient rien -- la lecture
+	// de leurs corps le montre, tesselate comprise : elle remplit des tampons
+	// que l'appelant possede et ne touche pas a m_contours. La non-constance
+	// etait donc un defaut de DECLARATION, pas une contrainte de corps, et elle
+	// interdisait a un consommateur tenant un polygone immuable de les appeler.
+	//
+	// get_points garde sa surcharge non const : elle donne un acces en ECRITURE
+	// sur les points, dont plusieurs algorithmes de ce fichier se servent.
+	int    get_n_contours (void) const { return (int)m_contours.size(); };
+	const float* get_points (unsigned int iContour) const { return (const float*)m_contours[iContour].data(); };
 	float* get_points (unsigned int iContour) { return (float*)m_contours[iContour].data(); };
-	int    get_n_points (unsigned int iContour) { return (int)m_contours[iContour].size(); };
-	int    get_n_points (void) {
+	int    get_n_points (unsigned int iContour) const { return (int)m_contours[iContour].size(); };
+	int    get_n_points (void) const {
 		int nPoints = 0;
 		for (unsigned int i=0; i<m_contours.size(); i++)
 			nPoints += get_n_points (i);
@@ -89,7 +98,7 @@ public:
 
 	// tesselation
 	int tesselate (float **pVertices, unsigned int *nVertices,
-		       unsigned int **pFaces, unsigned int *nFaces);
+		       unsigned int **pFaces, unsigned int *nFaces) const;
 
 	void thicken (Polygon2* polygon, float ithickness, float othickness, int bOpen=1);
 	void dilate (Polygon2* polygon, float d);

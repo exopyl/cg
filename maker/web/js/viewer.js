@@ -190,7 +190,14 @@ export function createViewer({
       });
       // Rotation libre (trackball) au lieu de l'orbite a vecteur up fixe, qui
       // "verrouille" la rotation autour de l'axe vertical.
-      viewer.GetViewer().SetNavigationMode(OV.NavigationMode.FreeOrbit);
+      //
+      // Reglage de CONFORT, donc non fatal : OV.NavigationMode n'existe pas dans
+      // tous les bundles d'Online3DViewer. Le viewer est deja construit a ce
+      // stade ; laisser l'exception remonter le declarerait indisponible alors
+      // qu'il rend.
+      if (OV.NavigationMode && typeof viewer.GetViewer().SetNavigationMode === "function") {
+        viewer.GetViewer().SetNavigationMode(OV.NavigationMode.FreeOrbit);
+      }
       available = true;
     } catch (e) {
       console.error(e);

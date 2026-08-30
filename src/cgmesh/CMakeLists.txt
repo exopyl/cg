@@ -35,6 +35,17 @@ if (EMSCRIPTEN)
         # mesh_io_3ds.h et mesh_io_rply.h, soit deux formats binaires entiers a
         # embarquer pour ecrire un fichier texte.
         ${PROJECT_SOURCE_DIR}/mesh_io_obj.cpp
+        # Mesh::load / Mesh::save, restreints a l'OBJ. Ces deux membres vivent
+        # dans mesh_io.cpp, qui reste exclu ; sans eux, tout consommateur WASM
+        # qui charge ou enregistre un maillage ne LIE pas -- la compilation,
+        # elle, passait deja.
+        ${PROJECT_SOURCE_DIR}/mesh_io_wasm.cpp
+        # Lissage laplacien et decimation QEM : deux algorithmes que la cible
+        # WASM appelle desormais. bvh.cpp accompagne simplification.cpp, qui
+        # l'inclut.
+        ${PROJECT_SOURCE_DIR}/smoothing_laplacian.cpp
+        ${PROJECT_SOURCE_DIR}/simplification.cpp
+        ${PROJECT_SOURCE_DIR}/bvh.cpp
         # Conteneur ZIP generique (entrees non compressees) : livre l'OBJ et son
         # .mtl en un seul fichier, et servira au 3MF. Aucune dependance -- zlib
         # n'est pas requis pour du "stored".
@@ -66,6 +77,11 @@ if (EMSCRIPTEN)
         ${PROJECT_SOURCE_DIR}/clipper.cpp
         ${PROJECT_SOURCE_DIR}/polygon2.cpp
         ${PROJECT_SOURCE_DIR}/polygon2_tesselation.cpp
+        # profils de moulure partages (Profile2D) + extrusion profilee : sortis
+        # d'architecture_gothic.cpp, donc a declarer ICI sans quoi le lien de
+        # maker echoue sur extrudeProfiledToMesh -- « compile » et « lie » sont
+        # deux affirmations distinctes.
+        ${PROJECT_SOURCE_DIR}/profile2d.cpp
         # architecture gothique (remplage parametrique + primitives)
         ${PROJECT_SOURCE_DIR}/architecture_gothic.cpp
         ${PROJECT_SOURCE_DIR}/surface_architecture.cpp
@@ -76,6 +92,7 @@ if (EMSCRIPTEN)
         # interface de parametrage + catalogue de formes
         ${PROJECT_SOURCE_DIR}/parameterized.cpp
         ${PROJECT_SOURCE_DIR}/parameterized_shapes.cpp
+        ${PROJECT_SOURCE_DIR}/parametric_catalog.cpp
     )
 else()
     file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/*.cpp)
@@ -104,7 +121,12 @@ endif (UNIX)
 add_library(cgmesh STATIC ${HEADER_FILES} ${SRC_FILES} ${GLUTESS_HEADER_FILES} ${GLUTESS_SRC_FILES} ${CLIPPER2_SRC_FILES} ${CLIPPER2_HEADER_FILES})
 source_group("glutess" FILES ${GLUTESS_HEADER_FILES} ${GLUTESS_SRC_FILES})
 source_group("clipper2" FILES ${CLIPPER2_SRC_FILES} ${CLIPPER2_HEADER_FILES})
-target_include_directories(cgmesh PUBLIC ${PROJECT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../../extern)
+target_include_directories(cgmesh PUBLIC ${PROJECT_SOURCE_DIR})
+# extern/ en SYSTEM : les en-tetes tierces versionnees (clipper2, glutess) ne se
+# corrigent pas ici, leurs diagnostics ne doivent donc pas se melanger aux
+# notres. Sans cela -Wsuggest-destructor-override rend du bruit permanent sur
+# clipper.engine.h, et un avertissement qu'on apprend a ignorer ne sert plus.
+target_include_directories(cgmesh SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../extern)
 target_link_libraries(cgmesh cgimg)
 
 # std::thread (thickness parallelisation) needs pthread on Linux; Threads::Threads

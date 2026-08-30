@@ -70,7 +70,7 @@ public:
 	Plane (Vector3f normale, float distance);
 	Plane (Vector3f v1, Vector3f v2, Vector3f v3);
 	Plane (Vector3f pt, Vector3f normale);
-	~Plane () {};
+	~Plane () override {};
 	
 	float distance_point (Vector3f v);                 // distance between the plane and a point
 	float distance_point (float x, float y, float z);  // distance between the plane and a point
@@ -92,10 +92,10 @@ public:
 	void fitting (Vector3f *array, int n);
 
 	// intersections
-	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const;
-	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const;
+	int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const override;
+	int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const override;
 
-	virtual const void* GetMaterial (void) const { return nullptr; };
+	const void* GetMaterial (void) const override { return nullptr; };
 
 private:
 	// equation of a plane : ax + by + cz + d = 0
@@ -283,7 +283,7 @@ public:
 		m_fRadius = 1.;
 		m_pAABox = std::make_unique<AABox> (Vector3 (-1., -1., -1.), Vector3 (1., 1., 1.));
 	};
-	~Sphere () = default;
+	~Sphere () override = default;
 
 	void SetCenter (float vCenter[3])
 	{
@@ -309,10 +309,10 @@ public:
 	};
 
 	// intersections
-	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const;
-	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const;
+	int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const override;
+	int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const override;
 
-	virtual const void* GetMaterial (void) const { return nullptr; };
+	const void* GetMaterial (void) const override { return nullptr; };
 
 private:
 	float m_vCenter[3];
@@ -334,13 +334,13 @@ public:
 		r = _r;
 		m_pAABox = nullptr;
 	};
-	~Torus () = default;
+	~Torus () override = default;
 
 	// intersections
-	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const;
-	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const;
+	int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const override;
+	int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const override;
 
-	virtual const void* GetMaterial (void) const { return nullptr; };
+	const void* GetMaterial (void) const override { return nullptr; };
 
 public:
 	float R, r;
@@ -357,7 +357,7 @@ public:
 			m_v[i].Set (0., 0., 0.);
 		m_pAABox = nullptr;
 	};
-	~Triangle () = default;
+	~Triangle () override = default;
 
 	inline void SetVertex (int i, float x, float y, float z)
 	{
@@ -380,10 +380,10 @@ public:
 	}
 
 	// intersections
-	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const;
-	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const;
+	int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const override;
+	int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const override;
 
-	virtual const void* GetMaterial (void) const { return nullptr; };
+	const void* GetMaterial (void) const override { return nullptr; };
 
 public:
 	Vector3f m_v[3];

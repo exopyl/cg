@@ -14,7 +14,7 @@ class ParametricSurface : public Mesh
 {
 public:
 	ParametricSurface () {};
-	virtual ~ParametricSurface () {};
+	~ParametricSurface () override {};
 
 public:
 	virtual bool EvaluatePosition (float u, float v, diff_s *diff) = 0;
@@ -43,8 +43,8 @@ class ParametricSphere : public ParametricSurface
 {
 public:
 	ParametricSphere (unsigned int nu=20, unsigned int nv=20);
-	~ParametricSphere () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~ParametricSphere () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 // 
@@ -52,8 +52,8 @@ class EllipticHelicoid : public ParametricSurface
 {
 public:
 	EllipticHelicoid (unsigned int nu=20, unsigned int nv=20, float a=1.0f, float b=1.0f, float c=0.2f);
-	~EllipticHelicoid () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~EllipticHelicoid () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 // 
@@ -61,8 +61,8 @@ class SeaShell : public ParametricSurface
 {
 public:
 	SeaShell (unsigned int nu=20, unsigned int nv=20);
-	~SeaShell () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~SeaShell () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 // 
@@ -70,16 +70,16 @@ class SeaShellVonSeggern : public ParametricSurface
 {
 public:
 	SeaShellVonSeggern (unsigned int nu=20, unsigned int nv=20, float a=0.2f, float b=1.0f, float c=0.1f, float n=2.0f);
-	~SeaShellVonSeggern () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~SeaShellVonSeggern () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 class CorkscrewSurface : public ParametricSurface
 {
 public:
 	CorkscrewSurface (unsigned int nu=20, unsigned int nv=20, float a=1.0f, float b=0.5f);
-	~CorkscrewSurface () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~CorkscrewSurface () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 // 
@@ -87,8 +87,8 @@ class MobiusStrip : public ParametricSurface
 {
 public:
 	MobiusStrip (unsigned int nu=20, unsigned int nv=20, float w=0.1f, float r=0.5f);
-	~MobiusStrip () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~MobiusStrip () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 // 
@@ -96,8 +96,8 @@ class RadialWave : public ParametricSurface
 {
 public:
 	RadialWave (unsigned int nu=20, unsigned int nv=20, float radius=10.0f, float height=20.0f, float frequency=0.6f);
-	~RadialWave () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~RadialWave () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 //
@@ -105,8 +105,8 @@ class ParametricTorus : public ParametricSurface
 {
 public:
 	ParametricTorus (unsigned int nu=20, unsigned int nv=20, float radius1=5.0f, float radius2=2.0f);
-	~ParametricTorus () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~ParametricTorus () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 
@@ -120,8 +120,8 @@ class Breather : public ParametricSurface
 {
 public:
 	Breather (unsigned int nu=20, unsigned int nv=20);
-	~Breather () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~Breather () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 /*
@@ -135,15 +135,15 @@ class BorromeanRing : public ParametricSurface
 	friend class BorromeanRings;
 public:
 	BorromeanRing (unsigned int nu=20, unsigned int nv=20, float param1=2.0f, float param2=1.0f, float r=0.2f);
-	~BorromeanRing () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~BorromeanRing () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 class BorromeanRings : public Mesh
 {
 public:
 	BorromeanRings (unsigned int nu=20, unsigned int nv=20);
-	~BorromeanRings () {};
+	~BorromeanRings () override {};
 	bool EvaluatePosition (float u, float v, diff_s *diff);
 };
 /*
@@ -154,16 +154,16 @@ class TorusKnot : public ParametricSurface
 {
 public:
 	TorusKnot (unsigned int nu=20, unsigned int nv=20, unsigned int a=3, unsigned int b=4);
-	~TorusKnot () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~TorusKnot () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 class CinquefoilKnot : public ParametricSurface
 {
 public:
 	CinquefoilKnot (unsigned int nu=20, unsigned int nv=20, unsigned int a=3);
-	~CinquefoilKnot () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~CinquefoilKnot () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 //
@@ -171,8 +171,8 @@ class TrefoilKnot1 : public ParametricSurface
 {
 public:
 	TrefoilKnot1 (unsigned int nu=20, unsigned int nv=20);
-	~TrefoilKnot1 () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~TrefoilKnot1 () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 //
@@ -180,8 +180,8 @@ class TrefoilKnot2 : public ParametricSurface
 {
 public:
 	TrefoilKnot2 (unsigned int nu=20, unsigned int nv=20);
-	~TrefoilKnot2 () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~TrefoilKnot2 () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 
@@ -191,63 +191,63 @@ class HyperbolicParaboloid : public ParametricSurface
 {
 public:
 	HyperbolicParaboloid (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
-	~HyperbolicParaboloid () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~HyperbolicParaboloid () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 class MonkeySaddle : public ParametricSurface
 {
 public:
 	MonkeySaddle (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
-	~MonkeySaddle () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~MonkeySaddle () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 class Blobs : public ParametricSurface
 {
 public:
 	Blobs (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
-	~Blobs () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~Blobs () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 class Drop : public ParametricSurface
 {
 public:
 	Drop (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
-	~Drop () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~Drop () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 class Wave1 : public ParametricSurface
 {
 public:
 	Wave1 (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
-	~Wave1 () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~Wave1 () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 class Wave2 : public ParametricSurface
 {
 public:
 	Wave2 (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
-	~Wave2 () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~Wave2 () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 class Weight : public ParametricSurface
 {
 public:
 	Weight (unsigned int nu=20, unsigned int nv=20, float xmin=-5.0f, float xmax=5.0f, float ymin=-5.0f, float ymax=5.0f);
-	~Weight () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~Weight () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 
 class Guimard : public ParametricSurface
 {
 public:
 	Guimard (unsigned int nu=20, unsigned int nv=20, float a=2.0f, float b=3.0f, float c=1.0f);
-	~Guimard () {};
-	bool EvaluatePosition (float u, float v, diff_s *diff);
+	~Guimard () override {};
+	bool EvaluatePosition (float u, float v, diff_s *diff) override;
 };
 

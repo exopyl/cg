@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Fumée — la page graph.html telle qu'elle est livrée</title>
+  <style>iframe { width: 1100px; height: 700px; border: 1px solid #444; }</style>
+</head>
+<body>
+  <!-- Les sondes de step7.js importent le PONT et court-circuitent la page.
+       Celle-ci fait l'inverse : elle charge graph.html telle quelle, dans une
+       iframe de même origine, et lit ce que la page a réellement affiché. Sans
+       elle, le contrôleur de la page (graph-host.js) ne serait couvert par
+       rien. -->
+  <iframe id="page" src="../web/graph.html"></iframe>
+  <pre id="out">chargement…</pre>
+  <script type="module" src="./smoke_graph.js"></script>
+</body>
+</html>

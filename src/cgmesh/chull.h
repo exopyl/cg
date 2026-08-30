@@ -37,6 +37,7 @@
  *
  ********************************************************************/
 #pragma once
+class Context;
 class Chull3D_vertex;
 class Chull3D_edge;
 class Chull3D_face;
@@ -52,7 +53,11 @@ class Chull3D
   Chull3D (float *vertices, int n_vertices);
   ~Chull3D ();
 
-  void compute        (void);
+  // ctx optionnel : quand il porte l'annulation, la construction s'arrete dans
+  // sa boucle externe -- l'insertion incrementale des sommets -- et l'enveloppe
+  // reste PARTIELLE. C'est a l'appelant de ne pas la lire : le contexte, pas
+  // l'objet, dit si le resultat vaut quelque chose.
+  void compute        (const Context *ctx = nullptr);
 
   int  get_n_vertices (void);
   int  get_n_faces    (void);
@@ -82,7 +87,7 @@ class Chull3D
   void clean_faces    (void);
   void clean_vertices (Chull3D_vertex **pvnext);
   int double_triangle (void);
-  int construct_hull  (void);
+  int construct_hull  (const Context *ctx);
 
   int get_vertex_index (Chull3D_vertex *v);
 

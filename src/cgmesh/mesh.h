@@ -22,7 +22,7 @@ class Mesh : public Geometry
 public:
 	Mesh ();
 	Mesh (unsigned int nVertices, unsigned int nFaces);
-	~Mesh();
+	~Mesh() override;
 
 	// Copie PROFONDE : le maillage copie ne partage rien de mutable avec
 	// l'original. `= default` suffit, chaque membre etant un type valeur -- ne pas
@@ -36,16 +36,16 @@ public:
 	void Dump() const;
 
 	// from class Geometry
-	bool GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d) const;
+	bool GetIntersectionBboxWithRay (const Vector3f &o, const Vector3f &d) const override;
 
 	// Chemin NON ACCELERE : tous les triangles testes, sans structure spatiale.
 	// Existe parce que Geometry la declare virtuelle pure -- la retirer rendrait
 	// Mesh abstraite -- et sert les appelants qui ne voient qu'un `Geometry*`.
 	// Pour du lancer de rayon repete, utiliser mesh_raycast.h : un octree detenu
 	// par l'appelant et la fonction libre qui l'exploite.
-	virtual int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const;
-	virtual int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const;
-	virtual const void* GetMaterial (void) const;
+	int GetIntersectionWithRay (const Vector3f &o, const Vector3f &d, float *_t, Vector3f &i, Vector3f &n) const override;
+	int GetIntersectionWithSegment (const Vector3f &vStart, const Vector3f &vEnd, float *_t, Vector3f &i, Vector3f &n) const override;
+	const void* GetMaterial (void) const override;
 
 private:
 	void DeleteFaces (void);

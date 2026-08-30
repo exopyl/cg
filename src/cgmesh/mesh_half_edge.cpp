@@ -132,7 +132,7 @@ Mesh_half_edge::Mesh_half_edge (int par_nv, float *par_v, int par_nf, unsigned i
 	m_pMesh->SetFaces (par_nf, 3, par_f);
 }
 
-Mesh_half_edge::Mesh_half_edge (Mesh *pMesh)
+Mesh_half_edge::Mesh_half_edge (const Mesh *pMesh)
 {
 	// Copie PROFONDE : le maillage enveloppe garde ses materiaux, ses UV, ses
 	// tenseurs, ses lignes, ses points -- et son identite de POLYGONE.
@@ -156,6 +156,19 @@ Mesh_half_edge::Mesh_half_edge (const char *par_filename)
 {
 	m_pMesh = new Mesh();
 	m_pMesh->load (par_filename);
+}
+
+Mesh *Mesh_half_edge::release (void)
+{
+	Mesh *released = m_pMesh;
+	m_pMesh = new Mesh ();
+	// La structure demi-arete et les tableaux de topologie decrivaient le
+	// maillage qui vient de partir. Les garder ferait rendre a is_border () et a
+	// GetCheMesh () des reponses sur un maillage qui n'est plus la.
+	m_pCheMesh.reset ();
+	m_topology_ok.clear ();
+	m_border.clear ();
+	return released;
 }
 
 void Mesh_half_edge::create_half_edge (void)
@@ -222,32 +235,6 @@ void Mesh_half_edge::export_statistics (const std::string & filename)
 	fclose (ptr);
 }
 
-
-int Mesh_half_edge::get_edge (unsigned int v1, unsigned int v2)
-{
-	if (!is_manifold (v1))
-		return -1;
-
-	int he = GetCheMesh()->m_edges_vertex[v1];
-	int he_walk = he;
-	int bFound = 0;
-	do
-	{
-		if (he_walk < 0)
-			break;
-		if (GetCheMesh()->edge(he_walk).m_v_end == (int)v2)
-		{
-			bFound = 1;
-			break;
-		}
-
-		int n1 = GetCheMesh()->edge(he_walk).m_he_next;
-		int n2 = GetCheMesh()->edge(n1).m_he_next;
-		he_walk = GetCheMesh()->edge(n2).m_pair;
-	} while (he_walk != he);
-
-	return (bFound)? he_walk : -1;
-}
 
 /**
 * Destructor.

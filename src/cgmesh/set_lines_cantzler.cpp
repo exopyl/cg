@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <string.h>
 
+#include <map>
+#include <utility>
 #include <vector>
 
 #include "set_lines.h"
@@ -14,20 +16,35 @@ void Cset_lines::cantzler_extract_edges (float threshold)
 {
 	const float *fn = model->m_pMesh->GetFaceNormals ().data();
 	const float *v = model->m_pMesh->GetVertices ().data();
-	int nv = model->m_pMesh->GetNVertices ();
 	int ne = 3*model->m_pMesh->GetNFaces ();
 	Che_mesh *cheMesh = model->GetCheMesh();
 
-	// visited half edges
-	Cedges_visited *ev = new Cedges_visited (nv);
+	// Demi-aretes deja vues, par paire de sommets NON ORIENTEE. Remplace le
+	// cache Cedges_visited, retire de half_edge.h : l'appariement des demi-aretes
+	// se fait desormais par rangement CSR, et cette boucle-ci etait son dernier
+	// autre usage.
+	//
+	// ⚠ La comparaison est « > 0 », pas « >= 0 », et c'est repris TEL QUEL du
+	// cache : la demi-arete d'indice 0 est bien enregistree, mais relue comme
+	// non vue, donc son arete est traitee DEUX fois. Le comportement est
+	// preserve a l'identique -- ce fichier n'est dans aucune cible du
+	// CMakeLists, donc aucun test ne pourrait dire si le corriger casse quelque
+	// chose.
+	std::map<std::pair<int,int>,int> visited;
 	for (int i=0; i<ne; i++)
 	{
 		Vector3f n1, n2;
 		int f1, f2;
 		Che_edge &ei = cheMesh->edge(i);
-		if (ei.m_pair < 0 || ev->is_edge_visited (ei.m_v_begin, ei.m_v_end) > 0)
+		const std::pair<int,int> key = ei.m_v_begin < ei.m_v_end
+			? std::make_pair (ei.m_v_begin, ei.m_v_end)
+			: std::make_pair (ei.m_v_end, ei.m_v_begin);
+		std::map<std::pair<int,int>,int>::const_iterator seen = visited.find (key);
+		if (ei.m_pair < 0 || (seen != visited.end () && seen->second > 0))
 			continue;
-		ev->add_edge (ei.m_v_begin, ei.m_v_end,i);
+		// insert ne remplace pas : la PREMIERE demi-arete vue garde la cle,
+		// comme le faisait le balayage lineaire du cache.
+		visited.insert (std::make_pair (key, i));
 
 		f1 = ei.m_face;
 		f2 = cheMesh->edge(ei.m_pair).m_face;
@@ -64,7 +81,6 @@ void Cset_lines::cantzler_extract_edges (float threshold)
 						2.0);
 		}
 	}
-	delete ev;
 }
 
 /* distance between a line and a point */

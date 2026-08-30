@@ -3,6 +3,7 @@
 
 #include "parameterized.h"
 #include "mesh.h"
+#include "profile2d.h"          // Profile2D -- sous-objets geometriques promus
 #include "image_pixel_blocks.h"   // ImagePixelBlocksOptions
 #include "surface_implicit_pointcloud.h"
 
@@ -580,7 +581,36 @@ public:
 	// (src/cgmath/gothic-window-v2.schema) — the inverse of LoadFromJson, so the
 	// result re-imports to the same window. Pretty-printed JSON string.
 	std::string ExportJson() const;
+// Profils EXPLICITES -- ce que le menu `Profile` ne sait pas dire.
+	//
+	// Le parametre `Profile` est une enumeration a cinq positions : Flat,
+	// Chamfer, et trois barres. Un profil de moulure est pourtant une COURBE --
+	// une ebrasure a sa pente, une doucine sa courbure --, et l'ecraser en cinq
+	// positions figees etait la limite du modele plat. Ces deux poseurs
+	// l'ouvrent : le profil devient une VALEUR, produite ailleurs, et la famille
+	// cesse d'etre un menu.
+	//
+	//   - ebrasement (ouvert, en (u = enfoncement, v = rentrant)) : remplace la
+	//     position Chamfer, consomme par extrudeProfiledToMesh ;
+	//   - barre (ferme) : remplace les trois positions de barre, balaye par
+	//     buildBayMoulding le long des vraies silhouettes d'ouverture.
+	//
+	// Nul = revenir au menu. Les deux sont independants : poser le seul
+	// ebrasement laisse les barres au menu, et l'inverse.
+	//
+	// ⚠ Les points sont en UNITES MONDE de la baie, dont la largeur par defaut
+	// vaut 200 : un profil d'une unite y est invisible. Le u des barres est
+	// RELATIF a la face avant ; c'est buildBayMoulding qui recoit la cote de
+	// cette face, et non l'auteur du profil.
+	void SetSplayProfile (const Profile2D *profile);
+	void SetBarProfile (const Profile2D *profile);
+
 private:
+	bool     m_hasSplayProfile = false;
+	Profile2D m_splayProfile;
+	bool     m_hasBarProfile = false;
+	Profile2D m_barProfile;
+
 	// arch
 	float m_width = 200.f, m_excess = 1.0f, m_offsetOuter = 16.f, m_offsetInner = 10.f;
 	// straight body below the pointed heads (main frame + lancets) : turns the

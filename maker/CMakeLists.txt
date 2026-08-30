@@ -23,11 +23,59 @@ if (NOT EMSCRIPTEN)
         "  emcmake cmake --preset maker-wasm")
 endif()
 
-add_executable(maker wasm_api.cpp)
+# UN SEUL artefact (D27) : les trois facades Embind -- les formes parametriques
+# (wasm_api.cpp), la couche nodale procedurale (graph_api.cpp) et l'hote ImGui
+# du canvas nodal (graph_editor.cpp) -- vivent dans le meme maker.js. Ce sont
+# les INSTANCES qui sont deux (D17) : les six pages chargent la leur sur le
+# thread UI, graph.html charge la sienne dans un Web Worker.
+#
+# imgui_impl_opengl3.cpp est ici et non dans src/cggraph/canvas : les BACKENDS
+# d'ImGui appartiennent a l'HOTE, jamais au canvas, exactement comme dans
+# cggraph-boilerplate. C'est le seul endroit ou l'API graphique est choisie.
+#
+# ⚠ PAS d'imgui_impl_glfw ici, alors que l'hote natif en a un : le port GLFW de
+# la chaine Emscripten s'adresse au DOM, et il n'y a pas de DOM dans un Web
+# Worker. Les evenements d'entree arrivent par postMessage et sont pousses dans
+# ImGuiIO par graph_editor.cpp.
+add_executable(maker
+    wasm_api.cpp
+    graph_api.cpp
+    graph_editor.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp)
+
+# WebGL 2, et il faut le dire DEUX fois, a deux etages differents :
+#  - au backend d'ImGui, dont la detection automatique choisit ES2/WebGL1 sous
+#    Emscripten (imgui_impl_opengl3.h, la branche __EMSCRIPTEN__) ;
+#  - a la chaine, dont MAX_WEBGL_VERSION vaut 1 par defaut.
+# Sans les deux, l'interface serait dessinee en WebGL1 sur un contexte WebGL2
+# que le JS de l'apercu a deja cree -- deux contextes sur un canvas, donc un
+# refus du navigateur.
+target_compile_definitions(maker PRIVATE IMGUI_IMPL_OPENGL_ES3)
+
+# Les avertissements du code tiers ne sont pas les notres, et les melanger aux
+# notres rend les notres invisibles. Meme traitement que src/cggraph/canvas, qui
+# compile les memes sources : imgui.h construit ses ImDrawList par memset, ce que
+# clang signale a chaque unite qui l'inclut.
+set_source_files_properties(
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+    graph_editor.cpp
+    PROPERTIES COMPILE_OPTIONS "-Wno-nontrivial-memcall")
 
 # le module de maillage tire ses deux dependances transitivement (plain-signature link dans les
 # CMakeLists des modules natifs).
-target_link_libraries(maker PRIVATE cgmesh)
+#
+# cggraph_nodes tire cggraph et cgmesh de la meme facon. C'est la premiere fois
+# que ces deux cibles sont LIEES par la chaine Emscripten et non seulement
+# compilees : le constat E6 du plan (« compilee, jamais liee ») portait sur la
+# compilation, et le lien a manque quatre symboles de cgmesh -- Mesh::load,
+# Mesh::save, MeshAlgoSmoothingLaplacian::Apply et Mesh_half_edge::simplify --,
+# tous ajoutes a la liste EMSCRIPTEN de src/cgmesh/CMakeLists.txt.
+#
+# cggraph_canvas amene ImGui et imgui-node-editor. C'est la contrepartie chiffree
+# de D27 : l'artefact etant unique, les six pages qui n'ouvrent jamais le graphe
+# portent le poids du canvas. Le chiffre est mesure avant/apres sur le meme etat
+# de l'arbre, jamais estime.
+target_link_libraries(maker PRIVATE cggraph_canvas cggraph_ui cggraph_nodes cgmesh)
 
 # Sortie : maker.js + maker.wasm dans maker/web/, ou la page index.html les
 # reference en ./maker.js.
@@ -76,7 +124,10 @@ target_compile_options(maker PRIVATE -fexceptions)
 #  MODULARIZE+EXPORT_ES6 : import ES6 `createMakerModule()` -> Promise<Module>
 #  ALLOW_MEMORY_GROWTH : heap extensible (maillages volumineux)
 #  FORCE_FILESYSTEM    : MEMFS pour l'import SVG par octets (ANALYSE sec.7)
-#  ENVIRONMENT=web     : cible navigateur uniquement
+#  ENVIRONMENT=web,worker : le module doit pouvoir s'instancier AUSSI dans un
+#                      Web Worker -- c'est la cible du graphe (option (a), D5 /
+#                      D27). Un seul artefact pour les deux : `web` seul ferait
+#                      echouer le chargement dans le worker au demarrage.
 target_link_options(maker PRIVATE
     -lembind
     -fexceptions
@@ -85,5 +136,6 @@ target_link_options(maker PRIVATE
     "-sEXPORT_NAME=createMakerModule"
     "-sALLOW_MEMORY_GROWTH=1"
     "-sFORCE_FILESYSTEM=1"
-    "-sENVIRONMENT=web"
+    "-sENVIRONMENT=web,worker"
+    "-sMAX_WEBGL_VERSION=2"
     "-sEXPORTED_RUNTIME_METHODS=FS,ccall,cwrap")

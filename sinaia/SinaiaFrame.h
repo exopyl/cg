@@ -184,7 +184,7 @@ public:
             const wxSize& size = wxDefaultSize,
             long style = wxDEFAULT_FRAME_STYLE | wxSUNKEN_BORDER);
 
-    ~MyFrame();
+    ~MyFrame() override;
 
     wxAuiDockArt* GetDockArt();
     void DoUpdate();

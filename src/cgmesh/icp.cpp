@@ -2,6 +2,7 @@
 
 #include "mesh.h"
 #include "bvh.h"
+#include "../cgmath/context.h"
 
 #include <algorithm>
 #include <cmath>
@@ -96,7 +97,8 @@ static void orthonormalize(double R[9])
 
 } // namespace
 
-ICPResult icp_align(const std::vector<float>& srcPts, Mesh& target, const ICPOptions& opt)
+ICPResult icp_align(const std::vector<float>& srcPts, Mesh& target, const ICPOptions& opt,
+                    const Context* ctx)
 {
     ICPResult res;
     const size_t N = srcPts.size()/3;
@@ -128,6 +130,11 @@ ICPResult icp_align(const std::vector<float>& srcPts, Mesh& target, const ICPOpt
 
     for (int iter=0; iter<opt.maxIterations; ++iter)
     {
+        // SEUL point de test du jeton, et il est dans la boucle externe. Il
+        // tombe des iter == 0, donc un drapeau pose avant l'appel est vu avant
+        // toute recherche de correspondance ; res reste alors la pose initiale.
+        if (ctx && ctx->IsAborted()) break;
+
         // 1) correspondances closest-point
         for (size_t i=0;i<N;++i)
         {

@@ -1,6 +1,8 @@
 #include <vector>
 
 #include "DiffParamEvaluator.h"
+#include "../cgmath/context.h"
+#include "../cgimg/color.h"
 
 //
 //
@@ -210,44 +212,38 @@ void MeshAlgoTensorEvaluator::Dump (void)
 //
 // Evaluation of the tensor
 //
-bool MeshAlgoTensorEvaluator::Evaluate (TensorMethodId tensorMethodId)
+bool MeshAlgoTensorEvaluator::Evaluate (TensorMethodId tensorMethodId, const Context *ctx)
 {
+	// Le code de retour de la methode est desormais LU. Il ne l'etait pas :
+	// Evaluate estampillait les tenseurs valides quoi qu'il arrive, si bien
+	// qu'une methode ayant renonce laissait derriere elle des tenseurs partiels
+	// reputes a jour. C'est aussi ce qui rend l'annulation observable.
+	bool ok = false;
 	switch (tensorMethodId)
 	{
 	case TENSOR_HAMANN:
-		{
-			ApplyHamann ();
-		}
+		ok = ApplyHamann (ctx);
 		break;
 	case TENSOR_TAUBIN:
-		{
-			ApplyTaubin ();
-		}
+		ok = ApplyTaubin (ctx);
 		break;
 	case TENSOR_DESBRUN:
-		{
-			ApplyDesbrun ();
-		}
+		ok = ApplyDesbrun (ctx);
 		break;
 	case TENSOR_STEINER:
-		{
-			ApplySteiner ();
-		}
+		ok = ApplySteiner (ctx);
 		break;
 	case TENSOR_GOLDFEATHER:
-		{
-			ApplyGoldfeather ();
-		}
+		ok = ApplyGoldfeather (ctx);
 		break;
 	case TENSOR_HYBRID:
-		{
-			ApplyHybrid ();
-		}
+		ok = ApplyHybrid (ctx);
 		break;
 	default:
 		return false;
-		break;
 	}
+	if (!ok)
+		return false;
 
 	// The Apply* methods wrote the tensors directly into the mesh's storage.
 	// Stamp them as valid for the mesh's current geometry revision so stale
@@ -258,36 +254,6 @@ bool MeshAlgoTensorEvaluator::Evaluate (TensorMethodId tensorMethodId)
 }
 
 
-
-/* jet (inspired by MatLab) */
-/*
-*'red':   ((0., 0, 0), (0.35, 0, 0), (0.66, 1, 1), (0.89,1, 1), (1, 0.5, 0.5)),
-*'green': ((0., 0, 0), (0.125,0, 0), (0.375,1, 1), (0.64,1, 1),(0.91,0,0), (1, 0, 0)),   
-*'blue':  ((0., 0.5, 0.5), (0.11, 1, 1), (0.34, 1, 1), (0.65,0, 0), (1, 0, 0))}
-*/
-static float ri[5] = {0, 0.35, 0.66, 0.89, 1};
-static float rv[5] = {0, 0, 1, 1, 0.5};
-static float gi[6] = {0, 0.125, 0.375, 0.64, 0.91, 1};
-static float gv[6] = {0, 0, 1, 1, 0, 0};
-static float bi[5] = {0, 0.11, 0.34, 0.65, 1};
-static float bv[5] = {0.5, 1, 1, 0, 0};
-
-void
-static get_jet_color (float index, float *r, float *g, float *b)
-{
-	int j;
-	// red
-	for (j=1; j<5; j++) if (ri[j] > index) break;
-	*r = ((rv[j]-rv[j-1])*index+rv[j-1]*ri[j]-rv[j]*ri[j-1])/(ri[j]-ri[j-1]);
-	
-	// green
-	for (j=1; j<5; j++) if (gi[j] > index) break;
-	*g = ((gv[j]-gv[j-1])*index+gv[j-1]*gi[j]-gv[j]*gi[j-1])/(gi[j]-gi[j-1]);
-	
-	// blue
-	for (j=1; j<5; j++) if (bi[j] > index) break;
-	*b = ((bv[j]-bv[j-1])*index+bv[j-1]*bi[j]-bv[j]*bi[j-1])/(bi[j]-bi[j-1]);
-}
 
 void MeshAlgoTensorEvaluator::EvaluateColors (CurvatureType type)
 {
@@ -344,7 +310,7 @@ void MeshAlgoTensorEvaluator::EvaluateColors (CurvatureType type)
 	{
 		if (defined[i])
 		{
-			get_jet_color (array[i]/max_value, &r, &g, &b);
+			color_jet (array[i]/max_value, &r, &g, &b);
 			m_pModel->m_pMesh->SetVertexColor (i, r, g, b);
 		}
 		else

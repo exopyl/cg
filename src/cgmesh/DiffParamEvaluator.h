@@ -1,6 +1,8 @@
 #pragma once
 #include "mesh_half_edge.h"
 
+class Context;
+
 //
 //
 //
@@ -27,7 +29,12 @@ public:
 	~MeshAlgoTensorEvaluator ();
 
 	bool Init (Mesh_half_edge *model);
-	bool Evaluate (TensorMethodId tensorMethodId);
+
+	// ctx optionnel : le jeton est teste dans la boucle sur les sommets de
+	// CHACUNE des methodes. Sur annulation, Evaluate rend false et n'estampille
+	// PAS les tenseurs comme valides -- le maillage en porte donc de partiels,
+	// que AreTensorsValid () signale comme perimes.
+	bool Evaluate (TensorMethodId tensorMethodId, const Context *ctx = nullptr);
 
 	void Dump ();
 
@@ -47,15 +54,15 @@ private:
 	// methods
 	void Reset (void);
 
-	bool ApplyTaubin (void);
-	bool ApplyGoldfeather (void);
-	bool ApplyHamann (void);
-	bool ApplyDesbrun (void);
+	bool ApplyTaubin (const Context *ctx);
+	bool ApplyGoldfeather (const Context *ctx);
+	bool ApplyHamann (const Context *ctx);
+	bool ApplyDesbrun (const Context *ctx);
 
 	void ApplySteinerAux (int index, float radius, int *_n_edges, int **_edges);
-	bool ApplySteiner (void);
+	bool ApplySteiner (const Context *ctx);
 
-	bool ApplyHybrid (void);
+	bool ApplyHybrid (const Context *ctx);
 
 	// Acces par indice au stockage de tenseurs du maillage modele. Valides
 	// seulement apres Init(). TensorAt rend nullptr pour un indice hors bornes

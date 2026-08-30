@@ -174,7 +174,7 @@ static void glutess_combine(double coords[3],
 
 // tesselation
 int Polygon2::tesselate (float **_pVertices, unsigned int *_nVertices,
-			  unsigned int **_pFaces, unsigned int *_nFaces)
+			  unsigned int **_pFaces, unsigned int *_nFaces) const
 {
 	GLUtesselator *tess;
 	double *coords;
@@ -221,7 +221,7 @@ int Polygon2::tesselate (float **_pVertices, unsigned int *_nVertices,
 	for (unsigned int j=0; j<get_n_contours(); j++)
 	{
 		gluTessBeginContour(tess);
-		float *pts = get_points(j);
+		const float *pts = get_points(j);
 		for (unsigned int i=0; i<get_n_points(j); i++)
 		{
 			coords[3 * iVertex + 0] = (double) pts[2*i];

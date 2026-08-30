@@ -278,8 +278,11 @@ TEST(TEST_cgmesh_polygon_tesselate, FromFile)
 	// context
 	Polygon2 pol;
 	pol.input((char *)"./test/data/polygon1.dat");
-	if (pol.get_n_contours() == 0)
-		GTEST_SKIP() << "polygon1.dat not found or empty";
+	// La donnee est livree avec le depot et copiee dans le repertoire de travail
+	// des tests : son absence signale une invocation hors de ce repertoire, pas
+	// une condition d'environnement acceptable.
+	ASSERT_GT(pol.get_n_contours(), 0)
+		<< "./test/data/polygon1.dat introuvable ou illisible";
 
 	float *pVertices = nullptr;
 	unsigned int nVertices = 0;

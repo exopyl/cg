@@ -102,8 +102,19 @@ add_dependencies(${PROJECT_NAME} compile_shaders)
 # Copy the compiled SPIR-V next to the executable so the app is self-contained
 # and launches from any working directory (e.g. double-clicked in Explorer).
 # findShaderDirectory() looks in "<exedir>/shaders" first.
+# copy_directory REECRIT SYSTEMATIQUEMENT, sans comparer dates ni contenu : les
+# shaders etaient reecrits a chaque build, et un vecna.exe en cours d'execution
+# suffisait a faire sortir la commande en "Permission denied". vecna est un
+# projet CMake distinct, non ajoute par la racine du depot : il ne peut pas
+# heriter du CG_COPY_DIRECTORY defini la-bas, d'ou cette copie.
+if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.26)
+    set(VECNA_COPY_DIRECTORY copy_directory_if_different)
+else ()
+    set(VECNA_COPY_DIRECTORY copy_directory)
+endif ()
+
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    COMMAND ${CMAKE_COMMAND} -E ${VECNA_COPY_DIRECTORY}
             ${CMAKE_CURRENT_SOURCE_DIR}/shaders/compiled
             $<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders
     COMMENT "Copying compiled shaders next to vecna executable"

@@ -14,6 +14,7 @@
 #include <vector>
 
 class Mesh;
+class Context;
 
 struct ICPOptions
 {
@@ -40,6 +41,12 @@ struct ICPResult
 
 // Recale `srcPts` (3*N, format x y z) sur la surface de `target`. Renvoie la
 // transfo (scale, R, T) telle que scale·R·p + T rapproche p de la cible.
+// ctx optionnel : quand il porte l'annulation, la boucle d'iterations s'arrete
+// et le resultat rendu est celui de la DERNIERE iteration achevee, avec
+// `converged` a false. Il n'est donc pas faux, il est seulement moins bon --
+// et c'est au contexte, non au resultat, que l'appelant demande s'il a ete
+// interrompu.
 ICPResult icp_align(const std::vector<float>& srcPts,
                     Mesh&                      target,
-                    const ICPOptions&          opt = ICPOptions());
+                    const ICPOptions&          opt = ICPOptions(),
+                    const Context*        ctx = nullptr);

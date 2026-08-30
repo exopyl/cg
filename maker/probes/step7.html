@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Sondes de l'étape 7</title>
+</head>
+<body>
+  <!-- Le canvas est celui que la sonde TRANSFÈRE au worker. Il est dans la page
+       et non fabriqué en mémoire, parce que transferControlToOffscreen() sur un
+       canvas détaché ne mesurerait pas ce que le produit fait. -->
+  <canvas id="view" width="320" height="240"></canvas>
+  <pre id="out">sondes en cours…</pre>
+  <script type="module" src="./step7.js"></script>
+</body>
+</html>

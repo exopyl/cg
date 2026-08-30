@@ -1,4 +1,5 @@
 #include "ambient_occlusion.h"
+#include "../cgmath/context.h"
 #include "octree.h"
 
 //
@@ -146,12 +147,20 @@ float MeshAlgoAmbientOcclusion::compute_occlusion (int index_receiver, int index
 	return fOcclusion;
 }
 
-float* MeshAlgoAmbientOcclusion::Evaluate (int nPasses)
+float* MeshAlgoAmbientOcclusion::Evaluate (int nPasses, const Context *ctx)
 {
 	if (!m_pMesh)
 		return nullptr;
 
 	m_pMesh->ComputeNormals();
+	// Le rayon d'influence est derive de la diagonale de la boite englobante
+	// (plus bas). Or bbox_diagonal_length () rend la DERNIERE valeur calculee,
+	// sans detecter sa peremption, et BoundingBox::GetDiagonalLength () ne teste
+	// pas m_bEmpty : sur un maillage jamais passe par computebbox (), elle lit
+	// m_min / m_max NON INITIALISES. Le rayon d'influence devenait alors une
+	// valeur indeterminee, et l'occlusion avec lui. Meme precaution que
+	// MeshAlgoThickness, qui rafraichit la boite pour la meme raison.
+	m_pMesh->computebbox ();
 	unsigned int nVertices = m_pMesh->GetNVertices ();
 	const float *pVertices = m_pMesh->GetVertices ().data();
 	const float *pVertexNormals =  m_pMesh->GetVertexNormals ().data();
@@ -198,6 +207,18 @@ float* MeshAlgoAmbientOcclusion::Evaluate (int nPasses)
 		{
 			for (unsigned int i=0; i<nVertices; i++)
 			{
+				// SEUL point de test du jeton, et il est dans la boucle qui
+				// porte le travail. Un test dans la boucle sur les passes ne
+				// repondrait qu'une fois dans le cas nominal (nPasses == 1),
+				// donc jamais assez tot pour une annulation interactive.
+				if (ctx && (i & 255u) == 0u && ctx->IsAborted ())
+				{
+					delete pOctree;
+					delete[] m_pPatches;
+					m_pPatches = nullptr;
+					return nullptr;
+				}
+
 				m_pPatches[i].m_fOcclusion = 0.;
 				if (m_pPatches[i].m_fArea < 0.0000001) // for stability
 					continue;

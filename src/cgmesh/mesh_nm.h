@@ -5,7 +5,7 @@ class Mesh_nm :	public Mesh
 {
 public:
 	Mesh_nm ();
-	~Mesh_nm ();
+	~Mesh_nm () override;
 
 	int load (char *filename);
 

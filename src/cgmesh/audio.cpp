@@ -6,6 +6,9 @@
 
 Audio::Audio ()
 {
+     length = 0;
+     rate = 0;
+     channels = 0;
      data = nullptr;
 }
 

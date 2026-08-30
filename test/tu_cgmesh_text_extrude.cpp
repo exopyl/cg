@@ -512,3 +512,224 @@ TEST(TEST_cgmesh_text_extrude, a_missing_glyph_degrades_without_failing)
 	measure (*m, defaults().depth, v, t);
 	EXPECT_NEAR (v, t * (double)defaults().depth, 1e-6);
 }
+
+// ---------------------------------------------------------------------------
+// Plaque de support (D18) -- un contour de plus dans l'union
+// ---------------------------------------------------------------------------
+//
+// Ce que ces cas etablissent, et dans cet ordre :
+//
+//   1. le support et le texte partagent la PROFONDEUR -- il n'y a qu'un champ
+//      depth, et c'est la contrainte que la voie 2D fait payer ;
+//   2. un bandeau RELIE les lettres en un solide unique sans les couvrir ;
+//   3. une plaque PLEINE, a profondeur egale, rend sa propre silhouette : les
+//      lettres disparaissent dedans. Ce n'est pas une panne, c'est la meme
+//      contrainte vue de l'autre bout, et il faut qu'un test la dise ;
+//   4. l'ORIENTATION du contour de support suit celle des glyphes. Sous NonZero,
+//      un support trace a l'envers SOUSTRAIT les lettres au lieu de les fondre.
+
+namespace {
+
+// Aire du capot superieur, en valeur absolue : l'orientation d'ensemble depend
+// de la police, ce sont les rapports d'aires qui portent le sens.
+double topAreaOf (Mesh& m, float depth)
+{
+	double v = 0, t = 0;
+	measure (m, depth, v, t);
+	return t;
+}
+
+}  // namespace
+
+TEST(TEST_cgmesh_text_extrude, the_support_and_the_text_share_one_depth)
+{
+	auto font = loadFont (kCffFont);
+	ASSERT_NE (font, nullptr);
+
+	TextExtrudeOptions opt = defaults();
+	opt.support       = TextExtrudeOptions::Support::Bar;
+	opt.supportMargin = 0.05f;
+
+	std::unique_ptr<Mesh> m (text_to_extruded_mesh (*font, "on", opt));
+	ASSERT_NE (m, nullptr);
+
+	float lo[3], hi[3];
+	bbox (*m, lo, hi);
+	// UN seul champ depth, donc une seule paire de plans. Un socle d'epaisseur
+	// distincte ferait sortir la boite de [0, depth] -- et il n'y a aucun
+	// reglage pour le demander.
+	EXPECT_NEAR (lo[2], 0.f, 1e-6f);
+	EXPECT_NEAR (hi[2], opt.depth, 1e-6f);
+
+	// Et le solide reste ferme : volume = aire du capot x profondeur.
+	double volume = 0, top = 0;
+	measure (*m, opt.depth, volume, top);
+	EXPECT_NEAR (volume, top * (double)opt.depth, 1e-6);
+}
+
+TEST(TEST_cgmesh_text_extrude, a_support_bar_joins_the_letters_without_covering_them)
+{
+	auto font = loadFont (kCffFont);
+	ASSERT_NE (font, nullptr);
+
+	TextExtrudeOptions bare = defaults();
+	TextExtrudeOptions barred = defaults();
+	barred.support          = TextExtrudeOptions::Support::Bar;
+	barred.supportThickness = 0.08f;
+	barred.supportOverlap   = 0.03f;
+
+	std::unique_ptr<Mesh> a (text_to_extruded_mesh (*font, "on", bare));
+	std::unique_ptr<Mesh> b (text_to_extruded_mesh (*font, "on", barred));
+	ASSERT_NE (a, nullptr);
+	ASSERT_NE (b, nullptr);
+
+	const double bareTop = std::fabs (topAreaOf (*a, bare.depth));
+	const double barTop  = std::fabs (topAreaOf (*b, barred.depth));
+
+	// Le bandeau AJOUTE de la matiere...
+	EXPECT_GT (barTop, bareTop);
+	// ... mais il n'en ajoute qu'une bande : l'emprise entiere du texte est
+	// beaucoup plus grande que ce qu'il couvre.
+	float lo[3], hi[3];
+	bbox (*b, lo, hi);
+	const double footprint = (double)(hi[0]-lo[0]) * (hi[1]-lo[1]);
+	EXPECT_LT (barTop, footprint) << "un bandeau ne doit pas remplir l'emprise";
+
+	// Et la piece reste UNE piece fermee.
+	double volume = 0, top = 0;
+	measure (*b, barred.depth, volume, top);
+	EXPECT_NEAR (volume, top * (double)barred.depth, 1e-6);
+}
+
+TEST(TEST_cgmesh_text_extrude, a_full_plate_swallows_the_letters_at_equal_depth)
+{
+	auto font = loadFont (kCffFont);
+	ASSERT_NE (font, nullptr);
+
+	TextExtrudeOptions opt = defaults();
+	opt.support       = TextExtrudeOptions::Support::Plate;
+	opt.supportMargin = 0.1f;
+
+	std::unique_ptr<Mesh> m (text_to_extruded_mesh (*font, "on", opt));
+	ASSERT_NE (m, nullptr);
+
+	float lo[3], hi[3];
+	bbox (*m, lo, hi);
+	const double rect = (double)(hi[0]-lo[0]) * (hi[1]-lo[1]);
+	const double top  = std::fabs (topAreaOf (*m, opt.depth));
+
+	// A profondeur egale, l'union d'une plaque et de ce qu'elle contient EST la
+	// plaque. Le capot vaut donc exactement le rectangle -- les contre-formes du
+	// « o » comprises, que la plaque bouche.
+	EXPECT_NEAR (top, rect, 1e-6 * rect);
+}
+
+TEST(TEST_cgmesh_text_extrude, the_support_follows_the_glyph_orientation_on_both_font_flavours)
+{
+	// Sous NonZero, un contour trace a l'envers des lettres les RETIRE de la
+	// plaque au lieu de les y fondre -- un pochoir au lieu d'un socle. Le sens
+	// des contours exterieurs appartient a la police (cf. normalizeOrientation,
+	// laisse a false ici), donc les deux familles sont exercees.
+	for (const char* path : { kCffFont, kTrueTypeFont })
+	{
+		auto font = loadFont (path);
+		ASSERT_NE (font, nullptr) << path;
+
+		TextExtrudeOptions opt = defaults();
+		opt.support       = TextExtrudeOptions::Support::Plate;
+		opt.supportMargin = 0.1f;
+
+		std::unique_ptr<Mesh> m (text_to_extruded_mesh (*font, "on", opt));
+		ASSERT_NE (m, nullptr) << path;
+
+		float lo[3], hi[3];
+		bbox (*m, lo, hi);
+		const double rect = (double)(hi[0]-lo[0]) * (hi[1]-lo[1]);
+		const double top  = std::fabs (topAreaOf (*m, opt.depth));
+		// Un pochoir rendrait rect MOINS l'aire des lettres.
+		EXPECT_NEAR (top, rect, 1e-6 * rect) << path;
+	}
+}
+
+TEST(TEST_cgmesh_text_extrude, a_frame_surrounds_the_text_and_leaves_it_visible)
+{
+	auto font = loadFont (kTrueTypeFont);
+	ASSERT_NE (font, nullptr);
+
+	TextExtrudeOptions bare = defaults();
+	TextExtrudeOptions framed = defaults();
+	framed.support          = TextExtrudeOptions::Support::Frame;
+	framed.supportMargin    = 0.1f;
+	framed.supportThickness = 0.05f;
+
+	std::unique_ptr<Mesh> a (text_to_extruded_mesh (*font, "on", bare));
+	std::unique_ptr<Mesh> b (text_to_extruded_mesh (*font, "on", framed));
+	ASSERT_NE (a, nullptr);
+	ASSERT_NE (b, nullptr);
+
+	const double bareTop = std::fabs (topAreaOf (*a, bare.depth));
+	const double frameTop = std::fabs (topAreaOf (*b, framed.depth));
+
+	float lo[3], hi[3];
+	bbox (*b, lo, hi);
+	const double outer = (double)(hi[0]-lo[0]) * (hi[1]-lo[1]);
+
+	EXPECT_GT (frameTop, bareTop) << "le cadre ajoute de la matiere";
+	EXPECT_LT (frameTop, outer)   << "un cadre est CREUX : il ne remplit pas sa boite";
+	EXPECT_NEAR (lo[2], 0.f, 1e-6f);
+	EXPECT_NEAR (hi[2], framed.depth, 1e-6f);
+}
+
+TEST(TEST_cgmesh_text_extrude, a_rounded_plate_cuts_its_own_corners)
+{
+	auto font = loadFont (kCffFont);
+	ASSERT_NE (font, nullptr);
+
+	TextExtrudeOptions sharp = defaults(), rounded = defaults();
+	sharp.support         = TextExtrudeOptions::Support::Plate;
+	sharp.supportMargin   = 0.15f;
+	rounded               = sharp;
+	rounded.supportCornerRadius = 0.1f;
+
+	std::unique_ptr<Mesh> a (text_to_extruded_mesh (*font, "on", sharp));
+	std::unique_ptr<Mesh> b (text_to_extruded_mesh (*font, "on", rounded));
+	ASSERT_NE (a, nullptr);
+	ASSERT_NE (b, nullptr);
+
+	// Meme emprise a un cheveu pres, mais quatre coins en moins : l'aire du
+	// capot doit baisser d'a peu pres (4 - pi) r^2.
+	const double sharpTop = std::fabs (topAreaOf (*a, sharp.depth));
+	const double roundTop = std::fabs (topAreaOf (*b, rounded.depth));
+	// (4 - pi) r^2 est l'aire du VRAI quart de cercle ; le coin est trace en six
+	// segments inscrits, qui en enlevent un peu plus. 10 % couvre l'ecart de
+	// discretisation sans couvrir une erreur de rayon.
+	const double expected = (4.0 - 3.14159265358979) * 0.1 * 0.1;
+	EXPECT_LT (roundTop, sharpTop);
+	EXPECT_NEAR (sharpTop - roundTop, expected, 0.10 * expected);
+}
+
+TEST(TEST_cgmesh_text_extrude, a_support_without_matter_adds_nothing)
+{
+	auto font = loadFont (kCffFont);
+	ASSERT_NE (font, nullptr);
+
+	// Epaisseur nulle : le bandeau et le cadre n'ont pas de matiere, donc ils
+	// n'emettent aucun contour. Le solide reste celui du texte -- sans lever,
+	// sans contour degenere dans l'union.
+	TextExtrudeOptions bare = defaults();
+	bare.unionOverlaps = true;      // l'union a lieu dans les deux cas
+	for (auto shape : { TextExtrudeOptions::Support::Bar, TextExtrudeOptions::Support::Frame })
+	{
+		TextExtrudeOptions flat = bare;
+		flat.support          = shape;
+		flat.supportThickness = 0.f;
+
+		std::unique_ptr<Mesh> a (text_to_extruded_mesh (*font, "on", bare));
+		std::unique_ptr<Mesh> b (text_to_extruded_mesh (*font, "on", flat));
+		ASSERT_NE (a, nullptr);
+		ASSERT_NE (b, nullptr);
+		EXPECT_EQ (a->GetNVertices (), b->GetNVertices ());
+		EXPECT_NEAR (std::fabs (topAreaOf (*a, bare.depth)),
+		             std::fabs (topAreaOf (*b, flat.depth)), 1e-9);
+	}
+}

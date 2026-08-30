@@ -1,0 +1,219 @@
+{
+  "$schema": "https://gothic-tracery/schema/v1/window.schema.json",
+
+  "wall": {
+    "width": 400,
+    "height": 700,
+    "thickness": 60,
+    "tessellation": {
+      "respectsOpenings": true,
+      "subdivisionDepth": 2
+    }
+  },
+
+  "window": {
+    "id": "high-gothic-2lancets",
+    "label": "High Gothic — 2 lancettes, rosette 6 foils ronds",
+    "period": "XIIIe siècle",
+    "cathedral_ref": "Cathédrale de Chartres",
+
+    "basis": {
+      "origin": { "x": 0, "y": 0 },
+      "archRise": 180,
+      "pL": { "x": -100, "y": 180 },
+      "pR": { "x":  100, "y": 180 }
+    },
+
+    "arch": {
+      "width": 200,
+      "excess": 1.0,
+      "offset": {
+        "outer": 16,
+        "inner": 10,
+        "method": "fixed-centers"
+      },
+      "profile": {
+        "type": "chamfer",
+        "depth": 8,
+        "segments": [
+          { "type": "line", "u": 0.00, "v": 0.0 },
+          { "type": "line", "u": 0.25, "v": 0.3 },
+          { "type": "line", "u": 0.25, "v": 1.0 },
+          { "type": "line", "u": 0.15, "v": 1.0 },
+          { "type": "line", "u": 0.00, "v": 1.0 }
+        ]
+      },
+      "trefoil": {
+        "enabled": false,
+        "splitParameter": 0.45,
+        "foilRadiusFactor": 0.30,
+        "continuity": "tangent"
+      }
+    },
+
+    "subwindows": {
+      "count": 2,
+      "drop": 0,
+      "excess": 1.0,
+      "gap": {
+        "mode": "fraction",
+        "gapFraction": 0.11
+      },
+      "trefoil": {
+        "enabled": false,
+        "splitParameter": 0.45,
+        "foilRadiusFactor": 0.30,
+        "continuity": "tangent"
+      },
+      "foils": {
+        "count": 3,
+        "type": "round",
+        "pointedness": 0,
+        "phi0": 0,
+        "orientation": "standing"
+      }
+    },
+
+    "rosette": {
+      "construction": "ellipse-intersection",
+      "foils": {
+        "count": 6,
+        "type": "round",
+        "pointedness": 0,
+        "phi0": 0,
+        "orientation": "standing"
+      },
+      "hub": {
+        "radiusFactor": 0.12
+      }
+    },
+
+    "fillets": {
+      "enabled": true,
+      "subdivide": false,
+      "subdivisionDepth": 1,
+      "stoneBandWidth": 10
+    },
+
+    "mouchettes": {
+      "enabled": false
+    },
+
+    "style": {
+      "windowStyle": {
+        "name": "high-gothic",
+        "heightToWidthRatio": 3.0
+      },
+      "archStyle": {
+        "name": "equilateral",
+        "molding": "chamfer"
+      },
+      "glass": {
+        "color": "#1e4a8c",
+        "opacity": 0.58,
+        "leadlineWidth": 1.5
+      },
+      "stone": {
+        "color": "#c8b89a",
+        "highlightColor": "#e8d8b8",
+        "shadowColor": "#8a7560",
+        "textureType": "limestone"
+      },
+      "subdivisionSurface": {
+        "enabled": false,
+        "scheme": "catmull-clark",
+        "depth": 2,
+        "sharpEdges": true
+      },
+      "recursive": {
+        "enabled": false,
+        "scaleFactor": 0.55,
+        "maxDepth": 2
+      }
+    },
+
+    "tessellation": {
+      "targetEdgeLength": 8,
+      "angularResolution": 72,
+      "adaptiveSubdivision": true,
+      "manifold": true
+    }
+  },
+
+  "variants": [
+    {
+      "id": "equilateral",
+      "label": "Équilatéral classique",
+      "period": "XIIe–XIIIe s.",
+      "patch": {
+        "window.arch.excess": 1.0,
+        "window.subwindows.drop": 20,
+        "window.subwindows.excess": 1.0,
+        "window.rosette.foils.count": 4,
+        "window.rosette.foils.orientation": "lying"
+      }
+    },
+    {
+      "id": "late-gothic-3",
+      "label": "Late Gothic — 3 lancettes",
+      "period": "XIVe s.",
+      "patch": {
+        "window.arch.excess": 1.25,
+        "window.subwindows.count": 3,
+        "window.subwindows.excess": 1.2,
+        "window.rosette.foils.count": 8,
+        "window.rosette.foils.type": "pointed",
+        "window.rosette.foils.pointedness": 0.5
+      }
+    },
+    {
+      "id": "flamboyant",
+      "label": "Flamboyant (XVe s.)",
+      "period": "XVe s.",
+      "patch": {
+        "window.arch.excess": 1.5,
+        "window.arch.trefoil.enabled": true,
+        "window.arch.trefoil.splitParameter": 0.42,
+        "window.subwindows.count": 3,
+        "window.subwindows.excess": 1.4,
+        "window.subwindows.drop": 12,
+        "window.subwindows.trefoil.enabled": true,
+        "window.rosette.foils.count": 12,
+        "window.rosette.foils.type": "pointed",
+        "window.rosette.foils.pointedness": 1.2,
+        "window.mouchettes.enabled": true,
+        "window.mouchettes.type": "soufflet",
+        "window.style.recursive.enabled": true,
+        "window.style.recursive.maxDepth": 2,
+        "window.style.subdivisionSurface.enabled": true
+      }
+    },
+    {
+      "id": "round-arch",
+      "label": "Arc en plein cintre",
+      "period": "Roman / avant 1140",
+      "patch": {
+        "window.arch.excess": 0.5,
+        "window.subwindows.excess": 0.5,
+        "window.rosette.foils.count": 5,
+        "window.rosette.foils.type": "round"
+      }
+    },
+    {
+      "id": "trefoil-pointed",
+      "label": "Arc trèfle pointu",
+      "period": "XIVe s.",
+      "patch": {
+        "window.arch.excess": 1.15,
+        "window.arch.trefoil.enabled": true,
+        "window.arch.trefoil.splitParameter": 0.44,
+        "window.arch.trefoil.foilRadiusFactor": 0.32,
+        "window.subwindows.excess": 1.15,
+        "window.subwindows.trefoil.enabled": true,
+        "window.rosette.foils.count": 6,
+        "window.rosette.foils.type": "pointed",
+        "window.rosette.foils.pointedness": 0.8
+      }
+    }
+  ]
+}

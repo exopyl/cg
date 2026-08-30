@@ -1,9 +1,11 @@
 #include "smoothing_laplacian.h"
 
+#include "../cgmath/context.h"
+
 //
 //
 //
-bool MeshAlgoSmoothingLaplacian::Apply (Mesh_half_edge *model)
+bool MeshAlgoSmoothingLaplacian::Apply (Mesh_half_edge *model, const Context *ctx)
 {
 	int nv = model->m_pMesh->GetNVertices ();
 	const float *v = model->m_pMesh->GetVertices ().data();
@@ -17,6 +19,20 @@ bool MeshAlgoSmoothingLaplacian::Apply (Mesh_half_edge *model)
 
 	for (i=0; i<nv; i++)
     {
+		// SEUL point de test du jeton, et il est dans la boucle externe. Un
+		// second test place avant la boucle serait indistinguable de son
+		// absence : il repondrait le premier pour un drapeau deja pose, et
+		// aucun test ne pourrait alors montrer que celui-ci fait quelque chose.
+		//
+		// Les positions ne sont ecrites qu'apres la boucle : sortir ici laisse
+		// le maillage tel qu'il etait, jamais a moitie lisse. Le test tombe sur
+		// i == 0, donc un drapeau pose avant l'appel est vu avant tout travail.
+		if (ctx && (i & 1023) == 0 && ctx->IsAborted ())
+		{
+			delete[] vnew;
+			return false;
+		}
+
 		if (!model->is_manifold(i) || model->is_border(i))
 		{
 			vnew[3*i]   = v[3*i];

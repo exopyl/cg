@@ -103,7 +103,7 @@ if(WIN32)
     # finds TKernel.dll etc. at runtime.
     if (ENABLE_OCCT)
         add_custom_command(TARGET ${APP_TARGET} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                COMMAND ${CMAKE_COMMAND} -E ${CG_COPY_DIRECTORY}
                 "${EXTERN_OCCT}/bin"
                 "$<TARGET_FILE_DIR:${APP_TARGET}>"
                 COMMENT "Copying OCCT DLLs to $<TARGET_FILE_DIR:${APP_TARGET}>")

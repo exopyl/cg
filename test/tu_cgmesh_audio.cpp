@@ -2,6 +2,15 @@
 
 #include "../src/cgmesh/cgmesh.h"
 
+// La donnee est livree avec le depot et copiee dans le repertoire de travail
+// des tests : son absence signale une invocation hors de ce repertoire, donc un
+// echec, pas un saut.
+//
+// Le critere de presence est la cadence lue, et non le code de retour de load() :
+// celui-ci vaut -1 sur ce fichier, dont le Subchunk1Size de 18 met le decodeur en
+// echec sur les echantillons apres qu'il a renseigne l'en-tete. get_rate() reste
+// nul tant qu'aucun en-tete n'a ete parcouru.
+
 
 TEST(TEST_cgmesh_audio, rate)
 {
@@ -9,6 +18,7 @@ TEST(TEST_cgmesh_audio, rate)
     char* input = (char*)"./test/data/M1F1-Alaw-AFsp.wav";
     Audio* audio = new Audio();
     audio->load(input);
+    ASSERT_GT(audio->get_rate(), 0u) << input << " introuvable ou illisible";
     audio->dump();
 
     // action
@@ -26,6 +36,7 @@ TEST(TEST_cgmesh_audio, spectrum)
     char* input = (char*)"./test/data/M1F1-Alaw-AFsp.wav";
     Audio* audio = new Audio();
     audio->load(input);
+    ASSERT_GT(audio->get_rate(), 0u) << input << " introuvable ou illisible";
 
     // action
     int nWindows = 1200;
@@ -96,6 +107,7 @@ TEST(TEST_cgmesh_audio, audio_2_image)
     char* input = (char*)"./test/data/M1F1-Alaw-AFsp.wav";
     Audio* audio = new Audio();
     audio->load(input);
+    ASSERT_GT(audio->get_rate(), 0u) << input << " introuvable ou illisible";
 
     // action
     Img* img = audio_2_image(audio);

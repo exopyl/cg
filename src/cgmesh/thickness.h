@@ -2,6 +2,7 @@
 #include <vector>
 
 class Mesh;
+class Context;
 
 //
 // Wall-thickness computation on a triangle mesh.
@@ -66,12 +67,20 @@ public:
 	// smoothIterations==0 it reduces exactly to ComputeWallThickness.
 	// Same outThickness/outDefined contract and the same mesh side effects
 	// (normals recomputed if missing, bbox refreshed) as ComputeWallThickness.
+	//
+	// ctx optionnel : le jeton traverse jusqu'au LAMBDA du pool de threads --
+	// c'est la seule voie qui marche, un jeton en thread_local etant vierge dans
+	// chaque fil cree par parallelChunks. Chaque fil abandonne son bloc des
+	// qu'il voit le drapeau ; la fonction rend alors false et le contenu de
+	// outThickness / outDefined est PARTIEL. C'est au contexte, non au code de
+	// retour, que l'appelant demande pourquoi.
 	static bool ComputeShapeDiameter (Mesh &mesh,
 	                                  std::vector<float> &outThickness,
 	                                  std::vector<char>  &outDefined,
 	                                  int   numRays          = 16,
 	                                  float coneHalfAngleDeg = 60.0f,
-	                                  int   smoothIterations = 1);
+	                                  int   smoothIterations = 1,
+	                                  const Context *ctx = nullptr);
 
 	// Convenience: ComputeShapeDiameter + heatmap colouring (THIN = red,
 	// THICK = blue; see ColorizeWallThickness for the colour scale and side

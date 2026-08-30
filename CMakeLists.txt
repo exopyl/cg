@@ -4,6 +4,25 @@ project (cg)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# copy_directory REECRIT SYSTEMATIQUEMENT : il ne compare ni dates ni contenu.
+# Les blocs POST_BUILD qui deposent les ~50 DLL d'OCCT a cote d'un executable
+# les reecrivaient donc a chaque build, et il suffisait qu'une seule soit
+# verrouillee -- un binaire en cours d'execution tient ses DLL mappees -- pour
+# que la commande sorte en "Permission denied" et fasse echouer le build, y
+# compris quand rien n'etait a reconstruire.
+#
+# copy_directory_if_different ne recopie que ce qui differe : en regime etabli
+# il n'ecrit plus rien, donc il ne peut plus buter sur un verrou. Il apparait en
+# CMake 3.26 ; le plancher declare ci-dessus est 3.18.4, d'ou le repli.
+#
+# Defini ici pour que les sous-repertoires en heritent. vecna est un projet
+# CMake distinct, non ajoute par cette racine : il porte sa propre copie.
+if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.26)
+    set(CG_COPY_DIRECTORY copy_directory_if_different)
+else ()
+    set(CG_COPY_DIRECTORY copy_directory)
+endif ()
+
 # Sous Emscripten (cible maker, WebAssembly) : aucune dependance lourde n'est
 # disponible ni souhaitee. On les force OFF ici defensivement — le preset
 # maker-wasm les met deja a OFF, ceci protege une configuration manuelle.
@@ -24,6 +43,20 @@ if (EMSCRIPTEN)
     # lieu du repli placeholder. Doit preceder les add_subdirectory ci-dessous.
     add_compile_options(-fexceptions)
     add_link_options(-fexceptions)
+
+    # -Wsuggest-destructor-override n'est ni dans -Wall ni dans -Wextra, et
+    # -Winconsistent-missing-override (actif par defaut) exclut deliberement les
+    # destructeurs. Un destructeur de sous-classe declare `virtual` au lieu
+    # d'`override` passe donc en silence, et le jour ou la classe de base perd
+    # son `virtual` la destruction polymorphe devient un comportement indefini
+    # sans un mot du compilateur. Ce drapeau transforme ce silence en
+    # diagnostic.
+    #
+    # Portee : TOUTE la configuration Emscripten, pas la seule cible maker. Le
+    # diagnostic se declenche a la compilation de la classe, donc dans chaque
+    # unite de traduction qui inclut l'en-tete ; le limiter a maker
+    # n'inspecterait que ses deux .cpp.
+    add_compile_options(-Wsuggest-destructor-override)
 endif()
 
 # Options
@@ -47,6 +80,16 @@ set(POISSONRECON_DIR "${CMAKE_SOURCE_DIR}/extern/PoissonRecon-18.76" CACHE PATH 
 set(ENABLE_ZLIB On CACHE BOOL "Enable zlib (vendored extern/zlib-1.3.2); required by the NBT (Minecraft) parser.")
 set(ZLIB_DIR "${CMAKE_SOURCE_DIR}/extern/zlib-1.3.2" CACHE PATH "Path to the vendored zlib source tree.")
 set(ENABLE_SULINA Off CACHE BOOL "Compile sulina (Qt 6 + Vulkan, via cgre2).")
+
+# Canvas nodal ImGui et son hote natif. DEFAUT Off : l'option ajoute des cibles
+# et un executable dont la plupart des configurations n'ont que faire. Elle
+# n'ajoute PLUS d'exigence de reseau -- ses trois tierces sont versionnees sous
+# extern/, au meme titre que les dix autres du depot, et la configuration
+# aboutit hors ligne dans les deux positions de l'option.
+set(ENABLE_CGGRAPH_BOILERPLATE Off CACHE BOOL "Build the ImGui node canvas and the cggraph-boilerplate native host.")
+set(IMGUI_DIR "${CMAKE_SOURCE_DIR}/extern/imgui-1.89.9" CACHE PATH "Path to the vendored Dear ImGui source tree.")
+set(IMGUI_NODE_EDITOR_DIR "${CMAKE_SOURCE_DIR}/extern/imgui-node-editor-0.9.3" CACHE PATH "Path to the vendored imgui-node-editor source tree.")
+set(GLFW_DIR "${CMAKE_SOURCE_DIR}/extern/glfw-3.3.10" CACHE PATH "Path to the vendored GLFW source tree.")
 set(ENABLE_OPENNURBS On CACHE BOOL "Enable openNURBS (.3dm) import.")
 set(EXTERN_OPENNURBS "" CACHE PATH "Path to openNURBS directory.")
 
@@ -92,6 +135,15 @@ endif ()
 add_subdirectory(src/cgmath)
 add_subdirectory(src/cgimg)
 add_subdirectory(src/cgmesh)
+# Couche A de cggraph : moteur de graphe, sans dependance. Sans condition, comme
+# les trois ci-dessus -- une option la sortirait des deux chaines de CI.
+add_subdirectory(src/cggraph/core)
+# Couche B : les adaptateurs. Une seule cible, rangee par domaine, qui depend de
+# cgmesh -- c'est elle qui nomme les types de domaine, et le moteur l'ignore.
+add_subdirectory(src/cggraph/nodes)
+# Modele d'edition : palette et inspecteur derives du registre, sans dessin ni
+# dependance tierce. Sans condition, pour la meme raison que les deux ci-dessus.
+add_subdirectory(src/cggraph/ui)
 if ( WIN32 )
 	add_subdirectory(src/cgnet)
 endif ()
@@ -121,6 +173,29 @@ endif ()
 
 if ( ENABLE_RECONSTRUCTION_CLI )
 	add_subdirectory(reconstruction-cli)
+endif ()
+
+# Canvas nodal : le canvas lui-meme (commun aux hotes) puis l'hote natif.
+#
+# NATIF -- sous ENABLE_CGGRAPH_BOILERPLATE, defaut Off : c'est la seule partie du
+# chantier qui tire une fenetre et GLFW, dont la plupart des configurations
+# n'ont que faire.
+#
+# WEBASSEMBLY -- SANS OPTION, avec maker, et c'est une consequence de D27. Un
+# artefact unique veut dire que maker/web/graph.html fait partie du contrat de
+# cet artefact : une option qui retirerait le canvas produirait un maker.js ou
+# cette page echouerait au CHARGEMENT, sans que rien dans le build ne l'annonce.
+# Le prix -- la taille du module, payee aussi par les six pages qui ne s'en
+# servent pas -- est mesure, pas suppose. L'hote web n'est pas cggraph-boilerplate :
+# il n'y a ni fenetre ni GLFW dans un Worker, et c'est maker/graph_editor.cpp
+# qui le remplace, exactement comme le prevoit l'en-tete du canvas.
+if ( EMSCRIPTEN )
+	if ( ENABLE_MAKER )
+		add_subdirectory(src/cggraph/canvas)
+	endif ()
+elseif ( ENABLE_CGGRAPH_BOILERPLATE )
+	add_subdirectory(src/cggraph/canvas)
+	add_subdirectory(cggraph-boilerplate)
 endif ()
 
 # sulina (Qt 6 + Vulkan): pulls in the cgre2 render lib and the Qt app.

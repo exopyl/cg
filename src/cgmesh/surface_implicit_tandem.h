@@ -12,9 +12,9 @@ class ImplicitSurfaceTandem : public ImplicitSurface
 {
 public:
 	ImplicitSurfaceTandem ();
-	~ImplicitSurfaceTandem ();
+	~ImplicitSurfaceTandem () override;
 
 private:
-	virtual void get_triangulation_pre (void);
-	virtual void get_triangulation_post (int *nvertices, float **vertices, int *nfaces, unsigned int **faces);
+	void get_triangulation_pre (void) override;
+	void get_triangulation_post (int *nvertices, float **vertices, int *nfaces, unsigned int **faces) override;
 };

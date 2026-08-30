@@ -1,9 +1,10 @@
 #include "DiffParamEvaluator.h"
+#include "../cgmath/context.h"
 
 //
 //
 //
-bool MeshAlgoTensorEvaluator::ApplyHybrid (void)
+bool MeshAlgoTensorEvaluator::ApplyHybrid (const Context *ctx)
 {
 	int nv = m_pModel->m_pMesh->GetNVertices ();
 	int i;
@@ -14,7 +15,12 @@ bool MeshAlgoTensorEvaluator::ApplyHybrid (void)
 	for (i=0; i<nv; i++) hybrid[i] = std::make_unique<Tensor> ();
 
 	/* normale and principal curvatures */
-	ApplyDesbrun ();
+	// SEUL point de test du jeton pour cette methode : les trois boucles qui
+	// suivent sont des recopies, et c'est ApplyDesbrun qui porte le calcul. Il
+	// teste le jeton dans SA boucle sur les sommets et renonce ; il n'y a rien
+	// a tester une seconde fois ici.
+	if (!ApplyDesbrun (ctx))
+		return false;
 	for (i=0; i<nv; i++)
     {
 		if (!TensorAt (i))
@@ -31,7 +37,11 @@ bool MeshAlgoTensorEvaluator::ApplyHybrid (void)
     }
 
 	/* principal directions */
-	ApplySteiner ();
+	// ApplySteiner a son corps entierement sous #if 0 : il ne modifie aucun
+	// tenseur et rend true. La boucle qui suit relit donc les directions que
+	// ApplyDesbrun vient d'ecrire -- l'hybride est, en l'etat, un Desbrun.
+	if (!ApplySteiner (ctx))
+		return false;
 	for (i=0; i<nv; i++)
     {
 		if (!TensorAt (i))

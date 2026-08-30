@@ -1,6 +1,7 @@
 #include <vector>
 
 #include "DiffParamEvaluator.h"
+#include "../cgmath/context.h"
 
 /**
 *
@@ -73,7 +74,7 @@ region_area (const Vector3f &a, const Vector3f &b, const Vector3f &c)
 //
 //
 //
-bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
+bool MeshAlgoTensorEvaluator::ApplyDesbrun (const Context *ctx)
 {
 	int nv = m_pModel->m_pMesh->GetNVertices ();
 	const float *v = m_pModel->m_pMesh->GetVertices ().data();
@@ -86,6 +87,11 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (void)
 
 	for (i=0; i<nv; i++)
     {
+		// SEUL point de test du jeton pour cette methode, et il est dans sa
+		// boucle externe -- un tour par sommet. Les tenseurs deja ecrits sont
+		// conserves : c'est Evaluate qui refuse de les estampiller valides.
+		if (ctx && (i & 255) == 0 && ctx->IsAborted ()) return false;
+
 		if (!m_pModel->is_manifold(i) || m_pModel->is_border(i))
 		{
 			SetTensorAt (i, nullptr);

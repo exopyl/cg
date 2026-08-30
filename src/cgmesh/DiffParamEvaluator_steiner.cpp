@@ -213,7 +213,7 @@ void MeshAlgoTensorEvaluator::ApplySteinerAux (int index, float radius, int *_n_
     }
 }
 
-bool MeshAlgoTensorEvaluator::ApplySteiner (void)
+bool MeshAlgoTensorEvaluator::ApplySteiner (const Context *ctx)
 {
 #if 0
 	int nv = m_pModel->m_pMesh->nv;
@@ -430,5 +430,10 @@ bool MeshAlgoTensorEvaluator::ApplySteiner (void)
 			m_pDiffParams[i] = pDiffParamWalk;
     }
 #endif
+	// Aucun point de test du jeton : il n'y a pas de boucle a interrompre, le
+	// corps entier etant sous #if 0. Le parametre existe pour que les six
+	// methodes se declarent de la meme facon -- une signature qui varierait
+	// rendrait la voie de l'annulation invisible a la lecture.
+	(void)ctx;
 	return true;
 }

@@ -1,6 +1,8 @@
 #pragma once
 #include "mesh_half_edge.h"
 
+class Context;
+
 //
 // References :
 // http://loulou.developpez.com/tutoriels/3d/ambient-occlusion/
@@ -14,7 +16,15 @@ public:
 	~MeshAlgoAmbientOcclusion ();
 
 	bool Init (Mesh *mesh);
-	float* Evaluate (int nPasses = 1);
+
+	// Rend un tableau de nVertices flottants ALLOUE PAR MALLOC, a rendre par
+	// free(). Nul si Init n'a pas ete appele, ou si l'annulation est survenue.
+	//
+	// ctx optionnel : le jeton est teste dans la boucle SUR LES SOMMETS, non
+	// dans celle sur les passes -- c'est la premiere qui porte le travail, et le
+	// cas nominal ne fait qu'une passe. Sur annulation, la fonction rend nullptr
+	// apres avoir libere ses structures : jamais un tableau a moitie rempli.
+	float* Evaluate (int nPasses = 1, const Context *ctx = nullptr);
 
 private:
 	Mesh *m_pMesh;

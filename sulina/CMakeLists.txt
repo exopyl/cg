@@ -170,7 +170,7 @@ if (WIN32)
     # idempotent et le cout n'est paye qu'une fois.
     if (ENABLE_OCCT AND EXTERN_OCCT)
         add_custom_command(TARGET sulina POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            COMMAND ${CMAKE_COMMAND} -E ${CG_COPY_DIRECTORY}
                 "${EXTERN_OCCT}/bin"
                 "$<TARGET_FILE_DIR:sulina>"
             COMMENT "Copying OCCT DLLs next to sulina.exe"

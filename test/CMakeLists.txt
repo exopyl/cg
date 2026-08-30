@@ -14,6 +14,12 @@ file(GLOB HEADER_FILES ${PROJECT_SOURCE_DIR}/*.h)
 add_executable(${PROJECT_NAME} ${HEADER_FILES} ${SRC_FILES})
 
 # ---------------------------------------------------------------------------
+# Commande de copie de repertoire
+# ---------------------------------------------------------------------------
+# La copie POST_BUILD passe par CG_COPY_DIRECTORY, defini par le CMakeLists
+# racine : copy_directory reecrit systematiquement et bute sur un verrou.
+
+# ---------------------------------------------------------------------------
 # Repertoire de travail des tests
 # ---------------------------------------------------------------------------
 # Les tests ecrivent leurs sorties via des noms relatifs NUS ("shapes_cube.obj",
@@ -56,7 +62,7 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/test/data")
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        COMMAND ${CMAKE_COMMAND} -E ${CG_COPY_DIRECTORY}
             "${CMAKE_SOURCE_DIR}/test/data"
             "${TU_RUN_DIR}/test/data"
         COMMENT "Copying test/data to ${TU_RUN_DIR}/test/data"
@@ -116,10 +122,11 @@ endif()
 
 # OCCT ships ~48 interdependent DLLs; copy the whole bin/ folder next to
 # the test exe so STEP-loading tests can resolve TKernel.dll & friends
-# without polluting PATH. copy_directory is idempotent; cost is one-time.
+# without polluting PATH. The copy is skipped file by file once the
+# destination matches, so a settled tree writes nothing here.
 if (WIN32 AND ENABLE_OCCT)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        COMMAND ${CMAKE_COMMAND} -E ${CG_COPY_DIRECTORY}
             "${EXTERN_OCCT}/bin"
             "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
         COMMENT "Copying OCCT DLLs to $<TARGET_FILE_DIR:${PROJECT_NAME}>"
@@ -158,7 +165,7 @@ gtest_discover_tests(${PROJECT_NAME}
     DISCOVERY_TIMEOUT 60
 )
 
-target_link_libraries(${PROJECT_NAME} cgmath cgimg cgmesh)
+target_link_libraries(${PROJECT_NAME} cgmath cgimg cgmesh cggraph cggraph_nodes cggraph_ui)
 if ( WIN32 )
     target_link_libraries(${PROJECT_NAME} cgnet)
 endif ()

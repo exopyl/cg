@@ -40,7 +40,8 @@
 #include <string>
 #include <vector>
 
-#include "parameterized_shapes.h"   // IParameterized + catalogue de formes
+#include "parameterized_shapes.h"   // IParameterized + formes a ressource
+#include "parametric_catalog.h"     // fabriques des formes sans ressource
 #include "image_pixel_blocks.h"      // image_to_pixel_blocks_per_component
 #include "material.h"                // Material::GetName (nommage des groupes OBJ)
 #include "mesh.h"                    // GetNVertices / GetVertex / GetTriangles
@@ -74,11 +75,6 @@ void removeTempFile(int id)
     g_tempFiles.erase(it);
 }
 
-using Factory = std::function<std::unique_ptr<IParameterized>()>;
-
-template <typename T>
-Factory make() { return [] { return std::unique_ptr<IParameterized>(new T()); }; }
-
 // Une entree du catalogue. La CATEGORIE partitionne le catalogue entre les pages
 // de maker/web/ : chacune n'expose que ses propres formes (listShapes(category)).
 // Elle vit ici et pas dans le JS pour rester une source unique de verite : ajouter
@@ -87,12 +83,17 @@ struct CatalogEntry {
     std::string name;       // cle du catalogue (== GetName())
     std::string category;   // "parametric" | "gothic"
     std::string group;      // en-tete <optgroup> dans la liste ("" = aucun)
-    Factory     make;
+    std::function<std::unique_ptr<IParameterized>()> make;
 };
 
-// Catalogue : source unique de verite (nom affiche == GetName()). Les formes
-// necessitant un fichier (SVG, image, nuage de points implicite) ont leur propre
-// fabrique dediee et ne figurent pas ici.
+// Catalogue de PRESENTATION : nom, categorie de page, groupe de liste. La
+// FABRIQUE n'est plus ici -- elle vit dans cgmesh (parametric_catalog.h), d'ou
+// la couche nodale la lit aussi. Deux listes de fabriques auraient diverge au
+// premier ajout ; celle-ci ne porte plus que ce qui est propre a maker, et le
+// nom sert de cle entre les deux.
+//
+// Une entree dont le nom ne se resout pas est ECARTEE, et la forme disparait de
+// la page -- l'ecart se voit donc, au lieu de produire une fabrique nulle.
 const std::vector<CatalogEntry>& catalog()
 {
     static const std::string P = "parametric";
@@ -104,35 +105,47 @@ const std::vector<CatalogEntry>& catalog()
     static const std::string SOL = "Solides";
     static const std::string SUR = "Surfaces";
     static const std::string FRA = "Fractales";
-    static const std::vector<CatalogEntry> c = {
-        {"Cube",                  P, SOL, make<ParameterizedCube>()},
-        {"Sphere",                P, SOL, make<ParameterizedSphere>()},
-        {"Cylinder",              P, SOL, make<ParameterizedCylinder>()},
-        {"Cone",                  P, SOL, make<ParameterizedCone>()},
-        {"Capsule",               P, SOL, make<ParameterizedCapsule>()},
-        {"Torus",                 P, SOL, make<ParameterizedTorus>()},
-        {"Seashell",              P, SUR, make<ParameterizedSeashell>()},
-        {"Seashell (von Seggern)",P, SUR, make<ParameterizedSeashellVonSeggern>()},
-        {"Klein Bottle",          P, SUR, make<ParameterizedKleinBottle>()},
-        {"Breather",              P, SUR, make<ParameterizedBreather>()},
-        {"Hyperbolic Paraboloid", P, SUR, make<ParameterizedHyperbolicParaboloid>()},
-        {"Monkey Saddle",         P, SUR, make<ParameterizedMonkeySaddle>()},
-        {"Blobs",                 P, SUR, make<ParameterizedBlobs>()},
-        {"Drop",                  P, SUR, make<ParameterizedDrop>()},
-        {"Torus Knot",            P, SUR, make<ParameterizedTorusKnot>()},
-        {"Cinquefoil Knot",       P, SUR, make<ParameterizedCinquefoilKnot>()},
-        {"Trefoil Knot",          P, SUR, make<ParameterizedTrefoilKnot>()},
-        {"Borromean Rings",       P, SUR, make<ParameterizedBorromeanRings>()},
-        {"Helicoid",              P, SUR, make<ParameterizedHelicoid>()},
-        {"Corkscrew",             P, SUR, make<ParameterizedCorkscrew>()},
-        {"Mobius Strip",          P, SUR, make<ParameterizedMobiusStrip>()},
-        {"Radial Wave",           P, SUR, make<ParameterizedRadialWave>()},
-        {"Guimard",               P, SUR, make<ParameterizedGuimard>()},
-        {"Menger Sponge",         P, FRA, make<ParameterizedMengerSponge>()},
-        {"L-system",              P, FRA, make<ParameterizedLSystem>()},
-        {"Gothic Window",         G, "", make<ParameterizedGothicWindow>()},
-        {"Gothic Block",          G, "", make<ParameterizedGothicBlock>()},
+    struct Row { const char *name; const std::string &category; const std::string &group; };
+    static const std::vector<Row> rows = {
+        {"Cube",                  P, SOL},
+        {"Sphere",                P, SOL},
+        {"Cylinder",              P, SOL},
+        {"Cone",                  P, SOL},
+        {"Capsule",               P, SOL},
+        {"Torus",                 P, SOL},
+        {"Seashell",              P, SUR},
+        {"Seashell (von Seggern)",P, SUR},
+        {"Klein Bottle",          P, SUR},
+        {"Breather",              P, SUR},
+        {"Hyperbolic Paraboloid", P, SUR},
+        {"Monkey Saddle",         P, SUR},
+        {"Blobs",                 P, SUR},
+        {"Drop",                  P, SUR},
+        {"Torus Knot",            P, SUR},
+        {"Cinquefoil Knot",       P, SUR},
+        {"Trefoil Knot",          P, SUR},
+        {"Borromean Rings",       P, SUR},
+        {"Helicoid",              P, SUR},
+        {"Corkscrew",             P, SUR},
+        {"Mobius Strip",          P, SUR},
+        {"Radial Wave",           P, SUR},
+        {"Guimard",               P, SUR},
+        {"Menger Sponge",         P, FRA},
+        {"L-system",              P, FRA},
+        {"Gothic Window",         G, ""},
+        {"Gothic Block",          G, ""},
     };
+    static const std::vector<CatalogEntry> c = [] {
+        std::vector<CatalogEntry> out;
+        out.reserve(rows.size());
+        for (const Row& r : rows) {
+            const std::string name = r.name;
+            if (!FindParametricShape(name)) continue;   // nom inconnu de cgmesh
+            out.push_back(CatalogEntry{name, r.category, r.group,
+                                       [name] { return MakeParametricShape(name); }});
+        }
+        return out;
+    }();
     return c;
 }
 

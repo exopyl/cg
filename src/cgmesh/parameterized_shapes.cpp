@@ -1323,12 +1323,23 @@ void ParameterizedGothicWindow::Regenerate()
 			// carved-stone look. Falls back to a flat extrusion if the per-vertex
 			// offset degenerates (thin bars / sharp corners).
 			bool profiled = false;
-			if (m_profile == 1)
+			Profile2D splay;
+			if (m_hasSplayProfile)
+				splay = m_splayProfile;          // le PORT l'emporte sur le menu
+			else if (m_profile == 1)
 			{
+				// Position « Chamfer » du menu : un chanfrein droit dont la
+				// largeur et la profondeur se derivent des offsets de la baie.
+				// C'est desormais UNE valeur de profil parmi d'autres, et non
+				// plus un cas particulier du code d'extrusion.
 				double chamW = std::min(0.6 * mp.filletInset, 0.45 * (double)m_offsetInner + 2.0);
 				if (chamW < 0.5) chamW = 0.5;
 				double chamD = std::min(0.5 * mp.zHeight, 3.0 * chamW);
-				try { extrudeProfiledToMesh(poly, *m, 0.0, mp.zHeight, chamW, chamD); profiled = true; }
+				splay = chamferSplayProfile (chamW, chamD);
+			}
+			if (!splay.empty())
+			{
+				try { extrudeProfiledToMesh(poly, splay, *m, 0.0, mp.zHeight); profiled = true; }
 				catch (...) { profiled = false; }
 			}
 			if (!profiled) extrudeToMesh(poly, *m, 0.0, mp.zHeight);
@@ -1339,39 +1350,32 @@ void ParameterizedGothicWindow::Regenerate()
 			// tracery, rosette rim) via buildBayMoulding. Profile library : 2 = Roll
 			// (half-round bead), 3 = Keel (pointed ridge), 4 = Ogee (symmetric cyma).
 			// Corner mitring is deferred (open joints for now).
-			if (m_profile >= 2)
+			// La section de barre est RELATIVE a la face avant ; c'est ici,
+			// et non chez son auteur, qu'elle est portee a la cote zF. Le code
+			// d'origine l'ecrivait en z absolu, ce qui liait chaque section a la
+			// profondeur d'extrusion de CETTE baie et interdisait de la produire
+			// ailleurs.
+			Profile2D bar;
+			if (m_hasBarProfile)
+				bar = m_barProfile;              // le PORT l'emporte sur le menu
+			else if (m_profile >= 2)
 			{
-				const double PI = 3.14159265358979323846;
 				double rb = std::min(0.5 * mp.filletInset, 0.45 * (double)m_offsetInner + 1.5);
 				if (rb < 0.8) rb = 0.8;
-				const double zF = mp.zHeight;
-
-				// Closed cross-section in (u = z, v = in-plane) : flat base on the front
-				// face (z = zF), molding proud toward +z. Symmetric in v (a bar).
-				std::vector<Vector2d> profile;
-				if (m_profile == 3)          // Keel : pointed ridge
-				{
-					profile = { Vector2d(zF, rb), Vector2d(zF + 1.2 * rb, 0.0), Vector2d(zF, -rb) };
-				}
-				else if (m_profile == 4)     // Ogee : symmetric cyma (smoothstep flanks)
-				{
-					const int ns = 6;
-					for (int k = 0; k <= ns; ++k)
-					{ double s = (double)k/ns; double h = rb*(3*s*s - 2*s*s*s); profile.push_back(Vector2d(zF + h,  rb*(1.0-s))); }
-					for (int k = ns - 1; k >= 0; --k)
-					{ double s = (double)k/ns; double h = rb*(3*s*s - 2*s*s*s); profile.push_back(Vector2d(zF + h, -rb*(1.0-s))); }
-				}
-				else                          // Roll (m_profile==2) : half-round bead
-				{
-					const int ns = 12;
-					for (int k = 0; k <= ns; ++k)
-					{ double th = PI * (double)k/ns; profile.push_back(Vector2d(zF + rb*std::sin(th), rb*std::cos(th))); }
-				}
-
+				// Trois positions du menu, trois valeurs de la meme famille --
+				// bourdon, arete, doucine (Havemann §5.4.1 « french style »,
+				// Fig 5.28 d).
+				if      (m_profile == 3) bar = keelBarProfile (rb);
+				else if (m_profile == 4) bar = ogeeBarProfile (rb);
+				else                     bar = rollBarProfile (rb);
+			}
+			if (!bar.empty())
+			{
+				const Profile2D placed = translatedInU (bar, mp.zHeight);
 				try
 				{
 					Mesh beads;
-					buildBayMoulding(geom, mp, profile, beads);
+					buildBayMoulding(geom, mp, placed.points, beads);
 					appendMesh(*m, beads);
 				}
 				catch (...) { /* degenerate outline : keep the flat plate only */ }
@@ -1386,6 +1390,18 @@ void ParameterizedGothicWindow::Regenerate()
 		// Combinaison de parametres invalide (les buildXxx lancent) -> placeholder.
 		m_pMesh = placeholder();
 	}
+}
+
+void ParameterizedGothicWindow::SetSplayProfile (const Profile2D *profile)
+{
+	m_hasSplayProfile = (profile != nullptr) && !profile->empty();
+	m_splayProfile = m_hasSplayProfile ? *profile : Profile2D();
+}
+
+void ParameterizedGothicWindow::SetBarProfile (const Profile2D *profile)
+{
+	m_hasBarProfile = (profile != nullptr) && !profile->empty();
+	m_barProfile = m_hasBarProfile ? *profile : Profile2D();
 }
 
 bool ParameterizedGothicWindow::LoadFromJson(const std::string &jsonText)

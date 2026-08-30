@@ -62,7 +62,7 @@ class VectorizedPlane : public VectorizedElement, Plane
 {
 public:
 	VectorizedPlane (unsigned int *pElements, unsigned int nElements, Plane *pPlane);
-	~VectorizedPlane () {};
+	~VectorizedPlane () override {};
 
 	void set_area (float fArea) { m_fArea = fArea; };
 	float get_area (void) { return m_fArea; };

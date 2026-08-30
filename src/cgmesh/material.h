@@ -98,14 +98,14 @@ public:
 	//virtual ~MaterialColor () {};
 	std::unique_ptr<Material> clone (void) const override
 		{ return std::make_unique<MaterialColor> (*this); }
-	MaterialType GetType (void) const;
+	MaterialType GetType (void) const override;
 
 	float GetFloatRed() const { return m_r / 255.f; };
 	float GetFloatGreen() const { return m_g / 255.f; };
 	float GetFloatBlue() const { return m_b / 255.f; };
 	float GetFloatAlpha() const { return m_a / 255.f; };
 
-	void Dump (void);
+	void Dump (void) override;
 private:
 	unsigned char m_r, m_g, m_b, m_a;
 };
@@ -200,8 +200,8 @@ public:
 	};
 	void Init_From_Library (MaterialColorExtType eType);
 
-	inline MaterialType GetType () const { return MATERIAL_COLOR_ADV; };
-	void Dump () {
+	inline MaterialType GetType () const override { return MATERIAL_COLOR_ADV; };
+	void Dump () override {
 		printf ("MATERIAL_COLOR_ADV :\n");
 		printf ("   ambient : %f %f %f %f\n", m_fAmbient[0], m_fAmbient[1], m_fAmbient[2], m_fAmbient[3]);
 		printf ("   diffuse : %f %f %f %f\n", m_fDiffuse[0], m_fDiffuse[1], m_fDiffuse[2], m_fDiffuse[3]);
@@ -228,12 +228,12 @@ public:
 	MaterialTexture (const std::string &name, unsigned int width, unsigned int height, const unsigned char *rgbaPixels);
 	MaterialTexture (unsigned int nWidth, unsigned int nHeight);
 	MaterialTexture (const MaterialTexture &m); // constructor of copy
-	virtual ~MaterialTexture ();
+	~MaterialTexture () override;
 
 	std::unique_ptr<Material> clone (void) const override
 		{ return std::make_unique<MaterialTexture> (*this); }
-	MaterialType GetType (void) const;
-	void Dump (void);
+	MaterialType GetType (void) const override;
+	void Dump (void) override;
 	std::string GetFilename () const;
 	Img* GetImage ();
 

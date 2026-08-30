@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Sonde de l'éditeur nodal dans le worker</title>
+</head>
+<body>
+  <!-- Le canvas est celui que la sonde TRANSFÈRE au worker, dans la page et non
+       fabriqué en mémoire : transferControlToOffscreen() sur un canvas détaché
+       ne mesurerait pas ce que le produit fait. Sa taille est celle que
+       l'éditeur natif utilise, pour que la disposition ImGui de premier usage
+       tienne dans le cadre. -->
+  <canvas id="view" width="1200" height="800"></canvas>
+  <pre id="out">sonde en cours…</pre>
+  <script type="module" src="./editor.js"></script>
+</body>
+</html>

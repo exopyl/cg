@@ -84,7 +84,7 @@ class ShaderBackground : public GL_Shader
 {
 public:
 	ShaderBackground();
-	virtual ~ShaderBackground();
+	~ShaderBackground() override;
 	virtual bool LoadShadersFromString() override;
 	virtual bool LoadShadersFromFiles(const std::string& shaderDirectory = std::string("")) override;
 	virtual void Execute() const override;
