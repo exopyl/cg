@@ -11,6 +11,10 @@
 // stays unchanged; the real dispatch lives in ImgIO below.
 int Img::load (char const *filename, char const *path) { return ImgIO::load (*this, filename, path); }
 int Img::save (char const *filename)                   { return ImgIO::save (*this, filename); }
+int Img::load_from_memory (const unsigned char *data, size_t size)
+{
+	return ImgIO::load_from_memory (*this, data, size);
+}
 
 int ImgIO::load (Img& img, char const *filename, char const *path)
 {

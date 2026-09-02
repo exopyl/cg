@@ -106,8 +106,9 @@ export async function createShell({ title, subtitle }) {
 
   if (!viewer.available) {
     bnr.reportHtml(
-      "Online3DViewer introuvable. Place <code>o3dv.min.js</code> dans " +
-      "<code>maker/web/vendor/</code> pour activer le rendu 3D. " +
+      "Online3DViewer introuvable. Place <code>o3dv-three.module.js</code> dans " +
+      "<code>maker/web/vendor/</code> pour activer le rendu 3D " +
+      "(voir <code>vendor/README.md</code> pour le régénérer). " +
       "Le panneau et la génération restent fonctionnels (télécharge l'OBJ).");
   }
 

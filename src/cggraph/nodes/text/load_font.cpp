@@ -18,6 +18,17 @@ const cggraph::NodeDesc &Desc ()
 	static const cggraph::NodeDesc desc = [] {
 		cggraph::NodeDesc d;
 		d.typeName = "text.font.load";
+		// ENTREE OPTIONNELLE, et c'est ce qui permet de l'ajouter sans condamner
+		// les documents deja ecrits : un document d'avant ne la connecte pas, le
+		// noeud retombe sur ses octets internes, et le calcul est identique. La
+		// version du descripteur n'est donc PAS incrementee -- IsVersionCompatible
+		// etant une egalite stricte sans crochet de migration, un bump aurait
+		// refuse tout ce qui existe.
+		//
+		// Un CHEMIN, pas des octets : Font sait lire par nom (loadFromFile), et
+		// c'est la forme que les trois chargeurs partagent -- MeshIO n'a AUCUNE
+		// entree en memoire, donc un port d'octets n'aurait pas pu les servir tous.
+		d.inputs.push_back ({ "chemin", Types ().path, /*optional=*/true });
 		d.outputs.push_back ({ "police", Types ().font, false });
 		return d;
 	}();
@@ -58,17 +69,31 @@ bool LoadFontNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueList 
                             cggraph::ValueList &out)
 {
 	(void)ctx;
-	(void)in;
 
-	if (m_bytes.empty ())
-		return false;
+	// L'ENTREE L'EMPORTE quand elle est connectee : un noeud file.ref en amont est
+	// une intention explicite, la ou les octets internes sont un etat pose de
+	// cote. Les deux voies coexistent le temps que les documents migrent.
+	const std::string *incoming =
+		in.empty () ? nullptr : in[0].Get<std::string> (Types ().path);
 
 	std::shared_ptr<Font> font = std::make_shared<Font> ();
 	++m_parses;
-	// La police recoit sa PROPRE copie des octets : elle n'en garde qu'un
-	// pointeur interne, le buffer du noeud ne doit donc pas etre le sien.
-	if (!font->loadFromMemory (m_bytes, GetInt (GetParams (), "fontIndex", 0)))
-		return false;
+	const int index = GetInt (GetParams (), "fontIndex", 0);
+
+	if (incoming != nullptr && !incoming->empty ())
+	{
+		if (!font->loadFromFile (*incoming, index))
+			return false;
+	}
+	else
+	{
+		if (m_bytes.empty ())
+			return false;
+		// La police recoit sa PROPRE copie des octets : elle n'en garde qu'un
+		// pointeur interne, le buffer du noeud ne doit donc pas etre le sien.
+		if (!font->loadFromMemory (m_bytes, index))
+			return false;
+	}
 
 	out[0] = cggraph::Value::Make (Types ().font, font);
 	return true;

@@ -77,6 +77,11 @@ public:
 	// Connect les valide.
 	virtual void SetSubgraphReference (const std::string &reference) { (void)reference; }
 
+	// Le pendant embarque : le TEXTE du document delegue, transmis par le
+	// graphe au noeud qui sait quoi en faire. Meme raison d'etre que
+	// SetSubgraphReference -- le graphe ne connait aucun type de noeud.
+	virtual void SetSubgraphDocument (const std::string &document) { (void)document; }
+
 	// Appele sur toute la branche amont AVANT que la signature soit calculee.
 	// Un noeud source depend d'un etat exterieur au graphe -- un fichier -- que
 	// rien d'autre ne vient relever : sans ce moment, sa signature resterait

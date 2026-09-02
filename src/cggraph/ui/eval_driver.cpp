@@ -168,6 +168,9 @@ void InlineEvalDriver::Pump ()
 	Completed completed;
 	completed.node = id;
 	completed.result = m_evaluator.Evaluate (id, completed.outputs, m_context);
+	// Juste apres Evaluate et sur le MEME fil : les vignettes du parcours
+	// voyagent avec le resultat.
+	completed.previews = m_evaluator.TakeRunPreviews ();
 
 	m_busy = false;
 	m_done.push_back (std::move (completed));

@@ -1,5 +1,9 @@
 #include "import_svg.h"
 
+// Resolution des regles de remplissage (resolveShape) : meme dependance que
+// text_extrude.cpp, et pour la meme raison.
+#include "clipper2/clipper.h"
+
 #include "extrude_contours.h"
 #include "mesh.h"
 
@@ -175,13 +179,55 @@ std::vector<Vector2f> fromArrays(const std::vector<std::array<float, 2>>& pts)
 
 } // namespace
 
-Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& opt)
+// Resout la regle de remplissage d'UNE forme et rend sa region. Clipper2 oriente
+// exterieurs et trous en sens opposes, ce que NonZero traite correctement en aval.
+//
+// C'est ce qui permet a un port de contours de porter une liste PLATE : la regle
+// EvenOdd/NonZero est une propriete de la forme SOURCE, pas du resultat, et la
+// resoudre ici evite d'avoir a la transporter.
+static std::vector<ExtrudeContour> resolveShape(const std::vector<ExtrudeContour>& in,
+                                                bool evenOdd)
 {
+    using namespace Clipper2Lib;
+
+    PathsD subjects;
+    subjects.reserve(in.size());
+    for (const ExtrudeContour& c : in)
+    {
+        PathD p;
+        p.reserve(c.pts.size());
+        for (const Vector2f& q : c.pts)
+            p.emplace_back((double)q.x, (double)q.y);
+        subjects.push_back(std::move(p));
+    }
+
+    // precision 6, comme text_extrude.cpp : deux decimales aplatiraient les
+    // details d'une forme d'une unite de cote.
+    const PathsD merged = Union(subjects, evenOdd ? FillRule::EvenOdd : FillRule::NonZero, 6);
+
+    std::vector<ExtrudeContour> out;
+    out.reserve(merged.size());
+    for (const PathD& p : merged)
+    {
+        if (p.size() < 3) continue;
+        ExtrudeContour c;
+        c.pts.reserve(p.size());
+        for (const PointD& q : p)
+            c.pts.emplace_back((float)q.x, (float)q.y);
+        out.push_back(std::move(c));
+    }
+    return out;
+}
+
+bool svg_to_contours(const std::string& filename, const SvgExtrudeOptions& opt,
+                     std::vector<ExtrudeContour>& out)
+{
+    out.clear();
     NSVGimage* image = nsvgParseFromFile(filename.c_str(), "px", 96.0f);
     if (!image)
     {
         std::fprintf(stderr, "import_svg: failed to parse %s\n", filename.c_str());
-        return nullptr;
+        return false;
     }
 
     // ------------------------------------------------------------------------
@@ -312,7 +358,7 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
     if (shapeContours.empty())
     {
         std::fprintf(stderr, "import_svg: %s has no fillable shapes\n", filename.c_str());
-        return nullptr;
+        return false;
     }
 
     if (opt.centerAndFit)
@@ -329,7 +375,6 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
                 pts = std::move(flat[k++]);
     }
 
-    ExtrudedMeshBuilder builder;
     for (size_t s = 0; s < shapeContours.size(); ++s)
     {
         std::vector<ExtrudeContour> contours;
@@ -343,23 +388,41 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
             contours.push_back(std::move(c));
         }
 
-        ExtrudeAppendOptions ao;
-        ao.zBottom = 0.0f;
-        ao.zTop    = opt.height;
-        ao.winding = shapeEvenOdd[s] ? ExtrudeWinding::EvenOdd
-                                     : ExtrudeWinding::NonZero;
-        // SVG holes are inner contours of opposite orientation as AUTHORED, so
-        // the orientation must be taken at face value — rewinding here would
-        // fill the holes in.
-        ao.normalizeOrientation = false;
-        builder.Append(contours, ao);
+        // Chaque forme resout SA regle ici. C'est le seul endroit ou elle est
+        // encore connue : la liste rendue est plate et ne la porte pas.
+        const std::vector<ExtrudeContour> region = resolveShape(contours, shapeEvenOdd[s]);
+        out.insert(out.end(), region.begin(), region.end());
     }
 
+    if (out.empty())
+    {
+        std::fprintf(stderr, "import_svg: %s a tessele dans le vide\n", filename.c_str());
+        return false;
+    }
+    return true;
+}
+
+Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& opt)
+{
+    std::vector<ExtrudeContour> contours;
+    if (!svg_to_contours(filename, opt, contours))
+        return nullptr;
+
+    ExtrudeAppendOptions ao;
+    ao.zBottom = 0.0f;
+    ao.zTop    = opt.height;
+    // NonZero et normalizeOrientation faux : les contours viennent de Clipper2,
+    // qui a deja oriente exterieurs et trous en sens opposes. Les reorienter
+    // d'apres l'aire signee reboucherait les contre-formes.
+    ao.winding = ExtrudeWinding::NonZero;
+    ao.normalizeOrientation = false;
+
+    ExtrudedMeshBuilder builder;
+    builder.Append(contours, ao);
     if (builder.Empty())
     {
-        std::fprintf(stderr, "import_svg: %s tessellated to nothing\n", filename.c_str());
+        std::fprintf(stderr, "import_svg: %s a tessele dans le vide\n", filename.c_str());
         return nullptr;
     }
-
     return builder.Build();
 }

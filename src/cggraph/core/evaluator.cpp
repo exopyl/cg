@@ -175,6 +175,7 @@ EvalResult Evaluator::Evaluate (NodeId id, ValueList &outputs, EvalContext &ctx)
 	const RunningGuard running (m_running);
 
 	m_memo.clear ();
+	m_runPreviews.clear ();
 	outputs.clear ();
 
 	{
@@ -251,6 +252,7 @@ EvalResult Evaluator::EvaluateNode (NodeId id, ValueList &outputs, EvalContext &
 		m_entries.splice (m_entries.begin (), m_entries, entry);
 		++m_stats.hits;
 		outputs = entry->values;
+		RecordPreviews (id, outputs);
 		return EvalResult ();
 	}
 
@@ -308,7 +310,24 @@ EvalResult Evaluator::EvaluateNode (NodeId id, ValueList &outputs, EvalContext &
 	if (!desc.sideEffect)
 		Insert (key, id, produced);
 	outputs = produced;
+	RecordPreviews (id, outputs);
 	return EvalResult ();
+}
+
+void Evaluator::RecordPreviews (NodeId id, const ValueList &outputs)
+{
+	// La PREMIERE sortie qui sache se representer, et on s'arrete la : un noeud
+	// a rarement deux sorties visuelles, et en afficher plusieurs demanderait a
+	// l'interface de choisir -- ce qui n'est pas une decision du moteur.
+	for (const Value &value : outputs)
+	{
+		Thumbnail thumb;
+		if (value.GetThumbnail (kPreviewMaxSide, thumb) && !thumb.IsEmpty ())
+		{
+			m_runPreviews[id] = std::move (thumb);
+			return;
+		}
+	}
 }
 
 } // namespace cggraph

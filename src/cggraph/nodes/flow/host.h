@@ -66,9 +66,11 @@ public:
 	std::vector<std::string> GetWrittenPaths () const override;
 
 	void SetSubgraphReference (const std::string &reference) override;
+	void SetSubgraphDocument (const std::string &document) override;
 	void RefreshExternalState () override;
 
 	const std::string &GetSubgraphReference () const { return m_reference; }
+	const std::string &GetSubgraphDocument () const { return m_document; }
 
 	// INSTRUMENTS. Node::Compute ne rend qu'un booleen : le statut nomme de
 	// l'evaluateur INTERNE serait perdu a la frontiere, et l'exterieur ne verrait
@@ -118,6 +120,12 @@ private:
 	void Reload ();
 
 	std::string m_reference;
+
+	// Document EMBARQUE. Il exclut m_reference -- le graphe fait s'exclure les
+	// deux formes --, et c'est lui qui rend le parent autonome : rien n'est lu
+	// sur disque au calcul, donc rien a relever non plus, son texte etant sa
+	// propre identite.
+	std::string m_document;
 
 	std::atomic<cggraph::EvalStatus> m_lastStatus{ cggraph::EvalStatus::Ok };
 	std::atomic<unsigned int> m_passes{ 0u };

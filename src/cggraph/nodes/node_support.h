@@ -61,6 +61,39 @@ public:
 	virtual std::vector<std::string> GetWrittenPaths () const = 0;
 };
 
+// Ce qu'un noeud SOURCE alimente par des OCTETS sait recevoir.
+//
+// Symetrique de FileSink ci-dessus, et retrouve de la meme facon -- par
+// dynamic_cast depuis un hote qui ne connait pas les types concrets. C'est ce
+// qui evite a la facade Embind de maker (graph_api.cpp) d'enumerer les noeuds
+// sources : une liste centrale aurait grossi a chaque ajout, et le sixieme
+// oubli y aurait ete silencieux.
+//
+// POURQUOI DES OCTETS ET NON UN CHEMIN. Les sources par chemin -- mesh.io.load
+// -- sont deja servies sous WebAssembly : l'hote ecrit le fichier dans MEMFS et
+// pose le chemin dans un parametre. Cela ne convient PAS a une police ni a une
+// image : leur identite de cache est le hash du contenu, le chemin temporaire
+// est souvent supprime avant le premier calcul, et le detour par le disque
+// laisse des fichiers que personne ne nettoie (maker les garde vivants pour la
+// duree de la page, faute de mieux). Un port d'octets n'a aucun de ces defauts.
+//
+// Les deux methodes sont celles que portaient deja LoadFontNode et
+// LoadImageNode : l'interface ne fait que les nommer ensemble.
+class ByteSource
+{
+public:
+	virtual ~ByteSource () = default;
+
+	// Pose le contenu ET verse aussitot son hash a la signature. Les deux dans
+	// la meme operation, sans quoi l'identite de cache pourrait se desynchroniser
+	// du contenu -- et le cache resservirait un resultat perime sans jamais
+	// planter.
+	virtual void SetBytes (std::vector<unsigned char> bytes) = 0;
+
+	// Purement decoratif, HORS signature : renommer ne recalcule rien.
+	virtual void SetName (const std::string &name) = 0;
+};
+
 // Lectures de parametres qui rendent le defaut quand l'entree manque, n'a pas le
 // type demande, ou est INTERNE. Un adaptateur ne devine jamais : c'est son
 // constructeur qui a pose les valeurs, donc l'absence est une erreur de

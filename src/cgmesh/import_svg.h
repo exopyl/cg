@@ -21,6 +21,8 @@
 
 #include <string>
 
+#include "extrude_contours.h"   // ExtrudeContour
+
 class Mesh;
 
 struct SvgExtrudeOptions
@@ -101,4 +103,18 @@ struct SvgExtrudeOptions
 
 // Parse `filename` and return a heap-allocated extruded Mesh, or nullptr on
 // failure (file missing, parse error, no fillable shape).
+// Contours 2D du SVG, en unités monde, prêts à extruder — l'étage que
+// import_svg_extruded enchaîne en interne, rendu accessible pour qu'un nœud de
+// graphe puisse s'y brancher.
+//
+// ⚠ La règle de remplissage de CHAQUE forme (even-odd ou non-zero) est résolue
+// ici, par une passe Clipper2 : une liste plate de contours ne peut pas la
+// transporter, et elle n'est connue nulle part ailleurs. Les contours rendus
+// sortent donc orientés pour NonZero, extérieurs et trous en sens opposés.
+//
+// `height` n'est pas lu : c'est un réglage d'extrusion.
+// Rend false si le fichier est illisible ou ne donne aucun contour.
+bool svg_to_contours(const std::string& filename, const SvgExtrudeOptions& opt,
+                     std::vector<ExtrudeContour>& out);
+
 Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& opt);

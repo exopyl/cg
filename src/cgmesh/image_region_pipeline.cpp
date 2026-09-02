@@ -1,6 +1,8 @@
 #include "image_region_pipeline.h"
 
 #include "extrude_contours.h"
+#include "material.h"
+#include "mesh.h"
 
 #include "../cgimg/cgimg.h"
 
@@ -151,17 +153,18 @@ void region_shrink_contours(std::vector<VectorContour>& contours, float shrink)
 //  Source -> raster quantifie
 // ============================================================================
 
-bool image_to_quantized_image(const std::string& filename,
-                              const RegionQuantizeOptions& opt,
-                              Img& out)
+// Coeur de la chaine, EN PLACE sur `img`. Extrait pour que les deux entrees
+// publiques ci-dessous -- depuis un fichier, depuis une image deja en memoire --
+// partagent exactement le meme ordre d'etapes. Cet ordre porte des decisions non
+// evidentes (cf. les commentaires qui le jalonnent) ; deux copies divergeraient
+// au premier reglage, ce qui est precisement le motif pour lequel ce tronc avait
+// deja ete extrait de image_relief.cpp et image_pixel_blocks.cpp.
+//
+// Ne rend rien : aucune de ses etapes n'echoue. Ce qui peut echouer, c'est
+// d'ARRIVER ici sans image -- teste par les deux appelants, chacun avec le
+// diagnostic qui a du sens pour sa source.
+static void quantize_in_place(Img& img, const RegionQuantizeOptions& opt)
 {
-	Img img;
-	if (img.load(filename.c_str()) != 0 || img.width() == 0 || img.height() == 0)
-	{
-		std::fprintf(stderr, "image_region_pipeline: failed to load %s\n", filename.c_str());
-		return false;
-	}
-
 	// Pre-reduction AVANT le lissage : c'est le seul endroit ou elle economise du
 	// travail sur TOUTE la chaine (bilateral et Wu sont les deux etages couteux).
 	if (opt.workingMaxDim > 0)
@@ -233,7 +236,34 @@ bool image_to_quantized_image(const std::string& filename,
 	// qu'on va vectoriser (cellules de sortie), et non en pixels source ou
 	// minRegionArea=12 effacerait des blocs entiers d'une grille 64 de large.
 	despeckle(img, opt.despecklePasses, opt.minRegionArea);
+}
 
+bool quantize_image(const Img& src, const RegionQuantizeOptions& opt, Img& out)
+{
+	// Pas de diagnostic sur la console : contrairement au chemin par fichier, il
+	// n'y a pas de nom a citer, et l'appelant -- un noeud de graphe, typiquement --
+	// sait dire d'ou vient son image bien mieux que cette fonction.
+	if (src.width() == 0 || src.height() == 0)
+		return false;
+
+	Img img = src;
+	quantize_in_place(img, opt);
+	out = img;
+	return true;
+}
+
+bool image_to_quantized_image(const std::string& filename,
+                              const RegionQuantizeOptions& opt,
+                              Img& out)
+{
+	Img img;
+	if (img.load(filename.c_str()) != 0 || img.width() == 0 || img.height() == 0)
+	{
+		std::fprintf(stderr, "image_region_pipeline: failed to load %s\n", filename.c_str());
+		return false;
+	}
+
+	quantize_in_place(img, opt);
 	out = img;
 	return true;
 }
@@ -357,4 +387,52 @@ void region_append_wall(ExtrudedMeshBuilder& builder, unsigned int materialId,
 	ring.push_back(region_make_rect(w.halfW + outer, w.halfH + outer, false));
 	ring.push_back(region_make_rect(w.halfW + inner, w.halfH + inner, true));
 	builder.Append(ring, ao);
+}
+
+bool region_apply_planar_uvs(Mesh& mesh, const RegionWorldTransform& w)
+{
+	const unsigned int nv = mesh.GetNVertices();
+	if (nv == 0) return false;
+
+	// Une emprise nulle rendrait une division par zéro : refuser plutôt que
+	// produire des UV infinis, qui se verraient comme un texel unique étiré.
+	if (!(w.halfW > 0.f) || !(w.halfH > 0.f)) return false;
+
+	const std::vector<float>& verts = mesh.GetVertices();
+	std::vector<float> uv;
+	uv.resize((size_t)nv * 2);
+	for (unsigned int i = 0; i < nv; ++i)
+	{
+		const float x = verts[3 * (size_t)i + 0];
+		const float y = verts[3 * (size_t)i + 1];
+		uv[2 * (size_t)i + 0] = (x + w.halfW) / (2.f * w.halfW);
+		// v retourné : l'image descend quand le monde monte (cf. RegionMapping,
+		// qui a déjà inversé le y en passant des pixels au monde).
+		uv[2 * (size_t)i + 1] = 1.f - (y + w.halfH) / (2.f * w.halfH);
+	}
+	mesh.SetTextureCoordinates(std::move(uv), nv);
+	return true;
+}
+
+Material* region_make_texture_material(const Img& image, const std::string& name)
+{
+	const unsigned int w = image.width();
+	const unsigned int h = image.height();
+	if (w == 0 || h == 0) return nullptr;
+
+	std::vector<unsigned char> rgba((size_t)w * h * 4, 0);
+	for (unsigned int y = 0; y < h; ++y)
+		for (unsigned int x = 0; x < w; ++x)
+		{
+			unsigned char r = 0, g = 0, b = 0, a = 255;
+			image.get_pixel(x, y, &r, &g, &b, &a);
+			const size_t k = ((size_t)y * w + x) * 4;
+			rgba[k + 0] = r;
+			rgba[k + 1] = g;
+			rgba[k + 2] = b;
+			rgba[k + 3] = a;
+		}
+
+	auto* mat = new MaterialTexture(name, w, h, rgba.data());
+	return mat;
 }

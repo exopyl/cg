@@ -22,11 +22,12 @@
 #include <vector>
 
 #include "../../core/node.h"
+#include "../node_support.h"
 
 namespace cggraph_nodes
 {
 
-class LoadFontNode : public cggraph::Node
+class LoadFontNode : public cggraph::Node, public ByteSource
 {
 public:
 	LoadFontNode ();
@@ -38,10 +39,10 @@ public:
 	// Pose les octets et verse aussitot leur hash a la signature : la valeur du
 	// parametre d'identite ne peut pas se desynchroniser du buffer, puisque
 	// c'est la meme operation qui ecrit les deux.
-	void SetBytes (std::vector<unsigned char> bytes);
+	void SetBytes (std::vector<unsigned char> bytes) override;
 
 	// Purement decoratif, hors signature.
-	void SetName (const std::string &name);
+	void SetName (const std::string &name) override;
 
 	// Nombre d'analyses REELLES du buffer depuis la construction.
 	unsigned int GetParseCount () const { return m_parses.load (); }

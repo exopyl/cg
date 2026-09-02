@@ -46,6 +46,9 @@
 #include "material.h"                // Material::GetName (nommage des groupes OBJ)
 #include "mesh.h"                    // GetNVertices / GetVertex / GetTriangles
 #include "mesh_io.h"                 // MeshIO::export_obj (serialisation OBJ+MTL)
+#include "mesh_payload.h"
+#include "graph_host.h"              // maker_graph::host () -- resultat du graphe (graphExportObj)
+#include "../src/cggraph/nodes/value_types.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/bind.h>
@@ -725,6 +728,75 @@ emscripten::val meshData(int id)
     return out;
 }
 
+// ---------------------------------------------------------------------------
+//  Resultat d'un graphe -> OBJ, pour les PAGES TEMPLATEES
+// ---------------------------------------------------------------------------
+//
+// Les pages de formes affichent un objet en donnant son OBJ a Online3DViewer.
+// Une page pilotee par un GRAPHE a le meme besoin, et rien ne le servait : la
+// facade nodale ne sait rendre que des vues typees (graphMeshView), faites pour
+// le renderer WebGL du worker.
+//
+// C'est ici et non dans graph_api.cpp parce que meshToObj vit dans l'espace de
+// noms anonyme de CETTE unite. Les deux facades partagent le meme artefact et,
+// sur le thread UI, la meme instance : lire host () d'ici est donc lire le
+// document que la page vient d'evaluer, pas un autre.
+//
+// ⚠ OBJ MINIMAL, sans ligne mtllib -- meme choix que regenerate(), et pour la
+// meme raison : o3dv chercherait un .mtl absent de sa FileList. Les MATERIAUX ne
+// traversent donc pas. C'est sans consequence pour un solide a materiau unique
+// (le texte extrude) ; cela retirerait en revanche tout son sens a un relief
+// colore, dont les couleurs SONT le resultat. Une page templatee sur
+// img.relief demandera d'abord un chemin qui les porte.
+// Geometrie du resultat d'un graphe en vues typees, COULEURS COMPRISES.
+//
+// C'est le pendant de meshData(id) pour une page GABARIT, et il existe pour une
+// raison precise : graphExportObj rend un OBJ MINIMAL, sans mtllib -- les
+// materiaux n'y sont donc pas. Sur un texte extrude, materiau unique, cela ne se
+// voit pas. Sur un relief d'image, les couleurs SONT le resultat, et un OBJ gris
+// n'en montrerait rien.
+//
+// Les couleurs passent donc par le meme chemin que pour les formes : un attribut
+// `color` par sommet, que viewer.js branche sur three.js. fillVertexColors rend
+// un tableau VIDE pour un maillage mono-materiau, et le JS retombe alors sur le
+// selecteur de couleur -- exactement comme pour une forme parametrique.
+//
+// Reutilise g_pos / g_idx / g_col : ces tampons servent deja meshData(), et les
+// deux ne sont jamais en vol en meme temps -- une page est pilotee par une forme
+// ou par un graphe, jamais par les deux.
+// Geometrie du resultat nodal, telle que three.js la veut.
+//
+// Le corps vit dans mesh_payload.cpp, PARTAGE avec graphMeshView : les deux vues
+// 3D de maker -- celle des pages et celle de l'editeur nodal -- lisaient le meme
+// maillage de deux facons differentes, et l'editeur n'en tirait que positions et
+// indices. Voir l'en-tete de mesh_payload.h.
+static maker::MeshPayloadBuffers g_graphBufs;
+
+emscripten::val graphMeshData(unsigned int port)
+{
+    const cggraph::ValueList& outputs = maker_graph::host().model.GetLastOutputs();
+    const std::shared_ptr<const Mesh> mesh =
+        (port < outputs.size())
+            ? outputs[port].Share<Mesh>(cggraph_nodes::Types().mesh)
+            : nullptr;
+    return maker::BuildMeshPayload(mesh.get(), g_graphBufs);
+}
+
+std::string graphExportObj(unsigned int port)
+{
+    const cggraph::ValueList& outputs = maker_graph::host().model.GetLastOutputs();
+    if (port >= outputs.size()) return std::string();
+
+    const std::shared_ptr<const Mesh> mesh =
+        outputs[port].Share<Mesh>(cggraph_nodes::Types().mesh);
+    if (mesh == nullptr) return std::string();
+
+    // meshToObj prend un Mesh* non const et ne le modifie pas (il ne lit que
+    // sommets et triangles). Le const_cast est cantonne a cet appel plutot que
+    // d'elargir une signature partagee avec le chemin des formes.
+    return meshToObj(const_cast<Mesh*>(mesh.get()));
+}
+
 EMSCRIPTEN_BINDINGS(maker)
 {
     emscripten::function("listShapes",        &listShapes);
@@ -740,6 +812,8 @@ EMSCRIPTEN_BINDINGS(maker)
     emscripten::function("setParam",          &setParam);
     emscripten::function("setParamString",    &setParamString);
     emscripten::function("regenerate",        &regenerate);
+    emscripten::function("graphExportObj",    &graphExportObj);
+    emscripten::function("graphMeshData",     &graphMeshData);
     emscripten::function("exportObj",         &exportObj);
     emscripten::function("meshData",          &meshData);
     emscripten::function("destroyShape",      &destroyShape);

@@ -15,7 +15,6 @@
 #include "../src/cggraph/nodes/mesh/simplify.h"
 #include "../src/cggraph/nodes/mesh/smooth_laplacian.h"
 #include "../src/cggraph/nodes/node_support.h"
-#include "../src/cggraph/nodes/text/extrude_text.h"
 #include "../src/cggraph/nodes/text/load_font.h"
 #include "../src/cggraph/nodes/value_types.h"
 #include "../src/cgmath/font.h"
@@ -33,7 +32,8 @@
 //
 // PERIMETRE DU JETON, dit une fois : trois des six noeuds emballent un
 // algorithme qui a une boucle externe -- SmoothLaplacian, Simplify,
-// ExtrudeText. Les trois autres -- LoadMesh, SaveMesh, LoadFont -- emballent un
+// TextContours (l'ex-ExtrudeText, dont c'est la moitie amont qui porte la
+// boucle de placement des glyphes). Les trois autres -- LoadMesh, SaveMesh, LoadFont -- emballent un
 // appel monolithique d'entree-sortie ou d'analyse : il n'y a pas de boucle
 // externe a instrumenter, et y en poser une reviendrait a faire traverser le
 // contexte a mesh_io_obj, mesh_io_ply, mesh_io_stl et stb_truetype. C'est un

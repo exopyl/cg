@@ -3,6 +3,7 @@
 #include "../src/cgimg/cgimg.h"
 #include "../src/cgmesh/image_relief.h"
 #include "../src/cgmesh/image_vectorization.h"
+#include "../src/cgmesh/material.h"
 #include "../src/cgmesh/mesh.h"
 
 #include <cmath>
@@ -559,4 +560,46 @@ TEST(TEST_cgmesh_image_relief, source_is_reduced_to_the_working_size)
 TEST(TEST_cgmesh_image_relief, working_size_defaults_to_512)
 {
 	EXPECT_EQ(ImageReliefOptions().workingMaxDim, 512);
+}
+
+// ---------------------------------------------------------------------------
+//  Plaquage de l'image SOURCE
+// ---------------------------------------------------------------------------
+
+TEST(TEST_cgmesh_image_relief, texturing_merges_the_layer_materials_without_moving_geometry)
+{
+	const char* kInputFile = "./texturing_merges_the_layer_materials.ppm";
+	ASSERT_TRUE(writeTwoColorImage(kInputFile));
+
+	const ImageReliefOptions opt = defaultOptions();
+
+	std::unique_ptr<Mesh> flat(image_to_relief(kInputFile, opt));
+	ASSERT_NE(flat, nullptr);
+	EXPECT_EQ(flat->GetNMaterials(), 2u + 2u) << "deux couleurs + base + mur";
+	EXPECT_TRUE(flat->GetTextureCoordinates().empty());
+
+	std::unique_ptr<Mesh> textured(
+		image_to_relief(kInputFile, opt, /*textureFromSource=*/true));
+	ASSERT_NE(textured, nullptr);
+
+	// Les deux couches ont fusionne sur le materiau de la texture ; la base et le
+	// mur gardent le leur, debordant du contenu.
+	EXPECT_EQ(textured->GetNMaterials(), 1u + 2u);
+
+	// LA GEOMETRIE NE BOUGE PAS : texturer ne change que la provenance des
+	// couleurs. C'est ce qui distingue ce reglage d'un changement de palette.
+	EXPECT_EQ(textured->GetNVertices(), flat->GetNVertices());
+	EXPECT_EQ(textured->GetNFaces(), flat->GetNFaces());
+
+	MaterialTexture* tex = dynamic_cast<MaterialTexture*>(textured->GetMaterial(0));
+	ASSERT_NE(tex, nullptr) << "le materiau des couches n'est pas une texture";
+	ASSERT_NE(tex->GetImage(), nullptr);
+	EXPECT_EQ(tex->GetImage()->width(), (unsigned)W);
+	EXPECT_EQ(tex->GetImage()->height(), (unsigned)H);
+
+	// UV par sommet, paralleles aux sommets -- la condition du chemin rapide de
+	// BuildPolygonRenderData.
+	EXPECT_EQ(textured->GetNTextureCoordinates(), textured->GetNVertices());
+	EXPECT_EQ(textured->GetTextureCoordinates().size(),
+	          (size_t)textured->GetNVertices() * 2);
 }

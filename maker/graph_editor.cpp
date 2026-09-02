@@ -33,6 +33,7 @@
 // ===========================================================================
 
 #include <cfloat>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -42,12 +43,17 @@
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
 #include <emscripten/html5_webgl.h>
+// GLES3 : le backend OpenGL 3 d'ImGui l'utilise deja, mais il inclut son propre
+// chargeur en interne. Le televerseur de vignette appelle glGenTextures /
+// glTexImage2D directement, donc il lui faut l'en-tete.
+#include <GLES3/gl3.h>
 #include <emscripten/val.h>
 
 #include <imgui.h>
 #include <imgui_impl_opengl3.h>
 
 #include "../src/cggraph/canvas/node_canvas.h"
+#include "../src/cggraph/nodes/node_support.h"   // ByteSource, pour la sonde
 #include "../src/cggraph/ui/editor_model.h"
 #include "graph_host.h"
 
@@ -73,12 +79,66 @@ struct Editor
 	ImGuiContext *imgui = nullptr;
 	cggraph_canvas::NodeCanvas *canvas = nullptr;
 	bool overlay = true;
+	// SEPARATEUR, garde par l'HOTE et non par le canvas : graphEditorReset en
+	// construit un neuf a chaque document, et un reglage de vue n'a aucune raison
+	// de repartir a zero quand le document change. C'est le meme motif que le
+	// televerseur de vignette et la sonde d'octets, reposes juste apres.
+	float split = 1.0f;
 	int width = 1;
 	int height = 1;
 	std::string error;
 };
 
 Editor g_editor;
+
+// SONDE « CE NOEUD PREND-IL DES OCTETS ? ». C'est un dynamic_cast vers
+// ByteSource, exactement celui que graphAcceptsBytes fait pour la facade
+// procedurale -- et c'est pourquoi il est ici et non dans le canvas : l'y
+// descendre lui donnerait une dependance vers la couche des noeuds, alors que
+// l'hote la connait deja.
+static bool AcceptsBytes (cggraph::NodeId id)
+{
+	cggraph::Node *node = maker_graph::host ().model.GetGraph ().FindNode (id);
+	return node != nullptr && dynamic_cast<cggraph_nodes::ByteSource *> (node) != nullptr;
+}
+
+// TELEVERSEUR DE VIGNETTE. Le canvas rend des octets RGBA et ne connait aucune
+// API graphique ; c'est ici, cote hote, que GL existe.
+//
+// REUTILISE la texture quand elle existe : une vignette est refaite a chaque
+// evaluation, et en creer une neuve a chaque fois fuirait un objet GL par calcul.
+static void *UploadThumbnail (const unsigned char *rgba, int width, int height, void *reuse)
+{
+	if (rgba == nullptr || width <= 0 || height <= 0)
+		return reuse;
+
+	GLuint texture = (GLuint)(std::uintptr_t)reuse;
+	if (texture == 0)
+	{
+		glGenTextures (1, &texture);
+		if (texture == 0)
+			return nullptr;
+		glBindTexture (GL_TEXTURE_2D, texture);
+		// LINEAR et CLAMP : une vignette est affichee a sa taille exacte, mais
+		// ImGui peut l'echelonner sur un ecran a densite elevee.
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	}
+	else
+	{
+		glBindTexture (GL_TEXTURE_2D, texture);
+	}
+
+	// glTexImage2D et non glTexSubImage2D : les dimensions changent d'une
+	// vignette a l'autre (l'image source n'a pas toujours le meme rapport).
+	glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
+	              GL_UNSIGNED_BYTE, rgba);
+	glBindTexture (GL_TEXTURE_2D, 0);
+	return (void *)(std::uintptr_t)texture;
+}
+
 
 // --------------------------------------------------------------------------
 //  Clavier : event.code -> ImGuiKey
@@ -210,6 +270,9 @@ std::string graphEditorInit (int width, int height)
 	}
 
 	g_editor.canvas = new cggraph_canvas::NodeCanvas ();
+	g_editor.canvas->SetTextureUploader (&UploadThumbnail);
+	g_editor.canvas->SetByteSourceProbe (&AcceptsBytes);
+	g_editor.canvas->SetSplit (g_editor.split);
 	g_editor.width = width > 0 ? width : 1;
 	g_editor.height = height > 0 ? height : 1;
 	io.DisplaySize = ImVec2 ((float)g_editor.width, (float)g_editor.height);
@@ -240,6 +303,9 @@ void graphEditorReset ()
 		return;
 	delete g_editor.canvas;
 	g_editor.canvas = new cggraph_canvas::NodeCanvas ();
+	g_editor.canvas->SetTextureUploader (&UploadThumbnail);
+	g_editor.canvas->SetByteSourceProbe (&AcceptsBytes);
+	g_editor.canvas->SetSplit (g_editor.split);
 }
 
 // ⚠ A APPELER APRES graphFromJson () -- et apres graphEditorReset (), qui rend
@@ -264,6 +330,24 @@ void graphEditorSetOverlay (bool on)
 bool graphEditorGetOverlay ()
 {
 	return g_editor.overlay;
+}
+
+// SEPARATEUR. La fraction est celle de l'EDITEUR ; la vue 3D prend le reste, et
+// c'est le JS qui y pose son viewport. La valeur ne vit qu'a un endroit -- ici
+// elle ne fait que descendre dans le canvas, qui en tire sa disposition.
+void graphEditorSetSplit (float fraction)
+{
+	// RETENU MEME SANS CANVAS : la page peut poser sa fraction avant que
+	// l'editeur soit construit, et la perdre alors laisserait la vue 3D dessinee
+	// a droite pendant que l'editeur s'etale sur toute la largeur.
+	g_editor.split = fraction;
+	if (g_editor.canvas != nullptr)
+		g_editor.canvas->SetSplit (fraction);
+}
+
+float graphEditorGetSplit ()
+{
+	return g_editor.split;
 }
 
 // ---------------------------------------------------------------------------
@@ -356,6 +440,37 @@ std::string graphEditorState ()
 	j += io.WantCaptureKeyboard ? "true" : "false";
 	j += ",\"wantText\":";
 	j += io.WantTextInput ? "true" : "false";
+
+	// DEMANDE DE SELECTION DE FICHIER posee par le bouton « Parcourir... » de
+	// l'inspecteur. Le canvas ne peut pas ouvrir de selecteur -- il est dessine
+	// par ImGui, dans un Worker, sans acces au DOM -- il DEMANDE, et l'hote s'en
+	// charge. Meme separation que le pompage de frame : le canvas dit ce qu'il
+	// veut, l'hote sait comment.
+	//
+	// La lecture EFFACE la demande cote canvas, donc ce champ ne peut apparaitre
+	// qu'une fois par clic. C'est aussi pourquoi il est lu ICI, dans l'etat que
+	// l'hote consulte a chaque frame, plutot que par un appel separe qu'il
+	// faudrait penser a faire.
+	// Le canvas peut ne pas exister encore (etat interroge avant graphEditorInit).
+	const cggraph_canvas::NodeCanvas::FileRequest request =
+		g_editor.canvas != nullptr ? g_editor.canvas->TakeFileRequest ()
+		                           : cggraph_canvas::NodeCanvas::FileRequest ();
+	if (request.node != 0)
+	{
+		j += ",\"fileRequest\":{\"node\":" + std::to_string (request.node);
+		j += ",\"param\":\"" + request.param + "\"}";
+	}
+
+	// DESCENTE. Publiee parce que les compteurs de la page portent sur le
+	// document RACINE : sans cette mention, la barre annoncerait « 2 noeuds »
+	// pendant qu'on regarde un corps qui en a trois.
+	if (g_editor.canvas != nullptr && g_editor.canvas->GetDepth () > 0)
+	{
+		j += ",\"descent\":{\"depth\":"
+		     + std::to_string ((unsigned long long)g_editor.canvas->GetDepth ());
+		j += ",\"reference\":\"" + maker_graph::JsonEscape (g_editor.canvas->GetCurrentReference ()) + "\"}";
+	}
+
 	j += "}";
 	return j;
 }
@@ -458,6 +573,8 @@ EMSCRIPTEN_BINDINGS (maker_graph_editor_bindings)
 	emscripten::function ("graphEditorResize", &graphEditorResize);
 	emscripten::function ("graphEditorSetOverlay", &graphEditorSetOverlay);
 	emscripten::function ("graphEditorGetOverlay", &graphEditorGetOverlay);
+	emscripten::function ("graphEditorSetSplit", &graphEditorSetSplit);
+	emscripten::function ("graphEditorGetSplit", &graphEditorGetSplit);
 	emscripten::function ("graphEditorFrame", &graphEditorFrame);
 	emscripten::function ("graphEditorRenderDrawData", &graphEditorRenderDrawData);
 	emscripten::function ("graphEditorPump", &graphEditorPump);

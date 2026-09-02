@@ -23,6 +23,11 @@
 
 #include <cstddef>
 #include <string>
+#include <vector>
+
+// Pour ExtrudeContour, que text_to_contours rend. L'en-tete ne tire que les
+// types de contour, pas le constructeur de maillage.
+#include "extrude_contours.h"
 
 #include "../cgmath/text_layout.h"   // TextAlign
 
@@ -134,6 +139,24 @@ struct TextExtrudeStats
 // ctx optionnel, en DERNIER parametre : la boucle de placement des glyphes teste
 // le jeton d'annulation et rend nullptr sans rien construire. Un appelant qui
 // n'annule rien compile inchange.
+// Contours 2D du texte, en unités monde, prêts à extruder — l'étage que
+// text_to_extruded_mesh enchaîne en interne, rendu accessible pour qu'un autre
+// consommateur puisse s'y brancher (un nœud de graphe, typiquement).
+//
+// ⚠ Les glyphes sont TOUJOURS fusionnés en une région unique (Clipper2,
+// NonZero), contrairement à text_to_extruded_mesh qui ne le fait que sur demande
+// ou quand un support l'impose. Une liste plate de contours ne peut pas porter
+// le découpage par glyphe, et extruder d'un seul tenant des lettres non
+// fusionnées laisserait des murs internes là où elles se touchent.
+//
+// `depth` et `materialId` ne sont pas lus : ce sont des réglages d'extrusion.
+// Rend false sur police invalide, texte vide, contours vides ou annulation.
+bool text_to_contours (const Font& font, const std::string& utf8,
+                       const TextExtrudeOptions& opt,
+                       std::vector<ExtrudeContour>& out,
+                       TextExtrudeStats* stats = nullptr,
+                       const Context* ctx = nullptr);
+
 Mesh* text_to_extruded_mesh (const Font& font, const std::string& utf8,
                              const TextExtrudeOptions& opt,
                              TextExtrudeStats* stats = nullptr,

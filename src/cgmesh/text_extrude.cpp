@@ -282,11 +282,111 @@ std::vector<ExtrudeContour> supportContours (const TextExtrudeOptions& opt,
 }
 } // namespace
 
+bool text_to_contours (const Font& font, const std::string& utf8,
+                       const TextExtrudeOptions& opt,
+                       std::vector<ExtrudeContour>& out,
+                       TextExtrudeStats* stats,
+                       const Context* ctx)
+{
+	out.clear();
+
+	if (!font.isValid())
+	{
+		std::fprintf (stderr, "text_extrude: police non chargee\n");
+		return false;
+	}
+
+	TextLayoutOptions lo;
+	lo.size          = opt.size;
+	lo.lineSpacing   = opt.lineSpacing;
+	lo.letterSpacing = opt.letterSpacing;
+	lo.align         = opt.align;
+	lo.kerning       = opt.kerning;
+
+	const TextLayout layout = layoutText (utf8, font, lo);
+	if (layout.glyphs.empty())
+	{
+		std::fprintf (stderr, "text_extrude: texte vide\n");
+		return false;
+	}
+
+	Vector2f origin (0.f, 0.f);
+	if (opt.centerOnOrigin)
+		origin = Vector2f (-0.5f * (layout.bboxMin.x + layout.bboxMax.x),
+		                   -0.5f * (layout.bboxMin.y + layout.bboxMax.y));
+
+	// Un texte repete ses lettres : « MISSISSIPPI » n'a que quatre glyphes
+	// distincts sur onze. On ne les lit -- et surtout on ne les subdivise --
+	// qu'une fois, puisque la plume ne fait ensuite que translater le resultat.
+	std::unordered_map<int, std::vector<ExtrudeContour>> glyphCache;
+
+	if (stats)
+		stats->glyphsPlaced = layout.glyphs.size();
+
+	std::vector<ExtrudeContour> pooled;
+	for (const PlacedGlyph& placed : layout.glyphs)
+	{
+		// Un glyphe est l'unite de travail, et l'aplatissement d'un seul peut
+		// couter cher. Rien n'est rendu d'un texte a moitie pose -- une forme
+		// tronquee ressemblerait a un resultat.
+		if (ctx && ctx->IsAborted())
+			return false;
+
+		auto it = glyphCache.find (placed.glyphIndex);
+		if (it == glyphCache.end())
+		{
+			if (stats)
+				stats->glyphsFlattened++;
+			it = glyphCache.emplace (
+				placed.glyphIndex,
+				flattenGlyph (font.glyphContours (placed.glyphIndex),
+				              layout.scale, opt.flattenTol)).first;
+		}
+		if (it->second.empty()) continue;    // espace, .notdef, glyphe blanc
+
+		const Vector2f pen (placed.pen.x + origin.x, placed.pen.y + origin.y);
+		const std::vector<ExtrudeContour> contours = translated (it->second, pen);
+		pooled.insert (pooled.end(), contours.begin(), contours.end());
+	}
+
+	if (pooled.empty())
+	{
+		std::fprintf (stderr, "text_extrude: aucun contour a extruder\n");
+		return false;
+	}
+
+	// LE contour de plus, ajoute AVANT l'union : il traverse le meme Union
+	// (subjects, NonZero, 6) que les glyphes, et en ressort fondu avec eux.
+	// Aucune coque a recoller, aucun booleen 3D.
+	if (opt.support != TextExtrudeOptions::Support::None)
+	{
+		const std::vector<ExtrudeContour> support = supportContours (opt, pooled);
+		pooled.insert (pooled.end(), support.begin(), support.end());
+	}
+
+	// UNION TOUJOURS, et c'est un ecart assume avec text_to_extruded_mesh, qui
+	// ne la faisait que sur demande (unionOverlaps) ou quand un support
+	// l'imposait.
+	//
+	// Le motif est le TYPE de sortie : un port de forme 2D porte une liste plate
+	// de contours, pas le decoupage par glyphe que l'ancien chemin exploitait
+	// pour appeler l'extrudeur une fois par lettre. Rendre les glyphes non
+	// fusionnes sur ce port, puis les extruder d'un seul tenant, donnerait des
+	// murs interieurs la ou deux lettres se touchent. Une region unique est ce
+	// qu'un consommateur de contours attend, et c'est aussi ce qui rend le
+	// solide etanche.
+	//
+	// Le prix est une passe Clipper2 meme sur un texte sans chevauchement.
+	out = unionContours (pooled);
+	return !out.empty();
+}
+
 Mesh* text_to_extruded_mesh (const Font& font, const std::string& utf8,
                              const TextExtrudeOptions& opt,
                              TextExtrudeStats* stats,
                              const Context* ctx)
 {
+
 	if (!font.isValid())
 	{
 		std::fprintf (stderr, "text_extrude: police non chargee\n");

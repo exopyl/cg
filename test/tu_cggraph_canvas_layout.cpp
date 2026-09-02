@@ -168,3 +168,80 @@ TEST (CggraphCanvasLayout, PanelsStayInsideDisplay)
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+//  SEPARATEUR -- l'editeur a gauche, la vue 3D a droite
+// ---------------------------------------------------------------------------
+
+TEST (TEST_cggraph_canvas_layout, the_default_split_leaves_the_editor_alone)
+{
+	// Le defaut vaut 1 : c'est la disposition d'AVANT le separateur, et tout
+	// appelant qui ne le passe pas doit obtenir exactement la meme chose. C'est
+	// ce qui permet aux dix-neuf cas ci-dessus de ne pas bouger d'un pixel.
+	const CanvasLayout implicit = ComputeLayout (1600.0f, 1000.0f);
+	const CanvasLayout explicitOne = ComputeLayout (1600.0f, 1000.0f, 1.0f);
+
+	EXPECT_FLOAT_EQ (implicit.graph.width, 1600.0f);
+	EXPECT_FLOAT_EQ (implicit.graph.width, explicitOne.graph.width);
+	EXPECT_FLOAT_EQ (implicit.inspector.x, explicitOne.inspector.x);
+	// Et la vue est alors VIDE, pas negative.
+	EXPECT_FLOAT_EQ (implicit.view.width, 0.0f);
+}
+
+TEST (TEST_cggraph_canvas_layout, the_two_panes_tile_the_display_exactly)
+{
+	// Les deux cotes viennent du meme calcul, donc ils se touchent sans
+	// recouvrement ni trou -- un pixel de l'un ne peut pas appartenir a l'autre.
+	const float fractions[] = { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f };
+	for (float f : fractions)
+	{
+		const CanvasLayout layout = ComputeLayout (1600.0f, 1000.0f, f);
+		EXPECT_FLOAT_EQ (layout.graph.x, 0.0f) << f;
+		EXPECT_FLOAT_EQ (layout.view.x, layout.graph.width) << f;
+		EXPECT_FLOAT_EQ (layout.graph.width + layout.view.width, 1600.0f) << f;
+		EXPECT_FLOAT_EQ (layout.graph.height, 1000.0f) << f;
+		EXPECT_FLOAT_EQ (layout.view.height, 1000.0f) << f;
+	}
+}
+
+TEST (TEST_cggraph_canvas_layout, the_panels_stay_inside_the_editor_pane)
+{
+	// LE POINT QUI MOTIVE LE SEPARATEUR. Les panneaux flottent AU-DESSUS de
+	// l'editeur ; s'ils suivaient la largeur d'affichage, l'inspecteur se
+	// poserait par-dessus la vue 3D -- soit exactement la superposition que la
+	// separation existe pour supprimer.
+	for (float f : { 0.4f, 0.5f, 0.6f, 0.8f })
+	{
+		const CanvasLayout layout = ComputeLayout (1600.0f, 1000.0f, f);
+		EXPECT_GE (layout.palette.x, 0.0f) << f;
+		EXPECT_LE (layout.inspector.x + layout.inspector.width, layout.graph.width + 0.001f) << f;
+		EXPECT_LE (layout.palette.x + layout.palette.width, layout.graph.width + 0.001f) << f;
+	}
+}
+
+TEST (TEST_cggraph_canvas_layout, a_narrow_editor_pane_shrinks_the_panels_rather_than_overflowing)
+{
+	// La regle de retrecissement s'applique a la part de l'EDITEUR, pas a
+	// l'affichage : reduire le volet gauche doit retrecir les panneaux comme le
+	// ferait une fenetre etroite.
+	const CanvasLayout wide = ComputeLayout (1600.0f, 800.0f, 1.0f);
+	const CanvasLayout narrow = ComputeLayout (1600.0f, 800.0f, 0.3f);
+	EXPECT_LT (narrow.palette.width, wide.palette.width);
+	EXPECT_GE (narrow.palette.width, 0.0f);
+	EXPECT_GE (narrow.inspector.width, 0.0f);
+	EXPECT_LE (narrow.inspector.x + narrow.inspector.width, narrow.graph.width + 0.001f);
+}
+
+TEST (TEST_cggraph_canvas_layout, an_out_of_range_split_is_brought_back_into_it)
+{
+	// Bornage, comme partout ou une valeur vient de l'exterieur -- ici d'un
+	// glissement a la souris dans la page. Hors de [0, 1] la fraction n'a pas de
+	// sens, et une largeur negative ferait un viewport GL invalide.
+	const CanvasLayout below = ComputeLayout (1200.0f, 600.0f, -3.0f);
+	EXPECT_FLOAT_EQ (below.graph.width, 0.0f);
+	EXPECT_FLOAT_EQ (below.view.width, 1200.0f);
+
+	const CanvasLayout above = ComputeLayout (1200.0f, 600.0f, 4.0f);
+	EXPECT_FLOAT_EQ (above.graph.width, 1200.0f);
+	EXPECT_FLOAT_EQ (above.view.width, 0.0f);
+}

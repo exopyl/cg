@@ -107,6 +107,12 @@ Hash Signature (const Graph &graph, NodeId id, SignatureMemo &memo)
 	// bien qu'aucun noeud ne l'interprete encore -- une signature completee
 	// apres coup est exactement le defaut que ce module existe pour empecher.
 	h = HashString (graph.GetNodeSubgraph (id), h);
+	// Le document EMBARQUE entre dans la signature comme la reference, et il y
+	// entre MIEUX : il est son propre contenu, donc l'editer change la
+	// signature sans qu'aucun releve exterieur soit necessaire. Un chemin, lui,
+	// ne hache qu'un nom -- d'ou le parametre d'identite que les noeuds de flux
+	// tiennent a jour pour les fichiers.
+	h = HashString (graph.GetNodeSubgraphDocument (id), h);
 
 	// La recursion termine sans garde : le graphe refuse les cycles au moment
 	// de la connexion, il n'en existe donc aucun a parcourir.

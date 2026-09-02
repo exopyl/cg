@@ -14,14 +14,20 @@ project(libcggraph_nodes)
 file(GLOB SRC_FILES
 	${PROJECT_SOURCE_DIR}/*.cpp
 	${PROJECT_SOURCE_DIR}/flow/*.cpp
+	${PROJECT_SOURCE_DIR}/img/*.cpp
+	${PROJECT_SOURCE_DIR}/io/*.cpp
 	${PROJECT_SOURCE_DIR}/mesh/*.cpp
 	${PROJECT_SOURCE_DIR}/shapes/*.cpp
+	${PROJECT_SOURCE_DIR}/svg/*.cpp
 	${PROJECT_SOURCE_DIR}/text/*.cpp)
 file(GLOB HEADER_FILES
 	${PROJECT_SOURCE_DIR}/*.h
 	${PROJECT_SOURCE_DIR}/flow/*.h
+	${PROJECT_SOURCE_DIR}/img/*.h
+	${PROJECT_SOURCE_DIR}/io/*.h
 	${PROJECT_SOURCE_DIR}/mesh/*.h
 	${PROJECT_SOURCE_DIR}/shapes/*.h
+	${PROJECT_SOURCE_DIR}/svg/*.h
 	${PROJECT_SOURCE_DIR}/text/*.h)
 
 # Noeuds d'ANALYSE : NATIFS SEULEMENT.
@@ -50,6 +56,14 @@ set(NATIVE_ONLY_SRC
 	# Decomposition multi-objets : vmeshes_io.cpp n'est pas dans la liste
 	# EMSCRIPTEN de cgmesh, et il tire 3ds / gltf / occt / lib3mf derriere lui.
 	${PROJECT_SOURCE_DIR}/mesh/load_parts.cpp)
+# img/ N'EST PAS dans cette liste non plus, et c'est verifiable plutot que
+# suppose : les quatre corps qu'il emballe -- image_relief.cpp,
+# image_pixel_blocks.cpp, image_region_pipeline.cpp, image_vectorization.cpp --
+# figurent tous dans la liste EMSCRIPTEN de src/cgmesh/CMakeLists.txt, et cgimg
+# est globe en entier sans branche EMSCRIPTEN. Les deux chaines image se
+# compilent ET SE LIENT sous Emscripten ; c'est d'ailleurs pour le web qu'elles
+# ont ete ecrites, les pages relief.html et pixels.html de maker les appellent.
+#
 # flow/ N'EST PAS dans cette liste, et c'est le fait a retenir de l'etape 9 pour
 # la cible web : les trois constructions de flux n'emballent aucun corps de
 # cgmesh. Elles se compilent ET SE LIENT sous Emscripten -- verifie sur

@@ -119,6 +119,18 @@ static const std::size_t kMaxSubgraphDepth = 16;
 LoadStatus LoadSubgraph (const std::string &reference, SubgraphInstance &instance,
                          std::string &detail);
 
+// Meme chose depuis le TEXTE du document, embarque dans le parent au lieu d'etre
+// designe par un chemin.
+//
+// PAS DE GARDE DE RECURSION ICI, et ce n'est pas un oubli : la garde par chemin
+// existe parce qu'un fichier peut se referencer lui-meme, directement ou par un
+// tour de plusieurs documents. Un document embarque, lui, est CONTENU dans son
+// parent : il ne peut pas le contenir en retour, et sa profondeur est donc celle
+// du texte, finie par construction. La borne kMaxSubgraphDepth continue de
+// s'appliquer aux chemins qu'il pourrait contenir, la pile etant partagee.
+LoadStatus LoadSubgraphFromText (const std::string &document, SubgraphInstance &instance,
+                                 std::string &detail);
+
 const char *ToString (LoadStatus status);
 
 // Resultat d'une passe. Le statut de l'evaluateur INTERNE y est rendu tel quel :

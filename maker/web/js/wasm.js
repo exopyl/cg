@@ -17,6 +17,11 @@ const REQUIRED_BINDINGS = [
   "createGothicFromJson", "exportGothicJson", "getParams", "setParam",
   "regenerate", "exportObj", "meshData", "destroyShape",
   "createImagePixelBlocks", "exportPixelBlocks",
+  // Pages GABARIT (template.html) : elles pilotent un graphe sur CETTE instance
+  // -- le meme artefact porte les deux facades -- et le rendent par o3dv.
+  "graphFromJson", "graphToJson", "graphEvaluate", "graphNodeInfo",
+  "graphSetInt", "graphSetFloat", "graphSetBool", "graphSetString",
+  "graphSetBytes", "graphExportObj",
 ];
 
 // Renvoie { Module, staleMessage }. `staleMessage` est non nul quand le module

@@ -54,10 +54,18 @@ struct LayoutRect
 
 struct CanvasLayout
 {
-	// Le fond : toujours (0, 0) et toute la taille de l'affichage.
+	// L'EDITEUR : toujours a partir de (0, 0) -- voir l'en-tete, l'origine est ce
+	// qui se perd au decoupage -- mais plus forcement sur toute la largeur : il
+	// s'arrete au separateur.
 	LayoutRect graph;
 	LayoutRect palette;
 	LayoutRect inspector;
+
+	// LA VUE 3D : ce qui reste a droite du separateur. Le canvas ne la dessine
+	// pas -- c'est l'hote qui y pose son viewport --, mais elle est calculee ici
+	// pour que les deux cotes viennent d'un seul endroit et ne puissent pas
+	// diverger d'un pixel.
+	LayoutRect view;
 };
 
 // Marge entre un panneau flottant et le bord de l'affichage.
@@ -71,6 +79,12 @@ inline constexpr float kInspectorWidth = 320.0f;
 // panneaux se retrecissent plutot que de se rejoindre : un editeur nodal dont
 // on ne voit plus le graphe n'est plus un editeur nodal.
 inline constexpr float kMinGraphWidth = 260.0f;
+
+inline float ClampFraction (float value)
+{
+	if (!(value > 0.0f)) return 0.0f;   // attrape aussi NaN
+	return value < 1.0f ? value : 1.0f;
+}
 
 inline float ClampToZero (float value)
 {
@@ -86,27 +100,42 @@ inline float ClampToZero (float value)
 //   3. sinon ils se retrecissent ENSEMBLE, dans le meme rapport, jusqu'a
 //      zero -- aucune dimension rendue n'est negative, quelle que soit
 //      l'entree, y compris nulle.
-inline CanvasLayout ComputeLayout (float displayWidth, float displayHeight)
+inline CanvasLayout ComputeLayout (float displayWidth, float displayHeight,
+                                   float splitFraction = 1.0f)
 {
 	const float width = ClampToZero (displayWidth);
 	const float height = ClampToZero (displayHeight);
 
+	// PART DE L'EDITEUR dans la largeur. Le defaut vaut 1 : l'editeur occupe
+	// tout, la vue 3D est vide, et c'est exactement la disposition d'avant le
+	// separateur -- les appelants qui ne le passent pas ne changent pas de
+	// comportement.
+	const float editorWidth = width * ClampFraction (splitFraction);
+
 	CanvasLayout layout;
 	layout.graph.x = 0.0f;
 	layout.graph.y = 0.0f;
-	layout.graph.width = width;
+	layout.graph.width = editorWidth;
 	layout.graph.height = height;
+
+	layout.view.x = editorWidth;
+	layout.view.y = 0.0f;
+	layout.view.width = ClampToZero (width - editorWidth);
+	layout.view.height = height;
 
 	// La marge suit l'affichage quand celui-ci devient minuscule : une marge
 	// fixe de 10 px sur un cadre de 16 px ne laisserait pas de panneau du tout.
+	// LES PANNEAUX SUIVENT L'EDITEUR, pas l'affichage : ils flottent au-dessus de
+	// lui, donc les pousser au bord de l'ecran les ferait passer par-dessus la
+	// vue 3D -- exactement ce que le separateur existe pour empecher.
 	float margin = kLayoutMargin;
-	if (margin > width * 0.125f)
-		margin = width * 0.125f;
+	if (margin > editorWidth * 0.125f)
+		margin = editorWidth * 0.125f;
 	if (margin > height * 0.125f)
 		margin = height * 0.125f;
 
 	const float nominal = kPaletteWidth + kInspectorWidth;
-	const float room = ClampToZero (width - 2.0f * margin - kMinGraphWidth);
+	const float room = ClampToZero (editorWidth - 2.0f * margin - kMinGraphWidth);
 	const float scale = room < nominal ? room / nominal : 1.0f;
 
 	const float paletteWidth = kPaletteWidth * scale;
@@ -118,7 +147,7 @@ inline CanvasLayout ComputeLayout (float displayWidth, float displayHeight)
 	layout.palette.width = paletteWidth;
 	layout.palette.height = panelHeight;
 
-	layout.inspector.x = width - margin - inspectorWidth;
+	layout.inspector.x = editorWidth - margin - inspectorWidth;
 	layout.inspector.y = margin;
 	layout.inspector.width = inspectorWidth;
 	layout.inspector.height = panelHeight;

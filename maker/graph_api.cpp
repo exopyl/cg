@@ -45,8 +45,10 @@
 #include "../src/cggraph/core/serialize.h"
 #include "../src/cggraph/nodes/catalog.h"
 #include "../src/cggraph/nodes/catalog_factory.h"
+#include "../src/cggraph/nodes/node_support.h"
 #include "../src/cggraph/nodes/value_types.h"
 #include "graph_host.h"
+#include "mesh_payload.h"
 #include "mesh.h"
 
 #ifdef __EMSCRIPTEN__
@@ -117,23 +119,7 @@ void ResetHost ()
 namespace {
 
 using maker_graph::host;
-
-std::string JsonEscape (const std::string &s)
-{
-    std::string o;
-    o.reserve (s.size () + 2);
-    for (char c : s) {
-        switch (c) {
-            case '"':  o += "\\\""; break;
-            case '\\': o += "\\\\"; break;
-            case '\n': o += "\\n";  break;
-            case '\r': o += "\\r";  break;
-            case '\t': o += "\\t";  break;
-            default:   o += c;      break;
-        }
-    }
-    return o;
-}
+using maker_graph::JsonEscape;
 
 const char *NameOf (cggraph::ConnectStatus s)
 {
@@ -327,6 +313,16 @@ bool graphSetBool (unsigned int id, const std::string &name, bool value)
     return ok;
 }
 
+// Le noeud designe accepte-t-il des octets ? L'hote s'en sert pour choisir, sur
+// un import de fichier, entre « pousser dans ce noeud » et « deposer en MEMFS ».
+// Sans cette question, l'interface devrait deviner d'apres le nom du type -- une
+// liste de plus, a tenir a jour ailleurs.
+bool graphAcceptsBytes (unsigned int id)
+{
+    cggraph::Node *node = FindForWrite (id);
+    return node != nullptr && dynamic_cast<cggraph_nodes::ByteSource *> (node) != nullptr;
+}
+
 bool graphSetString (unsigned int id, const std::string &name, const std::string &value)
 {
     cggraph::Node *node = FindForWrite (id);
@@ -442,41 +438,26 @@ std::string graphEvaluate (unsigned int id)
 
 #ifdef __EMSCRIPTEN__
 
-// Sommets et triangles de la sortie retenue, en vues typees sur le tas de CE
-// module. Elles ne traversent aucun postMessage : le renderer qui les lit vit
-// dans le meme worker (D27).
+// Geometrie de la sortie retenue, en vues typees sur le tas de CE module. Elles
+// ne traversent aucun postMessage : le renderer qui les lit vit dans le meme
+// worker (D27).
+//
+// Le corps est PARTAGE avec graphMeshData, la facade des pages (mesh_payload.h).
+// Il ne l'etait pas, et cela se voyait : cette vue-ci ne transportait que
+// positions et indices, si bien qu'un relief d'image reconstruit dans l'editeur
+// nodal sortait en bloc uniforme, sans palette ni texture, la ou la page
+// « Image to puzzle » le montrait correctement.
+static maker::MeshPayloadBuffers g_viewBufs;
+
 emscripten::val graphMeshView (unsigned int port)
 {
-    using namespace emscripten;
     maker_graph::Host &h = host ();
-    h.viewPositions.clear ();
-    h.viewIndices.clear ();
-
     const cggraph::ValueList &outputs = h.model.GetLastOutputs ();
-    if (port < outputs.size ()) {
-        const std::shared_ptr<const Mesh> mesh =
-            outputs[port].Share<Mesh> (cggraph_nodes::Types ().mesh);
-        if (mesh != nullptr) {
-            const int nv = mesh->GetNVertices ();
-            h.viewPositions.reserve ((std::size_t)nv * 3);
-            float v[3];
-            for (int i = 0; i < nv; ++i) {
-                mesh->GetVertex ((unsigned int)i, v);
-                h.viewPositions.push_back (v[0]);
-                h.viewPositions.push_back (v[1]);
-                h.viewPositions.push_back (v[2]);
-            }
-            h.viewIndices = mesh->GetTriangles ();
-        }
-    }
-
-    val out = val::object ();
-    out.set ("positions",
-             val (typed_memory_view (h.viewPositions.size (), h.viewPositions.data ())));
-    out.set ("indices", val (typed_memory_view (h.viewIndices.size (), h.viewIndices.data ())));
-    out.set ("nv", (int)(h.viewPositions.size () / 3));
-    out.set ("nf", (int)(h.viewIndices.size () / 3));
-    return out;
+    const std::shared_ptr<const Mesh> mesh =
+        (port < outputs.size ())
+            ? outputs[port].Share<Mesh> (cggraph_nodes::Types ().mesh)
+            : nullptr;
+    return maker::BuildMeshPayload (mesh.get (), g_viewBufs);
 }
 
 // Le collecteur de progression de l'hote. C'est LUI qui fait du pompage de
@@ -512,6 +493,45 @@ double heapBytes ()
     return (double)emscripten_get_heap_size ();
 }
 
+// Alimente une source par ses OCTETS. Rend false si le noeud n'existe pas ou
+// n'est pas une source d'octets -- text.font.load et img.io.load le sont ;
+// mesh.io.load ne l'est PAS, il prend un chemin, et l'hote continue de le servir
+// par MEMFS (message "loadFile").
+//
+// Aucune enumeration des types de noeuds ici : le dynamic_cast vers ByteSource
+// suffit, exactement comme runner.cpp retrouve un FileSink. Une septieme source
+// d'octets marchera sans toucher a ce fichier.
+//
+// ⚠ Les octets sont COPIES dans le tas WASM par convertJSArrayToNumberVector,
+// puis a nouveau dans le noeud. Pour une police (~2 Mio) ou une image c'est sans
+// consequence ; ce ne serait pas le cas pour de la geometrie, qui n'a de toute
+// facon rien a faire sur cette frontiere (D27).
+bool graphSetBytes (unsigned int id, emscripten::val bytes, const std::string &name)
+{
+    cggraph::Node *node = FindForWrite (id);
+    if (node == nullptr)
+        return false;
+
+    cggraph_nodes::ByteSource *source = dynamic_cast<cggraph_nodes::ByteSource *> (node);
+    if (source == nullptr)
+        return false;
+
+    std::vector<unsigned char> data =
+        emscripten::convertJSArrayToNumberVector<unsigned char> (bytes);
+    if (data.empty ())
+        return false;
+
+    source->SetBytes (std::move (data));
+    if (!name.empty ())
+        source->SetName (name);
+
+    // SetBytes a reecrit le parametre d'identite : l'inspecteur qui pointe sur ce
+    // noeud doit republier ses adresses, au meme titre que pour un setter
+    // scalaire.
+    NoteParamChanged (id);
+    return true;
+}
+
 EMSCRIPTEN_BINDINGS(maker_graph)
 {
     emscripten::function ("graphReset",           &graphReset);
@@ -525,6 +545,8 @@ EMSCRIPTEN_BINDINGS(maker_graph)
     emscripten::function ("graphSetFloat",        &graphSetFloat);
     emscripten::function ("graphSetBool",         &graphSetBool);
     emscripten::function ("graphSetString",       &graphSetString);
+    emscripten::function ("graphSetBytes",        &graphSetBytes);
+    emscripten::function ("graphAcceptsBytes",    &graphAcceptsBytes);
     emscripten::function ("graphToJson",          &graphToJson);
     emscripten::function ("graphFromJson",        &graphFromJson);
     emscripten::function ("graphEvaluate",        &graphEvaluate);

@@ -42,7 +42,7 @@ const LAYOUT = [
   { key: "smooth", type: "mesh.smooth.laplacian", x: 330, y: 290 },
   { key: "repeat", type: "flow.repeat", x: 560, y: 290 },
   { key: "font", type: "text.font.load", x: 330, y: 420 },
-  { key: "extrude", type: "text.extrude", x: 560, y: 420 },
+  { key: "extrude", type: "text.contours", x: 560, y: 420 },
   { key: "save", type: "mesh.io.save", x: 330, y: 540 },
 ];
 

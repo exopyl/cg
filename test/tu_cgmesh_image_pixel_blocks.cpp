@@ -411,3 +411,89 @@ TEST(TEST_cgmesh_image_pixel_blocks, dropping_the_frame_shrinks_the_footprint_to
 	delete framed;
 	delete bare;
 }
+
+// ---------------------------------------------------------------------------
+//  Plaquage de l'image SOURCE
+// ---------------------------------------------------------------------------
+
+TEST(TEST_cgmesh_image_pixel_blocks, texturing_replaces_the_palette_flats_by_one_texture)
+{
+	const char* kFile = "./texturing_replaces_the_palette_flats_by_one_texture.ppm";
+	Img img(32, 32, false);
+	fillRect(img, 0, 0, 32, 32, 255, 255, 255);
+	fillRect(img,  2,  2, 10, 10, 255, 0, 0);
+	fillRect(img,  2, 22, 10, 30, 0, 0, 255);
+	ASSERT_EQ(img.save(kFile), 0);
+
+	ImagePixelBlocksOptions opt = rawOptions(/*pixelWidth=*/16, /*maxColors=*/4);
+
+	// Sans texture : le comportement historique, un aplat par couleur de palette.
+	Mesh* flat = image_to_pixel_blocks(kFile, opt);
+	ASSERT_NE(flat, nullptr);
+	EXPECT_EQ(flat->GetNMaterials(), 3u);
+	EXPECT_TRUE(flat->GetTextureCoordinates().empty());
+
+	// Avec texture : UN materiau pour tous les blocs, et c'est celui de l'image.
+	// La geometrie, elle, ne bouge PAS -- c'est toujours la quantification qui
+	// decoupe les blocs, seule leur couleur change de source.
+	Mesh* textured = image_to_pixel_blocks(kFile, opt, /*textureFromSource=*/true);
+	ASSERT_NE(textured, nullptr);
+	EXPECT_EQ(textured->GetNMaterials(), 1u);
+	EXPECT_EQ(textured->GetNVertices(), flat->GetNVertices());
+	EXPECT_EQ(textured->GetNFaces(), flat->GetNFaces());
+
+	Material* mat = textured->GetMaterial(0);
+	ASSERT_NE(mat, nullptr);
+	MaterialTexture* tex = dynamic_cast<MaterialTexture*>(mat);
+	ASSERT_NE(tex, nullptr) << "le materiau des blocs n'est pas une texture";
+	ASSERT_NE(tex->GetImage(), nullptr);
+	// L'image PLAQUEE est l'originale, en pleine resolution -- pas la quantifiee,
+	// dont les aplats sont precisement ce qu'on cherche a depasser.
+	EXPECT_EQ(tex->GetImage()->width(), 32u);
+	EXPECT_EQ(tex->GetImage()->height(), 32u);
+
+	delete flat;
+	delete textured;
+}
+
+TEST(TEST_cgmesh_image_pixel_blocks, texturing_gives_every_vertex_a_uv_inside_the_unit_square)
+{
+	const char* kFile = "./texturing_gives_every_vertex_a_uv_inside_the_unit_square.ppm";
+	Img img(32, 32, false);
+	fillRect(img, 0, 0, 32, 32, 255, 255, 255);
+	fillRect(img, 8, 8, 24, 24, 0, 128, 255);
+	ASSERT_EQ(img.save(kFile), 0);
+
+	// Base et mur ACTIFS : ils debordent du contenu, et c'est justement le cas
+	// qui dit pourquoi ils gardent leur propre materiau au lieu de recevoir la
+	// texture -- leurs UV sortent de [0, 1].
+	ImagePixelBlocksOptions opt = rawOptions(/*pixelWidth=*/16, /*maxColors=*/4);
+	opt.emitBase = true;
+	opt.emitWall = true;
+
+	Mesh* m = image_to_pixel_blocks(kFile, opt, /*textureFromSource=*/true);
+	ASSERT_NE(m, nullptr);
+
+	// Texture + base + mur : le materiau des blocs a fusionne, les deux autres non.
+	EXPECT_EQ(m->GetNMaterials(), 3u);
+
+	// UV PAR SOMMET : le tableau est parallele aux sommets, ce qui est la
+	// condition du chemin rapide de BuildPolygonRenderData.
+	const std::vector<float>& uv = m->GetTextureCoordinates();
+	ASSERT_EQ(uv.size(), (size_t)m->GetNVertices() * 2);
+	EXPECT_EQ(m->GetNTextureCoordinates(), m->GetNVertices());
+
+	// Les UV du CONTENU tiennent dans [0, 1] ; ceux du cadre en sortent. Les deux
+	// ensemble : sans le second, une projection degeneree passerait le premier.
+	bool anyOutside = false;
+	unsigned int inside = 0;
+	for (size_t i = 0; i < uv.size(); ++i)
+	{
+		if (uv[i] < -0.001f || uv[i] > 1.001f) anyOutside = true;
+		else ++inside;
+	}
+	EXPECT_GT(inside, 0u);
+	EXPECT_TRUE(anyOutside) << "la base et le mur devraient deborder de [0, 1]";
+
+	delete m;
+}

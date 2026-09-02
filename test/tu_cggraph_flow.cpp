@@ -1545,3 +1545,162 @@ TEST (TEST_cggraph_flow_sinks, the_headless_runner_names_the_files_written_insid
 	EXPECT_TRUE (refused.written.empty ());
 	EXPECT_TRUE (FilesWithPrefix (prefix).empty ());
 }
+
+// ===========================================================================
+//  DOCUMENT EMBARQUE -- le corps DANS le parent, sans fichier a cote
+// ===========================================================================
+// Le champ `subgraph` accepte deux formes : une CHAINE, qui designe un fichier,
+// et un OBJET, qui EST le document. La seconde rend le parent autonome -- rien
+// a resoudre sur disque -- et rend son identite exacte, le contenu etant sa
+// propre reference.
+
+namespace {
+
+// Le meme corps que WriteSmoothDocument, mais rendu en TEXTE au lieu d'etre
+// ecrit. C'est ce texte qui se pose sur le noeud hote.
+std::string SmoothDocumentText (int iterations = 1)
+{
+	Graph graph;
+	const NodeId in = graph.AddNode (MakeNode (flow::kInputTypeName));
+	const NodeId smooth = graph.AddNode (MakeNode ("mesh.smooth.laplacian"));
+	const NodeId out = graph.AddNode (MakeNode (flow::kOutputTypeName));
+	graph.FindNode (smooth)->GetParams ().SetInt ("iterations", iterations);
+	graph.Connect (in, 0, smooth, 0);
+	graph.Connect (smooth, 0, out, 0);
+	return SaveGraph (graph);
+}
+
+} // namespace
+
+TEST (TEST_cggraph_flow_embedded, a_body_carried_in_the_parent_computes_without_any_file)
+{
+	// LE CAS QUI MOTIVE TOUT : aucun fichier n'existe, aucun repertoire courant
+	// n'est en jeu, et la boucle tourne quand meme. C'est ce qui manquait a
+	// l'hote web, ou le corps devait etre depose a la main dans le systeme de
+	// fichiers du worker avant que le document ne se calcule.
+	Graph graph;
+	const NodeId repeat = graph.AddNode (MakeNode ("flow.repeat"));
+	ASSERT_NE (repeat, kInvalidNodeId);
+	ASSERT_TRUE (graph.SetNodeSubgraphDocument (repeat, SmoothDocumentText ()));
+	graph.FindNode (repeat)->GetParams ().SetInt ("n", 3);
+
+	// Les ports sont publies des que le document est pose : la preuve qu'il a
+	// bien ete lu, et non simplement range.
+	ASSERT_EQ (graph.FindNode (repeat)->GetDesc ().inputs.size (), 1u);
+	ASSERT_EQ (graph.FindNode (repeat)->GetDesc ().outputs.size (), 1u);
+
+	Evaluator evaluator (graph);
+	EvalContext ctx;
+	ValueList in (1);
+	in[0] = Value::Make (Types ().mesh, MakeBumpGrid (5, 3.0f));
+	ValueList out (1);
+	ASSERT_TRUE (graph.FindNode (repeat)->Compute (ctx, in, out));
+	ASSERT_FALSE (out.empty ());
+	EXPECT_NE (out[0].Get<Mesh> (Types ().mesh), nullptr);
+
+	// Trois passes, et non une servie trois fois.
+	EXPECT_EQ (static_cast<flow::SubgraphHostNode *> (graph.FindNode (repeat))->GetPassCount (), 3u);
+}
+
+TEST (TEST_cggraph_flow_embedded, the_two_forms_exclude_each_other)
+{
+	// Un noeud qui delegue a la fois un fichier et un texte n'aurait pas de sens,
+	// et il faudrait ecrire quelque part lequel gagne -- une regle que personne
+	// ne lirait au bon moment. Poser l'une efface donc l'autre, dans les deux
+	// sens.
+	Graph graph;
+	const NodeId repeat = graph.AddNode (MakeNode ("flow.repeat"));
+
+	ASSERT_TRUE (graph.SetNodeSubgraph (repeat, "corps.json"));
+	EXPECT_EQ (graph.GetNodeSubgraph (repeat), "corps.json");
+	EXPECT_TRUE (graph.GetNodeSubgraphDocument (repeat).empty ());
+
+	ASSERT_TRUE (graph.SetNodeSubgraphDocument (repeat, SmoothDocumentText ()));
+	EXPECT_TRUE (graph.GetNodeSubgraph (repeat).empty ());
+	EXPECT_FALSE (graph.GetNodeSubgraphDocument (repeat).empty ());
+
+	ASSERT_TRUE (graph.SetNodeSubgraph (repeat, "autre.json"));
+	EXPECT_EQ (graph.GetNodeSubgraph (repeat), "autre.json");
+	EXPECT_TRUE (graph.GetNodeSubgraphDocument (repeat).empty ());
+}
+
+TEST (TEST_cggraph_flow_embedded, editing_the_body_moves_the_signature_with_no_outside_probe)
+{
+	// LE GAIN LE MOINS VISIBLE ET LE PLUS IMPORTANT. Pour un FICHIER, la
+	// reference ne hache qu'un NOM : editer le corps sans le renommer laisserait
+	// le cache resservir l'ancien resultat, et c'est pourquoi l'hote releve
+	// l'etat exterieur du fichier dans un parametre d'identite. Embarque, le
+	// contenu EST la reference -- la signature bouge d'elle-meme.
+	Graph graph;
+	const NodeId repeat = graph.AddNode (MakeNode ("flow.repeat"));
+	ASSERT_TRUE (graph.SetNodeSubgraphDocument (repeat, SmoothDocumentText (1)));
+
+	const Hash before = Signature (graph, repeat);
+
+	// Un seul parametre change dans le corps -- exactement le cas qui piegeait
+	// le stat : meme taille, meme seconde.
+	ASSERT_TRUE (graph.SetNodeSubgraphDocument (repeat, SmoothDocumentText (5)));
+	EXPECT_NE (Signature (graph, repeat), before);
+
+	// Et le releve exterieur ne s'en mele pas : il n'y a pas de fichier a
+	// interroger, donc l'identite reste a son defaut. Le parametre EXISTE quand
+	// meme -- il est declare au constructeur, et le retirer selon la forme ferait
+	// varier le jeu de parametres d'un noeud a l'autre.
+	graph.FindNode (repeat)->RefreshExternalState ();
+	EXPECT_EQ (GetStringParam (*graph.FindNode (repeat), "subgraph.identity"), "absent");
+}
+
+TEST (TEST_cggraph_flow_embedded, the_document_survives_a_save_and_reload_as_an_object)
+{
+	// Le format porte l'objet, pas une chaine echappee : re-lire le document
+	// rend un noeud qui delegue le MEME corps, et qui calcule.
+	Graph graph;
+	const NodeId repeat = graph.AddNode (MakeNode ("flow.repeat"));
+	ASSERT_TRUE (graph.SetNodeSubgraphDocument (repeat, SmoothDocumentText ()));
+    graph.FindNode (repeat)->GetParams ().SetInt ("n", 2);
+
+	const std::string document = SaveGraph (graph);
+	// L'objet embarque, et non une chaine : sans cela le document serait illisible
+	// par tout autre outil, et le controle ci-dessous ne dirait rien de plus que
+	// « une chaine a survecu ».
+	EXPECT_NE (document.find ("\"subgraph\""), std::string::npos);
+	EXPECT_EQ (document.find ("\"subgraph\": \""), std::string::npos);
+
+	Graph reloaded;
+	const CatalogFactory factory;
+	ASSERT_TRUE (LoadGraph (document, factory, reloaded).IsOk ());
+
+	NodeId found = kInvalidNodeId;
+	for (NodeId id : reloaded.GetNodeIds ())
+		if (reloaded.FindNode (id)->GetDesc ().typeName == "flow.repeat")
+			found = id;
+	ASSERT_NE (found, kInvalidNodeId);
+	EXPECT_TRUE (reloaded.GetNodeSubgraph (found).empty ());
+	EXPECT_FALSE (reloaded.GetNodeSubgraphDocument (found).empty ());
+	EXPECT_EQ (reloaded.FindNode (found)->GetDesc ().inputs.size (), 1u);
+
+	EvalContext ctx;
+	ValueList in (1);
+	in[0] = Value::Make (Types ().mesh, MakeBumpGrid (5, 2.0f));
+	ValueList out (1);
+	EXPECT_TRUE (reloaded.FindNode (found)->Compute (ctx, in, out));
+}
+
+TEST (TEST_cggraph_flow_embedded, an_invalid_embedded_document_is_refused_by_name)
+{
+	// Le corps embarque est relu par le MEME lecteur que son parent : une erreur
+	// dedans se nomme comme n'importe quelle autre, au lieu de donner un noeud
+	// muet sans port.
+	Graph graph;
+	const NodeId repeat = graph.AddNode (MakeNode ("flow.repeat"));
+	ASSERT_TRUE (graph.SetNodeSubgraphDocument (repeat, "{\"format\":\"cggraph\"}"));
+
+	// Sans frontiere lisible, l'hote reste VISIBLE et garde ses ports fixes --
+	// c'est le parti pris pour toute reference qui ne se charge pas --, mais le
+	// calcul refuse.
+	EvalContext ctx;
+	ValueList in (1);
+	in[0] = Value::Make (Types ().mesh, MakeBumpGrid (4, 1.0f));
+	ValueList out (1);
+	EXPECT_FALSE (graph.FindNode (repeat)->Compute (ctx, in, out));
+}

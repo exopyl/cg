@@ -8,14 +8,18 @@
 #include <vector>
 
 #include "../src/cggraph/core/evaluator.h"
+#include "../src/cggraph/core/serialize.h"
 #include "../src/cggraph/nodes/catalog.h"
 #include "../src/cggraph/nodes/file_identity.h"
+#include "../src/cggraph/nodes/img/load_image.h"
+#include "../src/cggraph/nodes/io/file_ref.h"
 #include "../src/cggraph/nodes/mesh/load_mesh.h"
 #include "../src/cggraph/nodes/mesh/save_mesh.h"
 #include "../src/cggraph/nodes/mesh/simplify.h"
 #include "../src/cggraph/nodes/mesh/smooth_laplacian.h"
 #include "../src/cggraph/nodes/node_support.h"
-#include "../src/cggraph/nodes/text/extrude_text.h"
+#include "../src/cggraph/nodes/shapes/extrude.h"
+#include "../src/cggraph/nodes/text/text_contours.h"
 #include "../src/cggraph/nodes/text/load_font.h"
 #include "../src/cggraph/nodes/value_types.h"
 #include "../src/cgmath/font.h"
@@ -222,7 +226,18 @@ TEST (TEST_cggraph_nodes_catalog, the_native_only_entries_are_named_one_by_one)
 	// generateurs qu'il appelle, tous dans la liste EMSCRIPTEN de cgmesh.
 	const std::vector<std::string> expectedFirst = {
 		"mesh.io.load", "mesh.smooth.laplacian", "mesh.simplify", "mesh.io.save",
-		"text.font.load", "text.extrude"
+		"text.font.load", "text.contours",
+		// CONTOUR 2D -- les deux moities de l'ancien text.extrude, plus le
+		// producteur SVG qui partage desormais l'extrudeur.
+		"svg.contours", "shape.extrude",
+		// IMAGE -- portables comme les precedents : image_relief.cpp,
+		// image_pixel_blocks.cpp, image_region_pipeline.cpp et
+		// image_vectorization.cpp sont tous dans la liste EMSCRIPTEN de cgmesh,
+		// et cgimg est globe en entier. Nommes ici et pas seulement comptes :
+		// une cardinalite ne dit pas lequel a ete renomme.
+		"file.ref",
+		"img.io.load", "img.quantize", "img.relief", "img.relief.layers",
+		"img.pixel_blocks", "img.pixel_blocks.parts"
 	};
 	ASSERT_GE (portable.size (), expectedFirst.size ());
 	EXPECT_EQ (std::vector<std::string> (portable.begin (),
@@ -239,16 +254,33 @@ TEST (TEST_cggraph_nodes_catalog, the_native_only_entries_are_named_one_by_one)
 		if (std::string (entry.category) == "Profil") ++profiles;
 	}
 	std::size_t flow = 0;
+	std::size_t images = 0;
 	for (const CatalogEntry &entry : Catalog ())
+	{
 		if (std::string (entry.category) == "Flux") ++flow;
+		if (std::string (entry.category) == "Image") ++images;
+	}
 
 	EXPECT_EQ (shapes, 27u);      // 26 generiques + la fenetre gothique
 	EXPECT_EQ (profiles, 5u);
 	// Les cinq du flux sont PORTABLES : elles n'emballent aucun corps de
 	// cgmesh, seulement le serialiseur et l'evaluateur de la couche A.
 	EXPECT_EQ (flow, 5u);
-	EXPECT_EQ (portable.size (), 43u);
-	EXPECT_EQ (Catalog ().size (), 50u);
+	// Les six de l'image sont PORTABLES elles aussi : une source, le tronc de
+	// quantification, et deux extrudeurs a deux sorties chacun.
+	EXPECT_EQ (images, 6u);
+	// Le noeud FICHIER, seul de sa categorie : il ne lit que <cstdio>, donc
+	// portable comme les six precedents.
+	std::size_t files = 0;
+	for (const CatalogEntry &entry : Catalog ())
+		if (std::string (entry.category) == "Fichier") ++files;
+	EXPECT_EQ (files, 1u);
+	// Le contour 2D en ajoute deux au decompte : l'ancien text.extrude, un
+	// noeud, est devenu text.contours + shape.extrude, et svg.contours est
+	// arrive avec eux. Tous portables -- text_extrude.cpp, import_svg.cpp et
+	// extrude_contours.cpp sont dans la liste EMSCRIPTEN de cgmesh.
+	EXPECT_EQ (portable.size (), 52u);
+	EXPECT_EQ (Catalog ().size (), 59u);
 }
 
 TEST (TEST_cggraph_nodes_catalog, every_entry_either_carries_a_caveat_or_declares_it_has_none)
@@ -301,7 +333,9 @@ TEST (TEST_cggraph_nodes_catalog, the_catalog_names_what_the_wrapped_bodies_real
 		{ "mesh.simplify", true, "PROXY" },
 		{ "mesh.io.save", true, "casse" },
 		{ "text.font.load", false, nullptr },
-		{ "text.extrude", true, "nullptr" },
+		{ "text.contours", true, "TOUJOURS fusionnes" },
+		{ "svg.contours", true, "Clipper2" },
+		{ "shape.extrude", true, "plaque de support" },
 		// Les six noeuds d'analyse, et la meme discipline : chaque reserve vient
 		// de la LECTURE du corps, pas de sa declaration.
 		{ "mesh.color.map", true, "defined" },
@@ -683,27 +717,158 @@ TEST (TEST_cggraph_nodes_mesh, an_abort_raised_during_the_computation_stops_the_
 //  Les deux noeuds de texte
 // ---------------------------------------------------------------------------
 
+// Monte la chaine « police -> contours -> extrusion » et rend les trois
+// identifiants. C'est le remplacant de l'ancien text.extrude monolithique : deux
+// noeuds la ou il n'y en avait qu'un, et l'extrudeur est desormais partage avec
+// le SVG.
+struct TextChain
+{
+	Graph graph;
+	NodeId font = 0;
+	NodeId contours = 0;
+	NodeId extrude = 0;
+};
+
+static bool BuildTextChain (TextChain &chain, const std::vector<unsigned char> &fontBytes,
+                            const std::string &text)
+{
+	chain.font = chain.graph.AddNode (std::unique_ptr<Node> (new LoadFontNode ()));
+	chain.contours = chain.graph.AddNode (std::unique_ptr<Node> (new TextContoursNode (text)));
+	chain.extrude = chain.graph.AddNode (std::unique_ptr<Node> (new ExtrudeNode ()));
+	static_cast<LoadFontNode *> (chain.graph.FindNode (chain.font))->SetBytes (fontBytes);
+	return chain.graph.Connect (chain.font, 0, chain.contours, 0) == ConnectStatus::Ok
+	       && chain.graph.Connect (chain.contours, 0, chain.extrude, 0) == ConnectStatus::Ok;
+}
+
+// Extrude un texte multiligne sous un alignement donne et rend l'empreinte de
+// ses positions. Multiligne DELIBEREMENT : sur une seule ligne l'alignement ne
+// deplace rien, et le test ne prouverait rien.
+static std::vector<unsigned char> ExtrudeAligned (const std::vector<unsigned char> &fontBytes,
+                                                  int align)
+{
+	TextChain chain;
+	if (!BuildTextChain (chain, fontBytes, "I\nMMMM"))
+		return std::vector<unsigned char> ();
+	chain.graph.FindNode (chain.contours)->GetParams ().SetInt ("align", align);
+
+	Evaluator evaluator (chain.graph);
+	EvalContext ctx;
+	ValueList outputs;
+	if (!evaluator.Evaluate (chain.extrude, outputs, ctx).IsOk ())
+		return std::vector<unsigned char> ();
+	const Mesh *mesh = outputs[0].Get<Mesh> (Types ().mesh);
+	return mesh != nullptr ? ImageOfPositions (*mesh) : std::vector<unsigned char> ();
+}
+
+TEST (TEST_cggraph_nodes_text, the_alignment_reaches_the_layout_and_is_bounded)
+{
+	// PARITE avec la page « Texte 3D » de maker, dont la forme
+	// ParameterizedText3D expose les trois alignements. Le noeud ne les exposait
+	// pas : TextExtrudeOptions::align restait a son defaut, et tout texte
+	// multiligne sortait ferre a gauche.
+	const std::vector<unsigned char> bytes = ReadAllBytes (kTrueTypeFont);
+	ASSERT_FALSE (bytes.empty ());
+
+	const std::vector<unsigned char> left   = ExtrudeAligned (bytes, 0);
+	const std::vector<unsigned char> center = ExtrudeAligned (bytes, 1);
+	const std::vector<unsigned char> right  = ExtrudeAligned (bytes, 2);
+	ASSERT_FALSE (left.empty ());
+	ASSERT_FALSE (center.empty ());
+	ASSERT_FALSE (right.empty ());
+
+	// Les trois placent la ligne courte differemment : le parametre ATTEINT
+	// vraiment la mise en page, ce qu'une simple lecture de ParamSet ne dirait pas.
+	EXPECT_NE (left, center);
+	EXPECT_NE (center, right);
+	EXPECT_NE (left, right);
+
+	// Deterministe : meme reglage, meme geometrie.
+	EXPECT_EQ (ExtrudeAligned (bytes, 1), center);
+
+	// Borne, comme `support` : hors de [0, 2] la valeur est ramenee dans
+	// l'intervalle plutot que transtypee en une valeur d'enumeration inexistante.
+	EXPECT_EQ (ExtrudeAligned (bytes, -5), left);
+	EXPECT_EQ (ExtrudeAligned (bytes, 99), right);
+}
+
+TEST (TEST_cggraph_nodes_text, a_document_written_before_align_existed_still_reads_as_left)
+{
+	// L'ajout d'`align` n'a PAS incremente la version du descripteur, et c'est
+	// delibere : IsVersionCompatible est une egalite stricte sans crochet de
+	// migration, donc un bump aurait condamne tous les documents existants.
+	// Ce cas fige la condition qui rend ce choix legitime -- l'absence du
+	// parametre doit se calculer exactement comme l'ancien comportement.
+	const std::vector<unsigned char> bytes = ReadAllBytes (kTrueTypeFont);
+	ASSERT_FALSE (bytes.empty ());
+
+	TextChain chain;
+	ASSERT_TRUE (BuildTextChain (chain, bytes, "I\nMMMM"));
+	// Un document d'avant l'ajout ne porte pas d'entree "align" : la relecture
+	// vide le jeu et n'en repose aucune. On reproduit exactement cet etat.
+	Node *contours = chain.graph.FindNode (chain.contours);
+	contours->GetParams ().Clear ();
+	contours->GetParams ().SetString ("text", "I\nMMMM");
+
+	Evaluator evaluator (chain.graph);
+	EvalContext ctx;
+	ValueList outputs;
+	ASSERT_TRUE (evaluator.Evaluate (chain.extrude, outputs, ctx).IsOk ());
+	const Mesh *mesh = outputs[0].Get<Mesh> (Types ().mesh);
+	ASSERT_NE (mesh, nullptr);
+	EXPECT_EQ (ImageOfPositions (*mesh), ExtrudeAligned (bytes, 0));
+}
+
+TEST (TEST_cggraph_nodes_text, the_byte_fed_sources_are_reachable_through_the_ByteSource_contract)
+{
+	// C'EST LE CONTRAT DONT DEPEND maker/graph_api.cpp : graphSetBytes retrouve
+	// la source par un dynamic_cast vers ByteSource, sans enumerer les types de
+	// noeuds. Si une source cessait d'implementer l'interface, rien d'autre que
+	// ce cas ne le dirait -- la facade se contenterait de rendre false, et
+	// l'import de fichier deviendrait silencieusement inoperant dans l'editeur web.
+	LoadFontNode fontNode;
+	LoadImageNode imageNode;
+	SimplifyNode notASource (0.5f);
+
+	EXPECT_NE (dynamic_cast<ByteSource *> (&fontNode), nullptr);
+	EXPECT_NE (dynamic_cast<ByteSource *> (&imageNode), nullptr);
+	EXPECT_EQ (dynamic_cast<ByteSource *> (&notASource), nullptr);
+
+	// Et l'interface suffit reellement a alimenter la source : c'est par elle,
+	// et non par le type concret, que la facade ecrit.
+	ByteSource *source = &fontNode;
+	source->SetName ("DejaVu");
+	source->SetBytes (ReadAllBytes (kTrueTypeFont));
+
+	EvalContext ctx;
+	ValueList out (1);
+	ASSERT_TRUE (fontNode.Compute (ctx, ValueList (), out));
+	EXPECT_NE (out[0].Get<Font> (Types ().font), nullptr);
+}
+
 TEST (TEST_cggraph_nodes_text, the_font_travels_on_a_port_and_the_text_is_extruded)
 {
 	const std::vector<unsigned char> bytes = ReadAllBytes (kTrueTypeFont);
 	ASSERT_FALSE (bytes.empty ());
 
-	Graph graph;
-	const NodeId font = graph.AddNode (std::unique_ptr<Node> (new LoadFontNode ()));
-	const NodeId extrude = graph.AddNode (std::unique_ptr<Node> (new ExtrudeTextNode ("AB")));
-	static_cast<LoadFontNode *> (graph.FindNode (font))->SetBytes (bytes);
+	TextChain chain;
+	ASSERT_TRUE (BuildTextChain (chain, bytes, "AB"));
 
 	// La police est un PORT d'entree, non un parametre : c'est la seule forme
-	// qui la relie a la signature de ce qui la consomme.
-	ASSERT_EQ (graph.FindNode (extrude)->GetDesc ().inputs.size (), 1u);
-	EXPECT_EQ (graph.FindNode (extrude)->GetDesc ().inputs[0].name, std::string ("police"));
-	EXPECT_EQ (graph.FindNode (extrude)->GetDesc ().inputs[0].type, Types ().font);
-	ASSERT_EQ (graph.Connect (font, 0, extrude, 0), ConnectStatus::Ok);
+	// qui la relie a la signature de ce qui la consomme. Et le contour 2D en est
+	// un aussi, entre les deux moities de l'ancien noeud monolithique : c'est ce
+	// port qui rend l'extrudeur reutilisable par svg.contours.
+	const Node *contours = chain.graph.FindNode (chain.contours);
+	ASSERT_EQ (contours->GetDesc ().inputs.size (), 1u);
+	EXPECT_EQ (contours->GetDesc ().inputs[0].name, std::string ("police"));
+	EXPECT_EQ (contours->GetDesc ().inputs[0].type, Types ().font);
+	const Node *extruder = chain.graph.FindNode (chain.extrude);
+	ASSERT_EQ (extruder->GetDesc ().inputs.size (), 1u);
+	EXPECT_EQ (extruder->GetDesc ().inputs[0].type, Types ().extrudeContours);
 
-	Evaluator evaluator (graph);
+	Evaluator evaluator (chain.graph);
 	EvalContext ctx;
 	ValueList outputs;
-	const EvalResult result = evaluator.Evaluate (extrude, outputs, ctx);
+	const EvalResult result = evaluator.Evaluate (chain.extrude, outputs, ctx);
 	ASSERT_EQ (result.status, EvalStatus::Ok) << result.detail;
 
 	const Mesh *mesh = outputs[0].Get<Mesh> (Types ().mesh);
@@ -712,10 +877,13 @@ TEST (TEST_cggraph_nodes_text, the_font_travels_on_a_port_and_the_text_is_extrud
 	EXPECT_GT (mesh->GetNFaces (), 0u);
 
 	// La police n'est analysee qu'une fois : un reglage aval ne la re-parse pas.
-	LoadFontNode *loader = static_cast<LoadFontNode *> (graph.FindNode (font));
+	// Le decoupage RENFORCE le cas -- `depth` vit maintenant deux noeuds plus
+	// loin, et le cache doit donc reutiliser aussi les contours, pas seulement
+	// la police.
+	LoadFontNode *loader = static_cast<LoadFontNode *> (chain.graph.FindNode (chain.font));
 	EXPECT_EQ (loader->GetParseCount (), 1u);
-	graph.FindNode (extrude)->GetParams ().SetFloat ("depth", 0.5f);
-	ASSERT_TRUE (evaluator.Evaluate (extrude, outputs, ctx).IsOk ());
+	chain.graph.FindNode (chain.extrude)->GetParams ().SetFloat ("depth", 0.5f);
+	ASSERT_TRUE (evaluator.Evaluate (chain.extrude, outputs, ctx).IsOk ());
 	EXPECT_EQ (loader->GetParseCount (), 1u);
 }
 
@@ -753,25 +921,23 @@ TEST (TEST_cggraph_nodes_text, mississippi_flattens_four_glyphs_out_of_eleven)
 	const std::vector<unsigned char> bytes = ReadAllBytes (kTrueTypeFont);
 	ASSERT_FALSE (bytes.empty ());
 
-	Graph graph;
-	const NodeId font = graph.AddNode (std::unique_ptr<Node> (new LoadFontNode ()));
-	const NodeId extrude =
-		graph.AddNode (std::unique_ptr<Node> (new ExtrudeTextNode ("MISSISSIPPI")));
-	static_cast<LoadFontNode *> (graph.FindNode (font))->SetBytes (bytes);
-	ASSERT_EQ (graph.Connect (font, 0, extrude, 0), ConnectStatus::Ok);
+	TextChain chain;
+	ASSERT_TRUE (BuildTextChain (chain, bytes, "MISSISSIPPI"));
 
-	Evaluator evaluator (graph);
+	Evaluator evaluator (chain.graph);
 	EvalContext ctx;
 	ValueList outputs;
-	ASSERT_TRUE (evaluator.Evaluate (extrude, outputs, ctx).IsOk ());
+	ASSERT_TRUE (evaluator.Evaluate (chain.contours, outputs, ctx).IsOk ());
 
 	// Onze glyphes places, quatre aplatissements : M, I, S, P. C'est cette
 	// memoisation par glyphe qu'un decoupage du noeud detruirait, et que le
 	// cache du graphe ne pourrait pas recuperer -- sa granularite est le noeud.
-	const TextExtrudeStats &stats =
-		static_cast<ExtrudeTextNode *> (graph.FindNode (extrude))->GetLastStats ();
-	EXPECT_EQ (stats.glyphsPlaced, 11u);
-	EXPECT_EQ (stats.glyphsFlattened, 4u);
+	// ELLE SURVIT au decoupage contours/extrusion, parce que la coupure a ete
+	// faite en AVAL d'elle : elle vit dans text_to_contours.
+	const TextContoursNode *node =
+		static_cast<const TextContoursNode *> (chain.graph.FindNode (chain.contours));
+	EXPECT_EQ (node->GetGlyphsPlaced (), 11u);
+	EXPECT_EQ (node->GetGlyphsFlattened (), 4u);
 }
 
 // ---------------------------------------------------------------------------
@@ -880,4 +1046,110 @@ TEST (TEST_cggraph_nodes_catalog, the_mesh_size_hint_counts_every_per_face_array
 	nu.SetVertices (4, v);
 	nu.SetFaces (4, 3, f);
 	EXPECT_LT (Types ().mesh->sizeHint (&nu), Types ().mesh->sizeHint (&mesh));
+}
+
+
+// ---------------------------------------------------------------------------
+//  Le noeud FICHIER
+// ---------------------------------------------------------------------------
+
+TEST (TEST_cggraph_nodes_file, the_path_is_serialised_so_a_saved_document_can_name_its_resource)
+{
+	// LA raison d'etre du noeud. Sans lui, un document enregistre porte
+	// l'empreinte d'un contenu qu'il n'a plus et ne sait meme pas le nommer.
+	Graph graph;
+	const NodeId id = graph.AddNode (std::unique_ptr<Node> (new FileRefNode ()));
+	static_cast<FileRefNode *> (graph.FindNode (id))->SetPath (kTrueTypeFont);
+
+	const std::string document = SaveGraph (graph);
+	EXPECT_NE (document.find (kTrueTypeFont), std::string::npos)
+		<< "le chemin doit etre serialise : sans lui le document ne se rouvre pas";
+
+	// Et le document reste un DIAGNOSTIC, pas une archive : rien du contenu n'y
+	// entre, quelle que soit la taille du fichier designe.
+	EXPECT_LT (document.size (), 2048u) << "le document a grossi : du contenu y a fui";
+}
+
+TEST (TEST_cggraph_nodes_file, it_designates_without_reading_and_refuses_a_path_that_leads_nowhere)
+{
+	// « Il ne lit rien » n'est pas qu'une formule : ce que le noeud publie est le
+	// CHEMIN lui-meme. Mais il verifie l'existence, sinon l'echec surviendrait un
+	// cran plus loin, dans un chargeur qui dirait « police illisible » la ou le
+	// vrai probleme est un chemin faux.
+	Graph graph;
+	const NodeId id = graph.AddNode (std::unique_ptr<Node> (new FileRefNode ()));
+	FileRefNode *file = static_cast<FileRefNode *> (graph.FindNode (id));
+
+	Evaluator evaluator (graph);
+	EvalContext ctx;
+	ValueList outputs;
+
+	file->SetPath ("chemin/qui/n/existe/pas.ttf");
+	EXPECT_FALSE (evaluator.Evaluate (id, outputs, ctx).IsOk ());
+
+	file->SetPath (kTrueTypeFont);
+	ASSERT_TRUE (evaluator.Evaluate (id, outputs, ctx).IsOk ());
+	const std::string *published = outputs[0].Get<std::string> (Types ().path);
+	ASSERT_NE (published, nullptr);
+	EXPECT_EQ (*published, std::string (kTrueTypeFont));
+}
+
+TEST (TEST_cggraph_nodes_file, a_font_reads_from_the_port_when_it_is_connected)
+{
+	// L'entree est OPTIONNELLE : le meme noeud sert les deux voies, et c'est ce
+	// qui permet de l'avoir ajoutee sans incrementer la version du descripteur.
+	Graph graph;
+	const NodeId source = graph.AddNode (std::unique_ptr<Node> (new FileRefNode ()));
+	const NodeId font = graph.AddNode (std::unique_ptr<Node> (new LoadFontNode ()));
+	static_cast<FileRefNode *> (graph.FindNode (source))->SetPath (kTrueTypeFont);
+
+	const NodeDesc &desc = graph.FindNode (font)->GetDesc ();
+	ASSERT_EQ (desc.inputs.size (), 1u);
+	EXPECT_TRUE (desc.inputs[0].optional) << "l'entree doit rester optionnelle";
+	EXPECT_EQ (desc.inputs[0].type, Types ().path);
+	EXPECT_EQ (desc.version, 1) << "ajouter une entree OPTIONNELLE ne doit pas bumper la version";
+
+	ASSERT_EQ (graph.Connect (source, 0, font, 0), ConnectStatus::Ok);
+
+	Evaluator evaluator (graph);
+	EvalContext ctx;
+	ValueList outputs;
+	ASSERT_TRUE (evaluator.Evaluate (font, outputs, ctx).IsOk ());
+	EXPECT_NE (outputs[0].Get<Font> (Types ().font), nullptr);
+}
+
+TEST (TEST_cggraph_nodes_file, a_font_still_works_with_nothing_connected)
+{
+	// Le cas des documents deja ecrits : entree non connectee, octets internes.
+	// S'il cassait, les trois gabarits livres cesseraient de se calculer.
+	LoadFontNode node;
+	node.SetBytes (ReadAllBytes (kTrueTypeFont));
+
+	EvalContext ctx;
+	ValueList in (1);          // l'entree existe mais reste VIDE
+	ValueList out (1);
+	ASSERT_TRUE (node.Compute (ctx, in, out));
+	EXPECT_NE (out[0].Get<Font> (Types ().font), nullptr);
+}
+
+TEST (TEST_cggraph_nodes_file, the_identity_follows_the_file_and_not_the_path_string)
+{
+	// Ce qui relie la signature de l'aval au CONTENU : le lien ne porte qu'un
+	// nom, donc sans ce parametre semantique un fichier modifie resservirait un
+	// resultat de cache perime.
+	FileRefNode node;
+	node.SetPath ("chemin/qui/n/existe/pas.ttf");
+	const std::string absent = node.GetParams ().Find ("source.identity")->stringValue;
+
+	node.SetPath (kTrueTypeFont);
+	const std::string present = node.GetParams ().Find ("source.identity")->stringValue;
+
+	EXPECT_NE (absent, present) << "un fichier existant et un chemin mort ont la meme identite";
+	EXPECT_FALSE (present.empty ());
+
+	// Le nom decoratif suit le chemin, mais il est HORS signature.
+	const ParamEntry *name = node.GetParams ().FindEntry ("name");
+	ASSERT_NE (name, nullptr);
+	EXPECT_EQ (name->role, ParamRole::NonSemantic);
+	EXPECT_NE (name->value.stringValue.find ("DejaVuSans"), std::string::npos);
 }

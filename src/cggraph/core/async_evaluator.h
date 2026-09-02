@@ -32,6 +32,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <map>
 #include <vector>
 
 #include "eval_context.h"
@@ -57,6 +58,12 @@ public:
 		NodeId node = kInvalidNodeId;
 		EvalResult result;
 		ValueList outputs;
+
+		// Vignettes de TOUS les noeuds traverses par ce calcul, pas seulement du
+		// noeud demande. Elles voyagent avec le resultat : construites sur le fil
+		// de calcul, lues sur celui de l'interface, et la remise du Completed est
+		// le point de synchronisation qui rend cette lecture sure.
+		std::map<NodeId, Thumbnail> previews;
 	};
 
 	// Derniere progression rendue par le calcul en cours. Elle est COPIEE :

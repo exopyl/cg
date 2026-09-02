@@ -330,9 +330,25 @@ std::string SaveGraph (const Graph &graph)
 
 		// Ecrit seulement quand il porte quelque chose : un champ vide sur
 		// chaque noeud alourdit un document que des humains relisent.
+		// Une seule des deux formes peut etre posee -- le graphe fait s'exclure
+		// chemin et document embarque --, donc l'ordre du test ne tranche rien.
 		const std::string &subgraph = graph.GetNodeSubgraph (id);
+		const std::string &subgraphDocument = graph.GetNodeSubgraphDocument (id);
 		if (!subgraph.empty ())
 			entry["subgraph"] = subgraph;
+		else if (!subgraphDocument.empty ())
+		{
+			// RE-ANALYSE plutot que recopie textuelle : le document est stocke en
+			// texte, et l'inserer tel quel donnerait une chaine JSON echappee au
+			// lieu d'un objet. Un texte devenu illisible entre-temps ne fait pas
+			// echouer l'ecriture du parent -- il est alors ecrit tel quel, et sa
+			// relecture le refusera en le nommant.
+			json embedded = json::parse (subgraphDocument, nullptr, false);
+			if (embedded.is_discarded ())
+				entry["subgraph"] = subgraphDocument;
+			else
+				entry["subgraph"] = embedded;
+		}
 
 		json params = json::array ();
 		for (const ParamEntry &param : node->GetParams ().GetEntries ())
@@ -441,12 +457,24 @@ LoadResult LoadGraph (const std::string &text, const NodeFactory &factory, Graph
 		if (x != entry.end () && y != entry.end () && x->is_number () && y->is_number ())
 			graph.SetNodePosition (nodeId, x->get<float> (), y->get<float> ());
 
+		// DEUX FORMES pour le meme champ, et le type les distingue :
+		//   "subgraph": "corps.json"   -- un CHEMIN, resolu au calcul ;
+		//   "subgraph": { ... }        -- le document EMBARQUE, autonome.
+		//
+		// La seconde est relue par le meme lecteur que le document parent, donc
+		// une erreur dedans est nommee comme n'importe quelle autre. Elle est
+		// re-serialisee telle quelle : l'objet est stocke sous forme de TEXTE et
+		// non d'arbre, ce qui evite au graphe -- couche de base -- de porter un
+		// type JSON dans son etat.
 		const json::const_iterator subgraph = entry.find ("subgraph");
 		if (subgraph != entry.end ())
 		{
-			if (!subgraph->is_string ())
+			if (subgraph->is_string ())
+				graph.SetNodeSubgraph (nodeId, subgraph->get<std::string> ());
+			else if (subgraph->is_object ())
+				graph.SetNodeSubgraphDocument (nodeId, subgraph->dump ());
+			else
 				return Refuse (SerializeStatus::BadNode, typeName + ": subgraph");
-			graph.SetNodeSubgraph (nodeId, subgraph->get<std::string> ());
 		}
 	}
 

@@ -130,6 +130,16 @@ bool Graph::SetNodeSubgraph (NodeId id, const std::string &reference)
 		if (slot.id == id)
 		{
 			slot.subgraph = reference;
+			// LES DEUX FORMES S'EXCLUENT : poser un chemin retire le document
+			// embarque. Sans cela un noeud delegerait les deux, et il faudrait
+			// ecrire quelque part lequel l'emporte -- une regle que personne ne
+			// lirait au bon moment.
+			if (!reference.empty ())
+			{
+				slot.subgraphDocument.clear ();
+				if (slot.node != nullptr)
+					slot.node->SetSubgraphDocument (std::string ());
+			}
 			// Le noeud APPREND sa reference. Le graphe ne l'interprete pas -- il
 			// ne connait aucun type de noeud --, il la transmet a celui qui le
 			// peut.
@@ -145,6 +155,32 @@ const std::string &Graph::GetNodeSubgraph (NodeId id) const
 	static const std::string empty;
 	const Slot *slot = FindSlot (id);
 	return slot == nullptr ? empty : slot->subgraph;
+}
+
+bool Graph::SetNodeSubgraphDocument (NodeId id, const std::string &document)
+{
+	for (Slot &slot : m_nodes)
+		if (slot.id == id)
+		{
+			slot.subgraphDocument = document;
+			if (!document.empty ())
+			{
+				slot.subgraph.clear ();
+				if (slot.node != nullptr)
+					slot.node->SetSubgraphReference (std::string ());
+			}
+			if (slot.node != nullptr)
+				slot.node->SetSubgraphDocument (document);
+			return true;
+		}
+	return false;
+}
+
+const std::string &Graph::GetNodeSubgraphDocument (NodeId id) const
+{
+	static const std::string empty;
+	const Slot *slot = FindSlot (id);
+	return slot == nullptr ? empty : slot->subgraphDocument;
 }
 
 const Link *Graph::FindInputLink (NodeId to, PortIdx toPort) const

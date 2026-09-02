@@ -18,6 +18,11 @@ const cggraph::NodeDesc &Desc ()
 	static const cggraph::NodeDesc desc = [] {
 		cggraph::NodeDesc d;
 		d.typeName = "mesh.io.load";
+		// Entree OPTIONNELLE : connectee, elle l'emporte sur le parametre `path`.
+		// Optionnelle et non obligatoire pour que les documents deja ecrits -- qui
+		// portent leur chemin en parametre -- se calculent a l'identique ; la
+		// version du descripteur n'est donc pas incrementee.
+		d.inputs.push_back ({ "chemin", Types ().path, /*optional=*/true });
 		d.outputs.push_back ({ "maillage", Types ().mesh, false });
 		return d;
 	}();
@@ -74,9 +79,20 @@ bool LoadMeshNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueList 
                             cggraph::ValueList &out)
 {
 	(void)ctx;
-	(void)in;
 
-	const std::string path = GetString (GetParams (), "path", std::string ());
+	// L'ENTREE L'EMPORTE quand elle est connectee : un file.ref en amont est une
+	// intention explicite, la ou le parametre est un etat pose de cote.
+	//
+	// ⚠ RefreshExternalState, lui, ne voit PAS les entrees -- elles n'existent
+	// qu'au calcul. Quand le chemin vient d'un port, l'identite versee par CE
+	// noeud est donc celle de son parametre, souvent vide, et c'est correct : la
+	// fraicheur du fichier est portee par le `source.identity` du file.ref amont,
+	// et la signature d'un noeud inclut toute sa branche.
+	const std::string *incoming =
+		in.empty () ? nullptr : in[0].Get<std::string> (Types ().path);
+	const std::string path = (incoming != nullptr && !incoming->empty ())
+		? *incoming
+		: GetString (GetParams (), "path", std::string ());
 	if (path.empty ())
 		return false;
 

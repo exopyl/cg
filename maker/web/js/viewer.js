@@ -2,9 +2,10 @@
 //  Online3DViewer : init, chargement d'un OBJ en memoire, et mise a jour EN
 //  PLACE de la geometrie three.js pendant l'edition.
 // ===========================================================================
-//  Degrade proprement si le global OV est absent (vendor/o3dv.min.js non
-//  fourni) : la generation et les telechargements restent fonctionnels.
+//  Degrade proprement si le bundle vendor est absent (voir js/o3dv.js) : la
+//  generation et les telechargements restent fonctionnels.
 // ===========================================================================
+import { OV, THREE, isAvailable } from "./o3dv.js";
 
 // Cree le viewer. Les accesseurs passes en options evitent que ce module
 // connaisse le DOM du panneau (couleur, fil de fer) ou l'id de la forme courante.
@@ -33,6 +34,91 @@ export function createViewer({
   // restent pilotees par le color picker.
   let hasVertexColors = false;
 
+  // Materiaux construits d'apres la table du maillage (une entree par plage
+  // d'indices), et leur signature. La signature evite de RECONSTRUIRE la texture
+  // a chaque image : un curseur qu'on deplace change la geometrie, pas l'image
+  // source, et re-televerser plusieurs Mo de RGBA a chaque pas rendrait le
+  // deplacement inutilisable.
+  let ownMaterials = null;
+  let ownMaterialSig = "";
+  // Genre de chaque materiau construit ("texture" | "color" | "none"), garde
+  // pour que le picker continue de piloter les SEULS materiaux qui n'ont pas de
+  // couleur a eux.
+  let ownMaterialKinds = [];
+  // Materiau d'origine d'o3dv, garde comme MODELE a cloner : il porte les
+  // reglages de la scene (cote eclaire, transparence), qu'on ne veut pas
+  // reinventer.
+  let baseMaterial = null;
+
+  function disposeOwnMaterials() {
+    if (!ownMaterials) return;
+    for (const m of ownMaterials) {
+      if (m.map && m.map.dispose) m.map.dispose();
+      if (m.dispose) m.dispose();
+    }
+    ownMaterials = null;
+    ownMaterialSig = "";
+    ownMaterialKinds = [];
+  }
+
+  // Empreinte bon marche d'une table de materiaux. Pour une texture on ne hache
+  // PAS les millions d'octets : dimensions, taille, et un echantillon a pas
+  // premier -- assez pour distinguer deux images, et en temps constant.
+  function materialSignature(materials) {
+    const parts = [];
+    for (const m of materials) {
+      if (m.kind === "texture") {
+        let sum = 0;
+        for (let i = 0; i < m.rgba.length; i += 997) sum = (sum + m.rgba[i]) | 0;
+        parts.push(`t${m.width}x${m.height}:${m.rgba.length}:${sum}`);
+      } else if (m.kind === "color") {
+        parts.push(`c${m.r.toFixed(4)},${m.g.toFixed(4)},${m.b.toFixed(4)}`);
+      } else {
+        parts.push("n");
+      }
+    }
+    return parts.join("|");
+  }
+
+  function buildOwnMaterials(materials) {
+    const out = [];
+    for (const desc of materials) {
+      const m = baseMaterial ? baseMaterial.clone() : null;
+      if (!m) return null;
+      m.vertexColors = false;
+      if (desc.kind === "texture") {
+        // DataTexture et pas de flipY : ses octets commencent par la PREMIERE
+        // ligne de l'image, et region_apply_planar_uvs a deja retourne le v
+        // (monde vers le haut, image vers le bas). Les deux conventions se
+        // rejoignent, il ne faut pas retourner une seconde fois.
+        const tex = new THREE.DataTexture(
+          new Uint8Array(desc.rgba), desc.width, desc.height, THREE.RGBAFormat);
+        // Sans SRGBColorSpace l'image ressort delavee : three suppose du lineaire.
+        tex.colorSpace = THREE.SRGBColorSpace;
+        // Filtrage LINEAIRE : DataTexture prend Nearest par defaut, ce qui
+        // creneleraient une photo. Pas de mipmaps, donc pas de filtre mip a regler.
+        tex.magFilter = THREE.LinearFilter;
+        tex.minFilter = THREE.LinearFilter;
+        // Le contenu deborde de [0, 1] pour la base et le cadre, qui ont leur
+        // propre materiau : le bord ne sera donc jamais echantillonne. Clamp
+        // plutot que repeat, pour que ce soit vrai meme si cela changeait.
+        tex.wrapS = THREE.ClampToEdgeWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.needsUpdate = true;
+        m.map = tex;
+        // BLANC obligatoire : sous three, `color` MULTIPLIE la texture.
+        if (m.color) m.color.set("#ffffff");
+      } else if (desc.kind === "color") {
+        m.map = null;
+        if (m.color) m.color.setRGB(desc.r, desc.g, desc.b);
+      } else {
+        m.map = null;
+      }
+      out.push(m);
+    }
+    return out;
+  }
+
   function materialsOf(mesh) {
     if (!mesh || !mesh.material) return [];
     return Array.isArray(mesh.material) ? mesh.material : [mesh.material];
@@ -40,6 +126,19 @@ export function createViewer({
 
   function applyModelColor() {
     if (!meshRef) return;
+    // Le maillage porte SA table de materiaux : leurs couleurs et leurs textures
+    // sont le resultat, le picker n'a rien a y ecrire -- SAUF sur les entrees
+    // sans materiau, qui restent les siennes. Un maillage nodal peut melanger les
+    // deux : des regions colorees et des faces qui n'ont jamais recu de materiau.
+    if (ownMaterials && meshRef.material === ownMaterials) {
+      const c = getModelColor();
+      for (let i = 0; i < ownMaterials.length; ++i)
+        if (ownMaterialKinds[i] === "none" && ownMaterials[i].color)
+          ownMaterials[i].color.set(c);
+      onVertexColors(true);
+      if (viewer) viewer.GetViewer().Render();
+      return;
+    }
     // En mode vertexColors la couleur du materiau MODULE les couleurs de sommet :
     // il faut du blanc pour restituer la palette telle quelle. Le picker n'a donc
     // pas d'effet sur un relief colore (et son champ est grise via onVertexColors).
@@ -86,6 +185,15 @@ export function createViewer({
         // Float32BufferAttribute convertirait les index en float -> index GL_FLOAT
         // -> "glDrawElements: Invalid enum" et rien ne s'affiche.
         IdxAttrCtor = Object.getPrototypeOf(AttrCtor.prototype).constructor;
+        // Materiau MODELE : celui qu'o3dv vient de construire pour la scene. Les
+        // notres en sont des clones, pour heriter de ses reglages plutot que de
+        // les redevenner. Un rechargement de modele en fournit un neuf : les
+        // materiaux derives d'un modele precedent n'ont plus lieu d'etre.
+        const first = materialsOf(meshRef)[0];
+        if (first && first !== baseMaterial) {
+          disposeOwnMaterials();
+          baseMaterial = first;
+        }
       }
       // Re-applique les reglages de vue courants au materiau (frais au bootstrap).
       applyModelColor();
@@ -125,9 +233,16 @@ export function createViewer({
   // tas, copiees aussitot), reconstruit la BufferGeometry, la substitue au mesh
   // existant et re-rend. Pas de Clear, pas de reload, camera inchangee.
   // Renvoie { nv, nf, ms } pour l'affichage des stats par l'appelant.
-  function updateInPlace(Module, id, refit = false) {
+  // `source` est SOIT le Module (chemin des formes : meshData(id)), SOIT une
+  // fonction qui rend le meme objet -- positions / indices / colors / nv / nf.
+  //
+  // La seconde forme sert les pages GABARIT, dont la geometrie ne vient pas d'un
+  // objet natif identifie mais du resultat d'un graphe (graphMeshData). Tout ce
+  // qui suit est identique : c'est la seule ligne de cette fonction qui savait
+  // d'ou venait la donnee.
+  function updateInPlace(source, id, refit = false) {
     const t0 = performance.now();
-    const d = Module.meshData(id);
+    const d = typeof source === "function" ? source() : source.meshData(id);
     const positions = new Float32Array(d.positions); // copie hors du tas WASM
     // Type d'index minimal : Uint16 (UNSIGNED_SHORT, universel) tant que < 65536
     // sommets ; sinon Uint32 (UNSIGNED_INT, WebGL2). Uint32 systematique faisait
@@ -138,24 +253,69 @@ export function createViewer({
     const g = new GeomCtor();
     g.setAttribute("position", new AttrCtor(positions, 3));
     g.setIndex(new IdxAttrCtor(indices, 1)); // BufferAttribute generique (garde le type entier)
-    g.addGroup(0, indices.length, 0); // o3dv attend un material[] -> un groupe
 
-    // Couleurs par sommet : non vides uniquement pour les maillages multi-materiaux
-    // (relief d'image = une couleur par region quantifiee). Le materiau bascule en
-    // vertexColors et sa couleur de base doit repasser en BLANC, sinon three.js
-    // multiplie les deux et le gris du picker ternit toutes les regions.
-    hasVertexColors = d.colors.length === positions.length && positions.length > 0;
+    // GROUPES ET MATERIAUX, quand la source les fournit (chemin nodal). C'est la
+    // table de plages que Mesh::BuildPolygonRenderData produisait deja pour le
+    // chemin VBO d'OpenGL -- un glDrawElements par materiau --, et un addGroup de
+    // three est la meme notion. Elle apporte ce qu'une couleur par sommet ne
+    // pouvait pas : une TEXTURE, qui n'a pas de couleur par sommet.
+    const groups = Array.isArray(d.groups) ? d.groups : [];
+    const materials = Array.isArray(d.materials) ? d.materials : [];
+    // Il faut au moins UN materiau reel : un maillage dont aucune face n'en porte
+    // -- un texte extrude, une forme -- doit rester pilote par le selecteur de
+    // couleur, comme avant. Passer par les groupes le figerait sur la couleur du
+    // modele d'o3dv et rendrait le selecteur inoperant.
+    const useGroups = groups.length > 0 && baseMaterial !== null
+      && materials.some((m) => m.kind === "texture" || m.kind === "color");
+
+    if (useGroups) {
+      for (const gr of groups) g.addGroup(gr.start, gr.count, gr.material);
+    } else {
+      g.addGroup(0, indices.length, 0); // o3dv attend un material[] -> un groupe
+    }
+
+    // Couleurs par sommet : le repli quand la source ne decrit pas ses materiaux
+    // (chemin des formes). Le materiau bascule en vertexColors et sa couleur de
+    // base doit repasser en BLANC, sinon three multiplie les deux et le gris du
+    // picker ternit toutes les regions.
+    hasVertexColors = !useGroups
+      && d.colors.length === positions.length && positions.length > 0;
     if (hasVertexColors)
       g.setAttribute("color", new AttrCtor(new Float32Array(d.colors), 3));
 
-    g.computeVertexNormals();         // normales lissees (bonus: moins facette)
+    // UV : indispensables des qu'un materiau porte une texture.
+    if (d.uvs && d.uvs.length === (positions.length / 3) * 2)
+      g.setAttribute("uv", new AttrCtor(new Float32Array(d.uvs), 2));
+
+    // Normales du MAILLAGE quand il en fournit -- ExtrudedMeshBuilder emet des
+    // blocs de sommets disjoints pour les capots et les parois, donc elles sont
+    // deja franches sur les aretes vives. Sinon, on les recalcule.
+    if (d.normals && d.normals.length === positions.length)
+      g.setAttribute("normal", new AttrCtor(new Float32Array(d.normals), 3));
+    else
+      g.computeVertexNormals();
 
     const old = meshRef.geometry;
     meshRef.geometry = g;
     if (old && old.dispose) old.dispose();
 
+    if (useGroups) {
+      const sig = materialSignature(materials);
+      if (sig !== ownMaterialSig) {
+        disposeOwnMaterials();
+        ownMaterials = buildOwnMaterials(materials);
+        ownMaterialKinds = ownMaterials ? materials.map((m) => m.kind) : [];
+        ownMaterialSig = ownMaterials ? sig : "";
+      }
+      if (ownMaterials) meshRef.material = ownMaterials;
+    } else if (ownMaterials) {
+      // Retour a un maillage sans table : on rend la main au materiau d'origine.
+      meshRef.material = baseMaterial;
+      disposeOwnMaterials();
+    }
+
     for (const m of materialsOf(meshRef)) {
-      m.vertexColors = hasVertexColors;
+      if (!useGroups) m.vertexColors = hasVertexColors;
       m.needsUpdate = true;
     }
     applyModelColor();
@@ -179,8 +339,8 @@ export function createViewer({
 
   // --- initialisation ------------------------------------------------------
   let available = false;
-  if (window.__o3dvMissing || typeof window.OV === "undefined") {
-    hintEl.textContent = "Rendu 3D indisponible (o3dv.min.js manquant).";
+  if (!isAvailable) {
+    hintEl.textContent = "Rendu 3D indisponible (vendor/o3dv-three.module.js manquant).";
   } else {
     try {
       viewer = new OV.EmbeddedViewer(container, {

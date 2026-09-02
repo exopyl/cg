@@ -95,6 +95,33 @@ const char *ToString (LoadStatus status)
 	return "unknown";
 }
 
+// Releve les frontieres et les puits du document charge. Commune aux deux
+// chargeurs : ce qui suit la lecture ne depend pas de sa provenance.
+static void IndexBoundaries (SubgraphInstance &instance)
+{
+	for (cggraph::NodeId id : instance.graph.GetNodeIds ())
+	{
+		const cggraph::Node *node = instance.graph.FindNode (id);
+		if (node == nullptr)
+			continue;
+
+		const cggraph::NodeDesc &desc = node->GetDesc ();
+		if (desc.typeName == kInputTypeName)
+			instance.inputs.push_back (Describe (instance.graph, id));
+		else if (desc.typeName == kOutputTypeName)
+			instance.outputs.push_back (Describe (instance.graph, id));
+
+		// Un noeud de flux imbrique a DEJA derive son propre drapeau de son
+		// propre document : lire le descripteur suffit, et la propriete remonte
+		// d'elle-meme sur toute la profondeur.
+		if (desc.sideEffect)
+			instance.sinks.push_back (id);
+	}
+
+	std::sort (instance.inputs.begin (), instance.inputs.end (), Less);
+	std::sort (instance.outputs.begin (), instance.outputs.end (), Less);
+}
+
 LoadStatus LoadSubgraph (const std::string &reference, SubgraphInstance &instance,
                          std::string &detail)
 {
@@ -129,27 +156,38 @@ LoadStatus LoadSubgraph (const std::string &reference, SubgraphInstance &instanc
 			       : LoadStatus::DocumentInvalid;
 	}
 
-	for (cggraph::NodeId id : instance.graph.GetNodeIds ())
+	IndexBoundaries (instance);
+	return LoadStatus::Ok;
+}
+
+LoadStatus LoadSubgraphFromText (const std::string &document, SubgraphInstance &instance,
+                                 std::string &detail)
+{
+	detail.clear ();
+	if (document.empty ())
+		return LoadStatus::NoReference;
+
+	// PROFONDEUR seulement, pas de garde de cycle -- cf. l'en-tete. La cle posee
+	// ne peut egaler aucun chemin, donc elle ne fera jamais prendre un fichier
+	// pour recursif ; elle ne sert qu'a faire compter cet etage.
+	if (g_loading.size () >= kMaxSubgraphDepth)
 	{
-		const cggraph::Node *node = instance.graph.FindNode (id);
-		if (node == nullptr)
-			continue;
+		detail = "document embarque";
+		return LoadStatus::TooDeep;
+	}
+	const LoadingGuard guard ("<embarque>");
 
-		const cggraph::NodeDesc &desc = node->GetDesc ();
-		if (desc.typeName == kInputTypeName)
-			instance.inputs.push_back (Describe (instance.graph, id));
-		else if (desc.typeName == kOutputTypeName)
-			instance.outputs.push_back (Describe (instance.graph, id));
-
-		// Un noeud de flux imbrique a DEJA derive son propre drapeau de son
-		// propre document : lire le descripteur suffit, et la propriete remonte
-		// d'elle-meme sur toute la profondeur.
-		if (desc.sideEffect)
-			instance.sinks.push_back (id);
+	const CatalogFactory factory;
+	const cggraph::LoadResult result = cggraph::LoadGraph (document, factory, instance.graph);
+	if (!result.IsOk ())
+	{
+		detail = std::string (cggraph::ToString (result.status));
+		if (!result.detail.empty ())
+			detail += ": " + result.detail;
+		return LoadStatus::DocumentInvalid;
 	}
 
-	std::sort (instance.inputs.begin (), instance.inputs.end (), Less);
-	std::sort (instance.outputs.begin (), instance.outputs.end (), Less);
+	IndexBoundaries (instance);
 	return LoadStatus::Ok;
 }
 

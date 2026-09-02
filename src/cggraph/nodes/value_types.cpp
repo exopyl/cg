@@ -1,5 +1,6 @@
 #include "value_types.h"
 
+#include "../../cgimg/image.h"
 #include "../../cgmath/font.h"
 #include "../../cgmesh/extrude_contours.h"
 #include "../../cgmesh/profile2d.h"
@@ -41,6 +42,63 @@ std::size_t SizeOfMesh (const void *value)
 	       + mesh->GetTextureCoordinates ().size () * sizeof (float)
 	       + static_cast<std::size_t> (mesh->GetNFaces ()) * 3u * sizeof (unsigned int)
 	       + static_cast<std::size_t> (mesh->GetNFaces ()) * sizeof (unsigned int);
+}
+
+std::shared_ptr<void> CloneImage (const void *value)
+{
+	// Copie PROFONDE : Img tient la regle des 3, son operateur de copie duplique
+	// le tampon de pixels et la palette (image.h, « regle des 3/5 »).
+	return std::make_shared<Img> (*static_cast<const Img *> (value));
+}
+
+std::size_t SizeOfImage (const void *value)
+{
+	// EXACT pour le tampon de pixels, qui est tout le poids : RGBA8 entrelace,
+	// width*height*4 octets, contrat documente par Img::data(). La palette
+	// eventuelle -- au plus 256 entrees -- n'est pas comptee ; a l'echelle d'une
+	// image elle est du bruit, et Palette ne publie pas sa taille en octets.
+	const Img *img = static_cast<const Img *> (value);
+	return sizeof (Img)
+	       + static_cast<std::size_t> (img->width ()) * img->height () * 4u;
+}
+
+bool PreviewImage (const void *value, int maxSide, cggraph::Thumbnail &out)
+{
+	const Img *img = static_cast<const Img *> (value);
+	if (img == nullptr || img->width () == 0 || img->height () == 0 || maxSide <= 0)
+		return false;
+
+	// Reduction proportionnelle, jamais d'agrandissement : une vignette plus
+	// grande que sa source n'apprend rien et coute une interpolation.
+	const unsigned int w = img->width (), h = img->height ();
+	const unsigned int largest = w > h ? w : h;
+	unsigned int tw = w, th = h;
+	if (largest > (unsigned int)maxSide)
+	{
+		const double k = (double)maxSide / (double)largest;
+		tw = (unsigned int)(w * k); if (tw == 0) tw = 1;
+		th = (unsigned int)(h * k); if (th == 0) th = 1;
+	}
+
+	// COPIE : resize modifie l'image, et celle-ci est la valeur d'un lien,
+	// partagee par tous ses consommateurs.
+	Img scaled (*img);
+	if (tw != w || th != h)
+		scaled.resize (tw, th, /*mode=*/1);   // bilineaire
+	if (scaled.width () == 0 || scaled.height () == 0 || scaled.data () == nullptr)
+		return false;
+
+	out.width = (int)scaled.width ();
+	out.height = (int)scaled.height ();
+	const std::size_t n = (std::size_t)out.width * out.height * 4u;
+	out.rgba.assign (scaled.data (), scaled.data () + n);
+	return true;
+}
+
+std::size_t SizeOfPath (const void *value)
+{
+	const std::string *path = static_cast<const std::string *> (value);
+	return sizeof (std::string) + path->size ();
 }
 
 std::size_t SizeOfMeshArray (const void *value)
@@ -109,6 +167,29 @@ DomainTypes BuildTypes (cggraph::TypeRegistry &registry)
 	// clone qui portera plus tard la copie a la demande.
 	mesh.mutability = cggraph::TypeDesc::Forkable;
 	types.mesh = registry.Register (mesh);
+
+	cggraph::TypeDesc image;
+	image.name = "cgimg.Img";
+	image.clone = &CloneImage;
+	image.sizeHint = &SizeOfImage;
+	// Forkable, comme le maillage et pour le meme motif : un noeud aval a une
+	// raison legitime de vouloir ecrire dans l'image qu'il recoit. Aucun ne le
+	// fait aujourd'hui -- les adaptateurs de relief et de blocs copient
+	// franchement, parce que la vectorisation PALETTISE son entree -- et ce clone
+	// portera la copie a la demande le jour ou elle existera.
+	image.mutability = cggraph::TypeDesc::Forkable;
+	// SEUL type du catalogue a savoir se montrer : ses octets SONT deja une
+	// image. Un maillage demanderait un rendu hors ecran, une police une
+	// rasterisation de contours -- ni l'un ni l'autre n'est un crochet de
+	// quelques lignes.
+	image.preview = &PreviewImage;
+	types.image = registry.Register (image);
+
+	cggraph::TypeDesc path;
+	path.name = "nodes.Path";
+	path.sizeHint = &SizeOfPath;
+	path.mutability = cggraph::TypeDesc::Immutable;
+	types.path = registry.Register (path);
 
 	cggraph::TypeDesc meshArray;
 	meshArray.name = "cgmesh.MeshArray";

@@ -41,6 +41,7 @@
 #include "image_region_pipeline.h"   // QuantAlgo + chaîne partagée avec image_pixel_blocks
 
 class Mesh;
+class Img;
 
 struct ImageReliefOptions
 {
@@ -185,7 +186,15 @@ struct ImageReliefOptions
 // Faces are stamped with their material id; Mesh::BuildPolygonRenderData()
 // groups them into materialRanges on its own (single VBO, one draw per material).
 // Returns nullptr on failure (missing file, nothing vectorized).
-Mesh* image_to_relief(const std::string& filename, const ImageReliefOptions& opt);
+// `textureFromSource` PLAQUE L'IMAGE D'ORIGINE sur les couches, au lieu de leur
+// donner un aplat par couleur quantifiée. La géométrie ne change pas -- c'est
+// toujours la quantification qui découpe les couches et fixe leurs hauteurs --,
+// seules leurs couleurs redeviennent celles de la photo. Le maillage porte alors
+// des UV par sommet et UN SEUL matériau pour toutes les couches :
+// GetNMaterials() == 1 + emitBase + emitWall. Le fichier est décodé une seconde
+// fois, la première n'ayant rendu que l'image quantifiée.
+Mesh* image_to_relief(const std::string& filename, const ImageReliefOptions& opt,
+                      bool textureFromSource = false);
 
 // One mesh per colour: each colour is a separate solid.
 //
@@ -205,4 +214,34 @@ Mesh* image_to_relief(const std::string& filename, const ImageReliefOptions& opt
 // the whole call instead of silently shipping a frameless relief.
 // Caller owns every returned Mesh.
 std::vector<Mesh*> image_to_relief_per_color(const std::string& filename,
+                                             const ImageReliefOptions& opt);
+
+// ---------------------------------------------------------------------------
+//  Mêmes opérations, depuis une image DÉJÀ QUANTIFIÉE
+// ---------------------------------------------------------------------------
+//
+// Pour les appelants qui ne détiennent pas de fichier — un nœud de graphe dont
+// l'image arrive par un port, la cible WebAssembly où les octets viennent du
+// JavaScript — et qui ont décidé de la palette en amont, typiquement via
+// `quantize_image` (image_region_pipeline.h).
+//
+// ⚠ CES SURCHARGES NE QUANTIFIENT PAS. Elles prennent le raster tel quel, et
+// ne lisent donc AUCUN de ces champs de `opt` :
+//
+//     maxColors, algo, preSmoothPasses, refineIterations,
+//     despecklePasses, minRegionArea, workingMaxDim
+//
+// Les y renseigner n'a aucun effet. Tous les autres champs — simplifyErr,
+// shrink, fitSize, la géométrie du relief, le cadre et les couleurs — sont lus
+// normalement.
+//
+// L'image est COPIÉE : la vectorisation palettise son entrée, donc la modifie,
+// et une valeur partagée sur un lien de graphe ne doit pas l'être.
+// `texture`, s'il est fourni, joue le rôle de `textureFromSource` ci-dessus. Il
+// est PASSÉ et non déduit : cette forme ne reçoit que le résultat de la
+// quantification, l'originale est en amont chez l'appelant.
+Mesh* image_to_relief(const Img& quantized, const ImageReliefOptions& opt,
+                      const Img* texture = nullptr);
+
+std::vector<Mesh*> image_to_relief_per_color(const Img& quantized,
                                              const ImageReliefOptions& opt);

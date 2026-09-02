@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gabarit — maker</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <!--
+    PAGE GABARIT. Ce fichier ne nomme aucun nœud ni aucun paramètre : il ne
+    fournit que le chrome. Ce qu'il affiche est décidé par
+    data/templates/<t>.json, choisi par la query string (?t=text3d).
+
+    Elle n'utilise PAS shell.js, et c'est délibéré : shell.js est soudé au chemin
+    des FORMES (getParams(id), updateInPlace(Module, id), downloadObj(Module,
+    id)), qui suppose un objet natif identifié. Une page pilotée par un graphe
+    n'en a pas — elle a un document et un nœud de sortie. Y greffer un second
+    mode aurait touché les six pages qui marchent ; le chrome est donc recopié
+    ici, et seul le viewer, lui indépendant, est réutilisé tel quel.
+  -->
+  <aside class="panel" id="panel">
+    <header>
+      <a class="back" href="./index.html">← maker</a>
+      <h1 id="title">…</h1>
+      <p class="sub" id="subtitle"></p>
+    </header>
+
+    <section class="group">
+      <div class="lbl">Sources</div>
+      <div id="sources"></div>
+    </section>
+
+    <section class="group">
+      <div class="lbl">Paramètres</div>
+      <div id="params"></div>
+    </section>
+
+    <section class="group">
+      <div class="lbl">Vue</div>
+      <div class="ctrlrow"><span>Couleur du modèle</span><input type="color" id="modelColor" value="#b4bec8"></div>
+      <div class="ctrlrow"><label for="wireframe">Fil de fer</label><input type="checkbox" id="wireframe"></div>
+      <button id="resetView">Recentrer la vue</button>
+    </section>
+
+    <footer>
+      <div id="status" class="stats">Chargement…</div>
+      <div class="lbl">Export</div>
+      <input type="text" id="filename" value="maker" placeholder="nom du fichier" spellcheck="false">
+      <div class="btnrow">
+        <button id="downloadObjBtn">OBJ</button>
+      </div>
+      <div class="lbl">Graphe</div>
+      <button id="openInEditor">Enregistrer le document</button>
+      <p class="hint-sm">Le graphe de cette page est un document ordinaire :
+        enregistre-le, puis ouvre-le dans l'éditeur nodal pour le modifier.</p>
+    </footer>
+  </aside>
+
+  <main id="viewer" class="viewer">
+    <div id="hint" class="hint">Chargement du module…</div>
+  </main>
+
+  <script type="module">
+    import { runTemplate } from "./js/template.js";
+    // Le gabarit est choisi par la query string, avec un repli : ouvrir
+    // template.html sans paramètre doit donner une page qui marche.
+    const name = new URLSearchParams(location.search).get("t") || "text3d";
+    runTemplate(name).catch((e) => {
+      document.getElementById("status").textContent = `échec : ${e && e.message ? e.message : e}`;
+      console.error(e);
+    });
+  </script>
+</body>
+</html>

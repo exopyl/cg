@@ -28,6 +28,7 @@
 #include <list>
 #include <set>
 #include <string>
+#include <map>
 #include <unordered_map>
 #include <vector>
 
@@ -77,6 +78,11 @@ struct CacheStats
 	std::size_t bytes = 0;
 };
 
+// Plus grand cote d'une vignette de noeud. Ici et non dans l'interface : c'est
+// le moteur qui les construit, et deux tailles concurrentes donneraient des
+// vignettes que l'affichage devrait re-echelonner.
+static const int kPreviewMaxSide = 96;
+
 class Evaluator
 {
 public:
@@ -101,6 +107,23 @@ public:
 	// kNoSignature si le noeud est inconnu.
 	Hash GetSignature (NodeId id);
 
+	// VIGNETTES DU DERNIER PARCOURS, une par noeud qui a produit une valeur dont
+	// le type sait se representer. Videe a chaque Evaluate, remplie au fil de la
+	// descente -- succes de cache COMPRIS, sans quoi un noeud deja calcule
+	// perdrait sa vignette au parcours suivant.
+	//
+	// Pourquoi des vignettes et non les VALEURS : garder les valeurs les
+	// epinglerait hors du budget du cache, qui pourrait alors depasser sa borne
+	// sans que rien ne le dise. Une vignette pese quelques kilo-octets et ne
+	// designe plus rien.
+	//
+	// Le cout est borne par les types qui l'ont VOULU : `preview` est nul pour
+	// presque tous, et la boucle les saute sans rien construire.
+	//
+	// TakeRunPreviews DEPLACE : appelee par le pilote juste apres Evaluate, sur
+	// le meme fil, elle transporte le resultat sans copie ni course.
+	std::map<NodeId, Thumbnail> TakeRunPreviews () { return std::move (m_runPreviews); }
+
 	void Pin (NodeId id);
 	void Unpin (NodeId id);
 	bool IsPinned (NodeId id) const;
@@ -114,6 +137,13 @@ public:
 	void ClearCache ();
 
 private:
+	// Enregistre les vignettes des sorties d'un noeud. Appelee aux DEUX endroits
+	// ou les sorties deviennent connues -- succes de cache et calcul -- parce
+	// qu'un seul des deux laisserait des trous selon l'etat du cache.
+	void RecordPreviews (NodeId id, const ValueList &outputs);
+
+	std::map<NodeId, Thumbnail> m_runPreviews;
+
 	struct Entry
 	{
 		Hash key = kNoSignature;

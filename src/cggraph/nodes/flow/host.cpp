@@ -74,7 +74,11 @@ std::unique_ptr<SubgraphInstance> SubgraphHostNode::Open (LoadStatus &status,
                                                           std::string &detail) const
 {
 	std::unique_ptr<SubgraphInstance> instance (new SubgraphInstance ());
-	status = LoadSubgraph (m_reference, *instance, detail);
+	// Les deux formes s'excluent au niveau du graphe ; l'embarque est teste en
+	// premier parce que lui n'a rien a ouvrir -- pas de disque, pas d'echec
+	// possible pour cause de chemin.
+	status = m_document.empty () ? LoadSubgraph (m_reference, *instance, detail)
+	                             : LoadSubgraphFromText (m_document, *instance, detail);
 	if (status != LoadStatus::Ok)
 		return nullptr;
 	return instance;
@@ -114,6 +118,14 @@ void SubgraphHostNode::SetSubgraphReference (const std::string &reference)
 	Reload ();
 }
 
+void SubgraphHostNode::SetSubgraphDocument (const std::string &document)
+{
+	if (document == m_document)
+		return;
+	m_document = document;
+	Reload ();
+}
+
 void SubgraphHostNode::RefreshExternalState ()
 {
 	// HASH DU CONTENU, TOUJOURS -- et c'est un ECART ASSUME avec D15, qui donne
@@ -137,6 +149,17 @@ void SubgraphHostNode::RefreshExternalState ()
 	// Repli sur le stat quand le fichier n'est pas lisible : les deux formes de
 	// cle sont distinctes par construction (file_identity.h), donc passer de
 	// l'une a l'autre ne peut pas resservir l'entree de l'autre regime.
+	// RIEN A RELEVER SUR UN DOCUMENT EMBARQUE, et c'est tout son interet ici :
+	// son texte vit dans le document parent, donc il entre DEJA dans la
+	// signature par HashNodeSubgraph -- editer le corps change la signature sans
+	// qu'aucun etat exterieur soit interroge. Le releve n'existe que pour les
+	// fichiers, dont la reference ne hache qu'un nom.
+	if (!m_document.empty ())
+	{
+		RefreshSideEffect ();
+		return;
+	}
+
 	std::string key = "absent";
 	if (!m_reference.empty ())
 	{

@@ -41,6 +41,7 @@ add_executable(maker
     wasm_api.cpp
     graph_api.cpp
     graph_editor.cpp
+    mesh_payload.cpp
     ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp)
 
 # WebGL 2, et il faut le dire DEUX fois, a deux etages differents :
@@ -59,6 +60,7 @@ target_compile_definitions(maker PRIVATE IMGUI_IMPL_OPENGL_ES3)
 set_source_files_properties(
     ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
     graph_editor.cpp
+    mesh_payload.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-nontrivial-memcall")
 
 # le module de maillage tire ses deux dependances transitivement (plain-signature link dans les
@@ -105,16 +107,80 @@ add_custom_command(TARGET maker POST_BUILD
             "${CMAKE_CURRENT_SOURCE_DIR}/web/data/joconde.jpg"
     COMMENT "Copie de l'image par defaut dans maker/web/data/")
 
-# Police servie par defaut a la page « Texte 3D », pour qu'elle ouvre sur un
-# resultat plutot que sur un viewer vide -- l'utilisateur reste libre d'importer
-# la sienne. BloomingGrove.otf (Nathan Eady) est du DOMAINE PUBLIC, ce qui
-# autorise sa redistribution avec la page. Meme montage que les deux copies
-# ci-dessus : source unique dans test/data/, copie en artefact de build.
+# GABARITS de pages (template.html). Un gabarit decrit une page entiere -- le
+# graphe qu'elle evalue, les parametres qu'elle expose, ses sources de fichier --
+# et rien d'autre ne distingue deux pages templatees.
+#
+# Meme montage que les copies ci-dessus, et pour la meme raison de servabilite :
+# le serveur ne sert que maker/web/. Mais il y a ici un motif de PLUS, qui n'existe
+# pas pour l'image ni pour les polices -- un gabarit contient un DOCUMENT DE GRAPHE,
+# donc quelque chose qui peut etre FAUX : un type de noeud renomme, un port qui a
+# change d'indice, un parametre disparu. Le garder sous test/data/ le met a portee
+# de la suite de tests, qui le relit et l'evalue reellement
+# (tu_cggraph_template.cpp). Une copie servie au navigateur ne se teste pas.
+# ⚠ PAS de POST_BUILD ici, contrairement aux trois copies voisines, et la
+# difference est de fond : un POST_BUILD ne s'execute que si sa cible est
+# RELIEE. Les trois autres copient des ressources qui ne changent qu'avec le
+# code ; un gabarit, lui, se modifie SEUL -- c'est meme tout son interet. Sous
+# POST_BUILD, editer un gabarit sans toucher a une ligne de C++ ne recopiait
+# rien, et le navigateur continuait de servir la version precedente sans que
+# rien ne le signale. (Constate, pas suppose.)
+#
+# D'ou une regle par fichier, qui DEPEND de sa source : elle se redeclenche des
+# que le gabarit change, que maker soit relie ou non.
+file(GLOB MAKER_TEMPLATES "${CMAKE_SOURCE_DIR}/test/data/templates/*.json")
+set(MAKER_TEMPLATE_OUTPUTS "")
+foreach(tpl ${MAKER_TEMPLATES})
+    get_filename_component(tpl_name "${tpl}" NAME)
+    set(tpl_out "${CMAKE_CURRENT_SOURCE_DIR}/web/data/templates/${tpl_name}")
+    add_custom_command(OUTPUT "${tpl_out}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/data/templates"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${tpl}" "${tpl_out}"
+        DEPENDS "${tpl}"
+        COMMENT "Copie du gabarit ${tpl_name} dans maker/web/data/templates/")
+    list(APPEND MAKER_TEMPLATE_OUTPUTS "${tpl_out}")
+endforeach()
+if (MAKER_TEMPLATE_OUTPUTS)
+    add_custom_target(maker_templates ALL DEPENDS ${MAKER_TEMPLATE_OUTPUTS})
+    add_dependencies(maker maker_templates)
+endif()
+
+# Catalogue de polices propose par la page « Texte 3D » : elle ouvre sur la
+# police par defaut (catalogue.json / "default") plutot que sur un viewer vide,
+# et son selecteur offre les autres -- l'utilisateur reste libre d'importer la
+# sienne. Meme montage que les deux copies ci-dessus : source unique dans
+# test/data/, copie en artefact de build.
+#
+# ⚠ Deposer une police dans test/data/fonts/ la REDISTRIBUE : ce glob la sert au
+# navigateur. Seules des licences qui l'autorisent (OFL 1.1, Apache 2.0, domaine
+# public) ont leur place la, et licenses/ doit porter le texte correspondant --
+# l'OFL 1.1 l'exige. Cf. test/data/fonts/CREDITS.md.
+#
+# GLOB et non liste explicite : ajouter une police ne doit toucher QUE
+# test/data/fonts/ (le fichier + son entree dans catalogue.json). Le prix est le
+# prix habituel du glob -- il est evalue a la CONFIGURATION, donc une police
+# ajoutee sans reconfigurer ne sera pas copiee.
+file(GLOB MAKER_FONT_FILES
+     "${CMAKE_SOURCE_DIR}/test/data/fonts/*.ttf"
+     "${CMAKE_SOURCE_DIR}/test/data/fonts/*.otf"
+     "${CMAKE_SOURCE_DIR}/test/data/fonts/*.ttc"
+     "${CMAKE_SOURCE_DIR}/test/data/fonts/*.otc")
+
+# copy_if_different accepte plusieurs sources pour un dossier destination, et
+# non copy_directory_if_different : celui-la demande CMake 3.26 quand la racine
+# n'exige que 3.18.4.
 add_custom_command(TARGET maker POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/data/fonts"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/test/data/fonts/BloomingGrove.otf"
-            "${CMAKE_CURRENT_SOURCE_DIR}/web/data/BloomingGrove.otf"
-    COMMENT "Copie de la police par defaut dans maker/web/data/")
+            ${MAKER_FONT_FILES}
+            "${CMAKE_SOURCE_DIR}/test/data/fonts/catalogue.json"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/data/fonts"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/test/data/fonts/licenses"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/data/fonts/licenses"
+    COMMENT "Copie du catalogue de polices dans maker/web/data/fonts/")
 
 # Exceptions : nanosvg / STL en levent (cf. ANALYSE sec.9.3).
 target_compile_options(maker PRIVATE -fexceptions)

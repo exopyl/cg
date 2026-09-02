@@ -25,6 +25,7 @@
 #include <chrono>
 #include <cstddef>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "../src/cggraph/ui/editor_model.h"
@@ -32,6 +33,27 @@
 
 namespace maker_graph
 {
+
+// Echappement JSON, ici parce que les DEUX facades ecrivent du JSON a la main et
+// qu'une copie de chaque cote finirait par diverger. Les chemins de fichier lui
+// doivent leur passage : sous Windows ils portent des antislashs, qui sans cela
+// casseraient le document rendu au JS.
+inline std::string JsonEscape (const std::string &s)
+{
+    std::string o;
+    o.reserve (s.size () + 2);
+    for (char c : s) {
+        switch (c) {
+            case '"':  o += "\\\""; break;
+            case '\\': o += "\\\\"; break;
+            case '\n': o += "\\n";  break;
+            case '\r': o += "\\r";  break;
+            case '\t': o += "\\t";  break;
+            default:   o += c;      break;
+        }
+    }
+    return o;
+}
 
 struct Host
 {
@@ -44,12 +66,6 @@ struct Host
 	// Declare APRES le pilote : la fabrique le renseigne pendant la
 	// construction du modele.
 	cggraph_ui::EditorModel model;
-
-	// Tampons de vue, remplis a la demande du renderer du worker. Le JS du
-	// worker les televerse aussitot ; ils restent valides jusqu'a l'appel
-	// suivant.
-	std::vector<float> viewPositions;
-	std::vector<unsigned int> viewIndices;
 
 	unsigned int progressTicks = 0;
 

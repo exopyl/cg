@@ -21,6 +21,15 @@ public:
 	static int load (Img& img, char const *filename, char const *path = nullptr);
 	static int save (Img& img, char const *filename);
 
+	// Cf. Img::load_from_memory. Implante dans image_io_memory.cpp, qui porte sa
+	// PROPRE copie de stb_image : ni import_png ni import_jpg ne peuvent la
+	// partager, leurs unites compilant stb avec STB_IMAGE_STATIC pour ne pas
+	// entrer en conflit avec la copie de cgmesh (vmeshes.cpp). Consolider les
+	// trois en une seule unite est un point ouvert de l'audit de dette
+	// (debt_cgimg.md, « 2 copies de stb_image dans cgimg ») ; ce n'est pas fait
+	// ici pour ne pas toucher au chemin de decodage JPEG dont depend maker.
+	static int load_from_memory (Img& img, const unsigned char *data, size_t size);
+
 private:
 	static int import_bmp (Img& img, const char *filename);
 	static int export_bmp (Img& img, const char *filename);

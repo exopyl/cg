@@ -396,6 +396,12 @@ bool MeshAlgoTensorEvaluator::ApplyDesbrun (const Context *ctx)
 			pDiffParam_walk->SetDirectionMax (basis1[0], basis1[1], basis1[2]);
 			pDiffParam_walk->SetDirectionMin (basis2[0], basis2[1], basis2[2]);
 			SetTensorAt (i, pDiffParam_walk);
+			// SOMMET TERMINE. Sans ce continue, la suite lisait a, b et c jamais
+			// ecrits -- /RTC1 le signalait -- puis ecrasait le tenseur de repli
+			// par un second, calcule sur cette pile indeterminee. Le repli
+			// range deja les directions du repere local a defaut des
+			// directions principales : c'est tout ce qu'on sait ici.
+			continue;
 		}
 
 		// solve the eigensystem

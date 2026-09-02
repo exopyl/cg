@@ -258,19 +258,25 @@ RegionQuantizeOptions quantizeOptions(const ImagePixelBlocksOptions& opt)
 	return qo;
 }
 
-bool buildContent(const std::string& filename,
-                  const ImagePixelBlocksOptions& opt,
-                  PixelContent& content)
-{
-	Img img;
-	if (!image_to_quantized_image(filename, quantizeOptions(opt), img))
-		return false;
+// Etiquette de source pour les diagnostics quand l'image n'a pas de nom de
+// fichier -- elle est arrivee par un port ou par un buffer.
+const char* const kMemorySource = "<image en memoire>";
 
+// Segmente, vectorise et passe en XY monde un raster DEJA QUANTIFIE ET PIXELISE.
+//
+// L'image est prise telle quelle : ni lissage, ni quantification, ni vote
+// majoritaire. Les champs correspondants de `opt` ne sont donc PAS lus ici --
+// c'est l'appelant qui a decide de la palette et de la grille, en amont.
+bool buildContent(Img& img,
+                  const ImagePixelBlocksOptions& opt,
+                  PixelContent& content,
+                  const char* source)
+{
 	// Blocs connexes de couleur identique, sur la grille pixelisee.
 	const Components comps = labelComponents(img);
 	if (comps.count == 0)
 	{
-		std::fprintf(stderr, "image_pixel_blocks: %s has no region\n", filename.c_str());
+		std::fprintf(stderr, "image_pixel_blocks: %s has no region\n", source);
 		return false;
 	}
 
@@ -281,7 +287,7 @@ bool buildContent(const std::string& filename,
 	if (!pPalette || pPalette->NColors() == 0)
 	{
 		if (!paletteOwnedByImg) delete pPalette;
-		std::fprintf(stderr, "image_pixel_blocks: %s has no colour\n", filename.c_str());
+		std::fprintf(stderr, "image_pixel_blocks: %s has no colour\n", source);
 		return false;
 	}
 	content.nColors = pPalette->NColors();
@@ -296,14 +302,14 @@ bool buildContent(const std::string& filename,
 		delete pPalette;
 	if (!ok)
 	{
-		std::fprintf(stderr, "image_pixel_blocks: vectorization failed on %s\n", filename.c_str());
+		std::fprintf(stderr, "image_pixel_blocks: vectorization failed on %s\n", source);
 		return false;
 	}
 
 	std::vector<VectorLayer> layers = rtv.GetLayers();
 	if (layers.empty())
 	{
-		std::fprintf(stderr, "image_pixel_blocks: %s vectorized to no region\n", filename.c_str());
+		std::fprintf(stderr, "image_pixel_blocks: %s vectorized to no region\n", source);
 		return false;
 	}
 
@@ -357,25 +363,29 @@ bool buildContent(const std::string& filename,
 	{
 		std::fprintf(stderr,
 		             "image_pixel_blocks: %s has no block left after shrink=%g\n",
-		             filename.c_str(), opt.shrink);
+		             source, opt.shrink);
 		return false;
 	}
 	return true;
 }
 
-} // namespace
-
-// ============================================================================
-//  Points d'entree publics
-// ============================================================================
-
-Mesh* image_to_pixel_blocks(const std::string& filename,
-                            const ImagePixelBlocksOptions& opt)
+// Contenu depuis un FICHIER : quantification (avec pixelisation) puis segmentation.
+bool buildContentFromFile(const std::string& filename,
+                          const ImagePixelBlocksOptions& opt,
+                          PixelContent& content)
 {
-	PixelContent content;
-	if (!buildContent(filename, opt, content))
-		return nullptr;
+	Img img;
+	if (!image_to_quantized_image(filename, quantizeOptions(opt), img))
+		return false;
 
+	return buildContent(img, opt, content, filename.c_str());
+}
+
+
+Mesh* pixelBlocksFromContent(const PixelContent& content,
+                             const ImagePixelBlocksOptions& opt,
+                             const Img* texture)
+{
 	// Un materiau par COULEUR de palette (et non par bloc) : a l'ecran c'est
 	// l'image qu'on veut lire, pas la decoupe. La decoupe est le sujet de
 	// image_to_pixel_blocks_per_component().
@@ -397,15 +407,30 @@ Mesh* image_to_pixel_blocks(const std::string& filename,
 					edgeCount[edgeKey(c.pts[i], c.pts[(i + 1) % n], content.w.quantScale)]++;
 			}
 
+	// TEXTURE : tous les blocs partagent le materiau 0, celui de l'image. La
+	// palette ne sert alors plus qu'a decouper la geometrie -- c'est l'image qui
+	// donne les couleurs, et une plage d'indices par bloc n'aurait aucun sens
+	// puisqu'ils portent tous la meme.
+	const bool textured = texture != nullptr;
+
 	for (const Block& b : content.blocks)
 	{
-		auto it = colorMaterial.find(b.colorIndex);
-		if (it == colorMaterial.end())
+		unsigned int slot = 0;
+		if (textured)
 		{
-			it = colorMaterial.emplace(b.colorIndex, (unsigned int)materialColors.size()).first;
-			materialColors.push_back(b.color);
+			if (materialColors.empty()) materialColors.push_back(b.color);
 		}
-		ExtrudeAppendOptions ao = blockOptions(opt, it->second);
+		else
+		{
+			auto it = colorMaterial.find(b.colorIndex);
+			if (it == colorMaterial.end())
+			{
+				it = colorMaterial.emplace(b.colorIndex, (unsigned int)materialColors.size()).first;
+				materialColors.push_back(b.color);
+			}
+			slot = it->second;
+		}
+		ExtrudeAppendOptions ao = blockOptions(opt, slot);
 		if (!opt.emitInternalWalls)
 		{
 			const std::map<EdgeKey, int>* counts = &edgeCount;
@@ -436,10 +461,27 @@ Mesh* image_to_pixel_blocks(const std::string& filename,
 	if (!mesh) return nullptr;
 
 	char name[32];
-	for (size_t i = 0; i < materialColors.size(); ++i)
+	if (textured)
 	{
-		std::snprintf(name, sizeof(name), "color_%02d", (int)i);
-		mesh->Material_Add(makeColorMaterial(materialColors[i], name));
+		// L'echec de la texture n'est PAS silencieux : sans materiau a l'indice 0
+		// les blocs pointeraient sur rien. On retombe sur l'aplat de la premiere
+		// couleur, ce qui donne un maillage lisible plutot qu'un maillage nu.
+		Material* mat = region_make_texture_material(*texture, "source");
+		if (mat != nullptr) mesh->Material_Add(mat);
+		else mesh->Material_Add(makeColorMaterial(materialColors[0], "color_00"));
+
+		// UV sur TOUT le maillage : les parois heritent de l'empreinte au sol.
+		// La base et le mur debordent du contenu, mais gardent leur propre
+		// materiau -- leurs UV hors [0, 1] ne sont donc jamais echantillonnes.
+		region_apply_planar_uvs(*mesh, content.w);
+	}
+	else
+	{
+		for (size_t i = 0; i < materialColors.size(); ++i)
+		{
+			std::snprintf(name, sizeof(name), "color_%02d", (int)i);
+			mesh->Material_Add(makeColorMaterial(materialColors[i], name));
+		}
 	}
 	if (opt.emitBase)
 	{
@@ -454,14 +496,10 @@ Mesh* image_to_pixel_blocks(const std::string& filename,
 	return mesh;
 }
 
-std::vector<Mesh*> image_to_pixel_blocks_per_component(const std::string& filename,
-                                                       const ImagePixelBlocksOptions& opt)
+std::vector<Mesh*> pixelBlocksPartsFromContent(const PixelContent& content,
+                                               const ImagePixelBlocksOptions& opt)
 {
 	std::vector<Mesh*> out;
-
-	PixelContent content;
-	if (!buildContent(filename, opt, content))
-		return out;
 
 	int index = 0;
 	for (const Block& b : content.blocks)
@@ -509,4 +547,79 @@ std::vector<Mesh*> image_to_pixel_blocks_per_component(const std::string& filena
 		out.push_back(mesh);
 	}
 	return out;
+}
+
+} // namespace
+
+// ============================================================================
+//  Points d'entree publics
+// ============================================================================
+//
+// Quatre entrees pour deux operations, chacune declinee DEPUIS UN FICHIER et
+// DEPUIS UNE IMAGE DEJA QUANTIFIEE ET PIXELISEE.
+//
+// La seconde forme existe pour les appelants qui ne detiennent pas de fichier et
+// qui ont deja decide de la palette et de la grille en amont : un noeud de graphe
+// dont l'image arrive par un port, la cible WebAssembly ou les octets viennent du
+// JavaScript. Elle NE QUANTIFIE NI NE PIXELISE -- voir la note de
+// image_pixel_blocks.h sur les champs de `opt` qu'elle ne lit pas.
+
+Mesh* image_to_pixel_blocks(const std::string& filename,
+                            const ImagePixelBlocksOptions& opt,
+                            bool textureFromSource)
+{
+	PixelContent content;
+	if (!buildContentFromFile(filename, opt, content))
+		return nullptr;
+
+	// SECONDE LECTURE du fichier, et non un partage avec la premiere : celle-ci
+	// rend l'image QUANTIFIEE, dont les aplats sont deja ce qu'on cherche a
+	// depasser. C'est l'originale qu'on plaque, et buildContentFromFile ne la
+	// conserve pas. Le cout est un decodage de plus, paye seulement quand la
+	// texture est demandee.
+	// Img::load rend 0 en SUCCES (cf. image_region_pipeline.cpp:260) : une texture
+	// illisible retombe sur les aplats plutot que d'echouer le maillage entier.
+	Img source;
+	if (textureFromSource && source.load(filename.c_str()) == 0
+	    && source.width() > 0 && source.height() > 0)
+		return pixelBlocksFromContent(content, opt, &source);
+
+	return pixelBlocksFromContent(content, opt, nullptr);
+}
+
+Mesh* image_to_pixel_blocks(const Img& quantized, const ImagePixelBlocksOptions& opt,
+                            const Img* texture)
+{
+	// COPIE DELIBEREE. CLitRasterToVector::Vectorize palettise son entree, donc la
+	// MODIFIE. Une image qui arrive ici par un lien de graphe est partagee entre
+	// tous les consommateurs de ce lien : la muter les corromprait tous.
+	Img work = quantized;
+
+	PixelContent content;
+	if (!buildContent(work, opt, content, kMemorySource))
+		return nullptr;
+
+	return pixelBlocksFromContent(content, opt, texture);
+}
+
+std::vector<Mesh*> image_to_pixel_blocks_per_component(const std::string& filename,
+                                                       const ImagePixelBlocksOptions& opt)
+{
+	PixelContent content;
+	if (!buildContentFromFile(filename, opt, content))
+		return std::vector<Mesh*>();
+
+	return pixelBlocksPartsFromContent(content, opt);
+}
+
+std::vector<Mesh*> image_to_pixel_blocks_per_component(const Img& quantized,
+                                                       const ImagePixelBlocksOptions& opt)
+{
+	Img work = quantized;   // meme motif que ci-dessus
+
+	PixelContent content;
+	if (!buildContent(work, opt, content, kMemorySource))
+		return std::vector<Mesh*>();
+
+	return pixelBlocksPartsFromContent(content, opt);
 }

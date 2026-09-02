@@ -5,26 +5,77 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Texte 3D — maker</title>
   <link rel="stylesheet" href="./style.css">
-  <script src="./vendor/o3dv.min.js" onerror="window.__o3dvMissing = true"></script>
 </head>
 <body>
+  <!--
+    PAGE GABARIT. Cette page n'a plus de code qui lui soit propre : tout ce qui
+    la distingue vit dans test/data/templates/text3d.json — le graphe qu'elle
+    évalue (text.font.load -> text.contours -> shape.extrude), les paramètres qu'elle expose avec
+    leurs bornes et leurs listes de choix, et son catalogue de polices.
+
+    Ce qui a disparu en chemin : js/pages/text.js, et la chaîne C++ dédiée
+    qu'il appelait (createTextExtrusion / ParameterizedText3D). La page passe
+    désormais par les MÊMES nœuds que l'éditeur nodal, si bien qu'elle et lui ne
+    peuvent plus diverger — et le bouton « Enregistrer le document » rend un
+    document cggraph ordinaire, qui s'ouvre dans graph.html.
+
+    Le chrome est recopié de template.html plutôt que tiré de shell.js : shell.js
+    est soudé au chemin des FORMES (getParams(id), updateInPlace(Module, id)),
+    qui suppose un objet natif identifié. Une page pilotée par un graphe n'en a
+    pas — elle a un document et un nœud de sortie.
+  -->
   <aside class="panel" id="panel">
-    <div id="pageControls">
-      <section class="group">
-        <label class="lbl" for="fontInput">Police (TTF, OTF, TTC)</label>
-        <input type="file" id="fontInput" accept=".ttf,.otf,.ttc,.otc,font/ttf,font/otf">
-        <p class="hint-sm" id="fontInfo">Aucune police chargée.</p>
-        <p class="hint-sm">Le <b>texte</b> est un paramètre de la forme, comme la
-          profondeur ou le corps : il se saisit dans le panneau ci-dessous et le
-          volume suit à la frappe. Un retour à la ligne ouvre une nouvelle ligne.</p>
-      </section>
-    </div>
+    <header>
+      <a class="back" href="./index.html">← maker</a>
+      <h1 id="title">…</h1>
+      <p class="sub" id="subtitle"></p>
+    </header>
+
+    <section class="group">
+      <div class="lbl">Sources</div>
+      <div id="sources"></div>
+    </section>
+
+    <section class="group">
+      <div class="lbl">Paramètres</div>
+      <div id="params"></div>
+    </section>
+
+    <section class="group">
+      <div class="lbl">Vue</div>
+      <div class="ctrlrow"><span>Couleur du modèle</span><input type="color" id="modelColor" value="#b4bec8"></div>
+      <div class="ctrlrow"><label for="wireframe">Fil de fer</label><input type="checkbox" id="wireframe"></div>
+      <button id="resetView">Recentrer la vue</button>
+    </section>
+
+    <footer>
+      <div id="status" class="stats">Chargement…</div>
+      <div class="lbl">Export</div>
+      <input type="text" id="filename" value="texte3d" placeholder="nom du fichier" spellcheck="false">
+      <div class="btnrow">
+        <button id="downloadObjBtn">OBJ</button>
+      </div>
+      <div class="lbl">Graphe</div>
+      <button id="openInEditor">Enregistrer le document</button>
+      <p class="hint-sm">Cette page EST un graphe. Enregistre-le, puis ouvre-le
+        dans l'éditeur nodal pour le modifier ou l'étendre.</p>
+    </footer>
   </aside>
 
   <main id="viewer" class="viewer">
-    <div id="viewerHint" class="hint">Chargement du module…</div>
+    <div id="hint" class="hint">Chargement du module…</div>
   </main>
 
-  <script type="module" src="./js/pages/text.js"></script>
+  <script type="module">
+    import { runTemplate } from "./js/template.js";
+    // Gabarit FIXE, contrairement à template.html qui le lit dans la query
+    // string : cette URL est celle que index.html publie, et elle doit désigner
+    // « Texte 3D » et rien d'autre.
+    runTemplate("text3d").catch((e) => {
+      document.getElementById("status").textContent =
+        `échec : ${e && e.message ? e.message : e}`;
+      console.error(e);
+    });
+  </script>
 </body>
 </html>

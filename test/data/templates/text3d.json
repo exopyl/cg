@@ -1,0 +1,336 @@
+{
+  "title": "Texte 3D",
+  "subtitle": "police · mise en page · extrusion — piloté par un graphe",
+  "_comment": [
+    "GABARIT DE PAGE. Tout ce qui distingue cette page d'une autre est ici :",
+    "le graphe qu'elle évalue, les paramètres qu'elle expose, et la source de",
+    "fichier qu'elle propose. js/template.js ne connaît aucun de ces noms.",
+    "",
+    "Pourquoi les métadonnées d'interface (min/max/step/choices) vivent ICI et",
+    "non dans le graphe : ParamSet ne les porte pas — il ne connaît que quatre",
+    "scalaires nus, sans bornes ni liste de choix. C'est une limite réelle du",
+    "moteur (cf. debt_cggraph.md, « ParamType sans métadonnée »). Tant qu'elle",
+    "tient, le gabarit est le seul endroit où un entier `align` peut redevenir",
+    "les trois choix qu'il représente.",
+    "",
+    "Conséquence à connaître : rien ne vérifie que `node`/`param` existent dans",
+    "le graphe ci-dessous. Une faute de frappe donne un widget qui n'écrit",
+    "nulle part. template.js le signale au chargement plutôt que de le taire."
+  ],
+  "output": 4,
+  "sources": [
+    {
+      "node": 3,
+      "label": "Police (.ttf / .otf)",
+      "accept": ".ttf,.otf,.ttc,.otc",
+      "ownLabel": "…ou une police à toi (TTF, OTF, TTC)",
+      "catalogue": {
+        "url": "data/fonts/catalogue.json",
+        "dir": "data/fonts",
+        "label": "Police du catalogue",
+        "itemsKey": "fonts"
+      },
+      "hint": "Le fichier est désigné par un nœud file.ref, dont le chemin EST sérialisé : un document enregistré depuis cette page sait quoi relire. La police est un PORT, pas un paramètre : c'est ce qui la relie à la signature de ce qui la consomme, et ce qui la rend partageable."
+    }
+  ],
+  "expose": [
+    {
+      "node": 2,
+      "param": "text",
+      "label": "Texte",
+      "type": "string",
+      "multiline": true,
+      "rows": 3,
+      "hint": "Les retours à la ligne sont honorés ; c'est là que l'alignement se voit."
+    },
+    {
+      "node": 2,
+      "param": "align",
+      "label": "Alignement",
+      "type": "enum",
+      "choices": [
+        "gauche",
+        "centré",
+        "droite"
+      ],
+      "hint": "Sans effet sur une seule ligne."
+    },
+    {
+      "node": 2,
+      "param": "size",
+      "label": "Corps",
+      "type": "float",
+      "min": 0.05,
+      "max": 10.0,
+      "step": 0.05
+    },
+    {
+      "node": 4,
+      "param": "depth",
+      "label": "Profondeur",
+      "type": "float",
+      "min": 0.01,
+      "max": 5.0,
+      "step": 0.01
+    },
+    {
+      "node": 2,
+      "param": "letterSpacing",
+      "label": "Approche",
+      "type": "float",
+      "min": -0.5,
+      "max": 2.0,
+      "step": 0.01
+    },
+    {
+      "node": 2,
+      "param": "lineSpacing",
+      "label": "Interligne",
+      "type": "float",
+      "min": 0.2,
+      "max": 4.0,
+      "step": 0.05
+    },
+    {
+      "node": 2,
+      "param": "kerning",
+      "label": "Crénage",
+      "type": "bool"
+    },
+    {
+      "node": 2,
+      "param": "flattenTol",
+      "label": "Finesse des courbes",
+      "type": "float",
+      "min": 0.001,
+      "max": 0.2,
+      "step": 0.001,
+      "hint": "Écart de corde toléré à l'aplatissement des contours de glyphe. Plus petit = plus de segments."
+    },
+    {
+      "node": 2,
+      "param": "centerOnOrigin",
+      "label": "Centrer sur l'origine",
+      "type": "bool"
+    },
+    {
+      "node": 2,
+      "param": "support",
+      "label": "Support",
+      "type": "enum",
+      "choices": [
+        "aucun",
+        "plaque",
+        "bandeau",
+        "cadre"
+      ],
+      "hint": "Un contour de PLUS dans l'union 2D, jamais un second volume : support et texte partagent donc la profondeur."
+    },
+    {
+      "node": 2,
+      "param": "supportMargin",
+      "label": "Marge du support",
+      "type": "float",
+      "min": 0.0,
+      "max": 2.0,
+      "step": 0.01
+    },
+    {
+      "node": 2,
+      "param": "supportCornerRadius",
+      "label": "Rayon des coins",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01
+    }
+  ],
+  "graph": {
+    "format": "cggraph",
+    "formatVersion": 1,
+    "nodes": [
+      {
+        "id": 3,
+        "type": "file.ref",
+        "version": 1,
+        "x": -220.0,
+        "y": 120.0,
+        "params": [
+          {
+            "name": "path",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "string",
+            "value": ""
+          },
+          {
+            "name": "name",
+            "role": "nonSemantic",
+            "kind": "literal",
+            "type": "string",
+            "value": "sans nom"
+          }
+        ]
+      },
+      {
+        "id": 1,
+        "type": "text.font.load",
+        "version": 1,
+        "x": 40.0,
+        "y": 120.0,
+        "params": [
+          {
+            "name": "name",
+            "role": "nonSemantic",
+            "kind": "literal",
+            "type": "string",
+            "value": "sans nom"
+          },
+          {
+            "name": "fontIndex",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 0
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "type": "text.contours",
+        "version": 1,
+        "x": 320.0,
+        "y": 120.0,
+        "params": [
+          {
+            "name": "text",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "string",
+            "value": "Texte 3D"
+          },
+          {
+            "name": "size",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 1.0
+          },
+          {
+            "name": "flattenTol",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.01
+          },
+          {
+            "name": "lineSpacing",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 1.0
+          },
+          {
+            "name": "letterSpacing",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.0
+          },
+          {
+            "name": "kerning",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "bool",
+            "value": true
+          },
+          {
+            "name": "align",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 0
+          },
+          {
+            "name": "centerOnOrigin",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "bool",
+            "value": true
+          },
+          {
+            "name": "support",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 0
+          },
+          {
+            "name": "supportMargin",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.0
+          },
+          {
+            "name": "supportThickness",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.1
+          },
+          {
+            "name": "supportOverlap",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.02
+          },
+          {
+            "name": "supportCornerRadius",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.0
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "type": "shape.extrude",
+        "version": 1,
+        "x": 580.0,
+        "y": 120.0,
+        "params": [
+          {
+            "name": "depth",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.2
+          }
+        ]
+      }
+    ],
+    "links": [
+      {
+        "from": 3,
+        "fromPort": 0,
+        "to": 1,
+        "toPort": 0
+      },
+      {
+        "from": 1,
+        "fromPort": 0,
+        "to": 2,
+        "toPort": 0
+      },
+      {
+        "from": 2,
+        "fromPort": 0,
+        "to": 4,
+        "toPort": 0
+      }
+    ]
+  }
+}

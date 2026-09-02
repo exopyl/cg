@@ -1,0 +1,67 @@
+{
+  "_comment": [
+    "Catalogue des polices a contours du depot. SOURCE UNIQUE : la page",
+    "« Texte 3D » du maker construit son selecteur en lisant ce fichier, copie",
+    "dans maker/web/data/fonts/ par le build (cf. maker/CMakeLists.txt).",
+    "Ajouter une police = deposer le fichier ici + une entree ci-dessous ; ni",
+    "le CMakeLists (glob) ni le JS (lecture du manifeste) n'ont a changer.",
+    "",
+    "`variable` signale une table `fvar`. cgmath/font.h passe par stb_truetype,",
+    "qui ne SAIT PAS interpreter fvar : c'est toujours l'INSTANCE PAR DEFAUT",
+    "(Regular) qui est lue. Le champ est donc informatif -- il dit pourquoi on",
+    "n'obtient pas le Bold en demandant ce fichier, pas une capacite offerte.",
+    "",
+    "`outlines` dit quel chemin du parseur la police exerce : `quad` = table",
+    "`glyf` TrueType (GlyphSegment::Kind::Quadratic), `cubic` = charstrings",
+    "Type 2 CFF (Kind::Cubic). Les deux doivent rester couverts.",
+    "",
+    "Provenance, auteurs et licences : CREDITS.md et licenses/ dans ce dossier.",
+    "Toute police listee ici est redistribuable (OFL 1.1, Apache 2.0 ou domaine",
+    "public), condition NON negociable puisque le build la sert au navigateur."
+  ],
+
+  "default": "BloomingGrove.otf",
+
+  "groups": [
+    {
+      "label": "Sans",
+      "fonts": [
+        { "file": "Roboto.ttf",      "label": "Roboto",       "outlines": "quad",  "variable": true,  "em": 2048, "note": "sans neutre, la référence" },
+        { "file": "OpenSans.ttf",    "label": "Open Sans",    "outlines": "quad",  "variable": true,  "em": 2048, "note": "sans humaniste" },
+        { "file": "NotoSans.ttf",    "label": "Noto Sans",    "outlines": "quad",  "variable": true,  "em": 2048, "note": "4515 glyphes, diacritiques étendues" },
+        { "file": "FiraSans.otf",    "label": "Fira Sans",    "outlines": "cubic", "variable": false, "em": 1000, "note": "OpenType/CFF — contours cubiques" },
+        { "file": "DejaVuSans.ttf",  "label": "DejaVu Sans",  "outlines": "quad",  "variable": false, "em": 2048, "note": "police des tests unitaires cgmath/cggraph" }
+      ]
+    },
+    {
+      "label": "Serif",
+      "fonts": [
+        { "file": "PlayfairDisplay.ttf", "label": "Playfair Display", "outlines": "quad", "variable": true, "em": 1000, "note": "très contrastée — déliés fins à l'extrusion" },
+        { "file": "RobotoSlab.ttf",      "label": "Roboto Slab",      "outlines": "quad", "variable": true, "em": 2048, "note": "empattements épais, robuste en volume" }
+      ]
+    },
+    {
+      "label": "Titrage",
+      "fonts": [
+        { "file": "Cinzel.ttf",              "label": "Cinzel",              "outlines": "quad", "variable": true,  "em": 1000, "note": "capitales romaines lapidaires" },
+        { "file": "UnifrakturMaguntia.ttf",  "label": "Unifraktur Maguntia", "outlines": "quad", "variable": false, "em": 2048, "note": "gothique textura" },
+        { "file": "BebasNeue.ttf",           "label": "Bebas Neue",          "outlines": "quad", "variable": false, "em": 1000, "note": "capitales condensées, 60 Ko" }
+      ]
+    },
+    {
+      "label": "Scriptes",
+      "fonts": [
+        { "file": "BloomingGrove.otf", "label": "Blooming Grove", "outlines": "cubic", "variable": false, "em": 1000, "note": "domaine public — police par défaut de la page" },
+        { "file": "Lobster.ttf",       "label": "Lobster",        "outlines": "quad",  "variable": false, "em": 1000, "note": "contours qui se chevauchent" },
+        { "file": "GreatVibes.ttf",    "label": "Great Vibes",    "outlines": "quad",  "variable": false, "em": 1000, "note": "déliés fins, auto-intersections — cas dur" }
+      ]
+    },
+    {
+      "label": "Monospace",
+      "fonts": [
+        { "file": "JetBrainsMono.ttf", "label": "JetBrains Mono", "outlines": "quad", "variable": true, "em": 1000, "note": "mono, chasse fixe" },
+        { "file": "Inconsolata.ttf",   "label": "Inconsolata",    "outlines": "quad", "variable": true, "em": 1000, "note": "mono étroite" }
+      ]
+    }
+  ]
+}

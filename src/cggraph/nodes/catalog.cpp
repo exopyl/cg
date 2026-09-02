@@ -17,6 +17,11 @@
 #include "flow/foreach.h"
 #include "flow/repeat.h"
 #include "flow/subgraph.h"
+#include "img/load_image.h"
+#include "io/file_ref.h"
+#include "img/pixel_blocks.h"
+#include "img/quantize.h"
+#include "img/relief.h"
 #include "mesh/load_mesh.h"
 #include "mesh/save_mesh.h"
 #include "mesh/simplify.h"
@@ -24,7 +29,9 @@
 #include "shapes/gothic_window.h"
 #include "shapes/parametric_shape.h"
 #include "shapes/profile.h"
-#include "text/extrude_text.h"
+#include "shapes/extrude.h"
+#include "svg/svg_contours.h"
+#include "text/text_contours.h"
 #include "text/load_font.h"
 
 namespace cggraph_nodes
@@ -45,7 +52,7 @@ const std::vector<CatalogEntry> &Catalog ()
 {
 	static const std::vector<CatalogEntry> entries = [] {
 	std::vector<CatalogEntry> table = {
-		{ "mesh.io.load", "Chargement de maillage", "Maillage", &Make<LoadMeshNode>,
+		{ "mesh.io.load", "Maillage", "Maillage", &Make<LoadMeshNode>,
 		  "MeshIO::import_obj rend 0 -- succes -- sur un nom de fichier nul "
 		  "(mesh_io_obj.cpp:266) : le code de retour ne suffit pas a decider "
 		  "qu'un maillage a ete lu" },
@@ -59,12 +66,84 @@ const std::vector<CatalogEntry> &Catalog ()
 		  "MeshIO::save compare l'extension par strcmp sans normaliser la casse "
 		  "(mesh_io.cpp:69-89), contrairement a load : un chemin en .OBJ n'est "
 		  "pas reconnu" },
-		// Deux noeuds de texte, et exactement deux : la police est un PORT, donc
-		// un noeud a part ; l'extrusion est monolithique, donc un seul noeud.
-		{ "text.font.load", "Chargement de police", "Texte", &Make<LoadFontNode>, nullptr },
-		{ "text.extrude", "Extrusion de texte", "Texte", &Make<ExtrudeTextNode>,
-		  "un glyphe absent de la police occupe son avance sans emettre de "
-		  "contour ; un texte entierement blanc rend nullptr, donc un echec" }
+		// La police est un PORT, donc un noeud a part.
+		{ "text.font.load", "Police", "Texte", &Make<LoadFontNode>, nullptr },
+		// CONTOUR 2D -- deux producteurs, un extrudeur. `text.extrude`, qui
+		// enchainait mise en page, aplatissement et extrusion en un bloc, a ete
+		// RETIRE : extruder un texte et extruder un dessin refaisaient la meme
+		// derniere etape, et rien ne pouvait s'intercaler entre les deux.
+		{ "text.contours", "Contours de texte", "Texte", &Make<TextContoursNode>,
+		  "les glyphes sont TOUJOURS fusionnes en une region unique, la ou "
+		  "text.extrude ne le faisait que sur demande : une liste plate de "
+		  "contours ne peut pas porter le decoupage par glyphe. Un glyphe absent "
+		  "de la police occupe son avance sans emettre de contour, et un texte "
+		  "entierement blanc est un echec" },
+		{ "svg.contours", "Contours SVG", "Forme 2D", &Make<SvgContoursNode>,
+		  "la regle de remplissage de CHAQUE forme -- even-odd ou non-zero -- est "
+		  "resolue par une passe Clipper2 en amont : elle n'est connue nulle part "
+		  "ailleurs et une liste plate ne la transporte pas. `height` n'est pas "
+		  "un reglage de ce noeud, la profondeur se regle sur shape.extrude" },
+		{ "shape.extrude", "Extrusion", "Forme 2D", &Make<ExtrudeNode>,
+		  "n'ajoute PAS de plaque de support : le support est un contour de plus, "
+		  "fondu par l'union 2D, donc il se decide chez le producteur de contours "
+		  "-- text.contours le porte, svg.contours non" },
+		// ---------------------------------------------------------------
+		// IMAGE -- les deux chaines « image -> regions extrudees », celles des
+		// pages « Image to puzzle » et « Blocs pixelises » de maker.
+		//
+		// PORTABLES, et c'est verifie et non suppose : image_relief.cpp,
+		// image_pixel_blocks.cpp, image_region_pipeline.cpp et
+		// image_vectorization.cpp figurent tous dans la liste EMSCRIPTEN de
+		// src/cgmesh/CMakeLists.txt, et cgimg est globe en entier. Rien a
+		// exclure ici, contrairement aux sept noeuds d'analyse plus bas.
+		//
+		// La source est un noeud SEPARE, comme la police : c'est ce qui donne a
+		// l'image un port, donc une place dans la signature, donc un partage
+		// entre les deux chaines d'un meme document.
+		// FICHIER -- la ressource devenue un noeud, donc un port.
+		//
+		// Portable : il ne lit que <cstdio>. Sous WebAssembly sa lecture de fichier
+		// echoue par construction (une uri y est une adresse HTTP), et c'est
+		// l'HOTE qui resout l'uri puis repose les octets -- cf. l'en-tete du noeud.
+		{ "file.ref", "Fichier", "Fichier", &Make<FileRefNode>,
+		  "IL NE LIT RIEN -- il DESIGNE, les chargeurs en aval ouvrent. Le lien "
+		  "porte un NOM et non un contenu : ce qui relie la signature de l'aval au "
+		  "contenu du fichier, c'est son parametre semantique `source.identity`, "
+		  "releve par un STAT. Sous WebAssembly le mtime d'un fichier MEMFS est "
+		  "celui de son ECRITURE : un hote qui reecrit la meme ressource a chaque "
+		  "import manquerait le cache a tous les coups" },
+		{ "img.io.load", "Image", "Image", &Make<LoadImageNode>,
+		  "le format est reconnu au CONTENU et non a l'extension, la couverture "
+		  "est donc plus large que celle d'Img::load et ne depend pas de "
+		  "CGIMG_WITH_PNG / CGIMG_WITH_JPG ; un buffer vide est un echec, pas "
+		  "une image vide" },
+		{ "img.quantize", "Quantification", "Image", &Make<QuantizeImageNode>,
+		  "N'EST PAS ANNULABLE : quantize_image ne prend pas de contexte, et le "
+		  "filtrage bilateral puis Wu tiennent le fil plusieurs secondes sur une "
+		  "grande image. `algo` autre que 1 vaut Wu. `pixelWidth` est le seul "
+		  "parametre qui distingue les deux chaines aval : 0 pour le relief, 64 "
+		  "pour les blocs" },
+		{ "img.relief", "Relief colore", "Image", &Make<ReliefNode>,
+		  "attend une image DEJA QUANTIFIEE (img.quantize) et n'en verifie rien : "
+		  "branche sur img.io.load brut, il sort un relief a autant de couleurs "
+		  "que l'image en compte, sans erreur. Les champs de quantification "
+		  "d'ImageReliefOptions ne sont pas lus par cette voie" },
+		{ "img.relief.layers", "Relief : couches par couleur", "Image",
+		  &Make<ReliefLayersNode>,
+		  "suite DENSE : une couche qui ne tesselle rien est OMISE, donc la "
+		  "position i ne designe pas la couleur i -- seul le nom de materiau "
+		  "\"color_NN\" porte l'index de palette. Base et mur sont les dernieres "
+		  "entrees quand ils sont demandes" },
+		{ "img.pixel_blocks", "Blocs pixelises", "Image", &Make<PixelBlocksNode>,
+		  "attend une image quantifiee ET PIXELISEE (img.quantize avec "
+		  "pixelWidth). Sur une image non pixelisee la segmentation REUSSIT et "
+		  "rend des milliers de blocs minuscules : rien n'echoue, le resultat "
+		  "est seulement ininterpretable" },
+		{ "img.pixel_blocks.parts", "Blocs pixelises : pieces separables", "Image",
+		  &Make<PixelBlocksPartsNode>,
+		  "meme piege de pixelisation que img.pixel_blocks, et il coute ici un "
+		  "maillage par region ; le nom de materiau \"block_NNNN_color_NN\" est le "
+		  "seul lien fiable entre la position dans la suite et le bloc d'origine" }
 #ifndef __EMSCRIPTEN__
 		,
 		// ---------------------------------------------------------------

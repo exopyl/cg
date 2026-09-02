@@ -29,6 +29,7 @@
 // l'hote doit l'appeler.
 //
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
 
@@ -57,6 +58,30 @@ public:
 	// qu'il est un membre, donc construit avant le pilote.
 	using DriverFactory = std::function<std::unique_ptr<EvalDriver> (cggraph::Graph &)>;
 	explicit EditorModel (const DriverFactory &makeDriver);
+
+	// OUVRE UN DOCUMENT EXISTANT dans un modele NEUF, avec la fabrique du
+	// catalogue -- la meme que AddNode. C'est ce dont la descente dans un
+	// sous-graphe a besoin : le canvas affiche le document delegue sans que
+	// l'hote ait a savoir qu'il existe.
+	//
+	// ⚠ LE MODELE RENDU EST AUTONOME : son propre graphe, son propre pilote. Ce
+	// n'est PAS une vue du document parent, et rien n'y remonte -- ni les
+	// positions, ni les parametres. Un corps de boucle vit dans un fichier a
+	// part, et seul un enregistrement l'ecrirait.
+	//
+	// nullptr en echec, `detail` nommant alors la cause telle que LoadGraph la
+	// rend. Un chemin qui ne mene nulle part en fait partie : dans l'hote web le
+	// document delegue doit avoir ete depose dans le systeme de fichiers du
+	// worker, et sans ce refus la descente ouvrirait un graphe vide, ce qui se
+	// lirait comme « le corps est vide » au lieu de « le corps est introuvable ».
+	static std::unique_ptr<EditorModel> OpenDocument (const std::string &path,
+	                                                  std::string &detail);
+
+	// Meme chose depuis le TEXTE du document, pour un corps EMBARQUE dans son
+	// parent. Aucun fichier n'est touche -- c'est ce qui rend la descente
+	// possible dans l'hote web sans rien deposer dans son systeme de fichiers.
+	static std::unique_ptr<EditorModel> OpenDocumentText (const std::string &document,
+	                                                      std::string &detail);
 
 	const Palette &GetPalette () const { return m_palette; }
 
@@ -145,6 +170,18 @@ public:
 	// pas d'apercu, personne n'en avait donc eu besoin avant l'hote web.
 	const cggraph::ValueList &GetLastOutputs () const { return m_outputs; }
 
+	// Noeud dont GetLastOutputs () porte les sorties. kInvalidNodeId tant que
+	// rien n'a ete calcule.
+	//
+	// EvalResult::node ne peut PAS servir a cela : il ne nomme que le lieu d'un
+	// REFUS, et vaut kInvalidNodeId quand tout s'est bien passe.
+	cggraph::NodeId GetLastEvaluatedNode () const { return m_lastEvaluated; }
+
+	// Vignette d'un noeud, nulle s'il n'en a pas -- type sans representation, ou
+	// noeud jamais traverse par un calcul. Elles couvrent TOUTE la branche du
+	// dernier calcul, pas seulement son noeud terminal.
+	const cggraph::Thumbnail *GetPreview (cggraph::NodeId id) const;
+
 	// Incremente a chaque fois que Poll retire un resultat. C'est ce qui dit a
 	// un hote « il y a autre chose a televerser » : Poll est appele par le
 	// canvas, l'hote ne voit donc pas son booleen passer.
@@ -162,6 +199,13 @@ private:
 
 	cggraph::ValueList m_outputs;
 	cggraph::EvalResult m_lastResult;
+	cggraph::NodeId m_lastEvaluated = cggraph::kInvalidNodeId;
+
+	// Accumulees d'un calcul a l'autre plutot que remplacees : evaluer un noeud
+	// intermediaire ne doit pas effacer les vignettes des noeuds en aval, qui
+	// restent justes tant que leur entree n'a pas change. C'est `m_revision` qui
+	// dit a l'interface quand se rafraichir, pas la disparition d'une entree.
+	std::map<cggraph::NodeId, cggraph::Thumbnail> m_previews;
 	unsigned int m_revision = 0;
 };
 

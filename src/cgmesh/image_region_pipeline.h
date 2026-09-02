@@ -27,6 +27,8 @@
 #include "extrude_contours.h"      // ExtrudeContour, ExtrudedMeshBuilder
 #include "image_vectorization.h"   // VectorLayer
 
+class Material;
+
 class Img;
 
 // Wu is the one to use. Heckbert (median cut) is kept for comparison only: it
@@ -92,6 +94,17 @@ struct RegionQuantizeOptions
 bool image_to_quantized_image(const std::string& filename,
                               const RegionQuantizeOptions& opt,
                               Img& out);
+
+// Même chaîne, depuis une image DÉJÀ EN MÉMOIRE. Renvoie false si `src` est vide.
+//
+// C'est la forme dont a besoin tout appelant qui ne détient pas de fichier : un
+// nœud de graphe dont l'image arrive par un port, ou la cible WebAssembly, où les
+// octets viennent du JavaScript. Les deux entrées partagent le même corps, donc
+// le même ordre d'étapes — cf. quantize_in_place dans le .cpp.
+//
+// `src` et `out` peuvent désigner le même objet : la fonction travaille sur une
+// copie locale et n'écrit dans `out` qu'à la fin.
+bool quantize_image(const Img& src, const RegionQuantizeOptions& opt, Img& out);
 
 // Le sous-échantillonnage par vote majoritaire lui-même est une primitive
 // d'image : Img::resize(w, h, 3) (bornes de bloc exactes, départage déterministe
@@ -166,3 +179,47 @@ void region_append_base(ExtrudedMeshBuilder& builder, unsigned int materialId,
 
 void region_append_wall(ExtrudedMeshBuilder& builder, unsigned int materialId,
                         const RegionWorldTransform& w, const RegionFrameOptions& f);
+
+// ---------------------------------------------------------------------------
+//  Plaquage de l'image SOURCE sur le contenu
+// ---------------------------------------------------------------------------
+//
+// Les régions portent chacune un aplat, une couleur par entrée de palette. Ces
+// aplats SONT le résultat quand on lit la découpe ; ils ne le sont plus quand on
+// veut lire l'image elle-même, que la quantification a réduite à quelques tons.
+// Une texture rend l'image d'origine, en pleine résolution, sur une géométrie
+// qui reste grossière : c'est exactement ce qu'une couleur par sommet ne peut
+// pas faire, les capots étant de larges polygones plats dont les sommets sont
+// aux FRONTIÈRES des régions -- interpoler entre eux donnerait un dégradé, pas
+// une image.
+//
+// PROJECTION PLANAIRE XY, et rien de plus savant : `RegionMapping` a centré le
+// contenu sur l'origine et l'a cadré sur [-halfW, halfW] x [-halfH, halfH], donc
+// l'UV est la simple normalisation de la position. Le v est retourné, l'image
+// descendant quand le monde monte.
+//
+// ⚠ S'APPLIQUE À TOUT LE MAILLAGE, parois et cadre compris. Les parois héritent
+// de l'UV de leur empreinte au sol : verticalement constant, donc chaque paroi
+// prend la couleur de la frontière sur laquelle elle se dresse -- ce qui est
+// l'effet voulu. La base et le mur d'encadrement, eux, débordent du contenu :
+// leurs UV sortent de [0, 1], et c'est pourquoi ils gardent leur propre matériau
+// plutôt que de recevoir la texture (cf. image_to_pixel_blocks).
+//
+// UV PAR SOMMET et non par coin : ici l'UV est une fonction de la position, donc
+// deux faces partageant un sommet lui donnent la même. C'est le chemin rapide de
+// BuildPolygonRenderData, qui recopie m_texCoords tel quel.
+//
+// Renvoie false sur un maillage vide.
+bool region_apply_planar_uvs(Mesh& mesh, const RegionWorldTransform& w);
+
+// Matériau texturé portant une COPIE RGBA de `image`, prêt à être ajouté au
+// maillage par Material_Add. Le nom sert au diagnostic et à l'export.
+//
+// La copie est délibérée et non un oubli : MaterialTexture possède son image et
+// la libère avec lui, alors que celle qu'on lui donne appartient au graphe, qui
+// la partage entre tous les consommateurs du lien. `get_pixel` est utilisé plutôt
+// qu'une lecture directe de `data()` pour que la conversion vaille quel que soit
+// le format de l'entrée -- palettisée, en niveaux de gris ou RGB.
+//
+// Renvoie nullptr sur une image vide.
+Material* region_make_texture_material(const Img& image, const std::string& name);

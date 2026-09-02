@@ -10,11 +10,13 @@
 
 #include "../src/cggraph/core/evaluator.h"
 #include "../src/cggraph/nodes/catalog.h"
+#include "../src/cggraph/nodes/io/file_ref.h"
 #include "../src/cggraph/nodes/shapes/gothic_window.h"
 #include "../src/cggraph/nodes/shapes/parametric_shape.h"
 #include "../src/cggraph/nodes/shapes/profile.h"
 #include "../src/cggraph/nodes/text/load_font.h"
 #include "../src/cggraph/nodes/value_types.h"
+#include "../src/cgmesh/extrude_contours.h"
 #include "../src/cgmesh/mesh.h"
 #include "../src/cgmesh/parameterized_shapes.h"
 #include "../src/cgmesh/parametric_catalog.h"
@@ -51,6 +53,31 @@ std::shared_ptr<const Mesh> EvaluateShape (Node *node)
 	if (outputs.empty ())
 		return nullptr;
 	return outputs[0].Share<Mesh> (Types ().mesh);
+}
+
+// Empreinte grossiere d'un jeu de contours : le nombre total de points. Elle
+// suffit ici -- deux supports de FORMES differentes ne donnent pas le meme
+// nombre de points --, et elle ne depend d'aucune tolerance flottante.
+std::size_t PointCount (const std::vector<ExtrudeContour> &contours)
+{
+	std::size_t total = 0;
+	for (const ExtrudeContour &contour : contours)
+		total += contour.pts.size ();
+	return total;
+}
+
+float ZExtent (const Mesh &mesh)
+{
+	const std::vector<float> &v = mesh.GetVertices ();
+	if (v.size () < 3)
+		return 0.0f;
+	float lo = v[2], hi = v[2];
+	for (std::size_t i = 2; i < v.size (); i += 3)
+	{
+		lo = std::min (lo, v[i]);
+		hi = std::max (hi, v[i]);
+	}
+	return hi - lo;
 }
 
 std::vector<unsigned char> ReadAllBytes (const std::string &path)
@@ -159,8 +186,8 @@ TEST (TEST_cggraph_nodes_shapes, no_shape_node_wraps_a_form_that_reads_a_file)
 		EXPECT_EQ (node->GetDesc ().outputs[0].type, Types ().mesh) << binding.typeName;
 	}
 
-	// Et le seul noeud a ressource du catalogue -- le texte -- en a bien un.
-	std::unique_ptr<Node> text = MakeNode ("text.extrude");
+	// Et le noeud a ressource du catalogue -- le texte -- en a bien un.
+	std::unique_ptr<Node> text = MakeNode ("text.contours");
 	ASSERT_NE (text, nullptr);
 	EXPECT_FALSE (text->GetDesc ().inputs.empty ());
 }
@@ -539,8 +566,12 @@ TEST (TEST_cggraph_nodes_shapes, the_text_node_bounds_its_support_selector)
 	const NodeId fontId = graph.AddNode (MakeNode ("text.font.load"));
 	static_cast<LoadFontNode *> (graph.FindNode (fontId))->SetBytes (std::move (bytes));
 
-	const NodeId frame = graph.AddNode (MakeNode ("text.extrude"));
-	const NodeId overflow = graph.AddNode (MakeNode ("text.extrude"));
+	// Le support vit sur text.contours, PAS sur l'extrudeur : c'est un contour
+	// de plus, fondu aux lettres par la meme union 2D. On compare donc les
+	// contours, et non un maillage -- une etape de moins entre le reglage et ce
+	// que le cas observe.
+	const NodeId frame = graph.AddNode (MakeNode ("text.contours"));
+	const NodeId overflow = graph.AddNode (MakeNode ("text.contours"));
 	ASSERT_EQ (graph.Connect (fontId, 0, frame, 0), ConnectStatus::Ok);
 	ASSERT_EQ (graph.Connect (fontId, 0, overflow, 0), ConnectStatus::Ok);
 	for (NodeId id : { frame, overflow })
@@ -557,23 +588,24 @@ TEST (TEST_cggraph_nodes_shapes, the_text_node_bounds_its_support_selector)
 	ValueList outA, outB;
 	ASSERT_TRUE (evaluator.Evaluate (frame, outA, ctx).IsOk ());
 	ASSERT_TRUE (evaluator.Evaluate (overflow, outB, ctx).IsOk ());
-	std::shared_ptr<const Mesh> a = outA[0].Share<Mesh> (Types ().mesh);
-	std::shared_ptr<const Mesh> b = outB[0].Share<Mesh> (Types ().mesh);
+	typedef std::vector<ExtrudeContour> Contours;
+	std::shared_ptr<const Contours> a = outA[0].Share<Contours> (Types ().extrudeContours);
+	std::shared_ptr<const Contours> b = outB[0].Share<Contours> (Types ().extrudeContours);
 	ASSERT_NE (a, nullptr);
 	ASSERT_NE (b, nullptr);
-	EXPECT_EQ (a->GetNVertices (), b->GetNVertices ());
+	EXPECT_EQ (PointCount (*a), PointCount (*b));
 
-	// Controle positif : un support de forme differente ne rend pas le meme
-	// maillage, sans quoi l'egalite ci-dessus ne prouverait rien.
-	const NodeId plate = graph.AddNode (MakeNode ("text.extrude"));
+	// Controle positif : un support de forme differente ne rend pas les memes
+	// contours, sans quoi l'egalite ci-dessus ne prouverait rien.
+	const NodeId plate = graph.AddNode (MakeNode ("text.contours"));
 	ASSERT_EQ (graph.Connect (fontId, 0, plate, 0), ConnectStatus::Ok);
 	graph.FindNode (plate)->GetParams ().SetString ("text", "on");
 	graph.FindNode (plate)->GetParams ().SetInt ("support", 1);       // Plate
 	ValueList outC;
 	ASSERT_TRUE (evaluator.Evaluate (plate, outC, ctx).IsOk ());
-	std::shared_ptr<const Mesh> c = outC[0].Share<Mesh> (Types ().mesh);
+	std::shared_ptr<const Contours> c = outC[0].Share<Contours> (Types ().extrudeContours);
 	ASSERT_NE (c, nullptr);
-	EXPECT_NE (a->GetNVertices (), c->GetNVertices ());
+	EXPECT_NE (PointCount (*a), PointCount (*c));
 }
 
 TEST (TEST_cggraph_nodes_shapes, a_boolean_parameter_reaches_the_wrapped_body_too)
@@ -640,4 +672,95 @@ TEST (TEST_cggraph_nodes_shapes, all_five_profile_nodes_publish_a_usable_profile
 				<< want.typeName;
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+//  Le SECOND producteur de contours, et l'extrudeur qu'il PARTAGE avec le texte
+// ---------------------------------------------------------------------------
+
+TEST (TEST_cggraph_nodes_shapes, the_svg_producer_feeds_the_same_extruder_as_the_text_one)
+{
+	// C'EST LA RAISON D'ETRE du decoupage : shape.extrude ne sait pas d'ou
+	// viennent ses contours. Le cas le prouve en le branchant sur svg.contours,
+	// alors que les cas de texte le branchent sur text.contours -- le meme
+	// extrudeur, jamais recompile pour l'occasion.
+	Graph graph;
+	const NodeId fileId = graph.AddNode (MakeNode ("file.ref"));
+	ASSERT_NE (graph.FindNode (fileId), nullptr);
+	static_cast<FileRefNode *> (graph.FindNode (fileId))->SetPath ("./test/data/svg/square.svg");
+
+	const NodeId contours = graph.AddNode (MakeNode ("svg.contours"));
+	const NodeId extrude = graph.AddNode (MakeNode ("shape.extrude"));
+	ASSERT_NE (graph.FindNode (contours), nullptr);
+	ASSERT_NE (graph.FindNode (extrude), nullptr);
+	ASSERT_EQ (graph.Connect (fileId, 0, contours, 0), ConnectStatus::Ok);
+	ASSERT_EQ (graph.Connect (contours, 0, extrude, 0), ConnectStatus::Ok);
+
+	Evaluator evaluator (graph);
+	EvalContext ctx;
+	ValueList out;
+	const EvalResult result = evaluator.Evaluate (extrude, out, ctx);
+	ASSERT_EQ (result.status, EvalStatus::Ok) << result.detail;
+	std::shared_ptr<const Mesh> mesh = out[0].Share<Mesh> (Types ().mesh);
+	ASSERT_NE (mesh, nullptr);
+	EXPECT_GT (mesh->GetNVertices (), 0u);
+	EXPECT_GT (mesh->GetNFaces (), 0u);
+
+	// `depth` vit sur l'extrudeur et NULLE PART ailleurs : svg.contours n'expose
+	// pas `height`, qui serait un curseur sans effet. On verifie donc que c'est
+	// bien l'extrudeur qui decide de l'epaisseur.
+	EXPECT_EQ (graph.FindNode (contours)->GetParams ().Find ("height"), nullptr);
+
+	// Etendue en z mesuree sur les positions, et non par bbox() : celle-ci est
+	// une derivation MISE EN CACHE sans detection de peremption (cf. mesh.h),
+	// donc vide sur un maillage jamais passe par computebbox().
+	const float thin = ZExtent (*mesh);
+	graph.FindNode (extrude)->GetParams ().SetFloat ("depth", 2.0f);
+	ValueList thicker;
+	ASSERT_TRUE (evaluator.Evaluate (extrude, thicker, ctx).IsOk ());
+	std::shared_ptr<const Mesh> second = thicker[0].Share<Mesh> (Types ().mesh);
+	ASSERT_NE (second, nullptr);
+	EXPECT_GT (ZExtent (*second), thin);
+}
+
+TEST (TEST_cggraph_nodes_shapes, an_svg_hole_survives_the_flat_contour_list)
+{
+	// Une liste PLATE de contours ne transporte pas la regle de remplissage de
+	// chaque forme : svg.contours la resout en amont, par Clipper2. Sans cette
+	// passe, le creux du « a » de rose.svg se remplirait -- et le maillage aurait
+	// moins de sommets, pas plus.
+	Graph graph;
+	const NodeId fileId = graph.AddNode (MakeNode ("file.ref"));
+	static_cast<FileRefNode *> (graph.FindNode (fileId))->SetPath ("./test/data/svg/rose.svg");
+	const NodeId contours = graph.AddNode (MakeNode ("svg.contours"));
+	ASSERT_EQ (graph.Connect (fileId, 0, contours, 0), ConnectStatus::Ok);
+
+	Evaluator evaluator (graph);
+	EvalContext ctx;
+	ValueList out;
+	ASSERT_TRUE (evaluator.Evaluate (contours, out, ctx).IsOk ());
+	typedef std::vector<ExtrudeContour> Contours;
+	std::shared_ptr<const Contours> produced = out[0].Share<Contours> (Types ().extrudeContours);
+	ASSERT_NE (produced, nullptr);
+
+	// Plus d'un contour : les trous sont des contours a part entiere, et c'est
+	// exactement ce que la resolution en amont produit.
+	EXPECT_GT (produced->size (), 1u);
+	EXPECT_GT (PointCount (*produced), 0u);
+}
+
+// Un chemin qui ne mene nulle part est un ECHEC, pas un jeu de contours vide :
+// une forme vide se propagerait en silence jusqu'a un maillage nul.
+TEST (TEST_cggraph_nodes_shapes, the_svg_producer_refuses_a_path_that_leads_nowhere)
+{
+	Graph graph;
+	const NodeId fileId = graph.AddNode (MakeNode ("file.ref"));
+	static_cast<FileRefNode *> (graph.FindNode (fileId))->SetPath ("./test/data/svg/aucun_fichier.svg");
+	const NodeId contours = graph.AddNode (MakeNode ("svg.contours"));
+	ASSERT_EQ (graph.Connect (fileId, 0, contours, 0), ConnectStatus::Ok);
+
+	Evaluator evaluator (graph);
+	EvalContext ctx;
+	ValueList out;
+	EXPECT_FALSE (evaluator.Evaluate (contours, out, ctx).IsOk ());
 }

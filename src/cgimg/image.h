@@ -61,6 +61,22 @@ public:
 	int load (char const *filename, char const *path = nullptr);
 	int save (char const *filename);
 
+	// Decodage depuis un buffer EN MEMOIRE, sans passer par le systeme de
+	// fichiers. Rend 0 en cas de succes, -1 sinon ; l'image est laissee vide en
+	// cas d'echec (comme load, qui repart de zero avant de decoder).
+	//
+	// Existe pour les appelants qui n'ONT PAS de fichier : sous WebAssembly les
+	// octets arrivent du JavaScript, et le detour par MEMFS que maker pratique
+	// aujourd'hui (/tmp/maker_img_N, gardes vivants pour la duree de la page)
+	// laisse derriere lui des fichiers que personne ne supprime. C'est aussi ce
+	// que reclame un noeud SOURCE de cggraph, sur le modele de Font::loadFromMemory.
+	//
+	// Le format est reconnu au CONTENU (nombres magiques), pas a l'extension :
+	// il n'y a pas de nom de fichier ici. La couverture est donc plus large que
+	// celle de load -- PNG, JPEG, BMP, TGA, PNM, GIF, PSD, HDR, PIC -- et ne
+	// depend pas de CGIMG_WITH_PNG / CGIMG_WITH_JPG.
+	int load_from_memory (const unsigned char *data, size_t size);
+
 	// getters / setters
 	inline unsigned int width (void) const { return m_iWidth; };
 	inline unsigned int height (void) const { return m_iHeight; };

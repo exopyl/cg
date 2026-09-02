@@ -1,0 +1,429 @@
+{
+  "title": "Image to puzzle",
+  "subtitle": "quantification · vectorisation · extrusion — piloté par un graphe",
+  "_comment": [
+    "GABARIT DE PAGE. Cf. text3d.json pour le contrat complet.",
+    "",
+    "LE GRAPHE DIT CE QUE LA PAGE FAISAIT EN UN SEUL APPEL. image_to_relief()",
+    "enchaînait quantification et extrusion derrière une struct d'options unique ;",
+    "ici les deux étages sont deux nœuds, et le premier — img.quantize — est",
+    "EXACTEMENT celui des blocs pixelisés. La seule chose qui sépare les deux",
+    "pages est son paramètre `pixelWidth` : 0 ici, 64 là.",
+    "",
+    "⚠ CONSÉQUENCE À CONNAÎTRE. Les paramètres de quantification appartiennent",
+    "désormais au nœud 2 et NON au nœud 3 : les surcharges d'image de",
+    "image_to_relief() ne les lisent pas (cf. image_relief.h). Les exposer sur",
+    "l'extrudeur donnerait des curseurs sans effet."
+  ],
+  "output": 3,
+  "sources": [
+    {
+      "node": 4,
+      "label": "Image",
+      "accept": "image/*,.png,.jpg,.jpeg,.bmp,.tga,.ppm,.pgm",
+      "default": "data/joconde.jpg",
+      "hint": "Le fichier est désigné par un nœud file.ref, dont le chemin EST sérialisé : un document enregistré depuis cette page sait quoi relire. Le format est reconnu au CONTENU et non à l'extension : PNG, JPEG, BMP, TGA, PNM."
+    }
+  ],
+  "expose": [
+    {
+      "node": 3,
+      "param": "useTexture",
+      "label": "Couleurs de l'image",
+      "type": "bool",
+      "hint": "Plaque la photo d'origine sur les couches au lieu des aplats quantifiés. La géométrie ne change pas : c'est toujours la quantification qui découpe les couches et fixe leurs hauteurs."
+    },
+    {
+      "node": 2,
+      "param": "maxColors",
+      "label": "Couleurs",
+      "type": "int",
+      "min": 2,
+      "max": 32,
+      "step": 1,
+      "hint": "Nombre maximal d'entrées de palette. Chacune devient une région, donc un matériau."
+    },
+    {
+      "node": 2,
+      "param": "algo",
+      "label": "Algorithme",
+      "type": "enum",
+      "choices": [
+        "Wu",
+        "Heckbert"
+      ],
+      "hint": "Wu est celui à utiliser ; Heckbert n'est gardé que pour comparaison (erreur mesurée 4× pire à 4 couleurs)."
+    },
+    {
+      "node": 2,
+      "param": "workingMaxDim",
+      "label": "Résolution de travail",
+      "type": "int",
+      "min": 128,
+      "max": 2048,
+      "step": 32,
+      "hint": "L'image est réduite à cette dimension AVANT tout traitement. Les deux étages coûteux y sont linéaires."
+    },
+    {
+      "node": 2,
+      "param": "preSmoothPasses",
+      "label": "Lissage préalable",
+      "type": "int",
+      "min": 0,
+      "max": 4,
+      "step": 1,
+      "hint": "Filtrage bilatéral avant quantification : c'est le réglage de fidélité, il traite la cause (les bords anticrénelés) et non le symptôme."
+    },
+    {
+      "node": 2,
+      "param": "refineIterations",
+      "label": "Raffinement de palette",
+      "type": "int",
+      "min": 0,
+      "max": 8,
+      "step": 1,
+      "hint": "Itérations de Lloyd. Elles effacent l'écart entre Wu et Heckbert."
+    },
+    {
+      "node": 2,
+      "param": "despecklePasses",
+      "label": "Anti-mouchetis",
+      "type": "int",
+      "min": 0,
+      "max": 4,
+      "step": 1,
+      "hint": "Vote majoritaire 3×3 sur l'image de labels. C'est ce qui efface le tramage d'un pixel de large."
+    },
+    {
+      "node": 2,
+      "param": "minRegionArea",
+      "label": "Aire minimale de région",
+      "type": "int",
+      "min": 0,
+      "max": 200,
+      "step": 1,
+      "hint": "En pixels de l'image de travail. Absorbe les taches compactes que la fenêtre 3×3 ne peut pas emporter."
+    },
+    {
+      "node": 3,
+      "param": "simplifyErr",
+      "label": "Simplification des contours",
+      "type": "float",
+      "min": 0.0,
+      "max": 8.0,
+      "step": 0.1
+    },
+    {
+      "node": 3,
+      "param": "shrink",
+      "label": "Retrait des régions",
+      "type": "float",
+      "min": 0.0,
+      "max": 6.0,
+      "step": 0.1,
+      "hint": "Érosion en pixels. Creuse un sillon de 2× cette valeur entre régions voisines : le jeu d'assemblage à l'impression."
+    },
+    {
+      "node": 3,
+      "param": "fitSize",
+      "label": "Taille",
+      "type": "float",
+      "min": 0.2,
+      "max": 10.0,
+      "step": 0.1
+    },
+    {
+      "node": 3,
+      "param": "blockHeight",
+      "label": "Hauteur des blocs",
+      "type": "float",
+      "min": 0.01,
+      "max": 1.0,
+      "step": 0.01
+    },
+    {
+      "node": 3,
+      "param": "baseThickness",
+      "label": "Épaisseur du socle",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01
+    },
+    {
+      "node": 3,
+      "param": "margin",
+      "label": "Marge",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01
+    },
+    {
+      "node": 3,
+      "param": "wallThickness",
+      "label": "Épaisseur du mur",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.5,
+      "step": 0.01
+    },
+    {
+      "node": 3,
+      "param": "wallHeight",
+      "label": "Hauteur du mur",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01
+    },
+    {
+      "node": 3,
+      "param": "emitBase",
+      "label": "Socle",
+      "type": "bool"
+    },
+    {
+      "node": 3,
+      "param": "emitWall",
+      "label": "Mur périmétrique",
+      "type": "bool"
+    },
+    {
+      "node": 3,
+      "param": "emitInternalWalls",
+      "label": "Murs internes",
+      "type": "bool",
+      "hint": "Décoché : les murs coïncidents entre blocs adjacents sont supprimés. Maillage plus léger, mais les blocs ne sont plus des solides fermés pris isolément."
+    }
+  ],
+  "graph": {
+    "format": "cggraph",
+    "formatVersion": 1,
+    "nodes": [
+      {
+        "id": 4,
+        "type": "file.ref",
+        "version": 1,
+        "x": -220.0,
+        "y": 160.0,
+        "params": [
+          {
+            "name": "path",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "string",
+            "value": ""
+          },
+          {
+            "name": "name",
+            "role": "nonSemantic",
+            "kind": "literal",
+            "type": "string",
+            "value": "sans nom"
+          }
+        ]
+      },
+      {
+        "id": 1,
+        "type": "img.io.load",
+        "version": 1,
+        "x": 40.0,
+        "y": 160.0,
+        "params": [
+          {
+            "name": "name",
+            "role": "nonSemantic",
+            "kind": "literal",
+            "type": "string",
+            "value": "sans nom"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "type": "img.quantize",
+        "version": 1,
+        "x": 300.0,
+        "y": 160.0,
+        "params": [
+          {
+            "name": "maxColors",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 16
+          },
+          {
+            "name": "algo",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 0
+          },
+          {
+            "name": "preSmoothPasses",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 1
+          },
+          {
+            "name": "refineIterations",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 3
+          },
+          {
+            "name": "despecklePasses",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 1
+          },
+          {
+            "name": "minRegionArea",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 12
+          },
+          {
+            "name": "pixelWidth",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 0
+          },
+          {
+            "name": "workingMaxDim",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 512
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "type": "img.relief",
+        "version": 1,
+        "x": 580.0,
+        "y": 160.0,
+        "params": [
+          {
+            "name": "useTexture",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "bool",
+            "value": false
+          },
+          {
+            "name": "simplifyErr",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 1.0
+          },
+          {
+            "name": "shrink",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.0
+          },
+          {
+            "name": "fitSize",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 1.0
+          },
+          {
+            "name": "blockHeight",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.1
+          },
+          {
+            "name": "baseThickness",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.05
+          },
+          {
+            "name": "margin",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.05
+          },
+          {
+            "name": "wallThickness",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.03
+          },
+          {
+            "name": "wallHeight",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.1
+          },
+          {
+            "name": "emitBase",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "bool",
+            "value": true
+          },
+          {
+            "name": "emitWall",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "bool",
+            "value": true
+          },
+          {
+            "name": "emitInternalWalls",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "bool",
+            "value": true
+          }
+        ]
+      }
+    ],
+    "links": [
+      {
+        "from": 4,
+        "fromPort": 0,
+        "to": 1,
+        "toPort": 0
+      },
+      {
+        "from": 1,
+        "fromPort": 0,
+        "to": 2,
+        "toPort": 0
+      },
+      {
+        "from": 2,
+        "fromPort": 0,
+        "to": 3,
+        "toPort": 0
+      },
+      {
+        "from": 1,
+        "fromPort": 0,
+        "to": 3,
+        "toPort": 1
+      }
+    ]
+  }
+}

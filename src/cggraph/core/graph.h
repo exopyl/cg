@@ -106,6 +106,25 @@ public:
 	bool SetNodeSubgraph (NodeId id, const std::string &reference);
 	const std::string &GetNodeSubgraph (NodeId id) const;
 
+	// DOCUMENT EMBARQUE : le corps delegue porte DANS le document parent, au
+	// lieu d'etre designe par un chemin. Les deux formes coexistent et
+	// s'excluent -- poser l'une efface l'autre --, parce qu'un noeud qui
+	// delegue a la fois un fichier et un texte n'aurait pas de sens et qu'il
+	// faudrait alors ecrire lequel gagne.
+	//
+	// Ce que l'embarque apporte : un document AUTONOME, qui ne depend d'aucun
+	// systeme de fichiers -- decisif pour l'hote web, ou le corps devait etre
+	// depose a la main dans celui du worker -- et dont l'identite est exacte,
+	// le contenu etant sa propre reference.
+	//
+	// Ce que le chemin garde : le PARTAGE. Plusieurs noeuds delegant le meme
+	// fichier se corrigent en un seul endroit ; embarque, le corps est duplique
+	// dans chaque document qui l'utilise.
+	//
+	// Chaine vide = pas de document embarque. Faux si le noeud est inconnu.
+	bool SetNodeSubgraphDocument (NodeId id, const std::string &document);
+	const std::string &GetNodeSubgraphDocument (NodeId id) const;
+
 	// Lien qui alimente une entree, nullptr si elle est libre.
 	const Link *FindInputLink (NodeId to, PortIdx toPort) const;
 
@@ -143,6 +162,7 @@ private:
 		float x = 0.0f;
 		float y = 0.0f;
 		std::string subgraph;
+		std::string subgraphDocument;
 	};
 
 	const Slot *FindSlot (NodeId id) const;

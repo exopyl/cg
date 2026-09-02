@@ -14,10 +14,22 @@
 #include <deque>
 #include <memory>
 #include <string>
+#include <vector>
 #include <unordered_map>
 
 namespace cggraph
 {
+
+// Vignette RGBA8 d'une valeur, pour l'interface. Le moteur ne dessine rien : il
+// se contente de transporter des octets qu'un hote saura televerser.
+struct Thumbnail
+{
+	int width = 0;
+	int height = 0;
+	std::vector<unsigned char> rgba;   // width * height * 4, sans padding
+
+	bool IsEmpty () const { return width <= 0 || height <= 0 || rgba.empty (); }
+};
 
 struct TypeDesc
 {
@@ -37,6 +49,17 @@ struct TypeDesc
 
 	// Nul si le type ne sait pas se mesurer ; le cache lit alors 0.
 	std::size_t (*sizeHint) (const void *value) = nullptr;
+
+	// VIGNETTE, optionnelle. Nul quand le type n'a rien de visuel a montrer --
+	// un chemin, une selection d'indices -- et c'est le cas le plus courant.
+	//
+	// C'est le TYPE qui sait se representer, jamais l'interface : le canvas
+	// demande, il ne connait aucun domaine. Meme partage que `clone` et
+	// `sizeHint`.
+	//
+	// `maxSide` borne le plus grand cote ; l'implantation reste libre de rendre
+	// plus petit. Faux si la valeur n'a rien donne.
+	bool (*preview) (const void *value, int maxSide, Thumbnail &out) = nullptr;
 
 	Mutability mutability = Immutable;
 };

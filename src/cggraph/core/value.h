@@ -56,6 +56,19 @@ public:
 		return std::static_pointer_cast<const T> (m_payload);
 	}
 
+	// Vignette de cette valeur, quand son type sait en donner une. Faux sinon --
+	// ce qui est le cas le plus courant, et pas une lacune.
+	//
+	// Meme forme que GetSizeHint : c'est la VALEUR qui appelle le crochet, la
+	// charge utile restant privee. Un accesseur brut la rendrait publique et
+	// ouvrirait la porte au transtypage muet que Get<T> existe pour empecher.
+	bool GetThumbnail (int maxSide, Thumbnail &out) const
+	{
+		if (m_type == nullptr || m_payload == nullptr || m_type->preview == nullptr)
+			return false;
+		return m_type->preview (m_payload.get (), maxSide, out);
+	}
+
 	// 0 quand le type ne sait pas se mesurer -- un cache borne doit traiter ce
 	// cas, non l'interdire.
 	std::size_t GetSizeHint () const

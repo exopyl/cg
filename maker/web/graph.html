@@ -11,8 +11,20 @@
        montage de shell.js ne s'y applique. */
     body { display: flex; height: 100vh; margin: 0; }
     #panel { width: 20rem; overflow: auto; padding: .75rem; box-sizing: border-box; }
-    #stage { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    #stage { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
     #view { flex: 1; width: 100%; display: block; background: #16181d; outline: none; }
+
+    /* SEPARATEUR. Un element du DOM par-dessus le canvas, et non un widget
+       dessine dedans : le glissement est un geste du navigateur, qui le gere
+       mieux qu'ImGui a travers un pont de messages, et il reste saisissable
+       meme quand le worker est occupe a calculer. Il ne fait que RAPPORTER une
+       fraction ; le worker en tire le viewport de la scene et le C++ la
+       disposition de ses panneaux. */
+    #split { position: absolute; top: 0; bottom: 8rem; width: 9px; margin-left: -4px;
+             cursor: col-resize; z-index: 5; touch-action: none; }
+    #split::before { content: ""; position: absolute; top: 0; bottom: 0; left: 4px;
+                     width: 1px; background: #3a3f4a; }
+    #split:hover::before, #split.drag::before { background: #5aa2ff; width: 2px; }
     #log { height: 8rem; overflow: auto; font: 11px/1.45 ui-monospace, monospace;
            white-space: pre-wrap; padding: .5rem; }
     .row { display: flex; gap: .25rem; flex-wrap: wrap; margin: .35rem 0; }
@@ -21,50 +33,49 @@
     kbd { font: 11px ui-monospace, monospace; border: 1px solid #555; border-radius: 3px;
           padding: 0 .25rem; }
   </style>
+  <style>
+    /* La barre remplace la colonne : une ligne, pas un tiers de l'ecran. */
+    body { display: flex; flex-direction: column; height: 100vh; margin: 0; }
+    #bar { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+           padding: .35rem .6rem; border-bottom: 1px solid #2a2d33; font-size: .82rem; }
+    #bar .brand { font-weight: 600; opacity: .85; }
+    #bar .stat { opacity: .7; }
+    #bar .pick { display: inline-flex; align-items: center; gap: .3rem; opacity: .85; }
+    #bar .pick input[type=file] { width: 8.5rem; font-size: .75rem; }
+    #stage { flex: 1 1 auto; position: relative; min-height: 0; }
+  </style>
 </head>
 <body>
-  <aside id="panel">
-    <h1>Graphe</h1>
-    <p>
-      Le module de cette page vit dans un <strong>Web Worker</strong>, qui possède
-      aussi le rendu : le canvas lui est transféré. L'éditeur nodal y est dessiné
-      par ImGui, et les gestes de la souris lui sont routés par messages.
-    </p>
-    <p>
-      Battements du thread UI : <strong id="beat">0</strong> — ils continuent
-      pendant un calcul long. Frames rendues : <strong id="frames">0</strong>.
-    </p>
+  <!--
+    PAS DE PANNEAU LATERAL, et UN SEUL CANVAS pour deux volets : l'editeur nodal
+    a gauche, la vue 3D a droite, separes par une poignee que l'on glisse. Un
+    seul canvas parce qu'un seul contexte WebGL2 -- le C++ et le JS y dessinent
+    tous deux, et le navigateur refuserait deux contextes sur un meme canvas ;
+    la separation se fait donc au viewport, pas au DOM.
 
-    <h2>Document</h2>
-    <div id="summary">—</div>
+    Ce qui restait utile -- les entrees de fichier, les bascules, l'export -- tient
+    dans la barre ci-dessous. Le reste (mode d'emploi, compteurs de frames) a ete
+    retire : c'etait de la documentation, pas des commandes.
+  -->
+  <header id="bar">
+    <span class="brand"><a href="./index.html">← maker</a> · Graphe</span>
+    <span id="summary" class="stat">—</span>
 
-    <h2>Édition</h2>
-    <p>
-      Tout se fait <strong>dans le canvas</strong> : la palette crée les nœuds,
-      un lien se tire d'une sortie vers une entrée, <kbd>Suppr</kbd> retire ce qui
-      est sélectionné, et l'inspecteur règle les paramètres puis lance le calcul.
-    </p>
+    <label class="pick">ouvrir un document <input type="file" id="open" accept=".json,application/json"></label>
 
-    <h2>Fichier</h2>
-    <input type="file" id="file">
+    <button id="overlay">masquer l'éditeur</button>
+    <button id="export">exporter</button>
+    <button id="stats">mémoire</button>
+    <button id="reset">vider</button>
 
-    <h2>Outils</h2>
-    <div class="row">
-      <button id="overlay">masquer l'éditeur</button>
-      <button id="stats">mémoire</button>
-    </div>
-    <div class="row">
-      <button id="export">exporter le document</button>
-      <button id="reset">vider</button>
-    </div>
-    <div class="row">
-      <label for="open">ouvrir un document</label>
-      <input type="file" id="open" accept=".json,application/json">
-    </div>
-  </aside>
+    <!-- Conserves parce que le JS les ecrit, mais hors du chemin de l'oeil :
+         ils mesuraient la vivacite du thread pendant un calcul long. -->
+    <span class="stat" hidden><b id="beat">0</b>/<b id="frames">0</b></span>
+  </header>
 
   <main id="stage">
     <canvas id="view" tabindex="0"></canvas>
+    <div id="split" title="glisser pour partager l'espace"></div>
     <div id="log"></div>
   </main>
 

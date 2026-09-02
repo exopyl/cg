@@ -2,7 +2,9 @@
 
 #include <utility>
 
+#include "../core/serialize.h"
 #include "../nodes/catalog.h"
+#include "../nodes/catalog_factory.h"
 
 namespace cggraph_ui
 {
@@ -13,6 +15,58 @@ EditorModel::EditorModel (EvalMode mode) : m_driver (MakeEvalDriver (m_graph, mo
 
 EditorModel::EditorModel (const DriverFactory &makeDriver) : m_driver (makeDriver (m_graph))
 {
+}
+
+std::unique_ptr<EditorModel> EditorModel::OpenDocument (const std::string &path,
+                                                        std::string &detail)
+{
+	detail.clear ();
+	if (path.empty ())
+	{
+		detail = "reference vide";
+		return nullptr;
+	}
+
+	std::unique_ptr<EditorModel> model (new EditorModel ());
+	const cggraph_nodes::CatalogFactory factory;
+	const cggraph::LoadResult result =
+		cggraph::LoadGraphFromFile (path, factory, model->GetGraph ());
+	if (!result.IsOk ())
+	{
+		// Le statut, et le detail SEULEMENT s'il ajoute quelque chose. Sur un
+		// fichier illisible LoadGraph nomme le chemin, que l'appelant vient de
+		// passer : le repeter donnerait « repeat_body.json : fichier illisible :
+		// repeat_body.json ».
+		detail = std::string (cggraph::ToString (result.status));
+		if (!result.detail.empty () && result.detail != path)
+			detail += " : " + result.detail;
+		return nullptr;
+	}
+	return model;
+}
+
+std::unique_ptr<EditorModel> EditorModel::OpenDocumentText (const std::string &document,
+                                                            std::string &detail)
+{
+	detail.clear ();
+	if (document.empty ())
+	{
+		detail = "document vide";
+		return nullptr;
+	}
+
+	std::unique_ptr<EditorModel> model (new EditorModel ());
+	const cggraph_nodes::CatalogFactory factory;
+	const cggraph::LoadResult result =
+		cggraph::LoadGraph (document, factory, model->GetGraph ());
+	if (!result.IsOk ())
+	{
+		detail = std::string (cggraph::ToString (result.status));
+		if (!result.detail.empty ())
+			detail += " : " + result.detail;
+		return nullptr;
+	}
+	return model;
 }
 
 cggraph::NodeId EditorModel::AddNode (const std::string &typeName, float x, float y)
@@ -105,6 +159,13 @@ bool EditorModel::Poll ()
 	const EvalDriver::Completed &last = ready.back ();
 	m_lastResult = last.result;
 	m_outputs = last.outputs;
+	// Le noeud QUI a ete calcule -- `last.result.node` ne nomme qu'un refus, et
+	// vaut kInvalidNodeId quand tout s'est bien passe.
+	m_lastEvaluated = last.node;
+	// FUSION et non remplacement : cf. m_previews dans l'en-tete.
+	for (std::map<cggraph::NodeId, cggraph::Thumbnail>::const_iterator it = last.previews.begin ();
+	     it != last.previews.end (); ++it)
+		m_previews[it->first] = it->second;
 	++m_revision;
 	return true;
 }
@@ -134,6 +195,17 @@ void EditorModel::Pump ()
 bool EditorModel::SetProgressSink (cggraph::EvalContext::ProgressSink sink)
 {
 	return m_driver->SetProgressSink (std::move (sink));
+}
+
+} // namespace cggraph_ui
+
+namespace cggraph_ui
+{
+
+const cggraph::Thumbnail *EditorModel::GetPreview (cggraph::NodeId id) const
+{
+	std::map<cggraph::NodeId, cggraph::Thumbnail>::const_iterator it = m_previews.find (id);
+	return it == m_previews.end () ? nullptr : &it->second;
 }
 
 } // namespace cggraph_ui

@@ -32,15 +32,14 @@ struct ReliefContent
 	RegionWorldTransform w;
 };
 
-// Load, quantize, vectorize, and map every contour to world XY.
-bool buildContent(const std::string& filename,
-                  const ImageReliefOptions& opt,
-                  ReliefContent& content)
+// Etiquette de source pour les diagnostics quand l'image n'a pas de nom de
+// fichier -- elle est arrivee par un port ou par un buffer.
+const char* const kMemorySource = "<image en memoire>";
+
+// Options de quantification derivees du relief. Le relief ne pixelise pas
+// (pixelWidth a 0) ; il PRE-REDUIT en revanche (workingMaxDim).
+RegionQuantizeOptions reliefQuantizeOptions(const ImageReliefOptions& opt)
 {
-	// Chargement, lissage, quantification, raffinement et anti-mouchetis : chaine
-	// partagee avec image_pixel_blocks (image_region_pipeline.h). Le relief ne
-	// pixelise pas -> pixelWidth a 0. Il PRE-REDUIT en revanche (workingMaxDim,
-	// cf. ImageReliefOptions).
 	RegionQuantizeOptions qo;
 	qo.maxColors        = opt.maxColors;
 	qo.algo             = opt.algo;
@@ -50,11 +49,19 @@ bool buildContent(const std::string& filename,
 	qo.minRegionArea    = opt.minRegionArea;
 	qo.pixelWidth       = 0;
 	qo.workingMaxDim    = opt.workingMaxDim;
+	return qo;
+}
 
-	Img img;
-	if (!image_to_quantized_image(filename, qo, img))
-		return false;
-
+// Vectorize an ALREADY QUANTIZED raster and map every contour to world XY.
+//
+// L'image est prise telle quelle : ni lissage, ni quantification, ni
+// anti-mouchetis. Les champs correspondants de `opt` ne sont donc PAS lus ici --
+// c'est l'appelant qui a decide de la palette, en amont.
+bool buildContent(Img& img,
+                  const ImageReliefOptions& opt,
+                  ReliefContent& content,
+                  const char* source)
+{
 	// get_palette() returns the Img-owned palette for a palettized image and a
 	// FRESH heap one otherwise (which is our case here: quantization works on the
 	// RGBA buffer). Its colours are collected in raster-scan order, the very
@@ -65,7 +72,7 @@ bool buildContent(const std::string& filename,
 	if (!pPalette || pPalette->NColors() == 0)
 	{
 		if (!paletteOwnedByImg) delete pPalette;
-		std::fprintf(stderr, "image_relief: %s has no colour\n", filename.c_str());
+		std::fprintf(stderr, "image_relief: %s has no colour\n", source);
 		return false;
 	}
 
@@ -76,14 +83,14 @@ bool buildContent(const std::string& filename,
 		delete pPalette;
 	if (!ok)
 	{
-		std::fprintf(stderr, "image_relief: vectorization failed on %s\n", filename.c_str());
+		std::fprintf(stderr, "image_relief: vectorization failed on %s\n", source);
 		return false;
 	}
 
 	content.layers = rtv.GetLayers();
 	if (content.layers.empty())
 	{
-		std::fprintf(stderr, "image_relief: %s vectorized to no region\n", filename.c_str());
+		std::fprintf(stderr, "image_relief: %s vectorized to no region\n", source);
 		return false;
 	}
 
@@ -93,7 +100,7 @@ bool buildContent(const std::string& filename,
 	{
 		std::fprintf(stderr,
 		             "image_relief: %s has no region left (shrink=%g px)\n",
-		             filename.c_str(), opt.shrink);
+		             source, opt.shrink);
 		return false;
 	}
 
@@ -220,18 +227,31 @@ Material* makeColorMaterial(Color color, const std::string& name)
 	return mat;
 }
 
-} // namespace
-
-// ============================================================================
-//  Public entry points
-// ============================================================================
-
-Mesh* image_to_relief(const std::string& filename, const ImageReliefOptions& opt)
+// Contenu depuis un FICHIER : quantification puis vectorisation.
+bool buildContentFromFile(const std::string& filename,
+                          const ImageReliefOptions& opt,
+                          ReliefContent& content)
 {
-	ReliefContent content;
-	if (!buildContent(filename, opt, content))
-		return nullptr;
+	// Chargement, lissage, quantification, raffinement et anti-mouchetis : chaine
+	// partagee avec image_pixel_blocks (image_region_pipeline.h).
+	Img img;
+	if (!image_to_quantized_image(filename, reliefQuantizeOptions(opt), img))
+		return false;
 
+	return buildContent(img, opt, content, filename.c_str());
+}
+
+// ============================================================================
+//  Corps communs -- contenu deja construit -> maillage(s)
+// ============================================================================
+//
+// Extraits pour que les entrees « depuis un fichier » et « depuis une image »
+// partagent tout ce qui suit la quantification. `source` ne sert qu'aux
+// diagnostics.
+
+Mesh* reliefFromContent(const ReliefContent& content, const ImageReliefOptions& opt,
+                        const char* source, const Img* texture)
+{
 	std::map<EdgeKey, int> internalEdges;
 	const std::map<EdgeKey, int>* pInternalEdges = nullptr;
 	if (!opt.emitInternalWalls)
@@ -245,27 +265,52 @@ Mesh* image_to_relief(const std::string& filename, const ImageReliefOptions& opt
 	// then wall.
 	const unsigned int nLayers = (unsigned int)content.layers.size();
 
+	// TEXTURE : toutes les couches partagent le materiau 0, celui de l'image.
+	// Les couches restent des couches -- c'est toujours la quantification qui
+	// decide de leur decoupe et de leur hauteur --, seule leur couleur change de
+	// source. Une couleur par couche n'aurait plus de sens : elles portent
+	// toutes la meme texture.
+	const bool textured = texture != nullptr;
+	const unsigned int nColorMaterials = textured ? 1u : nLayers;
+
 	ExtrudedMeshBuilder builder;
 	for (unsigned int i = 0; i < nLayers; ++i)
-		appendLayer(builder, content.layers[i], i, opt, pInternalEdges, content.w.quantScale);
+		appendLayer(builder, content.layers[i], textured ? 0u : i, opt, pInternalEdges,
+		            content.w.quantScale);
 	// Les ids de materiau suivent l'ordre d'enregistrement plus bas ; un cadre
 	// desactive ne consomme donc pas son id.
-	unsigned int nextMaterial = nLayers;
+	unsigned int nextMaterial = nColorMaterials;
 	if (opt.emitBase) appendBase(builder, nextMaterial++, content, opt);
 	if (opt.emitWall) appendWall(builder, nextMaterial++, content, opt);
 
 	Mesh* m = builder.Build();
 	if (!m)
 	{
-		std::fprintf(stderr, "image_relief: %s produced no geometry\n", filename.c_str());
+		std::fprintf(stderr, "image_relief: %s produced no geometry\n", source);
 		return nullptr;
 	}
 
 	char name[32];
-	for (unsigned int i = 0; i < nLayers; ++i)
+	if (textured)
 	{
-		std::snprintf(name, sizeof(name), "color_%02u", i);
-		m->Material_Add(makeColorMaterial(content.layers[i].color, name));
+		// Echec de la texture : on retombe sur l'aplat de la premiere couche
+		// plutot que de laisser les faces pointer sur un materiau absent.
+		Material* mat = region_make_texture_material(*texture, "source");
+		if (mat != nullptr) m->Material_Add(mat);
+		else if (nLayers > 0) m->Material_Add(makeColorMaterial(content.layers[0].color, "color_00"));
+		else m->Material_Add(makeColorMaterial(opt.baseColor, "color_00"));
+
+		// UV sur tout le maillage. La base et le mur debordent du contenu, mais
+		// gardent leur materiau : leurs UV hors [0, 1] ne sont pas echantillonnes.
+		region_apply_planar_uvs(*m, content.w);
+	}
+	else
+	{
+		for (unsigned int i = 0; i < nLayers; ++i)
+		{
+			std::snprintf(name, sizeof(name), "color_%02u", i);
+			m->Material_Add(makeColorMaterial(content.layers[i].color, name));
+		}
 	}
 	if (opt.emitBase) m->Material_Add(makeColorMaterial(opt.baseColor, "base"));
 	if (opt.emitWall) m->Material_Add(makeColorMaterial(opt.wallColor, "wall"));
@@ -274,14 +319,11 @@ Mesh* image_to_relief(const std::string& filename, const ImageReliefOptions& opt
 	return m;
 }
 
-std::vector<Mesh*> image_to_relief_per_color(const std::string& filename,
-                                             const ImageReliefOptions& opt)
+std::vector<Mesh*> reliefLayersFromContent(const ReliefContent& content,
+                                           const ImageReliefOptions& opt,
+                                           const char* source)
 {
 	std::vector<Mesh*> meshes;
-
-	ReliefContent content;
-	if (!buildContent(filename, opt, content))
-		return meshes;
 
 	std::map<EdgeKey, int> internalEdges;
 	const std::map<EdgeKey, int>* pInternalEdges = nullptr;
@@ -305,7 +347,7 @@ std::vector<Mesh*> image_to_relief_per_color(const std::string& filename,
 		{
 			std::fprintf(stderr,
 			             "image_relief: %s layer %zu tessellated to nothing, omitted\n",
-			             filename.c_str(), i);
+			             source, i);
 			continue;
 		}
 		std::snprintf(name, sizeof(name), "color_%02zu", i);
@@ -335,11 +377,81 @@ std::vector<Mesh*> image_to_relief_per_color(const std::string& filename,
 	    (opt.emitWall && !appendFrame(appendWall, opt.wallColor, "wall")))
 	{
 		std::fprintf(stderr, "image_relief: %s failed to build the base/wall frame\n",
-		             filename.c_str());
+		             source);
 		for (Mesh* m : meshes) delete m;   // pas de demi-resultat
 		meshes.clear();
 		return meshes;
 	}
 
 	return meshes;
+}
+
+} // namespace
+
+// ============================================================================
+//  Public entry points
+// ============================================================================
+//
+// Quatre entrees pour deux operations, chacune declinee DEPUIS UN FICHIER et
+// DEPUIS UNE IMAGE DEJA QUANTIFIEE.
+//
+// La seconde forme existe pour les appelants qui ne detiennent pas de fichier et
+// qui ont deja decide de la palette en amont : un noeud de graphe dont l'image
+// arrive par un port, la cible WebAssembly ou les octets viennent du JavaScript.
+// Elle NE QUANTIFIE PAS -- voir la note de image_relief.h sur les champs de `opt`
+// qu'elle ne lit pas.
+
+Mesh* image_to_relief(const std::string& filename, const ImageReliefOptions& opt,
+                      bool textureFromSource)
+{
+	ReliefContent content;
+	if (!buildContentFromFile(filename, opt, content))
+		return nullptr;
+
+	// Seconde lecture du fichier : la premiere n'a rendu que l'image QUANTIFIEE,
+	// dont les aplats sont ce qu'on cherche a depasser. Img::load rend 0 en
+	// succes ; une texture illisible retombe sur les aplats.
+	Img sourceImg;
+	if (textureFromSource && sourceImg.load(filename.c_str()) == 0
+	    && sourceImg.width() > 0 && sourceImg.height() > 0)
+		return reliefFromContent(content, opt, filename.c_str(), &sourceImg);
+
+	return reliefFromContent(content, opt, filename.c_str(), nullptr);
+}
+
+Mesh* image_to_relief(const Img& quantized, const ImageReliefOptions& opt,
+                      const Img* texture)
+{
+	// COPIE DELIBEREE. CLitRasterToVector::Vectorize palettise son entree, donc la
+	// MODIFIE. Une image qui arrive ici par un lien de graphe est partagee entre
+	// tous les consommateurs de ce lien : la muter les corromprait tous.
+	Img work = quantized;
+
+	ReliefContent content;
+	if (!buildContent(work, opt, content, kMemorySource))
+		return nullptr;
+
+	return reliefFromContent(content, opt, kMemorySource, texture);
+}
+
+std::vector<Mesh*> image_to_relief_per_color(const std::string& filename,
+                                             const ImageReliefOptions& opt)
+{
+	ReliefContent content;
+	if (!buildContentFromFile(filename, opt, content))
+		return std::vector<Mesh*>();
+
+	return reliefLayersFromContent(content, opt, filename.c_str());
+}
+
+std::vector<Mesh*> image_to_relief_per_color(const Img& quantized,
+                                             const ImageReliefOptions& opt)
+{
+	Img work = quantized;   // meme motif que ci-dessus
+
+	ReliefContent content;
+	if (!buildContent(work, opt, content, kMemorySource))
+		return std::vector<Mesh*>();
+
+	return reliefLayersFromContent(content, opt, kMemorySource);
 }

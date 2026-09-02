@@ -39,6 +39,7 @@
 #include "image_region_pipeline.h"   // QuantAlgo + chaîne partagée
 
 class Mesh;
+class Img;
 
 struct ImagePixelBlocksOptions
 {
@@ -96,8 +97,19 @@ struct ImagePixelBlocksOptions
 // la base et le mur), donc l'image reste lisible à l'écran.
 // GetNMaterials() == nCouleurs + emitBase + emitWall.
 // Renvoie nullptr en cas d'échec (fichier illisible, rien à vectoriser).
+// `textureFromSource` PLAQUE L'IMAGE D'ORIGINE sur les blocs, au lieu de leur
+// donner un aplat par couleur de palette. La géométrie ne change pas -- c'est
+// toujours la quantification qui la découpe --, mais les couleurs cessent d'être
+// les quelques tons de la palette pour redevenir celles de la photo. Le maillage
+// porte alors des UV par sommet et UN SEUL matériau pour tous les blocs, celui de
+// la texture : GetNMaterials() == 1 + emitBase + emitWall. La base et le mur
+// gardent leur couleur, débordant du contenu.
+//
+// Coût : le fichier est décodé une seconde fois, la première n'ayant rendu que
+// l'image quantifiée.
 Mesh* image_to_pixel_blocks(const std::string& filename,
-                            const ImagePixelBlocksOptions& opt);
+                            const ImagePixelBlocksOptions& opt,
+                            bool textureFromSource = false);
 
 // Sortie de FABRICATION : un Mesh par BLOC CONNEXE, puis la base, puis le mur —
 // la base et le mur sont TOUJOURS les dernières entrées quand ils sont demandés.
@@ -109,4 +121,39 @@ Mesh* image_to_pixel_blocks(const std::string& filename,
 //
 // Renvoie un vecteur vide en cas d'échec. L'appelant possède chaque Mesh.
 std::vector<Mesh*> image_to_pixel_blocks_per_component(const std::string& filename,
+                                                       const ImagePixelBlocksOptions& opt);
+
+// ---------------------------------------------------------------------------
+//  Mêmes opérations, depuis une image DÉJÀ QUANTIFIÉE ET PIXELISÉE
+// ---------------------------------------------------------------------------
+//
+// Pour les appelants qui ne détiennent pas de fichier — un nœud de graphe dont
+// l'image arrive par un port, la cible WebAssembly — et qui ont produit le
+// raster en amont, typiquement via `quantize_image` (image_region_pipeline.h)
+// avec `pixelWidth` renseigné.
+//
+// ⚠ CES SURCHARGES NE QUANTIFIENT NI NE PIXELISENT. Elles prennent le raster tel
+// quel, et ne lisent donc AUCUN de ces champs de `opt` :
+//
+//     pixelWidth, workingMaxDim, maxColors, algo,
+//     preSmoothPasses, refineIterations, despecklePasses, minRegionArea
+//
+// C'est un piège si on l'ignore : passer `pixelWidth = 64` ici ne pixelise RIEN,
+// et l'entrée sera segmentée à sa résolution réelle — donc en autant de blocs
+// qu'elle a de régions connexes, ce qui peut en faire des milliers. La grille se
+// décide en amont, dans l'appel à `quantize_image`.
+//
+// Tous les autres champs — shrink, fitSize, la géométrie, le cadre, les couleurs
+// et les trois drapeaux d'émission — sont lus normalement.
+//
+// L'image est COPIÉE : la vectorisation palettise son entrée, donc la modifie,
+// et une valeur partagée sur un lien de graphe ne doit pas l'être.
+// `texture`, s'il est fourni, joue le rôle de `textureFromSource` ci-dessus. Il
+// est PASSÉ et non déduit parce que cette forme ne reçoit que le résultat de la
+// quantification : l'originale est en amont, chez l'appelant, et texturer avec
+// l'image quantifiée ne montrerait que les aplats qu'on cherche à dépasser.
+Mesh* image_to_pixel_blocks(const Img& quantized, const ImagePixelBlocksOptions& opt,
+                            const Img* texture = nullptr);
+
+std::vector<Mesh*> image_to_pixel_blocks_per_component(const Img& quantized,
                                                        const ImagePixelBlocksOptions& opt);

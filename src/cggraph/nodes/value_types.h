@@ -18,6 +18,7 @@
 //
 #include <cstddef>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "../core/type_registry.h"
@@ -27,6 +28,11 @@
 // incomplet -- son suppresseur est fixe a la CONSTRUCTION, dans value_types.cpp
 // et dans les adaptateurs, qui eux ont la definition.
 class Mesh;
+
+// Declaree et non incluse, pour la meme raison que Mesh : image.h tire
+// cgmath.h en entier (cf. l'audit de dette, debt_cgimg.md), et ce fichier ne
+// sert que d'en-tete de types.
+class Img;
 
 namespace cggraph_nodes
 {
@@ -73,11 +79,46 @@ struct MeshArray
 	std::vector<std::shared_ptr<const Mesh>> items;
 };
 
-// Les neuf descripteurs enregistres. Leurs adresses sont stables pour la duree
+// Les onze descripteurs enregistres. Leurs adresses sont stables pour la duree
 // du programme : le registre les stocke en deque et ne les detruit jamais.
 struct DomainTypes
 {
 	const cggraph::TypeDesc *mesh = nullptr;
+
+	// Raster RGBA8. UN SEUL type d'image, et non un « image brute » distinct d'un
+	// « image quantifiee » : la difference entre les deux n'est pas une propriete
+	// de la structure -- un Img quantifie est un Img dont les pixels ne prennent
+	// qu'un petit nombre de valeurs -- et rien dans le type ne pourrait la
+	// verifier. La distinguer au systeme de types promettrait donc une garantie
+	// que la connexion ne tient pas ; c'est la documentation des noeuds qui dit
+	// lesquels attendent un raster deja quantifie.
+	//
+	// (C'est l'inverse du choix fait pour les contours et les profils juste
+	// dessous, ou les deux formes different REELLEMENT -- courbes contre
+	// polylignes, ouvert contre ferme -- et ou la confusion serait muette.)
+	const cggraph::TypeDesc *image = nullptr;
+
+	// CHEMIN d'une ressource -- ce qu'un noeud file.ref publie et ce que les
+	// chargeurs acceptent en entree optionnelle.
+	//
+	// Un chemin et non des octets, et ce n'est pas un detail de commodite :
+	// MeshIO est INTEGRALEMENT base sur des noms de fichiers (quatorze
+	// importeurs, aucune entree en memoire), et un OBJ resout son .mtl compagnon
+	// par chemin RELATIF -- `import_mtl (Mesh&, filename, path)`. Un tampon n'a
+	// pas de repertoire : une conception « octets » ne pourrait pas charger un
+	// OBJ avec ses materiaux. Les trois consommateurs, eux, savent tous lire par
+	// nom (Font::loadFromFile, Img::load, MeshIO::load).
+	//
+	// Type DISTINCT d'une chaine ordinaire, dans le meme esprit que splayProfile
+	// et barProfile : on ne doit pas pouvoir brancher un parametre texte
+	// quelconque dans une entree de fichier.
+	//
+	// ⚠ Le lien porte un NOM, pas un contenu. Ce qui relie la signature de l'aval
+	// au CONTENU du fichier, c'est le parametre semantique `source.identity` de
+	// file.ref : la signature d'un noeud inclut toute sa branche amont, donc un
+	// fichier modifie invalide le cache de ses consommateurs bien que la chaine
+	// sur le lien n'ait pas bouge.
+	const cggraph::TypeDesc *path = nullptr;
 
 	// Type DISTINCT de `mesh`, et non un maillage qu'on lirait par morceaux :
 	// brancher une suite la ou un maillage est attendu est refuse a la

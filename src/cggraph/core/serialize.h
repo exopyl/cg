@@ -31,6 +31,9 @@
 //         "version": 1,               version du TYPE de noeud
 //         "x": 0.0, "y": 0.0,         position d'ecran, hors signature
 //         "subgraph": "autre.json",   OPTIONNEL -- absent = ne delegue rien
+//                                     Une CHAINE designe un fichier ; un OBJET
+//                                     est le document lui-meme, embarque, et
+//                                     rend le parent autonome.
 //         "params": [
 //           { "name": "n", "role": "semantic", "kind": "literal",
 //             "type": "int", "value": 3 },
