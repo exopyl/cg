@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "stroke_contours.h"
-#include "../cgmath/bezier_flatten.h"
+#include <cgmath/bezier_flatten.h>
 
 // nanosvg is a single-header library; expand its implementation here.
 #define NANOSVG_IMPLEMENTATION

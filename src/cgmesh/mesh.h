@@ -8,7 +8,7 @@
 #include <optional>
 #include <cstdint>
 
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 #include "material.h"
 #include "tensor.h"
 #include "bounding_box.h"

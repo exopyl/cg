@@ -3,7 +3,7 @@
 #include <string.h>
 #include <math.h>
 
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 #include "polygon2.h"
 
 // memory allocation

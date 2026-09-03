@@ -37,7 +37,7 @@
 //
 #include <vector>
 
-#include "../cgmath/TVector2.h"
+#include <cgmath/TVector2.h>
 
 class Mesh;
 class Polygon2;

@@ -5,7 +5,7 @@ using namespace std;
 #include "image.h"
 #include "image_geodesic.h"
 
-#include "../cgmath/common.h"
+#include <cgmath/common.h>
 
 // references to use a priority queue with a struct :
 // http://en.cppreference.com/w/cpp/container/priority_queue

@@ -1,6 +1,6 @@
 #include "smoothing_laplacian.h"
 
-#include "../cgmath/context.h"
+#include <cgmath/context.h>
 
 //
 //

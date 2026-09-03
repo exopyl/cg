@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.18.4)
 
 project(libcgimg)
 
-file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/*.cpp)
-file(GLOB HEADER_FILES ${PROJECT_SOURCE_DIR}/*.h)
+file(GLOB SRC_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/*.cpp)
+file(GLOB HEADER_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/*.h)
 
 add_library(cgimg STATIC ${HEADER_FILES} ${SRC_FILES})
 
@@ -35,6 +35,15 @@ if (CGIMG_WITH_JPG)
 	target_compile_definitions(cgimg PRIVATE CGIMG_WITH_JPG)
 endif ()
 
-target_link_libraries(cgimg cgmath)
+target_include_directories(cgimg PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>)
+target_compile_features(cgimg PUBLIC cxx_std_17)
+
+# PUBLIC, et non la forme sans mot-cle : `image.h` inclut `cgmath.h`, donc tout
+# consommateur de cgimg compile contre cgmath. La forme historique laissait la
+# dependance passer transitivement sans etre declaree.
+target_link_libraries(cgimg PUBLIC cg::cgmath)
+
+add_library(cg::cgimg ALIAS cgimg)
 
 install(TARGETS cgimg DESTINATION .)

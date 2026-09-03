@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include "../src/cgimg/image_quantization.h"
+
 #include "../src/cgmesh/cgmesh.h"
 
 #include <set>
@@ -1552,4 +1554,121 @@ TEST(TEST_cgimg_img, bilateral_filtering_mirrors_the_border)
             ASSERT_NEAR((int)g, 110, 1) << "x=" << x << " y=" << y;
             ASSERT_NEAR((int)b, 130, 1) << "x=" << x << " y=" << y;
         }
+}
+
+// ===========================================================================
+//  resize_memory : le debordement entier ne passe plus pour un succes
+// ===========================================================================
+//
+// `4*W*H` etait calcule en `unsigned int` : un produit qui se replie rendait 0,
+// `malloc(0)` rendait un pointeur non nul, et resize_memory annoncait un SUCCES
+// sur un tampon vide. Et les dimensions etaient posees AVANT l'allocation, si
+// bien qu'en cas d'echec l'image se declarait de W x H avec un tampon nul : tous
+// les controles de bornes du module, qui comparent a width()/height(), etaient
+// alors satisfaits sur rien.
+//
+// resize_memory est privee ; le constructeur est son entree publique, et il
+// IGNORE le code de retour -- raison de plus pour que l'echec laisse un objet
+// coherent plutot qu'un statut que personne ne lit.
+
+TEST (TEST_cgimg_img, a_size_that_cannot_be_addressed_leaves_the_image_empty)
+{
+	// Le produit W x H deborderait size_t sur une cible 32 bits, et sa
+	// multiplication par 4 le deborde sur toutes. Refuse AVANT toute allocation :
+	// ce cas ne demande pas de memoire, il verifie qu'on n'en demande pas.
+	Img img (0xFFFFFFFFu, 0xFFFFFFFFu, false);
+
+	EXPECT_EQ (img.width (), 0u);
+	EXPECT_EQ (img.height (), 0u);
+	EXPECT_EQ (img.data (), nullptr);
+	EXPECT_FALSE (img.uses_palette ());
+}
+
+TEST (TEST_cgimg_img, an_ordinary_size_still_allocates_and_reports_itself)
+{
+	// Controle positif : sans lui, le cas ci-dessus serait satisfait par un
+	// constructeur qui refuse tout.
+	Img img (16, 8, false);
+	EXPECT_EQ (img.width (), 16u);
+	EXPECT_EQ (img.height (), 8u);
+	EXPECT_NE (img.data (), nullptr);
+	EXPECT_FALSE (img.uses_palette ());
+
+	Img palettized (4, 4, true);
+	EXPECT_EQ (palettized.width (), 4u);
+	EXPECT_TRUE (palettized.uses_palette ());
+	EXPECT_NE (palettized.data (), nullptr);
+}
+
+// ===========================================================================
+//  Taille de palette : les tables de 256 ne debordent plus
+// ===========================================================================
+//
+// Heckbert indexe `list[MAXCOLORS]` (statique) et Wu `cube[MAXCOLOR]` / `vv[]`
+// SUR LA PILE, tous dimensionnes a 256, et `ncolors` n'etait valide nulle part :
+// demander 300 couleurs ecrasait la pile de l'appelant, et l'API n'en disait
+// rien. Le clamp vaut pour les deux, et une garde defensive le double dans
+// MedianCut_Wu, qui est a linkage externe donc atteignable sans passer par
+// ImgQuantize.
+
+namespace {
+
+Img MakeGradientImage (unsigned int w, unsigned int h)
+{
+	Img img (w, h, false);
+	for (unsigned int y = 0; y < h; ++y)
+		for (unsigned int x = 0; x < w; ++x)
+			img.set_pixel (x, y, (unsigned char) (x * 7), (unsigned char) (y * 5),
+			               (unsigned char) ((x + y) * 3), 255);
+	return img;
+}
+
+} // namespace
+
+TEST (TEST_cgimg_img, a_palette_larger_than_the_tables_is_clamped_not_overflowed)
+{
+	// 300 > 256 : avant clamp, les deux algorithmes ecrivaient au-dela de leurs
+	// tables. On demande seulement qu'ils rendent une image saine -- la valeur du
+	// retour appartient au contrat d'erreur du module, qui est un point ouvert de
+	// l'audit et qu'on ne fige donc pas ici.
+	Img wu = MakeGradientImage (16, 16);
+	ImgQuantize::wu (wu, 300);
+	EXPECT_EQ (wu.width (), 16u);
+	EXPECT_EQ (wu.height (), 16u);
+
+	Img heckbert = MakeGradientImage (16, 16);
+	ImgQuantize::heckbert (heckbert, 300);
+	EXPECT_EQ (heckbert.width (), 16u);
+	EXPECT_EQ (heckbert.height (), 16u);
+}
+
+TEST (TEST_cgimg_img, a_palette_below_two_is_brought_back_instead_of_looping_empty)
+{
+	// Zero et negatif faisaient tourner les boucles de coupe dans le vide.
+	Img zero = MakeGradientImage (8, 8);
+	ImgQuantize::wu (zero, 0);
+	EXPECT_EQ (zero.width (), 8u);
+
+	Img negative = MakeGradientImage (8, 8);
+	ImgQuantize::heckbert (negative, -5);
+	EXPECT_EQ (negative.width (), 8u);
+}
+
+TEST (TEST_cgimg_img, an_ordinary_palette_size_still_quantizes)
+{
+	// Controle positif : le clamp ne doit pas avoir neutralise la quantification.
+	// Un degrade de 256 pixels distincts ramene a 4 couleurs en compte au plus 4.
+	Img img = MakeGradientImage (16, 16);
+	ImgQuantize::wu (img, 4);
+
+	std::set<unsigned int> colors;
+	unsigned char r = 0, g = 0, b = 0, a = 0;
+	for (unsigned int y = 0; y < img.height (); ++y)
+		for (unsigned int x = 0; x < img.width (); ++x)
+		{
+			img.get_pixel (x, y, &r, &g, &b, &a);
+			colors.insert ((unsigned int) r << 16 | (unsigned int) g << 8 | b);
+		}
+	EXPECT_LE (colors.size (), 4u);
+	EXPECT_GE (colors.size (), 2u);
 }

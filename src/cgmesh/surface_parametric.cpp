@@ -6,7 +6,7 @@
 #endif // _BSD_SOURCE
 
 #include <math.h>
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 
 #include "surface_parametric.h"
 

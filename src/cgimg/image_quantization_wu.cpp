@@ -32,6 +32,26 @@ Free to distribute, comments and suggestions are appreciated.
 #define	GREEN	1
 #define BLUE	0
 
+// ===========================================================================
+//  TOUT CE QUI SUIT EST INTERNE A CETTE UNITE DE TRADUCTION
+// ===========================================================================
+//
+// Ces tableaux et ces fonctions etaient a linkage EXTERNE : `libcgimg.a`
+// exportait des symboles nommes `size`, `K`, `wt`, `Var`, `Mark`, `compare`,
+// `Shrink`... Trois consequences, et la troisieme est la plus grave :
+//
+//  1. collision de definition possible avec n'importe quel autre objet du
+//     programme portant l'un de ces noms tres communs ;
+//  2. l'etat est PARTAGE entre appels : deux quantifications concurrentes se
+//     corrompent mutuellement, alors que cgmesh parallelise ses pipelines ;
+//  3. rien ne le signalait -- ni le compilateur, ni l'editeur de liens.
+//
+// L'espace de noms anonyme regle 1 immediatement et rend 2 visible : l'etat
+// reste global, mais il est desormais CIRCONSCRIT, ce qui est la premiere
+// etape avant de le passer en parametre.
+namespace {
+
+
 struct box {
     int r0;			 /* min value, exclusive */
     int r1;			 /* max value, inclusive */
@@ -54,7 +74,10 @@ int	        size; /*image size*/
 int		K;    /*color look-up table size*/
 unsigned short int *Qadd;
 
-void Hist3d(long int vwt[33][33][33], long int vmr[33][33][33], long int vmg[33][33][33], long int vmb[33][33][33], float m2[33][33][33]) 
+// Rend FAUX si l'histogramme n'a pas pu etre alloue. Rendait `void` et appelait
+// exit(1) : une bibliotheque qui termine le processus prive l'appelant de toute
+// reprise, et sous WebAssembly elle emporte la page entiere.
+bool Hist3d(long int vwt[33][33][33], long int vmr[33][33][33], long int vmg[33][33][33], long int vmb[33][33][33], float m2[33][33][33]) 
 /* build 3-D color histogram of counts, r/g/b, c^2 */
 {
 int ind, r, g, b;
@@ -63,7 +86,7 @@ long int i;
 		
 	for(i=0; i<256; ++i) table[i]=i*i;
 	Qadd = (unsigned short int *)malloc(sizeof(unsigned short int)*size);
-	if (Qadd==nullptr) {printf("Not enough space\n"); exit(1);}
+	if (Qadd==nullptr) return false;
 	for(i=0; i<size; ++i){
 	    r = Ir[i]; g = Ig[i]; b = Ib[i];
 	    inr=(r>>3)+1; 
@@ -85,6 +108,7 @@ long int i;
 	    vmb[inr][ing][inb] += b;
 	    m2[inr][ing][inb] += (float)(table[r]+table[g]+table[b]);;
 	}
+	return true;
 }
 
 /* At conclusion of the histogram step, we can interpret
@@ -374,6 +398,9 @@ int r, g, b;
 	    tag[(r<<10) + (r<<6) + r + (g<<5) + g + b] = label;
 }
 
+
+} // namespace anonyme -- fin de l'etat interne
+
 int MedianCut_Wu(unsigned char *pPixels, int iSize, int ncolors)
 {
 	struct box			cube[MAXCOLOR];
@@ -383,6 +410,14 @@ int MedianCut_Wu(unsigned char *pPixels, int iSize, int ncolors)
 	long int	i, weight;
 	int		k;
 	float				vv[MAXCOLOR], temp;
+
+	// GARDE DEFENSIVE, en plus du clamp de l'appelant. `cube` et `vv` sont sur la
+	// PILE et dimensionnes a MAXCOLOR : une valeur hors bornes ecraserait la pile
+	// de l'appelant. La borner ici aussi vaut mieux que de compter sur un seul
+	// point de passage -- cette fonction est a linkage externe, donc atteignable
+	// sans passer par ImgQuantize.
+	if (ncolors < 2) ncolors = 2;
+	if (ncolors > MAXCOLOR) ncolors = MAXCOLOR;
 
 	/* input R,G,B components into Ir, Ig, Ib;
 	   set size to width*height */
@@ -417,7 +452,12 @@ int MedianCut_Wu(unsigned char *pPixels, int iSize, int ncolors)
 				m2[ii][jj][kk] = 0.;
 			}
 
-	Hist3d(wt, mr, mg, mb, m2);
+	if (!Hist3d(wt, mr, mg, mb, m2))
+	{
+		free (Ir); free (Ig); free (Ib);
+		Ir = Ig = Ib = nullptr;
+		return -1;
+	}
 	free(Ig); free(Ib); free(Ir);
 
 	M3d(wt, mr, mg, mb, m2);
@@ -453,7 +493,13 @@ int MedianCut_Wu(unsigned char *pPixels, int iSize, int ncolors)
 	/* the space for array m2 can be freed now */
 
 	tag = (unsigned char *)malloc(33*33*33);
-	if (tag==nullptr) {printf("Not enough space\n"); exit(1);}
+	if (tag==nullptr)
+	{
+		free (Qadd); Qadd = nullptr;
+		free (Ir); free (Ig); free (Ib);
+		Ir = Ig = Ib = nullptr;
+		return -1;
+	}
 	for(k=0; k<K; ++k){
 	    Mark(&cube[k], k, tag);
 	    weight = Vol(&cube[k], wt);

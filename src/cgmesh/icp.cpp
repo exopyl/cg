@@ -2,7 +2,7 @@
 
 #include "mesh.h"
 #include "bvh.h"
-#include "../cgmath/context.h"
+#include <cgmath/context.h>
 
 #include <algorithm>
 #include <cmath>

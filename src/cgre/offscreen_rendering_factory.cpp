@@ -7,7 +7,7 @@
 
 #include "offscreen_rendering_factory.h"
 
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 #include "../cgmesh/cgmesh.h"
 
 Coffscreen_rendering::Coffscreen_rendering (Mesh *_model)

@@ -1,5 +1,5 @@
 #pragma once
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 
 // Octree ne connait pas Mesh : il est bati depuis des tableaux bruts, et
 // interroge en lecture seule (cf. mesh_raycast.h). Ne pas y introduire de

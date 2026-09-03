@@ -13,7 +13,7 @@
 #include "extrude_contours.h"
 #include "stroke_contours.h"
 #include "text_extrude.h"
-#include "../cgmath/font.h"
+#include <cgmath/font.h>
 #include <nlohmann/json.hpp>
 #include <cmath>
 

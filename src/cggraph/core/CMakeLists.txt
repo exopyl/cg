@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.18.4)
 
 project(libcggraph)
 
-file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/*.cpp)
-file(GLOB HEADER_FILES ${PROJECT_SOURCE_DIR}/*.h)
+file(GLOB SRC_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/*.cpp)
+file(GLOB HEADER_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/*.h)
 
 add_library(cggraph STATIC ${HEADER_FILES} ${SRC_FILES})
 

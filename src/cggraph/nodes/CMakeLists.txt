@@ -11,7 +11,7 @@ project(libcggraph_nodes)
 # Le decoupage ulterieur reste mecanique tant qu'un adaptateur n'inclut pas un
 # adaptateur d'un autre sous-repertoire. C'est la seule discipline que le
 # rangement impose ; ce qui est commun aux domaines vit a la RACINE.
-file(GLOB SRC_FILES
+file(GLOB SRC_FILES CONFIGURE_DEPENDS
 	${PROJECT_SOURCE_DIR}/*.cpp
 	${PROJECT_SOURCE_DIR}/flow/*.cpp
 	${PROJECT_SOURCE_DIR}/img/*.cpp
@@ -20,7 +20,7 @@ file(GLOB SRC_FILES
 	${PROJECT_SOURCE_DIR}/shapes/*.cpp
 	${PROJECT_SOURCE_DIR}/svg/*.cpp
 	${PROJECT_SOURCE_DIR}/text/*.cpp)
-file(GLOB HEADER_FILES
+file(GLOB HEADER_FILES CONFIGURE_DEPENDS
 	${PROJECT_SOURCE_DIR}/*.h
 	${PROJECT_SOURCE_DIR}/flow/*.h
 	${PROJECT_SOURCE_DIR}/img/*.h

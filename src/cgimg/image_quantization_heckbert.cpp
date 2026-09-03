@@ -53,6 +53,26 @@ typedef unsigned  long dword;    /* range 0-4,294,967,295      */
 #define GREEN(x)   (unsigned  char)(((((x)>>5)&31)<<3)|4)
 #define BLUE(x)    (unsigned  char)(((((x)>>10)&31)<<3)|4)
 
+// ===========================================================================
+//  TOUT CE QUI SUIT EST INTERNE A CETTE UNITE DE TRADUCTION
+// ===========================================================================
+//
+// Ces tableaux et ces fonctions etaient a linkage EXTERNE : `libcgimg.a`
+// exportait des symboles nommes `size`, `K`, `wt`, `Var`, `Mark`, `compare`,
+// `Shrink`... Trois consequences, et la troisieme est la plus grave :
+//
+//  1. collision de definition possible avec n'importe quel autre objet du
+//     programme portant l'un de ces noms tres communs ;
+//  2. l'etat est PARTAGE entre appels : deux quantifications concurrentes se
+//     corrompent mutuellement, alors que cgmesh parallelise ses pipelines ;
+//  3. rien ne le signalait -- ni le compilateur, ni l'editeur de liens.
+//
+// L'espace de noms anonyme regle 1 immediatement et rend 2 visible : l'etat
+// reste global, mais il est desormais CIRCONSCRIT, ce qui est la premiere
+// etape avant de le passer en parametre.
+namespace {
+
+
 typedef  struct {       /* structure for a cube in color space */
    word  lower;         /* one corner's index in histogram     */
    word  upper;         /* another corner's index in histogram */
@@ -71,6 +91,9 @@ static word HistPtr[HSIZE];      /* points to colors in "Hist" */
 void Shrink(cube_t * Cube);
 void InvMap(word * Hist, unsigned  char ColMap[][3],word ncubes);
 int  compare(const void * a1, const void * a2);
+
+
+} // namespace anonyme -- fin de l'etat interne
 
 word MedianCut(word Hist[], unsigned  char ColMap[][3], int maxcubes)
 {
@@ -175,6 +198,12 @@ word MedianCut(word Hist[], unsigned  char ColMap[][3], int maxcubes)
    InvMap(Hist, ColMap,ncubes);
    return((word)ncubes);
 }
+
+// L'espace de noms anonyme REPREND ici : Shrink, InvMap et compare sont
+// definies plus bas, et elles sont internes comme le reste. Un espace anonyme
+// est le MEME dans toute l'unite de traduction, donc ces definitions
+// rejoignent les declarations posees avant MedianCut.
+namespace {
 void Shrink(cube_t * Cube)
 {
    /* Encloses "Cube" with a tight-fitting cube by updating (rmin,gmin,bmin) 
@@ -297,3 +326,5 @@ int compare(const void * a1, const void * a2)
    }
    return ((int)(C1-C2));
 }
+
+} // namespace anonyme -- fin de l'etat interne

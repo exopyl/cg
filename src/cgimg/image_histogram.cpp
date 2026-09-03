@@ -4,7 +4,7 @@
 
 #include "image.h"
 #include "image_histogram.h"
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 
 // Extrait d'image.cpp : l'analyse d'une image n'est pas une responsabilite du
 // conteneur. Code deplace tel quel (aucun changement de comportement), seul le

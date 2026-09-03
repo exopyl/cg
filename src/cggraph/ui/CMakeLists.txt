@@ -11,8 +11,8 @@ project(libcggraph_ui)
 # Sans condition, comme cggraph et cggraph_nodes : une option la sortirait des
 # deux chaines de CI, et c'est ici que vit la generation depuis le registre --
 # la propriete que l'etape 4 existe pour tenir.
-file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/*.cpp)
-file(GLOB HEADER_FILES ${PROJECT_SOURCE_DIR}/*.h)
+file(GLOB SRC_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/*.cpp)
+file(GLOB HEADER_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/*.h)
 
 add_library(cggraph_ui STATIC ${HEADER_FILES} ${SRC_FILES})
 

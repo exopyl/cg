@@ -105,7 +105,21 @@ void LineImplPluecker::fit (Line **lines, int n)
 
 	for (int i=0; i<n; i++)
 	{
-		LineImplPluecker *line_walk = (LineImplPluecker*)lines[i];
+		// LE CAST PORTAIT SUR LE MAUVAIS OBJET : `lines[i]` est un `Line*`, pas une
+		// implementation, et le transtyper en C vers `LineImplPluecker*` lisait les
+		// champs de Pluecker a partir de l'adresse d'un Line -- comportement
+		// indefini, silencieux, dans du code non teste.
+		//
+		// L'implementation se demande a la ligne, et le transtypage est VERIFIE :
+		// une ligne rangee dans une autre representation (point + direction) n'a
+		// pas de coordonnees de Plucker a lire. On l'ignore plutot que de lire
+		// n'importe quoi -- c'est la seule reponse juste sans conversion prealable,
+		// que cette methode n'a pas mandat de declencher.
+		LineImplPluecker *line_walk =
+			lines[i] != nullptr ? dynamic_cast<LineImplPluecker*> (lines[i]->m_lineImpl)
+			                    : nullptr;
+		if (line_walk == nullptr)
+			continue;
 		l11 += line_walk->m_l1 * line_walk->m_l1;
 		l22 += line_walk->m_l2 * line_walk->m_l2;
 		l33 += line_walk->m_l3 * line_walk->m_l3;

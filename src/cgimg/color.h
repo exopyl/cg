@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../cgmath/common.h"
+#include <cgmath/common.h>
 
 typedef struct RGBc  { unsigned char r, g, b; }    RGBc;
 typedef struct RGBf  { float r, g, b; }            RGBf;

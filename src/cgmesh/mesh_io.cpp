@@ -13,7 +13,7 @@
 #include "mesh.h"
 #include "mesh_io.h"
 #include "mesh_io_3ds.h"
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 #include "endianness.h"
 
 int MeshIO::load (Mesh& mesh, const char *filename)

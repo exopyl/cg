@@ -1,5 +1,5 @@
 #include "ambient_occlusion.h"
-#include "../cgmath/context.h"
+#include <cgmath/context.h>
 #include "octree.h"
 
 //

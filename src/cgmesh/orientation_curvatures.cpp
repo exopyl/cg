@@ -6,7 +6,7 @@
 #include "orientation_curvatures.h"
 #include "orientation_peak.h"
 #include "regions_vertices.h"
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 
 Cmesh_orientation_curvatures::Cmesh_orientation_curvatures (Mesh_half_edge *mesh, int _w, int _h)
   : Cmesh_orientation(mesh)

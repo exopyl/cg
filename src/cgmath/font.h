@@ -21,7 +21,7 @@
 // compilateur, pas simple affaire de style.
 //
 // Cet en-tete n'est volontairement PAS inclus par l'ombrelle cgmath.h : il
-// s'inclut explicitement, comme TTransformation.h.
+// s'inclut explicitement.
 //
 // ============================================================================
 

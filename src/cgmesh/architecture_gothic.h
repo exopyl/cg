@@ -2,8 +2,8 @@
 
 #include <string>
 
-#include "../cgmath/architecture_gothic.h"
-#include "../cgmath/architecture_gothic_io.h"
+#include <cgmath/architecture_gothic.h>
+#include <cgmath/architecture_gothic_io.h>
 
 #include "polygon2.h"
 #include "mesh.h"

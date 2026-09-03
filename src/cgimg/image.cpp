@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -6,7 +7,7 @@
 #include "image.h"
 #include "image_histogram.h"   // get_median_value s'appuie sur ImgHistogram::compute
 #include "color.h"
-#include "../cgmath/TVector2.h"
+#include <cgmath/TVector2.h>
 
 #include <list>
 #include <map>
@@ -52,22 +53,53 @@ int Img::resize_memory (unsigned int width, unsigned int height, bool use_palett
 		m_pPalette = nullptr;
 	}
 
+	// LES DIMENSIONS SONT POSEES APRES LE SUCCES, et c'est le point : les ecrire
+	// d'abord laissait, en cas d'echec d'allocation, une image qui SE DECLARE de
+	// W x H avec m_pPixels a nullptr. Tous les controles de bornes du module,
+	// qui comparent a width()/height(), etaient alors satisfaits sur un tampon
+	// inexistant.
+	//
+	// La TAILLE est calculee en size_t. `4*W*H` se faisait en `unsigned int` :
+	// une image de 32 768 x 32 768 rendait 0 par debordement, malloc(0) rendait
+	// un pointeur non nul, et resize_memory annoncait un succes sur un tampon
+	// vide. Le garde explicite refuse ce qui ne tient pas, plutot que de
+	// s'en remettre au repliement.
+	// DEUX debordements a ecarter, pas un : celui du produit W x H, puis celui de
+	// sa multiplication par le nombre de canaux. Le premier n'est pas theorique
+	// sur la cible WebAssembly, ou size_t fait 32 bits -- c'est la meme largeur
+	// que l'`unsigned int` d'origine.
+	const std::size_t kMax = (std::size_t) -1;
+	const std::size_t channels = use_palette ? 1u : 4u;
+	if ((height != 0 && width > kMax / height)
+	    || ((std::size_t) width * (std::size_t) height > kMax / channels))
+	{
+		m_iWidth = 0;
+		m_iHeight = 0;
+		bUsePalette = false;
+		return -1;
+	}
+
+	const std::size_t pixels = (std::size_t) width * (std::size_t) height;
+	unsigned char *buffer = (unsigned char*) malloc (pixels * channels * sizeof (unsigned char));
+	if (buffer == nullptr && pixels != 0)
+	{
+		// Echec : l'image reste VIDE et coherente, jamais « grande et sans
+		// tampon ». C'est ce que les appelants qui ignorent le retour -- il y en
+		// a neuf dans le module -- rencontreront de moins dangereux.
+		m_iWidth = 0;
+		m_iHeight = 0;
+		bUsePalette = false;
+		return -1;
+	}
+
+	m_pPixels = buffer;
 	m_iWidth = width;
 	m_iHeight = height;
-
+	bUsePalette = use_palette;
 	if (use_palette)
-	{
-		m_pPixels = (unsigned char*)malloc(m_iWidth*m_iHeight*sizeof(unsigned char));
-		bUsePalette = true;
 		m_pPalette = new Palette ();
-	}
-	else
-	{
-		m_pPixels = (unsigned char*)malloc(4*m_iWidth*m_iHeight*sizeof(unsigned char));
-		bUsePalette = false;
-	}
-	
-	return (m_pPixels)? 0 : -1;
+
+	return 0;
 }
 
 Img::Img (unsigned int w, unsigned int h, bool use_palette)

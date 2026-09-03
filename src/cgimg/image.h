@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 #include <vector>
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 #include "palette.h"
 
 

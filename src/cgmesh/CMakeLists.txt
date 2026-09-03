@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.18.4)
 
 project(libcgmesh)
 
-file(GLOB HEADER_FILES ${PROJECT_SOURCE_DIR}/*.h)
+file(GLOB HEADER_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/*.h)
 
 if (EMSCRIPTEN)
     # WebAssembly (cible maker) : on ne compile QUE le sous-ensemble geometrie
@@ -95,12 +95,12 @@ if (EMSCRIPTEN)
         ${PROJECT_SOURCE_DIR}/parametric_catalog.cpp
     )
 else()
-    file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/*.cpp)
+    file(GLOB SRC_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/*.cpp)
 endif()
 # Paths relative to cgmesh's own location so this works whether cgmesh is
 # built from the repo-root CMakeLists or as a subproject of vecna/.
-file(GLOB GLUTESS_SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/glutess/*.c)
-file(GLOB GLUTESS_HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/glutess/*.h)
+file(GLOB GLUTESS_SRC_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/glutess/*.c)
+file(GLOB GLUTESS_HEADER_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/glutess/*.h)
 
 # Clipper2 (Boost licence, vendored in extern/clipper2) : robust 2D polygon
 # boolean ops (Union/Difference/Intersect) used for the gothic tracery. Headers
@@ -112,7 +112,7 @@ file(GLOB GLUTESS_HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/glutess/
 set(CLIPPER2_SRC_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/clipper2/clipper.engine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/clipper2/clipper.offset.cpp)
-file(GLOB CLIPPER2_HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/clipper2/*.h)
+file(GLOB CLIPPER2_HEADER_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/clipper2/*.h)
 
 if (UNIX)
 	add_compile_options(-fpermissive)
@@ -330,7 +330,7 @@ if (ENABLE_ZLIB)
         if (NOT EXISTS "${ZLIB_DIR}/zlib.h")
             message(FATAL_ERROR "ENABLE_ZLIB is ON but zlib.h is not found at ${ZLIB_DIR}/zlib.h")
         endif()
-        file(GLOB ZLIB_SRC_FILES ${ZLIB_DIR}/*.c)
+        file(GLOB ZLIB_SRC_FILES CONFIGURE_DEPENDS ${ZLIB_DIR}/*.c)
         target_sources(cgmesh PRIVATE ${ZLIB_SRC_FILES})
         source_group("zlib" FILES ${ZLIB_SRC_FILES})
         # PUBLIC : nbt.h does #include "zlib.h", so consumers of cgmesh.h need the

@@ -148,28 +148,11 @@ public:
 		m_matrix[0][1]=0; m_matrix[1][1]=1;
 	}
 
-	inline TValue *Multiply(TValue *mat)
-	{
-		TMatrix2<TValue> res;
-		int i,j,k;
-		TMatrix2<TValue> TempMatrice(mat);
-		
-		for (i=0; i<2; i++) 
-		{
-			for (j=0; j<2; j++) 
-			{
-				res.m_matrix[i][j] = 0.0;
-				for (k=0; k<2; k++) 
-				{
-					res.m_matrix[i][j] += m_matrix[i][k] * (TempMatrice.m_matrix[k][j]);
-				}
-			}
-		}
-
-		*this = res;
-
-	return (TMatrix2<TValue>)(&res.m_matrix[0][0]);
-	}
+	// Multiply(TValue*) A ETE RETIRE : il rendait un pointeur vers `res`, une
+	// variable LOCALE detruite au retour -- comportement indefini arme, dans une
+	// methode que personne n'appelait. Le cast final vers TMatrix2 n'avait pas
+	// davantage de sens. La multiplication en place se fait par `*this = *this * m`,
+	// que l'operateur * couvre et que les tests exercent.
 
 
 	/*! Transform a point or a vector using the matrix
@@ -226,17 +209,10 @@ public:
 		m_matrix[1][0] = temp;
 	}
 
-	TValue *GetTranspose(TValue *TransposeMatrix)
-	{
-		int i,j;
-		TMatrix2<TValue> TempMatrice(TransposeMatrix);
-			
-		for ( i=0; i<2; i++ ) 
-			for ( j=0; j<2; j++ ) 
-				TempMatrice.m_matrix[i][j]= m_matrix[j][i];
-
-		return (TValue)(&TempMatrice.m_matrix[0][0]);
-	}
+	// GetTranspose(TValue*) A ETE RETIRE : son `return (TValue)(&...)` transtypait
+	// une ADRESSE en flottant avant de la rendre comme pointeur -- il ne compilait
+	// meme pas, ce que personne ne voyait faute d'appelant. `Transpose()` fait le
+	// travail en place.
 
 	inline TValue Determinant()
 	{

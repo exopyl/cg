@@ -2,7 +2,7 @@
 #include <list>
 using namespace std;
 
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 
 enum NPRSegmentType {	NPR_SEGMENT_ANGLE,
 			NPR_SEGMENT_BORDER,

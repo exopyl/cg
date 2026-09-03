@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "half_edge.h"
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 
 
 typedef struct _mc_triangulation_

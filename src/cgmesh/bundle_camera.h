@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 
 // Row-major 4x4 so the raw on-disk layout (R[0..2] = first row, ...) read by
 // Bundle::Load/Load2 maps directly onto at(row, col).

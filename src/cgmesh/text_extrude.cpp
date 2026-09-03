@@ -1,6 +1,6 @@
 #include "text_extrude.h"
 
-#include "../cgmath/context.h"
+#include <cgmath/context.h>
 
 #include <algorithm>
 #include <cmath>
@@ -11,8 +11,8 @@
 #include "extrude_contours.h"
 #include "mesh.h"
 
-#include "../cgmath/bezier_flatten.h"
-#include "../cgmath/font.h"
+#include <cgmath/bezier_flatten.h>
+#include <cgmath/font.h>
 
 #include "../../extern/clipper2/clipper.h"
 

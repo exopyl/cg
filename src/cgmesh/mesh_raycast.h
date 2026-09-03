@@ -33,7 +33,7 @@
 //
 #include <memory>
 
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 
 class Mesh;
 class Octree;

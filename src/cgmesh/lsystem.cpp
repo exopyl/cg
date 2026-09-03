@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 #include "lsystem.h"
-#include "../cgmath/TQuaternion.h"
+#include <cgmath/TQuaternion.h>
 
 // constructor
 LSystem::LSystem ()

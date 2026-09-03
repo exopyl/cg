@@ -1,7 +1,7 @@
 #include <vector>
 
 #include "DiffParamEvaluator.h"
-#include "../cgmath/context.h"
+#include <cgmath/context.h>
 #include "../cgimg/color.h"
 
 //

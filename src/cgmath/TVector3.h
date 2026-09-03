@@ -266,6 +266,19 @@ public:
 		return (TValue)(0.5) * evaluate_triangle_normal(v1, v2, v3).getLength();
 	}
 
+	// DISTANCE AU CARRE. Comparer des distances ne demande pas de racine : elle
+	// est monotone, donc l'ordre est le meme. Elle manquait, et des boucles de
+	// plus proche voisin -- k-means de cgimg, notamment -- payaient un sqrt par
+	// candidat pour une comparaison qui n'en a pas besoin.
+	template <class S>
+	inline const TValue getSquaredDistance(const TVector3<S> &v2) const noexcept
+	{
+		const TValue dx = (TValue)(v2.x - x);
+		const TValue dy = (TValue)(v2.y - y);
+		const TValue dz = (TValue)(v2.z - z);
+		return dx * dx + dy * dy + dz * dz;
+	}
+
 	template <class S>
 	inline const TValue getDistance(const TVector3<S> &v2)  const noexcept
 	{

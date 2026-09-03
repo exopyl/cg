@@ -1,5 +1,5 @@
 #pragma once
-#include "../cgmath/cgmath.h"   // vec3
+#include <cgmath/cgmath.h>   // vec3
 #include <vector>
 
 class Mesh;

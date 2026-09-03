@@ -1,5 +1,5 @@
 #pragma once
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 #include "mesh_half_edge.h"
 #include "geometric_primitives.h"
 

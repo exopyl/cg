@@ -1,7 +1,7 @@
 #pragma once
 
 // algebra
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 #include "../cgimg/cgimg.h"
 
 // mesh

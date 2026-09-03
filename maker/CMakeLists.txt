@@ -128,7 +128,7 @@ add_custom_command(TARGET maker POST_BUILD
 #
 # D'ou une regle par fichier, qui DEPEND de sa source : elle se redeclenche des
 # que le gabarit change, que maker soit relie ou non.
-file(GLOB MAKER_TEMPLATES "${CMAKE_SOURCE_DIR}/test/data/templates/*.json")
+file(GLOB MAKER_TEMPLATES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/test/data/templates/*.json")
 set(MAKER_TEMPLATE_OUTPUTS "")
 foreach(tpl ${MAKER_TEMPLATES})
     get_filename_component(tpl_name "${tpl}" NAME)
@@ -161,7 +161,7 @@ endif()
 # test/data/fonts/ (le fichier + son entree dans catalogue.json). Le prix est le
 # prix habituel du glob -- il est evalue a la CONFIGURATION, donc une police
 # ajoutee sans reconfigurer ne sera pas copiee.
-file(GLOB MAKER_FONT_FILES
+file(GLOB MAKER_FONT_FILES CONFIGURE_DEPENDS
      "${CMAKE_SOURCE_DIR}/test/data/fonts/*.ttf"
      "${CMAKE_SOURCE_DIR}/test/data/fonts/*.otf"
      "${CMAKE_SOURCE_DIR}/test/data/fonts/*.ttc"

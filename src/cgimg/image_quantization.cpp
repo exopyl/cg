@@ -19,8 +19,29 @@
 // Color Image Quantization for Frame Buffer Display
 // Paul S. Heckbert
 // SIGGRAPH '82, July 1982, pp. 297-307
+// BORNES DE LA PALETTE, communes aux deux algorithmes.
+//
+// Les deux indexent des tables DIMENSIONNEES A 256 -- `list[MAXCOLORS]` en
+// statique chez Heckbert, `cube[MAXCOLOR]` et `vv[MAXCOLOR]` sur la PILE chez Wu
+// -- et aucun ne validait `ncolors`. Un appelant demandant 300 couleurs
+// ecrasait donc la pile de l'appelant, et rien dans l'API ne l'en dissuadait.
+//
+// Le plancher vaut 2 : une palette a une couleur n'a pas de sens pour un
+// algorithme de coupe, et zero ou negatif faisait boucler dans le vide.
+static const int kMinPaletteColors = 2;
+static const int kMaxPaletteColors = 256;
+
+static int ClampPaletteSize (int ncolors)
+{
+	if (ncolors < kMinPaletteColors) return kMinPaletteColors;
+	if (ncolors > kMaxPaletteColors) return kMaxPaletteColors;
+	return ncolors;
+}
+
 int ImgQuantize::heckbert (Img& img, int ncolors)
 {
+	ncolors = ClampPaletteSize (ncolors);
+
 	// 32768 * (2 + 3) bytes = 160 KB: allocate on the heap, not the stack
 	// (a stack array this large can overflow worker-thread / deep-call stacks).
 	unsigned short*   Hist   = new unsigned short[32768];
@@ -139,6 +160,7 @@ int ImgQuantize::refine (Img& img, const Img &reference, int iterations)
 //
 int ImgQuantize::wu (Img& img, int ncolors)
 {
+	ncolors = ClampPaletteSize (ncolors);
 	int res = MedianCut_Wu (img.m_pPixels, img.m_iWidth*img.m_iHeight, ncolors);
 
 	return 0;
@@ -157,14 +179,6 @@ int ImgQuantize::kmean (Img& img, float threshold)
 		pPixels[3*i+1] = img.m_pPixels[4*i+1]/255.;
 		pPixels[3*i+2] = img.m_pPixels[4*i+2]/255.;
 	}
-	FILE *ptr = fopen ("colors.asc", "w");
-	for (int i=0; i<n; i++)
-	{
-		fprintf (ptr, "%f %f %f %d %d %d 1. 0. 0.\n",
-			 pPixels[3*i], pPixels[3*i+1], pPixels[3*i+2],
-			 (int)(255*pPixels[3*i]), (int)(255*pPixels[3*i+1]), (int)(255*pPixels[3*i+2]));
-	}
-	fclose (ptr);
 
 	// select random colors for clusters
 	srand (5);
@@ -177,14 +191,6 @@ int ImgQuantize::kmean (Img& img, float threshold)
 		pClusters[3*i+1] = pPixels[3*ind+1];
 		pClusters[3*i+2] = pPixels[3*ind+2];
 	}
-	ptr = fopen ("clusters1.asc", "w");
-	for (int i=0; i<nclusters; i++)
-	{
-		fprintf (ptr, "%f %f %f %d %d %d 1. 0. 0.\n",
-			 pClusters[3*i], pClusters[3*i+1], pClusters[3*i+2],
-			 (int)(255*pClusters[3*i]), (int)(255*pClusters[3*i+1]), (int)(255*pClusters[3*i+2]));
-	}
-	fclose (ptr);
 
 	//
 	int *pInCluster1 = (int*)malloc(n*sizeof(int));
@@ -214,7 +220,7 @@ int ImgQuantize::kmean (Img& img, float threshold)
 			for (int j=0; j<nclusters; j++)
 			{
 				mean.Set (pClusters[3*j], pClusters[3*j+1], pClusters[3*j+2]);
-				pClustersDistances[j] = (c).getDistance (mean);
+				pClustersDistances[j] = (c).getSquaredDistance (mean);
 
 			}
 			int ci = 0;
@@ -262,12 +268,14 @@ int ImgQuantize::kmean (Img& img, float threshold)
 		float dmin;
 		c.Set (pPixels[3*i], pPixels[3*i+1], pPixels[3*i+2]);
 		cnew.Set (pClusters[0], pClusters[1], pClusters[2]);
-		dmin = (c).getDistance (cnew);
+		// Distances au CARRE : seul leur ordre compte ici, et la racine ne le
+		// change pas. Un sqrt par candidat et par pixel disparait.
+		dmin = (c).getSquaredDistance (cnew);
 		for (int j=1; j<nclusters; j++)
 		{
 			Vector3f cwalk;
 			cwalk.Set (pClusters[3*j], pClusters[3*j+1], pClusters[3*j+2]);
-			float d = (c).getDistance (cwalk);
+			float d = (c).getSquaredDistance (cwalk);
 			if (d < dmin)
 			{
 				dmin = d;
@@ -280,14 +288,6 @@ int ImgQuantize::kmean (Img& img, float threshold)
 		img.m_pPixels[4*i+3] = 255;
 	}
 
-	ptr = fopen ("clusters2.asc", "w");
-	for (int i=0; i<nclusters; i++)
-	{
-		fprintf (ptr, "%f %f %f %d %d %d 1. 0. 0.\n",
-			 pClusters[3*i], pClusters[3*i+1], pClusters[3*i+2],
-			 (int)(255*pClusters[3*i]), (int)(255*pClusters[3*i+1]), (int)(255*pClusters[3*i+2]));
-	}
-	fclose (ptr);
 
 	// look for the final number of colors
 	//int *pIndices = (int*)malloc(img.m_iWidth*img.m_iHeight*sizeof(int));

@@ -16,7 +16,7 @@
 #include "mesh.h"
 #include "mesh_io.h"
 #include "io_path_guard.h"
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 #include "zip_manager.h"
 
 // Taille des tampons de lecture ligne a ligne (etait dans mesh_io.cpp).

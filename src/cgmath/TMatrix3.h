@@ -163,24 +163,11 @@ public:
 		m_Mat[2][0]=m2; m_Mat[2][1]=m5; m_Mat[2][2]=m8;
 	}
 
-	inline TValue *Multiply(TValue *mat)
-	{
-	TMatrix3<TValue> res;
-	int i,j,k;
-	TMatrix3<TValue> TempMatrice(mat);
-		
-		for (i=0; i<3; i++) 
-			for (j=0; j<3; j++) 
-			{
-				res.m_Mat[i][j] = 0.0;
-				for (k=0; k<3; k++) 
-					res.m_Mat[i][j] += m_Mat[i][k] * (TempMatrice.m_Mat[k][j]);
-			}
-
-		*this = res;
-
-		return (TMatrix3<TValue>)(&res.m_Mat[0][0]);
-	}
+	// Multiply(TValue*) A ETE RETIRE : il rendait un pointeur vers `res`, une
+	// variable LOCALE detruite au retour -- comportement indefini arme, dans une
+	// methode que personne n'appelait. Le cast final vers TMatrix3 n'avait pas
+	// davantage de sens. La multiplication en place se fait par `*this = *this * m`,
+	// que l'operateur * couvre et que les tests exercent.
 
 
 	//

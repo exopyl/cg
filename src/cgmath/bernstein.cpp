@@ -1,6 +1,10 @@
 #include "bernstein.h"
 
 // binomial coefficient (n,k) with n>=k. If n<k, the coefficient is invalid => returns -1.0
+//
+// Le degre maximal est celui de la table, et il est NOMME : binomialCoefficient
+// s'en sert pour refuser au lieu de lire a cote.
+static constexpr int kMaxBinomialDegree = 20;
 static constexpr int binomialCoefficients[21][21] = {{1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 {1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 {1, 2, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
@@ -28,8 +32,17 @@ static constexpr int binomialCoefficients[21][21] = {{1, -1, -1, -1, -1, -1, -1,
 */
 int binomialCoefficient (int n, int k)
 {
+	// BORNES, et elles manquaient : la table est [21][21], donc tout n ou k au-dela
+	// de 20 lisait hors d'elle. Ce n'etait pas theorique -- une courbe de Bezier a
+	// 22 points de controle y arrive, et la lecture rendait une valeur quelconque
+	// au lieu d'echouer.
+	//
+	// -1 est la valeur que la table elle-meme donne aux couples invalides (n < k) :
+	// le refus s'exprime donc dans la convention deja en place, sans en inventer
+	// une seconde.
+	if (n < 0 || k < 0 || n > kMaxBinomialDegree || k > kMaxBinomialDegree)
+		return -1;
 	return binomialCoefficients[n][k];
-	//return (factorial(n) / (factorial(k) * factorial(n-k)));
 }
 
 /**

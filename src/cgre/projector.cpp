@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 #include "../cgimg/cgimg.h"
 #include "projector.h"
 

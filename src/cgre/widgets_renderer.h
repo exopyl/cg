@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 
 #include "framerate.h"
 

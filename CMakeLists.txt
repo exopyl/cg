@@ -4,6 +4,42 @@ project (cg)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# REPLI DE TYPE DE BUILD. Sans lui, une configuration hors preset sur un
+# generateur mono-config (Ninja, Makefiles) compile SANS AUCUN -O : cgmath et
+# cgimg, dont les primitives sont appelees en boucle chaude par cgmesh, y
+# perdent tout. Le motif est celui de vecna/CMakeLists.txt:18-19.
+#
+# Uniquement sur generateur mono-config : sur Visual Studio ou Xcode,
+# CMAKE_BUILD_TYPE n'a pas de sens -- le type se choisit a la construction.
+get_property(CG_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if (NOT CG_MULTI_CONFIG AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Type de build" FORCE)
+    message(STATUS "CMAKE_BUILD_TYPE non precise : repli sur Release")
+endif ()
+
+# OPTIMISATION INTER-PROCEDURALE, derriere une option et par defaut OFF.
+#
+# cgmath et cgimg sont des bibliotheques STATIQUES dont les accesseurs par pixel
+# et par composante vivent dans une autre unite de traduction que leurs
+# appelants : sans LTO, aucun de ces acces n'est inlinable. C'est l'un des
+# constats de debt_cgimg.md.
+#
+# OFF par defaut, et delibere : l'audit n'a mesure aucun gain -- il ne pouvait
+# pas, aucun banc n'ayant ete execute -- et l'IPO allonge sensiblement l'edition
+# de liens. L'option existe pour rendre la mesure possible sans modifier le
+# depot, pas pour trancher a sa place.
+option(CG_ENABLE_IPO "Optimisation inter-procedurale (LTO) en Release" OFF)
+if (CG_ENABLE_IPO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT CG_IPO_OK OUTPUT CG_IPO_WHY)
+    if (CG_IPO_OK)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+        message(STATUS "IPO active en Release")
+    else ()
+        message(WARNING "IPO demandee mais indisponible : ${CG_IPO_WHY}")
+    endif ()
+endif ()
+
 # copy_directory REECRIT SYSTEMATIQUEMENT : il ne compare ni dates ni contenu.
 # Les blocs POST_BUILD qui deposent les ~50 DLL d'OCCT a cote d'un executable
 # les reecrivaient donc a chaque build, et il suffisait qu'une seule soit

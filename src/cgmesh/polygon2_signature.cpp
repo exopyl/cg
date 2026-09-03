@@ -4,7 +4,7 @@
 #include <assert.h>
 
 #include "polygon2.h"
-#include "../cgmath/common.h"
+#include <cgmath/common.h>
 
 void
 Polygon2::search_symmetry_signature (int signature_type, int interpolation_type, int nbins)

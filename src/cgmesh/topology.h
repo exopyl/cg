@@ -1,5 +1,5 @@
 #pragma once
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 
 extern void create_indexation(Vector3f *pTriangles, unsigned int nPoints,
 			      unsigned int **pIndexation,

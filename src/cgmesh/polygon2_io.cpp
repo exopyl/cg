@@ -8,7 +8,7 @@
 
 #include "polygon2.h"
 #include "io_path_guard.h"
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 #include "../cgimg/cgimg.h"
 
 #define NPTS_QUADRIC 10

@@ -1,5 +1,5 @@
 #pragma once
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 
 //
 // Curvature type.

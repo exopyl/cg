@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "chull.h"
-#include "../cgmath/context.h"
+#include <cgmath/context.h>
 
 // SWAP local a 3 arguments (t = variable temporaire fournie par l'appelant),
 // incompatible avec le SWAP(a, b) de cgmath/common.h que chull.h fait entrer

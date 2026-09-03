@@ -29,7 +29,7 @@
 // types de contour, pas le constructeur de maillage.
 #include "extrude_contours.h"
 
-#include "../cgmath/text_layout.h"   // TextAlign
+#include <cgmath/text_layout.h>   // TextAlign
 
 class Font;
 class Mesh;

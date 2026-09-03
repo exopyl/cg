@@ -12,7 +12,7 @@
 #include <functional>
 
 #include "mesh.h"
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 #include "../cgimg/cgimg.h"
 #include "octree.h"
 #include "mesh_raycast.h"

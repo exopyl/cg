@@ -1,7 +1,7 @@
 #ifndef __GEOMETRIC_PRIMITIVES_H__
 #define __GEOMETRIC_PRIMITIVES_H__
 
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 #include "mesh_half_edge.h"
 
 //

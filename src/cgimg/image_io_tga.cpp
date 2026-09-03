@@ -427,21 +427,37 @@ int ImgIO::import_tga (Img& img, const char *filename)
 	  return -1;
 	  break;
 	case 2:
-	  while (pixels_read < w*h)
+	  {
+	  // DEBORDEMENT DE TAS CORRIGE ICI. La boucle ne testait que
+	  // `pixels_read < w*h` AVANT de lire un paquet, et un paquet porte jusqu'a
+	  // 128 pixels : le dernier ecrivait donc jusqu'a 127 pixels au-dela du
+	  // tampon, soit ~508 octets, sur un fichier que rien n'oblige a etre sain.
+	  //
+	  // Deux gardes, et il faut les deux :
+	  //   - le nombre de pixels ECRITS est borne par la place restante ;
+	  //   - les octets du fichier sont quand meme CONSOMMES, pour que le
+	  //     decodage reste synchrone si l'image se termine au milieu d'un paquet.
+	  //
+	  // Le retour de fread est teste : sans cela un fichier tronque remplissait
+	  // la fin de l'image avec la derniere valeur lue, en silence.
+	  const unsigned int total = (unsigned int) (w * h);
+	  while (pixels_read < total)
 	    {
-	      // read a packet
-	      fread (&repetition_block, sizeof(unsigned char), 1, ptr);
+	      if (fread (&repetition_block, sizeof(unsigned char), 1, ptr) != 1)
+		break;   // fichier tronque : on garde ce qui a ete decode
+	      const unsigned int room = total - pixels_read;
 	      if ((repetition_block&0x80) == 0x80)
 		{
 		  // run-length packet
 		  pixel_count = repetition_block - 0x80 + 1;
-		  fread (&b, sizeof(unsigned char), 1, ptr);
-		  fread (&g, sizeof(unsigned char), 1, ptr);
-		  fread (&r, sizeof(unsigned char), 1, ptr);
+		  if (fread (&b, sizeof(unsigned char), 1, ptr) != 1) break;
+		  if (fread (&g, sizeof(unsigned char), 1, ptr) != 1) break;
+		  if (fread (&r, sizeof(unsigned char), 1, ptr) != 1) break;
 		  a = 255;
-		  if (pixel_depth == 32)
-		    fread (&a, sizeof(unsigned char), 1, ptr);
-		  for (i=0; i<pixel_count; i++)
+		  if (pixel_depth == 32 && fread (&a, sizeof(unsigned char), 1, ptr) != 1)
+		    break;
+		  const unsigned int written = pixel_count < room ? pixel_count : room;
+		  for (i=0; i<(int)written; i++)
 		    {
 				img.m_pPixels[4*(pixels_read+i)+3] = a;
 				img.m_pPixels[4*(pixels_read+i)+2] = b;
@@ -453,24 +469,31 @@ int ImgIO::import_tga (Img& img, const char *filename)
 		{
 		  // non-run-length packet
 		  pixel_count = repetition_block + 1;
+		  bool truncated = false;
 		  for (i=0; i<pixel_count; i++)
 		    {
-				fread (&b, sizeof(unsigned char), 1, ptr);
-				fread (&g, sizeof(unsigned char), 1, ptr);
-				fread (&r, sizeof(unsigned char), 1, ptr);
+				if (fread (&b, sizeof(unsigned char), 1, ptr) != 1) { truncated = true; break; }
+				if (fread (&g, sizeof(unsigned char), 1, ptr) != 1) { truncated = true; break; }
+				if (fread (&r, sizeof(unsigned char), 1, ptr) != 1) { truncated = true; break; }
 				a = 255;
-				if (pixel_depth == 32)
-					fread (&a, sizeof(unsigned char), 1, ptr);
+				if (pixel_depth == 32 && fread (&a, sizeof(unsigned char), 1, ptr) != 1)
+					{ truncated = true; break; }
 
+				// Les octets sont lus meme au-dela de l'image -- c'est ce qui
+				// garde le flux synchrone -- mais ils ne sont ecrits que dans
+				// la place restante.
+				if ((unsigned int) i >= room)
+					continue;
 				img.m_pPixels[4*(pixels_read+i)+3] = a;
 				img.m_pPixels[4*(pixels_read+i)+2] = b;
 				img.m_pPixels[4*(pixels_read+i)+1] = g;
 				img.m_pPixels[4*(pixels_read+i)+0] = r;
 		    }
+		  if (truncated) break;
 		}
 	      pixels_read += pixel_count;
 	    }
-	  printf ("pixels read: %d\n", pixels_read);
+	  }
 	  break;
 	case 3:
 	  printf ("not yet implemented :(\n");

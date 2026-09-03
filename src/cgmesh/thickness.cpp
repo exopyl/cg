@@ -3,7 +3,7 @@
 #include "bvh.h"
 #include "../cgimg/color.h"
 
-#include "../cgmath/context.h"
+#include <cgmath/context.h>
 
 #include <algorithm>
 #include <atomic>

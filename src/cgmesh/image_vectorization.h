@@ -6,7 +6,7 @@
 #include <vector>
 using namespace std;
 
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 #include "../cgimg/cgimg.h"
 
 class TPoint

@@ -1,7 +1,7 @@
 #pragma once
 #include "mesh.h"
 #include "half_edge.h"
-#include "../cgmath/context.h"
+#include <cgmath/context.h>
 #include <memory>
 #include <vector>
 

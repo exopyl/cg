@@ -4,7 +4,7 @@
 #include <math.h>
 
 #include "polygon2.h"
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 
 float
 Polygon2::matching_arkin (Polygon2 *pol, int nn)

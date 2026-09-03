@@ -2,7 +2,7 @@
 #include <math.h>
 
 #include "surface_architecture.h"
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 
 Mesh* CreateBlock (float _width, float _height, float _depth, float bevel)
 {

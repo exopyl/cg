@@ -1,6 +1,6 @@
 #pragma once
 #include <vector>
-#include "../cgmath/TVector2.h"
+#include <cgmath/TVector2.h>
 
 #define SIGNATURE_DEVIATION 0
 #define SIGNATURE_CURVATURE 1

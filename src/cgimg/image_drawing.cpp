@@ -2,7 +2,7 @@
 
 #include "image.h"
 #include "image_drawing.h"
-#include "../cgmath/TVector2.h"
+#include <cgmath/TVector2.h>
 
 //
 // drawing

@@ -5,7 +5,7 @@
 #include <string>
 
 #include "io_path_guard.h"
-#include "../cgmath/cgmath.h"
+#include <cgmath/cgmath.h>
 
 #include "audio.h"
 
