@@ -450,3 +450,90 @@ TEST(TEST_cgmath_font, font_collections_are_indexed)
 	Font outOfRange;
 	EXPECT_FALSE (outOfRange.loadFromFile (path, first.numFonts()));
 }
+
+// ---------------------------------------------------------------------------
+// Hauteur de capitale
+// ---------------------------------------------------------------------------
+// La cote qu'un humain designe quand il dit « lettres de 30 mm ». Elle se
+// CONSTATE sur la bbox d'une capitale a sommet plat -- elle n'est pas lue dans
+// `OS/2`, que stb_truetype n'expose pas.
+
+TEST(TEST_cgmath_font, cap_height_is_the_flat_top_of_a_capital)
+{
+	if (!exists (kTrueTypeFont)) GTEST_SKIP() << kTrueTypeFont << " absent";
+	Font font;
+	ASSERT_TRUE (font.loadFromFile (kTrueTypeFont));
+
+	const int cap = font.capHeight();
+	ASSERT_GT (cap, 0);
+
+	// Elle vit STRICTEMENT sous l'em : c'est ce qui distingue les deux
+	// references, et tout l'objet du mode CapHeight.
+	EXPECT_LT (cap, font.unitsPerEm());
+
+	// Et elle vaut exactement le sommet du 'H' -- la mesure, pas une valeur
+	// declaree ailleurs. Le contour est en unites de police, Y vers le haut.
+	const std::vector<GlyphContour> h = font.glyphContours (font.glyphIndex (U'H'));
+	ASSERT_FALSE (h.empty());
+	float top = h[0].start.y;
+	for (const GlyphContour& c : h)
+	{
+		if (c.start.y > top) top = c.start.y;
+		for (const GlyphSegment& s : c.segments)
+			if (s.to.y > top) top = s.to.y;
+	}
+	EXPECT_NEAR ((float)cap, top, 1.f);
+}
+
+TEST(TEST_cgmath_font, cap_height_ignores_the_overshoot_of_round_capitals)
+{
+	if (!exists (kTrueTypeFont)) GTEST_SKIP() << kTrueTypeFont << " absent";
+	Font font;
+	ASSERT_TRUE (font.loadFromFile (kTrueTypeFont));
+
+	// Un 'O' DEPASSE la ligne des capitales (debord optique). Si capHeight()
+	// l'avait essaye, elle rendrait cette valeur-la : le test echouerait, et
+	// c'est precisement ce qu'il garde.
+	const std::vector<GlyphContour> o = font.glyphContours (font.glyphIndex (U'O'));
+	ASSERT_FALSE (o.empty());
+	float top = o[0].start.y;
+	for (const GlyphContour& c : o)
+	{
+		if (c.start.y > top) top = c.start.y;
+		for (const GlyphSegment& s : c.segments)
+			if (s.to.y > top) top = s.to.y;
+	}
+	EXPECT_GT (top, (float)font.capHeight())
+		<< "le 'O' de cette police ne deborde pas : le temoin ne prouve plus rien";
+}
+
+TEST(TEST_cgmath_font, cap_height_is_stable_and_font_specific)
+{
+	if (!exists (kCffFont) || !exists (kTrueTypeFont))
+		GTEST_SKIP() << "polices de test absentes";
+
+	Font cff;
+	ASSERT_TRUE (cff.loadFromFile (kCffFont));
+	Font ttf;
+	ASSERT_TRUE (ttf.loadFromFile (kTrueTypeFont));
+
+	// Memoisee : deux appels rendent la meme valeur.
+	EXPECT_EQ (cff.capHeight(), cff.capHeight());
+
+	// Le RAPPORT capitale/em differe d'une police a l'autre -- c'est la raison
+	// d'etre du mode : deux polices au meme corps em ne rendent pas des lettres
+	// de meme hauteur.
+	const double rCff = (double)cff.capHeight() / (double)cff.unitsPerEm();
+	const double rTtf = (double)ttf.capHeight() / (double)ttf.unitsPerEm();
+	EXPECT_GT (rCff, 0.3);
+	EXPECT_LT (rCff, 0.95);
+	EXPECT_GT (rTtf, 0.3);
+	EXPECT_LT (rTtf, 0.95);
+	EXPECT_NE (cff.capHeight(), ttf.capHeight());
+}
+
+TEST(TEST_cgmath_font, an_unloaded_font_has_no_cap_height)
+{
+	Font font;
+	EXPECT_EQ (font.capHeight(), 0);
+}

@@ -1,11 +1,62 @@
 :root {
-  --bg: #1e1f22;
-  --panel: #26282c;
-  --panel2: #2f3237;
-  --fg: #e6e6e6;
-  --muted: #9aa0a6;
-  --accent: #4c9aff;
-  --border: #3a3d42;
+  /* --- SURFACES NEUTRES, en gris tres clair -------------------------------
+     Le fond de l application et celui de la vue 3D sont volontairement les
+     memes : la piece flotte alors dans la page au lieu d etre posee dans une
+     fenetre noire. --viewer-bg existe separement parce que le renderer le lit
+     lui aussi (js/viewer.js), et qu une couleur ecrite a deux endroits finit
+     toujours par diverger. */
+  --bg: #e9ebef;
+  --viewer-bg: #eceef2;
+  --panel: #f2f4f7;
+  --panel2: #e3e6eb;
+  --fg: #23272f;
+  --muted: #5f6773;
+  --accent: #2f7fe0;
+  --border: #ccd2db;
+  /* Avertissement de CALCUL : ce que le reglage a coute (silhouette en
+     morceaux, delie mange par une arete). Ambre et non rouge -- la piece
+     est valide, elle n est simplement pas ce qu on croyait demander. */
+  --warn: #8a5a00;
+
+  /* --- BLOCS DE REGLAGES : une rampe bleue a quatre marches ---------------
+     Le panneau est neutre et SOMBRE (#26282c) ; les blocs sont bleutes et
+     nettement plus CLAIRS que lui -- c est ce qui les detache, sans introduire
+     de seconde couleur d accent. Trois essais ont ete necessaires : chacun
+     paraissait suffisant sur la feuille de style et trop timide a l ecran. Le
+     corps d un bloc est desormais a #5d6f95, soit plus de QUARANTE points de
+     clarte au-dessus du panneau. Les valeurs
+     montent dans l ordre ou l oeil les parcourt :
+
+       --block-head  le bandeau du titre, le plus SOMBRE : il pose la limite
+                     haute du bloc et laisse le titre ressortir ;
+       --block-body  le contenu, plus CLAIR que le panneau : c est ce qui
+                     separe visuellement un bloc de son voisin ;
+       --field       les champs et curseurs, RENFONCES dans le corps -- sans
+                     quoi une liste deroulante sur fond clair se confondrait
+                     avec lui ;
+       --block-title le titre lui-meme, bleu clair et non gris : il se lit d un
+                     coup d oeil, sans emprunter l accent, qui reste reserve
+                     aux VALEURS et aux positions actives.
+
+     --accent (#4c9aff) et --block-title (#8ab4f8) sont volontairement
+     parents : meme famille, saturations differentes. */
+  --block-head:  #44547a;
+  --block-body:  #5d6f95;
+  --block-title: #e6efff;
+  --block-border:#8195bd;
+  /* Le texte d un bloc ne suit PAS --fg : la page est claire, le bloc ne l est
+     pas. C est le prix des cartes bleues sur fond gris -- deux encres, chacune
+     pour sa surface. */
+  --block-fg:    #eef2f9;
+  /* Les CHAMPS, eux, sont des creux CLAIRS dans la carte : sur un corps de bloc
+     a mi-clarte, un champ presque blanc se lit mieux qu un champ sombre, et
+     accepte l encre foncee de la page. */
+  --field:       #edf1f7;
+  --field-fg:    #23272f;
+  /* Sur un corps de bloc CLAIR, l accent (#4c9aff) manque de contraste : les
+     valeurs et les notes prennent donc une marche de plus, et elles seules. */
+  --block-value: #d8e9ff;
+  --block-muted: #dde6f2;
 }
 
 * { box-sizing: border-box; }
@@ -26,14 +77,22 @@ body {
 
 /* ---- panneau ---- */
 .panel {
-  width: 320px;
-  flex: 0 0 320px;
+  /* 360 et non 320 : depuis que les reglages vivent dans des blocs encadres, ils
+     perdent 26 px de bordure et de retrait interieur. A 320 la colonne des
+     valeurs commencait a se serrer contre les libelles. */
+  width: 360px;
+  flex: 0 0 360px;
   background: var(--panel);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   padding: 16px;
-  gap: 16px;
+  /* MEME ecart partout. Les blocs de parametres vivent dans #params et se
+     separent de 10 px ; le bloc des sources, lui, est un enfant direct du
+     panneau et prenait donc le `gap` de celui-ci. « Police » et « Texte »
+     paraissaient appartenir a deux sections differentes alors qu ils sont deux
+     blocs de meme rang. */
+  gap: 10px;
   overflow-y: auto;
 }
 
@@ -88,15 +147,198 @@ button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: .5; cursor: default; }
 
 /* ---- widgets de paramètres ---- */
-.param { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
-.param .row { display: flex; justify-content: space-between; align-items: baseline; }
+.param { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+.param:last-child { margin-bottom: 2px; }
+.param .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.param .row label { font-size: 12.5px; color: var(--fg); }
 .param .name { font-size: 13px; }
-.param .val { font-size: 12px; color: var(--accent); font-variant-numeric: tabular-nums; }
-.param input[type=range] { width: 100%; accent-color: var(--accent); }
-.param.bool .row { justify-content: flex-start; gap: 8px; }
-.param select { padding: 6px; }
+/* La VALEUR se lit du même côté sur toutes les lignes, en chiffres à chasse
+   fixe : une colonne qu'on balaie du regard, au lieu de nombres qui dansent. */
+.param .val,
+.param .readout {
+  font-size: 12px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.param.bool .row { justify-content: space-between; }
+.param.bool input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.param select { padding: 6px 8px; }
+.param textarea {
+  font: inherit;
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  width: 100%;
+  resize: vertical;
+}
+.param textarea:focus { outline: none; border-color: var(--accent); }
 
-footer { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+/* CURSEUR dessiné plutôt que celui du système : le natif ignore accent-color
+   sur sa piste, et une piste claire sur un panneau sombre écrase la valeur. */
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type=range]::-webkit-slider-runnable-track {
+  height: 3px; border-radius: 2px; background: var(--border);
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px; height: 13px; margin-top: -5px;
+  border-radius: 50%; background: var(--accent); border: none;
+  transition: transform .12s;
+}
+input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.15); }
+input[type=range]::-moz-range-track { height: 3px; border-radius: 2px; background: var(--border); }
+input[type=range]::-moz-range-thumb {
+  width: 13px; height: 13px; border: none; border-radius: 50%; background: var(--accent);
+}
+
+/* ---- blocs de réglages ---- */
+/*
+   Vingt-cinq curseurs à la file ne se lisent pas. Un intertitre ne suffisait
+   pas non plus : il flottait dans la même colonne et se confondait avec les
+   libellés de section de la page. D'où de vrais BLOCS -- encadrés, repliables,
+   et refermés d'avance pour ceux qu'on ne touche qu'une fois.
+*/
+.block {
+  border: 1px solid var(--block-border);
+  border-radius: 8px;
+  background: var(--block-body);
+  overflow: hidden;
+  /* Le panneau est un flex COLONNE : un bloc qui en est l enfant direct -- le
+     bloc des sources, celui de la vue -- se laisserait comprimer des que le
+     contenu deborde, et se reduisait a un trait de deux pixels. Les blocs de
+     parametres, eux, vivent dans #params et ne le voyaient pas. */
+  flex: 0 0 auto;
+  /* Une ombre portee courte : elle POSE le bloc sur le panneau au lieu de l y
+     incruster, et fait le travail que la seule difference de ton ne ferait pas
+     sur un ecran mal regle. */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+}
+.block + .block { margin-top: 10px; }
+.block > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--block-title);
+  background: var(--block-head);
+  user-select: none;
+  transition: color .15s, background .15s;
+}
+.block > summary::-webkit-details-marker { display: none; }
+.block > summary::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 5px; height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform .15s;
+}
+.block[open] > summary::before { transform: rotate(45deg); }
+.block { color: var(--block-fg); }
+.block .body label,
+.block .body .ctrlrow,
+.block .body .name { color: var(--block-fg); }
+.block > summary:hover { color: #ffffff; background: #4e6091; }
+.block[open] > summary { border-bottom: 1px solid var(--block-border); }
+.block .body { padding: 12px 12px 10px; }
+
+/* Les champs se RENFONCENT dans le corps du bloc : sur un fond plus clair que
+   le panneau, un controle de la meme couleur que lui disparaitrait. */
+/* > et non un descendant quelconque : sans cela cette regle l emportait, par
+   specificite, sur la position ACTIVE d un controle segmente, qui ressortait
+   alors eteinte pendant que les inactives paraissaient allumees. */
+.block .body select,
+.block .body input[type=text],
+.block .body input[type=file],
+.block .body textarea,
+.block .body .seg,
+.block .body > button:not(.primary) {
+  background: var(--field);
+  border-color: var(--block-border);
+  color: var(--field-fg);
+}
+/* Un creux clair porte l encre foncee de la page : les positions inactives d un
+   controle segmente en font partie. */
+.block .body .seg button { color: #5b6473; }
+.block .body .seg button:hover:not([aria-pressed="true"]) { background: rgba(0,0,0,.06); }
+.block .body .seg button[aria-pressed="true"] { color: #ffffff; }
+.block .body .val,
+.block .body .readout { color: var(--block-value); }
+.block .body .hint-sm,
+.block .body .preview figcaption { color: var(--block-muted); }
+/* La piste du curseur doit rester visible SOUS le pouce sur un fond clair. */
+.block .body input[type=range]::-webkit-slider-runnable-track { background: #3d4a63; }
+.block .body input[type=range]::-moz-range-track { background: #3d4a63; }
+.block .body input[type=range]::-webkit-slider-thumb { background: var(--block-value); }
+.block .body input[type=range]::-moz-range-thumb { background: var(--block-value); }
+.block .body .seg button:hover:not([aria-pressed="true"]) { background: rgba(255,255,255,.07); }
+
+/* ---- contrôle segmenté ---- */
+/*
+   Pour deux ou trois choix, un menu déroulant cache l'essentiel : ce qu'on
+   POURRAIT choisir. Les positions côte à côte le montrent, et se changent d'un
+   clic au lieu de deux. Au-delà de trois, le menu reprend l'avantage.
+*/
+.seg {
+  display: flex;
+  gap: 2px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+}
+.seg button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 5px 4px;
+  font-size: 11.5px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  color: var(--muted);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.seg button:hover:not([aria-pressed="true"]) { color: var(--fg); background: rgba(255,255,255,.06); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #10151d; font-weight: 600; }
+
+footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+/* L'action que la page existe pour rendre : elle se voit, les autres suivent. */
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #10151d;
+  font-weight: 600;
+}
+button.primary:hover:not(:disabled) { filter: brightness(1.1); border-color: var(--accent); }
 /* Boutons propres a une page (ex. export JSON gothique). Sans :empty, le
    conteneur vide consommerait le `gap` du footer sur les autres pages. */
 #footerExtras { display: flex; flex-direction: column; gap: 8px; }
@@ -122,10 +364,10 @@ footer { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
   padding: 10px;
   border-radius: 6px;
 }
-.banner code { background: rgba(0,0,0,.3); padding: 1px 4px; border-radius: 3px; }
+.banner code { background: rgba(0,0,0,.35); padding: 1px 4px; border-radius: 3px; }
 
 /* ---- viewer ---- */
-.viewer { position: relative; flex: 1 1 auto; min-width: 0; background: #14161a; }
+.viewer { position: relative; flex: 1 1 auto; min-width: 0; background: var(--viewer-bg); }
 .viewer canvas { display: block; }
 .hint {
   position: absolute; inset: 0;
@@ -179,8 +421,19 @@ body.home {
 
 /* ---- divers ---- */
 code {
-  background: rgba(0, 0, 0, .3);
+  background: rgba(0, 0, 0, .07);
   padding: 1px 4px;
   border-radius: 3px;
   font-size: .95em;
 }
+
+/* Voir --warn : un constat, pas une panne. Masque par [hidden] tant que rien
+   n est a dire. */
+.warn {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--warn);
+  border-left: 2px solid var(--warn);
+  padding-left: 8px;
+}
+.warn[hidden] { display: none; }

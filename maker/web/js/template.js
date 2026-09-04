@@ -26,7 +26,7 @@
 
 import { loadModule } from "./wasm.js";
 import { createViewer } from "./viewer.js";
-import { saveBlob, safeName } from "./exporters.js";
+import { saveBlob, safeName, downloadStlFromGraph, meshExtent } from "./exporters.js";
 
 const el = (id) => document.getElementById(id);
 
@@ -53,6 +53,38 @@ function readParam(Module, spec) {
   return found ? found.value : null;
 }
 
+// MESURES du dernier calcul d'un nœud (Node::PublishStats). Ce ne sont pas des
+// paramètres : rien ne les règle, elles se constatent — d'où une section à part
+// dans graphNodeInfo.
+function readStats(Module, node) {
+  const info = JSON.parse(Module.graphNodeInfo(node));
+  return info && info.stats ? info.stats : {};
+}
+
+// Les premières mesures étaient toutes des COMPTES — des morceaux, des déliés
+// mangés — et s'écrivaient telles quelles. L'entraxe de la fixation est une
+// LONGUEUR : brute, elle s'afficherait « 92.36000061035156 », ce qui est exact
+// et illisible. Un entier reste un entier ; le reste est arrondi au dixième de
+// millimètre, qui est déjà plus fin que ce qu'une perceuse tient.
+function fmtStat(value) {
+  return Number.isInteger(value)
+    ? String(value)
+    : value.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
+}
+
+// Un avertissement du gabarit est vrai QUAND la branche qu'il surveille est
+// celle qui sert. Sans cette garde, la page crierait « ta silhouette est en
+// morceaux » alors que le socle choisi est rectangulaire — un avertissement
+// exact et hors sujet, donc un avertissement qu'on apprend à ignorer.
+function watchApplies(Module, spec) {
+  if (!spec.onlyIf) return true;
+  // Une condition, ou plusieurs qui doivent TOUTES tenir : la silhouette ne se
+  // signale que si le socle est demande ET que la forme choisie est bien elle.
+  const conditions = Array.isArray(spec.onlyIf) ? spec.onlyIf : [spec.onlyIf];
+  return conditions.every((c) =>
+    Number(readParam(Module, { node: c.node, param: c.param })) === Number(c.equals));
+}
+
 // Type que le GRAPHE donne au paramètre, à confronter à celui du gabarit.
 function graphType(Module, spec) {
   const info = JSON.parse(Module.graphNodeInfo(spec.node));
@@ -68,7 +100,13 @@ function graphType(Module, spec) {
 // C'est une panne muette, et elle est facile à écrire : un entier déclaré
 // « float » parce qu'on lui a mis un curseur. D'où cette vérification au
 // chargement plutôt qu'une relecture attentive des gabarits.
-const SETTER_TYPE = { int: "int", enum: "int", float: "float", bool: "bool", string: "string" };
+const SETTER_TYPE = {
+  int: "int", enum: "int", float: "float", bool: "bool",
+  string: "string",
+  // La couleur est une chaîne côté graphe : c'est le type qui la rend lisible
+  // dans le document, et le seul dont ParamSet dispose pour « #rrggbb ».
+  color: "string",
+};
 
 function checkType(Module, spec, warn) {
   const actual = graphType(Module, spec);
@@ -106,17 +144,66 @@ function buildWidget(Module, spec, onChange, warn) {
       writeParam(Module, spec, input.checked);
       onChange();
     });
+  } else if (spec.type === "enum" && (spec.choices || []).length <= 3) {
+    // `values` : la valeur écrite pour la position i, quand elle n'est pas i.
+    // C'est ce qui permet à une page de N'OFFRIR QU'UNE PARTIE d'une
+    // énumération — sauter une position que le nœud accepte mais qui ne peut
+    // rien produire d'utile — sans toucher au C++, où la retirer casserait les
+    // documents qui la portent. Un document qui l'utilise reste lisible : aucune
+    // position n'est alors marquée, et c'est vrai.
+    const values = spec.values || (spec.choices || []).map((_, i) => i);
+    // SEGMENTÉ pour deux ou trois positions. Un menu déroulant cache ce qu'on
+    // POURRAIT choisir et demande deux clics ; côte à côte, les positions se
+    // lisent et se changent d'un seul. Au-delà de trois, le menu reprend
+    // l'avantage — c'est pourquoi le seuil est ici et pas dans le gabarit.
+    const seg = document.createElement("div");
+    seg.className = "seg";
+    const buttons = [];
+    const select = (index) => {
+      buttons.forEach((b, i) => b.setAttribute("aria-pressed", i === index ? "true" : "false"));
+      writeParam(Module, spec, values[index]);
+      onChange();
+    };
+    (spec.choices || []).forEach((choice, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = choice;
+      // Le libellé complet en infobulle : une position peut être tronquée,
+      // l'ellipse ne doit pas emporter le sens avec elle.
+      b.title = choice;
+      b.setAttribute("aria-pressed", values[i] === (initial | 0) ? "true" : "false");
+      b.addEventListener("click", () => select(i));
+      buttons.push(b);
+      seg.appendChild(b);
+    });
+    row.appendChild(label);
+    wrap.appendChild(row);
+    wrap.appendChild(seg);
+    return wrap;
   } else if (spec.type === "enum") {
+    const values = spec.values || (spec.choices || []).map((_, i) => i);
     input = document.createElement("select");
     (spec.choices || []).forEach((choice, i) => {
       const option = document.createElement("option");
-      option.value = String(i);
+      option.value = String(values[i]);
       option.textContent = choice;
       input.appendChild(option);
     });
     input.value = String(initial | 0);
     input.addEventListener("change", () => {
       writeParam(Module, spec, Number(input.value));
+      onChange();
+    });
+  } else if (spec.type === "color") {
+    // La couleur s'écrit « #rrggbb » — le format de <input type="color"> — et
+    // part dans un paramètre de type CHAÎNE. Un entier aurait fait la même
+    // chose, mais le document enregistré ne se lirait plus : « #b4bec8 » se
+    // reconnaît, « 11845832 » se décode.
+    input = document.createElement("input");
+    input.type = "color";
+    input.value = String(initial);
+    input.addEventListener("input", () => {
+      writeParam(Module, spec, input.value);
       onChange();
     });
   } else if (spec.type === "string") {
@@ -138,6 +225,15 @@ function buildWidget(Module, spec, onChange, warn) {
       writeParam(Module, spec, input.value);
       onChange();
     });
+    // Une zone MULTILIGNE prend toute la largeur, sous son libellé : à côté de
+    // lui elle n'a plus la place d'afficher la ligne qu'on y tape, ce qui est
+    // tout ce qu'on lui demande.
+    if (spec.multiline) {
+      row.appendChild(label);
+      wrap.appendChild(row);
+      wrap.appendChild(input);
+      return wrap;
+    }
   } else {
     input = document.createElement("input");
     input.type = "range";
@@ -147,8 +243,17 @@ function buildWidget(Module, spec, onChange, warn) {
     input.value = initial;
     const readout = document.createElement("span");
     readout.className = "readout";
-    // Un entier s'affiche sans décimales : « 16 », pas « 16.000 ».
-    const show = (v) => (spec.type === "int" ? String(Math.round(v)) : Number(v).toFixed(3));
+    // La précision de l'AFFICHAGE suit celle du PAS : à 0,5 de pas, « 30.000 »
+    // annonce trois décimales que le curseur ne sait pas atteindre. Les zéros de
+    // queue tombent ensuite, pour que 30 se lise « 30 » et 0,05 « 0.05 ».
+    const step = String(spec.step !== undefined ? spec.step : 0.01);
+    const dot = step.indexOf(".");
+    const decimals = dot < 0 ? 0 : step.length - dot - 1;
+    const show = (v) => {
+      if (spec.type === "int") return String(Math.round(v));
+      const fixed = Number(v).toFixed(decimals);
+      return decimals > 0 ? fixed.replace(/\.?0+$/, "") : fixed;
+    };
     readout.textContent = show(initial);
     input.addEventListener("input", () => {
       readout.textContent = show(input.value);
@@ -168,9 +273,22 @@ function buildWidget(Module, spec, onChange, warn) {
   return wrap;
 }
 
+// Cote en millimetres : deux decimales au plus, et pas de zeros inutiles --
+// « 124,98 » et « 30 », pas « 124,9800 » ni « 30,00 ».
+function fmtMm(v) {
+  return (Math.round(v * 100) / 100).toLocaleString("fr-FR", { maximumFractionDigits: 2 });
+}
+
 export async function runTemplate(name) {
   const status = el("status");
   const setStatus = (t) => { if (status) status.textContent = t; };
+  // Optionnels : un gabarit qui ne montre ni cotes ni avertissements n'a pas ces
+  // éléments. Deux notions de « warning », à ne pas confondre : le tableau
+  // `warnings` ci-dessus porte les fautes de GABARIT, relevées une fois au
+  // chargement ; `warnBox` porte ce que le dernier CALCUL a coûté, et change à
+  // chaque réglage.
+  const dims = el("dims");
+  const warnBox = el("warnings");
   const warnings = [];
   const warn = (m) => { warnings.push(m); console.warn(m); };
 
@@ -191,15 +309,21 @@ export async function runTemplate(name) {
   if (error) { setStatus(`graphe refusé — ${error}`); return; }
 
   // ---- viewer ------------------------------------------------------------
+  // OPTIONNELLE désormais : quand le document porte lui-même sa couleur
+  // (nœud `mesh.color`), la page n'a plus de pastille à offrir — la couleur
+  // n'est plus un réglage de vue. template.html en garde une ; text.html non.
   const modelColor = el("modelColor");
   const wireframe = el("wireframe");
   const viewer = createViewer({
     container: el("viewer"),
     hintEl: el("hint"),
-    getModelColor: () => modelColor.value,
+    // Sans pastille, la teinte de repli ne sert qu'aux maillages qui ne portent
+    // aucun matériau — ceux qui en portent un l'emportent de toute façon.
+    getModelColor: () => (modelColor ? modelColor.value : "#b4bec8"),
     getWireframe: () => wireframe.checked,
     // Grise le sélecteur de couleur quand le maillage porte les siennes.
     onVertexColors: (has) => {
+      if (!modelColor) return;
       modelColor.disabled = has;
       modelColor.title = has
         ? "Le modèle porte ses propres couleurs (une par région)"
@@ -213,7 +337,7 @@ export async function runTemplate(name) {
       if (Module) viewer.updateInPlace(() => Module.graphMeshData(0), 0, true);
     },
   });
-  modelColor.addEventListener("input", viewer.applyModelColor);
+  if (modelColor) modelColor.addEventListener("input", viewer.applyModelColor);
   wireframe.addEventListener("change", viewer.applyWireframe);
   el("resetView").addEventListener("click", viewer.resetView);
 
@@ -244,7 +368,23 @@ export async function runTemplate(name) {
       queued = false;
       const result = JSON.parse(Module.graphEvaluate(tpl.output));
       if (result.status !== "ok") {
-        setStatus(`calcul : ${result.status}${result.detail ? " — " + result.detail : ""}`);
+        // NOMMER LE NŒUD FAUTIF. `graphEvaluate` rend déjà son identifiant —
+        // l'évaluateur le porte pour cette raison — mais la page n'en faisait
+        // rien, si bien qu'un refus parfaitement localisé s'affichait
+        // « compute-failed », c'est-à-dire rien. Et quand le gabarit sait ce que
+        // ce nœud reproche d'ordinaire, il le dit : un cul-de-sac devient un
+        // conseil.
+        let who = "";
+        try {
+          const info = JSON.parse(Module.graphNodeInfo(result.node));
+          if (info && info.type) who = ` · ${info.type}`;
+        } catch { /* le nœud a pu disparaître : le statut seul reste vrai */ }
+        const hint = (tpl.failureHints || {})[String(result.node)];
+        setStatus(`calcul refusé${who}${result.detail ? " — " + result.detail : ""}`);
+        if (warnBox) {
+          warnBox.textContent = hint || "";
+          warnBox.hidden = !hint;
+        }
         return;
       }
       lastObj = Module.graphExportObj(0);
@@ -259,19 +399,89 @@ export async function runTemplate(name) {
       // PAR SOMMET. graphExportObj rend un OBJ minimal sans mtllib ; graphMeshData
       // rend en plus l'attribut `color`, vide sur un maillage mono-matériau — le
       // sélecteur de couleur reprend alors la main, comme pour une forme.
+      // UN SEUL appel a graphMeshData, consomme deux fois : les cotes le lisent,
+      // le viewer le recoit. La charge utile est une VUE TYPEE sur le tas WASM,
+      // valide jusqu'au prochain appel au Module -- d'ou l'ordre strict ici, et
+      // le `() => payload` passe au viewer plutot qu'un second appel.
+      const payload = Module.graphMeshData(0);
+      const extent = meshExtent(payload.positions);
+
       if (!viewer.isReady()) viewer.bootstrap(lastObj);
-      else viewer.updateInPlace(() => Module.graphMeshData(0), 0, refit);
+      else viewer.updateInPlace(() => payload, 0, refit);
       refit = false;
 
       setStatus(`${result.nv} sommets · ${result.nf} triangles · ${result.ms} ms`);
+      // COTES : ce que l'utilisateur regarde avant d'imprimer, et la seule
+      // verification que le reglage veut bien dire ce qu'il annonce. Les unites
+      // monde du document SONT des millimetres (cf. le gabarit).
+      if (dims)
+        dims.textContent = extent
+          ? `${fmtMm(extent.x)} × ${fmtMm(extent.y)} × ${fmtMm(extent.z)} mm`
+          : "—";
+
+      // AVERTISSEMENTS. Plusieurs nœuds comptent ce que le réglage a coûté — les
+      // morceaux d'une silhouette qui ne s'est pas refermée, les déliés qu'une
+      // arête a mangés. Ces compteurs ne servaient à rien tant qu'ils
+      // n'atteignaient pas l'écran : un garde-fou invisible n'en est pas un.
+      if (warnBox) {
+        const said = [];
+        for (const spec of tpl.watch || []) {
+          if (!watchApplies(Module, spec)) continue;
+          // SANS `stat`, la garde `onlyIf` suffit : l'avertissement ne porte
+          // pas sur ce que le calcul a coûté mais sur un RÉGLAGE qui est un
+          // piège en lui-même — un renfort qui avale les lettres, par exemple.
+          // Rien à mesurer, tout à dire.
+          if (!spec.stat) { said.push(String(spec.message)); continue; }
+          const value = readStats(Module, spec.node)[spec.stat];
+          if (typeof value !== "number") continue;
+          if (value > (spec.warnAbove || 0))
+            said.push(String(spec.message).replace("{value}", fmtStat(value)));
+        }
+        warnBox.textContent = said.join(" · ");
+        warnBox.hidden = said.length === 0;
+      }
     });
   }
 
   // ---- panneau -----------------------------------------------------------
   const params = el("params");
   params.innerHTML = "";
-  for (const spec of tpl.expose || [])
-    params.appendChild(buildWidget(Module, spec, evaluate, warn));
+  // BLOCS. Un intertitre ne suffisait pas : il flottait dans la même colonne que
+  // les réglages et se confondait avec les libellés de section de la page. Un
+  // bloc encadré et REPLIABLE fait deux choses de plus — il borne visiblement ce
+  // qui va ensemble, et il permet de ranger ce qu'on ne touche qu'une fois.
+  //
+  // TOUS REPLIÉS d'avance. Le panneau s'ouvre alors sur une TABLE DES MATIÈRES
+  // — cinq ou six en-têtes qu'on lit d'un coup d'œil — au lieu d'une colonne de
+  // vingt-cinq réglages qu'il faut parcourir pour savoir ce qu'elle contient. On
+  // déplie ce qu'on vient régler.
+  //
+  // `tpl.groups` est optionnel : un groupe y demande `"open": true` pour faire
+  // exception. Un gabarit qui ne déclare rien les replie tous, et un gabarit qui
+  // ne groupe rien du tout retombe sur la liste simple.
+  const groupMeta = new Map();
+  for (const g of tpl.groups || []) groupMeta.set(g.name, g);
+
+  let currentGroup = null;
+  let body = params;
+  for (const spec of tpl.expose || []) {
+    if (spec.group && spec.group !== currentGroup) {
+      currentGroup = spec.group;
+      const meta = groupMeta.get(currentGroup) || {};
+      const block = document.createElement("details");
+      block.className = "block";
+      block.open = meta.open === true;
+      const summary = document.createElement("summary");
+      summary.textContent = currentGroup;
+      if (meta.hint) summary.title = meta.hint;
+      block.appendChild(summary);
+      body = document.createElement("div");
+      body.className = "body";
+      block.appendChild(body);
+      params.appendChild(block);
+    }
+    body.appendChild(buildWidget(Module, spec, evaluate, warn));
+  }
 
   // ---- sources de fichier ------------------------------------------------
   //
@@ -280,6 +490,11 @@ export async function runTemplate(name) {
   // temporaire à garder vivant pour la durée de la page.
   const sources = el("sources");
   sources.innerHTML = "";
+  // Le titre du bloc appartient au DOCUMENT : « Police » pour ce gabarit,
+  // « Image » pour un autre. Sans lui, la page annonce « Sources », qui ne dit
+  // rien de ce qu'on y dépose.
+  const sourcesTitle = el("sourcesTitle");
+  if (sourcesTitle) sourcesTitle.textContent = tpl.sourcesGroup || "Sources";
 
   // DEUX RÉGIMES DE SOURCE, choisis par le nœud lui-même et non par le gabarit :
   //
@@ -490,6 +705,18 @@ export async function runTemplate(name) {
     saveBlob(new Blob([lastObj], { type: "text/plain" }),
              safeName(el("filename").value || name, ".obj"));
   });
+
+  // STL BINAIRE -- le format de l'impression 3D, et la raison d'etre de cette
+  // page. Optionnel dans le gabarit : un relief colore n'a rien a faire d'un
+  // format qui ne porte pas la couleur, donc le bouton n'existe que la ou il a
+  // un sens.
+  const stlBtn = el("downloadStlBtn");
+  if (stlBtn) {
+    stlBtn.addEventListener("click", () => {
+      if (!downloadStlFromGraph(Module, 0, el("filename").value || name))
+        setStatus("rien a exporter — le nœud de sortie n'a pas rendu de maillage");
+    });
+  }
 
   // ---- lien vers l'éditeur ----------------------------------------------
   //

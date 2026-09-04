@@ -16,20 +16,27 @@
 #include "flow/boundary.h"
 #include "flow/foreach.h"
 #include "flow/repeat.h"
+#include "flow/select.h"
 #include "flow/subgraph.h"
 #include "img/load_image.h"
 #include "io/file_ref.h"
 #include "img/pixel_blocks.h"
 #include "img/quantize.h"
 #include "img/relief.h"
+#include "mesh/color.h"
 #include "mesh/load_mesh.h"
+#include "mesh/merge.h"
+#include "mesh/mounts.h"
 #include "mesh/save_mesh.h"
 #include "mesh/simplify.h"
 #include "mesh/smooth_laplacian.h"
 #include "shapes/gothic_window.h"
 #include "shapes/parametric_shape.h"
 #include "shapes/profile.h"
+#include "shapes/boolean2d.h"
+#include "shapes/contour_ops.h"
 #include "shapes/extrude.h"
+#include "shapes/extrude_profiled.h"
 #include "svg/svg_contours.h"
 #include "text/text_contours.h"
 #include "text/load_font.h"
@@ -62,6 +69,33 @@ const std::vector<CatalogEntry> &Catalog ()
 		{ "mesh.simplify", "Simplification", "Maillage", &Make<SimplifyNode>,
 		  "maxError est un PROXY du cout QEM, pas une borne de Hausdorff, sauf "
 		  "sous exactError ou il borne la distance des SOMMETS a la surface" },
+		// LA COULEUR EST UNE DONNEE DU DOCUMENT, pas un reglage de page : on la
+		// choisit une fois et on veut la retrouver en rouvrant le fichier.
+		{ "mesh.color", "Couleur", "Maillage", &Make<ColorMeshNode>,
+		  "ne repeint QUE les faces sans materiau : un relief colore garde sa "
+		  "palette au lieu de s'aplatir, et repeindre demanderait une selection "
+		  "qui n'existe pas. La couleur ne franchit AUCUN export actuel -- le STL "
+		  "n'en porte pas, et graphExportObj rend un OBJ sans mtllib. Une chaine "
+		  "qui n'est pas #rrggbb est REFUSEE, pas remplacee par un gris" },
+		{ "mesh.merge", "Fusion de maillages", "Maillage", &Make<MergeMeshNode>,
+		  "CONCATENATION, pas union booleenne : deux coques qui s'interpenetrent "
+		  "gardent leurs faces internes et la piece n'est pas une variete au sens "
+		  "strict -- ce qu'un slicer unifie sans broncher, et ce que fait aussi "
+		  "stltext.com. Seconde entree OPTIONNELLE : sans elle, la premiere passe "
+		  "telle quelle" },
+		// LA FIXATION MURALE, et elle vient a la FIN : ajouter de la matiere ne
+		// demande aucun booleen, donc elle vaut pour n'importe quel maillage.
+		{ "mesh.mounts", "Fixation murale", "Maillage", &Make<MountsNode>,
+		  "ses deux bouts sont pris sur la matiere presente A LA HAUTEUR du bandeau "
+		  "(tranche, pas boite englobante) -- une tranche vide est refusee. Mais "
+		  "connaitre les deux bouts n'est pas connaitre ce qu'il y a ENTRE eux : "
+		  "sur un modele en ANNEAU le bandeau traverse le vide central. Il ne perce "
+		  "QUE ce qu'il apporte -- percer la piece existante demanderait un booleen "
+		  "3D que le depot n'a pas. Part du BAS de la piece et monte de son "
+		  "epaisseur. La FRAISURE ne creuse pas davantage : le bandeau est perce au "
+		  "diametre de la bouche et une BAGUE remet la matiere sous le cone, si bien "
+		  "que la piece sort en trois coques que le trancheur unifie. Sa profondeur "
+		  "est DEDUITE des deux diametres et de l'angle, jamais reglee" },
 		{ "mesh.io.save", "Enregistrement de maillage", "Maillage", &Make<SaveMeshNode>,
 		  "MeshIO::save compare l'extension par strcmp sans normaliser la casse "
 		  "(mesh_io.cpp:69-89), contrairement a load : un chemin en .OBJ n'est "
@@ -84,9 +118,45 @@ const std::vector<CatalogEntry> &Catalog ()
 		  "ailleurs et une liste plate ne la transporte pas. `height` n'est pas "
 		  "un reglage de ce noeud, la profondeur se regle sur shape.extrude" },
 		{ "shape.extrude", "Extrusion", "Forme 2D", &Make<ExtrudeNode>,
-		  "n'ajoute PAS de plaque de support : le support est un contour de plus, "
-		  "fondu par l'union 2D, donc il se decide chez le producteur de contours "
-		  "-- text.contours le porte, svg.contours non" },
+		  "n'ajoute PAS de plaque de support : le support de text.contours est un "
+		  "contour de plus fondu par l'union 2D, donc a la MEME profondeur que les "
+		  "lettres. Un socle d'epaisseur propre passe par shape.contours.plate, "
+		  "`zBottom` et mesh.merge. `depth` est une EPAISSEUR : le solide occupe "
+		  "[zBottom, zBottom + depth]" },
+		// L'ARETE PROFILEE. Un noeud a part de shape.extrude, et non un parametre
+		// de plus : ce qui le distingue est une ENTREE -- un profil -- et un port
+		// laisse la famille des formes OUVERTE la ou une enumeration l'aurait
+		// figee.
+		{ "shape.extrude.profiled", "Extrusion profilee", "Forme 2D",
+		  &Make<ExtrudeProfiledNode>,
+		  "le decalage est INTERIEUR par defaut : l'emprise au sol reste nominale, "
+		  "mais un trait plus mince que deux fois la largeur du profil DISPARAIT "
+		  "(GetVanishedPieces le compte). Un profil plus large que la moitie de la "
+		  "piece est REFUSE, pas rabote. Chanfrein et biseau sont le meme "
+		  "producteur a deux reglages ; le conge est profile.cavetto" },
+		// LES DEUX FORMES DE PLAQUE, et elles ne sont pas specifiques au texte :
+		// tout producteur de contours -- SVG compris -- s'y branche.
+		{ "shape.contours.offset", "Decalage de contours", "Forme 2D",
+		  &Make<ContourOffsetNode>,
+		  "l'operation termine par une UNION : des halos qui se recouvrent "
+		  "fusionnent, mais un delta trop faible rend une piece PAR forme et le "
+		  "modele sort en morceaux (GetPieceCount le dit). Dilater REFERME les "
+		  "contre-formes : le centre du « o » disparait des que delta atteint sa "
+		  "demi-largeur" },
+		// LE BOOLEEN 2D, et ce qu'il n'est pas : il opere sur l'EMPRISE, pas sur
+		// le volume. Le depot n'a aucun booleen sur maillages.
+		{ "shape.boolean2d", "Booleen 2D", "Forme 2D", &Make<Boolean2dNode>,
+		  "DEUX dimensions : il compose des CONTOURS avant extrusion, il ne "
+		  "soustrait pas deux solides. L'ORDRE compte pour la difference -- A est "
+		  "la matiere, B l'emporte-piece. Un resultat vide (formes disjointes, "
+		  "outil plus grand que la matiere) est REFUSE ici, ou la cause est encore "
+		  "lisible, plutot que plus loin dans l'extrudeur" },
+		{ "shape.contours.plate", "Plaque rectangulaire", "Forme 2D",
+		  &Make<ContourPlateNode>,
+		  "l'emprise des contours d'entree plus une marge, et RIEN de leur forme : "
+		  "pour une plaque qui suit les lettres, c'est shape.contours.offset. Le "
+		  "sens de trace est aligne sur le plus grand contour d'entree, sans quoi "
+		  "la plaque soustrairait les lettres au lieu de les porter" },
 		// ---------------------------------------------------------------
 		// IMAGE -- les deux chaines « image -> regions extrudees », celles des
 		// pages « Image to puzzle » et « Blocs pixelises » de maker.
@@ -244,6 +314,27 @@ const std::vector<CatalogEntry> &Catalog ()
 	                               "element au regard de la signature : sert la "
 	                               "DIVERGENCE, jamais la repetition d'un meme "
 	                               "sous-calcul, qui doit rester dans le noeud" });
+	// LE SELECTEUR, et ce qu'il n'est pas : les branches non retenues sont
+	// EVALUEES quand meme, donc il ne rattrape pas une panne, il choisit un
+	// resultat. Deux variantes parce que ses ports doivent etre types des la
+	// relecture (cf. flow/select.h).
+	table.push_back (CatalogEntry{ "flow.select.mesh", "Choix de maillage", "Flux",
+	                               &Make<flow::SelectMeshNode>,
+	                               "TOUTES les branches sont evaluees, y compris celle "
+	                               "qu'on ne garde pas : une branche non selectionnee "
+	                               "qui echoue fait echouer l'evaluation entiere. Un "
+	                               "index qui designe un port vide est REFUSE" });
+	table.push_back (CatalogEntry{ "flow.select.contours", "Choix de contours", "Flux",
+	                               &Make<flow::SelectContoursNode>,
+	                               "meme reserve que flow.select.mesh : le selecteur "
+	                               "choisit un resultat deja calcule, il ne protege "
+	                               "d'aucune panne en amont" });
+	table.push_back (CatalogEntry{ "flow.select.profile", "Choix de profil", "Flux",
+	                               &Make<flow::SelectProfileNode>,
+	                               "meme reserve que les deux autres selecteurs : les "
+	                               "branches non retenues sont evaluees. Port "
+	                               "d'EBRASEMENT -- une section de barre est refusee a "
+	                               "la connexion" });
 	table.push_back (CatalogEntry{ "flow.repeat", "Repeter n fois", "Flux",
 	                               &Make<flow::RepeatNode>,
 	                               "ports FIXES a une entree et une sortie, la ou les "

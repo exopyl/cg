@@ -171,6 +171,7 @@ void InlineEvalDriver::Pump ()
 	// Juste apres Evaluate et sur le MEME fil : les vignettes du parcours
 	// voyagent avec le resultat.
 	completed.previews = m_evaluator.TakeRunPreviews ();
+	completed.stats = m_evaluator.TakeRunStats ();
 
 	m_busy = false;
 	m_done.push_back (std::move (completed));

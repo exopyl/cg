@@ -136,12 +136,14 @@ void Evaluator::EnforceBudget ()
 	m_stats.bytes = m_bytes;
 }
 
-void Evaluator::Insert (Hash key, NodeId owner, const ValueList &values)
+void Evaluator::Insert (Hash key, NodeId owner, const ValueList &values,
+                        const std::vector<NodeStat> &stats)
 {
 	Entry entry;
 	entry.key = key;
 	entry.values = values;
 	entry.bytes = MeasureBytes (values);
+	entry.stats = stats;
 	entry.owners.push_back (owner);
 
 	m_entries.push_front (entry);
@@ -165,6 +167,27 @@ void Evaluator::RefreshBranch (NodeId id, std::set<NodeId> &seen)
 			RefreshBranch (up, seen);
 }
 
+void Evaluator::CollectBranchStats (NodeId id, std::set<NodeId> &seen)
+{
+	if (!seen.insert (id).second)
+		return;
+
+	// Deja releve par l'un des deux sites d'enregistrement (calcul, ou succes de
+	// cache sur un noeud REELLEMENT visite) : on ne l'ecrase pas.
+	if (m_runStats.find (id) == m_runStats.end ())
+	{
+		const Hash key = Signature (m_graph, id, m_memo);
+		const std::unordered_map<Hash, EntryList::iterator>::const_iterator found
+			= m_index.find (key);
+		if (found != m_index.end () && !found->second->stats.empty ())
+			m_runStats[id] = found->second->stats;
+	}
+
+	for (NodeId up : m_graph.GetUpstream (id))
+		if (up != kInvalidNodeId)
+			CollectBranchStats (up, seen);
+}
+
 EvalResult Evaluator::Evaluate (NodeId id, ValueList &outputs, EvalContext &ctx)
 {
 	// Une seule evaluation a la fois sur un evaluateur donne. Le refus est
@@ -176,6 +199,7 @@ EvalResult Evaluator::Evaluate (NodeId id, ValueList &outputs, EvalContext &ctx)
 
 	m_memo.clear ();
 	m_runPreviews.clear ();
+	m_runStats.clear ();
 	outputs.clear ();
 
 	{
@@ -202,7 +226,17 @@ EvalResult Evaluator::Evaluate (NodeId id, ValueList &outputs, EvalContext &ctx)
 		Signature (m_graph, id, m_memo);
 	}
 
-	return EvaluateNode (id, outputs, ctx);
+	const EvalResult result = EvaluateNode (id, outputs, ctx);
+
+	// APRES le calcul, et sur la branche entiere : cf. CollectBranchStats. Les
+	// signatures sont figees dans le memo depuis la pre-passe, donc ce parcours
+	// ne relit aucun parametre et ne coute qu'une recherche par noeud.
+	if (result.IsOk ())
+	{
+		std::set<NodeId> statSeen;
+		CollectBranchStats (id, statSeen);
+	}
+	return result;
 }
 
 EvalResult Evaluator::EvaluateNode (NodeId id, ValueList &outputs, EvalContext &ctx)
@@ -253,6 +287,11 @@ EvalResult Evaluator::EvaluateNode (NodeId id, ValueList &outputs, EvalContext &
 		++m_stats.hits;
 		outputs = entry->values;
 		RecordPreviews (id, outputs);
+		// Les mesures du calcul qui a rempli l'entree, REPUBLIEES telles quelles.
+		// Sans cela, un succes de cache laisserait le lecteur sur celles d'une
+		// autre signature -- exactes, et sans rapport avec ce qu'il regarde.
+		if (!entry->stats.empty ())
+			m_runStats[id] = entry->stats;
 		return EvalResult ();
 	}
 
@@ -307,10 +346,14 @@ EvalResult Evaluator::EvaluateNode (NodeId id, ValueList &outputs, EvalContext &
 	// du cache plus haut ne peut pas trouver ce qui n'y a jamais ete mis. Une
 	// seconde garde a la lecture serait une branche morte, verifiee comme telle
 	// -- la retirer ne change aucun test.
+	std::vector<NodeStat> stats;
+	node->PublishStats (stats);
 	if (!desc.sideEffect)
-		Insert (key, id, produced);
+		Insert (key, id, produced, stats);
 	outputs = produced;
 	RecordPreviews (id, outputs);
+	if (!stats.empty ())
+		m_runStats[id] = std::move (stats);
 	return EvalResult ();
 }
 

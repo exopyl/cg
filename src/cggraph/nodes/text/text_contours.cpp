@@ -32,7 +32,12 @@ TextContoursNode::TextContoursNode (const std::string &text)
 {
 	GetParams ().SetString ("text", text);
 	GetParams ().SetFloat ("size", 1.0f);
-	GetParams ().SetFloat ("flattenTol", 0.01f);
+	// Ce que `size` mesure : 0 = corps em, 1 = hauteur de capitale. Le defaut
+	// reste l'em -- c'est la semantique historique du noeud, et un document
+	// existant ne doit pas changer de cote en changeant de version.
+	GetParams ().SetInt ("sizeMode", 0);
+	// 0 = automatique (size / 600), cf. text_extrude.h.
+	GetParams ().SetFloat ("flattenTol", 0.0f);
 	GetParams ().SetFloat ("lineSpacing", 1.0f);
 	GetParams ().SetFloat ("letterSpacing", 0.0f);
 	GetParams ().SetBool ("kerning", true);
@@ -51,6 +56,12 @@ TextContoursNode::TextContoursNode (const std::string &text)
 	// parametre laisserait croire qu'on peut la desactiver.
 }
 
+void TextContoursNode::PublishStats (std::vector<cggraph::NodeStat> &out) const
+{
+	out.push_back ({ "glyphsPlaced", (double)m_glyphsPlaced.load () });
+	out.push_back ({ "glyphsFlattened", (double)m_glyphsFlattened.load () });
+}
+
 const cggraph::NodeDesc &TextContoursNode::GetDesc () const
 {
 	return Desc ();
@@ -65,7 +76,15 @@ bool TextContoursNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueL
 
 	TextExtrudeOptions options;
 	options.size = GetFloat (GetParams (), "size", 1.0f);
-	options.flattenTol = GetFloat (GetParams (), "flattenTol", 0.01f);
+	options.flattenTol = GetFloat (GetParams (), "flattenTol", 0.0f);
+
+	// Bornage, comme pour `align` et `support` plus bas : hors intervalle le
+	// reglage ne veut rien dire, et retomber en silence sur le defaut masquerait
+	// une faute de frappe.
+	int sizeMode = GetInt (GetParams (), "sizeMode", 0);
+	if (sizeMode < 0) sizeMode = 0;
+	if (sizeMode > 1) sizeMode = 1;
+	options.sizeMode = static_cast<TextExtrudeOptions::SizeMode> (sizeMode);
 	options.lineSpacing = GetFloat (GetParams (), "lineSpacing", 1.0f);
 	options.letterSpacing = GetFloat (GetParams (), "letterSpacing", 0.0f);
 	options.kerning = GetBool (GetParams (), "kerning", true);

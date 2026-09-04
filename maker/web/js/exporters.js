@@ -8,6 +8,12 @@
 //
 //  Le STL reste assemble ici, faute d'un point d'entree WASM ; c'est un candidat
 //  au meme traitement que l'OBJ (MeshIO::export_stl_binary existe deja).
+//
+//  DEUX CHEMINS le consomment, et ils ne designent pas le maillage de la meme
+//  facon : les pages de FORMES tiennent un objet natif identifie (meshData(id)),
+//  une page pilotee par un GRAPHE tient un port de sortie (graphMeshData(port)).
+//  D'ou deux points d'entree pour un seul encodeur -- c'est la difference que
+//  shell.js et template.js portent partout ailleurs.
 // ===========================================================================
 
 // Nom de fichier : base saisie par l'utilisateur (nettoyee) + extension.
@@ -46,6 +52,37 @@ export function downloadStl(Module, id, base) {
   const indices = new Uint32Array(d.indices);
   saveBlob(new Blob([buildStl(positions, indices)], { type: "model/stl" }),
            safeName(base, ".stl"));
+}
+
+// Meme encodeur, source nodale : `port` est un port de sortie du graphe, pas un
+// identifiant d'objet. Rend false quand le port ne porte pas de maillage --
+// l'appelant a alors quelque chose a dire a l'utilisateur, ce qu'un export muet
+// ne permettrait pas.
+export function downloadStlFromGraph(Module, port, base) {
+  const d = Module.graphMeshData(port);
+  const positions = new Float32Array(d.positions); // copie hors du tas WASM
+  const indices = new Uint32Array(d.indices);
+  if (!indices.length) return false;
+  saveBlob(new Blob([buildStl(positions, indices)], { type: "model/stl" }),
+           safeName(base, ".stl"));
+  return true;
+}
+
+// Encombrement du maillage, dans les UNITES MONDE du document -- donc en
+// millimetres pour cette page (cf. le gabarit). `positions` est un tableau plat
+// x,y,z : la fonction ne fait AUCUN appel au Module, elle peut donc lire une vue
+// typee sur le tas WASM sans la copier.
+export function meshExtent(positions) {
+  if (!positions || positions.length < 3) return null;
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i + 2 < positions.length; i += 3)
+    for (let a = 0; a < 3; a++) {
+      const v = positions[i + a];
+      if (v < lo[a]) lo[a] = v;
+      if (v > hi[a]) hi[a] = v;
+    }
+  return { x: hi[0] - lo[0], y: hi[1] - lo[1], z: hi[2] - lo[2] };
 }
 
 // --- STL binaire : standard de l'impression 3D -----------------------------

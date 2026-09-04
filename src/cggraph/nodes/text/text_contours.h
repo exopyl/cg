@@ -46,6 +46,10 @@ public:
 	// evaluations concurrentes les incrementeraient ensemble. Meme choix que
 	// LoadFontNode::m_parses.
 	unsigned int GetGlyphsPlaced () const { return m_glyphsPlaced.load (); }
+
+	// Chemin GENERIQUE vers une interface, la ou les accesseurs ci-dessus ne
+	// servaient qu'a un test (cf. Node::PublishStats).
+	void PublishStats (std::vector<cggraph::NodeStat> &out) const override;
 	unsigned int GetGlyphsFlattened () const { return m_glyphsFlattened.load (); }
 
 private:

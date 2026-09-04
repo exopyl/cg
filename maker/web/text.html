@@ -31,34 +31,81 @@
       <p class="sub" id="subtitle"></p>
     </header>
 
-    <section class="group">
-      <div class="lbl">Sources</div>
-      <div id="sources"></div>
-    </section>
+    <!--
+      Les SOURCES de fichier sont un bloc comme les autres. Son titre vient du
+      GABARIT (`sourcesGroup`) et non de cette page : ce qu'on y charge dépend du
+      document — une police ici, une image ailleurs — et « Sources » ne dit rien
+      à personne. Le corps est rempli par js/template.js.
+    -->
+    <details class="block">
+      <summary id="sourcesTitle">Sources</summary>
+      <div class="body" id="sources"></div>
+    </details>
 
+    <!--
+      Pas d'intertitre « Paramètres » : chaque bloc porte son nom, et un titre
+      qui chapeaute des titres n'ajoute rien qu'une ligne à lire.
+    -->
     <section class="group">
-      <div class="lbl">Paramètres</div>
       <div id="params"></div>
     </section>
 
     <section class="group">
-      <div class="lbl">Vue</div>
-      <div class="ctrlrow"><span>Couleur du modèle</span><input type="color" id="modelColor" value="#b4bec8"></div>
-      <div class="ctrlrow"><label for="wireframe">Fil de fer</label><input type="checkbox" id="wireframe"></div>
-      <button id="resetView">Recentrer la vue</button>
+      <!--
+        La VUE est un bloc comme les autres, et refermé d'avance : ce sont des
+        réglages d'affichage, pas de pièce. Les blocs de PARAMÈTRES sont
+        construits par js/template.js à partir du gabarit ; celui-ci est écrit à
+        la main parce qu'il ne touche à aucun nœud du graphe — il n'a rien à
+        faire dans le document.
+      -->
+      <details class="block">
+        <summary>Vue</summary>
+        <div class="body">
+          <!--
+            PLUS DE PASTILLE ICI. La couleur de la pièce est passée dans le
+            DOCUMENT (nœud `mesh.color`, bloc « Couleur ») : on la choisit une
+            fois et on la retrouve en rouvrant le fichier. Ce qui reste dans
+            « Vue » ne regarde que l'affichage — le fil de fer et la caméra.
+          -->
+          <div class="ctrlrow"><label for="wireframe">Fil de fer</label><input type="checkbox" id="wireframe"></div>
+          <button id="resetView">Recentrer la vue</button>
+        </div>
+      </details>
     </section>
 
     <footer>
       <div id="status" class="stats">Chargement…</div>
-      <div class="lbl">Export</div>
-      <input type="text" id="filename" value="texte3d" placeholder="nom du fichier" spellcheck="false">
-      <div class="btnrow">
-        <button id="downloadObjBtn">OBJ</button>
-      </div>
-      <div class="lbl">Graphe</div>
-      <button id="openInEditor">Enregistrer le document</button>
-      <p class="hint-sm">Cette page EST un graphe. Enregistre-le, puis ouvre-le
-        dans l'éditeur nodal pour le modifier ou l'étendre.</p>
+      <!-- Cotes de la pièce, en millimètres : ce qu'on vérifie avant d'imprimer. -->
+      <div id="dims" class="stats">—</div>
+      <!-- Ce que le réglage a COÛTÉ : une silhouette qui sort en morceaux, un
+           délié qu'une arête a mangé. Les nœuds le comptaient déjà ; sans cette
+           ligne, le garde-fou restait dans le moteur et n'atteignait pas l'œil. -->
+      <div id="warnings" class="warn" hidden></div>
+      <!--
+        L'EXPORT est un bloc, comme les réglages : c'est la sortie de la page, et
+        elle mérite d'être délimitée plutôt que posée sous un intertitre. Le
+        GRAPHE en est un aussi — laisser l'un encadré et l'autre nu se lirait
+        comme un oubli — mais replié : on enregistre le document une fois, on
+        exporte à chaque essai.
+      -->
+      <details class="block">
+        <summary>Export</summary>
+        <div class="body">
+          <input type="text" id="filename" value="texte3d" placeholder="nom du fichier" spellcheck="false">
+          <div class="btnrow">
+            <button id="downloadStlBtn" class="primary">STL</button>
+            <button id="downloadObjBtn">OBJ</button>
+          </div>
+        </div>
+      </details>
+      <details class="block">
+        <summary>Graphe</summary>
+        <div class="body">
+          <button id="openInEditor">Enregistrer le document</button>
+          <p class="hint-sm">Cette page EST un graphe. Enregistre-le, puis ouvre-le
+            dans l'éditeur nodal pour le modifier ou l'étendre.</p>
+        </div>
+      </details>
     </footer>
   </aside>
 

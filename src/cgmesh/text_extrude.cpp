@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "contour_ops.h"      // roundedRectContour, contourSignedArea, contoursBBox
 #include "extrude_contours.h"
 #include "mesh.h"
 
@@ -147,54 +148,6 @@ std::vector<ExtrudeContour> unionContours (const std::vector<ExtrudeContour>& in
 }
 
 
-// Rectangle, coins eventuellement arrondis, trace dans le sens TRIGONOMETRIQUE
-// (aire signee positive). L'appelant le retourne s'il lui faut l'autre sens.
-std::vector<Vector2f> roundedRect (float x0, float y0, float x1, float y1, float radius,
-                                   int cornerSegments = 6)
-{
-	std::vector<Vector2f> pts;
-	const float maxR = 0.5f * std::min (x1 - x0, y1 - y0);
-	if (radius > maxR) radius = maxR;
-	if (radius <= 0.f || cornerSegments < 1)
-	{
-		pts.push_back (Vector2f (x0, y0));
-		pts.push_back (Vector2f (x1, y0));
-		pts.push_back (Vector2f (x1, y1));
-		pts.push_back (Vector2f (x0, y1));
-		return pts;
-	}
-	const float PI = 3.14159265358979323846f;
-	// Quatre quarts de cercle, centres rentres du rayon, parcourus dans le sens
-	// trigonometrique en partant du coin bas-droit.
-	const float cx[4] = { x1 - radius, x1 - radius, x0 + radius, x0 + radius };
-	const float cy[4] = { y0 + radius, y1 - radius, y1 - radius, y0 + radius };
-	for (int c = 0; c < 4; ++c)
-	{
-		const float a0 = -0.5f * PI + 0.5f * PI * (float)c;
-		for (int k = 0; k <= cornerSegments; ++k)
-		{
-			const float a = a0 + 0.5f * PI * (float)k / (float)cornerSegments;
-			pts.push_back (Vector2f (cx[c] + radius * std::cos (a),
-			                         cy[c] + radius * std::sin (a)));
-		}
-	}
-	return pts;
-}
-
-// Aire signee d'un contour ferme.
-float signedArea (const std::vector<Vector2f>& pts)
-{
-	float sum = 0.f;
-	const size_t n = pts.size();
-	for (size_t i = 0; i < n; ++i)
-	{
-		const Vector2f& a = pts[i];
-		const Vector2f& b = pts[(i + 1) % n];
-		sum += a.x * b.y - b.x * a.y;
-	}
-	return 0.5f * sum;
-}
-
 // Contours du support, dans le repere MONDE deja translate par la plume.
 //
 // ORIENTATION -- le point qui ne se devine pas, et qui decide entre un socle et
@@ -207,7 +160,8 @@ float signedArea (const std::vector<Vector2f>& pts)
 // pochoir avec une autre. On aligne donc le support sur le sens du plus grand
 // contour de glyphe present.
 std::vector<ExtrudeContour> supportContours (const TextExtrudeOptions& opt,
-                                             const std::vector<ExtrudeContour>& glyphs)
+                                             const std::vector<ExtrudeContour>& glyphs,
+                                             float baselineY)
 {
 	std::vector<ExtrudeContour> out;
 	if (opt.support == TextExtrudeOptions::Support::None || glyphs.empty()) return out;
@@ -218,7 +172,7 @@ std::vector<ExtrudeContour> supportContours (const TextExtrudeOptions& opt,
 	float solidSign = 1.f;
 	for (const ExtrudeContour& c : glyphs)
 	{
-		const float a = signedArea (c.pts);
+		const float a = contourSignedArea (c.pts);
 		if (std::fabs (a) > std::fabs (widestArea)) { widestArea = a; solidSign = (a >= 0.f) ? 1.f : -1.f; }
 		for (const Vector2f& p : c.pts)
 		{
@@ -237,7 +191,7 @@ std::vector<ExtrudeContour> supportContours (const TextExtrudeOptions& opt,
 	// creuse un vide s'il tourne a l'envers.
 	const auto push = [&](std::vector<Vector2f> pts, bool solid) {
 		const float want = solid ? solidSign : -solidSign;
-		if (signedArea (pts) * want < 0.f)
+		if (contourSignedArea (pts) * want < 0.f)
 			std::reverse (pts.begin(), pts.end());
 		ExtrudeContour c;
 		c.pts = std::move (pts);
@@ -247,21 +201,33 @@ std::vector<ExtrudeContour> supportContours (const TextExtrudeOptions& opt,
 	switch (opt.support)
 	{
 	case TextExtrudeOptions::Support::Plate:
-		push (roundedRect (x0 - m, y0 - m, x1 + m, y1 + m, r), true);
+		push (roundedRectContour (x0 - m, y0 - m, x1 + m, y1 + m, r), true);
 		break;
 	case TextExtrudeOptions::Support::Bar:
 	{
-		// Bandeau horizontal dont le HAUT mord de supportOverlap dans le bas de
-		// l'emprise : c'est ce recouvrement, et lui seul, qui fait de l'union
-		// une piece unique. Sa marge s'applique en largeur.
-		const float top = y0 + ((opt.supportOverlap > 0.f) ? opt.supportOverlap : 0.f);
+		// Bandeau horizontal dont le HAUT mord de supportOverlap dans les lettres :
+		// c'est ce recouvrement, et lui seul, qui fait de l'union une piece
+		// unique. Sa marge s'applique en largeur.
+		//
+		// ⚠ LA REFERENCE EST LA LIGNE DE BASE, et non le bas de l'emprise. Ce
+		// n'est pas une preference d'aspect, c'est ce qui fait tenir la piece :
+		// l'emprise descend jusqu'au JAMBAGE le plus bas, si bien qu'un bandeau
+		// pose la ne mordait QUE dans la lettre qui descend le plus -- un « p »,
+		// un « g » -- et laissait toutes les autres flotter au-dessus de lui,
+		// desolidarisees. Sur la ligne de base, il mord dans chaque lettre qui
+		// s'y pose, c'est-a-dire dans presque toutes.
+		//
+		// Contrepartie assumee : les jambages TRAVERSENT le bandeau et passent
+		// dessous. C'est ce qui les relie au reste, et c'est ainsi que le fait
+		// n'importe quelle plaque de nom.
+		const float top = baselineY + ((opt.supportOverlap > 0.f) ? opt.supportOverlap : 0.f);
 		const float bottom = top - ((t > 0.f) ? t : 0.f);
 		// Garde DEFENSIVE, et mesuree comme telle : la retirer ne change aucun
 		// resultat, l'union ecartant d'elle-meme un contour d'aire nulle. Elle
 		// reste parce qu'il vaut mieux ne pas soumettre a un moteur booleen une
 		// figure dont on sait deja qu'elle ne delimite rien.
 		if (top > bottom)
-			push (roundedRect (x0 - m, bottom, x1 + m, top, 0.f), true);
+			push (roundedRectContour (x0 - m, bottom, x1 + m, top, 0.f), true);
 		break;
 	}
 	case TextExtrudeOptions::Support::Frame:
@@ -270,8 +236,8 @@ std::vector<ExtrudeContour> supportContours (const TextExtrudeOptions& opt,
 		// anneaux coincident et s'annulent sous NonZero.
 		if (t > 0.f)
 		{
-			push (roundedRect (x0 - m - t, y0 - m - t, x1 + m + t, y1 + m + t, r), true);
-			push (roundedRect (x0 - m, y0 - m, x1 + m, y1 + m, (r > t) ? (r - t) : 0.f), false);
+			push (roundedRectContour (x0 - m - t, y0 - m - t, x1 + m + t, y1 + m + t, r), true);
+			push (roundedRectContour (x0 - m, y0 - m, x1 + m, y1 + m, (r > t) ? (r - t) : 0.f), false);
 		}
 		break;
 	}
@@ -280,6 +246,44 @@ std::vector<ExtrudeContour> supportContours (const TextExtrudeOptions& opt,
 	}
 	return out;
 }
+// ---------------------------------------------------------------------------
+//  Cote demandee -> corps em, et tolerance automatique
+// ---------------------------------------------------------------------------
+//
+// Les deux conversions que les appelants publics partagent, et qu'ils faisaient
+// deux fois chacun. Elles vivent ici et pas dans text_layout : celui-la ne
+// connait que IGlyphMetrics, sans hauteur de capitale (cf. font.h).
+
+// Corps em equivalent a la cote demandee. En mode CapHeight, une cote de 30 mm
+// veut dire « capitales de 30 mm », donc un em de 30 x upem / capHeight.
+float emSizeFor (const Font& font, const TextExtrudeOptions& opt)
+{
+	if (opt.sizeMode != TextExtrudeOptions::SizeMode::CapHeight) return opt.size;
+
+	const int cap = font.capHeight();
+	const int upem = font.unitsPerEm();
+	// Police sans capitale lisible, ou em inexploitable : on ne peut pas honorer
+	// la cote. Retomber sur l'em est la seule autre reference -- et le DIRE, car
+	// la piece sortira alors a une hauteur qui n'est pas celle demandee.
+	if (cap <= 0 || upem <= 0)
+	{
+		std::fprintf (stderr, "text_extrude: hauteur de capitale introuvable, "
+		                      "la cote est interpretee comme un corps em\n");
+		return opt.size;
+	}
+	return opt.size * (float)upem / (float)cap;
+}
+
+// Tolerance d'aplatissement effective : `flattenTol` tel quel, ou size / 600
+// quand il est nul ou negatif (cf. text_extrude.h).
+float flattenTolFor (const TextExtrudeOptions& opt)
+{
+	if (opt.flattenTol > 0.f) return opt.flattenTol;
+	// Une cote nulle ne produira rien de toute facon ; la garde evite juste une
+	// tolerance nulle qui subdiviserait sans fin.
+	return opt.size > 0.f ? opt.size / 600.f : 0.01f;
+}
+
 } // namespace
 
 bool text_to_contours (const Font& font, const std::string& utf8,
@@ -297,11 +301,16 @@ bool text_to_contours (const Font& font, const std::string& utf8,
 	}
 
 	TextLayoutOptions lo;
-	lo.size          = opt.size;
+	// La cote demandee peut mesurer la hauteur de CAPITALE ; le compositeur ne
+	// sait mettre a l'echelle que par l'em (cf. emSizeFor).
+	lo.size          = emSizeFor (font, opt);
 	lo.lineSpacing   = opt.lineSpacing;
 	lo.letterSpacing = opt.letterSpacing;
 	lo.align         = opt.align;
 	lo.kerning       = opt.kerning;
+
+	// Tolerance effective, calculee UNE fois : elle sert a chaque glyphe distinct.
+	const float tol = flattenTolFor (opt);
 
 	const TextLayout layout = layoutText (utf8, font, lo);
 	if (layout.glyphs.empty())
@@ -310,10 +319,19 @@ bool text_to_contours (const Font& font, const std::string& utf8,
 		return false;
 	}
 
+	// Ligne de base la plus BASSE, dans le repere final : c'est la reference du
+	// bandeau (cf. supportContours). Sur un texte d'une seule ligne elle vaut
+	// `origin.y` ; sur plusieurs, celle du bas -- un bandeau unique ne peut
+	// relier que la derniere.
+	float lowestPen = 0.f;
+	for (const PlacedGlyph& placed : layout.glyphs)
+		lowestPen = std::min (lowestPen, placed.pen.y);
+
 	Vector2f origin (0.f, 0.f);
 	if (opt.centerOnOrigin)
 		origin = Vector2f (-0.5f * (layout.bboxMin.x + layout.bboxMax.x),
 		                   -0.5f * (layout.bboxMin.y + layout.bboxMax.y));
+	const float baselineY = origin.y + lowestPen;
 
 	// Un texte repete ses lettres : « MISSISSIPPI » n'a que quatre glyphes
 	// distincts sur onze. On ne les lit -- et surtout on ne les subdivise --
@@ -340,7 +358,7 @@ bool text_to_contours (const Font& font, const std::string& utf8,
 			it = glyphCache.emplace (
 				placed.glyphIndex,
 				flattenGlyph (font.glyphContours (placed.glyphIndex),
-				              layout.scale, opt.flattenTol)).first;
+				              layout.scale, tol)).first;
 		}
 		if (it->second.empty()) continue;    // espace, .notdef, glyphe blanc
 
@@ -360,7 +378,7 @@ bool text_to_contours (const Font& font, const std::string& utf8,
 	// Aucune coque a recoller, aucun booleen 3D.
 	if (opt.support != TextExtrudeOptions::Support::None)
 	{
-		const std::vector<ExtrudeContour> support = supportContours (opt, pooled);
+		const std::vector<ExtrudeContour> support = supportContours (opt, pooled, baselineY);
 		pooled.insert (pooled.end(), support.begin(), support.end());
 	}
 
@@ -394,11 +412,16 @@ Mesh* text_to_extruded_mesh (const Font& font, const std::string& utf8,
 	}
 
 	TextLayoutOptions lo;
-	lo.size          = opt.size;
+	// La cote demandee peut mesurer la hauteur de CAPITALE ; le compositeur ne
+	// sait mettre a l'echelle que par l'em (cf. emSizeFor).
+	lo.size          = emSizeFor (font, opt);
 	lo.lineSpacing   = opt.lineSpacing;
 	lo.letterSpacing = opt.letterSpacing;
 	lo.align         = opt.align;
 	lo.kerning       = opt.kerning;
+
+	// Tolerance effective, calculee UNE fois : elle sert a chaque glyphe distinct.
+	const float tol = flattenTolFor (opt);
 
 	const TextLayout layout = layoutText (utf8, font, lo);
 	if (layout.glyphs.empty())
@@ -407,10 +430,19 @@ Mesh* text_to_extruded_mesh (const Font& font, const std::string& utf8,
 		return nullptr;
 	}
 
+	// Ligne de base la plus BASSE, dans le repere final : c'est la reference du
+	// bandeau (cf. supportContours). Sur un texte d'une seule ligne elle vaut
+	// `origin.y` ; sur plusieurs, celle du bas -- un bandeau unique ne peut
+	// relier que la derniere.
+	float lowestPen = 0.f;
+	for (const PlacedGlyph& placed : layout.glyphs)
+		lowestPen = std::min (lowestPen, placed.pen.y);
+
 	Vector2f origin (0.f, 0.f);
 	if (opt.centerOnOrigin)
 		origin = Vector2f (-0.5f * (layout.bboxMin.x + layout.bboxMax.x),
 		                   -0.5f * (layout.bboxMin.y + layout.bboxMax.y));
+	const float baselineY = origin.y + lowestPen;
 
 	ExtrudeAppendOptions ao;
 	ao.zBottom    = 0.f;
@@ -455,7 +487,7 @@ Mesh* text_to_extruded_mesh (const Font& font, const std::string& utf8,
 			it = glyphCache.emplace (
 				placed.glyphIndex,
 				flattenGlyph (font.glyphContours (placed.glyphIndex),
-				              layout.scale, opt.flattenTol)).first;
+				              layout.scale, tol)).first;
 		}
 		if (it->second.empty()) continue;    // espace, .notdef, glyphe blanc
 
@@ -476,7 +508,7 @@ Mesh* text_to_extruded_mesh (const Font& font, const std::string& utf8,
 		// LE contour de plus, ajoute AVANT l'union : il traverse le meme
 		// Union (subjects, NonZero, 6) que les glyphes, et en ressort fondu avec
 		// eux. Aucune coque a recoller, aucun booleen 3D.
-		const std::vector<ExtrudeContour> support = supportContours (opt, pooled);
+		const std::vector<ExtrudeContour> support = supportContours (opt, pooled, baselineY);
 		pooled.insert (pooled.end(), support.begin(), support.end());
 		builder.Append (unionContours (pooled), ao);
 	}

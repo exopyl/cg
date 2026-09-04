@@ -63,6 +63,16 @@ if (EMSCRIPTEN)
         # import + extrusion SVG
         ${PROJECT_SOURCE_DIR}/import_svg.cpp
         ${PROJECT_SOURCE_DIR}/extrude_contours.cpp
+        # operations sur contours fermes (decalage, emprise, coins arrondis) :
+        # requis par text_extrude.cpp et par les noeuds de plaque du graphe.
+        ${PROJECT_SOURCE_DIR}/contour_ops.cpp
+        # contours -> solide a arete profilee (chanfrein, biseau, conge)
+        ${PROJECT_SOURCE_DIR}/extrude_profiled.cpp
+        # bague de fraisure : requise par le noeud mesh.mounts du graphe.
+        ${PROJECT_SOURCE_DIR}/countersink.cpp
+        # emprise d'un maillage dans une tranche : requise par mesh.mounts, qui
+        # mesure la matiere A LA HAUTEUR de la fixation et non sur toute la piece.
+        ${PROJECT_SOURCE_DIR}/mesh_slab.cpp
         ${PROJECT_SOURCE_DIR}/stroke_contours.cpp   # epaississement des traces, requis par import_svg
         # texte -> solide extrude. SEUL fichier du chantier « texte 3D » a
         # declarer ici : font.cpp, text_layout.cpp et bezier_flatten.cpp vivent

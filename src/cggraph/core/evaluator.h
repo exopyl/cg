@@ -124,6 +124,19 @@ public:
 	// le meme fil, elle transporte le resultat sans copie ni course.
 	std::map<NodeId, Thumbnail> TakeRunPreviews () { return std::move (m_runPreviews); }
 
+	// MESURES DU PARCOURS (Node::PublishStats), meme discipline et meme raison
+	// que les vignettes ci-dessus -- succes de cache COMPRIS.
+	//
+	// ⚠ POURQUOI ELLES NE PEUVENT PAS RESTER SUR LE NOEUD. Un noeud publie les
+	// mesures de son DERNIER calcul ; un succes de cache n'en fait aucun. Le
+	// noeud garde donc celles d'une autre signature, et un lecteur qui l'interroge
+	// obtient un chiffre EXACT mais qui ne decrit pas ce qu'il regarde. Mesure sur
+	// le terrain : l'entraxe d'une fixation restait fige des qu'on revenait sur
+	// une hauteur deja visitee -- un chiffre faux, et de ceux d'apres lesquels on
+	// perce un mur. Les mesures accompagnent donc l'entree de cache, et sont
+	// republiees telles quelles quand elle ressert.
+	std::map<NodeId, std::vector<NodeStat>> TakeRunStats () { return std::move (m_runStats); }
+
 	void Pin (NodeId id);
 	void Unpin (NodeId id);
 	bool IsPinned (NodeId id) const;
@@ -142,13 +155,27 @@ private:
 	// qu'un seul des deux laisserait des trous selon l'etat du cache.
 	void RecordPreviews (NodeId id, const ValueList &outputs);
 
+	// Releve les mesures de TOUTE la branche depuis le cache, par signature
+	// courante. Indispensable parce qu'un succes de cache RETOURNE TOT : la
+	// branche sous un noeud deja calcule n'est pas descendue, donc ses noeuds ne
+	// passent par aucun des deux sites d'enregistrement. Sur une page a graphe
+	// fixe, ou l'on revient sans cesse sur des reglages deja vus, c'etait le cas
+	// ORDINAIRE et non le cas rare -- le compteur affiche datait alors du dernier
+	// reglage neuf, sans que rien ne le signale.
+	void CollectBranchStats (NodeId id, std::set<NodeId> &seen);
+
 	std::map<NodeId, Thumbnail> m_runPreviews;
+	std::map<NodeId, std::vector<NodeStat>> m_runStats;
 
 	struct Entry
 	{
 		Hash key = kNoSignature;
 		ValueList values;
 		std::size_t bytes = 0;
+		// Ce que le calcul qui a rempli cette entree avait mesure. Quelques
+		// doubles : le budget du cache les ignore, et sans elles l'entree
+		// ressortirait muette.
+		std::vector<NodeStat> stats;
 		// Un meme resultat peut etre celui de plusieurs noeuds ; il survit tant
 		// que l'un d'eux est epingle.
 		std::vector<NodeId> owners;
@@ -158,7 +185,8 @@ private:
 
 	EvalResult EvaluateNode (NodeId id, ValueList &outputs, EvalContext &ctx);
 	void RefreshBranch (NodeId id, std::set<NodeId> &seen);
-	void Insert (Hash key, NodeId owner, const ValueList &values);
+	void Insert (Hash key, NodeId owner, const ValueList &values,
+	             const std::vector<NodeStat> &stats);
 	void EnforceBudget ();
 	bool IsEntryPinned (const Entry &entry) const;
 

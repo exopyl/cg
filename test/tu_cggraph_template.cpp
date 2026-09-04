@@ -134,9 +134,18 @@ TEST (TEST_cggraph_template, the_text3d_template_document_loads_against_the_live
 	ASSERT_TRUE (result.IsOk ())
 		<< ToString (result.status) << " : " << result.detail;
 
-	// Quatre depuis le decoupage du contour 2D : fichier, police, contours,
-	// extrusion.
-	EXPECT_EQ (graph.GetNodeCount (), 4u);
+	// TREIZE. Les quatre du contour 2D -- fichier, police, contours, extrusion --
+	// plus les six du SOCLE (deux formes de plaque, le selecteur qui les arbitre,
+	// l'extrusion sur sa propre plage de Z, la fusion, et le selecteur « avec ou
+	// sans socle »), plus les trois de l'ARETE (chanfrein, cavet, et le selecteur
+	// de profil). Ce compte est un FILET : il rougit des qu'une branche est
+	// ajoutee ou retiree, ce qui force a relire le graphe plutot qu'a le supposer.
+	// Le quatorzieme est mesh.color : la couleur de la piece appartient au
+	// DOCUMENT, pas aux reglages d'affichage de la page. Les deux derniers sont
+	// la FIXATION MURALE et le selecteur qui la rend facultative -- places AVANT
+	// la couleur, sans quoi le bandeau sortirait gris pendant que le reste est
+	// peint.
+	EXPECT_EQ (graph.GetNodeCount (), 16u);
 }
 
 TEST (TEST_cggraph_template, the_text3d_template_evaluates_to_a_mesh_once_its_source_is_fed)

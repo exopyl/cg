@@ -182,6 +182,12 @@ public:
 	// dernier calcul, pas seulement son noeud terminal.
 	const cggraph::Thumbnail *GetPreview (cggraph::NodeId id) const;
 
+	// MESURES du dernier calcul qui a traverse ce noeud, succes de cache compris
+	// (cf. Evaluator::TakeRunStats). Nul quand le noeud n'a rien publie ou n'a pas
+	// ete traverse -- ce qui n'est PAS la meme chose qu'interroger le noeud, qui
+	// repondrait alors avec les mesures d'une signature perimee.
+	const std::vector<cggraph::NodeStat> *GetNodeStats (cggraph::NodeId id) const;
+
 	// Incremente a chaque fois que Poll retire un resultat. C'est ce qui dit a
 	// un hote « il y a autre chose a televerser » : Poll est appele par le
 	// canvas, l'hote ne voit donc pas son booleen passer.
@@ -206,6 +212,7 @@ private:
 	// restent justes tant que leur entree n'a pas change. C'est `m_revision` qui
 	// dit a l'interface quand se rafraichir, pas la disparition d'une entree.
 	std::map<cggraph::NodeId, cggraph::Thumbnail> m_previews;
+	std::map<cggraph::NodeId, std::vector<cggraph::NodeStat>> m_nodeStats;
 	unsigned int m_revision = 0;
 };
 

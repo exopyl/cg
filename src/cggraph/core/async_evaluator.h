@@ -64,6 +64,10 @@ public:
 		// de calcul, lues sur celui de l'interface, et la remise du Completed est
 		// le point de synchronisation qui rend cette lecture sure.
 		std::map<NodeId, Thumbnail> previews;
+
+		// Et les MESURES, par le meme convoi et pour la meme raison : construites
+		// sur le fil de calcul, lues sur celui de l'interface.
+		std::map<NodeId, std::vector<NodeStat>> stats;
 	};
 
 	// Derniere progression rendue par le calcul en cours. Elle est COPIEE :

@@ -13,10 +13,13 @@
 //
 // Ce qu'il ne fait PAS, et qu'il faut savoir :
 //
-//  - il n'ajoute pas de plaque de support. Le support est un CONTOUR de plus,
-//    fondu aux autres par une union 2D, et il se decide donc la ou les contours
-//    sont produits -- text.contours le porte. Le generaliser au SVG demanderait
-//    de deplacer cette union ici, ce qui est un autre chantier ;
+//  - il n'ajoute pas de plaque de support. Deux chemins existent, et ils ne
+//    donnent pas la meme piece : le support de `text.contours` est un CONTOUR de
+//    plus fondu par une union 2D, donc a la MEME profondeur que les lettres ;
+//    `shape.contours.plate` (ou `.offset`, pour une silhouette) rend la plaque
+//    SEULE, a extruder sur sa propre plage de Z via `zBottom` puis a fusionner
+//    par `mesh.merge`. C'est ce second chemin qui donne un socle plus mince que
+//    les lettres, ce que l'union 2D ne peut pas faire ;
 //  - il extrude d'un seul tenant. Les contours arrivent deja resolus en une
 //    region unique (les deux producteurs passent par Clipper2), donc NonZero
 //    suffit et il n'y a pas d'orientation a renormaliser.

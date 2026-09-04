@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "../src/cgmesh/contour_ops.h"
 #include "../src/cgmesh/text_extrude.h"
 
 #include "../src/cgmath/font.h"
@@ -732,4 +733,175 @@ TEST(TEST_cgmesh_text_extrude, a_support_without_matter_adds_nothing)
 		EXPECT_NEAR (std::fabs (topAreaOf (*a, bare.depth)),
 		             std::fabs (topAreaOf (*b, flat.depth)), 1e-9);
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Mode de mesure de la cote : corps em vs hauteur de capitale
+// ---------------------------------------------------------------------------
+// Le test qui vaut la peine n'est pas « la conversion calcule ce qu'elle
+// calcule » mais « deux polices au meme reglage rendent-elles des capitales de
+// meme hauteur ». C'est la promesse faite a l'utilisateur, et le mode Em ne peut
+// pas la tenir -- les deux polices de test ont des ems de 1000 et 2048.
+
+namespace {
+
+// Hauteur de l'emprise en Y, sur un texte de CAPITALES PLATES seulement : sans
+// jambage descendant ni ronde debordante, elle vaut la hauteur de capitale.
+float capBoxHeight (const Mesh& m)
+{
+	float lo = 1e30f, hi = -1e30f;
+	for (unsigned int v = 0; v < m.GetNVertices(); v++)
+	{
+		float p[3];
+		m.GetVertex (v, p);
+		if (p[1] < lo) lo = p[1];
+		if (p[1] > hi) hi = p[1];
+	}
+	return hi - lo;
+}
+
+}  // namespace
+
+TEST(TEST_cgmesh_text_extrude, cap_height_mode_makes_two_fonts_agree)
+{
+	std::unique_ptr<Font> cff = loadFont (kCffFont);
+	std::unique_ptr<Font> ttf = loadFont (kTrueTypeFont);
+	if (!cff || !ttf) GTEST_SKIP() << "polices de test absentes";
+	// Le temoin de l'ecart : sans deux ems differents, le test ne prouve rien.
+	ASSERT_NE (cff->unitsPerEm(), ttf->unitsPerEm());
+
+	TextExtrudeOptions opt;
+	opt.size     = 30.f;
+	opt.depth    = 3.f;
+	opt.sizeMode = TextExtrudeOptions::SizeMode::CapHeight;
+
+	std::unique_ptr<Mesh> a (text_to_extruded_mesh (*cff, "HEIL", opt));
+	std::unique_ptr<Mesh> b (text_to_extruded_mesh (*ttf, "HEIL", opt));
+	ASSERT_NE (a, nullptr);
+	ASSERT_NE (b, nullptr);
+
+	// 30 mm demandes = 30 mm mesures, dans les deux polices. La tolerance couvre
+	// l'aplatissement des courbes, pas un ecart d'echelle.
+	EXPECT_NEAR (capBoxHeight (*a), 30.f, 0.2f);
+	EXPECT_NEAR (capBoxHeight (*b), 30.f, 0.2f);
+
+	// Et le mode Em, lui, NE le tient pas : c'est ce qui justifie le mode.
+	TextExtrudeOptions em = opt;
+	em.sizeMode = TextExtrudeOptions::SizeMode::Em;
+	std::unique_ptr<Mesh> c (text_to_extruded_mesh (*cff, "HEIL", em));
+	std::unique_ptr<Mesh> d (text_to_extruded_mesh (*ttf, "HEIL", em));
+	ASSERT_NE (c, nullptr);
+	ASSERT_NE (d, nullptr);
+	EXPECT_GT (std::fabs (capBoxHeight (*c) - capBoxHeight (*d)), 0.5f)
+		<< "les deux polices s'accordent deja en mode Em : le mode CapHeight "
+		   "ne corrige plus rien de mesurable";
+}
+
+TEST(TEST_cgmesh_text_extrude, cap_height_mode_scales_with_the_requested_size)
+{
+	std::unique_ptr<Font> font = loadFont (kTrueTypeFont);
+	if (!font) GTEST_SKIP() << kTrueTypeFont << " absent";
+
+	TextExtrudeOptions opt;
+	opt.depth    = 1.f;
+	opt.sizeMode = TextExtrudeOptions::SizeMode::CapHeight;
+
+	opt.size = 10.f;
+	std::unique_ptr<Mesh> small (text_to_extruded_mesh (*font, "H", opt));
+	opt.size = 40.f;
+	std::unique_ptr<Mesh> large (text_to_extruded_mesh (*font, "H", opt));
+	ASSERT_NE (small, nullptr);
+	ASSERT_NE (large, nullptr);
+
+	EXPECT_NEAR (capBoxHeight (*small), 10.f, 0.1f);
+	EXPECT_NEAR (capBoxHeight (*large), 40.f, 0.1f);
+}
+
+// ---------------------------------------------------------------------------
+// Tolerance d'aplatissement automatique
+// ---------------------------------------------------------------------------
+
+TEST(TEST_cgmesh_text_extrude, a_zero_tolerance_means_automatic)
+{
+	std::unique_ptr<Font> font = loadFont (kCffFont);
+	if (!font) GTEST_SKIP() << kCffFont << " absent";
+
+	TextExtrudeOptions autoTol;
+	autoTol.size       = 30.f;
+	autoTol.depth      = 3.f;
+	autoTol.flattenTol = 0.f;          // = 30 / 600 = 0,05
+
+	TextExtrudeOptions explicitTol = autoTol;
+	explicitTol.flattenTol = 30.f / 600.f;
+
+	std::unique_ptr<Mesh> a (text_to_extruded_mesh (*font, "o", autoTol));
+	std::unique_ptr<Mesh> b (text_to_extruded_mesh (*font, "o", explicitTol));
+	ASSERT_NE (a, nullptr) << "une tolerance nulle a subdivise sans fin, ou rendu vide";
+	ASSERT_NE (b, nullptr);
+	// Le zero N'EST PAS une tolerance nulle : il vaut exactement size / 600.
+	EXPECT_EQ (a->GetNVertices(), b->GetNVertices());
+
+	// Et la tolerance automatique SUIT la cote : a corps double, l'ecart de corde
+	// double aussi, donc le nombre de segments ne s'envole pas.
+	TextExtrudeOptions big = autoTol;
+	big.size = 60.f;
+	std::unique_ptr<Mesh> c (text_to_extruded_mesh (*font, "o", big));
+	ASSERT_NE (c, nullptr);
+	EXPECT_EQ (a->GetNVertices(), c->GetNVertices())
+		<< "la tolerance automatique ne suit pas la cote : " << a->GetNVertices()
+		<< " sommets a 30 mm contre " << c->GetNVertices() << " a 60 mm";
+}
+
+// ---------------------------------------------------------------------------
+//  Le BANDEAU se pose sur la ligne de base
+// ---------------------------------------------------------------------------
+//
+// Ce cas manquait, et son absence s'est vue : la reference du bandeau est passee
+// du bas de l'emprise a la ligne de base sans qu'aucun test ne rougisse. Il ne
+// verifie pas une cote -- il verifie ce que le bandeau SERT A FAIRE : relier les
+// lettres en UNE piece.
+
+TEST(TEST_cgmesh_text_extrude, the_bar_binds_every_letter_into_one_piece)
+{
+	std::unique_ptr<Font> font = loadFont (kTrueTypeFont);
+	if (!font) GTEST_SKIP() << kTrueTypeFont << " absent";
+
+	// « op » : le « p » DESCEND sous la ligne de base, le « o » non. C'est
+	// exactement la configuration ou l'ancienne reference echouait -- un bandeau
+	// pose sous le jambage du « p » ne touchait que lui.
+	TextExtrudeOptions opt;
+	opt.size = 20.f;
+	opt.depth = 2.f;
+
+	// Temoin : sans support, deux lettres separees font deux morceaux.
+	int loose = 0;
+	std::vector<ExtrudeContour> bare;
+	ASSERT_TRUE (text_to_contours (*font, "op", opt, bare));
+	ASSERT_FALSE (offsetContours (bare, 0.f, StrokeJoin::Round, 2.f, &loose).empty ());
+	EXPECT_EQ (loose, 2) << "sans bandeau, le « o » et le « p » devraient etre "
+	                        "deux morceaux : sinon le cas ne prouve rien";
+
+	// Avec le bandeau : UN seul morceau. Sous l'ancienne reference, le « o »
+	// flottait au-dessus du bandeau et ce compte valait 2.
+	opt.support = TextExtrudeOptions::Support::Bar;
+	opt.supportThickness = 2.f;
+	opt.supportOverlap = 0.5f;
+	opt.supportMargin = 1.f;      // la marge du bandeau s'applique en LARGEUR
+	int bound = 0;
+	std::vector<ExtrudeContour> barred;
+	ASSERT_TRUE (text_to_contours (*font, "op", opt, barred));
+	ASSERT_FALSE (offsetContours (barred, 0.f, StrokeJoin::Round, 2.f, &bound).empty ());
+	EXPECT_EQ (bound, 1) << "le bandeau n'a pas relie les deux lettres : il se pose "
+	                        "sans doute sous le jambage plutot que sur la ligne de base";
+
+	// Et il descend BIEN sous la ligne de base : la piece est plus basse qu'elle
+	// ne l'etait, sans pour autant descendre sous le jambage du « p » de plus que
+	// son epaisseur.
+	float bx0 = 0.f, by0 = 0.f, bx1 = 0.f, by1 = 0.f;
+	float sx0 = 0.f, sy0 = 0.f, sx1 = 0.f, sy1 = 0.f;
+	ASSERT_TRUE (contoursBBox (bare, bx0, by0, bx1, by1));
+	ASSERT_TRUE (contoursBBox (barred, sx0, sy0, sx1, sy1));
+	EXPECT_LT (sy0, by0 + 1e-3f) << "le bandeau ne descend nulle part";
+	// La marge s'applique en largeur, de chaque cote -- et nulle part ailleurs.
+	EXPECT_NEAR (sx1 - sx0, (bx1 - bx0) + 2.f * opt.supportMargin, 1e-3f);
 }

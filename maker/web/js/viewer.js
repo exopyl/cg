@@ -154,6 +154,19 @@ export function createViewer({
     if (viewer) viewer.GetViewer().Render();
   }
 
+  // Le fond du rendu est celui du THEME, lu dans la feuille de style : ecrit ici
+  // en dur, il divergeait du `.viewer` qui l entoure des que l un des deux
+  // changeait -- et c est arrive.
+  function themeBackground() {
+    const css = getComputedStyle(document.documentElement)
+      .getPropertyValue("--viewer-bg").trim();
+    const h = (css.startsWith("#") ? css.slice(1) : "eceef2");
+    const n = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+    return new OV.RGBAColor(parseInt(n.slice(0, 2), 16),
+                            parseInt(n.slice(2, 4), 16),
+                            parseInt(n.slice(4, 6), 16), 255);
+  }
+
   function applyBackground(hex) {
     if (!viewer) return;
     const h = hex.replace("#", "");
@@ -344,7 +357,7 @@ export function createViewer({
   } else {
     try {
       viewer = new OV.EmbeddedViewer(container, {
-        backgroundColor: new OV.RGBAColor(20, 22, 26, 255),
+        backgroundColor: themeBackground(),
         defaultColor: new OV.RGBColor(180, 190, 200),
         onModelLoaded: captureMesh,
       });

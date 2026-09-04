@@ -127,6 +127,10 @@ struct Font::Impl
 	int                        fontCount = 0;
 	unsigned int               fontStart = 0;
 	int                        upem = 0;
+	// -1 = pas encore constatee ; 0 = constatee introuvable (cf. capHeight()).
+	// Les deux etats sont distincts : sans quoi une police sans capitale
+	// relancerait la recherche a chaque appel.
+	int                        capHeight = -1;
 
 	KerningStatus                              kernStatus = KerningStatus::None;
 	std::unordered_map<unsigned long long, int> kernPairs;
@@ -263,6 +267,35 @@ void Font::vMetrics (int& ascender, int& descender, int& lineGap) const
 	ascender = descender = lineGap = 0;
 	if (!m_impl->valid) return;
 	stbtt_GetFontVMetrics (&m_impl->info, &ascender, &descender, &lineGap);
+}
+
+int Font::capHeight () const
+{
+	if (!m_impl->valid) return 0;
+	if (m_impl->capHeight >= 0) return m_impl->capHeight;
+
+	// Capitales a sommet PLAT, dans l'ordre de preference : le 'H' est la
+	// reference typographique, les suivantes ne servent qu'aux polices qui ne le
+	// portent pas. Aucune ronde ici -- un 'O' ou un 'S' depasse la ligne des
+	// capitales par debord optique.
+	static const char32_t kFlatTopped[] = { U'H', U'E', U'I', U'X', U'T' };
+
+	int found = 0;
+	for (const char32_t cp : kFlatTopped)
+	{
+		const int glyph = glyphIndex (cp);
+		// 0 = .notdef : le point de code est absent de la police.
+		if (glyph <= 0) continue;
+
+		int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+		if (!stbtt_GetGlyphBox (&m_impl->info, glyph, &x0, &y0, &x1, &y1)) continue;
+		// y1 est le sommet, la ligne de base valant 0. Un glyphe blanc rend une
+		// bbox vide, donc un sommet nul ou negatif : il n'apprend rien.
+		if (y1 > 0) { found = y1; break; }
+	}
+
+	m_impl->capHeight = found;
+	return found;
 }
 
 int Font::glyphIndex (char32_t codepoint) const

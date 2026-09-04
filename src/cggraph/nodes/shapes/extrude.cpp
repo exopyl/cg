@@ -31,6 +31,11 @@ const cggraph::NodeDesc &Desc ()
 ExtrudeNode::ExtrudeNode ()
 {
 	GetParams ().SetFloat ("depth", 0.2f);
+	// Plan de POSE. `depth` reste une EPAISSEUR : le solide occupe
+	// [zBottom, zBottom + depth]. C'est ce qui rend l'empilement trivial -- un
+	// socle en [0, t], des lettres en [t, t + h] -- sans qu'aucun des deux
+	// reglages ne depende de l'autre.
+	GetParams ().SetFloat ("zBottom", 0.0f);
 }
 
 const cggraph::NodeDesc &ExtrudeNode::GetDesc () const
@@ -49,8 +54,8 @@ bool ExtrudeNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueList &
 		return false;
 
 	ExtrudeAppendOptions options;
-	options.zBottom = 0.0f;
-	options.zTop = GetFloat (GetParams (), "depth", 0.2f);
+	options.zBottom = GetFloat (GetParams (), "zBottom", 0.0f);
+	options.zTop = options.zBottom + GetFloat (GetParams (), "depth", 0.2f);
 
 	// NonZero, et PAS de renormalisation d'orientation. Les deux producteurs de
 	// contours du catalogue -- texte et SVG -- rendent des regions sorties de

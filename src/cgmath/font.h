@@ -111,6 +111,26 @@ public:
 	// Approche gauche du glyphe (left side bearing).
 	int  lsb (int glyph) const;
 
+	// HAUTEUR DE CAPITALE, en unites de police, mesuree depuis la ligne de base.
+	// 0 quand la police ne permet pas de la constater (aucune capitale latine a
+	// sommet plat) -- l'appelant retombe alors sur l'em, seule autre reference
+	// disponible.
+	//
+	// Pourquoi elle n'est PAS dans IGlyphMetrics : cette interface est le contrat
+	// MINIMAL dont text_layout a besoin, et un test l'implemente. La hauteur de
+	// capitale ne sert pas a composer une ligne, seulement a convertir une cote
+	// demandee par un humain -- c'est donc l'affaire de la couche qui tient une
+	// vraie police, pas du compositeur.
+	//
+	// Elle se CONSTATE sur la bbox du glyphe, et n'est pas lue dans `OS/2` :
+	// stb_truetype n'expose pas `sCapHeight`, et la valeur declaree y est de
+	// toute facon souvent absente ou fausse. Seules des capitales a sommet PLAT
+	// sont essayees ('H', 'E', 'I', 'X', 'T') : un 'O' depasse la ligne des
+	// capitales par debord optique, il surestimerait la hauteur de 1 a 2 %.
+	//
+	// Memoisee : une page en regle la cote a chaque deplacement de curseur.
+	int  capHeight () const;
+
 	KerningStatus kerningStatus () const;
 	// Nombre de paires effectivement lues (0 hors etat Applied).
 	std::size_t   kernPairCount () const;

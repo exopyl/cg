@@ -4,6 +4,15 @@
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
+#include <cstdlib>
+#include <sstream>
+#include <string>
+#include <vector>
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 #include "../src/cgmesh/cgmesh.h"
 #include "../src/cgmesh/mesh_io.h"       // MeshIO::export_obj (points d entree par format)
@@ -1269,6 +1278,114 @@ TEST(TEST_cgmesh_io, obj_zip_omits_the_mtl_when_there_is_no_material)
     EXPECT_EQ(rd16(eocd + 10), 1u) << "une seule entree attendue : le .obj";
 }
 
+namespace
+{
+// Repertoire temporaire PRIVE AU PROCESSUS, installe par l'environnement.
+//
+// `std::filesystem::temp_directory_path()` lit l'environnement a CHAQUE appel,
+// sans cache, sur les deux implementations : TMPDIR > TMP > TEMP > TEMPDIR >
+// /tmp sous libstdc++, TMP > TEMP > USERPROFILE sous MSVC. Poser les trois
+// couvre les deux. Il n'existe pas d'API standard pour ecrire une variable
+// d'environnement : POSIX a setenv/unsetenv, MSVC a _putenv_s, ou une valeur
+// vide SUPPRIME la variable.
+//
+// LE REPERTOIRE EST CREE AVANT que les variables ne le designent. Pointer vers
+// un chemin inexistant pose error_code -- chemin vide sous libstdc++, code 20
+// sous MSVC --, et le code de production rendrait alors une archive vide sans
+// que la cause soit lisible.
+//
+// LA RESTAURATION EST AU DESTRUCTEUR, jamais en ligne droite : le corps d'un cas
+// contient des ASSERT_* qui rendent la main depuis la fonction. Une restauration
+// ecrite apres la derniere assertion serait sautee a la premiere rupture et
+// contaminerait tous les cas suivants quand TU est lance sur la suite entiere.
+class ScopedTempEnv
+{
+public:
+    explicit ScopedTempEnv (const std::string& tag)
+    {
+        std::error_code ec;
+        const std::filesystem::path base = std::filesystem::temp_directory_path (ec);
+        if (ec)
+            return;
+
+        // L'identifiant de processus separe deux TU lances en parallele ; le
+        // compteur separe deux bacs a sable d'un meme processus.
+        static int serial = 0;
+        std::ostringstream name;
+        name << tag << '_' << (unsigned long)CurrentProcessId () << '_' << serial++;
+
+        const std::filesystem::path dir = base / name.str ();
+        std::filesystem::remove_all (dir, ec);
+        if (!std::filesystem::create_directories (dir, ec) || ec)
+            return;
+
+        m_dir = dir;
+        Save ("TMPDIR"); Save ("TMP"); Save ("TEMP"); Save ("TEMPDIR");
+        const std::string value = dir.string ();
+        Set ("TMPDIR", value.c_str ()); Set ("TMP", value.c_str ());
+        Set ("TEMP", value.c_str ()); Set ("TEMPDIR", value.c_str ());
+    }
+
+    ~ScopedTempEnv ()
+    {
+        for (std::vector<Saved>::const_reverse_iterator it = m_saved.rbegin ();
+             it != m_saved.rend (); ++it)
+            Set (it->name.c_str (), it->wasSet ? it->value.c_str () : nullptr);
+
+        if (!m_dir.empty ())
+        {
+            std::error_code ec;
+            std::filesystem::remove_all (m_dir, ec);
+        }
+    }
+
+    ScopedTempEnv (const ScopedTempEnv&) = delete;
+    ScopedTempEnv& operator= (const ScopedTempEnv&) = delete;
+
+    const std::filesystem::path& GetPath () const { return m_dir; }
+
+private:
+    struct Saved { std::string name; std::string value; bool wasSet = false; };
+
+    static unsigned long CurrentProcessId ()
+    {
+#if defined(_WIN32)
+        return (unsigned long)_getpid ();
+#else
+        return (unsigned long)getpid ();
+#endif
+    }
+
+    // nullptr efface la variable. Sous MSVC c'est la valeur VIDE qui efface,
+    // _putenv_s n'ayant pas de forme de suppression distincte.
+    static void Set (const char* name, const char* value)
+    {
+#if defined(_WIN32)
+        _putenv_s (name, value != nullptr ? value : "");
+#else
+        if (value != nullptr)
+            setenv (name, value, 1);
+        else
+            unsetenv (name);
+#endif
+    }
+
+    void Save (const char* name)
+    {
+        Saved entry;
+        entry.name = name;
+        const char* current = std::getenv (name);
+        entry.wasSet = current != nullptr;
+        if (entry.wasSet)
+            entry.value = current;
+        m_saved.push_back (entry);
+    }
+
+    std::filesystem::path m_dir;
+    std::vector<Saved> m_saved;
+};
+} // namespace
+
 // L'export ZIP passe par un fichier temporaire (MeshIO ecrit par NOM DE FICHIER).
 // Ce chemin fut longtemps PREVISIBLE et dans un repertoire PARTAGE -- /tmp/model.obj,
 // le radical venant d'un defaut fixe -- ce qui laissait un tiers y deposer un lien
@@ -1286,16 +1403,49 @@ TEST(TEST_cgmesh_io, obj_zip_uses_a_private_temp_dir_and_leaves_nothing_behind)
     unsigned int faces[] = { 0,1,2 };
     mesh.SetFaces(1, 3, faces);
 
+    // REPERTOIRE TEMPORAIRE PRIVE AU CAS, et ce n'est pas un confort.
+    //
+    // Le comptage porte sur `temp_directory_path()`, partage par TOUS les
+    // processus de la machine. Or ctest decouvre un test par cas gtest et les
+    // lance en parallele (-j) : les trois cas qui exportent une archive sont
+    // consecutifs dans ce fichier, donc dans le meme lot, donc leurs fenetres
+    // d'ecriture sont ALIGNEES et non independantes. Un frere vivant fait
+    // compter 1 avant et 0 apres -- le compte DIMINUE, ce qu'aucune fuite ne
+    // peut produire.
+    //
+    // En redirigeant l'environnement vers un repertoire cree ici, la base
+    // observee n'a plus aucun producteur concurrent : l'assertion cesse d'etre
+    // differentielle (`after == before`) pour devenir absolue -- zero avant,
+    // zero apres --, ce qui enonce reellement « rien ne subsiste ».
+    //
+    // Le nom porte l'identifiant de processus : deux TU.exe lances a la main en
+    // parallele reproduiraient sinon le defaut a l'etage au-dessus.
+    ScopedTempEnv sandbox ("tu_obj_zip");
+    ASSERT_FALSE (sandbox.GetPath ().empty ()) << "le bac a sable n'a pas pu etre cree";
+
     auto countTempDirs = [] {
         std::error_code ec;
         const std::filesystem::path base = std::filesystem::temp_directory_path(ec);
-        if (ec) return (size_t)0;
+        // Un echec rend le comptage MUET : rendre 0 ferait passer une base
+        // illisible pour une base propre. Le cas doit tomber, pas conclure.
+        EXPECT_FALSE (ec) << "temp_directory_path : " << ec.message();
+        if (ec) return (size_t)-1;
         size_t n = 0;
-        for (std::filesystem::directory_iterator it(base, ec), end; !ec && it != end; it.increment(ec))
+        std::filesystem::directory_iterator it(base, ec), end;
+        EXPECT_FALSE (ec) << "ouverture de " << base.string() << " : " << ec.message();
+        if (ec) return (size_t)-1;
+        for (; it != end; it.increment(ec))
+        {
+            // Meme raison : un parcours interrompu rend un compte tronque,
+            // indiscernable d'un compte legitime.
+            EXPECT_FALSE (ec) << "parcours de " << base.string() << " : " << ec.message();
+            if (ec) return (size_t)-1;
             if (it->path().filename().string().rfind("cg_obj_", 0) == 0) ++n;
+        }
         return n;
     };
     const size_t before = countTempDirs();
+    EXPECT_EQ (before, (size_t)0) << "le bac a sable doit etre vierge";
 
     // Meme radical deux fois : avec un chemin previsible, le second export reutilisait
     // le premier fichier.

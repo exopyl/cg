@@ -166,6 +166,12 @@ bool EditorModel::Poll ()
 	for (std::map<cggraph::NodeId, cggraph::Thumbnail>::const_iterator it = last.previews.begin ();
 	     it != last.previews.end (); ++it)
 		m_previews[it->first] = it->second;
+	// Idem pour les mesures, et pour la meme raison : un parcours ne traverse
+	// qu'une branche, et remplacer effacerait ce qu'une autre avait mesure.
+	for (std::map<cggraph::NodeId, std::vector<cggraph::NodeStat>>::const_iterator it
+	         = last.stats.begin ();
+	     it != last.stats.end (); ++it)
+		m_nodeStats[it->first] = it->second;
 	++m_revision;
 	return true;
 }
@@ -206,6 +212,13 @@ const cggraph::Thumbnail *EditorModel::GetPreview (cggraph::NodeId id) const
 {
 	std::map<cggraph::NodeId, cggraph::Thumbnail>::const_iterator it = m_previews.find (id);
 	return it == m_previews.end () ? nullptr : &it->second;
+}
+
+const std::vector<cggraph::NodeStat> *EditorModel::GetNodeStats (cggraph::NodeId id) const
+{
+	std::map<cggraph::NodeId, std::vector<cggraph::NodeStat>>::const_iterator it
+		= m_nodeStats.find (id);
+	return it == m_nodeStats.end () ? nullptr : &it->second;
 }
 
 } // namespace cggraph_ui

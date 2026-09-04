@@ -36,8 +36,28 @@ class Mesh;
 
 struct TextExtrudeOptions
 {
-	// Hauteur d'em en unites monde : le corps typographique, pas la hauteur des
-	// capitales. C'est le facteur d'echelle applique aux unites de police.
+	// Ce que `size` MESURE. Deux references, et elles ne coincident pour aucune
+	// police : l'em vaut ~1,4 fois la hauteur de capitale.
+	//
+	//   Em        -- le corps typographique. Deux polices au meme `size` NE
+	//                rendent PAS des lettres de meme hauteur.
+	//   CapHeight -- la hauteur des capitales, mesuree depuis la ligne de base.
+	//                C'est la cote qu'un humain designe quand il dit « lettres de
+	//                30 mm », et la seule qui se verifie a la regle sur la piece
+	//                imprimee.
+	//
+	// La conversion a lieu ICI et pas dans text_layout, qui ne connait que
+	// IGlyphMetrics -- contrat minimal, sans hauteur de capitale (cf. font.h).
+	// Cette couche tient une vraie police, donc elle peut convertir ; le
+	// compositeur, non.
+	//
+	// ⚠ DEGRADATION : une police dont aucune capitale a sommet plat n'est
+	// lisible rend `Font::capHeight() == 0`. Le mode retombe alors sur l'em --
+	// la cote demandee n'est plus honoree, et rien d'autre ne pouvait l'etre.
+	enum class SizeMode { Em, CapHeight };
+	SizeMode sizeMode = SizeMode::Em;
+
+	// La cote demandee en unites monde, interpretee selon `sizeMode`.
 	float size = 1.f;
 
 	// Epaisseur extrudee, de z = 0 a z = depth.
@@ -45,7 +65,18 @@ struct TextExtrudeOptions
 
 	// Tolerance d'aplatissement des courbes, en UNITES MONDE (cf. l'en-tete).
 	// A 1/100e du corps, un contour de glyphe est visuellement lisse.
-	float flattenTol = 0.01f;
+	//
+	// ZERO (ou negatif) = AUTOMATIQUE : `size / 600`. C'est la seule valeur qui
+	// n'avait aucun sens -- une tolerance nulle subdiviserait sans fin -- d'ou sa
+	// reaffectation plutot qu'un drapeau de plus.
+	//
+	// Le 600 n'est pas arbitraire : a une cote de 30 mm il donne 0,05 mm d'ecart
+	// de corde, soit largement sous la buse (0,4 mm) et sous la couche (0,2 mm)
+	// d'une imprimante FDM -- donc invisible sur la piece --, pour un budget
+	// mesure de ~3 500 triangles sur neuf glyphes. Une tolerance absolue, elle,
+	// ne peut pas suivre la cote : le defaut de 0,01 convenait a un corps de 1 et
+	// produisait des contours inutilement denses a 30.
+	float flattenTol = 0.f;
 
 	float     lineSpacing   = 1.f;
 	float     letterSpacing = 0.f;

@@ -174,6 +174,7 @@ void AsyncEvaluator::Loop ()
 		// Juste apres Evaluate et sur le MEME fil : les vignettes du parcours
 		// voyagent avec le resultat.
 		completed.previews = m_evaluator.TakeRunPreviews ();
+		completed.stats = m_evaluator.TakeRunStats ();
 
 		held.lock ();
 		m_busy = false;

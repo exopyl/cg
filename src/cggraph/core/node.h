@@ -54,6 +54,13 @@ struct NodeDesc
 	bool sideEffect = false;
 };
 
+// Une mesure publiee par un noeud apres calcul (cf. Node::PublishStats).
+struct NodeStat
+{
+	std::string name;
+	double      value = 0.0;
+};
+
 class Node
 {
 public:
@@ -89,6 +96,20 @@ public:
 	// jamais planter. Ne fait rien pour un noeud qui ne depend que de ses
 	// entrees, c'est-a-dire pour la quasi-totalite du catalogue.
 	virtual void RefreshExternalState () {}
+
+	// Ce que le dernier calcul a REELLEMENT fait, pour qui le montre.
+	//
+	// Plusieurs noeuds comptaient deja leur travail -- glyphes places, morceaux
+	// d'une silhouette, formes qu'un profil a mangees -- chacun derriere un
+	// accesseur qui lui etait propre. Aucun n'atteignait un ecran : il n'y avait
+	// pas de chemin generique entre un compteur de noeud et une interface, si
+	// bien qu'un garde-fou pouvait exister dans le moteur et rester invisible la
+	// ou il servait. C'est ce chemin.
+	//
+	// Les noms sont des IDENTIFIANTS STABLES, lus par un gabarit ou un pilote :
+	// les changer casse ce qui les affiche, exactement comme un nom de parametre.
+	// Ne publie rien pour la quasi-totalite du catalogue.
+	virtual void PublishStats (std::vector<NodeStat> &out) const { (void)out; }
 
 	// Version du document dont cette instance est issue. Negative tant que rien
 	// ne l'a posee : un noeud construit en memoire est, par construction, a la

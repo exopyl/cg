@@ -267,7 +267,28 @@ std::string graphNodeInfo (unsigned int id)
         }
         j += "}";
     }
-    j += "]}";
+
+    // MESURES du dernier calcul (Node::PublishStats). Elles ne sont pas des
+    // parametres -- rien ne les REGLE, elles se CONSTATENT -- d'ou une section a
+    // part. C'est le chemin qui manquait entre un compteur de noeud et un ecran :
+    // sans lui, un garde-fou comme le compte de morceaux d'une silhouette
+    // existait dans le moteur et restait invisible la ou il sert.
+    // ⚠ DU PARCOURS, ET NON DU NOEUD. Interroger le noeud rendait les mesures de
+    // son dernier CALCUL ; un succes de cache n'en fait aucun, et le chiffre
+    // decrivait alors une autre signature. C'est le modele qui garde celles du
+    // dernier parcours, succes de cache compris (EditorModel::GetNodeStats).
+    const std::vector<cggraph::NodeStat> *run = host ().model.GetNodeStats (id);
+    const std::vector<cggraph::NodeStat> stats = (run != nullptr)
+        ? *run : std::vector<cggraph::NodeStat> ();
+    j += "],\"stats\":{";
+    for (std::size_t i = 0; i < stats.size (); ++i) {
+        if (i) j += ',';
+        char buf[32];
+        std::snprintf (buf, sizeof (buf), "%.6g", stats[i].value);
+        j += "\"" + JsonEscape (stats[i].name) + "\":";
+        j += buf;
+    }
+    j += "}}";
     return j;
 }
 

@@ -180,10 +180,10 @@ TEST (TEST_cggraph_nodes_catalog, the_catalog_publishes_exactly_two_text_nodes)
 	// Deux, ni un ni trois : la police est un PORT -- donc un noeud a part --,
 	// et l'extrusion est monolithique -- donc un seul noeud.
 	EXPECT_EQ (text, 2u);
-	// CINQ depuis l'etape 9 : la decomposition multi-objets rejoint les quatre
-	// noeuds de maillage. Ce compte est un FILET, pas une description -- il a
-	// rougi a l'ajout, ce qui est sa fonction.
-	EXPECT_EQ (mesh, 5u);
+	// HUIT : mesh.mounts rejoint mesh.color, mesh.merge et les cinq d'avant.
+	// Ce compte est un FILET, pas une description -- il a rougi a l'ajout, ce
+	// qui est exactement sa fonction.
+	EXPECT_EQ (mesh, 8u);
 }
 
 TEST (TEST_cggraph_nodes_catalog, the_native_only_entries_are_named_one_by_one)
@@ -225,11 +225,29 @@ TEST (TEST_cggraph_nodes_catalog, the_native_only_entries_are_named_one_by_one)
 	// aussi : leurs corps vivent dans parameterized_shapes.cpp et dans les
 	// generateurs qu'il appelle, tous dans la liste EMSCRIPTEN de cgmesh.
 	const std::vector<std::string> expectedFirst = {
-		"mesh.io.load", "mesh.smooth.laplacian", "mesh.simplify", "mesh.io.save",
+		"mesh.io.load", "mesh.smooth.laplacian", "mesh.simplify",
+		// COULEUR -- portable : elle n'appelle que Mesh et MaterialColor.
+		"mesh.color",
+		// FUSION -- portable : elle n'appelle que Mesh::Append, du coeur.
+		"mesh.merge",
+		// FIXATION MURALE -- portable : contour_ops.cpp et extrude_contours.cpp
+		// sont tous deux dans la liste EMSCRIPTEN, et elle n'appelle rien d'autre.
+		"mesh.mounts",
+		"mesh.io.save",
 		"text.font.load", "text.contours",
 		// CONTOUR 2D -- les deux moities de l'ancien text.extrude, plus le
 		// producteur SVG qui partage desormais l'extrudeur.
 		"svg.contours", "shape.extrude",
+		// ARETE PROFILEE -- portable : extrude_profiled.cpp est dans la liste
+		// EMSCRIPTEN, et il n'appelle que Clipper2 et le tessellateur.
+		"shape.extrude.profiled",
+		// LES DEUX FORMES DE PLAQUE -- portables : contour_ops.cpp est dans la
+		// liste EMSCRIPTEN de cgmesh, et Clipper2 y est compile avec elle.
+		"shape.contours.offset",
+		// BOOLEEN 2D -- portable : contour_ops.cpp est dans la liste EMSCRIPTEN,
+		// et Clipper2 y est compile avec cgmesh. Sa place dans cette liste suit
+		// l'ordre d'ENREGISTREMENT du catalogue, pas un ordre logique.
+		"shape.boolean2d", "shape.contours.plate",
 		// IMAGE -- portables comme les precedents : image_relief.cpp,
 		// image_pixel_blocks.cpp, image_region_pipeline.cpp et
 		// image_vectorization.cpp sont tous dans la liste EMSCRIPTEN de cgmesh,
@@ -263,9 +281,11 @@ TEST (TEST_cggraph_nodes_catalog, the_native_only_entries_are_named_one_by_one)
 
 	EXPECT_EQ (shapes, 27u);      // 26 generiques + la fenetre gothique
 	EXPECT_EQ (profiles, 5u);
-	// Les cinq du flux sont PORTABLES : elles n'emballent aucun corps de
+	// HUIT depuis le selecteur de profil, qui rejoint ceux de maillage et de
+	// contours : flow.select.mesh et flow.select.contours
+	// rejoignent les cinq precedentes. Toutes PORTABLES : elles n'emballent aucun corps de
 	// cgmesh, seulement le serialiseur et l'evaluateur de la couche A.
-	EXPECT_EQ (flow, 5u);
+	EXPECT_EQ (flow, 8u);
 	// Les six de l'image sont PORTABLES elles aussi : une source, le tronc de
 	// quantification, et deux extrudeurs a deux sorties chacun.
 	EXPECT_EQ (images, 6u);
@@ -279,8 +299,16 @@ TEST (TEST_cggraph_nodes_catalog, the_native_only_entries_are_named_one_by_one)
 	// noeud, est devenu text.contours + shape.extrude, et svg.contours est
 	// arrive avec eux. Tous portables -- text_extrude.cpp, import_svg.cpp et
 	// extrude_contours.cpp sont dans la liste EMSCRIPTEN de cgmesh.
-	EXPECT_EQ (portable.size (), 52u);
-	EXPECT_EQ (Catalog ().size (), 59u);
+	//
+	// L'empilement 2,5D en ajoute TROIS : mesh.merge, shape.contours.offset et
+	// shape.contours.plate. Portables egalement -- contour_ops.cpp figure dans
+	// la liste EMSCRIPTEN, et c'est ce qui permet a la page « Texte 3D » de
+	// poser un socle sous ses lettres dans le navigateur.
+	//
+	// La FIXATION MURALE en ajoute un dernier, portable lui aussi : elle
+	// n'appelle que contour_ops et extrude_contours, tous deux dans la liste.
+	EXPECT_EQ (portable.size (), 62u);
+	EXPECT_EQ (Catalog ().size (), 69u);
 }
 
 TEST (TEST_cggraph_nodes_catalog, every_entry_either_carries_a_caveat_or_declares_it_has_none)

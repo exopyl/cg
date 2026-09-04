@@ -1,6 +1,6 @@
 {
   "title": "Texte 3D",
-  "subtitle": "police · mise en page · extrusion — piloté par un graphe",
+  "subtitle": "police · arête · socle — cotes en millimètres, export STL",
   "_comment": [
     "GABARIT DE PAGE. Tout ce qui distingue cette page d'une autre est ici :",
     "le graphe qu'elle évalue, les paramètres qu'elle expose, et la source de",
@@ -17,7 +17,7 @@
     "le graphe ci-dessous. Une faute de frappe donne un widget qui n'écrit",
     "nulle part. template.js le signale au chargement plutôt que de le taire."
   ],
-  "output": 4,
+  "output": 14,
   "sources": [
     {
       "node": 3,
@@ -41,7 +41,8 @@
       "type": "string",
       "multiline": true,
       "rows": 3,
-      "hint": "Les retours à la ligne sont honorés ; c'est là que l'alignement se voit."
+      "hint": "Les retours à la ligne sont honorés ; c'est là que l'alignement se voit.",
+      "group": "Texte"
     },
     {
       "node": 2,
@@ -53,96 +54,367 @@
         "centré",
         "droite"
       ],
-      "hint": "Sans effet sur une seule ligne."
+      "hint": "Sans effet sur une seule ligne.",
+      "group": "Texte"
     },
     {
       "node": 2,
       "param": "size",
-      "label": "Corps",
+      "label": "Hauteur de lettre (mm)",
       "type": "float",
-      "min": 0.05,
-      "max": 10.0,
-      "step": 0.05
+      "min": 2.0,
+      "max": 200.0,
+      "step": 0.5,
+      "hint": "Hauteur des capitales, mesurée depuis la ligne de base — la cote qu'on vérifie à la règle sur la pièce imprimée. Deux polices au même réglage rendent donc des lettres de MÊME hauteur, ce que le corps em ne garantit pas (il vaut ~1,4 fois cette hauteur). Bascule par « Mesure de la cote ».",
+      "group": "Texte"
+    },
+    {
+      "node": 2,
+      "param": "sizeMode",
+      "label": "Mesure de la cote",
+      "type": "enum",
+      "choices": [
+        "corps em",
+        "hauteur de capitale"
+      ],
+      "hint": "Ce que le réglage ci-dessus mesure. « Hauteur de capitale » est la cote attendue par un atelier ; « corps em » est la convention typographique, utile pour reproduire une mise en page.",
+      "group": "Texte"
     },
     {
       "node": 4,
       "param": "depth",
-      "label": "Profondeur",
+      "label": "Profondeur (mm)",
       "type": "float",
-      "min": 0.01,
-      "max": 5.0,
-      "step": 0.01
+      "min": 0.2,
+      "max": 50.0,
+      "step": 0.1,
+      "group": "Texte"
+    },
+    {
+      "node": 13,
+      "param": "index",
+      "label": "Forme de l'arête",
+      "type": "enum",
+      "choices": [
+        "chanfrein / biseau",
+        "congé"
+      ],
+      "hint": "Chanfrein et biseau sont la MÊME forme à deux réglages : largeur égale à la profondeur donne 45°, sinon un biseau. Le congé arrondit l'arête.",
+      "group": "Arête des lettres"
+    },
+    {
+      "node": 11,
+      "param": "width",
+      "label": "Chanfrein : largeur (mm)",
+      "type": "float",
+      "min": 0.0,
+      "max": 3.0,
+      "step": 0.05,
+      "hint": "ZÉRO = arête vive. La largeur est retirée à la face du dessus, de chaque côté : un trait plus mince que deux fois cette valeur DISPARAÎT.",
+      "group": "Arête des lettres"
+    },
+    {
+      "node": 11,
+      "param": "depth",
+      "label": "Chanfrein : profondeur (mm)",
+      "type": "float",
+      "min": 0.05,
+      "max": 3.0,
+      "step": 0.05,
+      "hint": "Doit rester inférieure à la profondeur des lettres, sinon le calcul est REFUSÉ — l'arête n'est pas rabotée en silence.",
+      "group": "Arête des lettres"
+    },
+    {
+      "node": 12,
+      "param": "width",
+      "label": "Congé : largeur (mm)",
+      "type": "float",
+      "min": 0.0,
+      "max": 3.0,
+      "step": 0.05,
+      "group": "Arête des lettres"
+    },
+    {
+      "node": 12,
+      "param": "depth",
+      "label": "Congé : profondeur (mm)",
+      "type": "float",
+      "min": 0.05,
+      "max": 3.0,
+      "step": 0.05,
+      "hint": "Largeur = profondeur donne un quart de rond ; les dissocier l'aplatit.",
+      "group": "Arête des lettres"
+    },
+    {
+      "node": 4,
+      "param": "direction",
+      "label": "Sens de l'arête",
+      "type": "enum",
+      "choices": [
+        "rentrant",
+        "dilatant"
+      ],
+      "hint": "RENTRANT : 30 mm demandes = 30 mm mesures, mais un delie fin peut disparaitre -- la page le compte et le dit. DILATANT : rien ne disparait, l'emprise croit de la largeur d'arete. C'est ce que fait stltext.com, et pourquoi il affiche 26,86 mm pour 24 demandes.",
+      "group": "Arête des lettres"
+    },
+    {
+      "node": 10,
+      "param": "index",
+      "label": "Socle",
+      "type": "enum",
+      "choices": [
+        "aucun",
+        "plaque sous les lettres"
+      ],
+      "hint": "Le socle est un SECOND volume, avec son épaisseur propre — pas un contour de plus fondu aux lettres (« Support » ci-dessous, qui partage forcément leur profondeur). Les deux branches sont calculées dans les deux cas.",
+      "group": "Socle"
+    },
+    {
+      "node": 7,
+      "param": "index",
+      "label": "Forme du socle",
+      "type": "enum",
+      "choices": [
+        "rectangulaire",
+        "silhouette du texte"
+      ],
+      "hint": "« Silhouette » suit la forme des lettres à distance constante. ⚠ Un décalage trop faible ne relie pas les lettres entre elles : la pièce sort alors en morceaux. Sans effet quand le socle est « aucun ».",
+      "group": "Socle"
+    },
+    {
+      "node": 8,
+      "param": "depth",
+      "label": "Épaisseur du socle (mm)",
+      "type": "float",
+      "min": 0.4,
+      "max": 20.0,
+      "step": 0.2,
+      "hint": "Les lettres sont posées dessus : leur cote de pose suit cette valeur.",
+      "group": "Socle"
+    },
+    {
+      "node": 5,
+      "param": "margin",
+      "label": "Marge du socle (mm)",
+      "type": "float",
+      "min": 0.0,
+      "max": 50.0,
+      "step": 0.5,
+      "hint": "Socle rectangulaire seulement.",
+      "group": "Socle"
+    },
+    {
+      "node": 5,
+      "param": "cornerRadius",
+      "label": "Rayon des coins du socle (mm)",
+      "type": "float",
+      "min": 0.0,
+      "max": 20.0,
+      "step": 0.5,
+      "hint": "Socle rectangulaire seulement.",
+      "group": "Socle"
+    },
+    {
+      "node": 6,
+      "param": "delta",
+      "label": "Décalage de la silhouette (mm)",
+      "type": "float",
+      "min": 0.0,
+      "max": 30.0,
+      "step": 0.5,
+      "hint": "Socle silhouette seulement. Borné à 0 minimum : un décalage négatif consommerait la matière et ferait échouer la branche, calculée même lorsqu'elle n'est pas retenue.",
+      "group": "Socle"
+    },
+    {
+      "node": 14,
+      "param": "color",
+      "label": "Couleur de la pièce",
+      "type": "color",
+      "group": "Couleur",
+      "hint": "Elle appartient au DOCUMENT et non à la vue : on la choisit une fois, on la retrouve en rouvrant le fichier. ⚠ Elle ne franchit aucun des deux exports — le STL ne porte pas de couleur, et l'OBJ rendu ici est minimal, sans fichier de matériaux."
     },
     {
       "node": 2,
       "param": "letterSpacing",
-      "label": "Approche",
+      "label": "Approche (mm)",
       "type": "float",
-      "min": -0.5,
-      "max": 2.0,
-      "step": 0.01
+      "min": -5.0,
+      "max": 20.0,
+      "step": 0.1,
+      "group": "Mise en page"
     },
     {
       "node": 2,
       "param": "lineSpacing",
-      "label": "Interligne",
+      "label": "Interligne (× corps)",
       "type": "float",
       "min": 0.2,
       "max": 4.0,
-      "step": 0.05
+      "step": 0.05,
+      "group": "Mise en page"
     },
     {
       "node": 2,
       "param": "kerning",
       "label": "Crénage",
-      "type": "bool"
+      "type": "bool",
+      "group": "Mise en page"
     },
     {
       "node": 2,
       "param": "flattenTol",
-      "label": "Finesse des courbes",
+      "label": "Finesse des courbes (mm)",
       "type": "float",
-      "min": 0.001,
-      "max": 0.2,
-      "step": 0.001,
-      "hint": "Écart de corde toléré à l'aplatissement des contours de glyphe. Plus petit = plus de segments."
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01,
+      "hint": "Écart de corde toléré à l'aplatissement des contours de glyphe. ZÉRO = automatique (cote / 600), ce qui suit la taille : à 30 mm cela fait 0,05 mm, largement sous la buse et sous la couche d'une FDM. Une valeur non nulle est absolue, en millimètres.",
+      "group": "Mise en page"
     },
     {
       "node": 2,
       "param": "centerOnOrigin",
       "label": "Centrer sur l'origine",
-      "type": "bool"
+      "type": "bool",
+      "group": "Mise en page"
     },
     {
       "node": 2,
       "param": "support",
-      "label": "Support",
+      "label": "Renfort",
       "type": "enum",
       "choices": [
         "aucun",
-        "plaque",
         "bandeau",
         "cadre"
       ],
-      "hint": "Un contour de PLUS dans l'union 2D, jamais un second volume : support et texte partagent donc la profondeur."
+      "hint": "Contour de plus FONDU aux lettres, donc forcément à leur profondeur. Le BANDEAU les relie sur la ligne de base, le CADRE les entoure — les deux les laissent visibles. La quatrième position du nœud, la plaque, n'est pas offerte ici : contenant l'emprise du texte, elle l'avale à profondeur égale et ne rend qu'une boîte. C'est le bloc « Socle » qu'il faut pour une plaque, lui a son épaisseur propre.",
+      "group": "Renfort fondu (hérité)",
+      "values": [
+        0,
+        2,
+        3
+      ]
     },
     {
       "node": 2,
       "param": "supportMargin",
-      "label": "Marge du support",
+      "label": "Marge du support (mm)",
       "type": "float",
       "min": 0.0,
-      "max": 2.0,
-      "step": 0.01
+      "max": 50.0,
+      "step": 0.5,
+      "group": "Renfort fondu (hérité)"
     },
     {
       "node": 2,
       "param": "supportCornerRadius",
-      "label": "Rayon des coins",
+      "label": "Rayon des coins (mm)",
+      "type": "float",
+      "min": 0.0,
+      "max": 20.0,
+      "step": 0.5,
+      "group": "Renfort fondu (hérité)"
+    },
+    {
+      "node": 16,
+      "param": "index",
+      "label": "Fixation",
+      "type": "enum",
+      "choices": [
+        "aucune",
+        "bandeau percé"
+      ],
+      "hint": "Le bandeau traverse l'emprise de la pièce et s'y soude ; ses deux bouts la dépassent et portent les trous de vis. Il ne perce QUE ce qu'il apporte — sur un modèle en anneau, il passerait dans le vide central.",
+      "group": "Fixation murale"
+    },
+    {
+      "node": 15,
+      "param": "lineHeight",
+      "label": "Hauteur de la ligne",
       "type": "float",
       "min": 0.0,
       "max": 1.0,
-      "step": 0.01
+      "step": 0.05,
+      "hint": "Fraction de la hauteur de la pièce : 0 en bas, 1 en haut, 0,5 à mi-hauteur. Une fraction et non des millimètres, pour qu'un changement de taille du texte ne déplace pas la fixation. La LARGEUR de la fixation suit : elle est mesurée sur la matière présente à la hauteur choisie, donc l'entraxe change quand on déplace la ligne.",
+      "group": "Fixation murale"
+    },
+    {
+      "node": 15,
+      "param": "bandWidth",
+      "label": "Hauteur du bandeau (mm)",
+      "type": "float",
+      "min": 1.0,
+      "max": 40.0,
+      "step": 0.5,
+      "hint": "Trop mince, il casse : c'est lui qui porte tout le poids de la pièce.",
+      "group": "Fixation murale"
+    },
+    {
+      "node": 15,
+      "param": "thickness",
+      "label": "Épaisseur (mm)",
+      "type": "float",
+      "min": 0.4,
+      "max": 20.0,
+      "step": 0.2,
+      "hint": "Le bandeau part du BAS de la pièce et monte d'autant : c'est ce qui le fait mordre dans le socle quand il y en a un, et dans les lettres sinon.",
+      "group": "Fixation murale"
+    },
+    {
+      "node": 15,
+      "param": "overhang",
+      "label": "Débord (mm)",
+      "type": "float",
+      "min": 0.0,
+      "max": 60.0,
+      "step": 0.5,
+      "hint": "De combien le bord extérieur de l'oreille dépasse la matière — celle qui se trouve à la hauteur de la fixation, pas l'encombrement total. C'est lui qui fixe l'entraxe, donc l'écartement des deux vis au mur.",
+      "group": "Fixation murale"
+    },
+    {
+      "node": 15,
+      "param": "earDiameter",
+      "label": "Diamètre de l'oreille (mm)",
+      "type": "float",
+      "min": 3.0,
+      "max": 60.0,
+      "step": 0.5,
+      "hint": "Doit rester plus grand que le trou, sinon il ne reste plus d'oreille.",
+      "group": "Fixation murale"
+    },
+    {
+      "node": 15,
+      "param": "holeDiameter",
+      "label": "Diamètre du trou (mm)",
+      "type": "float",
+      "min": 1.0,
+      "max": 20.0,
+      "step": 0.1,
+      "hint": "4,5 mm passe une vis de 4. Le jeu est DANS ce chiffre : un trou imprimé sort sous-coté.",
+      "group": "Fixation murale"
+    },
+    {
+      "node": 15,
+      "param": "countersinkDiameter",
+      "label": "Fraisure — diamètre (mm)",
+      "type": "float",
+      "min": 0.0,
+      "max": 30.0,
+      "step": 0.5,
+      "hint": "Diamètre de la BOUCHE sur la face avant, pour une tête de vis fraisée qui doit affleurer. 0 = aucune fraisure. Il doit rester plus grand que le trou et plus petit que l'oreille — sinon le calcul est refusé plutôt que rendu. Repère : Ø9 pour une vis de 4, Ø10 pour une vis de 5.",
+      "group": "Fixation murale"
+    },
+    {
+      "node": 15,
+      "param": "countersinkAngle",
+      "label": "Fraisure — angle (°)",
+      "type": "float",
+      "min": 60.0,
+      "max": 140.0,
+      "step": 1.0,
+      "hint": "Angle au sommet du cône. 90° est la norme métrique, 82° la norme pouce. La PROFONDEUR n'est pas réglable : elle se déduit des deux diamètres et de cet angle. Une fraisure qui traverserait la plaque est refusée.",
+      "group": "Fixation murale"
     }
   ],
   "graph": {
@@ -214,14 +486,21 @@
             "role": "semantic",
             "kind": "literal",
             "type": "float",
-            "value": 1.0
+            "value": 30.0
+          },
+          {
+            "name": "sizeMode",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 1
           },
           {
             "name": "flattenTol",
             "role": "semantic",
             "kind": "literal",
             "type": "float",
-            "value": 0.01
+            "value": 0.0
           },
           {
             "name": "lineSpacing",
@@ -270,21 +549,21 @@
             "role": "semantic",
             "kind": "literal",
             "type": "float",
-            "value": 0.0
+            "value": 3.0
           },
           {
             "name": "supportThickness",
             "role": "semantic",
             "kind": "literal",
             "type": "float",
-            "value": 0.1
+            "value": 2.0
           },
           {
             "name": "supportOverlap",
             "role": "semantic",
             "kind": "literal",
             "type": "float",
-            "value": 0.02
+            "value": 0.6
           },
           {
             "name": "supportCornerRadius",
@@ -297,9 +576,9 @@
       },
       {
         "id": 4,
-        "type": "shape.extrude",
+        "type": "shape.extrude.profiled",
         "version": 1,
-        "x": 580.0,
+        "x": 620.0,
         "y": 120.0,
         "params": [
           {
@@ -307,7 +586,303 @@
             "role": "semantic",
             "kind": "literal",
             "type": "float",
-            "value": 0.2
+            "value": 3.0
+          },
+          {
+            "name": "zBottom",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 2.0
+          },
+          {
+            "name": "direction",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 0
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "type": "shape.contours.plate",
+        "version": 1,
+        "x": 320.0,
+        "y": 320.0,
+        "params": [
+          {
+            "name": "margin",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 4.0
+          },
+          {
+            "name": "cornerRadius",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 2.0
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "type": "shape.contours.offset",
+        "version": 1,
+        "x": 320.0,
+        "y": 460.0,
+        "params": [
+          {
+            "name": "delta",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 4.0
+          },
+          {
+            "name": "join",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 0
+          },
+          {
+            "name": "miterLimit",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 2.0
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "type": "flow.select.contours",
+        "version": 1,
+        "x": 470.0,
+        "y": 390.0,
+        "params": [
+          {
+            "name": "index",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 0
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "type": "shape.extrude",
+        "version": 1,
+        "x": 620.0,
+        "y": 390.0,
+        "params": [
+          {
+            "name": "depth",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 2.0
+          },
+          {
+            "name": "zBottom",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.0
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "type": "mesh.merge",
+        "version": 1,
+        "x": 780.0,
+        "y": 250.0,
+        "params": []
+      },
+      {
+        "id": 10,
+        "type": "flow.select.mesh",
+        "version": 1,
+        "x": 930.0,
+        "y": 180.0,
+        "params": [
+          {
+            "name": "index",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 0
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "type": "profile.chamfer",
+        "version": 1,
+        "x": 320.0,
+        "y": -40.0,
+        "params": [
+          {
+            "name": "width",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.4
+          },
+          {
+            "name": "depth",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.4
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "type": "profile.cavetto",
+        "version": 1,
+        "x": 320.0,
+        "y": -180.0,
+        "params": [
+          {
+            "name": "width",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.4
+          },
+          {
+            "name": "depth",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.4
+          },
+          {
+            "name": "segments",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 6
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "type": "flow.select.profile",
+        "version": 1,
+        "x": 470.0,
+        "y": -110.0,
+        "params": [
+          {
+            "name": "index",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 0
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "type": "mesh.color",
+        "version": 1,
+        "x": 1080.0,
+        "y": 180.0,
+        "params": [
+          {
+            "name": "color",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "string",
+            "value": "#b4bec8"
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "type": "mesh.mounts",
+        "version": 1,
+        "x": 1080.0,
+        "y": 340.0,
+        "params": [
+          {
+            "name": "lineHeight",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.5
+          },
+          {
+            "name": "bandWidth",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 6.0
+          },
+          {
+            "name": "earDiameter",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 12.0
+          },
+          {
+            "name": "holeDiameter",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 4.5
+          },
+          {
+            "name": "overhang",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 6.0
+          },
+          {
+            "name": "thickness",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 2.0
+          },
+          {
+            "name": "countersinkDiameter",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.0
+          },
+          {
+            "name": "countersinkAngle",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 90.0
+          }
+        ]
+      },
+      {
+        "id": 16,
+        "type": "flow.select.mesh",
+        "version": 1,
+        "x": 1230.0,
+        "y": 250.0,
+        "params": [
+          {
+            "name": "index",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "int",
+            "value": 0
           }
         ]
       }
@@ -330,7 +905,189 @@
         "fromPort": 0,
         "to": 4,
         "toPort": 0
+      },
+      {
+        "from": 2,
+        "fromPort": 0,
+        "to": 5,
+        "toPort": 0
+      },
+      {
+        "from": 2,
+        "fromPort": 0,
+        "to": 6,
+        "toPort": 0
+      },
+      {
+        "from": 5,
+        "fromPort": 0,
+        "to": 7,
+        "toPort": 0
+      },
+      {
+        "from": 6,
+        "fromPort": 0,
+        "to": 7,
+        "toPort": 1
+      },
+      {
+        "from": 7,
+        "fromPort": 0,
+        "to": 8,
+        "toPort": 0
+      },
+      {
+        "from": 4,
+        "fromPort": 0,
+        "to": 9,
+        "toPort": 0
+      },
+      {
+        "from": 8,
+        "fromPort": 0,
+        "to": 9,
+        "toPort": 1
+      },
+      {
+        "from": 4,
+        "fromPort": 0,
+        "to": 10,
+        "toPort": 0
+      },
+      {
+        "from": 9,
+        "fromPort": 0,
+        "to": 10,
+        "toPort": 1
+      },
+      {
+        "from": 11,
+        "fromPort": 0,
+        "to": 13,
+        "toPort": 0
+      },
+      {
+        "from": 12,
+        "fromPort": 0,
+        "to": 13,
+        "toPort": 1
+      },
+      {
+        "from": 13,
+        "fromPort": 0,
+        "to": 4,
+        "toPort": 1
+      },
+      {
+        "from": 10,
+        "fromPort": 0,
+        "to": 15,
+        "toPort": 0
+      },
+      {
+        "from": 10,
+        "fromPort": 0,
+        "to": 16,
+        "toPort": 0
+      },
+      {
+        "from": 15,
+        "fromPort": 0,
+        "to": 16,
+        "toPort": 1
+      },
+      {
+        "from": 16,
+        "fromPort": 0,
+        "to": 14,
+        "toPort": 0
       }
     ]
-  }
+  },
+  "watch": [
+    {
+      "node": 6,
+      "stat": "pieces",
+      "warnAbove": 1,
+      "onlyIf": [
+        {
+          "node": 10,
+          "param": "index",
+          "equals": 1
+        },
+        {
+          "node": 7,
+          "param": "index",
+          "equals": 1
+        }
+      ],
+      "message": "socle silhouette : {value} morceaux séparés — augmente le décalage pour les relier, sinon la pièce sort en plusieurs parties"
+    },
+    {
+      "node": 4,
+      "stat": "vanishedPieces",
+      "warnAbove": 0,
+      "message": "{value} forme(s) mangée(s) par l'arête — réduis sa largeur, ou passe le sens en « dilatant »"
+    },
+    {
+      "node": 2,
+      "message": "renfort « plaque » : il est fondu aux lettres à leur propre profondeur, donc il les avale — c'est le bloc « Socle » qu'il faut, lui a son épaisseur propre",
+      "onlyIf": [
+        {
+          "node": 2,
+          "param": "support",
+          "equals": 1
+        }
+      ]
+    },
+    {
+      "node": 15,
+      "stat": "holeSpacing",
+      "warnAbove": 0,
+      "onlyIf": [
+        {
+          "node": 16,
+          "param": "index",
+          "equals": 1
+        }
+      ],
+      "message": "entraxe des deux trous : {value} mm — c'est l'écartement à percer au mur"
+    }
+  ],
+  "failureHints": {
+    "4": "l'arete est trop large ou trop profonde pour ces lettres : le profil a consomme toute la matiere, ou il descend plus bas que leur epaisseur. Reduis la largeur d'arete, augmente la profondeur des lettres, ou passe le sens en << dilatant >>.",
+    "6": "le decalage de la silhouette a tout consomme -- il ne peut pas etre negatif au point d'effacer les lettres.",
+    "15": "Fixation impossible : il n'y a AUCUNE matière à la hauteur demandée. Le cas courant est un texte sur PLUSIEURS LIGNES — à mi-hauteur, le bandeau tombe dans le blanc entre deux lignes et ne se souderait à rien. Trois issues : déplacer la ligne de fixation sur une ligne de texte (0,25 ou 0,75 plutôt que 0,5), élargir le bandeau jusqu'à ce qu'il atteigne les lettres, ou poser un socle — il y a alors de la matière partout. Autres refus possibles du même bloc : trou plus large que l'oreille, fraisure plus profonde que l'épaisseur, débord si négatif que les deux oreilles se croisent. ⚠ Tant que le calcul est refusé, la vue montre le modèle PRÉCÉDENT."
+  },
+  "groups": [
+    {
+      "name": "Texte",
+      "hint": "Ce qui est écrit, dans quelle police, à quelle taille et sur quelle épaisseur."
+    },
+    {
+      "name": "Arête des lettres",
+      "hint": "L'effet appliqué au bord supérieur des lettres : coupe droite, ou arrondi. Une largeur nulle laisse l'arête vive."
+    },
+    {
+      "name": "Socle",
+      "hint": "Une plaque SOUS les lettres, avec son épaisseur propre — à ne pas confondre avec le renfort fondu, qui partage la leur."
+    },
+    {
+      "name": "Couleur",
+      "hint": "La teinte de la pièce, portée par le document. Un relief coloré branché ici garderait sa palette : le nœud ne peint que les faces sans matériau."
+    },
+    {
+      "name": "Mise en page",
+      "hint": "Approche, interligne, crénage, finesse des courbes : on y touche une fois, rarement deux."
+    },
+    {
+      "name": "Renfort fondu (hérité)",
+      "hint": "L'ancien support : un contour de PLUS fondu aux lettres, donc forcément à leur profondeur. Un bandeau ou un cadre y restent utiles ; pour une plaque, préférer le socle."
+    },
+    {
+      "name": "Fixation murale",
+      "hint": "Un bandeau horizontal prolongé de deux oreilles percées, ajouté à la FIN. La ligne est imposée, jamais déduite de la forme : c'est ce qui garantit que les deux vis sont de niveau, même sur une pièce plus basse à gauche qu'à droite. Ses deux bouts, eux, se posent sur la matière présente À CETTE HAUTEUR — pas sur l'encombrement total de la pièce."
+    }
+  ],
+  "sourcesGroup": "Police"
 }
