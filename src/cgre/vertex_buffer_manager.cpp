@@ -344,7 +344,8 @@ void VBOManager::Draw (int id)
 	glDisableClientState(GL_VERTEX_ARRAY);
 }
 
-void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds, bool flat)
+void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds, bool flat,
+                                    bool useMeshMaterials)
 {
 	auto it = m_mapVBO.find(id);
 	if (it == m_mapVBO.end())
@@ -395,9 +396,17 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 	glEnable(GL_POLYGON_OFFSET_FILL);
 	glPolygonOffset(1.0f, 1.0f);
 
+	// Hors du mode « materiaux », un seul materiau pour tout le maillage : il est
+	// lie UNE FOIS, avant la boucle, et les plages ne le changent plus.
+	if (useMeshMaterials)
+		MaterialRenderer::ActivateDefaultMaterial ();
+	else
+		MaterialRenderer::ActivateNeutralMaterial ();
+
 	for (const Mesh::MaterialRange& r : info.materialRanges)
 	{
-		if (r.materialId != MATERIAL_NONE &&
+		if (useMeshMaterials &&
+		    r.materialId != MATERIAL_NONE &&
 		    r.materialId < rendererIds.size() &&
 		    rendererIds[r.materialId] != -1)
 		{

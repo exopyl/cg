@@ -16,8 +16,25 @@ enum CG_rendering_method {	CG_RENDERING_DEFAULT = 0,
 							CG_RENDERING_VBO,
 							CG_RENDERING_VERTEX_BUFFER	};
 
+// MODE D'OMBRAGE : d'ou vient la couleur des faces.
+//
+// Un SELECTEUR et non un booleen « materiaux oui/non » : la question « comment
+// je regarde » a deja plus de deux reponses utiles dans ce moteur, et un
+// booleen qu'il faudrait transformer en liste plus tard se paierait deux fois.
+// Ajouter un mode = une valeur ici et un cas dans mesh_draw.
+//
+// Materials est la valeur ZERO, donc le defaut de toute structure remise a
+// zero, et le comportement d'avant l'introduction du mode.
+enum class CG_shading_mode
+{
+	Materials = 0,   //!< les materiaux du maillage, textures comprises
+	Neutral,         //!< un materiau unique, celui des maillages sans materiau
+	VertexColors     //!< les couleurs par sommet, quand le maillage en porte
+};
+
 typedef struct rendering_properties
 {
+	CG_shading_mode shading;
 	int light;
 	int smooth;
 	int display_points;

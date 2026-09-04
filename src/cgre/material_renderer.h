@@ -15,6 +15,27 @@ public:
 	int AddMaterial (Material *pMaterial);
 
 	static void SetMaterial (MaterialColorExt::MaterialColorExtType eType);
+
+	// LE MATERIAU NEUTRE, et il n'y en a qu'un dans tout le moteur.
+	//
+	// Il sert a DEUX endroits qu'il serait faux de laisser diverger : le mode
+	// d'ombrage « Neutre », et le maillage qui ne porte AUCUN materiau. Ce
+	// second cas ne liait rien du tout jusqu'ici -- l'etat GL courant, herite du
+	// maillage precedent, s'appliquait -- donc l'apparence « par defaut » etait
+	// un residu et non un choix. Elle en est un maintenant.
+	static void ActivateNeutralMaterial (void);
+
+	// LE MATERIAU PAR DEFAUT : celui d'un maillage qui ne porte AUCUN materiau.
+	//
+	// Il vivait en dur dans le reglage du contexte GL de l'hote, pose une seule
+	// fois au demarrage. Cela tenait tant que rien ne le remplacait -- mais le
+	// premier materiau active, texture ou non, l'ecrasait pour de bon, et la
+	// couleur d'un maillage sans materiau dependait alors de ce qui avait ete
+	// dessine avant lui.
+	//
+	// Il est ici pour n'exister qu'a UN endroit, et il est repose a chaque
+	// maillage qui en a besoin plutot qu'une fois pour toutes.
+	static void ActivateDefaultMaterial (void);
 	void ActivateMaterial (unsigned int id);
 
 private:

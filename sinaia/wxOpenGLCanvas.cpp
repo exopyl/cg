@@ -1257,16 +1257,11 @@ void MyGLCanvas::InitGL()
 	glLightfv (GL_LIGHT1, GL_SPECULAR, black);
 	glLightfv (GL_LIGHT1, GL_POSITION, fillDir);
 
-	// Default material (overridden per material at draw time).
-	glColor3f (.2, .5, .8);
-	GLfloat no_mat[] = {0.f, 0.f, 0.f, 1.f};
-	GLfloat mat_diffuse[] = {0.1f, 0.5f, 0.8f, 1.f};
-	GLfloat no_shininess[] = {20.f};
-	glMaterialfv (GL_FRONT_AND_BACK, GL_AMBIENT, no_mat);
-	glMaterialfv (GL_FRONT_AND_BACK, GL_DIFFUSE, mat_diffuse);
-	glMaterialfv (GL_FRONT_AND_BACK, GL_SPECULAR, no_mat);
-	glMaterialfv (GL_FRONT_AND_BACK, GL_SHININESS, no_shininess);
-	glMaterialfv (GL_FRONT_AND_BACK, GL_EMISSION, no_mat);
+	// Materiau par defaut. Les valeurs ne sont plus ici : elles vivent dans
+	// MaterialRenderer, qui les repose a chaque maillage sans materiau. Les
+	// laisser en dur des deux cotes les aurait fait diverger au premier
+	// ajustement.
+	MaterialRenderer::ActivateDefaultMaterial ();
 
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     glEnable(GL_COLOR_MATERIAL);

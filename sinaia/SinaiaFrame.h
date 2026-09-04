@@ -87,6 +87,7 @@ class MyFrame : public wxFrame
 		ID_3D_FLAT,
 		ID_3D_LIGHTING,
         ID_3D_CLIPPING,
+        ID_3D_SHADING,
         ID_3D_WARNING,
         ID_RENDER_SHOW_FPS,
 
@@ -273,6 +274,7 @@ private:
 	void On3DSmooth(wxCommandEvent& evt);
 	void On3DFlat(wxCommandEvent& evt);
 	void On3DLighting(wxCommandEvent& evt);
+	void On3DShading(wxCommandEvent& evt);
 
 	void On3DWarning(wxCommandEvent& evt);
 	void On3DClippingPlane(wxCommandEvent& evt);
@@ -364,6 +366,10 @@ private:
     wxCheckBox* m_pClippingPlane;
 
 	wxAuiToolBar* m_pToolBar2;
+	// Selecteur de mode d'ombrage, dans la barre d'outils 2. Garde en membre
+	// parce qu'il faut le RELIRE : changer d'onglet doit y refleter le mode de
+	// la vue qui prend la main, sans quoi il annoncerait celui de la precedente.
+	wxChoice* m_pShadingChoice = nullptr;
 
     wxAuiManager m_mgr;
     wxArrayString m_perspectives;

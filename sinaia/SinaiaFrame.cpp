@@ -229,6 +229,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_3D_POINT, MyFrame::On3DPoint)
     EVT_MENU(ID_3D_WARNING, MyFrame::On3DWarning)
     EVT_MENU(ID_3D_LIGHTING, MyFrame::On3DLighting)
+    EVT_CHOICE(ID_3D_SHADING, MyFrame::On3DShading)
     EVT_MENU(ID_3D_CLIPPING, MyFrame::On3DClippingPlane)
     EVT_MENU(ID_RENDER_SHOW_FPS, MyFrame::OnToggleShowFps)
     EVT_MENU(ID_BUTTON_RENDERING_BGCOLOR, MyFrame::OnBgColor)
@@ -544,6 +545,19 @@ MyFrame::MyFrame(wxWindow* parent,
     m_pToolBar2->AddTool(ID_3D_FLAT, wxT("Test"), wxBitmap (flat_xpm));
     m_pToolBar2->AddSeparator();
     m_pToolBar2->AddTool(ID_3D_LIGHTING, wxT("Test"), wxBitmap (light_xpm));
+
+    // MODE D'OMBRAGE. Un wxChoice et non une bascule : « d'ou vient la couleur
+    // des faces » a plus de deux reponses utiles, et l'ordre des entrees suit
+    // celui de CG_shading_mode -- la selection EST l'indice de l'enumeration,
+    // ce qui evite une table de correspondance a tenir a jour des deux cotes.
+    m_pToolBar2->AddSeparator();
+    m_pShadingChoice = new wxChoice(m_pToolBar2, ID_3D_SHADING);
+    m_pShadingChoice->Append(_("Materiaux"));
+    m_pShadingChoice->Append(_("Neutre"));
+    m_pShadingChoice->Append(_("Couleurs par sommet"));
+    m_pShadingChoice->SetSelection(0);
+    m_pShadingChoice->SetToolTip(_("Source de la couleur des faces"));
+    m_pToolBar2->AddControl(m_pShadingChoice);
     //m_pToolBar2->SetCustomOverflowItems(prepend_items, append_items);
     m_pToolBar2->AddSeparator();
     m_pToolBar2->AddTool(ID_3D_CLIPPING, wxT("Clipping"), wxBitmap(planar_cut));
@@ -1586,6 +1600,12 @@ void MyFrame::OnNotebookPageChanged(wxAuiNotebookEvent& event)
 
         p = m_pToolBar2->FindTool(ID_3D_CLIPPING);
         if (p) p->SetSticky(pGLCanvas->GetClippingPlane());
+
+        // Le mode d'ombrage appartient a la VUE : le selecteur doit annoncer
+        // celui de l'onglet qui prend la main, sinon il affiche encore le mode
+        // du precedent et le prochain clic part d'une valeur fausse.
+        if (m_pShadingChoice)
+            m_pShadingChoice->SetSelection((int)pGLCanvas->GetShadingMode());
 
         m_pToolBar2->Refresh();
 
@@ -2678,6 +2698,27 @@ void MyFrame::On3DGrid(wxCommandEvent& WXUNUSED(event))
 //
 //
 //
+// MODE D'OMBRAGE. L'indice du choix EST la valeur de l'enumeration : les
+// entrees ont ete empilees dans l'ordre de CG_shading_mode, ce qui evite une
+// table de correspondance a tenir a jour des deux cotes.
+//
+// Le mode appartient a la VUE et non a la fenetre : deux onglets peuvent montrer
+// le meme modele, l'un texture et l'autre en neutre. C'est aussi ce qui permet
+// de comparer sans recharger.
+void MyFrame::On3DShading(wxCommandEvent& event)
+{
+	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection ());
+	if (!pGLCanvas)
+		return;
+
+	const int index = event.GetSelection ();
+	if (index < 0 || index > (int)CG_shading_mode::VertexColors)
+		return;
+
+	pGLCanvas->SetShadingMode ((CG_shading_mode)index);
+	pGLCanvas->Refresh ();
+}
+
 void MyFrame::On3DFill(wxCommandEvent& WXUNUSED(event))
 {
 	*m_pWndLogging << _T("Fill\n");

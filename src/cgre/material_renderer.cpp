@@ -248,12 +248,58 @@ void MaterialRenderer::ActivateMaterial (unsigned int id)
 	}
 }
 
+void MaterialRenderer::ActivateDefaultMaterial (void)
+{
+	// Meme preambule que le neutre : defaire ce qu'un materiau texture a pose.
+	BindReflectionUnit (0, 0.f);
+	glDisable (GL_TEXTURE_2D);
+	glDisable (GL_COLOR_MATERIAL);
+
+	// Le bleu historique de l'hote. Valeurs reprises telles quelles, pour que le
+	// deplacement ne change rien a ce qui s'affiche.
+	const GLfloat none[4]      = { 0.f, 0.f, 0.f, 1.f };
+	const GLfloat diffuse[4]   = { 0.1f, 0.5f, 0.8f, 1.f };
+	const GLfloat shininess    = 20.f;
+
+	glColor3f (0.2f, 0.5f, 0.8f);
+	glMaterialfv (GL_FRONT_AND_BACK, GL_AMBIENT,   none);
+	glMaterialfv (GL_FRONT_AND_BACK, GL_DIFFUSE,   diffuse);
+	glMaterialfv (GL_FRONT_AND_BACK, GL_SPECULAR,  none);
+	glMaterialf  (GL_FRONT_AND_BACK, GL_SHININESS, shininess);
+	glMaterialfv (GL_FRONT_AND_BACK, GL_EMISSION,  none);
+}
+
+void MaterialRenderer::ActivateNeutralMaterial (void)
+{
+	// ⚠ L'ETAT DE TEXTURE DOIT ETRE DEFAIT, et c'est le point : SetMaterial ne
+	// pose que des glMaterialfv. Si un ActivateMaterial precedent a laisse
+	// GL_TEXTURE_2D actif -- ce que fait toute branche MATERIAL_TEXTURE -- la
+	// texture continue de moduler la surface, et le mode « neutre » ne change
+	// rien a l'ecran. Meme raisonnement pour COLOR_MATERIAL, qui ferait suivre
+	// le dernier glColor, et pour l'unite de reflexion.
+	//
+	// Ce sont exactement les trois gestes de la branche MATERIAL_COLOR_ADV
+	// d'ActivateMaterial : un materiau de couleur doit defaire ce qu'un materiau
+	// texture a pose.
+	BindReflectionUnit (0, 0.f);
+	glDisable (GL_TEXTURE_2D);
+	glDisable (GL_COLOR_MATERIAL);
+
+	// WHITE_PLASTIC : un blanc casse mat, sans teinte propre, qui laisse lire la
+	// forme et son ombrage sans rien raconter sur la matiere. C'est le rendu
+	// « terre cuite » habituel des visualiseurs, et le seul de la bibliotheque
+	// qui ne colore pas ce qu'il montre.
+	SetMaterial (MaterialColorExt::WHITE_PLASTIC);
+}
+
 void MaterialRenderer::SetMaterial (MaterialColorExt::MaterialColorExtType eType)
 {
-	MaterialColorExt *pMaterial = new MaterialColorExt ();
-	pMaterial->Init_From_Library (eType);
-
-	MaterialColorExt *pMatColExt = dynamic_cast<MaterialColorExt*>(pMaterial);
+	// PILE, et non `new` : la version d'origine allouait un MaterialColorExt a
+	// chaque appel sans jamais le detruire. Appelee une fois par maillage et par
+	// image, elle fuyait a la cadence du rendu.
+	MaterialColorExt material;
+	material.Init_From_Library (eType);
+	MaterialColorExt *pMatColExt = &material;
  
 	GLfloat mat[4];
 
@@ -267,7 +313,7 @@ void MaterialRenderer::SetMaterial (MaterialColorExt::MaterialColorExtType eType
 	mat[2] = material_parameters[10*index+2];
 	mat[3] = 1.;
 	*/
-	glMaterialfv (GL_FRONT, GL_AMBIENT, pMatColExt->m_fAmbient);
+	glMaterialfv (GL_FRONT_AND_BACK, GL_AMBIENT, pMatColExt->m_fAmbient);
   
 	// diffuse
 	/*
@@ -275,7 +321,7 @@ void MaterialRenderer::SetMaterial (MaterialColorExt::MaterialColorExtType eType
 	mat[1] = material_parameters[10*index+4];
 	mat[2] = material_parameters[10*index+5];
 	*/
-	glMaterialfv (GL_FRONT, GL_DIFFUSE, pMatColExt->m_fDiffuse);
+	glMaterialfv (GL_FRONT_AND_BACK, GL_DIFFUSE, pMatColExt->m_fDiffuse);
   
 	// specular
 	/*
@@ -283,15 +329,13 @@ void MaterialRenderer::SetMaterial (MaterialColorExt::MaterialColorExtType eType
 	mat[1] = material_parameters[10*index+7];
 	mat[2] = material_parameters[10*index+8];
 	*/
-	glMaterialfv (GL_FRONT, GL_SPECULAR, pMatColExt->m_fSpecular);
+	glMaterialfv (GL_FRONT_AND_BACK, GL_SPECULAR, pMatColExt->m_fSpecular);
   
 	// shininess
 	//mat[0] = 128 * material_parameters[10*index+9];
-	glMaterialf (GL_FRONT, GL_SHININESS, 128. * pMatColExt->m_fShininess[0]);
+	glMaterialf (GL_FRONT_AND_BACK, GL_SHININESS, 128. * pMatColExt->m_fShininess[0]);
   
-	glMaterialfv (GL_FRONT, GL_EMISSION, pMatColExt->m_fEmission);
-
-	delete pMaterial;
+	glMaterialfv (GL_FRONT_AND_BACK, GL_EMISSION, pMatColExt->m_fEmission);
 }
 
 

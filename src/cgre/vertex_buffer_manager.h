@@ -84,7 +84,13 @@ public:
 	// activating the matching renderer material in between. rendererIds maps a
 	// mesh material index to a MaterialRenderer id (see
 	// MeshRenderer::GetMaterialRendererIds).
-	void DrawMaterialGroups (int id, const std::vector<int>& rendererIds, bool flat = false);
+	// `useMeshMaterials` a FAUX : le materiau neutre est lie une fois, et les
+	// materiaux du maillage sont ignores. Sans ce parametre, ce chemin -- celui
+	// du remplissage par defaut -- continuait d'activer les textures quel que
+	// soit le mode d'ombrage demande, et le mode « neutre » ne changeait rien a
+	// l'ecran.
+	void DrawMaterialGroups (int id, const std::vector<int>& rendererIds, bool flat = false,
+	                         bool useMeshMaterials = true);
 
 private:
 	void uploadMesh(Mesh* mesh, vboInfo& info, bool flat);

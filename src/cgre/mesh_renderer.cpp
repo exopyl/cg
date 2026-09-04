@@ -11,6 +11,7 @@
 
 void rendering_properties_init (rendering_properties_s &prop)
 {
+	prop.shading = CG_shading_mode::Materials;
 	prop.light = 1;
 	prop.smooth = 1;
 	prop.display_points = 0;
@@ -120,13 +121,44 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 
 		int i_current_material = -1;
 
+		// LE MODE D'OMBRAGE DECIDE, une fois pour tout le maillage.
+		//
+		// Hors du mode Materials, aucun materiau du maillage n'est active : la
+		// couleur vient du materiau NEUTRE, ou des couleurs par sommet. Poser
+		// l'etat ici plutot que par face evite de le reposer a chaque triangle,
+		// et garde `i_current_material` a -1, ce dont la lecture des couleurs par
+		// sommet plus bas se sert deja comme condition.
+		const bool useMeshMaterials = (prop.shading == CG_shading_mode::Materials);
+		const bool useVertexColors  = (prop.shading == CG_shading_mode::VertexColors)
+		                              && !mesh->GetVertexColors ().empty ();
+		if (useMeshMaterials)
+		{
+			// Le defaut est REPOSE a chaque maillage. Le laisser au reglage du
+			// contexte, comme avant, le faisait ecraser par le premier materiau
+			// active : la couleur d'un maillage sans materiau dependait alors de
+			// ce qui avait ete dessine avant lui.
+			MaterialRenderer::ActivateDefaultMaterial ();
+		}
+		else
+		{
+			MaterialRenderer::ActivateNeutralMaterial ();
+			// Les couleurs par sommet passent par glColor : sans COLOR_MATERIAL
+			// elles seraient ignorees sous eclairage, et le maillage sortirait
+			// uniformement blanc.
+			if (useVertexColors)
+			{
+				glColorMaterial (GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+				glEnable (GL_COLOR_MATERIAL);
+			}
+		}
+
 		for (unsigned int i=0; i<mesh->GetNFaces (); i++)
 		{
 			auto pFace = mesh->FaceAt (i);
 			
 			// Material management
 			int meshMatId = pFace->GetMaterialId();
-			if (meshMatId != MATERIAL_NONE && meshMatId != i_current_material)
+			if (useMeshMaterials && meshMatId != MATERIAL_NONE && meshMatId != i_current_material)
 			{
 				if (!materialIds.empty() && meshMatId < (int)materialIds.size())
 				{
@@ -159,7 +191,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 				glNormal3f (mesh->GetFaceNormals ()[3*i], mesh->GetFaceNormals ()[3*i+1], mesh->GetFaceNormals ()[3*i+2]);
 
 				// Vertex A
-				if (!mesh->GetVertexColors ().empty() && !prop.light && i_current_material == -1)
+				if (useVertexColors || (!mesh->GetVertexColors ().empty() && !prop.light && i_current_material == -1))
 					glColor3f (mesh->GetVertexColors ()[3*a], mesh->GetVertexColors ()[3*a+1], mesh->GetVertexColors ()[3*a+2]);
 				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices () && !mesh->GetTextureCoordinates ().empty())
 				{
@@ -173,7 +205,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 				glVertex3f (mesh->GetVertices ()[3*a], mesh->GetVertices ()[3*a+1], mesh->GetVertices ()[3*a+2]);
 				
 				// Vertex B
-				if (!mesh->GetVertexColors ().empty() && !prop.light && i_current_material == -1)
+				if (useVertexColors || (!mesh->GetVertexColors ().empty() && !prop.light && i_current_material == -1))
 					glColor3f (mesh->GetVertexColors ()[3*b], mesh->GetVertexColors ()[3*b+1], mesh->GetVertexColors ()[3*b+2]);
 				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices () && !mesh->GetTextureCoordinates ().empty())
 				{
@@ -187,7 +219,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 				glVertex3f (mesh->GetVertices ()[3*b], mesh->GetVertices ()[3*b+1], mesh->GetVertices ()[3*b+2]);
 				
 				// Vertex C
-				if (!mesh->GetVertexColors ().empty() && !prop.light && i_current_material == -1)
+				if (useVertexColors || (!mesh->GetVertexColors ().empty() && !prop.light && i_current_material == -1))
 					glColor3f (mesh->GetVertexColors ()[3*c], mesh->GetVertexColors ()[3*c+1], mesh->GetVertexColors ()[3*c+2]);
 				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices () && !mesh->GetTextureCoordinates ().empty())
 				{
@@ -264,6 +296,11 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 			}
 		}
 		glDisable(GL_POLYGON_OFFSET_FILL);
+		// COLOR_MATERIAL est REMIS comme il etait : il n'est active que pour les
+		// couleurs par sommet, et le laisser ouvert ferait suivre le dernier
+		// glColor a tout ce qui est dessine ensuite -- le fil de fer, les
+		// reperes, le maillage suivant.
+		glDisable (GL_COLOR_MATERIAL);
 	}
 
 	// lines
@@ -473,9 +510,20 @@ void MeshRenderer::Draw (int id)
 	// because cgmesh's ApplyMaterial paints all faces of a mesh with one
 	// material id (true for our 3dm import path and most current importers).
 	auto activateMeshMaterial = [&]() {
+		// Hors du mode Materials, et aussi quand le maillage n'en porte AUCUN :
+		// le neutre est lie explicitement. Sans cela, l'etat GL herite du
+		// maillage precedent s'appliquait -- l'apparence d'un maillage sans
+		// materiau dependait de l'ordre de la scene.
+		if (el.properties.shading != CG_shading_mode::Materials)
+		{
+			MaterialRenderer::ActivateNeutralMaterial ();
+			return;
+		}
 		const vector<int>& matIds = GetMaterialRendererIds(id);
 		if (!matIds.empty() && matIds[0] != -1)
 			MaterialRenderer::getInstance()->ActivateMaterial(matIds[0]);
+		else
+			MaterialRenderer::ActivateDefaultMaterial ();
 	};
 
 	// Enable the clipping plane up here so it covers every draw path
@@ -498,7 +546,10 @@ void MeshRenderer::Draw (int id)
 	// material run, see DrawMaterialGroups). The other fast paths bind a
 	// single material for the whole mesh, so a multi-material mesh must go
 	// through the immediate-mode mesh_draw which switches material per face.
-	if (el.pMesh->GetNMaterials() > 1 &&
+	// ... et seulement quand les materiaux du maillage servent : en Neutre, il
+	// n'y en a plus qu'un, donc les chemins rapides redeviennent utilisables.
+	if (el.properties.shading == CG_shading_mode::Materials &&
+	    el.pMesh->GetNMaterials() > 1 &&
 	    el.method != CG_RENDERING_DEFAULT &&
 	    el.method != CG_RENDERING_VBO)
 	{
@@ -537,7 +588,8 @@ void MeshRenderer::Draw (int id)
 		{
 			// One draw call per material run (handles single- and
 			// multi-material meshes); activates each material in turn.
-			m_vboManager->DrawMaterialGroups (el.id, GetMaterialRendererIds(id), !el.properties.smooth);
+			m_vboManager->DrawMaterialGroups (el.id, GetMaterialRendererIds(id), !el.properties.smooth,
+			                                  el.properties.shading == CG_shading_mode::Materials);
 		}
 
 		// Overlays (wireframe, points, vertex normals, warnings) still go

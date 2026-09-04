@@ -78,4 +78,14 @@ set(headers
 include_directories(.)
 add_library(cgre STATIC ${headers} ${sources})
 target_include_directories(cgre PUBLIC ${CMAKE_SOURCE_DIR}/extern)
+
+# DEPENDANCES DECLAREES. cgre inclut cgmath, cgimg et cgmesh, et n'en liait
+# aucun : il ne compilait que parce que ses inclusions etaient RELATIVES, donc
+# resolues depuis le repertoire du fichier qui les ecrit. Les declarer donne au
+# passage le repertoire d'inclusion public de ces modules, sans lequel
+# `#include <cgmath/cgmath.h>` ne resout pas.
+#
+# ⚠ cgre n'est bati que sous ENABLE_SINAIA : un defaut de configuration y reste
+# invisible dans toute construction ordinaire du depot.
+target_link_libraries(cgre PUBLIC cg::cgmath cg::cgimg cgmesh)
 target_link_libraries(cgmesh cgimg)

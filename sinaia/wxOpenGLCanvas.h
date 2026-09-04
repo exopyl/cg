@@ -99,6 +99,11 @@ public:
 	void SetPointColor (float r, float g, float b)
 		{ prop.point_color[0] = r; prop.point_color[1] = g; prop.point_color[2] = b; Refresh(false); };
 
+	// MODE D'OMBRAGE : d'ou vient la couleur des faces. Un selecteur et non une
+	// bascule -- voir CG_shading_mode (cgre/mesh_renderer.h).
+	void SetShadingMode (CG_shading_mode mode) { prop.shading = mode; Refresh(false); };
+	CG_shading_mode GetShadingMode (void) const { return prop.shading; };
+
 	void ChangeFill (void);
 	bool GetFill (void);
 
