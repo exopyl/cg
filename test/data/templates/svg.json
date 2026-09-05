@@ -1,0 +1,277 @@
+{
+  "title": "Extrusion SVG",
+  "subtitle": "contours vectoriels · tessellation · extrusion — piloté par un graphe",
+  "_comment": [
+    "GABARIT DE PAGE. Cf. text3d.json pour le contrat de ce format.",
+    "La chaine est VISIBLE dans le document : file.ref -> svg.contours -> shape.extrude -> mesh.color.",
+    "Ce qui a disparu en chemin : js/pages/svg.js et l'appel monolithique createSvgExtrusion(),",
+    "qui ecrivait le SVG en MEMFS puis appelait une fabrique native dediee. Le noeud svg.contours",
+    "fait le meme travail, mais son resultat se branche sur tout consommateur de contours.",
+    "La COULEUR est dans le document (mesh.color), comme pour text3d : on la choisit une fois et",
+    "on la retrouve en rouvrant le fichier. La page n'a donc pas de pastille dans « Vue »."
+  ],
+  "output": 3,
+  "sources": [
+    {
+      "node": 4,
+      "label": "Fichier SVG",
+      "accept": ".svg,image/svg+xml",
+      "default": "data/svg/rose.svg",
+      "hint": "Le fichier est désigné par un nœud file.ref, dont le chemin EST sérialisé : un document enregistré depuis cette page sait quoi relire. Seuls les contours FERMÉS produisent de la matière ; les traits ouverts passent par « Traits »."
+    }
+  ],
+  "expose": [
+    {
+      "node": 1,
+      "param": "flattenTol",
+      "label": "Finesse d'échantillonnage",
+      "type": "float",
+      "min": 0.0005,
+      "max": 0.05,
+      "step": 0.0005,
+      "hint": "Fraction de la taille de l'objet produit, et non une longueur : 0,005 vaut un deux-centième quelle que soit l'échelle du SVG importé. Plus bas = courbes plus fines et maillage plus lourd.",
+      "group": "Import"
+    },
+    {
+      "node": 1,
+      "param": "centerAndFit",
+      "label": "Centrer et cadrer",
+      "type": "bool",
+      "hint": "Ramène le dessin à l'origine et le met à l'échelle. Décoché, les coordonnées du SVG sont conservées telles quelles — utile pour superposer deux fichiers.",
+      "group": "Import"
+    },
+    {
+      "node": 1,
+      "param": "invertY",
+      "label": "Inverser l'axe Y",
+      "type": "bool",
+      "hint": "Le SVG compte Y vers le BAS, la géométrie 3D vers le haut. Décocher retourne le dessin.",
+      "group": "Import"
+    },
+    {
+      "node": 1,
+      "param": "strokeToVolume",
+      "label": "Épaissir les traits",
+      "type": "bool",
+      "hint": "Un trait ouvert n'a pas d'intérieur et ne produirait rien. Coché, il est converti en contour fermé de la largeur de son `stroke-width`.",
+      "group": "Traits"
+    },
+    {
+      "node": 1,
+      "param": "strokeScale",
+      "label": "Facteur de largeur",
+      "type": "float",
+      "min": 0.1,
+      "max": 10.0,
+      "step": 0.1,
+      "hint": "Multiplie la largeur lue dans le fichier. Sans effet si « Épaissir les traits » est décoché.",
+      "group": "Traits"
+    },
+    {
+      "node": 1,
+      "param": "strokeWidthFallback",
+      "label": "Largeur par défaut",
+      "type": "float",
+      "min": 0.1,
+      "max": 20.0,
+      "step": 0.1,
+      "hint": "Largeur retenue pour un trait dont le fichier ne déclare pas de `stroke-width`.",
+      "group": "Traits"
+    },
+    {
+      "node": 1,
+      "param": "fitSize",
+      "label": "Taille (mm)",
+      "type": "float",
+      "min": 10.0,
+      "max": 300.0,
+      "step": 1.0,
+      "hint": "LA COTE ABSOLUE de cette page, mesurée sur le plus grand côté de la pièce. Contrairement aux blocs pixelisés et au puzzle, un dessin vectoriel n'a pas de grain — ni cellule ni pixel — dont la taille totale pourrait découler : c'est elle la référence, et la profondeur s'exprime dans la même unité.",
+      "group": "Extrusion"
+    },
+    {
+      "node": 2,
+      "param": "depth",
+      "label": "Profondeur (mm)",
+      "type": "float",
+      "min": 0.2,
+      "max": 50.0,
+      "step": 0.1,
+      "hint": "Épaisseur de la pièce, dans la même unité que « Taille ». Les deux étant absolues, changer la taille ne change PAS la profondeur — c'est le seul endroit du maker où deux longueurs sont indépendantes.",
+      "group": "Extrusion"
+    },
+    {
+      "node": 3,
+      "param": "color",
+      "label": "Couleur de la pièce",
+      "type": "color",
+      "hint": "Elle appartient au DOCUMENT et non à la vue : on la choisit une fois, on la retrouve en rouvrant le fichier. ⚠ Elle ne franchit aucun des deux exports — le STL ne porte pas de couleur, et l'OBJ rendu ici est minimal, sans fichier de matériaux.",
+      "group": "Couleur"
+    }
+  ],
+  "graph": {
+    "format": "cggraph",
+    "formatVersion": 1,
+    "nodes": [
+      {
+        "id": 4,
+        "type": "file.ref",
+        "version": 1,
+        "x": -220.0,
+        "y": 160.0,
+        "params": [
+          {
+            "name": "path",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "string",
+            "value": ""
+          },
+          {
+            "name": "name",
+            "role": "nonSemantic",
+            "kind": "literal",
+            "type": "string",
+            "value": "sans nom"
+          }
+        ]
+      },
+      {
+        "id": 1,
+        "type": "svg.contours",
+        "version": 1,
+        "x": 40.0,
+        "y": 160.0,
+        "params": [
+          {
+            "name": "flattenTol",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.005
+          },
+          {
+            "name": "centerAndFit",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "bool",
+            "value": true
+          },
+          {
+            "name": "invertY",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "bool",
+            "value": true
+          },
+          {
+            "name": "strokeToVolume",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "bool",
+            "value": true
+          },
+          {
+            "name": "strokeScale",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 1.0
+          },
+          {
+            "name": "strokeWidthFallback",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 1.0
+          },
+          {
+            "name": "fitSize",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 100.0
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "type": "shape.extrude",
+        "version": 1,
+        "x": 300.0,
+        "y": 160.0,
+        "params": [
+          {
+            "name": "depth",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 3.0
+          },
+          {
+            "name": "zBottom",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.0
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "type": "mesh.color",
+        "version": 1,
+        "x": 560.0,
+        "y": 160.0,
+        "params": [
+          {
+            "name": "color",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "string",
+            "value": "#b4bec8"
+          }
+        ]
+      }
+    ],
+    "links": [
+      {
+        "from": 4,
+        "fromPort": 0,
+        "to": 1,
+        "toPort": 0
+      },
+      {
+        "from": 1,
+        "fromPort": 0,
+        "to": 2,
+        "toPort": 0
+      },
+      {
+        "from": 2,
+        "fromPort": 0,
+        "to": 3,
+        "toPort": 0
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "Import",
+      "hint": "Comment le fichier est lu et ramené à des contours : finesse des courbes, cadrage, sens de l'axe vertical."
+    },
+    {
+      "name": "Traits",
+      "hint": "Le sort des tracés OUVERTS, qui n'ont pas d'intérieur. Sans épaississement, ils ne produisent aucune matière."
+    },
+    {
+      "name": "Extrusion",
+      "hint": "Les deux cotes de la pièce, en millimètres : son encombrement et son épaisseur."
+    },
+    {
+      "name": "Couleur",
+      "hint": "La teinte de la pièce, portée par le document."
+    }
+  ],
+  "sourcesGroup": "Fichier SVG"
+}

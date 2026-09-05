@@ -375,6 +375,147 @@ TEST (TEST_cggraph_nodes_img, pixel_blocks_yield_one_solid_per_connected_compone
 	EXPECT_LT ((std::size_t)mesh->GetNMaterials (), pieces->items.size ());
 }
 
+// Meme propriete sur le RELIEF, ou l'unite de base n'est pas une cellule mais un
+// pixel du raster de travail : le mecanisme est le meme, le mot change.
+TEST (TEST_cggraph_nodes_img, the_pixel_size_makes_the_relief_extent_a_consequence)
+{
+	// pixelWidth a zero : le relief travaille en pleine resolution de travail,
+	// c'est ce qui le distingue des blocs.
+	const Value quantized = Quantize (LoadTestImage (), 4, 0);
+	ASSERT_FALSE (quantized.IsEmpty ());
+	const std::shared_ptr<const Img> raster = quantized.Share<Img> (Types ().image);
+	ASSERT_NE (raster, nullptr);
+	const unsigned int cells =
+		raster->width () > raster->height () ? raster->width () : raster->height ();
+	ASSERT_GT (cells, 0u);
+
+	const auto largestSide = [&] (float cellSize) -> float {
+		ReliefNode node;
+		node.GetParams ().SetFloat ("cellSize", cellSize);
+		node.GetParams ().SetBool ("emitWall", false);
+		node.GetParams ().SetBool ("emitBase", false);
+		node.GetParams ().SetFloat ("marginCells", 0.0f);
+
+		ValueList in{ quantized };
+		ValueList out;
+		if (!RunNode (node, in, out))
+			return -1.0f;
+		const std::shared_ptr<const Mesh> mesh = out[0].Share<Mesh> (Types ().mesh);
+		if (mesh == nullptr)
+			return -1.0f;
+		const std::vector<float> &v = mesh->GetVertices ();
+		if (v.size () < 3)
+			return -1.0f;
+		float lo[2] = { v[0], v[1] }, hi[2] = { v[0], v[1] };
+		for (std::size_t i = 0; i + 2 < v.size (); i += 3)
+			for (int k = 0; k < 2; k++)
+			{
+				if (v[i + k] < lo[k]) lo[k] = v[i + k];
+				if (v[i + k] > hi[k]) hi[k] = v[i + k];
+			}
+		return (hi[0] - lo[0]) > (hi[1] - lo[1]) ? hi[0] - lo[0] : hi[1] - lo[1];
+	};
+
+	const float small = largestSide (0.5f);
+	ASSERT_GT (small, 0.0f);
+	EXPECT_NEAR (small, 0.5f * (float)cells, 1e-2f)
+		<< "la plus grande dimension doit valoir la cote de pixel fois le nombre de pixels";
+
+	// LA PROPRIETE : doubler le pixel double l'objet.
+	const float large = largestSide (1.0f);
+	ASSERT_GT (large, 0.0f);
+	EXPECT_NEAR (large, 2.0f * small, 1e-2f);
+}
+
+// ---------------------------------------------------------------------------
+//  La cote de cellule -- une seule longueur absolue, la taille totale en decoule
+// ---------------------------------------------------------------------------
+// `cellSize` renseigne, la page ne regle plus la taille de l'objet : elle regle
+// celle d'une CELLULE, et la taille totale en est la consequence. Le filet porte
+// sur cette implication, et sur elle seule -- ni sur le nombre de blocs, ni sur
+// leur decoupe, deja couverts plus haut.
+TEST (TEST_cggraph_nodes_img, the_cell_size_makes_the_total_extent_a_consequence)
+{
+	const Value quantized = Quantize (LoadTestImage (), 4, 16);
+	ASSERT_FALSE (quantized.IsEmpty ());
+	const std::shared_ptr<const Img> grid = quantized.Share<Img> (Types ().image);
+	ASSERT_NE (grid, nullptr);
+
+	// Le raster PARVENU au noeud est la grille : c'est ce que la deduction
+	// suppose, et le supposer sans le verifier laisserait le filet passer sur un
+	// raster reste en pleine resolution. `pixelWidth` fixe la LARGEUR ; la hauteur
+	// suit le rapport de l'image et peut donc etre le plus grand cote, ce qu'est
+	// ici la source de test.
+	ASSERT_EQ (grid->width (), 16u);
+	const unsigned int cells = grid->width () > grid->height () ? grid->width () : grid->height ();
+	ASSERT_GE (cells, 16u);
+
+	const auto largestSide = [&] (float cellSize) -> float {
+		PixelBlocksNode node;
+		node.GetParams ().SetFloat ("cellSize", cellSize);
+		// Mur et marge ecartes : ils ajoutent leur propre epaisseur autour du
+		// contenu, et ce cas mesure le contenu.
+		node.GetParams ().SetBool ("emitWall", false);
+		node.GetParams ().SetBool ("emitBase", false);
+		node.GetParams ().SetFloat ("marginCells", 0.0f);
+
+		ValueList in{ quantized };
+		ValueList out;
+		if (!RunNode (node, in, out))
+			return -1.0f;
+		const std::shared_ptr<const Mesh> mesh = out[0].Share<Mesh> (Types ().mesh);
+		if (mesh == nullptr)
+			return -1.0f;
+
+		const std::vector<float> &v = mesh->GetVertices ();
+		if (v.size () < 3)
+			return -1.0f;
+		float lo[2] = { v[0], v[1] }, hi[2] = { v[0], v[1] };
+		for (std::size_t i = 0; i + 2 < v.size (); i += 3)
+			for (int k = 0; k < 2; k++)
+			{
+				if (v[i + k] < lo[k]) lo[k] = v[i + k];
+				if (v[i + k] > hi[k]) hi[k] = v[i + k];
+			}
+		return (hi[0] - lo[0]) > (hi[1] - lo[1]) ? hi[0] - lo[0] : hi[1] - lo[1];
+	};
+
+	const float three = largestSide (3.0f);
+	ASSERT_GT (three, 0.0f);
+	EXPECT_NEAR (three, 3.0f * (float)cells, 1e-3f)
+		<< "la plus grande dimension doit valoir la cote de cellule fois le nombre de cellules";
+
+	// LA PROPRIETE, et non une valeur : doubler la cellule double l'objet. Une
+	// implantation qui aurait garde fitSize passerait le cas precedent par
+	// hasard sur une seule valeur ; elle echoue ici.
+	const float six = largestSide (6.0f);
+	ASSERT_GT (six, 0.0f);
+	EXPECT_NEAR (six, 2.0f * three, 1e-3f);
+
+	// cellSize a ZERO rend la main a fitSize : c'est ce qui garde lisibles les
+	// documents ecrits avant ce parametre.
+	PixelBlocksNode legacy;
+	legacy.GetParams ().SetFloat ("cellSize", 0.0f);
+	legacy.GetParams ().SetFloat ("fitSize", 1.0f);
+	legacy.GetParams ().SetBool ("emitWall", false);
+	legacy.GetParams ().SetBool ("emitBase", false);
+	legacy.GetParams ().SetFloat ("margin", 0.0f);
+	ValueList in{ quantized };
+	ValueList out;
+	ASSERT_TRUE (RunNode (legacy, in, out));
+	const std::shared_ptr<const Mesh> mesh = out[0].Share<Mesh> (Types ().mesh);
+	ASSERT_NE (mesh, nullptr);
+	const std::vector<float> &v = mesh->GetVertices ();
+	ASSERT_GE (v.size (), 3u);
+	float lo = v[0], hi = v[0];
+	for (std::size_t i = 0; i + 2 < v.size (); i += 3)
+	{
+		if (v[i] < lo) lo = v[i];
+		if (v[i] > hi) hi = v[i];
+	}
+	EXPECT_LT (hi - lo, 1.5f) << "a cellSize nul, fitSize fait toujours foi";
+}
+
 TEST (TEST_cggraph_nodes_img, an_unquantized_image_is_accepted_and_that_is_the_documented_trap)
 {
 	// Ce test ne verifie pas un comportement souhaitable : il FIGE le piege

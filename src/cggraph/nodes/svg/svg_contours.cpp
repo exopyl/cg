@@ -40,6 +40,19 @@ SvgContoursNode::SvgContoursNode ()
 	GetParams ().SetFloat ("strokeScale", 1.0f);
 	GetParams ().SetFloat ("strokeWidthFallback", 1.0f);
 
+	// TAILLE de la piece, en millimetres, mesuree sur son plus grand cote.
+	//
+	// A zero -- le defaut -- rien ne change : les contours sortent tels que
+	// svg_to_contours les rend, donc normalises a 1.0 sous `centerAndFit`, ce qui
+	// ne designe aucune longueur reelle. Renseignee, elle est LA cote absolue de
+	// la chaine : la profondeur de shape.extrude s'exprime alors dans la meme
+	// unite.
+	//
+	// Contrairement aux blocs et au relief, cette page n'a pas d'unite plus
+	// petite -- ni cellule ni pixel -- dont la taille totale pourrait decouler.
+	// Un dessin vectoriel n'a pas de grain : sa taille EST la cote de reference.
+	GetParams ().SetFloat ("fitSize", 0.0f);
+
 	// `height` n'est PAS expose : c'est la profondeur d'extrusion, elle se regle
 	// sur shape.extrude. L'exposer ici donnerait un curseur sans effet, puisque
 	// svg_to_contours ne le lit pas.
@@ -71,6 +84,42 @@ bool SvgContoursNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueLi
 		std::make_shared<std::vector<ExtrudeContour>> ();
 	if (!svg_to_contours (*path, options, *contours))
 		return false;
+
+	// Mise a l'echelle sur la BOITE MESUREE, et non sur l'hypothese que
+	// `centerAndFit` a normalise a 1.0 : le cadrage est optionnel, et sans lui
+	// les points sont dans les coordonnees du document. Mesurer vaut dans les
+	// deux cas.
+	const float fitSize = GetFloat (GetParams (), "fitSize", 0.0f);
+	if (fitSize > 0.0f)
+	{
+		bool any = false;
+		float lo[2] = { 0.0f, 0.0f }, hi[2] = { 0.0f, 0.0f };
+		for (const ExtrudeContour &c : *contours)
+			for (const Vector2f &pt : c.pts)
+			{
+				if (!any) { lo[0] = hi[0] = pt.x; lo[1] = hi[1] = pt.y; any = true; continue; }
+				if (pt.x < lo[0]) lo[0] = pt.x;
+				if (pt.x > hi[0]) hi[0] = pt.x;
+				if (pt.y < lo[1]) lo[1] = pt.y;
+				if (pt.y > hi[1]) hi[1] = pt.y;
+			}
+
+		const float w = hi[0] - lo[0];
+		const float h = hi[1] - lo[1];
+		const float largest = w > h ? w : h;
+		// Un dessin degenere -- un seul point, un trait sans epaisseur -- n'a pas
+		// de taille a ramener : le mettre a l'echelle diviserait par zero.
+		if (any && largest > 0.0f)
+		{
+			const float k = fitSize / largest;
+			for (ExtrudeContour &c : *contours)
+				for (Vector2f &pt : c.pts)
+				{
+					pt.x *= k;
+					pt.y *= k;
+				}
+		}
+	}
 
 	out[0] = cggraph::Value::Make (Types ().extrudeContours, contours);
 	return true;

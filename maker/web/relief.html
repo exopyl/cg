@@ -8,15 +8,20 @@
 </head>
 <body>
   <!--
-    PAGE GABARIT. Cette page n'a plus de code qui lui soit propre : tout ce qui
-    la distingue vit dans test/data/templates/text3d.json — le graphe qu'elle
-    évalue (text.font.load -> text.contours -> shape.extrude), les paramètres qu'elle expose avec
-    leurs bornes et leurs listes de choix, et son catalogue de polices.
+    PAGE GABARIT. Cette page n'a pas de code qui lui soit propre : tout ce qui la
+    distingue vit dans test/data/templates/relief.json — le graphe qu'elle évalue
+    (img.io.load -> img.quantize -> img.relief) et les paramètres qu'elle expose
+    avec leurs bornes et leurs listes de choix.
 
     Ce qui a disparu en chemin : js/pages/relief.js, et l'appel monolithique
     createImageRelief() qu'il faisait. La chaîne est désormais VISIBLE dans le
-    document : img.io.load -> img.quantize -> img.relief. Le nœud du milieu est
-    exactement celui des blocs pixelisés — seul son `pixelWidth` les sépare.
+    document. Le nœud du milieu est exactement celui des blocs pixelisés — seul
+    son `pixelWidth` les sépare.
+
+    Le chrome est celui de text.html, à une différence près, et elle tient au
+    DOCUMENT : le graphe de cette page n'a pas de nœud `mesh.color`, donc la
+    couleur reste un réglage d'affichage et la pastille reste dans « Vue ». Sur
+    text.html, la couleur est passée dans le document et la pastille a disparu.
 
     Le chrome est recopié de template.html plutôt que tiré de shell.js : shell.js
     est soudé au chemin des FORMES (getParams(id), updateInPlace(Module, id)),
@@ -30,34 +35,80 @@
       <p class="sub" id="subtitle"></p>
     </header>
 
-    <section class="group">
-      <div class="lbl">Sources</div>
-      <div id="sources"></div>
-    </section>
+    <!--
+      Les SOURCES de fichier sont un bloc comme les autres. Son titre vient du
+      GABARIT (`sourcesGroup`) et non de cette page : ce qu'on y charge dépend du
+      document — une image ici, une police ailleurs — et « Sources » ne dit rien
+      à personne. Le corps est rempli par js/template.js.
+    -->
+    <details class="block">
+      <summary id="sourcesTitle">Sources</summary>
+      <div class="body" id="sources"></div>
+    </details>
 
+    <!--
+      Pas d'intertitre « Paramètres » : chaque bloc porte son nom, et un titre
+      qui chapeaute des titres n'ajoute rien qu'une ligne à lire.
+    -->
     <section class="group">
-      <div class="lbl">Paramètres</div>
       <div id="params"></div>
     </section>
 
     <section class="group">
-      <div class="lbl">Vue</div>
-      <div class="ctrlrow"><span>Couleur du modèle</span><input type="color" id="modelColor" value="#b4bec8"></div>
-      <div class="ctrlrow"><label for="wireframe">Fil de fer</label><input type="checkbox" id="wireframe"></div>
-      <button id="resetView">Recentrer la vue</button>
+      <!--
+        La VUE est un bloc comme les autres, et refermé d'avance : ce sont des
+        réglages d'affichage, pas de pièce. Les blocs de PARAMÈTRES sont
+        construits par js/template.js à partir du gabarit ; celui-ci est écrit à
+        la main parce qu'il ne touche à aucun nœud du graphe — il n'a rien à
+        faire dans le document.
+      -->
+      <details class="block">
+        <summary>Vue</summary>
+        <div class="body">
+          <!--
+            LA PASTILLE RESTE ICI, et ce n'est pas un oubli : le graphe de cette
+            page ne porte pas de nœud `mesh.color`. La couleur ne survivrait donc
+            pas à un enregistrement du document — elle ne regarde que l'affichage.
+          -->
+          <div class="ctrlrow"><span>Couleur du modèle</span><input type="color" id="modelColor" value="#b4bec8"></div>
+          <div class="ctrlrow"><label for="wireframe">Fil de fer</label><input type="checkbox" id="wireframe"></div>
+          <button id="resetView">Recentrer la vue</button>
+        </div>
+      </details>
     </section>
 
     <footer>
       <div id="status" class="stats">Chargement…</div>
-      <div class="lbl">Export</div>
-      <input type="text" id="filename" value="puzzle" placeholder="nom du fichier" spellcheck="false">
-      <div class="btnrow">
-        <button id="downloadObjBtn">OBJ</button>
-      </div>
-      <div class="lbl">Graphe</div>
-      <button id="openInEditor">Enregistrer le document</button>
-      <p class="hint-sm">Cette page EST un graphe. Enregistre-le, puis ouvre-le
-        dans l'éditeur nodal pour le modifier ou l'étendre.</p>
+      <!-- Cotes de la pièce, en millimètres : ce qu'on vérifie avant d'imprimer. -->
+      <div id="dims" class="stats">—</div>
+      <!-- Ce que le réglage a COÛTÉ. Les nœuds le comptaient déjà ; sans cette
+           ligne, le garde-fou restait dans le moteur et n'atteignait pas l'œil. -->
+      <div id="warnings" class="warn" hidden></div>
+      <!--
+        L'EXPORT est un bloc, comme les réglages : c'est la sortie de la page, et
+        elle mérite d'être délimitée plutôt que posée sous un intertitre. Le
+        GRAPHE en est un aussi — laisser l'un encadré et l'autre nu se lirait
+        comme un oubli — mais replié : on enregistre le document une fois, on
+        exporte à chaque essai.
+      -->
+      <details class="block">
+        <summary>Export</summary>
+        <div class="body">
+          <input type="text" id="filename" value="puzzle" placeholder="nom du fichier" spellcheck="false">
+          <div class="btnrow">
+            <button id="downloadStlBtn" class="primary">STL</button>
+            <button id="downloadObjBtn">OBJ</button>
+          </div>
+        </div>
+      </details>
+      <details class="block">
+        <summary>Graphe</summary>
+        <div class="body">
+          <button id="openInEditor">Enregistrer le document</button>
+          <p class="hint-sm">Cette page EST un graphe. Enregistre-le, puis ouvre-le
+            dans l'éditeur nodal pour le modifier ou l'étendre.</p>
+        </div>
+      </details>
     </footer>
   </aside>
 
@@ -69,7 +120,7 @@
     import { runTemplate } from "./js/template.js";
     // Gabarit FIXE, contrairement à template.html qui le lit dans la query
     // string : cette URL est celle que index.html publie, et elle doit désigner
-    // « Texte 3D » et rien d'autre.
+    // « Image to puzzle » et rien d'autre.
     runTemplate("relief").catch((e) => {
       document.getElementById("status").textContent =
         `échec : ${e && e.message ? e.message : e}`;

@@ -38,6 +38,35 @@ void DeclareReliefParams (cggraph::ParamSet &params)
 	params.SetFloat ("wallThickness", 0.03f);
 	params.SetFloat ("wallHeight", 0.10f);
 
+	// COTE DE PIXEL, en millimetres, et UNIQUE longueur absolue du noeud. Meme
+	// mecanique que `cellSize` sur img.pixel_blocks, a ceci pres que le raster
+	// n'est pas pixelise ici : l'unite de base est le PIXEL de l'image telle
+	// qu'elle parvient au noeud -- donc apres la pre-reduction a workingMaxDim.
+	//
+	// A zero -- le defaut -- rien ne change : `fitSize` et les cinq longueurs
+	// ci-dessus font foi, en unites monde. Renseignee, elle prend le pas et la
+	// taille totale devient une CONSEQUENCE : cote de pixel x plus grand cote du
+	// raster.
+	//
+	// Un MODE et non un remplacement : IsVersionCompatible est une egalite
+	// stricte, sans crochet de migration, et monter la version condamnerait tous
+	// les documents deja enregistres.
+	params.SetFloat ("cellSize", 0.0f);
+
+	// Les cinq memes longueurs, en MULTIPLES DE PIXEL. Des noms distincts et non
+	// les memes parametres relus autrement : un nom qui change d'unite selon
+	// l'etat d'un autre ne se lit pas sans connaitre cet etat. Consultees
+	// seulement si cellSize > 0.
+	//
+	// Defauts plus grands que ceux de img.pixel_blocks, et c'est normal : un
+	// pixel de relief est bien plus petit qu'une cellule de blocs, l'image
+	// arrivant ici en pleine resolution de travail.
+	params.SetFloat ("blockHeightCells", 12.0f);
+	params.SetFloat ("baseThicknessCells", 6.0f);
+	params.SetFloat ("marginCells", 6.0f);
+	params.SetFloat ("wallThicknessCells", 4.0f);
+	params.SetFloat ("wallHeightCells", 14.0f);
+
 	// Plaquage de l'image d'origine, arrivant par le port "texture". DEFAUT FAUX :
 	// les aplats quantifies sont le resultat attendu d'un relief, et un document
 	// existant doit continuer a rendre ce qu'il rendait. Le parametre ne designe
@@ -73,7 +102,14 @@ unsigned char ColorComponent (const cggraph::ParamSet &params, const char *name,
 	return static_cast<unsigned char> (v);
 }
 
-ImageReliefOptions ReadOptions (const cggraph::ParamSet &params)
+// `cells` est la plus grande dimension du raster tel qu'il parvient au noeud,
+// en pixels. C'est ce que `fitSize` cadre, donc ce qui multiplie la cote.
+unsigned int LargestSide (const Img &image)
+{
+	return image.width () > image.height () ? image.width () : image.height ();
+}
+
+ImageReliefOptions ReadOptions (const cggraph::ParamSet &params, unsigned int cells)
 {
 	ImageReliefOptions opt;
 
@@ -85,12 +121,25 @@ ImageReliefOptions ReadOptions (const cggraph::ParamSet &params)
 
 	opt.simplifyErr   = GetFloat (params, "simplifyErr", 1.0f);
 	opt.shrink        = GetFloat (params, "shrink", 0.0f);
-	opt.fitSize       = GetFloat (params, "fitSize", 1.0f);
-	opt.blockHeight   = GetFloat (params, "blockHeight", 0.10f);
-	opt.baseThickness = GetFloat (params, "baseThickness", 0.05f);
-	opt.margin        = GetFloat (params, "margin", 0.05f);
-	opt.wallThickness = GetFloat (params, "wallThickness", 0.03f);
-	opt.wallHeight    = GetFloat (params, "wallHeight", 0.10f);
+	const float cellSize = GetFloat (params, "cellSize", 0.0f);
+	if (cellSize > 0.0f && cells > 0)
+	{
+		opt.fitSize       = cellSize * static_cast<float> (cells);
+		opt.blockHeight   = cellSize * GetFloat (params, "blockHeightCells", 12.0f);
+		opt.baseThickness = cellSize * GetFloat (params, "baseThicknessCells", 6.0f);
+		opt.margin        = cellSize * GetFloat (params, "marginCells", 6.0f);
+		opt.wallThickness = cellSize * GetFloat (params, "wallThicknessCells", 4.0f);
+		opt.wallHeight    = cellSize * GetFloat (params, "wallHeightCells", 14.0f);
+	}
+	else
+	{
+		opt.fitSize       = GetFloat (params, "fitSize", 1.0f);
+		opt.blockHeight   = GetFloat (params, "blockHeight", 0.10f);
+		opt.baseThickness = GetFloat (params, "baseThickness", 0.05f);
+		opt.margin        = GetFloat (params, "margin", 0.05f);
+		opt.wallThickness = GetFloat (params, "wallThickness", 0.03f);
+		opt.wallHeight    = GetFloat (params, "wallHeight", 0.10f);
+	}
 
 	opt.emitBase          = GetBool (params, "emitBase", true);
 	opt.emitWall          = GetBool (params, "emitWall", true);
@@ -167,7 +216,7 @@ bool ReliefNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueList &i
 
 	// La surcharge copie l'image : la vectorisation palettise son entree, et la
 	// valeur qui arrive ici est partagee par tout ce qui lit ce lien.
-	Mesh *mesh = image_to_relief (*image, ReadOptions (GetParams ()), texture.get ());
+	Mesh *mesh = image_to_relief (*image, ReadOptions (GetParams (), LargestSide (*image)), texture.get ());
 	if (mesh == nullptr)
 		return false;
 
@@ -199,7 +248,7 @@ bool ReliefLayersNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueL
 		return false;
 
 	const std::vector<Mesh *> meshes =
-		image_to_relief_per_color (*image, ReadOptions (GetParams ()));
+		image_to_relief_per_color (*image, ReadOptions (GetParams (), LargestSide (*image)));
 	if (meshes.empty ())
 		return false;
 

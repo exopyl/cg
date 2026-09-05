@@ -107,6 +107,18 @@ add_custom_command(TARGET maker POST_BUILD
             "${CMAKE_CURRENT_SOURCE_DIR}/web/data/joconde.jpg"
     COMMENT "Copie de l'image par defaut dans maker/web/data/")
 
+# SVG par defaut de la page « Extrusion SVG », meme raison que l'image ci-dessus :
+# la page ouvre sur un dessin plutot que sur un viewer vide. Le chemin de
+# DESTINATION doit correspondre au champ `default` de test/data/templates/svg.json
+# ("data/svg/rose.svg"), qui est resolu depuis la racine servie.
+add_custom_command(TARGET maker POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/data/svg"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/test/data/svg/rose.svg"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/data/svg/rose.svg"
+    COMMENT "Copie du SVG par defaut dans maker/web/data/svg/")
+
 # GABARITS de pages (template.html). Un gabarit decrit une page entiere -- le
 # graphe qu'elle evalue, les parametres qu'elle expose, ses sources de fichier --
 # et rien d'autre ne distingue deux pages templatees.

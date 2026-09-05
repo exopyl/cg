@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <filesystem>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -105,7 +106,8 @@ const char *kFont   = "./test/data/fonts/DejaVuSans.ttf";
 const char *kAllTemplates[] = {
 	"./test/data/templates/text3d.json",
 	"./test/data/templates/relief.json",
-	"./test/data/templates/pixels.json"
+	"./test/data/templates/pixels.json",
+	"./test/data/templates/svg.json"
 };
 
 std::vector<unsigned char> ReadBytes (const char *path)
@@ -255,6 +257,45 @@ TEST (TEST_cggraph_template, every_exposed_parameter_of_the_text3d_template_exis
 // ---------------------------------------------------------------------------
 //  Tous les gabarits, sans exception
 // ---------------------------------------------------------------------------
+
+// LE CAS QUI GARDE LA LISTE HONNETE, et sans lui les trois suivants sont
+// decoratifs pour tout gabarit neuf.
+//
+// kAllTemplates est ecrite a la main, et son commentaire annonce le prix : un
+// gabarit qu'on oublie d'y ajouter n'est jamais teste, en silence. Le prix a ete
+// paye -- svg.json a ete livre, valide par personne, et un type de noeud
+// inexistant y serait passe sans que rien ne rougisse.
+//
+// Ce cas compare la liste au CONTENU du repertoire. Il ne remplace pas la liste :
+// celle-ci fait toujours echouer bruyamment le RETRAIT d'un gabarit, ce qu'un
+// simple balayage laisserait passer. Les deux ensemble couvrent les deux sens.
+TEST (TEST_cggraph_template, the_template_list_names_every_file_on_disk)
+{
+	namespace fs = std::filesystem;
+	std::error_code ec;
+
+	std::vector<std::string> listed;
+	for (const char *path : kAllTemplates)
+		listed.push_back (fs::path (path).filename ().string ());
+	std::sort (listed.begin (), listed.end ());
+
+	std::vector<std::string> onDisk;
+	for (fs::directory_iterator it ("./test/data/templates", ec), end; !ec && it != end;
+	     it.increment (ec))
+		if (it->path ().extension () == ".json")
+			onDisk.push_back (it->path ().filename ().string ());
+	ASSERT_FALSE (ec) << "parcours de ./test/data/templates : " << ec.message ();
+	std::sort (onDisk.begin (), onDisk.end ());
+
+	// Un repertoire vide rendrait ce cas vert sans rien prouver : c'est le meme
+	// defaut, une marche plus haut.
+	ASSERT_FALSE (onDisk.empty ()) << "aucun gabarit trouve sur le disque";
+
+	EXPECT_EQ (onDisk, listed)
+		<< "kAllTemplates et test/data/templates/ ont divergé : un gabarit livré "
+		   "hors de la liste n'est validé par aucun des cas ci-dessous.";
+}
+
 
 TEST (TEST_cggraph_template, every_shipped_template_loads_against_the_live_catalog)
 {

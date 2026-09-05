@@ -35,6 +35,28 @@ void DeclarePixelBlocksParams (cggraph::ParamSet &params)
 	params.SetFloat ("wallThickness", 0.03f);
 	params.SetFloat ("wallHeight", 0.10f);
 
+	// COTE DE CELLULE, en millimetres, et UNIQUE longueur absolue du noeud. A
+	// zero -- le defaut -- rien ne change : `fitSize` et les cinq longueurs
+	// ci-dessus font foi, en unites monde, comme avant. Renseignee, elle prend le
+	// pas sur elles et la taille totale de l'objet devient une CONSEQUENCE :
+	//
+	//     taille totale = cellSize x plus grande dimension du raster (en cellules)
+	//
+	// Un MODE et non un remplacement, parce que IsVersionCompatible est une
+	// egalite stricte, sans crochet de migration : monter la version du
+	// descripteur condamnerait tous les documents deja enregistres.
+	params.SetFloat ("cellSize", 0.0f);
+
+	// Les cinq memes longueurs, exprimees en MULTIPLES DE CELLULE. Des noms
+	// distincts et non les memes parametres relus autrement : un nom qui change
+	// d'unite selon l'etat d'un autre ne se lit pas sans connaitre cet etat.
+	// Elles ne sont consultees que si cellSize > 0.
+	params.SetFloat ("blockHeightCells", 1.0f);
+	params.SetFloat ("baseThicknessCells", 0.5f);
+	params.SetFloat ("marginCells", 0.5f);
+	params.SetFloat ("wallThicknessCells", 0.5f);
+	params.SetFloat ("wallHeightCells", 1.2f);
+
 	// Plaquage de l'image d'origine, arrivant par le port "texture". DEFAUT FAUX,
 	// et c'est un choix : les aplats quantifies font l'identite du module « blocs
 	// pixelises », et un document existant doit continuer a rendre ce qu'il
@@ -63,7 +85,19 @@ unsigned char ColorComponent (const cggraph::ParamSet &params, const char *name,
 	return static_cast<unsigned char> (v);
 }
 
-ImagePixelBlocksOptions ReadOptions (const cggraph::ParamSet &params)
+// `cells` est la plus grande dimension du raster, en cellules. Le raster qui
+// parvient a ce noeud EST la grille : quantize_image le ramene a `pixelWidth` de
+// large (pixelize_to_width -> Img::resize). La cote de cellule suffit donc a
+// deduire la taille totale, sans que ce noeud ait a connaitre pixelWidth -- qui
+// se regle en amont, sur img.quantize.
+// `fitSize` cadre la PLUS GRANDE dimension XY du contenu : c'est donc elle, et
+// non la largeur seule, qui multiplie la cote de cellule.
+unsigned int LargestSide (const Img &image)
+{
+	return image.width () > image.height () ? image.width () : image.height ();
+}
+
+ImagePixelBlocksOptions ReadOptions (const cggraph::ParamSet &params, unsigned int cells)
 {
 	ImagePixelBlocksOptions opt;
 
@@ -72,13 +106,29 @@ ImagePixelBlocksOptions ReadOptions (const cggraph::ParamSet &params)
 	// image_pixel_blocks.h). Les exposer ici ferait croire que la grille se regle
 	// sur ce noeud, alors qu'elle se decide dans img.quantize.
 
-	opt.shrink        = GetFloat (params, "shrink", 0.0f);
-	opt.fitSize       = GetFloat (params, "fitSize", 1.0f);
-	opt.blockHeight   = GetFloat (params, "blockHeight", 0.10f);
-	opt.baseThickness = GetFloat (params, "baseThickness", 0.05f);
-	opt.margin        = GetFloat (params, "margin", 0.05f);
-	opt.wallThickness = GetFloat (params, "wallThickness", 0.03f);
-	opt.wallHeight    = GetFloat (params, "wallHeight", 0.10f);
+	// Deja une fraction de cellule, dans les deux modes : il s'applique sur la
+	// grille, avant toute mise a l'echelle.
+	opt.shrink = GetFloat (params, "shrink", 0.0f);
+
+	const float cellSize = GetFloat (params, "cellSize", 0.0f);
+	if (cellSize > 0.0f && cells > 0)
+	{
+		opt.fitSize       = cellSize * static_cast<float> (cells);
+		opt.blockHeight   = cellSize * GetFloat (params, "blockHeightCells", 1.0f);
+		opt.baseThickness = cellSize * GetFloat (params, "baseThicknessCells", 0.5f);
+		opt.margin        = cellSize * GetFloat (params, "marginCells", 0.5f);
+		opt.wallThickness = cellSize * GetFloat (params, "wallThicknessCells", 0.5f);
+		opt.wallHeight    = cellSize * GetFloat (params, "wallHeightCells", 1.2f);
+	}
+	else
+	{
+		opt.fitSize       = GetFloat (params, "fitSize", 1.0f);
+		opt.blockHeight   = GetFloat (params, "blockHeight", 0.10f);
+		opt.baseThickness = GetFloat (params, "baseThickness", 0.05f);
+		opt.margin        = GetFloat (params, "margin", 0.05f);
+		opt.wallThickness = GetFloat (params, "wallThickness", 0.03f);
+		opt.wallHeight    = GetFloat (params, "wallHeight", 0.10f);
+	}
 
 	opt.emitBase          = GetBool (params, "emitBase", true);
 	opt.emitWall          = GetBool (params, "emitWall", true);
@@ -159,7 +209,7 @@ bool PixelBlocksNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueLi
 			? in[1].Share<Img> (Types ().image)
 			: nullptr;
 
-	Mesh *mesh = image_to_pixel_blocks (*image, ReadOptions (GetParams ()), texture.get ());
+	Mesh *mesh = image_to_pixel_blocks (*image, ReadOptions (GetParams (), LargestSide (*image)), texture.get ());
 	if (mesh == nullptr)
 		return false;
 
@@ -189,7 +239,7 @@ bool PixelBlocksPartsNode::Compute (cggraph::EvalContext &ctx, const cggraph::Va
 		return false;
 
 	const std::vector<Mesh *> meshes =
-		image_to_pixel_blocks_per_component (*image, ReadOptions (GetParams ()));
+		image_to_pixel_blocks_per_component (*image, ReadOptions (GetParams (), LargestSide (*image)));
 	if (meshes.empty ())
 		return false;
 

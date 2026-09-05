@@ -14,6 +14,7 @@
 #include "../src/cggraph/nodes/shapes/gothic_window.h"
 #include "../src/cggraph/nodes/shapes/parametric_shape.h"
 #include "../src/cggraph/nodes/shapes/profile.h"
+#include "../src/cggraph/nodes/svg/svg_contours.h"
 #include "../src/cggraph/nodes/text/load_font.h"
 #include "../src/cggraph/nodes/value_types.h"
 #include "../src/cgmesh/extrude_contours.h"
@@ -763,4 +764,73 @@ TEST (TEST_cggraph_nodes_shapes, the_svg_producer_refuses_a_path_that_leads_nowh
 	EvalContext ctx;
 	ValueList out;
 	EXPECT_FALSE (evaluator.Evaluate (contours, out, ctx).IsOk ());
+}
+
+// ---------------------------------------------------------------------------
+//  svg.contours -- la taille de la piece, en millimetres
+// ---------------------------------------------------------------------------
+// PREMIER filet de ce noeud : il n'en avait aucun avant `fitSize`.
+//
+// Sans `fitSize`, svg_to_contours rend un dessin normalise a 1.0 sous
+// `centerAndFit` -- une echelle qui ne designe aucune longueur reelle. Le
+// parametre en fait une cote, et c'est cette implication que le cas verifie :
+// la valeur demandee EST la plus grande dimension du resultat.
+//
+// Contrairement aux blocs et au relief, il n'y a pas ici d'unite plus petite
+// dont la taille decoulerait : un dessin vectoriel n'a pas de grain.
+TEST (TEST_cggraph_nodes_shapes, the_svg_fit_size_is_the_largest_dimension_in_millimetres)
+{
+	cggraph::Graph graph;
+	const cggraph::NodeId fileId =
+		graph.AddNode (std::unique_ptr<cggraph::Node> (new cggraph_nodes::FileRefNode ()));
+	static_cast<cggraph_nodes::FileRefNode *> (graph.FindNode (fileId))
+		->SetPath ("./test/data/svg/rose.svg");
+
+	const cggraph::NodeId svgId =
+		graph.AddNode (std::unique_ptr<cggraph::Node> (new cggraph_nodes::SvgContoursNode ()));
+	ASSERT_EQ (graph.Connect (fileId, 0, svgId, 0), cggraph::ConnectStatus::Ok);
+
+	const auto largestSide = [&] (float fitSize) -> float {
+		graph.FindNode (svgId)->GetParams ().SetFloat ("fitSize", fitSize);
+		cggraph::Evaluator evaluator (graph);
+		cggraph::EvalContext ctx;
+		cggraph::ValueList out;
+		if (!evaluator.Evaluate (svgId, out, ctx).IsOk () || out.empty ())
+			return -1.0f;
+		const std::shared_ptr<const std::vector<ExtrudeContour>> contours =
+			out[0].Share<std::vector<ExtrudeContour>> (cggraph_nodes::Types ().extrudeContours);
+		if (contours == nullptr || contours->empty ())
+			return -1.0f;
+
+		bool any = false;
+		float lo[2] = { 0.0f, 0.0f }, hi[2] = { 0.0f, 0.0f };
+		for (const ExtrudeContour &c : *contours)
+			for (const Vector2f &pt : c.pts)
+			{
+				if (!any) { lo[0] = hi[0] = pt.x; lo[1] = hi[1] = pt.y; any = true; continue; }
+				if (pt.x < lo[0]) lo[0] = pt.x;
+				if (pt.x > hi[0]) hi[0] = pt.x;
+				if (pt.y < lo[1]) lo[1] = pt.y;
+				if (pt.y > hi[1]) hi[1] = pt.y;
+			}
+		if (!any) return -1.0f;
+		const float w = hi[0] - lo[0], h = hi[1] - lo[1];
+		return w > h ? w : h;
+	};
+
+	const float hundred = largestSide (100.0f);
+	ASSERT_GT (hundred, 0.0f);
+	EXPECT_NEAR (hundred, 100.0f, 1e-2f) << "la taille demandee EST le plus grand cote";
+
+	// LA PROPRIETE, et non une valeur : la sortie suit la demande.
+	const float forty = largestSide (40.0f);
+	ASSERT_GT (forty, 0.0f);
+	EXPECT_NEAR (forty, 40.0f, 1e-2f);
+
+	// A ZERO, le noeud rend le dessin tel quel -- normalise a 1.0 par
+	// centerAndFit. C'est ce qui garde lisibles les documents ecrits avant ce
+	// parametre.
+	const float none = largestSide (0.0f);
+	ASSERT_GT (none, 0.0f);
+	EXPECT_NEAR (none, 1.0f, 1e-3f);
 }

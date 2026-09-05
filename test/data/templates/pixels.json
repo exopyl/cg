@@ -36,27 +36,30 @@
       "param": "useTexture",
       "label": "Couleurs de l'image",
       "type": "bool",
-      "hint": "Plaque la photo d'origine sur les blocs au lieu des aplats de la palette. La géométrie ne change pas : c'est toujours la quantification qui découpe les blocs."
+      "hint": "Plaque la photo d'origine sur les blocs au lieu des aplats de la palette. La géométrie ne change pas : c'est toujours la quantification qui découpe les blocs.",
+      "group": "Image"
     },
     {
       "node": 2,
       "param": "maxColors",
-      "label": "Couleurs",
+      "label": "Couleurs de la palette",
       "type": "int",
       "min": 2,
       "max": 32,
       "step": 1,
-      "hint": "Nombre maximal d'entrées de palette. Chacune devient une région, donc un matériau."
+      "hint": "Nombre maximal d'entrées de palette. Chacune devient une région, donc un matériau.",
+      "group": "Image"
     },
     {
       "node": 2,
       "param": "pixelWidth",
-      "label": "Largeur en cellules",
+      "label": "Largeur (cellules)",
       "type": "int",
       "min": 8,
       "max": 256,
       "step": 1,
-      "hint": "C'EST le paramètre qui distingue cette page du relief. Exprimé en largeur cible et non en facteur de réduction, pour que le nombre de blocs ne dépende pas de la résolution de la source."
+      "hint": "Nombre de cellules sur la plus grande dimension. C'est ce paramètre qui distingue cette page du relief ; il s'applique APRÈS la quantification, par vote majoritaire, et ne crée donc aucune couleur absente de la palette. C'EST le paramètre qui distingue cette page du relief. Exprimé en largeur cible et non en facteur de réduction, pour que le nombre de blocs ne dépende pas de la résolution de la source.",
+      "group": "Image"
     },
     {
       "node": 2,
@@ -67,140 +70,161 @@
         "Wu",
         "Heckbert"
       ],
-      "hint": "Wu est celui à utiliser ; Heckbert n'est gardé que pour comparaison (erreur mesurée 4× pire à 4 couleurs)."
+      "hint": "Wu est celui à utiliser ; Heckbert n'est gardé que pour comparaison (erreur mesurée 4× pire à 4 couleurs).",
+      "group": "Image"
     },
     {
       "node": 2,
       "param": "workingMaxDim",
-      "label": "Résolution de travail",
+      "label": "Résolution de travail (px)",
       "type": "int",
       "min": 128,
       "max": 2048,
       "step": 32,
-      "hint": "L'image est réduite à cette dimension AVANT tout traitement. Les deux étages coûteux y sont linéaires."
+      "hint": "Plus grande dimension de l'image APRÈS pré-réduction, en pixels de la source. 0 désactive la réduction. L'image est réduite à cette dimension AVANT tout traitement. Les deux étages coûteux y sont linéaires.",
+      "group": "Segmentation"
     },
     {
       "node": 2,
       "param": "preSmoothPasses",
-      "label": "Lissage préalable",
+      "label": "Lissage préalable (passes)",
       "type": "int",
       "min": 0,
       "max": 4,
       "step": 1,
-      "hint": "Filtrage bilatéral avant quantification : c'est le réglage de fidélité, il traite la cause (les bords anticrénelés) et non le symptôme."
+      "hint": "Filtrage bilatéral avant quantification : c'est le réglage de fidélité, il traite la cause (les bords anticrénelés) et non le symptôme.",
+      "group": "Segmentation"
     },
     {
       "node": 2,
       "param": "refineIterations",
-      "label": "Raffinement de palette",
+      "label": "Raffinement de palette (itérations)",
       "type": "int",
       "min": 0,
       "max": 8,
       "step": 1,
-      "hint": "Itérations de Lloyd. Elles effacent l'écart entre Wu et Heckbert."
+      "hint": "Itérations de Lloyd. Elles effacent l'écart entre Wu et Heckbert.",
+      "group": "Segmentation"
     },
     {
       "node": 2,
       "param": "despecklePasses",
-      "label": "Anti-mouchetis",
+      "label": "Anti-mouchetis (passes)",
       "type": "int",
       "min": 0,
       "max": 4,
       "step": 1,
-      "hint": "Vote majoritaire 3×3 sur l'image de labels. C'est ce qui efface le tramage d'un pixel de large."
+      "hint": "Vote majoritaire 3×3 sur l'image de labels. C'est ce qui efface le tramage d'un pixel de large.",
+      "group": "Segmentation"
     },
     {
       "node": 2,
       "param": "minRegionArea",
-      "label": "Aire minimale de région",
+      "label": "Aire minimale de région (cellules²)",
       "type": "int",
       "min": 0,
       "max": 200,
       "step": 1,
-      "hint": "En pixels de l'image de travail. Absorbe les taches compactes que la fenêtre 3×3 ne peut pas emporter."
+      "hint": "En CELLULES et non en pixels : l'anti-mouchetis s'applique après la pixelisation, donc sur la grille de sortie. En pixels de l'image de travail. Absorbe les taches compactes que la fenêtre 3×3 ne peut pas emporter.",
+      "group": "Segmentation"
     },
     {
       "node": 3,
       "param": "shrink",
-      "label": "Retrait des régions",
-      "type": "float",
-      "min": 0.0,
-      "max": 6.0,
-      "step": 0.1,
-      "hint": "Érosion en CELLULES de la grille, pas en pixels source. Creuse le sillon qui donne aux pièces leur jeu d'assemblage."
-    },
-    {
-      "node": 3,
-      "param": "fitSize",
-      "label": "Taille",
-      "type": "float",
-      "min": 0.2,
-      "max": 10.0,
-      "step": 0.1
-    },
-    {
-      "node": 3,
-      "param": "blockHeight",
-      "label": "Hauteur des blocs",
-      "type": "float",
-      "min": 0.01,
-      "max": 1.0,
-      "step": 0.01
-    },
-    {
-      "node": 3,
-      "param": "baseThickness",
-      "label": "Épaisseur du socle",
-      "type": "float",
-      "min": 0.0,
-      "max": 1.0,
-      "step": 0.01
-    },
-    {
-      "node": 3,
-      "param": "margin",
-      "label": "Marge",
-      "type": "float",
-      "min": 0.0,
-      "max": 1.0,
-      "step": 0.01
-    },
-    {
-      "node": 3,
-      "param": "wallThickness",
-      "label": "Épaisseur du mur",
+      "label": "Retrait des régions (× cellule)",
       "type": "float",
       "min": 0.0,
       "max": 0.5,
-      "step": 0.01
+      "step": 0.01,
+      "hint": "Chaque bloc est érodé de cette FRACTION d'une cellule, ce qui laisse entre deux voisins un sillon de deux fois cette valeur — le jeu d'assemblage à l'impression. 0,15 creuse donc un sillon de trois dixièmes de cellule.",
+      "group": "Segmentation"
     },
     {
       "node": 3,
-      "param": "wallHeight",
-      "label": "Hauteur du mur",
+      "param": "cellSize",
+      "label": "Dimension d'une cellule (mm)",
+      "type": "float",
+      "min": 0.5,
+      "max": 20.0,
+      "step": 0.1,
+      "hint": "LA SEULE COTE ABSOLUE de cette page. Tout le reste s'exprime en multiples de cette dimension, et la taille totale de l'objet en est une CONSÉQUENCE : elle vaut cette valeur multipliée par le nombre de cellules du plus grand côté. Elle se lit en pied de panneau ; elle ne se règle pas.",
+      "group": "Pièce"
+    },
+    {
+      "node": 3,
+      "param": "blockHeightCells",
+      "label": "Hauteur des blocs (× cellule)",
+      "type": "float",
+      "min": 0.1,
+      "max": 4.0,
+      "step": 0.05,
+      "hint": "1,0 donne un bloc aussi haut que large.",
+      "group": "Pièce"
+    },
+    {
+      "node": 3,
+      "param": "baseThicknessCells",
+      "label": "Épaisseur du socle (× cellule)",
       "type": "float",
       "min": 0.0,
-      "max": 1.0,
-      "step": 0.01
+      "max": 4.0,
+      "step": 0.05,
+      "hint": "Sous les blocs. Sans effet si « Socle » est décoché.",
+      "group": "Pièce"
+    },
+    {
+      "node": 3,
+      "param": "marginCells",
+      "label": "Marge (× cellule)",
+      "type": "float",
+      "min": 0.0,
+      "max": 4.0,
+      "step": 0.05,
+      "hint": "Jeu entre le contenu et la face INTERNE du mur périmétrique.",
+      "group": "Pièce"
     },
     {
       "node": 3,
       "param": "emitBase",
       "label": "Socle",
-      "type": "bool"
+      "type": "bool",
+      "group": "Socle et murs"
     },
     {
       "node": 3,
       "param": "emitWall",
       "label": "Mur périmétrique",
-      "type": "bool"
+      "type": "bool",
+      "group": "Socle et murs"
     },
     {
       "node": 3,
       "param": "emitInternalWalls",
       "label": "Murs internes",
       "type": "bool",
-      "hint": "Décoché : les murs coïncidents entre blocs adjacents sont supprimés. Maillage plus léger, mais les blocs ne sont plus des solides fermés pris isolément."
+      "hint": "Décoché : les murs coïncidents entre blocs adjacents sont supprimés. Maillage plus léger, mais les blocs ne sont plus des solides fermés pris isolément.",
+      "group": "Socle et murs"
+    },
+    {
+      "node": 3,
+      "param": "wallThicknessCells",
+      "label": "Épaisseur du mur (× cellule)",
+      "type": "float",
+      "min": 0.0,
+      "max": 4.0,
+      "step": 0.05,
+      "group": "Socle et murs"
+    },
+    {
+      "node": 3,
+      "param": "wallHeightCells",
+      "label": "Hauteur du mur (× cellule)",
+      "type": "float",
+      "min": 0.0,
+      "max": 6.0,
+      "step": 0.05,
+      "hint": "Prendre la hauteur des blocs affleure ; au-delà, le mur dépasse.",
+      "group": "Socle et murs"
     }
   ],
   "graph": {
@@ -394,6 +418,48 @@
             "kind": "literal",
             "type": "bool",
             "value": true
+          },
+          {
+            "name": "cellSize",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 2.0
+          },
+          {
+            "name": "blockHeightCells",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 1.0
+          },
+          {
+            "name": "baseThicknessCells",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.5
+          },
+          {
+            "name": "marginCells",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.5
+          },
+          {
+            "name": "wallThicknessCells",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 0.5
+          },
+          {
+            "name": "wallHeightCells",
+            "role": "semantic",
+            "kind": "literal",
+            "type": "float",
+            "value": 1.2
           }
         ]
       }
@@ -424,5 +490,24 @@
         "toPort": 1
       }
     ]
-  }
+  },
+  "groups": [
+    {
+      "name": "Image",
+      "hint": "Comment la photo est ramenée à des aplats de couleur. C'est ici que se joue la ressemblance ; le reste ne fait que la mettre en volume."
+    },
+    {
+      "name": "Segmentation",
+      "hint": "Tout ce qui se règle en PIXELS de l'image, pas en millimètres : le nettoyage de la carte des régions, et le jeu qui les sépare. À ne toucher que si le résultat est bruité, trop découpé, ou si les pièces sortent soudées."
+    },
+    {
+      "name": "Pièce",
+      "hint": "Une seule cote absolue, celle d'une cellule. Tout le reste en est un multiple, si bien que changer cette cote redimensionne la pièce entière sans rien dérégler."
+    },
+    {
+      "name": "Socle et murs",
+      "hint": "Ce qui tient l'ensemble : la plaque du dessous et les cloisons. Leurs cotes sont, elles aussi, des multiples de la cellule."
+    }
+  ],
+  "sourcesGroup": "Image source"
 }
