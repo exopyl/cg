@@ -308,6 +308,13 @@ export async function runTemplate(name) {
   const error = Module.graphFromJson(JSON.stringify(tpl.graph));
   if (error) { setStatus(`graphe refusé — ${error}`); return; }
 
+  // POIGNÉE DE DIAGNOSTIC. Cette page est un module ES : sans elle, la console
+  // du navigateur n'atteint ni le module WASM ni le gabarit chargé, et vérifier
+  // ce que la page vient de produire — sa palette, les mesures d'un nœud —
+  // obligerait à instancier un SECOND module, donc à mesurer autre chose que ce
+  // qui est à l'écran. Lecture seule par usage, pas par contrat.
+  window.maker = { Module, template: tpl, stats: (node) => readStats(Module, node) };
+
   // ---- viewer ------------------------------------------------------------
   // OPTIONNELLE désormais : quand le document porte lui-même sa couleur
   // (nœud `mesh.color`), la page n'a plus de pastille à offrir — la couleur
@@ -440,7 +447,32 @@ export async function runTemplate(name) {
         warnBox.textContent = said.join(" · ");
         warnBox.hidden = said.length === 0;
       }
+
+      applyGates();
     });
+  }
+
+  // RÉGLAGES QUE LE RÉSULTAT REND INOPÉRANTS. Un widget qui n'a plus d'effet
+  // n'est pas une faute de gabarit — c'est une conséquence de ce que le calcul a
+  // produit, et elle change d'un fichier à l'autre. Il ne peut donc se lire que
+  // sur une MESURE publiée par un nœud (Node::PublishStats), jamais sur une
+  // convention recopiée dans le gabarit, qui serait vraie le jour où on l'écrit
+  // et fausse ensuite.
+  //
+  // Grisé et NON masqué : un réglage qui disparaît laisse croire qu'il n'existe
+  // pas. L'infobulle porte alors la raison, sans quoi le gris est une énigme.
+  const gated = [];
+
+  function applyGates() {
+    for (const gate of gated) {
+      const value = readStats(Module, gate.rule.node)[gate.rule.stat];
+      const off = typeof value === "number" && value === Number(gate.rule.equals);
+      gate.wrap.classList.toggle("off", off);
+      for (const control of gate.wrap.querySelectorAll("input, select, textarea, button"))
+        control.disabled = off;
+      const label = gate.wrap.querySelector("label");
+      if (label) label.title = off ? (gate.rule.reason || "") : gate.hint;
+    }
   }
 
   // ---- panneau -----------------------------------------------------------
@@ -480,7 +512,10 @@ export async function runTemplate(name) {
       block.appendChild(body);
       params.appendChild(block);
     }
-    body.appendChild(buildWidget(Module, spec, evaluate, warn));
+    const widget = buildWidget(Module, spec, evaluate, warn);
+    if (spec.disableWhen)
+      gated.push({ rule: spec.disableWhen, wrap: widget, hint: spec.hint || "" });
+    body.appendChild(widget);
   }
 
   // ---- sources de fichier ------------------------------------------------

@@ -4,9 +4,10 @@
 //  Trace au trait -> contours fermes
 // ============================================================================
 //
-// Epaissit des polylignes OUVERTES d'une largeur donnee et rend les contours
-// fermes qui en resultent, prets pour la tessellation puis l'extrusion
-// (extrude_contours.h).
+// Epaissit des traces d'une largeur donnee et rend les contours fermes qui en
+// resultent, prets pour la tessellation puis l'extrusion (extrude_contours.h).
+// Deux familles, selon que le trace est OUVERT -- un ruban a extremites -- ou
+// FERME -- un anneau.
 //
 // C'est la seule operation qui ait un sens sur un trace : une polyligne n'a pas
 // de surface, et la « remplir » en la refermant d'office donne n'importe quoi des
@@ -42,3 +43,30 @@ enum class StrokeCap  { Round, Square, Butt };
 std::vector<std::vector<std::array<float, 2>>>
 strokeToContours (const std::vector<std::vector<std::array<float, 2>>>& polylines,
                   float width, StrokeJoin join, StrokeCap cap);
+
+// Variante FERMEE : chaque contour est trace des deux cotes de sa boucle, ce qui
+// rend un ANNEAU -- bord exterieur decale de +width/2, bord interieur de
+// -width/2 -- la ou strokeToContours rend un ruban a extremites. C'est le trait
+// d'une forme fermee au sens SVG.
+//
+// L'arete de fermeture est IMPLICITE : ne PAS repeter le premier point en fin de
+// contour. C'est la convention d'ExtrudeContour (extrude_contours.h) et celle que
+// Clipper2 attend pour un chemin ferme ; un point repete y serait de toute facon
+// retire.
+//
+// Un contour de moins de TROIS points est ignore : une boucle a deux points n'a
+// pas d'interieur, donc pas d'anneau -- son trait est un ruban, et releve de
+// strokeToContours.
+//
+// Pas de StrokeCap : une boucle fermee n'a pas d'extremite.
+//
+// L'orientation d'entree est indifferente, le decalage etant symetrique. Les
+// TROUS sont traces sans traitement particulier : chaque contour est decale
+// independamment, si bien qu'un exterieur et ses trous recoivent chacun leur
+// anneau -- c'est ce que fait le SVG, qui trace chaque sous-chemin.
+//
+// Meme convention de sortie que ci-dessus : orientation Clipper2, prete pour
+// NonZero.
+std::vector<std::vector<std::array<float, 2>>>
+strokeClosedToContours (const std::vector<std::vector<std::array<float, 2>>>& contours,
+                        float width, StrokeJoin join);

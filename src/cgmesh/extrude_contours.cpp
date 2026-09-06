@@ -235,8 +235,14 @@ void tessellateContours(const std::vector<ExtrudeContour>& contours,
 // ============================================================================
 
 bool ExtrudedMeshBuilder::Append(const std::vector<ExtrudeContour>& contours,
-                                 const ExtrudeAppendOptions& opt)
+                                 const ExtrudeAppendOptions& opt,
+                                 unsigned int* firstFace,
+                                 unsigned int* faceCount)
 {
+	const unsigned int faceBase = (unsigned int)m_faces.size();
+	if (firstFace) *firstFace = faceBase;
+	if (faceCount) *faceCount = 0u;
+
 	TessOut out;
 	std::vector<std::pair<unsigned int, unsigned int>> outlineEdges;
 	tessellateContours(contours, opt.normalizeOrientation, opt.winding,
@@ -378,6 +384,7 @@ bool ExtrudedMeshBuilder::Append(const std::vector<ExtrudeContour>& contours,
 		}
 	}
 
+	if (faceCount) *faceCount = (unsigned int)m_faces.size() - faceBase;
 	return true;
 }
 

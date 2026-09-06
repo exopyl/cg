@@ -38,6 +38,7 @@
 #include "shapes/extrude.h"
 #include "shapes/extrude_profiled.h"
 #include "svg/svg_contours.h"
+#include "svg/svg_extrude_colored.h"
 #include "text/text_contours.h"
 #include "text/load_font.h"
 
@@ -117,6 +118,19 @@ const std::vector<CatalogEntry> &Catalog ()
 		  "resolue par une passe Clipper2 en amont : elle n'est connue nulle part "
 		  "ailleurs et une liste plate ne la transporte pas. `height` n'est pas "
 		  "un reglage de ce noeud, la profondeur se regle sur shape.extrude" },
+		// LE CHEMIN COLORE, et il est MONOLITHIQUE : contours, marqueterie,
+		// extrusion et palette en un calcul. Une liste plate de contours ne
+		// transporte ni couleur ni rang, donc le decoupage habituel ne peut pas
+		// porter cette chaine. svg.contours n'est pas retire pour autant.
+		{ "svg.extrude.colored", "Extrusion SVG coloree", "Forme 2D",
+		  &Make<SvgExtrudeColoredNode>,
+		  "`useSvgColors` gouverne DEUX choses -- la palette ET le retrait de la "
+		  "matiere recouverte : peindre sans decouper laisserait deux capots "
+		  "coplanaires. A `true`, aucune face ne sort a MATERIAL_NONE, donc un "
+		  "mesh.color aval ne peint RIEN. Les couleurs ne franchissent aucun "
+		  "export -- le STL n'en porte pas, et l'OBJ rendu est sans mtllib. "
+		  "`flattenTol` et `minStrokeWorldWidth` sont dans les unites du dessin "
+		  "NORMALISE, avant « Taille »" },
 		{ "shape.extrude", "Extrusion", "Forme 2D", &Make<ExtrudeNode>,
 		  "n'ajoute PAS de plaque de support : le support de text.contours est un "
 		  "contour de plus fondu par l'union 2D, donc a la MEME profondeur que les "

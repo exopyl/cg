@@ -1,13 +1,16 @@
 #include <gtest/gtest.h>
 
+#include "../src/cgmesh/contour_ops.h"
 #include "../src/cgmesh/import_svg.h"
 #include "../src/cgmesh/mesh.h"
 
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 
 // ===========================================================================
 //  Formes au TRAIT : polyline epaissie, polygon rempli
@@ -24,21 +27,35 @@
 // (nanosvg.h:2826-2833 : meme parseur, closeFlag 0 ou 1) :
 //
 //   ferme + fill    -> tessellation du remplissage (chemin preexistant)
-//   sinon + stroke  -> trace EPAISSI de son stroke-width, via Clipper2
+//   ferme + stroke  -> ANNEAU : les deux bords de la boucle, arete de fermeture
+//                      comprise (strokeClosedToContours)
+//   ouvert + stroke -> RUBAN a extremites, de la largeur du trait
+//                      (strokeToContours)
 //
-// Un `<polygon>` en `fill:none` releve du second cas : c'est un trait ferme,
-// epaissi en ANNEAU et non rempli -- la semantique meme de `fill:none`.
+// Un `<polygon>` ou un `<rect>` en `fill:none` releve du deuxieme cas : c'est un
+// trait ferme, epaissi en ANNEAU et non rempli -- la semantique meme de
+// `fill:none`.
 //
 // ---------------------------------------------------------------------------
-//  L'oracle : le volume signe
+//  Les oracles
 // ---------------------------------------------------------------------------
-// Pour un prisme FERME, le volume signe vaut exactement aire_du_capot x hauteur.
-// Tout ecart signale un capot ou une paroi manquante.
+// 1. Le VOLUME SIGNE. Pour un prisme FERME, il vaut exactement
+//    aire_du_capot x hauteur. Tout ecart signale un capot ou une paroi
+//    manquante.
 //
-// Ni un compte de faces ni un compte d'aretes de bord ne le detecte :
-// ExtrudedMeshBuilder emet volontairement les capots et les parois en blocs de
-// sommets DISJOINTS (cf. son en-tete), de sorte que des aretes de bord existent
-// par construction et ne disent rien de l'etancheite.
+//    Ni un compte de faces ni un compte d'aretes de bord ne le detecte :
+//    ExtrudedMeshBuilder emet volontairement les capots et les parois en blocs
+//    de sommets DISJOINTS (cf. son en-tete), de sorte que des aretes de bord
+//    existent par construction et ne disent rien de l'etancheite.
+//
+// 2. L'AIRE ANALYTIQUE de l'anneau, perimetre x largeur pour un contour
+//    rectiligne a joints mitre. C'est le seul oracle qui distingue l'anneau du
+//    ruban : les deux sont etanches, et les deux couvrent moins que la forme
+//    pleine. Un anneau de rectangle mesure a trois cotes sur quatre est un
+//    ruban.
+//
+//    Il exige `centerAndFit` a FAUX, sans quoi la sortie n'est plus dans les
+//    unites du document et l'aire n'a plus de valeur analytique.
 
 namespace {
 
@@ -82,6 +99,34 @@ void measure(Mesh& m, float height, double& volume, double& topArea, unsigned in
     }
 }
 
+// Aire du capot dans les unites du DOCUMENT : c'est la grandeur que l'aire
+// analytique de l'anneau permet de verifier.
+double exactTopArea(const char* svgBody, const char* stem)
+{
+    const std::string path = std::string("./") + stem + ".svg";
+    writeSvg(path.c_str(), svgBody);
+
+    const float h = 0.2f;
+    SvgExtrudeOptions opt;
+    opt.height       = h;
+    opt.centerAndFit = false;
+    std::unique_ptr<Mesh> m(import_svg_extruded(path.c_str(), opt));
+    std::remove(path.c_str());
+    if (!m) return 0.0;
+
+    double volume = 0, topArea = 0;
+    unsigned int nWalls = 0;
+    measure(*m, h, volume, topArea, nWalls);
+    return topArea;
+}
+
+double netArea(const std::vector<ExtrudeContour>& region)
+{
+    double sum = 0.0;
+    for (const ExtrudeContour& c : region) sum += (double)contourSignedArea(c.pts);
+    return std::fabs(sum);
+}
+
 void expectWatertight(const char* svgBody, const char* stem)
 {
     const std::string path = std::string("./") + stem + ".svg";
@@ -120,9 +165,18 @@ TEST(TEST_cgmesh_svg_stroke, filled_polygon_extrudes_to_a_closed_solid)
 }
 
 // `fill:none` sur un polygone : trait FERME, donc anneau epaissi.
+//
+// L'etancheite ne suffit pas a l'etablir : un ruban a trois cotes est etanche
+// lui aussi. L'aire tranche -- 4 x 100 x 10 pour l'anneau des quatre cotes,
+// 3 x 100 x 10 si l'arete de fermeture n'est pas tracee.
 TEST(TEST_cgmesh_svg_stroke, unfilled_polygon_becomes_a_thickened_ring)
 {
     expectWatertight(kSquareStroked, "tu_svgs_polyring");
+
+    const double area = exactTopArea(kSquareStroked, "tu_svgs_polyring_area");
+    std::cout << "  anneau du polygone : aire " << area << " (attendu 4000)" << std::endl;
+    EXPECT_NEAR(area, 4000.0, 1.0)
+        << "3000 signalerait un ruban ouvert : le quatrieme cote n'est pas trace";
 }
 
 // Un anneau n'est pas un disque : son capot doit etre STRICTEMENT plus petit que
@@ -146,6 +200,65 @@ TEST(TEST_cgmesh_svg_stroke, a_ring_covers_less_than_the_filled_square)
 
     std::remove("./tu_svgs_cmp_fill.svg");
     std::remove("./tu_svgs_cmp_ring.svg");
+}
+
+// ===========================================================================
+//  L'anneau d'une forme SANS remplissage, sur son aire analytique
+// ===========================================================================
+//
+// Deux oracles, et il en faut deux :
+//   - DEUX contours : un bord exterieur et un bord interieur. Un seul contour
+//     est un ruban, quelle que soit son aire ;
+//   - l'aire vaut perimetre x largeur, soit 4 x 100 x 4 = 1600 pour ce
+//     rectangle a joints mitre. 1200 signalerait qu'un cote sur quatre --
+//     l'arete de fermeture -- n'est pas trace.
+//
+// Le trait d'une forme sans remplissage ne depend PAS de
+// `strokeOnFilledShapes`, qui ne gouverne que celui des formes remplies : la
+// fixture est lue avec les options par defaut, drapeau compris.
+TEST(TEST_cgmesh_svg_stroke, closed_stroke_only_yields_a_ring_of_perimeter_times_width)
+{
+    SvgExtrudeOptions opt;
+    opt.centerAndFit = false;
+    ASSERT_FALSE(opt.strokeOnFilledShapes) << "le defaut n'est plus celui que ce test suppose";
+
+    std::vector<SvgShapeGroup> groups;
+    ASSERT_TRUE(svg_to_shape_groups("./test/data/svg/closed_stroke_only.svg", opt, groups));
+    ASSERT_EQ(groups.size(), 1u) << "une forme au trait seul rend un seul groupe";
+
+    const std::vector<ExtrudeContour>& ring = groups[0].contours;
+    const double area = netArea(ring);
+
+    std::cout << "  anneau du rect : contours " << ring.size()
+              << "  aire " << area << " (attendu 1600)" << std::endl;
+
+    EXPECT_FALSE(groups[0].paint.hasFill) << "le groupe porte la couleur du trait";
+    EXPECT_EQ(ring.size(), 2u) << "un seul contour : c'est un ruban, pas un anneau";
+    EXPECT_NEAR(area, 1600.0, 1.0)
+        << "1200 signalerait un ruban ouvert : l'arete de fermeture n'est pas tracee";
+
+    // L'emprise confirme la lecture de l'aire : le bord exterieur est decale de
+    // la demi-largeur de part et d'autre du trace, soit 8 sur 10 et 110.
+    float lo = 1e30f, hi = -1e30f;
+    for (const ExtrudeContour& c : ring)
+        for (const Vector2f& p : c.pts) { lo = std::min(lo, p.x); hi = std::max(hi, p.x); }
+    EXPECT_NEAR(lo,   8.0f, 1e-2f);
+    EXPECT_NEAR(hi, 112.0f, 1e-2f);
+}
+
+// Le meme anneau sur un contour COURBE. L'aire analytique vaut
+// pi x (52^2 - 48^2) = 400 pi ~ 1256,6 ; l'ecart residuel est celui de
+// l'aplatissement, et le figer ici interdit qu'une modification de
+// `flattenTol` le degrade en silence.
+TEST(TEST_cgmesh_svg_stroke, unfilled_circle_yields_a_ring_of_the_analytic_area)
+{
+    const char* body =
+        "<circle cx=\"60\" cy=\"60\" r=\"50\" fill=\"none\""
+        " stroke=\"#ff0000\" stroke-width=\"4\"/>\n";
+
+    const double area = exactTopArea(body, "tu_svgs_circring");
+    std::cout << "  anneau du cercle : aire " << area << " (attendu 400 pi = 1256.6)" << std::endl;
+    EXPECT_NEAR(area, 400.0 * 3.14159265358979, 5.0);
 }
 
 // Une polyligne OUVERTE devient un ruban de la largeur du trait.

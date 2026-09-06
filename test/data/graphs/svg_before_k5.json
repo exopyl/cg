@@ -1,0 +1,146 @@
+{
+  "format": "cggraph",
+  "formatVersion": 1,
+  "nodes": [
+    {
+      "id": 4,
+      "type": "file.ref",
+      "version": 1,
+      "x": -220.0,
+      "y": 160.0,
+      "params": [
+        {
+          "name": "path",
+          "role": "semantic",
+          "kind": "literal",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "name",
+          "role": "nonSemantic",
+          "kind": "literal",
+          "type": "string",
+          "value": "sans nom"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "type": "svg.contours",
+      "version": 1,
+      "x": 40.0,
+      "y": 160.0,
+      "params": [
+        {
+          "name": "flattenTol",
+          "role": "semantic",
+          "kind": "literal",
+          "type": "float",
+          "value": 0.005
+        },
+        {
+          "name": "centerAndFit",
+          "role": "semantic",
+          "kind": "literal",
+          "type": "bool",
+          "value": true
+        },
+        {
+          "name": "invertY",
+          "role": "semantic",
+          "kind": "literal",
+          "type": "bool",
+          "value": true
+        },
+        {
+          "name": "strokeToVolume",
+          "role": "semantic",
+          "kind": "literal",
+          "type": "bool",
+          "value": true
+        },
+        {
+          "name": "strokeScale",
+          "role": "semantic",
+          "kind": "literal",
+          "type": "float",
+          "value": 1.0
+        },
+        {
+          "name": "strokeWidthFallback",
+          "role": "semantic",
+          "kind": "literal",
+          "type": "float",
+          "value": 1.0
+        },
+        {
+          "name": "fitSize",
+          "role": "semantic",
+          "kind": "literal",
+          "type": "float",
+          "value": 100.0
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "shape.extrude",
+      "version": 1,
+      "x": 300.0,
+      "y": 160.0,
+      "params": [
+        {
+          "name": "depth",
+          "role": "semantic",
+          "kind": "literal",
+          "type": "float",
+          "value": 3.0
+        },
+        {
+          "name": "zBottom",
+          "role": "semantic",
+          "kind": "literal",
+          "type": "float",
+          "value": 0.0
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "mesh.color",
+      "version": 1,
+      "x": 560.0,
+      "y": 160.0,
+      "params": [
+        {
+          "name": "color",
+          "role": "semantic",
+          "kind": "literal",
+          "type": "string",
+          "value": "#b4bec8"
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from": 4,
+      "fromPort": 0,
+      "to": 1,
+      "toPort": 0
+    },
+    {
+      "from": 1,
+      "fromPort": 0,
+      "to": 2,
+      "toPort": 0
+    },
+    {
+      "from": 2,
+      "fromPort": 0,
+      "to": 3,
+      "toPort": 0
+    }
+  ]
+}

@@ -149,6 +149,11 @@ button:disabled { opacity: .5; cursor: default; }
 /* ---- widgets de paramètres ---- */
 .param { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
 .param:last-child { margin-bottom: 2px; }
+/* Reglage qu'un resultat rend inoperant (template.js, `disableWhen`) : grise et
+   inerte, mais TOUJOURS VISIBLE -- le masquer laisserait croire qu'il n'existe
+   pas. Sa raison est dans l'infobulle du libelle. */
+.param.off { opacity: .45; }
+.param.off input, .param.off select, .param.off textarea { cursor: default; }
 .param .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .param .row label { font-size: 12.5px; color: var(--fg); }
 .param .name { font-size: 13px; }

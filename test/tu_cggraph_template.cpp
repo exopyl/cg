@@ -12,6 +12,7 @@
 #include "../src/cggraph/core/serialize.h"
 #include "../src/cggraph/nodes/catalog_factory.h"
 #include "../src/cggraph/nodes/io/file_ref.h"
+#include "../src/cggraph/nodes/mesh/color.h"
 #include "../src/cggraph/nodes/node_support.h"
 #include "../src/cggraph/nodes/value_types.h"
 #include "../src/cgmesh/mesh.h"
@@ -97,6 +98,7 @@ std::string ExtractObject (const std::string &json, const std::string &key)
 }
 
 const char *kText3d = "./test/data/templates/text3d.json";
+const char *kSvg    = "./test/data/templates/svg.json";
 const char *kFont   = "./test/data/fonts/DejaVuSans.ttf";
 
 // TOUS les gabarits livres. Enumeres ici et non decouverts par balayage de
@@ -251,6 +253,84 @@ TEST (TEST_cggraph_template, every_exposed_parameter_of_the_text3d_template_exis
 	// mentionner.
 	EXPECT_EQ (contours->GetParams ().Find ("unionOverlaps"), nullptr);
 	EXPECT_EQ (extrude->GetParams ().Find ("unionOverlaps"), nullptr);
+}
+
+
+// ---------------------------------------------------------------------------
+//  Le gabarit SVG -- la chaine coloree, et le grisage qu'elle commande
+// ---------------------------------------------------------------------------
+
+TEST (TEST_cggraph_template, the_svg_template_evaluates_to_a_painted_mesh)
+{
+	// Ce cas evalue le gabarit LIVRE, et non une chaine remontee a la main :
+	// c'est la seule facon de prendre en defaut un `output` qui designerait le
+	// mauvais noeud, ou un lien pose entre les mauvais ports.
+	//
+	// Il tient aussi la moitie verifiable du quatrieme critere de K5 : le
+	// selecteur « Couleur de la piece » se grise sur `paintedFaces == 0`, une
+	// mesure publiee par mesh.color. Le grisage lui-meme est du DOM ; le chiffre
+	// qui le commande est ici.
+	const std::string tpl = ReadTextFile (kSvg);
+	ASSERT_FALSE (tpl.empty ()) << kSvg << " introuvable";
+	const std::string document = ExtractObject (tpl, "graph");
+	ASSERT_FALSE (document.empty ());
+
+	Graph graph;
+	const CatalogFactory factory;
+	ASSERT_TRUE (LoadGraph (document, factory, graph).IsOk ());
+	EXPECT_EQ (graph.GetNodeCount (), 3u);
+
+	FileRefNode *source = nullptr;
+	for (NodeId id = 1; id <= 8 && source == nullptr; ++id)
+		source = dynamic_cast<FileRefNode *> (graph.FindNode (id));
+	ASSERT_NE (source, nullptr) << "le gabarit n'a pas de noeud file.ref";
+	source->SetPath ("./test/data/svg/rose.svg");
+
+	// Les DEUX reglages de la chaine coloree sont sur le MEME noeud, et c'est ce
+	// que la migration devait obtenir : `depth` a quitte shape.extrude, qui n'est
+	// plus dans ce document.
+	const Node *svg = graph.FindNode (1);
+	ASSERT_NE (svg, nullptr);
+	EXPECT_EQ (svg->GetDesc ().typeName, "svg.extrude.colored");
+	const char *onSvg[] = { "flattenTol", "centerAndFit", "invertY", "strokeToVolume",
+	                        "strokeScale", "strokeWidthFallback", "strokeOnFilledShapes",
+	                        "minStrokeWorldWidth", "strokeUsesStrokeColor",
+	                        "useSvgColors", "fitSize", "depth" };
+	for (const char *name : onSvg)
+	{
+		const ParamEntry *entry = svg->GetParams ().FindEntry (name);
+		ASSERT_NE (entry, nullptr) << "le gabarit expose \"" << name
+		                           << "\", que svg.extrude.colored n'a pas";
+		EXPECT_EQ (entry->visibility, ParamVisibility::Public) << name;
+	}
+
+	Evaluator evaluator (graph);
+	EvalContext ctx;
+	ValueList outputs;
+	// Le noeud de sortie est mesh.color -- id 3, ce que la cle "output" annonce.
+	ASSERT_EQ (evaluator.Evaluate (3, outputs, ctx).status, EvalStatus::Ok);
+	ASSERT_FALSE (outputs.empty ());
+	const Mesh *mesh = outputs[0].Get<Mesh> (Types ().mesh);
+	ASSERT_NE (mesh, nullptr);
+	EXPECT_GT (mesh->GetNFaces (), 0u);
+
+	// Le gabarit livre `useSvgColors` a `true` : le dessin porte donc ses
+	// couleurs, et il ne reste RIEN a peindre.
+	const ColorMeshNode *color = dynamic_cast<const ColorMeshNode *> (graph.FindNode (3));
+	ASSERT_NE (color, nullptr);
+	EXPECT_EQ (color->GetPaintedFaces (), 0u);
+	EXPECT_EQ (color->GetKeptFaces (), mesh->GetNFaces ());
+	EXPECT_GT (mesh->GetNMaterials (), 1u);
+
+	// Bascule a `false` : la page retrouve le rendu d'avant, mesh.color peint
+	// tout. Les deux moities du meme reglage, sur le gabarit livre.
+	graph.FindNode (1)->GetParams ().SetBool ("useSvgColors", false);
+	ValueList plain;
+	ASSERT_EQ (evaluator.Evaluate (3, plain, ctx).status, EvalStatus::Ok);
+	const Mesh *flat = plain[0].Get<Mesh> (Types ().mesh);
+	ASSERT_NE (flat, nullptr);
+	EXPECT_EQ (color->GetPaintedFaces (), flat->GetNFaces ());
+	EXPECT_EQ (flat->GetNMaterials (), 1u);
 }
 
 

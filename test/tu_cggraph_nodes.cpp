@@ -237,7 +237,11 @@ TEST (TEST_cggraph_nodes_catalog, the_native_only_entries_are_named_one_by_one)
 		"text.font.load", "text.contours",
 		// CONTOUR 2D -- les deux moities de l'ancien text.extrude, plus le
 		// producteur SVG qui partage desormais l'extrudeur.
-		"svg.contours", "shape.extrude",
+		"svg.contours",
+		// LE CHEMIN COLORE, portable au meme titre : il n'appelle
+		// qu'import_svg.cpp, deja dans la liste EMSCRIPTEN -- c'est meme la page
+		// web qui en est la raison d'etre.
+		"svg.extrude.colored", "shape.extrude",
 		// ARETE PROFILEE -- portable : extrude_profiled.cpp est dans la liste
 		// EMSCRIPTEN, et il n'appelle que Clipper2 et le tessellateur.
 		"shape.extrude.profiled",
@@ -307,8 +311,12 @@ TEST (TEST_cggraph_nodes_catalog, the_native_only_entries_are_named_one_by_one)
 	//
 	// La FIXATION MURALE en ajoute un dernier, portable lui aussi : elle
 	// n'appelle que contour_ops et extrude_contours, tous deux dans la liste.
-	EXPECT_EQ (portable.size (), 62u);
-	EXPECT_EQ (Catalog ().size (), 69u);
+	//
+	// Le CHEMIN COLORE en ajoute un dernier : svg.extrude.colored, monolithique
+	// la ou svg.contours + shape.extrude sont deux etages. Les deux voies
+	// coexistent -- retirer la premiere casserait les documents enregistres.
+	EXPECT_EQ (portable.size (), 63u);
+	EXPECT_EQ (Catalog ().size (), 70u);
 }
 
 TEST (TEST_cggraph_nodes_catalog, every_entry_either_carries_a_caveat_or_declares_it_has_none)

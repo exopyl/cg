@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Couverture du test de NSVG_FLAGS_VISIBLE (import_svg.cpp).
+
+  Le carre VISIBLE occupe exactement l'emprise du carre de square.svg. Les deux
+  formes masquees debordent de cette emprise : si l'import les extrudait, le
+  recentrage-ajustement global changerait l'echelle du carre visible, et le
+  resultat cesserait de coincider avec celui de square.svg. La fixture est donc
+  falsifiable par la geometrie, pas seulement par un comptage.
+
+  nanosvg n'honore que `display:none` -- sous forme d'attribut ou de style ;
+  `visibility:hidden` n'est pas lu (nanosvg.h:1819-1822).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <rect x="20" y="20" width="60" height="60" fill="#888"/>
+  <rect x="0" y="0" width="10" height="10" fill="#f00" display="none"/>
+  <rect x="90" y="90" width="10" height="10" fill="#0f0" style="display:none"/>
+</svg>

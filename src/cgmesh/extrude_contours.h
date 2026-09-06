@@ -78,8 +78,15 @@ public:
 	// Tessellate `contours` and append caps (+ walls) between opt.zBottom and
 	// opt.zTop. Returns false when nothing could be emitted (fewer than three
 	// points, tessellation failure).
+	//
+	// `firstFace` / `faceCount` rendent la plage de faces emise par CET appel,
+	// dans la numerotation du Mesh que Build() rendra : Build ne renumerote que
+	// les sommets, les faces gardent leur ordre et leur nombre. Sur un echec la
+	// plage est vide. Nul = l'appelant ne la demande pas.
 	bool Append (const std::vector<ExtrudeContour>& contours,
-		     const ExtrudeAppendOptions& opt);
+		     const ExtrudeAppendOptions& opt,
+		     unsigned int* firstFace = nullptr,
+		     unsigned int* faceCount = nullptr);
 
 	bool Empty (void) const { return m_faces.empty(); }
 	unsigned int GetNVertices (void) const { return (unsigned int)(m_verts.size() / 3); }

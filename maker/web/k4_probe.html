@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>K4 — instrument de mesure (WebAssembly)</title>
+<style>
+  body { font: 13px/1.45 Consolas, monospace; margin: 1.5rem; background: #14161a; color: #d8dee9; }
+  h1 { font-size: 15px; color: #88c0d0; }
+  p  { max-width: 60rem; color: #9aa4b2; }
+  pre { white-space: pre; background: #1b1f26; padding: 1rem; border: 1px solid #2b323c; }
+</style>
+</head>
+<body>
+<h1>K4 — instrument de mesure, jalon décisionnel</h1>
+<p>
+  Page jetable. Elle ne construit pas la fonctionnalité : elle appelle en WebAssembly les mêmes
+  fonctions de <code>cgmesh</code> que le nœud <code>svg.extrude.colored</code> appellera, avec les
+  mêmes options (D7 + M2a), et publie les trois postes du chronométrage. Elle mesure le
+  <strong>calcul</strong> ; ni le transport de la charge utile vers three.js, ni le rendu.
+  Le calcul tourne sur le <strong>thread UI</strong>, comme les pages gabarit.
+  À supprimer une fois K4 clos.
+</p>
+<pre id="out">démarrage…</pre>
+<script>
+  // Noms prefixes : le JS genere par Emscripten est charge dans la MEME portee
+  // globale et y declare ses propres `out` et `err`.
+  const k4out = document.getElementById('out');
+  k4out.textContent = '';
+  var Module = {
+    print:      (t) => { k4out.textContent += t + '\n'; },
+    printErr:   (t) => { k4out.textContent += '[err] ' + t + '\n'; },
+    // `postRun` s'execute apres le retour de main(), donc apres la derniere
+    // ligne publiee. Le POST permet de collecter le resultat sans lire l'ecran ;
+    // il echoue silencieusement si la page est ouverte a la main sur un serveur
+    // qui ne l'attend pas, ce qui est le cas nominal.
+    postRun: [() => {
+      document.title = 'K4 — terminé';
+      fetch('/k4', { method: 'POST', body: k4out.textContent }).catch(() => {});
+    }]
+  };
+</script>
+<script src="k4_probe.js"></script>
+</body>
+</html>
