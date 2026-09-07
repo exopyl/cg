@@ -1,6 +1,11 @@
 #pragma once
 
-#include "cgmesh.h"
+// Ce que ce fichier utilise, et non le parapluie.
+//
+// Il incluait `cgmesh.h`, lequel l'inclut en retour : un CYCLE, que `#pragma
+// once` rend silencieux mais qui impose a tout consommateur de ce fichier les 55
+// inclusions du parapluie -- zlib, l'audio, l'ONNX comprises.
+#include "mesh.h"
 
 #include "bundle_camera.h"
 

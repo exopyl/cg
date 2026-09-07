@@ -13,6 +13,19 @@ file(GLOB HEADER_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/*.h)
 
 add_executable(${PROJECT_NAME} ${HEADER_FILES} ${SRC_FILES})
 
+# zlib pour le SEUL test qui inclut nbt.h en direct.
+#
+# ${ZLIB_DIR} est PRIVATE sur la cible cgmesh : nbt.h inclut zlib.h, et l'exposer
+# en PUBLIC mettait les en-tetes zlib sur le chemin d'inclusion des 43
+# consommateurs du parapluie hors module. tu_cgmesh_nbt.cpp est le seul a en avoir
+# reellement besoin, il le demande donc pour lui-meme.
+if (ENABLE_ZLIB AND WIN32)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${ZLIB_DIR})
+elseif (ENABLE_ZLIB)
+    find_package(ZLIB REQUIRED)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${ZLIB_INCLUDE_DIRS})
+endif ()
+
 # ---------------------------------------------------------------------------
 # Commande de copie de repertoire
 # ---------------------------------------------------------------------------

@@ -145,6 +145,30 @@ target_include_directories(cgmesh PUBLIC ${PROJECT_SOURCE_DIR})
 target_include_directories(cgmesh SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../extern)
 target_link_libraries(cgmesh cgimg)
 
+# ---------------------------------------------------------------------------
+#  EN-TETES PRECOMPILES
+# ---------------------------------------------------------------------------
+# 160 unites de traduction, dont 96 atteignent mesh.h -- lui-meme le plus gros
+# poste de front-end du module. Chacune repayait l'analyse des memes en-tetes.
+#
+# La liste est volontairement COURTE : les quatre en-tetes standard omnipresents,
+# plus les deux en-tetes du depot qui dominent. Un PCH qui embarque tout devient
+# une dependance de tout : la moindre retouche de n'importe quel en-tete inclus
+# invalide le PCH et reconstruit les 160 unites. Ici, seuls cgmath.h et mesh.h
+# ont ce pouvoir -- et ils l'avaient deja, puisque presque tout les inclut.
+#
+# COMPILE_LANGUAGE:CXX est indispensable, pas decoratif : cette cible compile
+# aussi du C (glutess, clipper2, zlib vendorise). Sans le garde, CMake pousserait
+# des en-tetes C++ dans cl.exe /TC et le build casserait sur chacun d'eux.
+target_precompile_headers(cgmesh PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:<vector$<ANGLE-R>>
+    $<$<COMPILE_LANGUAGE:CXX>:<string$<ANGLE-R>>
+    $<$<COMPILE_LANGUAGE:CXX>:<memory$<ANGLE-R>>
+    $<$<COMPILE_LANGUAGE:CXX>:<optional$<ANGLE-R>>
+    $<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/../cgmath/cgmath.h>
+    $<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/mesh.h>
+)
+
 # tinygltf : options de compilation, en PUBLIC et non par fichier.
 #
 # Elles conditionnent l'initialiseur par defaut de membres de tinygltf::TinyGLTF
@@ -366,9 +390,12 @@ if (ENABLE_ZLIB)
         file(GLOB ZLIB_SRC_FILES CONFIGURE_DEPENDS ${ZLIB_DIR}/*.c)
         target_sources(cgmesh PRIVATE ${ZLIB_SRC_FILES})
         source_group("zlib" FILES ${ZLIB_SRC_FILES})
-        # PUBLIC : nbt.h does #include "zlib.h", so consumers of cgmesh.h need the
-        # zlib headers on their include path too.
-        target_include_directories(cgmesh PUBLIC ${ZLIB_DIR})
+        # PRIVATE. C'etait PUBLIC parce que cgmesh.h tirait nbt.h, lequel inclut
+        # zlib.h : les en-tetes zlib se retrouvaient sur le chemin d'inclusion des
+        # 43 consommateurs du parapluie hors module. nbt.h est sorti du parapluie,
+        # et les trois unites qui en ont besoin (nbt.cpp, voxels_import_nbt.cpp,
+        # test/tu_cgmesh_nbt.cpp) l'incluent en direct.
+        target_include_directories(cgmesh PRIVATE ${ZLIB_DIR})
         if (MSVC)
             # zlib uses fopen/strerror/etc.; silence the MSVC CRT deprecation noise.
             set_source_files_properties(${ZLIB_SRC_FILES} PROPERTIES
@@ -384,7 +411,8 @@ if (ENABLE_ZLIB)
         # entirely and matches how this repo already consumes OCCT on Linux.
         # Requires the zlib1g-dev package on the build host (see build.yml).
         find_package(ZLIB REQUIRED)
-        target_include_directories(cgmesh PUBLIC ${ZLIB_INCLUDE_DIRS})
+        # PRIVATE, meme raison que la branche Windows ci-dessus.
+        target_include_directories(cgmesh PRIVATE ${ZLIB_INCLUDE_DIRS})
         target_link_libraries(cgmesh ${ZLIB_LIBRARIES})
     endif()
 endif()

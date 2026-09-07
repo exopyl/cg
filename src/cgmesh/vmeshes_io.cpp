@@ -724,13 +724,54 @@ bool VMeshesIO::import_3ds(VMeshes& vm, const char* filename)
 			}
 		}
 
+		// INDICES VALIDES CONTRE LE NOMBRE DE SOMMETS.
+		//
+		// `vertIndex` vient du fichier 3DS sans aucun controle (un `unsigned short`
+		// lu tel quel, cf. ReadVertexIndices_3DS) : rien ne garantit qu'il designe
+		// un sommet de CET objet. Un indice hors bornes traverse ensuite tout le
+		// module -- ComputeNormals ecrit dans m_vertexNormals[3*k] et incremente
+		// nfaces[k] sans borne, donc une ecriture hors bornes a offset choisi par
+		// le fichier.
+		//
+		// Le lecteur OBJ valide deja de cette maniere (mesh_io_obj.cpp) ; la faille
+		// etait propre au chemin 3DS. Une face fautive est ECARTEE et signalee, et
+		// non rabattue sur le sommet 0 : rabattre fabriquerait une face degeneree
+		// silencieuse, que le diagnostic topologique attribuerait au maillage.
+		//
+		// DEUX PASSES, et non un filtrage en place : SetNFaces DETRUIT les faces
+		// existantes pour en creer des neuves (mesh.cpp), donc le retaillage doit
+		// preceder le remplissage.
+		auto faceIsValid = [&](const t3DSFace& f) {
+			for (unsigned int j = 0; j < 3; j++)
+				if (f.vertIndex[j] < 0 || (unsigned int) f.vertIndex[j] >= nVertices)
+					return false;
+			return true;
+		};
+
+		unsigned int nValid = 0;
+		for (unsigned int i = 0; i < nFaces; i++)
+			if (faceIsValid (object.pFaces[i]))
+				++nValid;
+
+		if (nValid != nFaces)
+		{
+			fprintf (stderr, "import_3ds: %u face(s) sur %u ecartee(s), indice de "
+			                 "sommet hors bornes (nv=%u)\n",
+			         nFaces - nValid, nFaces, nVertices);
+			pMesh->SetNFaces (nValid);
+		}
+
+		unsigned int nKept = 0;
 		for (unsigned int i = 0; i < nFaces; i++)
 		{
-			auto face = object.pFaces[i];
+			const t3DSFace& face = object.pFaces[i];
+			if (!faceIsValid (face))
+				continue;
 
-			pMesh->FaceAt (i)->SetNVertices(3);
+			pMesh->FaceAt (nKept)->SetNVertices(3);
 			for (unsigned int j = 0; j < 3; j++)
-				pMesh->FaceAt (i)->SetVertex(j, face.vertIndex[j]);
+				pMesh->FaceAt (nKept)->SetVertex(j, face.vertIndex[j]);
+			++nKept;
 		}
 
 		pMesh->SetName (std::string(object.strName));
@@ -1000,6 +1041,225 @@ bool CopyFloatAccessorVec2(std::vector<float>& dst, const tinygltf::Model& model
     }
     return true;
 }
+
+// ---------------------------------------------------------------------------
+//  Hierarchie de noeuds glTF -> repere du depot
+// ---------------------------------------------------------------------------
+// L'import lisait model.meshes en ignorant model.nodes, donc TOUTE
+// transformation de scene. Deux consequences, silencieuses toutes les deux :
+//
+//   1. l'echelle et l'orientation portees par les noeuds etaient perdues. Le
+//      Duck.glb de Khronos porte une echelle de 0,01 sur son noeud racine : il
+//      arrivait 100 fois trop grand ;
+//   2. la convention glTF elle-meme etait ignoree. glTF est Y-up et son unite de
+//      distance est le METRE ; le depot travaille en Z-up et en MILLIMETRES.
+//      L'export (mesh_io_gltf.cpp) porte cette conversion sur le noeud -- echelle
+//      0,001 et -90 degres autour de X -- mais l'import n'en faisait pas
+//      l'inverse, si bien qu'un aller-retour ne redonnait pas le modele de depart.
+//
+// On parcourt donc la scene, on compose les matrices de la racine jusqu'a chaque
+// noeud portant un maillage, et l'on applique par-dessus la conversion inverse de
+// celle de l'export :
+//
+//     depot = echelle(1000) . Rx(+90) . <chaine de noeuds> . sommet
+//
+// Rx(+90) envoie (x,y,z) sur (x,-z,y) : le +Y de glTF devient le +Z du depot.
+//
+// Un maillage reference par PLUSIEURS noeuds est instancie autant de fois, ce qui
+// est la semantique du format -- c'est ainsi qu'un glTF exprime la repetition.
+
+// Matrice 4x4 en COLONNES D'ABORD, comme glTF et OpenGL : m[4*c + r].
+struct GltfMat4
+{
+    double m[16];
+};
+
+GltfMat4 Mat4Identity()
+{
+    GltfMat4 r = {};
+    r.m[0] = r.m[5] = r.m[10] = r.m[15] = 1.0;
+    return r;
+}
+
+// a . b, au sens ou le produit applique b PUIS a.
+GltfMat4 Mat4Multiply(const GltfMat4& a, const GltfMat4& b)
+{
+    GltfMat4 r = {};
+    for (int c = 0; c < 4; ++c)
+        for (int row = 0; row < 4; ++row)
+        {
+            double s = 0.0;
+            for (int k = 0; k < 4; ++k)
+                s += a.m[4 * k + row] * b.m[4 * c + k];
+            r.m[4 * c + row] = s;
+        }
+    return r;
+}
+
+// Transformation LOCALE d'un noeud. La specification interdit de fournir a la
+// fois `matrix` et un triplet TRS ; `matrix` l'emporte quand elle est presente.
+GltfMat4 Mat4FromNode(const tinygltf::Node& node)
+{
+    if (node.matrix.size() == 16)
+    {
+        GltfMat4 r;
+        for (int i = 0; i < 16; ++i)
+            r.m[i] = node.matrix[i];
+        return r;
+    }
+
+    const double tx = (node.translation.size() == 3) ? node.translation[0] : 0.0;
+    const double ty = (node.translation.size() == 3) ? node.translation[1] : 0.0;
+    const double tz = (node.translation.size() == 3) ? node.translation[2] : 0.0;
+    const double sx = (node.scale.size() == 3) ? node.scale[0] : 1.0;
+    const double sy = (node.scale.size() == 3) ? node.scale[1] : 1.0;
+    const double sz = (node.scale.size() == 3) ? node.scale[2] : 1.0;
+    // Quaternion glTF : (x, y, z, w), dans cet ordre.
+    const double qx = (node.rotation.size() == 4) ? node.rotation[0] : 0.0;
+    const double qy = (node.rotation.size() == 4) ? node.rotation[1] : 0.0;
+    const double qz = (node.rotation.size() == 4) ? node.rotation[2] : 0.0;
+    const double qw = (node.rotation.size() == 4) ? node.rotation[3] : 1.0;
+
+    // Bloc rotation du quaternion, puis mise a l'echelle de chaque COLONNE :
+    // c'est l'ordre T . R . S impose par la specification.
+    const double rot[9] = {
+        1.0 - 2.0 * (qy * qy + qz * qz),  2.0 * (qx * qy + qz * qw),        2.0 * (qx * qz - qy * qw),
+        2.0 * (qx * qy - qz * qw),        1.0 - 2.0 * (qx * qx + qz * qz),  2.0 * (qy * qz + qx * qw),
+        2.0 * (qx * qz + qy * qw),        2.0 * (qy * qz - qx * qw),        1.0 - 2.0 * (qx * qx + qy * qy)
+    };
+
+    GltfMat4 r = Mat4Identity();
+    const double s[3] = { sx, sy, sz };
+    for (int c = 0; c < 3; ++c)
+        for (int row = 0; row < 3; ++row)
+            r.m[4 * c + row] = rot[3 * c + row] * s[c];
+    r.m[12] = tx;
+    r.m[13] = ty;
+    r.m[14] = tz;
+    return r;
+}
+
+// Conversion glTF -> depot : echelle(1000) . Rx(+90). Exactement l'inverse de ce
+// que l'export ecrit sur son noeud (cf. mesh_io_gltf.cpp).
+GltfMat4 Mat4GltfToRepo()
+{
+    // Rx(+90) : (x,y,z) -> (x,-z,y). Colonnes de la matrice = images des axes.
+    GltfMat4 r = {};
+    const double k = 1000.0;      // metres -> millimetres
+    r.m[0]  = k;                  // X -> X
+    r.m[6]  = k;                  // Y -> Z
+    r.m[9]  = -k;                 // Z -> -Y
+    r.m[15] = 1.0;
+    return r;
+}
+
+void Mat4TransformPoint(const GltfMat4& t, const float in[3], float out[3])
+{
+    for (int row = 0; row < 3; ++row)
+        out[row] = static_cast<float>(t.m[row]      * in[0] +
+                                      t.m[4 + row]  * in[1] +
+                                      t.m[8 + row]  * in[2] +
+                                      t.m[12 + row]);
+}
+
+// Bloc 3x3 destine aux NORMALES : l'inverse TRANSPOSEE, et non la matrice
+// elle-meme. Sous une echelle non uniforme, une normale transformee comme un
+// point cesse d'etre perpendiculaire a sa surface et l'eclairage part de travers.
+// Rendu en n[3*row + col], de sorte que sortie[row] = somme sur col.
+//
+// Bloc singulier (une echelle nulle sur un axe, ce qui aplatit le maillage) :
+// on rend l'identite. Une normale non tournee reste exploitable, une normale
+// nulle noircit la surface sans rien dire.
+void Mat3InverseTranspose(const GltfMat4& t, double n[9])
+{
+    const double a[9] = {
+        t.m[0], t.m[4], t.m[8],
+        t.m[1], t.m[5], t.m[9],
+        t.m[2], t.m[6], t.m[10]
+    };  // a[3*row + col]
+
+    const double cof[9] = {
+        a[4] * a[8] - a[5] * a[7],   a[5] * a[6] - a[3] * a[8],   a[3] * a[7] - a[4] * a[6],
+        a[2] * a[7] - a[1] * a[8],   a[0] * a[8] - a[2] * a[6],   a[1] * a[6] - a[0] * a[7],
+        a[1] * a[5] - a[2] * a[4],   a[2] * a[3] - a[0] * a[5],   a[0] * a[4] - a[1] * a[3]
+    };  // cof[3*row + col] = cofacteur de a(row, col)
+
+    const double det = a[0] * cof[0] + a[1] * cof[1] + a[2] * cof[2];
+    if (std::fabs(det) < 1e-20)
+    {
+        for (int i = 0; i < 9; ++i)
+            n[i] = (i % 4 == 0) ? 1.0 : 0.0;
+        return;
+    }
+    // (A^-1)^T [row][col] = cofacteur(row, col) / det.
+    for (int i = 0; i < 9; ++i)
+        n[i] = cof[i] / det;
+}
+
+double Mat3Determinant(const GltfMat4& t)
+{
+    return t.m[0] * (t.m[5] * t.m[10] - t.m[9] * t.m[6])
+         - t.m[4] * (t.m[1] * t.m[10] - t.m[9] * t.m[2])
+         + t.m[8] * (t.m[1] * t.m[6]  - t.m[5] * t.m[2]);
+}
+
+// Un maillage de la scene, avec sa transformation vers le repere du depot.
+struct GltfInstance
+{
+    int      mesh;
+    GltfMat4 xform;
+};
+
+void CollectGltfInstances(const tinygltf::Model& model, int nodeIndex,
+                          const GltfMat4& parent, int depth,
+                          std::vector<GltfInstance>& out)
+{
+    // La specification interdit les cycles dans la hierarchie ; un fichier casse
+    // ou malveillant n'en tient pas compte, et cette recursion n'aurait alors
+    // rien pour s'arreter. La borne de profondeur est ce garde-fou.
+    if (depth > 64)
+        return;
+    if (nodeIndex < 0 || nodeIndex >= static_cast<int>(model.nodes.size()))
+        return;
+
+    const tinygltf::Node& node = model.nodes[nodeIndex];
+    const GltfMat4 world = Mat4Multiply(parent, Mat4FromNode(node));
+
+    if (node.mesh >= 0 && node.mesh < static_cast<int>(model.meshes.size()))
+        out.push_back(GltfInstance{ node.mesh, world });
+
+    for (const int child : node.children)
+        CollectGltfInstances(model, child, world, depth + 1, out);
+}
+
+// Les maillages a construire, dans l'ordre de la scene.
+//
+// La scene retenue est celle que le fichier designe (defaultScene), a defaut la
+// premiere. Les noeuds hors scene sont ignores, ce qu'exige le format. Un fichier
+// SANS scene ni noeud exploitable retombe sur model.meshes avec la seule
+// conversion d'unite et d'axe : ce n'est pas conforme, mais c'est mieux que de
+// ne rien afficher -- et cela reste le comportement d'avant, a la conversion pres.
+std::vector<GltfInstance> GltfSceneInstances(const tinygltf::Model& model)
+{
+    const GltfMat4 toRepo = Mat4GltfToRepo();
+    std::vector<GltfInstance> out;
+
+    int sceneIndex = -1;
+    if (model.defaultScene >= 0 && model.defaultScene < static_cast<int>(model.scenes.size()))
+        sceneIndex = model.defaultScene;
+    else if (!model.scenes.empty())
+        sceneIndex = 0;
+
+    if (sceneIndex >= 0)
+        for (const int root : model.scenes[sceneIndex].nodes)
+            CollectGltfInstances(model, root, toRepo, 0, out);
+
+    if (out.empty())
+        for (size_t i = 0; i < model.meshes.size(); ++i)
+            out.push_back(GltfInstance{ static_cast<int>(i), toRepo });
+
+    return out;
+}
 }
 
 bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
@@ -1021,7 +1281,21 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
         return false;
     }
 
-    for (const auto& gltfMesh : model.meshes) {
+    // Une entree par (noeud, maillage) de la scene, chacune avec sa matrice
+    // composee -- conversion glTF -> depot comprise. Cf. GltfSceneInstances.
+    const std::vector<GltfInstance> instances = GltfSceneInstances(model);
+
+    for (const GltfInstance& instance : instances) {
+        const tinygltf::Mesh& gltfMesh = model.meshes[instance.mesh];
+
+        // Normales : inverse transposee du bloc lineaire. Determinant negatif =
+        // transformation MIROIR, qui inverse le sens de parcours des triangles ;
+        // les faces sont alors reordonnees plus bas, sans quoi le maillage sort
+        // retourne (faces arriere devant, eclairage a l'envers).
+        double normalMatrix[9];
+        Mat3InverseTranspose(instance.xform, normalMatrix);
+        const bool mirrored = (Mat3Determinant(instance.xform) < 0.0);
+
         for (const auto& primitive : gltfMesh.primitives) {
 			if (primitive.mode != 4)
 			{
@@ -1114,7 +1388,9 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
             }
 
             for (size_t i = 0; i < posAccessor.count; i++) {
-                pMesh->SetVertex(i, positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+                float p[3];
+                Mat4TransformPoint(instance.xform, &positions[i * 3], p);
+                pMesh->SetVertex(i, p[0], p[1], p[2]);
             }
 
             // Normals
@@ -1128,7 +1404,23 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
                     normAccessor.type == TINYGLTF_TYPE_VEC3 &&
                     normAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT) {
                     for (size_t i = 0; i < normAccessor.count; i++) {
-                        pMesh->SetVertexNormal ((unsigned int)i, normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]);
+                        const float* n = &normals[i * 3];
+                        double t[3];
+                        for (int row = 0; row < 3; ++row)
+                            t[row] = normalMatrix[3 * row]     * n[0] +
+                                     normalMatrix[3 * row + 1] * n[1] +
+                                     normalMatrix[3 * row + 2] * n[2];
+                        // L'echelle des noeuds (1000 rien que pour l'unite) passe
+                        // dans la normale : sans renormalisation, GL_NORMALIZE la
+                        // rattraperait au rendu, mais toute lecture directe des
+                        // normales -- courbure, export -- verrait des vecteurs de
+                        // longueur 1000.
+                        const double len = std::sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
+                        const double inv = (len > 1e-20) ? 1.0 / len : 0.0;
+                        pMesh->SetVertexNormal ((unsigned int)i,
+                                                (float)(t[0] * inv),
+                                                (float)(t[1] * inv),
+                                                (float)(t[2] * inv));
                     }
                     hasNormals = true;
                 }
@@ -1200,6 +1492,30 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
                             pMesh->FaceAt (i)->SetTexCoord(1, indices[i * 3 + 1]);
                             pMesh->FaceAt (i)->SetTexCoord(2, indices[i * 3 + 2]);
                         }
+                    }
+                }
+            }
+
+            // Transformation miroir : on rend aux triangles leur orientation en
+            // echangeant deux sommets. Fait ICI, et non aux trois endroits ou les
+            // faces sont ecrites (sans indices, indices 16 bits, indices 32 bits).
+            if (mirrored)
+            {
+                for (unsigned int i = 0; i < pMesh->GetNFaces(); ++i)
+                {
+                    auto face = pMesh->FaceAt (i);
+                    if (!face || face->GetNVertices() != 3)
+                        continue;
+                    const unsigned int v1 = face->GetVertex(1);
+                    const unsigned int v2 = face->GetVertex(2);
+                    face->SetVertex(1, v2);
+                    face->SetVertex(2, v1);
+                    if (face->UsesTextureCoordinates())
+                    {
+                        const int t1 = face->GetTexCoordIndex(1);
+                        const int t2 = face->GetTexCoordIndex(2);
+                        face->SetTexCoord(1, (unsigned int)t2);
+                        face->SetTexCoord(2, (unsigned int)t1);
                     }
                 }
             }

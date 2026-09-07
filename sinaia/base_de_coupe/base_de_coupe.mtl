@@ -1,0 +1,18 @@
+# Materiaux de la base de coupe.
+
+newmtl dessus
+Ka 1 1 1
+Kd 1 1 1
+Ks 0.05 0.05 0.05
+Ns 12
+d 1
+illum 2
+map_Kd base_de_coupe.png
+
+newmtl flancs
+Ka 0.2235 0.4941 0.3216
+Kd 0.2235 0.4941 0.3216
+Ks 0.05 0.05 0.05
+Ns 12
+d 1
+illum 2

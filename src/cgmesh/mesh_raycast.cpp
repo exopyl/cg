@@ -10,8 +10,18 @@ namespace {
 // Met a jour l'intersection la plus proche si elle est meilleure que fT.
 //
 // `tri` est passe en parametre pour que l'appelant le reutilise d'une iteration a
-// l'autre : Triangle::Init alloue une AABox, donc un new/delete par triangle et
-// par rayon. C'est le cout dominant de ce fichier.
+// l'autre, et ses sommets sont ecrits DIRECTEMENT plutot que par Triangle::Init.
+//
+// Init construit une AABox par `make_unique`, soit une allocation et une
+// liberation par triangle ET par rayon -- le cout dominant de ce fichier. Or
+// GetIntersectionWithRay (cgmath/geometry.cpp) ne lit que `m_v` : la boite
+// n'etait ni consultee ici, ni ailleurs sur ce chemin. On paie donc un tas pour
+// une donnee que personne ne regarde.
+//
+// Le motif est celui qu'Octree::Split applique deja au meme type
+// (octree.cpp:305-314), pour la meme raison et avec le meme commentaire : un
+// Triangle construit par defaut garde m_pAABox == nullptr, et remplir m_v ne le
+// cree pas.
 void TestTriangle (Triangle &tri, const Mesh &mesh,
                    unsigned int a, unsigned int b, unsigned int c,
                    const Vector3f &vOrig, const Vector3f &vDirection,
@@ -22,9 +32,9 @@ void TestTriangle (Triangle &tri, const Mesh &mesh,
 	if (mesh.GetVertex (b, vb) != 0) return;
 	if (mesh.GetVertex (c, vc) != 0) return;
 
-	tri.Init (va[0], va[1], va[2],
-	          vb[0], vb[1], vb[2],
-	          vc[0], vc[1], vc[2]);
+	tri.m_v[0].Set (va[0], va[1], va[2]);
+	tri.m_v[1].Set (vb[0], vb[1], vb[2]);
+	tri.m_v[2].Set (vc[0], vc[1], vc[2]);
 
 	float fTCurrent;
 	Vector3f vIntersectionCurrent, vNormalCurrent;

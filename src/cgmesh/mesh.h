@@ -94,6 +94,26 @@ public:
 	// aucun increment de lot : les caches comparent la revision A LA LECTURE, si
 	// bien que N increments ne declenchent pas N recalculs, et un mutateur
 	// unitaire appele seul reste couvert.
+	// HORS LIGNE, et ce n'est pas un oubli : MESURE FAITE.
+	//
+	// L'idee de rapatrier ici les cinq accesseurs triviaux de mesh.cpp
+	// (GetRevision, IncrementRevision, bbox, GetNVertices, GetNFaces) vient de
+	// debt_cgmesh.md, qui l'assortit d'une reserve : mesurer d'abord. La reserve
+	// etait justifiee -- la mesure ne montre AUCUN gain :
+	//
+	//   suite TEST_cgmesh* (760 tests), 2 a 3 executions par branche
+	//     Debug   hors ligne 121,4 s | en ligne 126,2 s  (4 % plus LENT)
+	//     Release hors ligne  27,2 s | en ligne  27,4 s  (dans le bruit)
+	//
+	// En Debug, MSVC compile avec /Od /Ob0 et n'inline rien : deplacer un corps
+	// dans l'en-tete n'y change que le nombre d'unites qui le compilent. En
+	// Release, les 43 conditions de boucle citees par la fiche existent bien, mais
+	// cette charge de travail n'est pas dominee par elles -- elle l'est par les
+	// entrees-sorties et les allocations.
+	//
+	// Conclusion : le rapatriement se paierait en recompilation de 96 unites a
+	// chaque retouche de ces corps, pour un gain non mesurable. A ne reprendre que
+	// sur une charge de travail ou ces accesseurs sont demontres chauds.
 	uint64_t GetRevision() const;
 	void IncrementRevision();
 

@@ -1,6 +1,7 @@
 #include "normals.h"
 
-#include "cgmesh.h"
+// Ce que ce fichier utilise, et non le parapluie.
+#include "mesh_half_edge.h"
 
 /**
 *

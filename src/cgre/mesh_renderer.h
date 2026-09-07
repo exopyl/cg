@@ -45,6 +45,11 @@ typedef struct rendering_properties
 	int display_warning;
 	int display_repere;
 	int display_grid;
+	// Base de coupe : le tapis quadrille de reference (cf. sinaia/CuttingMat.h).
+	// Comme display_repere et display_grid, c'est un etat de VUE parque ici, que
+	// le moteur ne lit pas -- le canvas s'en sert pour decider de dessiner ou non
+	// son widget, et non pour changer le rendu d'un maillage.
+	int display_cutting_mat;
 	int normalized;
 	float pointsize;
 	float linesize;

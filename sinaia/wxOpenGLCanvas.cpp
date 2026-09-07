@@ -280,8 +280,11 @@ void MyGLCanvas::ApplyNormalization(bool normalize)
 	{
 		// On retient la transformation avant de l appliquer : les regenerations
 		// ulterieures la rejouent a l identique au lieu de renormaliser. Meme calcul
-		// que VMeshes::Normalize -- translate(-centre) puis scale(1/plus grande
-		// dimension) -- dont on a besoin de la VALEUR, pas seulement de l effet.
+		// que VMeshes::Normalize -- translate(-centre) puis mise a l echelle pour
+		// amener la plus grande dimension a VMeshes::kNormalizedSize -- dont on a
+		// besoin de la VALEUR, pas seulement de l effet. Le facteur DOIT rester
+		// aligne sur celui de Normalize, sinon une regeneration parametrique
+		// changerait la taille du modele sous le curseur.
 		BoundingBox raw;
 		for (const auto& mesh : vm->GetMeshes())
 		{
@@ -290,7 +293,7 @@ void MyGLCanvas::ApplyNormalization(bool normalize)
 		}
 		raw.GetCenter(m_normCenter);
 		const float largest = raw.GetLargestLength();
-		m_normScale = (largest > 0.f) ? 1.f / largest : 1.f;
+		m_normScale = (largest > 0.f) ? VMeshes::kNormalizedSize / largest : 1.f;
 		m_hasNormalization = true;
 
 		vm->Normalize(); // recentre, remet a l echelle, et met a jour les bboxes
@@ -386,7 +389,67 @@ void MyGLCanvas::FrameCamera(const BoundingBox& bbox)
 	m_pTrackball->set_zoom_precision(std::max(0.5f, distance * 0.4f));
 	// Let the trackball derive near/far from the live zoom each frame so the
 	// clip planes follow the scene when zooming in/out.
+	m_sceneRadiusModel = radius;
+	UpdateSceneRadius();
+}
+
+void MyGLCanvas::UpdateSceneRadius()
+{
+	float radius = m_sceneRadiusModel;
+	if (prop.display_cutting_mat)
+		radius = std::max(radius, CuttingMat::BoundingRadius(m_cuttingMatZ));
 	m_pTrackball->set_scene_radius(radius);
+}
+
+// Signature bon marche de la scene. Tout ce qui peut deplacer le minimum Z
+// change au moins l'un des trois termes : le nombre de Model, leur visibilite,
+// la revision de geometrie de leurs maillages.
+uint64_t MyGLCanvas::SceneSignature() const
+{
+	uint64_t h = 1469598103934665603ull;   // FNV-1a 64 bits
+	auto mix = [&h](uint64_t v) { h = (h ^ v) * 1099511628211ull; };
+
+	if (!m_pVModels)
+		return h;
+
+	mix(m_pVModels->GetNModels());
+	for (const auto& mdl : m_pVModels->GetModels())
+	{
+		if (!mdl) continue;
+		mix(mdl->m_visible ? 1ull : 2ull);
+		for (const auto* mesh : mdl->m_meshes.GetMeshes())
+			if (mesh) mix(mesh->GetRevision());
+	}
+	return h;
+}
+
+void MyGLCanvas::UpdateCuttingMatLevel()
+{
+	const uint64_t sig = SceneSignature();
+	if (sig == m_matLevelSignature)
+		return;
+	m_matLevelSignature = sig;
+
+	// AggregateBBox recalcule les bboxes des maillages : c'est le calcul cher, et
+	// c'est justement pourquoi il est garde par la signature plutot que refait a
+	// chaque image.
+	float z = 0.f;
+	if (m_pVModels)
+	{
+		const BoundingBox bb = m_pVModels->AggregateBBox(true);
+		if (!bb.IsEmpty())
+		{
+			float mn[3], mx[3];
+			bb.GetMinMax(mn, mx);
+			z = mn[2];
+		}
+	}
+	if (z == m_cuttingMatZ)
+		return;
+
+	m_cuttingMatZ = z;
+	// Le tapis a change de cote : les plans de coupe doivent le couvrir la.
+	UpdateSceneRadius();
 }
 
 namespace {
@@ -805,6 +868,14 @@ void MyGLCanvas::DrawGL()
 		repere_draw ();
 	if (prop.display_grid)
 		draw_grid();
+	// AVANT les modeles : le tapis est un fond. Le premier appel lit l'asset,
+	// d'ou l'appel ici et non au chargement d'un modele -- le televersement des
+	// textures exige un contexte GL courant, ce qui n'est garanti qu'a la peinture.
+	if (prop.display_cutting_mat)
+	{
+		UpdateCuttingMatLevel();
+		m_cuttingMat.Draw(prop.light != 0, m_cuttingMatZ);
+	}
 	// Parcourt les fichiers (Model) VISIBLES, puis leurs maillages. Le renderer
 	// indexe par Mesh* (GetMeshId), donc rien d'autre à gérer côté ids.
 	if (m_pVModels)
@@ -1028,9 +1099,22 @@ bool MyGLCanvas::SaveScreenshot(const wxString& path)
 	GetClientSize(&w, &h);
 	if (w <= 0 || h <= 0) return false;
 
+	// ON REDESSINE, puis on lit le tampon ARRIERE -- et non le tampon avant.
+	//
+	// Lire GL_FRONT rend le contenu de la FENETRE telle qu'elle est a l'ecran :
+	// occultee par une autre fenetre, ou simplement pas encore repeinte, elle
+	// donne une image noire, sans erreur ni indice. C'est exactement le piege
+	// pour l'usage principal de cette fonction -- la console distante, qui pilote
+	// sinaia depuis un outil externe et n'a aucune raison d'avoir la fenetre au
+	// premier plan. Un rendu a la demande dans le tampon arriere, jamais presente,
+	// ne depend plus de ce qui recouvre la fenetre.
+	ResetProjectionMode();
+	DrawGL();
+	glFinish();
+
 	std::vector<unsigned char> pixels(static_cast<size_t>(w) * h * 3);
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-	glReadBuffer(GL_FRONT);
+	glReadBuffer(GL_BACK);
 	glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
 
 	// glReadPixels returns rows bottom-up; PNG wants top-down — flip Y.
@@ -1396,6 +1480,49 @@ void MyGLCanvas::ChangeGrid(void)
 bool MyGLCanvas::GetGrid(void)
 {
 	return prop.display_grid;
+}
+
+float MyGLCanvas::MoveModelToZeroLevel(Model* mdl)
+{
+	if (!mdl) return 0.f;
+
+	const BoundingBox& bb = mdl->ComputeBBox();
+	if (bb.IsEmpty()) return 0.f;
+
+	float mn[3], mx[3];
+	bb.GetMinMax(mn, mx);
+	const float dz = -mn[2];
+	if (dz == 0.f) return 0.f;
+
+	for (auto* mesh : mdl->m_meshes.GetMeshes())
+		if (mesh) mesh->translate(0.f, 0.f, dz);   // incremente la revision -> VBO reteleverse
+
+	mdl->ComputeBBox();
+	// Le BVH de picking indexe les POSITIONS et suppose la geometrie statique
+	// (cf. Model::BuildBVH) : sans reconstruction il designerait l'ancien
+	// emplacement, et le survol repondrait a cote du modele.
+	mdl->BuildBVH();
+
+	Refresh(false);
+	return dz;
+}
+
+void MyGLCanvas::ChangeCuttingMat(void)
+{
+	prop.display_cutting_mat = !prop.display_cutting_mat;
+	UpdateSceneRadius();   // le tapis entre ou sort de la plage de profondeur
+	Refresh(false);
+}
+
+bool MyGLCanvas::GetCuttingMat(void)
+{
+	return prop.display_cutting_mat;
+}
+
+float MyGLCanvas::GetCuttingMatLevel(void)
+{
+	UpdateCuttingMatLevel();
+	return m_cuttingMatZ;
 }
 
 void MyGLCanvas::ChangeBoundingBox (void)

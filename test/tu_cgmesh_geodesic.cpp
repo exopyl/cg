@@ -89,6 +89,31 @@ TEST(TEST_cgmesh_geodesic, geodesic_no_target)
 	free(distances);
 }
 
+// ---------------------------------------------------------------------------
+//  Le test « avec cible » n'est PAS un test : c'est une ebauche
+// ---------------------------------------------------------------------------
+// Le bloc `#if 0` ci-dessous portait un TEST() invisible -- ni compte, ni
+// couverture, ni colonne DISABLED. La recommandation de `debt_cgmesh.md` (§ 4)
+// est de convertir tout `#if 0` de test en `DISABLED_` motive, ce qui a ete fait
+// pour tu_cgmesh_set_lines.cpp.
+//
+// ICI, C'EST IMPOSSIBLE EN L'ETAT, et je l'ai verifie plutot que suppose : le
+// bloc ne COMPILE pas. Il appelle `algorithm`, `source` et `all_sources`, trois
+// identificateurs qui n'existent nulle part, et construit un
+// `geodesic::SurfacePoint` avec une signature qui n'existe pas. Ce n'est pas un
+// test desactive, c'est un brouillon jamais termine.
+//
+// Un `DISABLED_` exige que le corps compile ; le rendre compilable demande
+// d'ecrire le test, pas de deplacer une garde. Le bloc reste donc sous `#if 0`,
+// et le talon DISABLED_ ci-dessous rend son existence VISIBLE au decompte : c'est
+// la moitie du gain, obtenue sans reecrire ce qu'on ne sait pas encore ecrire.
+TEST(TEST_cgmesh_geodesic, DISABLED_geodesic_with_target_is_an_unfinished_sketch)
+{
+	FAIL() << "ebauche non compilable, conservee sous #if 0 dans ce fichier : "
+	          "elle appelle algorithm/source/all_sources, identificateurs "
+	          "inexistants, et un constructeur de SurfacePoint qui n'existe pas.";
+}
+
 #if 0
 TEST(TEST_cgmesh_geodesic, geodesic_with_target)
 {

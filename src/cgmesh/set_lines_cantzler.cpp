@@ -87,22 +87,24 @@ void Cset_lines::cantzler_extract_edges (float threshold)
 static float
 distance_line_point (Vector3f pos1, Vector3f dir1, Vector3f pos2)
 {
-  Vector3f tmp;
-  float a, dist, dist2;
-  tmp = pos2 - pos1;
-  if (tmp.getLength () == 0.0) dist = 0.0;
-  else
-    {
-	  /*
-      a = fabs (v3d_dot_product (tmp, dir1));
-      b = sqrt (v3d_dot_product (tmp, tmp) - a * a);
-      dist = sqrt (0.0005*a*a + 1.0*b*b);
-	  */	
-	  /* infinite cylidner */
-      a = fabs (tmp * dir1);
-      dist2 = (tmp * tmp) - a * a;
-  }
-  return dist2;
+  Vector3f tmp = pos2 - pos1;
+
+  // POINT CONFONDU AVEC L'ORIGINE DE LA DROITE : distance nulle.
+  //
+  // La branche d'origine posait `dist` -- variable que rien ne lit -- et
+  // laissait `dist2` INDETERMINE, avant de le rendre. Le resultat de la fonction
+  // etait donc de la pile, et les comparaisons de distance qui en dependent
+  // partaient au hasard.
+  //
+  // Ce n'etait pas visible : les seuls exercices de ce code sont les quatorze
+  // tests de tu_cgmesh_set_lines.cpp, tous caches sous un `#if 0 // TOFIX`. Les
+  // reactiver a fait tomber le controle /RTC1 de MSVC des la premiere execution.
+  if (tmp.getLength () == 0.0f)
+    return 0.f;
+
+  /* infinite cylinder : carre de la distance a l'axe */
+  const float a = (float) fabs (tmp * dir1);
+  return (tmp * tmp) - a * a;
 }
 
 void

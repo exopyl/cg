@@ -2,7 +2,10 @@
 #include <cstdio>
 #include <cstdint>
 
-#include "../src/cgmesh/cgmesh.h"            // pulls in nbt.h (guarded by CG_HAS_ZLIB)
+// nbt.h EN DIRECT : le parapluie ne le tire plus, precisement pour ne plus
+// imposer zlib.h a ses consommateurs. C'est le seul test qui en a besoin.
+#include "../src/cgmesh/nbt.h"
+#include "../src/cgmesh/mesh.h"
 #include "../src/cgmesh/voxels_import_nbt.h"  // loadnbt
 
 // The NBT (Minecraft "Named Binary Tag") parser is a vendored BEER-WARE C

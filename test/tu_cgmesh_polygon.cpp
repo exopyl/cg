@@ -141,13 +141,24 @@ TEST(TEST_cgmesh_polygon, Extrude_WritesObjWithVerticesAndFaces)
 	EXPECT_GT(nf, 0u);        // side quads
 }
 
-// clean() is currently a no-op stub (its body is under #ifdef USE_GLUTESS, which
-// is not defined): it must return 0 and not crash. Pins the current behaviour.
-TEST(TEST_cgmesh_polygon, Clean_IsNoOpStub_ReturnsZero)
+// clean() n'est PAS implementee : tout son corps vit sous `#ifdef USE_GLUTESS`,
+// drapeau defini nulle part (cf. l'en-tete de polygon2_clean.cpp, qui detaille
+// les trois obstacles a sa reanimation).
+//
+// Ce test constatait qu'elle rendait 0 -- SUCCES -- et verrouillait donc un
+// contrat mensonger : un appelant recevait un accuse de bonne fin sur une fusion
+// de contours qui n'avait pas eu lieu. Il constate maintenant l'ECHEC franc, ce
+// qui est le seul contrat qu'une fonction non implementee puisse honorer.
+//
+// Le jour ou le corps sera porte, c'est ce test qui echouera -- et c'est bien ce
+// qu'on veut : le retour devra alors passer a 0, deliberement, avec un oracle
+// sur les contours fusionnes.
+TEST(TEST_cgmesh_polygon, Clean_IsNotImplemented_ReportsFailure)
 {
 	Polygon2 square; make_unit_square(square);
 	Polygon2 out;
-	EXPECT_EQ(out.clean(&square), 0);
+	EXPECT_EQ(out.clean(&square), -1)
+		<< "une fonction non implementee doit rendre un echec, jamais un succes";
 }
 
 // Zabrodsky symmetry: returns the assumed centre (0,0) and a finite axis slope.

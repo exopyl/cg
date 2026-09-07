@@ -18,6 +18,46 @@
 #include "endianness.h"
 #include "nbt.h"
 
+/*
+ * DURCISSEMENT DES LECTURES
+ * =========================
+ * Ce lecteur venait d'amont sous licence beer-ware, et il faisait CONFIANCE au
+ * fichier sur trois points, chacun exploitable par un simple `.nbt` /
+ * `.schematic` ouvert depuis sinaia ou depuis un noeud du graphe :
+ *
+ *   1. AUCUN retour de gzread n'etait teste. En fin de flux ou sur erreur,
+ *      gzread rend 0 ou -1 sans toucher au tampon, si bien que la longueur qui
+ *      suit restait INDETERMINEE -- et servait ensuite de taille d'allocation.
+ *   2. AUCUN retour de malloc n'etait teste. Une longueur negative devient un
+ *      size_t enorme, malloc rend nullptr, et le gzread suivant ecrivait A
+ *      L'ADRESSE NULLE avec un contenu venu du fichier.
+ *   3. AUCUN plafond sur les longueurs. Le format ne les borne pas : un entier
+ *      de quatre octets demande jusqu'a 2 Go, et nbt_read_compound bouclait
+ *      sans fin en reallouant a chaque tour sur un fichier tronque.
+ *
+ * Les trois sont traites ici. Le contrat rendu aux appelants est desormais :
+ * une longueur nulle va toujours avec un contenu `nullptr`, et un tableau de
+ * longueur n est alloue a n elements tous initialises -- de sorte qu'un element
+ * manquant est un `nullptr` franc, et non de la memoire indeterminee.
+ */
+
+/* Plafonds. Larges devant tout fichier reel -- un tableau d'octets porte les
+ * blocs d'une structure, une liste ses entites -- et surtout FINIS, ce qui est
+ * le seul point qui compte ici. */
+#define NBT_MAX_BYTE_ARRAY (64u * 1024u * 1024u)
+#define NBT_MAX_LIST_ITEMS (4u * 1024u * 1024u)
+#define NBT_MAX_COMPOUND_TAGS (1u * 1024u * 1024u)
+
+/* gzread rend le nombre d'octets lus, 0 en fin de flux, -1 en erreur. Une
+ * lecture PARTIELLE laisse la fin du tampon indeterminee : seule l'egalite
+ * stricte vaut succes. */
+static int nbt_read_exact(nbt_file *nbt, void *dst, unsigned int len)
+{
+    if (nbt == nullptr || nbt->fp == Z_NULL || dst == nullptr)
+        return 0;
+    return gzread(nbt->fp, dst, len) == (int)len;
+}
+
 /* Initialization subroutine(s) */
 int nbt_init(nbt_file **nbt)
 {
@@ -53,8 +93,19 @@ int nbt_read_tag(nbt_file *nbt, nbt_tag **parent)
 {
     nbt_type type = (nbt_type)0;
 
-    /* Read the type */
-    gzread(nbt->fp, &type, 1);
+    /* Read the type
+     *
+     * Le type NON LU valait auparavant la valeur indeterminee de la pile. Comme
+     * nbt_read_compound boucle jusqu'a TAG_END, un fichier tronque dont l'octet
+     * fantome differait de TAG_END faisait boucler la lecture SANS FIN, en
+     * reallouant a chaque tour. On rend TAG_END, qui termine proprement. */
+    if (!nbt_read_exact(nbt, &type, 1))
+    {
+        (*parent)->type = TAG_END;
+        (*parent)->name = nullptr;
+        (*parent)->value = nullptr;
+        return TAG_END;
+    }
 
     (*parent)->type = type;
     (*parent)->name = nullptr;
@@ -120,6 +171,12 @@ int nbt_read(nbt_file *nbt, nbt_type type, void **parent)
             int32_t len = nbt_read_byte_array(nbt, &bytestring);
             
             nbt_byte_array *t = (nbt_byte_array *)malloc(sizeof(nbt_byte_array));
+            if (t == nullptr)
+            {
+                free(bytestring);
+                *parent = nullptr;
+                break;
+            }
             t->length = len;
             t->content = bytestring;
 
@@ -134,6 +191,12 @@ int nbt_read(nbt_file *nbt, nbt_type type, void **parent)
             int32_t length = nbt_read_list(nbt, &type, &target);
 
             nbt_list *l = (nbt_list *)malloc(sizeof(nbt_list));
+            if (l == nullptr)
+            {
+                free(target);
+                *parent = nullptr;
+                break;
+            }
             l->length = length;
             l->type = (nbt_type)type;
             l->content = target;
@@ -163,9 +226,13 @@ int nbt_read_byte(nbt_file *nbt, char **out)
 {
     char t;
 
-    gzread(nbt->fp, &t, sizeof(t));
+    *out = nullptr;
+    if (!nbt_read_exact(nbt, &t, sizeof(t)))
+        return 0;
 
     *out = (char*)malloc(sizeof(char));
+    if (*out == nullptr)
+        return 0;
     memcpy(*out, &t, sizeof(char));
 
     return 0;
@@ -175,14 +242,17 @@ int nbt_read_short(nbt_file *nbt, int16_t **out)
 {
     int16_t t;
 
-    gzread(nbt->fp, &t, sizeof(t));
+    *out = nullptr;
+    if (!nbt_read_exact(nbt, &t, sizeof(t)))
+        return 0;
     if (get_endianness() == L_ENDIAN)
         swaps((uint16_t *)&t);
 
     *out = (int16_t*)malloc(sizeof(int16_t));
+    if (*out == nullptr)
+        return 0;
     memcpy(*out, &t, sizeof(int16_t));
 
-    
     return 0;
 }
 
@@ -190,11 +260,15 @@ int nbt_read_int(nbt_file *nbt, int32_t **out)
 {
     int32_t t;
 
-    gzread(nbt->fp, &t, sizeof(t));
+    *out = nullptr;
+    if (!nbt_read_exact(nbt, &t, sizeof(t)))
+        return 0;
     if (get_endianness() == L_ENDIAN)
         swapi((uint32_t *)&t);
-    
+
     *out = (int32_t*)malloc(sizeof(int32_t));
+    if (*out == nullptr)
+        return 0;
     memcpy(*out, &t, sizeof(int32_t));
 
     return 0;
@@ -204,11 +278,15 @@ int nbt_read_long(nbt_file *nbt, int64_t **out)
 {
     int64_t t;
 
-    gzread(nbt->fp, &t, sizeof(t));
+    *out = nullptr;
+    if (!nbt_read_exact(nbt, &t, sizeof(t)))
+        return 0;
     if (get_endianness() == L_ENDIAN)
         swapl((uint64_t *)&t);
 
     *out = (int64_t*)malloc(sizeof(int64_t));
+    if (*out == nullptr)
+        return 0;
     memcpy(*out, &t, sizeof(int64_t));
 
     return 0;
@@ -218,11 +296,15 @@ int nbt_read_float(nbt_file *nbt, float **out)
 {
     float t;
 
-    gzread(nbt->fp, &t, sizeof(t));
+    *out = nullptr;
+    if (!nbt_read_exact(nbt, &t, sizeof(t)))
+        return 0;
     if (get_endianness() == L_ENDIAN)
         t = swapf(t);
 
     *out = (float*)malloc(sizeof(float));
+    if (*out == nullptr)
+        return 0;
     memcpy(*out, &t, sizeof(float));
 
     return 0;
@@ -232,11 +314,15 @@ int nbt_read_double(nbt_file *nbt, double **out)
 {
     double t;
 
-    gzread(nbt->fp, &t, sizeof(t));
+    *out = nullptr;
+    if (!nbt_read_exact(nbt, &t, sizeof(t)))
+        return 0;
     if (get_endianness() == L_ENDIAN)
         t = swapd(t);
 
     *out = (double*)malloc(sizeof(double));
+    if (*out == nullptr)
+        return 0;
     memcpy(*out, &t, sizeof(double));
 
     return 0;
@@ -246,29 +332,68 @@ int nbt_read_byte_array(nbt_file *nbt, unsigned char **out)
 {
     int32_t len;
 
-    gzread(nbt->fp, &len, sizeof(len));
+    *out = nullptr;
+
+    if (!nbt_read_exact(nbt, &len, sizeof(len)))
+        return 0;
     if (get_endianness() == L_ENDIAN)
         swapi((uint32_t *)&len);
 
-    *out = (unsigned char*)malloc(len);
-    gzread(nbt->fp, *out, len);
-    
+    /* Negative ou demesuree : fichier tronque ou forge. C'est ici que
+     * `malloc(len)` rendait nullptr et que le gzread suivant ecrivait a
+     * l'adresse nulle une charge utile venue du fichier. */
+    if (len <= 0 || (uint32_t)len > NBT_MAX_BYTE_ARRAY)
+    {
+        if (len > 0)
+            fprintf(stderr, "nbt: tableau d'octets de %d refuse (plafond %u)\n",
+                    len, NBT_MAX_BYTE_ARRAY);
+        return 0;
+    }
+
+    *out = (unsigned char*)malloc((size_t)len);
+    if (*out == nullptr)
+        return 0;
+
+    if (!nbt_read_exact(nbt, *out, (unsigned int)len))
+    {
+        free(*out);
+        *out = nullptr;
+        return 0;
+    }
+
     return len;
 }
 
 int nbt_read_string(nbt_file *nbt, char **out)
 {
-    int16_t len;
+    /* NON SIGNE, contrairement a l'original. La specification NBT donne une
+     * longueur de chaine sur deux octets NON SIGNES ; la lire en int16_t rendait
+     * negative toute longueur au-dela de 32767, et `malloc(len + 1)` puis
+     * `memset(*out, 0, len + 1)` recevaient alors un size_t enorme. */
+    uint16_t len;
 
-    gzread(nbt->fp, &len, sizeof(len));
+    *out = nullptr;
+
+    if (!nbt_read_exact(nbt, &len, sizeof(len)))
+        return 0;
     if (get_endianness() == L_ENDIAN)
-        swaps((uint16_t *)&len);
+        swaps(&len);
 
-    *out = (char*)malloc(len + 1);
-    memset(*out, 0, len + 1);
-    gzread(nbt->fp, *out, len);
+    /* Toujours terminee par un zero, y compris pour une chaine vide : les
+     * appelants la passent a strcmp. */
+    *out = (char*)malloc((size_t)len + 1u);
+    if (*out == nullptr)
+        return 0;
+    memset(*out, 0, (size_t)len + 1u);
 
-    return len;
+    if (len > 0 && !nbt_read_exact(nbt, *out, len))
+    {
+        free(*out);
+        *out = nullptr;
+        return 0;
+    }
+
+    return (int)len;
 }
 
 int32_t nbt_read_list(nbt_file *nbt, char *type_out, void ***target)
@@ -277,16 +402,37 @@ int32_t nbt_read_list(nbt_file *nbt, char *type_out, void ***target)
     int32_t len;
     int i;
 
-    gzread(nbt->fp, &type, 1);
+    *target = nullptr;
+    *type_out = (char)TAG_END;
+
+    if (!nbt_read_exact(nbt, &type, 1))
+        return 0;
     *type_out = type;
 
-    gzread(nbt->fp, &len, sizeof(len));
+    if (!nbt_read_exact(nbt, &len, sizeof(len)))
+        return 0;
 
     if (get_endianness() == L_ENDIAN)
         swapi((uint32_t *)&len);
 
+    /* Le plafond sert ici DEUX fins : refuser une longueur absurde, et garantir
+     * que `len * sizeof(void *)` ne deborde pas -- le produit d'origine se
+     * calculait en int et pouvait rendre une taille plus PETITE que voulue,
+     * donc une allocation trop courte suivie de n ecritures. */
+    if (len <= 0 || (uint32_t)len > NBT_MAX_LIST_ITEMS)
+    {
+        if (len > 0)
+            fprintf(stderr, "nbt: liste de %d elements refusee (plafond %u)\n",
+                    len, NBT_MAX_LIST_ITEMS);
+        return 0;
+    }
 
-    *target = (void**)malloc(len * sizeof(void *));
+    /* calloc et non malloc : un element que nbt_read ne remplit pas (fin de
+     * flux) doit valoir nullptr et non de la memoire indeterminee, sans quoi le
+     * consommateur dereference une adresse quelconque. */
+    *target = (void**)calloc((size_t)len, sizeof(void *));
+    if (*target == nullptr)
+        return 0;
 
     for (i = 0; i < len; ++i)
         nbt_read(nbt, (nbt_type)type, &((*target)[i]));
@@ -298,14 +444,30 @@ int32_t nbt_read_compound(nbt_file *nbt, nbt_tag ***listptr)
 {
     int32_t i;
 
-    *listptr = (nbt_tag**)malloc(sizeof(nbt_tag *)); 
+    *listptr = (nbt_tag**)malloc(sizeof(nbt_tag *));
+    if (*listptr == nullptr)
+        return 0;
 
-    for (i = 0;; ++i)
+    /* BORNE SUR LE NOMBRE DE TAGS. La boucle d'origine ne s'arretait que sur
+     * TAG_END ; sur un fichier tronque, nbt_read_tag rend maintenant TAG_END,
+     * mais un fichier FORGE peut aussi enchainer les tags sans jamais fermer, et
+     * chaque tour realloue. Le plafond met une fin a l'appetit. */
+    for (i = 0; (uint32_t)i < NBT_MAX_COMPOUND_TAGS; ++i)
     {
         (*listptr)[i] = (nbt_tag*)malloc(sizeof(nbt_tag));
+        if ((*listptr)[i] == nullptr)
+            break;
         nbt_type last = (nbt_type)nbt_read_tag(nbt, &((*listptr)[i]));
 
-        *listptr = (nbt_tag**)realloc(*listptr, sizeof(nbt_tag *) * (i+2));
+        nbt_tag **grown = (nbt_tag**)realloc(*listptr, sizeof(nbt_tag *) * (i+2));
+        if (grown == nullptr)
+        {
+            /* realloc a echoue : *listptr est INTACT, et l'element i vient d'y
+             * etre lu. On le libere et l'on rend le compte des precedents. */
+            free((*listptr)[i]);
+            return i;
+        }
+        *listptr = grown;
 
         if (last == TAG_END)
         {
@@ -334,6 +496,8 @@ int nbt_free(nbt_file *nbt)
 
 int nbt_free_tag(nbt_tag *t)
 {
+    if (t == nullptr)
+        return 0;
     free(t->name);
     nbt_free_type(t->type, t->value);
     free(t);
@@ -377,10 +541,17 @@ int nbt_free_list(nbt_list *l)
 {
     int i;
 
-    for (i = 0; i < l->length; ++i)
-        nbt_free_type(l->type, l->content[i]);
+    if (l == nullptr)
+        return 0;
 
-    free(l->content);
+    /* content peut etre nul avec une longueur non nulle sur un flux interrompu :
+     * la liberation doit survivre a ce que la lecture a produit. */
+    if (l->content != nullptr)
+    {
+        for (i = 0; i < l->length; ++i)
+            nbt_free_type(l->type, l->content[i]);
+        free(l->content);
+    }
     free(l);
 
     return 0;
@@ -388,9 +559,11 @@ int nbt_free_list(nbt_list *l)
 
 int nbt_free_byte_array(nbt_byte_array *a)
 {
+    if (a == nullptr)
+        return 0;
     free(a->content);
     free(a);
-    
+
     return 0;
 }
 
@@ -398,14 +571,23 @@ int nbt_free_compound(nbt_compound *c)
 {
     int i;
 
-    for (i = 0; i < c->length; ++i)
+    if (c == nullptr)
+        return 0;
+
+    if (c->tags != nullptr)
     {
-        free(c->tags[i]->name);
-        nbt_free_type(c->tags[i]->type, c->tags[i]->value);
-        free(c->tags[i]);
+        for (i = 0; i < c->length; ++i)
+        {
+            /* Un emplacement nul est possible : nbt_read_compound s'arrete sur
+             * un malloc en echec, et la liberation ne doit pas y buter. */
+            if (c->tags[i] == nullptr)
+                continue;
+            free(c->tags[i]->name);
+            nbt_free_type(c->tags[i]->type, c->tags[i]->value);
+            free(c->tags[i]);
+        }
+        free(c->tags);
     }
- 
-    free(c->tags);
     free(c);
 
     return 0;
@@ -752,8 +934,22 @@ nbt_tag *nbt_find_tag_by_name(const char *needle, nbt_compound *haystack)
     nbt_compound *c = haystack;
     int i;
 
+    /* TROIS pointeurs a tester, et non zero.
+     *
+     * `name` est nul des que nbt_read_string a echoue -- fin de flux, longueur
+     * refusee, malloc en echec. Le `strcmp(nullptr, needle)` d'origine etait
+     * alors une lecture a l'adresse nulle, et c'est le plantage que la premiere
+     * version de tu_cgmesh_io_malformed a leve : un octet retourne au coeur du
+     * flux gzip suffit a produire un nom manquant.
+     *
+     * Un tag nomme "" (chaine vide, name non nul) reste comparable et ne peut
+     * concorder qu'avec un needle vide : le comportement legitime est intact. */
+    if (c == nullptr || c->tags == nullptr)
+        return nullptr;
+
     for (i = 0; i < c->length; ++i)
-        if (strcmp(c->tags[i]->name, needle) == 0)
+        if (c->tags[i] != nullptr && c->tags[i]->name != nullptr
+            && strcmp(c->tags[i]->name, needle) == 0)
             return c->tags[i];
 
     return nullptr;

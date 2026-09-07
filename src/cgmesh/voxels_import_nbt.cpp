@@ -326,6 +326,14 @@ Voxels* loadnbt (char* filename)
 	// Not a structure NBT (e.g. a generic tag tree) -> bail out cleanly.
 	if (!size || size->length != 3 || !pal || !blocks) { nbt_free (nf); return nullptr; }
 
+	// CONTENU ET ELEMENTS testes, pas seulement la longueur. La longueur d'une
+	// liste NBT vient du fichier, et ses elements sont lus un a un : sur un
+	// fichier tronque, la liste annonce trois entrees dont les dernieres sont
+	// nulles. `*(int32_t*)content[i]` dereferencait alors un pointeur nul.
+	if (!size->content || !size->content[0] || !size->content[1] || !size->content[2])
+	{ nbt_free (nf); return nullptr; }
+	if (!pal->content || !blocks->content) { nbt_free (nf); return nullptr; }
+
 	const int sx = *(int32_t*)size->content[0];
 	const int sy = *(int32_t*)size->content[1];
 	const int sz = *(int32_t*)size->content[2];
@@ -365,7 +373,9 @@ Voxels* loadnbt (char* filename)
 		if (!posTag || posTag->type != TAG_LIST || !stTag || stTag->type != TAG_INT) continue;
 
 		nbt_list* pos = (nbt_list*)posTag->value;
-		if (!pos || pos->length != 3) continue;
+		if (!pos || pos->length != 3 || !pos->content) continue;
+		if (!pos->content[0] || !pos->content[1] || !pos->content[2]) continue;
+		if (!stTag->value) continue;
 
 		const int x     = *(int32_t*)pos->content[0];
 		const int y     = *(int32_t*)pos->content[1];

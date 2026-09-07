@@ -142,6 +142,32 @@ static const char *grid_xpm[] = {
 ".   .   .   .   .",
 "................."};
 
+// Base de coupe : la plaque vert sombre et son quadrillage clair, aux couleurs
+// de l'asset (FOND, MINEUR et MAJEUR de base_coupe_texture.py). Un trait fort
+// au milieu de chaque axe rappelle le majeur tous les 5 du tapis reel.
+static const char *cutting_mat_xpm[] = {
+"16 16 4 1",
+"G	c #397E52",
+"m	c #84BC98",
+"M	c #EEFAF2",
+".	c #1F4A30",
+"................",
+".GGmGGMGGmGGmGG.",
+".GGmGGMGGmGGmGG.",
+".mmmmmMmmmmmmmm.",
+".GGmGGMGGmGGmGG.",
+".GGmGGMGGmGGmGG.",
+".MMMMMMMMMMMMMM.",
+".GGmGGMGGmGGmGG.",
+".GGmGGMGGmGGmGG.",
+".mmmmmMmmmmmmmm.",
+".GGmGGMGGmGGmGG.",
+".GGmGGMGGmGGmGG.",
+".mmmmmMmmmmmmmm.",
+".GGmGGMGGmGGmGG.",
+".GGmGGMGGmGGmGG.",
+"................"};
+
 static const char *light_xpm[] = {
 "16 16 17 1",
 " 	c None",

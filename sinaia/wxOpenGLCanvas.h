@@ -7,6 +7,7 @@
 #include <list>
 #include "../src/cgre/cgre.h"
 #include "../src/cgmesh/vmodels.h"
+#include "CuttingMat.h"
 #include "ImportSettings.h"
 
 
@@ -65,8 +66,9 @@ public:
 	// Compat : renvoie le VMeshes du fichier ACTIF (le premier Model) — la plupart
 	// des traitements historiques opèrent encore sur « le » VMeshes de la vue.
 	VMeshes* GetVMeshes(void);
-	// normalize: when true (default), the meshes are centered and scaled to a
-	// unit bounding box. File import passes the user's "Normalisation" import
+	// normalize: when true (default), the meshes are centered and scaled so their
+	// largest bbox dimension becomes VMeshes::kNormalizedSize (100 mm = 10 cm, ten
+	// squares of the cutting mat). File import passes the user's "Normalisation" import
 	// option here; geometry-creation callers keep the default. La scène devient
 	// un unique Model qui adopte les maillages de pVMeshes (qui est ensuite détruit).
 	void SetVMeshes(VMeshes* pVMeshes, bool normalize = true);
@@ -118,6 +120,30 @@ public:
 
 	void ChangeGrid(void);
 	bool GetGrid(void);
+
+	// BASE DE COUPE : tapis quadrille de reference, affiche sous le modele pour
+	// lire ses dimensions a vue. Widget du canvas et NON Model de la scene (motifs
+	// dans CuttingMat.h). Le tapis est charge paresseusement au premier affichage.
+	void ChangeCuttingMat(void);
+	bool GetCuttingMat(void);
+	// Cote a laquelle la face utile du tapis est posee, recalculee au besoin.
+	// Publique pour la console distante, ou elle sert d'oracle : elle doit valoir
+	// le minimum Z de la scene visible.
+	float GetCuttingMatLevel(void);
+
+	// RAMENE un Model sur le plan Z = 0 : cuit une translation en Z dans ses
+	// maillages, de sorte que le minimum Z de sa bbox devienne zero. Le modele est
+	// DEPLACE pour de bon (le bouton « recharger » du panneau Models revient au
+	// fichier).
+	//
+	// Cette action n'a rien a voir avec la base de coupe : celle-ci se pose d'elle-
+	// meme sur le minimum Z du modele, qui repose donc dessus quoi qu'il arrive.
+	// Elle sert a mettre un modele a la cote qu'attend une chaine de FABRICATION --
+	// une piece imprimee part de Z = 0, plateau de la machine.
+	//
+	// Renvoie le deplacement appliqué (0 si le modele reposait deja sur zero, ou
+	// s'il est vide).
+	float MoveModelToZeroLevel(Model* mdl);
 
 	void SetClippingPlane(bool bActive) { prop.clipping_plane_active = bActive; Refresh(false); };
 	bool GetClippingPlane (void) { return prop.clipping_plane_active; };
@@ -175,6 +201,34 @@ private:
 	// model bounding box fits in view, whatever its native scale/position.
 	void FrameCamera(const BoundingBox& bbox);
 
+	// PLANS DE COUPE, decouples du CADRAGE. La distance de la camera se regle sur
+	// le seul modele (c'est lui qu'on observe), mais les plans near/far doivent
+	// couvrir tout ce qui est VISIBLE -- base de coupe comprise, sinon ses coins
+	// passent derriere le plan far des qu'un petit modele resserre le cadrage.
+	//
+	// La base de coupe n'entre dans le calcul que si elle est AFFICHEE : son rayon
+	// elargirait sinon la plage de profondeur de toutes les vues, au detriment de
+	// la precision du tampon, pour un objet qu'on ne dessine pas.
+	void UpdateSceneRadius();
+	float m_sceneRadiusModel = 0.f;   // rayon du seul modele, pose par FrameCamera
+
+	// NIVEAU DE LA BASE DE COUPE. Sa face utile se pose sur le minimum Z de la
+	// scene VISIBLE : le modele repose ainsi toujours dessus sans etre deplace.
+	//
+	// Le recalcul est declenche par une SIGNATURE de scene -- nombre de Model,
+	// drapeaux de visibilite, revisions de geometrie -- et non par des appels
+	// d'invalidation semes aux endroits qui modifient la scene. Il y en a une
+	// dizaine (chargement, ajout, retrait, rechargement, normalisation,
+	// regeneration parametrique, traitements, visibilite, deplacement) et en
+	// oublier UN poserait le tapis de travers, sans rien pour le signaler.
+	//
+	// La revision de geometrie est deja le signal « les sommets ont bouge » du
+	// depot : c'est ce que VBOManager surveille pour reteleverser ses tampons.
+	void     UpdateCuttingMatLevel();
+	uint64_t SceneSignature() const;
+	float    m_cuttingMatZ      = 0.f;
+	uint64_t m_matLevelSignature = (uint64_t)-1;
+
 	// Construit le rayon monde (origine + direction) passant par le pixel (x,y) à
 	// partir des matrices GL courantes. false si non inversibles.
 	bool ScreenToRay(int x, int y, float orig[3], float dir[3]);
@@ -191,6 +245,10 @@ private:
 	bool m_bBoundingBox;
 
 	Ctrackball *m_pTrackball;
+
+	// Possede par le canvas : sa duree de vie est celle de la VUE, pas celle du
+	// modele affiche. Basculer d'un modele a l'autre ne doit pas relire l'asset.
+	CuttingMat m_cuttingMat;
 
 	//CRenderingEngine *m_pRenderingEngine;
 	int m_nId;

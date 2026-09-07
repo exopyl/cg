@@ -59,7 +59,7 @@ void VMeshes::Normalize()
 		{
 			mesh->translate(-center[0], -center[1], -center[2]);
 			auto l = (fLargestLength == 0.f) ? 1.f : fLargestLength;
-			mesh->scale(1.f / l);
+			mesh->scale(kNormalizedSize / l);
 			mesh->IncrementRevision();
 		}
 	}

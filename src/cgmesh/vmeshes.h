@@ -25,6 +25,19 @@ public:
 	size_t GetNMeshes() const;
 	bool IsTriangleMesh() const;
 
+	// TAILLE VISEE PAR LA NORMALISATION : la plus grande dimension de la boite
+	// englobante apres Normalize(). En unites monde, donc en MILLIMETRES (cf.
+	// mesh_io_gltf.cpp).
+	//
+	// Cent, soit DIX CENTIMETRES. La valeur se lit sur la reference metrique de la
+	// vue : la base de coupe de sinaia est graduee en centimetres, un carreau
+	// valant 10 mm. Un modele normalise couvre donc dix graduations -- assez pour
+	// que ses proportions se lisent au carreau, la ou une cible de 10 mm n'en
+	// couvrait qu'un seul et une cible de 1 mm un dixieme.
+	static constexpr float kNormalizedSize = 100.f;
+
+	// Recentre sur l'origine, puis met a l'echelle pour que la plus grande
+	// dimension vaille kNormalizedSize. Met a jour les bboxes des maillages.
 	void Normalize();
 
 private:

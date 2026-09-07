@@ -273,6 +273,87 @@ std::string cmdFlip(MyFrame* frame, int n)
     return os.str();
 }
 
+// BASE DE COUPE : bascule / interroge l'affichage du tapis quadrille.
+//
+// On passe par MyFrame::SetCuttingMat plutot que par MyGLCanvas::ChangeCuttingMat.
+// Le detour n'est pas gratuit : c'est la fenetre qui remet a jour le bouton de la
+// barre d'outils ET la case du menu. Basculer le canvas directement changerait
+// bien le rendu, mais laisserait les deux commandes annoncer l'etat inverse --
+// une console de mise au point qui desynchronise l'interface qu'elle sert a
+// examiner.
+std::string cmdCuttingMat(MyFrame* frame, const std::string& arg)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    int want = -1;                      // -1 : bascule
+    if (arg == "on")       want = 1;
+    else if (arg == "off") want = 0;
+    else if (!arg.empty()) return "ERR usage: cuttingmat [on|off]\n";
+
+    struct State { int on; float level; };
+    const State st = callOnMain([frame, want]() -> State {
+        MyGLCanvas* c = frame->GetActiveCanvas();
+        if (!c) return { -1, 0.f };
+        frame->SetCuttingMat(want < 0 ? !c->GetCuttingMat() : (want != 0));
+        return { c->GetCuttingMat() ? 1 : 0, c->GetCuttingMatLevel() };
+    });
+
+    if (st.on < 0) return "ERR no active view\n";
+
+    // La COTE est rapportee avec l'etat : c'est elle qui dit que le tapis suit le
+    // modele, et elle doit valoir le minimum Z que `info` annonce.
+    std::ostringstream os;
+    os << "cuttingmat " << (st.on ? "on" : "off")
+       << " (level Z = " << st.level << " mm)\nOK\n";
+    return os.str();
+}
+
+// RAMENER SUR Z = 0 : deplace le Model N (indice du panneau « Models ») pour que
+// le minimum Z de sa bbox tombe sur zero. Rend le deplacement applique, ce qui en
+// fait un oracle utilisable depuis un script : la cote annoncee doit valoir
+// l'oppose du minimum Z d'avant.
+//
+// Sans rapport avec la base de coupe : celle-ci se pose d'elle-meme sur le minimum
+// Z de la scene visible, donc le modele repose dessus quoi qu'il arrive.
+std::string cmdDrop(MyFrame* frame, int n)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    struct Res { int code; float dz; };
+    const Res r = callOnMain([frame, n]() -> Res {
+        MyGLCanvas* c = frame->GetActiveCanvas();
+        if (!c || !c->GetVModels()) return { -1, 0.f };
+        Model* mdl = c->GetVModels()->GetModel((size_t)n);
+        if (!mdl) return { -2, 0.f };
+        return { 0, c->MoveModelToZeroLevel(mdl) };
+    });
+
+    if (r.code == -1) return "ERR no model loaded\n";
+    if (r.code == -2) return "ERR model index out of range\n";
+
+    std::ostringstream os;
+    os << "moved model " << n << " by " << r.dz << " mm in Z\nOK\n";
+    return os.str();
+}
+
+// NORMALISER : recentre le modele et amene sa plus grande dimension a la taille
+// visee par VMeshes::kNormalizedSize. Passe par la fenetre, qui rafraichit en plus
+// le panneau des cotes.
+std::string cmdNormalize(MyFrame* frame)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    const bool ok = callOnMain([frame]() -> bool {
+        MyGLCanvas* c = frame->GetActiveCanvas();
+        if (!c || !c->GetVMeshes()) return false;
+        frame->NormalizeActiveModel();
+        return true;
+    });
+
+    if (!ok) return "ERR no model loaded\n";
+    return "normalized\nOK\n";
+}
+
 std::string cmdOpen(MyFrame* frame, const std::string& path)
 {
     if (!frame) return "ERR frame unavailable\n";
@@ -330,6 +411,9 @@ std::string cmdHelp()
         "  material N M               material M of mesh N: type, colors\n"
         "  flip N                     flip winding of every face of mesh N\n"
         "  open PATH                  load a model file into a new tab\n"
+        "  cuttingmat [on|off]        show / hide the cutting mat (no arg: toggle)\n"
+        "  drop N                     move model N down onto the Z = 0 plane\n"
+        "  normalize                  recentre + scale the active model to the target size\n"
         "  screenshot PATH            save current viewport to PATH as PNG\n"
         "  help                       this help\n"
         "  quit                       close the connection\n"
@@ -388,6 +472,20 @@ cgnet::Reply dispatch(const std::string& rawLine, MyFrame* frame)
         path = trim(path);
         if (path.empty()) return { "ERR usage: screenshot PATH\n", false };
         return { cmdScreenshot(frame, path), false };
+    }
+    if (cmd == "cuttingmat")
+    {
+        std::string arg;
+        std::getline(iss, arg);
+        return { cmdCuttingMat(frame, trim(arg)), false };
+    }
+    if (cmd == "normalize")
+        return { cmdNormalize(frame), false };
+    if (cmd == "drop")
+    {
+        int n = -1; iss >> n;
+        if (iss.fail()) return { "ERR usage: drop N\n", false };
+        return { cmdDrop(frame, n), false };
     }
     if (cmd == "open")
     {

@@ -81,6 +81,7 @@ class MyFrame : public wxFrame
 
         ID_3D_FRAME,
         ID_3D_GRID,
+        ID_3D_CUTTING_MAT,
         ID_3D_FILL,
         ID_3D_WIREFRAME,		ID_3D_POINT,
 		ID_3D_SMOOTH,
@@ -199,6 +200,18 @@ public:
     // Load a model file into a new tab. Used by the remote console ('open').
     void LoadModelFile(const wxString& filename) { OpenDocument(filename); }
 
+    // BASE DE COUPE de la vue ACTIVE : pose l'etat et remet a jour les DEUX
+    // commandes qui l'exposent (bouton de la barre d'outils, case du menu).
+    // Publique parce que la console distante doit passer par ici : basculer le
+    // canvas directement laisserait les deux commandes annoncer l'inverse.
+    void SetCuttingMat(bool on);
+
+    // Normalise le modèle de la vue active : recentre, et amène la plus grande
+    // dimension à VMeshes::kNormalizedSize. Publique pour la même raison que
+    // SetCuttingMat — la console distante doit passer par ici pour que le panneau
+    // « Model information » suive les cotes, qui viennent de changer.
+    void NormalizeActiveModel();
+
     // Rafraîchit les panneaux dépendant de la scène (arbre d'info à deux niveaux,
     // panneaux contextuels) — appelé par la cible de glisser-déposer après un ajout.
     void OnSceneChanged();
@@ -269,6 +282,7 @@ private:
 
     void On3DFrame(wxCommandEvent& evt);
     void On3DGrid(wxCommandEvent& evt);
+    void On3DCuttingMat(wxCommandEvent& evt);
     void On3DFill(wxCommandEvent& evt);	void On3DWireframe(wxCommandEvent& evt);
 	void On3DPoint(wxCommandEvent& evt);
 	void On3DSmooth(wxCommandEvent& evt);
@@ -432,12 +446,16 @@ private:
     wxArrayString m_favorites;
 
     // Panneau "Models" : une ligne par Model de la vue courante = nom + bouton œil
-    // (visibilité) + bouton poubelle (suppression). Reconstruit par UpdateModelsList.
+    // (visibilité) + bouton « poser sur la base » + bouton recharger (fichiers
+    // seulement) + bouton poubelle. Reconstruit par UpdateModelsList.
     wxScrolledWindow* m_modelsPanel = nullptr;
     std::vector<wxStaticText*> m_modelRowLabels;   // libellés des lignes (surbrillance survol)
-    wxBitmap m_iconEye, m_iconEyeOff, m_iconTrash, m_iconRefresh;
+    wxBitmap m_iconEye, m_iconEyeOff, m_iconTrash, m_iconRefresh, m_iconDrop;
     void BuildModelsIcons();          // dessine les icônes une fois
-    void ToggleModelVisibility(int index);   // œil : bascule Model::m_visible
+    void ToggleModelVisibility(int index);    // œil : bascule Model::m_visible
+    // Ramene le Model de la ligne sur le plan Z = 0 (cote de depart d'une chaine
+    // de fabrication). Sans rapport avec la base de coupe, qui suit le modele.
+    void MoveModelRowToZeroLevel(int index);
     void RemoveModelAt(int index);           // poubelle : retire le Model de VModels
     void RefreshModelAt(int index);          // recharge le Model depuis son fichier
     void SelectModelRow(int index);          // clic ligne : sélectionne -> Model information

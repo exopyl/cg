@@ -77,6 +77,76 @@ jobs:
 
 
 
+  sanitizers:
+    name: ci-linux-asan
+    runs-on: ubuntu-latest
+
+    # Ce que ce job prouve, et que RIEN d'autre ne prouve : les lecteurs de
+    # fichiers binaires n'ecrivent pas hors bornes. Le job ci-linux fait tourner
+    # les memes tests, mais un depassement de quelques octets dans un tas Debug
+    # ne s'y voit PAS -- le test passe au vert avec la memoire deja corrompue.
+    #
+    # Les fixtures tronques et corrompus (test/tu_cgmesh_io_malformed.cpp) sont la
+    # moitie visible du filet ; ASan en est la moitie qui detecte. Chacun sans
+    # l'autre ne vaut presque rien : des fixtures sans sanitizer ne verifient que
+    # l'absence de plantage franc, un sanitizer sans entree malformee n'a rien a
+    # se mettre sous la dent.
+    #
+    # continue-on-error deliberement ABSENT : un rapport ASan doit faire echouer
+    # le job. Un filet dont l'echec est tolere n'est pas un filet.
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download cg_binaries archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .deps/cg_binaries
+          cd .deps
+          gh release download "$CG_BINARIES_VERSION" \
+            --repo "${{ github.repository_owner }}/cg_binaries" \
+            --pattern 'cgbinaries-*-linux-x86_64.zip'
+          unzip -q cgbinaries-*-linux-x86_64.zip
+          mv cgbinaries-*-linux-x86_64/* cg_binaries/
+          rm -rf cgbinaries-*-linux-x86_64 cgbinaries-*-linux-x86_64.zip
+
+      - name: Install Ninja + GTest + OCCT
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build \
+            zlib1g-dev \
+            libgtest-dev libgmock-dev \
+            libocct-foundation-dev \
+            libocct-modeling-data-dev \
+            libocct-modeling-algorithms-dev \
+            libocct-data-exchange-dev \
+            libtbb-dev
+
+      - name: Configure
+        run: cmake --preset ci-linux-asan
+
+      - name: Build
+        run: cmake --build --preset ci-linux-asan
+
+      - name: Test under ASan + UBSan
+        # detect_leaks=0 : les fuites sont un AUTRE sujet, et le depot en a
+        # beaucoup (les lecteurs 3DS rendent nullptr sans fermer leur FILE*).
+        # Les activer ici noierait le signal cherche -- les ecritures hors
+        # bornes -- sous des centaines de rapports sans rapport avec elles. Une
+        # chasse aux fuites merite son propre chantier et son propre job.
+        #
+        # abort_on_error=1 + print_stacktrace=1 : on veut la pile au premier
+        # incident, et un code de sortie non nul.
+        env:
+          ASAN_OPTIONS: abort_on_error=1:detect_leaks=0:print_stacktrace=1
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: |
+          echo "nproc = $(nproc)"
+          ctest --preset ci-linux-asan -j "$(nproc)"
+
   boilerplate:
     name: ci-linux-boilerplate
     runs-on: ubuntu-latest

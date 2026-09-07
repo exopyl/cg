@@ -65,6 +65,33 @@ static void BindReflectionUnit (GLuint texId, float amount)
 }
 
 // ---------------------------------------------------------------------------
+//  Niveaux de mipmap : la reponse a la MINIFICATION
+// ---------------------------------------------------------------------------
+// Sans eux, GL_LINEAR prend quatre texels de l'image PLEINE RESOLUTION quel que
+// soit le facteur de reduction. Une texture porteuse de traits fins perd alors
+// ses traits de facon irreguliere -- et, la vue bougeant d'un pixel, en perd
+// d'autres a l'image suivante : elle SCINTILLE. Le cas type du depot est la base
+// de coupe de sinaia, dont les graduations font 4 px dans une image de
+// 4500 x 3000 : vue de loin, son quadrillage moire.
+//
+// Le mipmapping filtre l'image a chaque niveau au moment du televersement, si
+// bien qu'un trait trop fin pour le pixel devient une teinte STABLE au lieu de
+// clignoter. Le cout est une fois un tiers de memoire en plus, paye au
+// chargement.
+//
+// glGenerateMipmap est un point d'entree GL 3.0, charge par glad. Sur un pilote
+// qui ne l'expose pas, le pointeur est nul et l'on retombe sur GL_LINEAR seul --
+// soit exactement le comportement d'avant : degrade, jamais casse. C'est ce que
+// dit le booleen rendu, que l'appelant traduit en filtre de minification.
+static bool GenerateMipmaps ()
+{
+	if (!glGenerateMipmap)
+		return false;
+	glGenerateMipmap (GL_TEXTURE_2D);
+	return true;
+}
+
+// ---------------------------------------------------------------------------
 //  Televersement d'une image de texture, borne a GL_MAX_TEXTURE_SIZE
 // ---------------------------------------------------------------------------
 // glTexImage2D REFUSE une dimension superieure au maximum du pilote (couramment
@@ -82,9 +109,9 @@ static void BindReflectionUnit (GLuint texId, float amount)
 // doit pas etre altere par un detail de rendu. L'echantillonnage reste correct
 // puisque les UV sont normalisees -- une mise a l'echelle non uniforme ne deplace
 // aucun texel.
-static void UploadTextureImage (Img *pImage)
+static bool UploadTextureImage (Img *pImage)
 {
-	if (!pImage || !pImage->data()) return;
+	if (!pImage || !pImage->data()) return false;
 
 	GLint maxSize = 0;
 	glGetIntegerv (GL_MAX_TEXTURE_SIZE, &maxSize);
@@ -94,7 +121,7 @@ static void UploadTextureImage (Img *pImage)
 	if (w <= (unsigned int)maxSize && h <= (unsigned int)maxSize)
 	{
 		glTexImage2D (GL_TEXTURE_2D, 0, 4, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pImage->data());
-		return;
+		return GenerateMipmaps ();
 	}
 
 	Img scaled (*pImage);                  // copie : ne pas toucher a l'original
@@ -104,11 +131,12 @@ static void UploadTextureImage (Img *pImage)
 	{
 		printf ("MaterialRenderer: texture %ux%u au-dela de GL_MAX_TEXTURE_SIZE=%d, "
 		        "reduction impossible\n", w, h, (int)maxSize);
-		return;
+		return false;
 	}
 	printf ("MaterialRenderer: texture %ux%u reduite a %ux%u (GL_MAX_TEXTURE_SIZE=%d)\n",
 	        w, h, nw, nh, (int)maxSize);
 	glTexImage2D (GL_TEXTURE_2D, 0, 4, nw, nh, 0, GL_RGBA, GL_UNSIGNED_BYTE, scaled.data());
+	return GenerateMipmaps ();
 }
 
 MaterialRenderer::MaterialRenderer()
@@ -149,8 +177,9 @@ int MaterialRenderer::AddMaterial (Material *pMaterial)
 			glGenTextures(1, &m_pTexturesId[m_nMaterials]);
 			glBindTexture(GL_TEXTURE_2D, m_pTexturesId[m_nMaterials]);
 
-			UploadTextureImage (pMaterialTexture->GetImage ());
-			glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+			const bool mipmapped = UploadTextureImage (pMaterialTexture->GetImage ());
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+			                mipmapped ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);
 			glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_REPEAT);
@@ -163,8 +192,9 @@ int MaterialRenderer::AddMaterial (Material *pMaterial)
 		{
 			glGenTextures(1, &m_pReflTexturesId[m_nMaterials]);
 			glBindTexture(GL_TEXTURE_2D, m_pReflTexturesId[m_nMaterials]);
-			UploadTextureImage (pMaterialTexture->GetReflectionImage ());
-			glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+			const bool reflMipmapped = UploadTextureImage (pMaterialTexture->GetReflectionImage ());
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+			                reflMipmapped ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);

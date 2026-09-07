@@ -222,6 +222,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(wxID_ABOUT, MyFrame::OnAbout)
     EVT_MENU(ID_3D_FRAME, MyFrame::On3DFrame)
     EVT_MENU(ID_3D_GRID, MyFrame::On3DGrid)
+    EVT_MENU(ID_3D_CUTTING_MAT, MyFrame::On3DCuttingMat)
     EVT_MENU(ID_3D_FILL, MyFrame::On3DFill)
     EVT_MENU(ID_3D_WIREFRAME, MyFrame::On3DWireframe)
     EVT_MENU(ID_3D_SMOOTH, MyFrame::On3DSmooth)
@@ -452,6 +453,7 @@ MyFrame::MyFrame(wxWindow* parent,
     wxMenu* panel_menu = new wxMenu;
     panel_menu->Append(ID_BUTTON_RENDERING_BGCOLOR, _("Background"));
     panel_menu->AppendCheckItem(ID_RENDER_SHOW_FPS, _("Show FPS"));
+    panel_menu->AppendCheckItem(ID_3D_CUTTING_MAT, _("Base de coupe"));
     options_menu->AppendSubMenu(panel_menu, wxT("3D Panel"));
 
     wxMenu* windows_menu = new wxMenu;
@@ -535,6 +537,8 @@ MyFrame::MyFrame(wxWindow* parent,
     m_pToolBar2->AddTool(wxID_SAVEAS, wxT("Test"), tb2_saveas);
     m_pToolBar2->AddTool(ID_3D_FRAME, wxT("Repere"), wxBitmap(repere_xpm));
     m_pToolBar2->AddTool(ID_3D_GRID, wxT("Grid"), wxBitmap(grid_xpm));
+    m_pToolBar2->AddTool(ID_3D_CUTTING_MAT, wxT("Base de coupe"), wxBitmap(cutting_mat_xpm),
+                         _("Base de coupe (tapis quadrille de reference)"));
     m_pToolBar2->AddTool(ID_3D_FILL, wxT("Test"), wxBitmap (fill_xpm));
     m_pToolBar2->AddTool(ID_3D_WIREFRAME, wxT("Test"), wxBitmap (wireframe_xpm));
     m_pToolBar2->AddTool(ID_3D_POINT, wxT("Test"), wxBitmap (cloud_xpm));
@@ -1580,6 +1584,12 @@ void MyFrame::OnNotebookPageChanged(wxAuiNotebookEvent& event)
         p = m_pToolBar2->FindTool(ID_3D_GRID);
         if (p) p->SetSticky(pGLCanvas->GetGrid());
 
+        p = m_pToolBar2->FindTool(ID_3D_CUTTING_MAT);
+        if (p) p->SetSticky(pGLCanvas->GetCuttingMat());
+        if (wxMenuBar* mb = GetMenuBar())
+            if (wxMenuItem* mi = mb->FindItem(ID_3D_CUTTING_MAT))
+                mi->Check(pGLCanvas->GetCuttingMat());
+
         p = m_pToolBar2->FindTool(ID_3D_FILL);
         if (p) p->SetSticky(pGLCanvas->GetFill());
 
@@ -1711,6 +1721,13 @@ void MyFrame::OpenDocument(const wxString& strFilename)
     b = pGLCanvas->GetGrid();
     p->SetSticky(b);
 
+    p = m_pToolBar2->FindTool(ID_3D_CUTTING_MAT);
+    b = pGLCanvas->GetCuttingMat();
+    p->SetSticky(b);
+    if (wxMenuBar* mb = GetMenuBar())
+        if (wxMenuItem* mi = mb->FindItem(ID_3D_CUTTING_MAT))
+            mi->Check(b);
+
     p = m_pToolBar2->FindTool(ID_3D_FILL);
     b = pGLCanvas->GetFill();
     p->SetSticky(b);
@@ -1738,7 +1755,8 @@ void MyFrame::OnSceneChanged()
     UpdateContextualPanes();
 }
 
-// Dessine les icônes œil / œil barré / poubelle (16x16) une seule fois. Fond blanc
+// Dessine les icônes œil / œil barré / poser / recharger / poubelle (16x16) une
+// seule fois. Fond blanc
 // rendu transparent par un masque -> s'intègre aux boutons quel que soit le thème.
 void MyFrame::BuildModelsIcons()
 {
@@ -1771,6 +1789,13 @@ void MyFrame::BuildModelsIcons()
         dc.DrawRectangle(4, 5, 8, 9);                     // bac
         dc.DrawLine(7, 7, 7, 12);                         // stries
         dc.DrawLine(9, 7, 9, 12);
+    });
+    m_iconDrop = make([](wxMemoryDC& dc) {                // flèche vers un socle (ramener sur Z = 0)
+        dc.DrawLine(8, 1, 8, 8);                          // hampe
+        dc.SetBrush(*wxBLACK_BRUSH);
+        wxPoint head[3] = { wxPoint(4, 7), wxPoint(12, 7), wxPoint(8, 12) };   // pointe
+        dc.DrawPolygon(3, head);
+        dc.DrawLine(1, 14, 15, 14);                       // le plan Z = 0
     });
     m_iconRefresh = make([](wxMemoryDC& dc) {             // flèche circulaire (recharger)
         dc.DrawEllipticArc(3, 3, 10, 10, 55, 340);        // cercle ouvert en haut-droite
@@ -1824,6 +1849,16 @@ void MyFrame::UpdateModelsList()
             eye->SetToolTip(_("Afficher / masquer"));
             eye->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&){ ToggleModelVisibility(i); });
             row->Add(eye, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
+
+            // Bouton « ramener sur Z = 0 » : cuit une translation en Z pour que le
+            // minimum de la bbox tombe sur zéro. Présent pour TOUT Model, fichier ou
+            // géométrie générée — l'un comme l'autre peut arriver hors du plan.
+            wxBitmapButton* drop = new wxBitmapButton(m_modelsPanel, wxID_ANY,
+                m_iconDrop, wxDefaultPosition, wxDefaultSize,
+                wxBU_EXACTFIT | wxBORDER_NONE);
+            drop->SetToolTip(_("Ramener sur le plan Z = 0"));
+            drop->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&){ MoveModelRowToZeroLevel(i); });
+            row->Add(drop, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
 
             // Bouton « recharger » : uniquement pour les Model issus d'un fichier
             // (m_path renseigné) ; les géométries générées n'ont rien à relire.
@@ -1888,6 +1923,31 @@ void MyFrame::ToggleModelVisibility(int index)
     mdl->m_visible = !mdl->m_visible;
     canvas->Refresh(false);
     UpdateModelsList();   // met à jour l'icône œil / œil barré
+}
+
+void MyFrame::MoveModelRowToZeroLevel(int index)
+{
+    MyGLCanvas* canvas = GetActiveCanvas();
+    if (!canvas || !canvas->GetVModels())
+        return;
+    Model* mdl = canvas->GetVModels()->GetModel((size_t)index);
+    if (!mdl)
+        return;
+
+    const float dz = canvas->MoveModelToZeroLevel(mdl);
+
+    // On DIT le déplacement, et on ne se contente pas de l'appliquer : l'action
+    // modifie la géométrie, donc les cotes de « Model information » changent. Sans
+    // la trace, un modèle qui bouge de 99 mm passerait pour un défaut d'affichage.
+    const wxString name(mdl->m_name);
+    if (dz == 0.f)
+        *m_pWndLogging << wxString::Format(
+            _T("%s reposait déjà sur le plan Z = 0\n"), name);
+    else
+        *m_pWndLogging << wxString::Format(
+            _T("%s ramené sur le plan Z = 0 : %+.3f mm\n"), name, dz);
+
+    UpdatePropertiesGrid();   // les bornes de la bbox ont changé
 }
 
 void MyFrame::RemoveModelAt(int index)
@@ -2696,6 +2756,40 @@ void MyFrame::On3DGrid(wxCommandEvent& WXUNUSED(event))
 }
 
 //
+// BASE DE COUPE. Comme le repere et la grille, l'etat appartient a la VUE et non
+// a la fenetre : deux onglets peuvent montrer le meme fichier, l'un pose sur le
+// tapis et l'autre nu.
+//
+// La bascule est servie par DEUX presentations -- le bouton de la barre d'outils
+// et Options > 3D Panel > Base de coupe -- donc les deux sont remises a jour ici.
+// Sans cela, actionner l'une laisserait l'autre mentir sur l'etat reel.
+//
+void MyFrame::On3DCuttingMat(wxCommandEvent& WXUNUSED(event))
+{
+	if (MyGLCanvas *pGLCanvas = GetActiveCanvas ())
+		SetCuttingMat (!pGLCanvas->GetCuttingMat ());
+}
+
+void MyFrame::SetCuttingMat(bool on)
+{
+	MyGLCanvas *pGLCanvas = GetActiveCanvas ();
+	if (!pGLCanvas)
+		return;
+
+	if (pGLCanvas->GetCuttingMat () != on)
+	{
+		pGLCanvas->ChangeCuttingMat ();
+		pGLCanvas->Refresh ();
+	}
+
+	if (wxAuiToolBarItem *p = m_pToolBar2->FindTool(ID_3D_CUTTING_MAT))
+		p->SetSticky (on);
+	if (wxMenuBar *mb = GetMenuBar ())
+		if (wxMenuItem *mi = mb->FindItem(ID_3D_CUTTING_MAT))
+			mi->Check (on);
+}
+
+//
 //
 //
 // MODE D'OMBRAGE. L'indice du choix EST la valeur de l'enumeration : les
@@ -3368,15 +3462,20 @@ void MyFrame::OnTreatmentMergeVertices(wxCommandEvent& WXUNUSED(event))
 
 void MyFrame::OnTreatmentNormalize(wxCommandEvent& WXUNUSED(event))
 {
-	MyGLCanvas *pGLCanvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+	NormalizeActiveModel();
+}
+
+void MyFrame::NormalizeActiveModel()
+{
+	MyGLCanvas *pGLCanvas = GetActiveCanvas();
 	if (!pGLCanvas)
 		return;
 
-    VMeshes * pVMeshes = pGLCanvas->GetVMeshes();
+	VMeshes *pVMeshes = pGLCanvas->GetVMeshes();
 	if (!pVMeshes)
 		return;
 
-	pGLCanvas->ApplyNormalization(true); // Call the new ApplyNormalization method
+	pGLCanvas->ApplyNormalization(true);
 
 	pGLCanvas->Refresh();
 	UpdatePropertiesGrid();

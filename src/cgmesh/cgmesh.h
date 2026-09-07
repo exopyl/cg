@@ -37,15 +37,19 @@
 #include "voxels.h"
 #include "voxels_menger_sponge.h"
 #include "voxels_import_kvx.h"
-#include "nbt.h"
+// nbt.h N'EST PAS ici, deliberement : il inclut zlib.h, et le parapluie
+// imposait donc les en-tetes zlib a ses 43 consommateurs hors module. Les deux
+// unites qui en ont besoin (nbt.cpp, voxels_import_nbt.cpp) et le test l'incluent
+// directement -- ce qui permet a ${ZLIB_DIR} de redevenir PRIVATE.
 
 // images
 #include "image_vectorization.h"
 #include "image_relief.h"
 
-// audio
-#include "audio.h"
-#include "audio_convert.h"
+// audio : RETIRE du parapluie. Ces quatre unites (486 L) n'ont AUCUN
+// consommateur applicatif -- seul test/tu_cgmesh_audio.cpp s'en sert, et il les
+// inclut desormais en direct. Le parapluie les diffusait a cgre et a sinaia,
+// qui n'en ont que faire.
 
 // fractal
 #include "lsysteminit.h"

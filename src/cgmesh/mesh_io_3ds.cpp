@@ -13,14 +13,115 @@ int gBuffer[50000] = {0};	// This is used to read past unwanted data
 FILE* g_File3DSPointer = nullptr;
 
 // Helper to safely skip chunks
+//
+// La soustraction est GARDEE : `length` et `bytesRead` sont des UINT32 issus du
+// fichier, et un `length` plus petit que `bytesRead` rendrait ici un reste de
+// ~4 milliards, tronque en `int` negatif -- donc un chunk non saute et un flux
+// decale. ReadChunk_3DS etablit desormais l'invariant `length >= bytesRead`,
+// cette garde est la ceinture qui va avec.
 void SkipChunk_3DS(t3DSChunk* pChunk)
 {
-	int remaining = pChunk->length - pChunk->bytesRead;
+	const UINT32 remaining = (pChunk->length > pChunk->bytesRead)
+	                       ? (pChunk->length - pChunk->bytesRead) : 0u;
 	if (remaining > 0)
 	{
-		fseek(g_File3DSPointer, remaining, SEEK_CUR);
+		fseek(g_File3DSPointer, (long) remaining, SEEK_CUR);
 		pChunk->bytesRead += remaining;
 	}
+}
+
+//*****************************************************************************
+//  Lecture BORNEE du reste d'un chunk dans un champ de taille fixe
+//*****************************************************************************
+// Le motif `fread(champ, 1, chunk.length - chunk.bytesRead, f)` etait recopie
+// tel quel sur huit champs de taille connue a la compilation : `strName[255]`,
+// `strFile[255]`, quatre FLOAT32 de placage, la couleur sur 3 octets et le
+// pourcentage. Aucun ne comparait la longueur ANNONCEE a la taille de la
+// DESTINATION -- c'est-a-dire une ecriture hors bornes dont le contenu ET la
+// longueur viennent du fichier, atteignable par une simple ouverture depuis
+// sinaia ou depuis un noeud du graphe.
+//
+// Le garde de ReadChunk_3DS ci-dessus supprime le debordement de soustraction ;
+// il ne suffit pas, car une longueur honnetement grande suffit a deborder un
+// champ de quatre octets. Il faut donc borner ICI, a la destination.
+//
+// Le reliquat est SAUTE et non ignore : sans cela le flux se decale, et tout le
+// reste du fichier est decoupe de travers. Et l'on impute au chunk la totalite
+// du reste annonce, ce que faisait l'accumulation d'origine quand elle
+// reussissait -- les boucles appelantes en dependent pour terminer.
+//
+// Renvoie le nombre d'octets effectivement STOCKES.
+// FIN DE FLUX : un en-tete de chunk fait SIX octets, pas moins.
+//
+// C'est le seul signal fiable d'epuisement du fichier, et il doit etre teste par
+// chaque boucle de parcours. Ces boucles avancent en ajoutant `currentChunk
+// .bytesRead` au chunk parent : un en-tete non lu vaut zero octet ajoute, donc
+// le parent n'avance PAS et la boucle tourne indefiniment.
+//
+// L'ancien code y echappait par accident : ReadChunk_3DS ne remettait pas
+// `length` a zero, si bien qu'a la fin du fichier le chunk heritait de la
+// longueur du precedent et que SkipChunk_3DS faisait « avancer » le parent d'un
+// saut fictif. Cet accident a disparu avec la remise a zero -- il faut donc le
+// remplacer par un arret EXPLICITE, ce que ce predicat rend possible.
+static bool ChunkHeaderOk_3DS (const t3DSChunk *pChunk)
+{
+	return pChunk != nullptr && pChunk->bytesRead >= 6;
+}
+
+static size_t ReadChunkRemainder_3DS (void *dest, size_t destSize, t3DSChunk *pChunk)
+{
+	if (!dest || !pChunk || !g_File3DSPointer)
+		return 0;
+
+	const UINT32 remaining = (pChunk->length > pChunk->bytesRead)
+	                       ? (pChunk->length - pChunk->bytesRead) : 0u;
+	const size_t toRead = (remaining < destSize) ? (size_t) remaining : destSize;
+
+	const size_t got = toRead ? fread (dest, 1, toRead, g_File3DSPointer) : 0u;
+	if (remaining > got)
+		fseek (g_File3DSPointer, (long) (remaining - got), SEEK_CUR);
+
+	pChunk->bytesRead += remaining;
+	return got;
+}
+
+//*****************************************************************************
+//  Lecture d'un TABLEAU alloue : la taille lue est celle qui a ete allouee
+//*****************************************************************************
+// Deuxieme faute des lecteurs de tableaux, distincte de la precedente : la
+// taille ALLOUEE venait du compte d'elements (deux octets du fichier) et la
+// taille LUE du reste du chunk (quatre autres octets du meme fichier), sans
+// aucun lien entre les deux. Un fichier annoncant 1 sommet dans un chunk de
+// 100 ko ecrivait donc 100 ko dans une allocation de 12 octets.
+//
+// Ici la borne est la taille REELLEMENT allouee, passee par l'appelant, et le
+// desaccord entre le compte et le reste du chunk est SIGNALE plutot que subi :
+// un fichier legitime a exactement `avail == want`, un ecart signe soit une
+// troncature, soit une forge. On lit alors le minimum des deux, ce qui laisse
+// les elements manquants a la valeur du memset de l'appelant.
+//
+// Le reliquat est saute pour la meme raison que dans ReadChunkRemainder_3DS :
+// sans cela, la suite du fichier est decoupee de travers.
+static void ReadArrayIntoChunk_3DS (void *dest, size_t want, t3DSChunk *pChunk,
+                                    const char *what)
+{
+	if (!pChunk || !g_File3DSPointer)
+		return;
+
+	const UINT32 avail = (pChunk->length > pChunk->bytesRead)
+	                   ? (pChunk->length - pChunk->bytesRead) : 0u;
+
+	if (avail != want)
+		fprintf (stderr, "import_3ds: chunk %s incoherent : %u octets disponibles "
+		                 "pour %zu annonces par le compte d'elements\n",
+		         what ? what : "?", (unsigned) avail, want);
+
+	const size_t toRead = (avail < want) ? (size_t) avail : want;
+	const size_t got = (dest && toRead) ? fread (dest, 1, toRead, g_File3DSPointer) : 0u;
+	if (avail > got)
+		fseek (g_File3DSPointer, (long) (avail - got), SEEK_CUR);
+
+	pChunk->bytesRead += avail;
 }
 
 // Error description if an error occurs during the parsing of the file
@@ -240,6 +341,8 @@ void ProcessNextChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 	{
 		// Read next Chunk
 		ReadChunk_3DS(&currentChunk);
+		if (!ChunkHeaderOk_3DS (&currentChunk))
+			break;   // fin de flux : cf. ChunkHeaderOk_3DS
 
 		// Check the chunk ID
 		switch (currentChunk.ID)
@@ -356,6 +459,8 @@ void ProcessNextObjectChunk_3DS(t3DSModel *pModel, char *strName, t3DSChunk *pPr
 	{
 		// Read the next chunk
 		ReadChunk_3DS(&currentChunk);
+		if (!ChunkHeaderOk_3DS (&currentChunk))
+			break;   // fin de flux : cf. ChunkHeaderOk_3DS
 
 		// Check which chunk we just read
 		switch (currentChunk.ID)
@@ -467,6 +572,8 @@ void ProcessNextTriMeshChunk_3DS (t3DSModel *pModel, t3DSObject *pObject, t3DSCh
 	{
 		// Read the next chunk
 		ReadChunk_3DS(&currentChunk);
+		if (!ChunkHeaderOk_3DS (&currentChunk))
+			break;   // fin de flux : cf. ChunkHeaderOk_3DS
 
 		// Check which chunk we just read
 		switch (currentChunk.ID)
@@ -570,6 +677,8 @@ void ProcessNextLightChunk_3DS (t3DSModel *pModel, t3DSLight *pLight, t3DSChunk 
 	{
 		// Read the next chunk
 		ReadChunk_3DS(&currentChunk);
+		if (!ChunkHeaderOk_3DS (&currentChunk))
+			break;   // fin de flux : cf. ChunkHeaderOk_3DS
 
 		// Check which chunk we just read
 		switch (currentChunk.ID)
@@ -684,6 +793,8 @@ void ProcessNextCameraChunk_3DS (t3DSModel *pModel, t3DSCamera *pCamera, t3DSChu
 	{
 		// Read the next chunk
 		ReadChunk_3DS(&currentChunk);
+		if (!ChunkHeaderOk_3DS (&currentChunk))
+			break;   // fin de flux : cf. ChunkHeaderOk_3DS
 
 		// Check which chunk we just read
 		switch (currentChunk.ID)
@@ -729,6 +840,8 @@ void ProcessNextKeyFrameChunk_3DS (t3DSModel* pModel, t3DSChunk *pPreviousChunk)
 	{
 		// Read the next chunk
 		ReadChunk_3DS(&currentChunk);
+		if (!ChunkHeaderOk_3DS (&currentChunk))
+			break;   // fin de flux : cf. ChunkHeaderOk_3DS
 
 		// Check which chunk we just read
 		switch (currentChunk.ID)
@@ -874,6 +987,8 @@ void ProcessKeyFrameChunk_3DS (t3DSModel* pModel, t3DSChunk *pPreviousChunk)
 	{
 		// Read the next chunk
 		ReadChunk_3DS(&currentChunk);
+		if (!ChunkHeaderOk_3DS (&currentChunk))
+			break;   // fin de flux : cf. ChunkHeaderOk_3DS
 
 		// Check which chunk we just read
 		switch (currentChunk.ID)
@@ -1109,6 +1224,8 @@ void ParseKfNode_3DS (t3DSModel *pModel, t3DSKfNode *pNode, t3DSChunk *pPrevious
 	while (pPreviousChunk->bytesRead < pPreviousChunk->length)
 	{
 		ReadChunk_3DS (&currentChunk);
+		if (!ChunkHeaderOk_3DS (&currentChunk))
+			break;   // fin de flux : cf. ChunkHeaderOk_3DS
 
 		switch (currentChunk.ID)
 		{
@@ -1181,6 +1298,8 @@ void ParseKeyframer_3DS (t3DSModel *pModel, t3DSChunk *pPreviousChunk)
 	while (pPreviousChunk->bytesRead < pPreviousChunk->length)
 	{
 		ReadChunk_3DS (&currentChunk);
+		if (!ChunkHeaderOk_3DS (&currentChunk))
+			break;   // fin de flux : cf. ChunkHeaderOk_3DS
 
 		if (currentChunk.ID == CHK3DS_B_OBJECT_NODE_TAG)
 		{
@@ -1218,6 +1337,8 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk, 
 	{
 		// Read the next chunk
 		ReadChunk_3DS(&currentChunk);
+		if (!ChunkHeaderOk_3DS (&currentChunk))
+			break;   // fin de flux : cf. ChunkHeaderOk_3DS
 
 		// Check which chunk we just read in
 		switch (currentChunk.ID)
@@ -1230,7 +1351,9 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk, 
 
 		case CHK3DS_A_MAT_NAME:							// This chunk holds the name of the material
 			// Here we read in the material name
-			currentChunk.bytesRead += fread(pModel->pMaterials[pModel->numOfMaterials - 1].strName, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			// Borne a sizeof(strName) : la longueur du nom vient du fichier.
+			ReadChunkRemainder_3DS (pModel->pMaterials[pModel->numOfMaterials - 1].strName,
+			                        sizeof (pModel->pMaterials[pModel->numOfMaterials - 1].strName), &currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_AMBIENT:						// This holds the R G B color of our object
@@ -1313,7 +1436,8 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk, 
 
 		case CHK3DS_A_MAT_WIRESIZE:	//
 			{
-				currentChunk.bytesRead += fread(&(pModel->pMaterials[pModel->numOfMaterials - 1]).fWireThickness, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+				ReadChunkRemainder_3DS (&(pModel->pMaterials[pModel->numOfMaterials - 1]).fWireThickness,
+				                        sizeof ((pModel->pMaterials[pModel->numOfMaterials - 1]).fWireThickness), &currentChunk);
 			}
 			break;
 
@@ -1372,7 +1496,8 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk, 
 				t3DSMaterialInfo &mi = pModel->pMaterials[pModel->numOfMaterials - 1];
 				char *dest = (mapSlot == 1) ? mi.strReflFile : mi.strFile;
 				if (dest[0] == '\0')
-					currentChunk.bytesRead += fread(dest, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+					// `dest` designe strFile ou strReflFile, tous deux de 255 octets.
+					ReadChunkRemainder_3DS (dest, sizeof (mi.strFile), &currentChunk);
 				else
 					SkipChunk_3DS(&currentChunk);
 			}
@@ -1404,7 +1529,8 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk, 
 
 		//New for handling texture coordinates
 		case CHK3DS_A_MAT_MAP_TILING :	//intsh    map options
-			currentChunk.bytesRead += fread( &pModel->pMaterials[pModel->numOfMaterials - 1].wTiling, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			ReadChunkRemainder_3DS (&pModel->pMaterials[pModel->numOfMaterials - 1].wTiling,
+			                        sizeof (pModel->pMaterials[pModel->numOfMaterials - 1].wTiling), &currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_MAP_TEXBLUR_OLD :
@@ -1412,23 +1538,28 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk, 
 			break;
 
 		case CHK3DS_A_MAT_MAP_TEXBLUR :	//float    map filtering blur ( 7% -> 0.07 )
-			currentChunk.bytesRead += fread( &pModel->pMaterials[pModel->numOfMaterials - 1].fTexBlur, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			ReadChunkRemainder_3DS (&pModel->pMaterials[pModel->numOfMaterials - 1].fTexBlur,
+			                        sizeof (pModel->pMaterials[pModel->numOfMaterials - 1].fTexBlur), &currentChunk);
 			break;
 */
 		case CHK3DS_A_MAT_MAP_USCALE :		//float 1/U scale
-			currentChunk.bytesRead += fread( &pModel->pMaterials[pModel->numOfMaterials - 1].uScale, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			ReadChunkRemainder_3DS (&pModel->pMaterials[pModel->numOfMaterials - 1].uScale,
+			                        sizeof (pModel->pMaterials[pModel->numOfMaterials - 1].uScale), &currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_MAP_VSCALE :		//float 1/V scale
-			currentChunk.bytesRead += fread( &pModel->pMaterials[pModel->numOfMaterials - 1].vScale, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			ReadChunkRemainder_3DS (&pModel->pMaterials[pModel->numOfMaterials - 1].vScale,
+			                        sizeof (pModel->pMaterials[pModel->numOfMaterials - 1].vScale), &currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_MAP_UOFFSET :		//float U offset 
-			currentChunk.bytesRead += fread(&pModel->pMaterials[pModel->numOfMaterials - 1].uOffset, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			ReadChunkRemainder_3DS (&pModel->pMaterials[pModel->numOfMaterials - 1].uOffset,
+			                        sizeof (pModel->pMaterials[pModel->numOfMaterials - 1].uOffset), &currentChunk);
 			break;
 
 		case CHK3DS_A_MAT_MAP_VOFFSET :		//float V offset
-			currentChunk.bytesRead += fread(&pModel->pMaterials[pModel->numOfMaterials - 1].vOffset, 1, currentChunk.length - currentChunk.bytesRead, g_File3DSPointer);
+			ReadChunkRemainder_3DS (&pModel->pMaterials[pModel->numOfMaterials - 1].vOffset,
+			                        sizeof (pModel->pMaterials[pModel->numOfMaterials - 1].vOffset), &currentChunk);
 			break;
 /*
 		case CHK3DS_A_MAT_MAP_ANG :	//float    map rotation angle
@@ -1476,6 +1607,12 @@ void ProcessNextMaterialChunk_3DS(t3DSModel *pModel, t3DSChunk *pPreviousChunk, 
 //*****************************************************************************
 void ReadChunk_3DS(t3DSChunk *pChunk)
 {
+	// Remis a zero AVANT lecture : sur un en-tete incomplet, fread laisse les
+	// champs inchanges, et un appelant qui ne teste pas bytesRead lirait alors
+	// l'ID et la longueur du chunk PRECEDENT.
+	pChunk->ID     = 0;
+	pChunk->length = 0;
+
 	// This reads the chunk ID which is 2 bytes.
 	// The chunk ID is like OBJECT or MATERIAL.  It tells what data is
 	// able to be read in within the chunks section.  
@@ -1484,8 +1621,22 @@ void ReadChunk_3DS(t3DSChunk *pChunk)
 	// Then, we read the length of the chunk which is 4 bytes.
 	// This is how we know how much to read in, or read past.
 	pChunk->bytesRead += fread(&pChunk->length, 1, 4, g_File3DSPointer);
-}
 
+	// GARDE-FOU DE L'INVARIANT `length >= bytesRead`.
+	//
+	// Tout le lecteur calcule le reste a lire par `length - bytesRead`, sur des
+	// UINT32. Une longueur annoncee inferieure aux six octets de l'en-tete --
+	// zero sur un fichier tronque, ou n'importe quelle valeur sur un fichier
+	// forge -- fait BOUCLER cette soustraction vers ~4 milliards, et le fread
+	// qui suit ecrit alors autant qu'il peut lire.
+	//
+	// On presente donc un chunk VIDE : `length == bytesRead`. Les boucles
+	// `while (bytesRead < length)` s'arretent, les lectures bornees ci-dessous
+	// ne lisent rien, et SkipChunk n'a rien a sauter. C'est le seul endroit ou
+	// l'invariant peut etre etabli, puisque c'est le seul qui lit l'en-tete.
+	if (pChunk->bytesRead < 6 || pChunk->length < pChunk->bytesRead)
+		pChunk->length = pChunk->bytesRead;
+}
 //*****************************************************************************
 //
 //*****************************************************************************
@@ -1519,7 +1670,12 @@ void ReadColorChunk_3DS(BYTE *pColor, t3DSChunk *pChunk)
 	ReadChunk_3DS(&tempChunk);
 
 	// Read in the R G B color (3 bytes - 0 through 255)
-	tempChunk.bytesRead += fread(pColor, 1, tempChunk.length - tempChunk.bytesRead, g_File3DSPointer);
+	//
+	// TROIS octets, et la borne ne peut pas venir d'un sizeof : `pColor` est un
+	// BYTE* nu. Les appelants passent tous l'adresse d'un champ RGB de trois
+	// octets (sMaterial.Ambient / Diffuse / Specular...), c'est donc le contrat
+	// de la fonction, et il est desormais applique plutot que suppose.
+	ReadChunkRemainder_3DS (pColor, 3, &tempChunk);
 
 	// Add the bytes read to our chunk
 	pChunk->bytesRead += tempChunk.bytesRead;
@@ -1538,7 +1694,7 @@ void ReadPercentageChunk_3DS(FLOAT32 *pPercentage, t3DSChunk *pChunk)
 
 	// Read the percentage chunk
 	int wTemp = 0;
-	tempChunk.bytesRead += fread(&wTemp, 1, tempChunk.length - tempChunk.bytesRead, g_File3DSPointer);
+	ReadChunkRemainder_3DS (&wTemp, sizeof (wTemp), &tempChunk);
 
 	*pPercentage = wTemp;
 
@@ -1604,13 +1760,23 @@ void ReadUVCoordinates_3DS(t3DSObject *pObject, t3DSChunk *pPreviousChunk)
 	// read in the amount there are, then read them in.
 
 	// Read in the number of UV coordinates there are (int)
+	//
+	// DEUX octets lus dans un champ INT32. C'est correct parce que le t3DSObject
+	// vient d'un `= {}` (CHK3DS_A_MAT_ENTRY / OBJECT), donc les deux octets hauts
+	// valent zero et le compte reste dans [0, 65535]. Ce n'est pas une evidence :
+	// sans cette initialisation, le compte serait arbitraire et l'allocation
+	// ci-dessous suivrait.
 	pPreviousChunk->bytesRead += fread(&pObject->numTexVertex, 1, 2, g_File3DSPointer);
+	if (pObject->numTexVertex < 0)
+		pObject->numTexVertex = 0;
 
 	// Allocate memory to hold the UV coordinates
 	pObject->pTexVerts = new VECTOR2f [pObject->numTexVertex];
 
 	// Read in the texture coodinates (an array 2 float)
-	pPreviousChunk->bytesRead += fread(pObject->pTexVerts, 1, pPreviousChunk->length - pPreviousChunk->bytesRead, g_File3DSPointer);
+	ReadArrayIntoChunk_3DS (pObject->pTexVerts,
+	                        (size_t) pObject->numTexVertex * sizeof (VECTOR2f),
+	                        pPreviousChunk, "MAPPINGCOORDS");
 }
 
 
@@ -1624,14 +1790,19 @@ void ReadVertices_3DS(t3DSObject *pObject, t3DSChunk *pPreviousChunk)
 	// we then fread() them into our vertice array.
 
 	// Read in the number of vertices (int)
+	// Deux octets dans un INT32 : cf. la note de ReadUVCoordinates_3DS.
 	pPreviousChunk->bytesRead += fread(&(pObject->numOfVerts), 1, 2, g_File3DSPointer);
+	if (pObject->numOfVerts < 0)
+		pObject->numOfVerts = 0;
 
 	// Allocate the memory for the verts and initialize the structure
 	pObject->pVerts = new VECTOR3f [pObject->numOfVerts];
 	memset(pObject->pVerts, 0, sizeof(VECTOR3f) * pObject->numOfVerts);
 
 	// Read in the array of vertices (an array of 3 floats)
-	pPreviousChunk->bytesRead += fread(pObject->pVerts, 1, pPreviousChunk->length - pPreviousChunk->bytesRead, g_File3DSPointer);
+	ReadArrayIntoChunk_3DS (pObject->pVerts,
+	                        (size_t) pObject->numOfVerts * sizeof (VECTOR3f),
+	                        pPreviousChunk, "POINTARRAY");
 
 	// Now we should have all of the vertices read in.  Because 3D Studio Max
 	// Models with the Z-Axis pointing up (strange and ugly I know!), we need

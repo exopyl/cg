@@ -26,6 +26,7 @@ include_directories(../src/cgre)
 
 set(srcs
         CurvaturePanel.cpp
+        CuttingMat.cpp
         DecimationPanel.cpp
         DrawingArea.cpp
         Managers.cpp
@@ -43,6 +44,11 @@ add_executable(${APP_TARGET} WIN32 ${srcs})
 if (ENABLE_SINAIA_TREATMENTS)
     target_compile_definitions(${APP_TARGET} PRIVATE CG_SINAIA_TREATMENTS)
 endif()
+
+# Base de coupe : l'asset (OBJ + MTL + PNG) est cherche d'abord a cote de
+# l'executable, ou le POST_BUILD plus bas le copie. Ce chemin-ci est le REPLI,
+# pour une execution dont le repertoire de sortie n'a pas recu la copie.
+target_compile_definitions(${APP_TARGET} PRIVATE SINAIA_ASSETS_DIR="${PROJECT_SOURCE_DIR}")
 target_link_libraries(${APP_TARGET} cgimg cgmath cgmesh cgnet cgre)
 
 # opengl
@@ -109,6 +115,21 @@ if(WIN32)
                 COMMENT "Copying OCCT DLLs to $<TARGET_FILE_DIR:${APP_TARGET}>")
     endif()
 endif()
+
+# Base de coupe : les trois fichiers LUS A L'EXECUTION, copies a cote de
+# l'executable. Nommes un par un, et non par copie du repertoire : celui-ci
+# contient aussi base_coupe_texture.py, l'outil qui a GENERE l'asset. Un script
+# de developpement livre avec l'application est du bruit, et il donnerait a
+# croire qu'elle en depend.
+add_custom_command(TARGET ${APP_TARGET} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:${APP_TARGET}>/base_de_coupe"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${PROJECT_SOURCE_DIR}/base_de_coupe/base_de_coupe.obj"
+        "${PROJECT_SOURCE_DIR}/base_de_coupe/base_de_coupe.mtl"
+        "${PROJECT_SOURCE_DIR}/base_de_coupe/base_de_coupe.png"
+        "$<TARGET_FILE_DIR:${APP_TARGET}>/base_de_coupe"
+        COMMENT "Copying base_de_coupe assets to $<TARGET_FILE_DIR:${APP_TARGET}>")
 
 if (UNIX AND ENABLE_OPENNURBS)
      add_custom_command(TARGET ${APP_TARGET} POST_BUILD

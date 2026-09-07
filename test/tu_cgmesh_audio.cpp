@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 
-#include "../src/cgmesh/cgmesh.h"
+// audio.h EN DIRECT : le parapluie ne le tire plus. Ce test est le seul
+// consommateur des quatre unites audio du module.
+#include "../src/cgmesh/audio.h"
+#include "../src/cgmesh/audio_convert.h"
 
 // La donnee est livree avec le depot et copiee dans le repertoire de travail
 // des tests : son absence signale une invocation hors de ce repertoire, donc un

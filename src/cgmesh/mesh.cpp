@@ -1253,6 +1253,18 @@ float Mesh::bbox_diagonal_length(void) const
 	return m_bbox.GetDiagonalLength();
 }
 
+unsigned int Mesh::GetNVertices() const
+{
+	return m_nVertices;
+}
+
+unsigned int Mesh::GetNFaces() const
+{
+	// Derive du tableau des materiaux, seul tableau par face toujours present.
+	// Aucun membre de comptage, donc aucune divergence possible.
+	return (unsigned int)m_faceMaterial.size ();
+}
+
 float Mesh::GetLargestLength(void) const
 {
 	return m_bbox.GetLargestLength();
@@ -1316,18 +1328,6 @@ int Mesh::stats_vertices_in_faces (int *verticesinfaces, int n) const
 	return 0;
 }
 
-unsigned int Mesh::GetNVertices() const
-{
-	return m_nVertices;
-}
-
-unsigned int Mesh::GetNFaces() const
-{
-	// Derive du tableau des materiaux, seul tableau par face toujours present.
-	// Aucun membre de comptage, donc aucune divergence possible.
-	return (unsigned int)m_faceMaterial.size ();
-}
-
 // Remet la face fi a l'etat neuf : triangle, sans materiau, sans UV, et vivante.
 void Mesh::ResetFace (unsigned int fi)
 {
@@ -1368,12 +1368,28 @@ void Mesh::ComputeNormals (void)
 	int *nfaces = new int[m_nVertices];
 	memset (nfaces, 0, m_nVertices*sizeof(int));
 	
+	// INDICES BORNES, EN SECONDE LIGNE.
+	//
+	// Les lecteurs de fichiers doivent valider leurs indices, et ils le font
+	// desormais tous. Mais ComputeNormals est atteint par TOUTE la chaine --
+	// generateurs, decimation, subdivision, contraction d'aretes, chargement --
+	// et un seul de ces producteurs qui laisse passer un indice fautif se
+	// traduisait ici par une ecriture hors bornes a offset choisi. Cette garde
+	// est le filet : une face dont un indice sort des bornes est IGNOREE, avec
+	// une normale de face nulle, plutot que d'ecrire n'importe ou.
+	//
+	// Le cout est de trois comparaisons par face, hors de toute boucle interne.
+	const int nv = (int) m_nVertices;
+	auto vertexInRange = [nv](int k) { return k >= 0 && k < nv; };
+
 	for (int i=0; i<GetNFaces (); i++)
 	{
 		auto pFace = FaceAt (i);
 		int k1 = pFace->GetVertex (0);
 		int k2 = pFace->GetVertex (1);
 		int k3 = pFace->GetVertex (2);
+		if (!vertexInRange (k1) || !vertexInRange (k2) || !vertexInRange (k3))
+			continue;
 		Vector3f p1p2, p1p3, n;
 		p1p2.Set (
 			   m_pVertices[3*k2]   - m_pVertices[3*k1],
@@ -1392,6 +1408,10 @@ void Mesh::ComputeNormals (void)
 		for (int j=0; j<pFace->GetNVertices (); j++)
 		{
 			int k = pFace->GetVertex (j);
+			// Une face de plus de 3 sommets : les trois premiers sont bornes
+			// ci-dessus, les suivants ne le sont pas encore.
+			if (!vertexInRange (k))
+				continue;
 			
 			m_vertexNormals[3*k]   += m_faceNormals[3*i];
 			m_vertexNormals[3*k+1] += m_faceNormals[3*i+1];
@@ -2188,4 +2208,5 @@ int Mesh::MergeVertices (float tolerance)
 
 	return (int)(nOldVertices - nNewVertices);
 }
+
 

@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -626,6 +627,29 @@ Cregions_faces::closing_selected_region (void)
 	erode_selected_region ();
 }
 
+
+// ===========================================================================
+//  METHODES NON IMPLEMENTEES : elles LEVENT, elles ne mentent plus
+// ===========================================================================
+// Les methodes de lissage ci-dessous avaient un corps entierement commente.
+// Elles rendaient donc la main sans rien faire, et comme elles sont `void`,
+// l'appelant n'avait AUCUN moyen de le savoir : `smoothing_taubin_regions()`
+// s'executait, ne lissait rien, et passait pour un succes.
+//
+// C'est le constat que `debt_cgmesh.md` porte au § 4, avec sa consigne : jamais
+// un `void {}`. Le contrat d'une methode non implementee est de le DIRE.
+//
+// POURQUOI LEVER, plutot que supprimer la declaration. Les corps commentes
+// nomment l'appel qui devait avoir lieu -- `mesh_topology->smoothing_laplacian
+// (regions)` -- et c'est la seule trace de l'intention. Le depot n'est pas sous
+// gestion de version : supprimer les perdrait. On garde donc la trace, et l'on
+// remplace le silence par une exception.
+//
+// AUCUN APPELANT VIVANT, verifie sur tout le depot : les deux seules mentions
+// hors de ce fichier (regions_faces.cpp:650 et 673) sont elles-memes dans des
+// corps commentes. La levee ne casse donc rien aujourd'hui, et se manifestera au
+// premier appelant reel -- ce qui est exactement l'objet.
+// ===========================================================================
 /*****************/
 /*** smoothing ***/
 /*****************/
@@ -650,6 +674,7 @@ Cregions_faces::smoothing_laplacian (void)
 			regions_vertices->smoothing_laplacian_selected_region ();
 	}
 	*/
+  throw std::logic_error ("Cregions_faces::smoothing_laplacian : non implemente (corps commente ci-dessus)");
 }
 
 void
@@ -673,6 +698,7 @@ Cregions_faces::smoothing_taubin (void)
 			region_vertices->smoothing_taubin_selected_region ();
 	}
 	*/
+  throw std::logic_error ("Cregions_faces::smoothing_taubin : non implemente (corps commente ci-dessus)");
 }
 
 /***************/

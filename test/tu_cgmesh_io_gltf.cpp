@@ -552,3 +552,82 @@ TEST(TEST_cgmesh_io_gltf, the_tiger_exports_every_material_as_its_own_primitive)
 	// ouvrent.
 	EXPECT_EQ(MeshIO::export_glb (*mesh, "./tu_tiger.glb"), 0);
 }
+
+// ===========================================================================
+//  L'IMPORT : la hierarchie de noeuds, et l'aller-retour
+// ===========================================================================
+//
+// Ces deux tests couvrent un trou : rien n'exercait VMeshesIO::load sur un glTF.
+// L'import lisait model.meshes en ignorant model.nodes, donc toute matrice de
+// scene -- une omission qu'aucun oracle d'ECRITURE ne pouvait voir, puisque
+// l'ecrivain, lui, ecrit bien son noeud.
+//
+// Le premier test est la propriete que le defaut violait : ecrire puis relire
+// doit redonner le maillage de depart. Le second l'ancre sur un fichier reel,
+// dont le noeud racine porte une echelle -- sans quoi le premier passerait meme
+// si la conversion d'unite et la conversion d'axe s'annulaient par erreur entre
+// elles.
+
+#include "../src/cgmesh/vmeshes.h"
+#include "../src/cgmesh/vmeshes_io.h"
+
+TEST(TEST_cgmesh_io_gltf, a_glb_round_trip_gives_back_the_same_coordinates)
+{
+	Mesh m = makeTriangles (3);
+	ASSERT_EQ(MeshIO::export_glb (m, "./tu_gltf_roundtrip.glb"), 0);
+
+	VMeshes vm;
+	ASSERT_TRUE(VMeshesIO::load (vm, "./tu_gltf_roundtrip.glb"));
+	ASSERT_EQ(vm.GetNMeshes (), 1u);
+
+	const Mesh* back = vm.GetMeshes ()[0];
+	ASSERT_NE(back, nullptr);
+	ASSERT_EQ(back->GetNVertices (), m.GetNVertices ());
+
+	// L'ecrivain met le maillage en metres et en Y-up sur son noeud ; le lecteur
+	// doit defaire exactement cela. La tolerance couvre le seul aller-retour de
+	// 0,001 et de 1000 en double, pas une erreur de repere : une rotation oubliee
+	// deplacerait les sommets de plusieurs millimetres.
+	const std::vector<float>& src = m.GetVertices ();
+	const std::vector<float>& dst = back->GetVertices ();
+	ASSERT_EQ(src.size (), dst.size ());
+	for (size_t i = 0; i < src.size (); ++i)
+		EXPECT_NEAR(dst[i], src[i], 1e-3f) << "composante " << i;
+}
+
+TEST(TEST_cgmesh_io_gltf, the_root_node_scale_of_a_real_file_is_honoured)
+{
+	// Duck.glb (Khronos) : son noeud racine porte une echelle uniforme de 0,01,
+	// et le maillage est un enfant de ce noeud. Ignoree, elle faisait arriver le
+	// canard 100 fois trop grand -- et couche, faute de conversion Y-up -> Z-up.
+	VMeshes vm;
+	ASSERT_TRUE(VMeshesIO::load (vm, "./test/data/Duck.glb"));
+	ASSERT_GE(vm.GetNMeshes (), 1u);
+
+	BoundingBox bbox;
+	for (Mesh* mesh : vm.GetMeshes ())
+	{
+		ASSERT_NE(mesh, nullptr);
+		mesh->computebbox ();
+		bbox.AddBoundingBox (mesh->bbox ());
+	}
+	float mn[3], mx[3];
+	bbox.GetMinMax (mn, mx);
+
+	// Coordonnees brutes du fichier : X -69,30..96,18  Y 9,93..163,97
+	//                                 Z -61,33..53,93
+	// Attendu = brut x 0,01 (noeud) x 1000 (metre -> millimetre), puis
+	// (x,y,z) -> (x,-z,y) pour passer en Z-up.
+	EXPECT_NEAR(mn[0], -692.985f, 0.5f);
+	EXPECT_NEAR(mx[0],  961.799f, 0.5f);
+	EXPECT_NEAR(mn[1], -539.252f, 0.5f);
+	EXPECT_NEAR(mx[1],  613.282f, 0.5f);
+	EXPECT_NEAR(mn[2],   99.294f, 0.5f);
+	EXPECT_NEAR(mx[2], 1639.700f, 0.5f);
+
+	// La consequence qui se voit a l'ecran, et qui a motive le correctif : le
+	// canard ne traverse plus le plan Z = 0 de la base de coupe. C'est la seule
+	// propriete d'orientation qu'on puisse affirmer ici -- ce canard est plus
+	// LARGE que haut (1655 mm en X contre 1540 en Z), donc « la plus grande
+	// dimension est la hauteur » serait faux.
+}

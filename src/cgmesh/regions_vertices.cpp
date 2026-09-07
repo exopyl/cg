@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -803,6 +804,29 @@ Cregions_vertices::pruning_selected_region (void)
   */
 }
 
+
+// ===========================================================================
+//  METHODES NON IMPLEMENTEES : elles LEVENT, elles ne mentent plus
+// ===========================================================================
+// Les methodes de lissage ci-dessous avaient un corps entierement commente.
+// Elles rendaient donc la main sans rien faire, et comme elles sont `void`,
+// l'appelant n'avait AUCUN moyen de le savoir : `smoothing_taubin_regions()`
+// s'executait, ne lissait rien, et passait pour un succes.
+//
+// C'est le constat que `debt_cgmesh.md` porte au § 4, avec sa consigne : jamais
+// un `void {}`. Le contrat d'une methode non implementee est de le DIRE.
+//
+// POURQUOI LEVER, plutot que supprimer la declaration. Les corps commentes
+// nomment l'appel qui devait avoir lieu -- `mesh_topology->smoothing_laplacian
+// (regions)` -- et c'est la seule trace de l'intention. Le depot n'est pas sous
+// gestion de version : supprimer les perdrait. On garde donc la trace, et l'on
+// remplace le silence par une exception.
+//
+// AUCUN APPELANT VIVANT, verifie sur tout le depot : les deux seules mentions
+// hors de ce fichier (regions_faces.cpp:650 et 673) sont elles-memes dans des
+// corps commentes. La levee ne casse donc rien aujourd'hui, et se manifestera au
+// premier appelant reel -- ce qui est exactement l'objet.
+// ===========================================================================
 /*************/
 /* smoothing */
 /*************/
@@ -810,68 +834,86 @@ void
 Cregions_vertices::smoothing_laplacian_regions (void)
 {
   //mesh_topology->smoothing_laplacian (regions);
+  throw std::logic_error ("Cregions_vertices::smoothing_laplacian_regions : non implemente (corps commente ci-dessus)");
 }
 
 void
 Cregions_vertices::smoothing_laplacian_inverse_regions (void)
 {
   //mesh_topology->smoothing_laplacian_inverse (regions);
+  throw std::logic_error ("Cregions_vertices::smoothing_laplacian_inverse_regions : non implemente (corps commente ci-dessus)");
 }
 
 void
 Cregions_vertices::smoothing_taubin_regions (void)
 {
-  float lambda = 0.7;
-  float mu = -0.7527;
-  //mesh_topology->smoothing_taubin (lambda, mu, regions);
+  // lambda = 0.7, mu = -0.7527 : les coefficients que l'appel commente
+  // ci-dessous consommait. Conserves en commentaire et non en variables
+  // locales -- deux declarations que personne ne lit sont deux
+  // avertissements de plus, pas une documentation.
+  //mesh_topology->smoothing_taubin (0.7, -0.7527, regions);
+  throw std::logic_error ("Cregions_vertices::smoothing_taubin_regions : non implemente (corps commente ci-dessus)");
 }
 
 void
 Cregions_vertices::smoothing_taubin_regions (float lambda, float mu)
 {
   //mesh_topology->smoothing_taubin (lambda, mu, regions);
+  throw std::logic_error ("Cregions_vertices::smoothing_taubin_regions : non implemente (corps commente ci-dessus)");
 }
 
 void
 Cregions_vertices::smoothing_taubin_inverse_regions (void)
 {
-  float lambda = -1.2;
-  float mu = 0.7;
-  //mesh_topology->smoothing_taubin (lambda, mu, regions);
+  // lambda = -1.2, mu = 0.7 : les coefficients que l'appel commente
+  // ci-dessous consommait. Conserves en commentaire et non en variables
+  // locales -- deux declarations que personne ne lit sont deux
+  // avertissements de plus, pas une documentation.
+  //mesh_topology->smoothing_taubin (-1.2, 0.7, regions);
+  throw std::logic_error ("Cregions_vertices::smoothing_taubin_inverse_regions : non implemente (corps commente ci-dessus)");
 }
 
 void
 Cregions_vertices::smoothing_laplacian_selected_region (void)
 {
   //mesh_topology->smoothing_laplacian (selected_region);
+  throw std::logic_error ("Cregions_vertices::smoothing_laplacian_selected_region : non implemente (corps commente ci-dessus)");
 }
 
 void
 Cregions_vertices::smoothing_laplacian_inverse_selected_region (void)
 {
   //mesh_topology->smoothing_laplacian_inverse (selected_region);
+  throw std::logic_error ("Cregions_vertices::smoothing_laplacian_inverse_selected_region : non implemente (corps commente ci-dessus)");
 }
 
 void
 Cregions_vertices::smoothing_taubin_selected_region (void)
 {
-  float lambda = 0.7;
-  float mu = -0.7527;
-  //mesh_topology->smoothing_taubin (lambda, mu, selected_region);
+  // lambda = 0.7, mu = -0.7527 : les coefficients que l'appel commente
+  // ci-dessous consommait. Conserves en commentaire et non en variables
+  // locales -- deux declarations que personne ne lit sont deux
+  // avertissements de plus, pas une documentation.
+  //mesh_topology->smoothing_taubin (0.7, -0.7527, selected_region);
+  throw std::logic_error ("Cregions_vertices::smoothing_taubin_selected_region : non implemente (corps commente ci-dessus)");
 }
 
 void
 Cregions_vertices::smoothing_taubin_inverse_selected_region (void)
 {
-  float lambda = -1.2;
-  float mu = 0.7;
-  //mesh_topology->smoothing_taubin (lambda, mu, selected_region);
+  // lambda = -1.2, mu = 0.7 : les coefficients que l'appel commente
+  // ci-dessous consommait. Conserves en commentaire et non en variables
+  // locales -- deux declarations que personne ne lit sont deux
+  // avertissements de plus, pas une documentation.
+  //mesh_topology->smoothing_taubin (-1.2, 0.7, selected_region);
+  throw std::logic_error ("Cregions_vertices::smoothing_taubin_inverse_selected_region : non implemente (corps commente ci-dessus)");
 }
 
 void
 Cregions_vertices::smoothing_taubin_selected_region (float lambda, float mu)
 {
   //mesh_topology->smoothing_taubin (lambda, mu, selected_region);
+  throw std::logic_error ("Cregions_vertices::smoothing_taubin_selected_region : non implemente (corps commente ci-dessus)");
 }
   
 /***********/

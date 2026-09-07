@@ -92,6 +92,35 @@ static void glutess_combine(double coords[3],
 //
 // merge contours defining a polygon to avoid overlapping contours
 //
+// ATTENTION : CETTE FONCTION N'EST PAS IMPLEMENTEE, et elle le DIT desormais.
+//
+// Elle rendait 0 -- succes -- sans rien faire, parce que la totalite de son
+// corps vit sous `#ifdef USE_GLUTESS`, drapeau qui n'est defini nulle part dans
+// le depot. Un appelant recevait donc un accuse de bonne fin sur une fusion de
+// contours qui n'avait pas eu lieu. C'est le defaut que `debt_cgmesh.md` decrit
+// au § 4 et qu'il resume ainsi : un talon qui rend « succes » est plus dangereux
+// qu'une absence de code.
+//
+// POURQUOI LE CORPS N'EST PAS SIMPLEMENT REACTIVE, contrairement a ce que la
+// fiche de dette proposait. Trois obstacles constates, et non supposes :
+//
+//   1. il inclut `glutess/sgi-glu.h`, qui N'EXISTE PAS dans extern/glutess. Le
+//      fichier voisin qui se sert reellement de la bibliotheque
+//      (polygon2_tesselation.cpp) inclut `glutess/glutess.h` ;
+//   2. il contient `return nullptr;` dans une fonction qui rend un `int`. Ce
+//      corps n'a donc JAMAIS ete compile, sous aucune configuration ;
+//   3. il utilise l'API GLU historique (gluNewTess, gluTessCallback...) alors
+//      que le glutess versionne du depot expose la sienne.
+//
+// Le reanimer n'est donc pas un retrait de garde : c'est un portage, sur 63
+// lignes dont la correction n'a jamais ete verifiee par quoi que ce soit. Ce
+// n'est pas ce qu'on fait a l'occasion d'un nettoyage d'honnetete.
+//
+// Le corps est CONSERVE, et non supprime : il porte l'intention algorithmique
+// (fusion de contours par regle de remplissage non nulle, contours de sortie
+// seulement), et le depot n'est pas sous gestion de version -- le supprimer le
+// perdrait. Son unique appelant est le test qui constate ce talon.
+//
 int Polygon2::clean (Polygon2* polygon)
 {
 #ifdef USE_GLUTESS
@@ -154,6 +183,13 @@ int Polygon2::clean (Polygon2* polygon)
 
 	// cleaning
 	free(state.tmp);
-#endif
 	return 0;
+#else
+	(void) polygon;
+	// -1, et non 0 : c'est la valeur d'echec que le corps ci-dessus emploie
+	// lui-meme pour une entree invalide. Un appelant qui la teste apprend que
+	// rien n'a ete fusionne, au lieu de le croire fait.
+	fprintf (stderr, "Polygon2::clean : non implemente (USE_GLUTESS absent)\n");
+	return -1;
+#endif
 }

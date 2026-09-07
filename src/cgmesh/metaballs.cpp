@@ -31,6 +31,31 @@
 #include <utility>
 #include <algorithm>
 
+// ===========================================================================
+//  ESPACE DE NOMS PROPRE : ce fichier definit son PROPRE type `Mesh`
+// ===========================================================================
+// Ce fichier est une DEMONSTRATION AUTONOME -- son en-tete indique encore sa
+// ligne de compilation g++ isolee -- qui a ete versee dans la bibliotheque
+// cgmesh. Il y definit, a la portee globale, un `struct Mesh { verts, tris }`
+// qui n'a rien a voir avec la classe Mesh du module.
+//
+// DEUX TYPES DE MEME NOM A LIAISON EXTERNE dans une meme bibliotheque : c'est
+// une violation de la regle de definition unique, donc un comportement
+// indefini. L'editeur de liens le DISAIT deja -- « LNK4006: Mesh::Mesh(void)
+// deja defini dans mesh.cpp.obj ; seconde definition ignoree » -- et choisissait
+// silencieusement l'une des deux.
+//
+// Le defaut est reste invisible tant que rien n'incluait mesh.h ici. L'en-tete
+// precompile de la cible l'y a introduit, et la redefinition est devenue une
+// erreur de compilation franche : c'est ainsi qu'elle a ete trouvee.
+//
+// Un espace de noms nomme, et non anonyme : il dit a quoi ces types
+// appartiennent, et n'inonde pas le build d'avertissements « symbole non
+// utilise » -- car RIEN n'appelle ce fichier. Le test tu_cgmesh_metaballs.cpp
+// recopie l'algorithme au lieu de l'appeler, et le note dans son propre
+// en-tete. Ce fichier est donc, en l'etat, du code mort compile.
+namespace metaballs_demo {
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -312,3 +337,6 @@ std::vector<Motif> interpolate_motifs(const std::vector<Motif>& A,
     }
     return result;
 }
+
+
+}  // namespace metaballs_demo

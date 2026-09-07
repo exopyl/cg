@@ -95,6 +95,61 @@ if (EMSCRIPTEN)
     add_compile_options(-Wsuggest-destructor-override)
 endif()
 
+# ---------------------------------------------------------------------------
+#  /MP : compilation PARALLELE des unites de traduction (MSVC)
+# ---------------------------------------------------------------------------
+# Sans /MP, cl.exe compile les fichiers d'une meme cible SEQUENTIELLEMENT, quel
+# que soit le nombre de coeurs. MSBuild parallelise les PROJETS, pas les unites a
+# l'interieur d'un projet -- or cgmesh en compte 160 a lui seul, ce qui en fait
+# le chemin critique de tout build complet.
+#
+# Pose ici et non par cible : la propriete est vraie de chaque cible du depot, et
+# une option de compilation utile a toutes n'a pas a etre repetee.
+#
+# /MP est incompatible avec /Gm (minimal rebuild, deprecie et absent des
+# configurations de ce depot) et avec #import ; ni l'un ni l'autre n'apparait
+# ici. Il l'est aussi avec /Yc + fichiers multiples dans un seul appel, ce que
+# CMake ne fait pas.
+if (MSVC)
+    add_compile_options(/MP)
+endif ()
+
+# ---------------------------------------------------------------------------
+#  SANITIZERS (AddressSanitizer + UndefinedBehaviorSanitizer)
+# ---------------------------------------------------------------------------
+# Les tests de fichiers malformes (test/tu_cgmesh_io_malformed.cpp) prouvent que
+# les lecteurs RENDENT LA MAIN sur une entree cassee. Ils ne prouvent PAS
+# l'absence d'ecriture hors bornes : un debordement de quelques octets dans un
+# tas Debug ne se voit pas, et c'est exactement la faute qu'on cherche.
+#
+# Sous ASan, ces memes tests deviennent des DETECTEURS -- l'ecriture est piegee
+# a l'octet pres, avec la pile. C'est pourquoi la cible et les fixtures sont un
+# seul et meme constat : chacun sans l'autre ne vaut presque rien.
+#
+# OFF par defaut : ASan coute environ 2x en temps et 3x en memoire, et
+# l'instrumentation n'a de sens ni pour un build de release ni pour l'usage
+# quotidien. La cible est faite pour la CI et pour une session de recherche.
+#
+# UBSan n'existe pas chez MSVC ; /fsanitize=address y existe depuis VS 2019 mais
+# reclame le CRT dynamique, d'ou l'absence de UBSan sur cette branche.
+set(CG_ENABLE_SANITIZERS Off CACHE BOOL
+    "AddressSanitizer (+ UndefinedBehaviorSanitizer hors MSVC).")
+if (CG_ENABLE_SANITIZERS)
+    if (MSVC)
+        add_compile_options(/fsanitize=address /Zi)
+        add_link_options(/INCREMENTAL:NO)
+    else ()
+        # -fno-sanitize-recover : un depassement doit FAIRE ECHOUER le test, pas
+        # seulement l'annoter. Sans cela UBSan rend un diagnostic sur stderr et
+        # laisse le processus sortir avec 0, donc la CI passe au vert.
+        add_compile_options(-fsanitize=address,undefined
+                            -fno-sanitize-recover=all
+                            -fno-omit-frame-pointer -g)
+        add_link_options(-fsanitize=address,undefined)
+    endif ()
+    message(STATUS "Sanitizers ACTIFS (CG_ENABLE_SANITIZERS=ON)")
+endif ()
+
 # Options
 set(ENABLE_COVERAGE Off CACHE BOOL "Enable coverage.")
 set(ENABLE_SINAIA Off CACHE BOOL "Enable sinaia.")
