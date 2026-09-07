@@ -104,24 +104,17 @@ double signedArea(const std::vector<Vector2f>& pts)
 
 // Retire les points consecutifs QUASI CONFONDUS, et referme proprement la boucle.
 //
-// Pourquoi c'est indispensable : glutess ECARTE un sommet redondant -- il
-// n'apparait alors dans aucun triangle. Or les parois se construisent en
-// retrouvant chaque arete de contour parmi les triangles de capot (voir
-// ExtrudedMeshBuilder::Append) : un sommet ecarte fait donc perdre TROIS aretes
-// d'un coup, celle qui entre, celle de longueur nulle, celle qui sort -- et donc
-// trois parois, silencieusement.
-//
-// Mesure avant correction, sur un trace dense (L-systeme « Dragon curve ») : 190
-// aretes sans paroi sur 1633, et sur ces 190, le nombre dont les deux extremites
-// etaient utilisees par un triangle valait exactement ZERO. Autrement dit la
-// totalite des pertes venait de sommets ecartes. Les paires fautives etaient
-// separees de 0 ou de 2,98e-08 -- soit un ULP de float a une magnitude de 0,3.
+// Indispensable : glutess ECARTE un sommet redondant, qui n'apparait alors dans
+// aucun triangle. Or les parois se construisent en retrouvant chaque arete de
+// contour parmi les triangles de capot (voir ExtrudedMeshBuilder::Append) : un
+// sommet ecarte fait perdre TROIS aretes d'un coup -- celle qui entre, celle de
+// longueur nulle, celle qui sort -- et donc trois parois, silencieusement.
 //
 // Tolerance RELATIVE et non absolue : ces points sont IDENTIQUES en sortie de
-// Clipper2, c'est la mise a l'echelle de recenterAndFit qui les separe d'un bit.
-// Une comparaison exacte (meme sur les bits) les rate donc par construction.
-// 1e-6 de la magnitude laisse une marge de ~30 ULP au-dessus du bruit, et reste
-// trois ordres de grandeur sous la plus courte arete legitime observee (0,005).
+// Clipper2, c'est la mise a l'echelle de recenterAndFit qui les separe d'un ULP.
+// Une comparaison exacte les rate donc par construction. 1e-6 de la magnitude
+// laisse une marge au-dessus de ce bruit tout en restant trois ordres de
+// grandeur sous la plus courte arete legitime.
 std::vector<Vector2f> dropDuplicatePoints(const std::vector<Vector2f>& pts)
 {
 	float mag = 1.f;

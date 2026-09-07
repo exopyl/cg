@@ -27,11 +27,9 @@ const cggraph::NodeDesc &Desc ()
 	return desc;
 }
 
-// Emprise XY du maillage, mesuree sur les positions.
-//
-// Et non par `Mesh::bbox()` : celle-ci est une derivation MISE EN CACHE sans
-// detection de peremption, vide sur un maillage qui n'est jamais passe par
-// computebbox().
+// Emprise XY du maillage, mesuree sur les positions -- et non par `Mesh::bbox()`,
+// derivation mise en cache sans detection de peremption, vide sur un maillage
+// qui n'est jamais passe par computebbox().
 bool meshExtentXY (const Mesh &mesh, float &largest)
 {
 	const unsigned int n = mesh.GetNVertices ();
@@ -61,9 +59,8 @@ bool meshExtentXY (const Mesh &mesh, float &largest)
 
 SvgExtrudeColoredNode::SvgExtrudeColoredNode ()
 {
-	// Les six reglages d'import, aux memes noms et aux memes defauts que
-	// svg.contours : un document se transpose d'un noeud a l'autre sans table de
-	// correspondance.
+	// Memes noms et memes defauts que svg.contours : un document se transpose
+	// d'un noeud a l'autre sans table de correspondance.
 	GetParams ().SetFloat ("flattenTol", 0.005f);
 	GetParams ().SetBool ("centerAndFit", true);
 	GetParams ().SetBool ("invertY", true);
@@ -72,17 +69,13 @@ SvgExtrudeColoredNode::SvgExtrudeColoredNode ()
 	GetParams ().SetFloat ("strokeWidthFallback", 1.0f);
 
 	// Trait des formes FERMEES ET REMPLIES. Defaut `true` ICI, alors que
-	// SvgExtrudeOptions le met a `false` : les deux defauts repondent a deux
-	// questions differentes. Le defaut C++ preserve le comportement anterieur
-	// bit pour bit ; le defaut du noeud sert la regle du produit, « ne rien
-	// perdre du document » -- sur le tigre de reference, 65 formes sur 239
-	// portent un trait qui serait sinon ignore.
+	// SvgExtrudeOptions le met a `false` : l'API C++ preserve la geometrie de ses
+	// appelants, le noeud sert la regle du produit -- ne rien perdre du document.
 	GetParams ().SetBool ("strokeOnFilledShapes", true);
 
-	// Largeur MINIMALE d'un trait, dans les unites du dessin normalise -- comme
-	// `flattenTol`, et pour la meme raison. Sous « Taille », 0.004 vaut 0,4 mm
-	// sur une piece de 100 mm. Elle ELARGIT un trait trop fin, elle n'en supprime
-	// jamais. 0 la desactive.
+	// Largeur MINIMALE d'un trait, dans les unites du dessin normalise comme
+	// `flattenTol` : sous « Taille », 0.004 vaut 0,4 mm sur une piece de 100 mm.
+	// Elle ELARGIT un trait trop fin, elle n'en supprime jamais. 0 la desactive.
 	GetParams ().SetFloat ("minStrokeWorldWidth", 0.0f);
 
 	// Couleur d'une region issue d'un trait : celle du `stroke` plutot que celle
@@ -97,9 +90,8 @@ SvgExtrudeColoredNode::SvgExtrudeColoredNode ()
 	// sortent telles que l'import les rend.
 	GetParams ().SetFloat ("fitSize", 0.0f);
 
-	// PROFONDEUR, en millimetres. Elle a migre depuis shape.extrude, que ce
-	// noeud remplace dans la chaine : `depth` reste une EPAISSEUR, le solide
-	// occupe [0, depth].
+	// PROFONDEUR, en millimetres : `depth` est une EPAISSEUR, le solide occupe
+	// [0, depth]. Meme sens que sur shape.extrude.
 	GetParams ().SetFloat ("depth", 0.2f);
 }
 
@@ -147,8 +139,7 @@ bool SvgExtrudeColoredNode::Compute (cggraph::EvalContext &ctx, const cggraph::V
 
 	// La profondeur est portee par l'EXTRUSION et non par une mise a l'echelle :
 	// « Taille » ne redimensionne que le plan, si bien que les deux cotes de la
-	// piece restent independantes -- c'est deja le contrat de la chaine
-	// svg.contours + shape.extrude, et il ne doit pas changer en passant ici.
+	// piece restent independantes. Meme contrat que svg.contours + shape.extrude.
 	options.height = GetFloat (GetParams (), "depth", 0.2f);
 
 	SvgExtrudeMapping mapping;

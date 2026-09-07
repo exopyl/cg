@@ -1,8 +1,6 @@
 #include "import_svg.h"
 
-// Resolution des regles de remplissage (resolveShape) : meme dependance que
-// text_extrude.cpp, et pour la meme raison.
-#include "clipper2/clipper.h"
+#include "clipper2/clipper.h"   // resolveShape : regles de remplissage
 
 #include "contour_ops.h"   // unionContours, differenceContours, contourSignedArea
 #include "extrude_contours.h"
@@ -28,11 +26,9 @@
 //  Bezier flattening
 // ============================================================================
 //
-// L'algorithme lui-meme vit desormais dans cgmath/bezier_flatten.h : meme
-// subdivision de De Casteljau, meme critere de platitude, meme garde-fou de
-// profondeur -- il est simplement partage avec les contours de glyphes
-// (text_extrude.cpp), qui en ont besoin en variante QUADRATIQUE. Ne reste ici
-// que ce qui est propre a nanosvg : le parcours du tableau de points.
+// La subdivision vit dans cgmath/bezier_flatten.h, partagee avec les contours
+// de glyphes (text_extrude.cpp). Ne reste ici que le parcours du tableau de
+// points de nanosvg.
 
 namespace {
 
@@ -80,11 +76,9 @@ std::vector<Vector2f> flattenPath(const NSVGpath* path, float tol)
 // derives cap and wall orientation from the world geometry itself, so doing this
 // before rather than after tessellation is equivalent.
 
-// Une forme que le document dit de ne pas dessiner ne porte pas
-// NSVG_FLAGS_VISIBLE (nanosvg.h:106, :160) : elle ne produit donc pas de volume.
-// Le drapeau est ecarte de TOUS les parcours du fichier, y compris de
-// l'estimation d'emprise -- la tolerance d'aplatissement se mesure sur l'encre
-// reellement produite.
+// Une forme masquee par le document ne porte pas NSVG_FLAGS_VISIBLE
+// (nanosvg.h:106, :160) et ne produit donc pas de volume. Le drapeau est
+// applique dans TOUS les parcours du fichier, estimation d'emprise comprise.
 //
 // Seul `display:none` le declenche, en attribut ou en style ; nanosvg ne lit pas
 // `visibility` (nanosvg.h:1819-1822).
@@ -98,18 +92,15 @@ bool isVisible(const NSVGshape* shape)
 // ============================================================================
 //
 // Une Bezier est contenue dans l'enveloppe convexe de ses points de controle :
-// l'emprise lue sur ces points CONTIENT donc celle du trace, et lui est egale
-// des que les extremums sont des points d'ancrage -- le cas courant. On connait
-// ainsi l'ordre de grandeur du document AVANT toute subdivision, ce qui casse la
-// circularite : recenterAndFit a besoin de la geometrie aplatie, et la
-// subdivision aurait besoin du facteur d'echelle.
+// l'emprise lue sur ces points CONTIENT donc celle du trace. L'ordre de
+// grandeur du document est ainsi connu AVANT toute subdivision, ce qui casse la
+// circularite -- recenterAndFit a besoin de la geometrie aplatie, la subdivision
+// aurait besoin du facteur d'echelle.
 //
-// Les memes formes sont parcourues que dans la boucle principale -- meme filtre
-// d'identifiant, meme test remplissage / trait -- pour que l'estimation porte sur
-// l'encre reellement produite. L'ecart residuel (chemins trop courts pour etre
-// retenus, epaisseur ajoutee par strokeToContours) ne joue QUE sur la densite de
-// tessellation, jamais sur la position d'un sommet : cette valeur ne sert qu'a
-// convertir une tolerance.
+// Le parcours applique les MEMES filtres que la boucle principale, pour que
+// l'estimation porte sur l'encre reellement produite. L'ecart residuel ne joue
+// que sur la densite de tessellation, jamais sur la position d'un sommet : cette
+// valeur ne sert qu'a convertir une tolerance et une largeur.
 //
 // Renvoie 0 quand il n'y a rien a mesurer.
 float controlHullLargestExtent(const NSVGimage* image, const SvgExtrudeOptions& opt)
@@ -269,13 +260,8 @@ void recenterAndFit(std::vector<std::vector<Vector2f>>& shapes)
         }
 }
 
-// ============================================================================
-//  Frontiere avec strokeToContours
-// ============================================================================
-//
 // stroke_contours.h parle en std::array<float,2> et sert aussi
-// parameterized_shapes.cpp : changer sa signature deborderait de ce fichier. On
-// convertit donc de part et d'autre de l'appel, sur les seuls traces ouverts.
+// parameterized_shapes.cpp : on convertit de part et d'autre de l'appel.
 
 std::vector<std::array<float, 2>> toArrays(const std::vector<Vector2f>& pts)
 {
@@ -294,9 +280,8 @@ std::vector<Vector2f> fromArrays(const std::vector<std::array<float, 2>>& pts)
 }
 
 // Un lot de contours aplatis partageant une regle de remplissage et une
-// peinture -- l'etat intermediaire entre la lecture du document et la resolution
-// Clipper2. Une forme source en produit jusqu'a deux : son remplissage, puis le
-// ruban issu de son trait.
+// peinture : l'etat intermediaire entre la lecture du document et la resolution
+// Clipper2.
 struct ShapeLot
 {
     std::vector<std::vector<Vector2f>> contours;
@@ -306,12 +291,10 @@ struct ShapeLot
 
 } // namespace
 
-// Resout la regle de remplissage d'UNE forme et rend sa region. Clipper2 oriente
-// exterieurs et trous en sens opposes, ce que NonZero traite correctement en aval.
-//
-// C'est ce qui permet a un port de contours de porter une liste PLATE : la regle
-// EvenOdd/NonZero est une propriete de la forme SOURCE, pas du resultat, et la
-// resoudre ici evite d'avoir a la transporter.
+// Resout la regle de remplissage d'UNE forme et rend sa region. La regle
+// EvenOdd/NonZero est une propriete de la forme SOURCE : la resoudre ici permet
+// aux etages aval de ne porter qu'une liste PLATE de contours. Clipper2 oriente
+// exterieurs et trous en sens opposes, ce que NonZero traite correctement.
 static std::vector<ExtrudeContour> resolveShape(const std::vector<ExtrudeContour>& in,
                                                 bool evenOdd)
 {
@@ -328,8 +311,8 @@ static std::vector<ExtrudeContour> resolveShape(const std::vector<ExtrudeContour
         subjects.push_back(std::move(p));
     }
 
-    // precision 6, comme text_extrude.cpp : deux decimales aplatiraient les
-    // details d'une forme d'une unite de cote.
+    // precision 6 : deux decimales aplatiraient les details d'une forme d'une
+    // unite de cote.
     const PathsD merged = Union(subjects, evenOdd ? FillRule::EvenOdd : FillRule::NonZero, 6);
 
     std::vector<ExtrudeContour> out;
@@ -357,33 +340,13 @@ bool svg_to_shape_groups(const std::string& filename, const SvgExtrudeOptions& o
         return false;
     }
 
-    // ------------------------------------------------------------------------
-    //  Tolerance : des unites de SORTIE vers celles du document
-    // ------------------------------------------------------------------------
-    // `flattenTol` s'exprime dans les unites du MAILLAGE PRODUIT (cf.
-    // import_svg.h), alors que la subdivision travaille sur les coordonnees du
-    // document. Sans conversion, la finesse des courbes dependrait de l'echelle
-    // du fichier source : 0.5 unite de document vaut 2 % d'une icone de 24 et
-    // 0.05 % d'un logo de 1024, alors que l'objet final fait 1.0 dans les deux
-    // cas.
+    // `flattenTol` et `minStrokeWorldWidth` s'expriment dans les unites du
+    // MAILLAGE PRODUIT (cf. import_svg.h), alors que la subdivision travaille
+    // sur les coordonnees du document : on les y ramene ici, via l'emprise
+    // ESTIMEE sur les points de controle.
     //
-    // L'ideal serait de mettre les points de controle a l'echelle AVANT de
-    // subdiviser, comme le fait text_extrude.cpp -- mais la, l'echelle est connue
-    // d'avance (size / unitsPerEm). Ici elle se lit sur l'emprise de l'encre, qui
-    // n'existe qu'une fois les courbes aplaties. On convertit donc la tolerance
-    // en sens inverse, avec une emprise ESTIMEE sur les points de controle.
-    //
-    // Ce que cette estimation peut et ne peut pas gater : elle ne sert QU'A
-    // choisir un pas de subdivision. Le recentrage-ajustement final, lui, reste
-    // calcule sur la geometrie aplatie exacte -- aucun sommet ne bouge, seule la
-    // densite varie de quelques pour cent.
-    //
-    // Sans `centerAndFit`, la sortie EST dans les unites du document : la
-    // tolerance y est deja exprimee, il n'y a rien a convertir.
-    //
-    // `minStrokeWorldWidth` s'exprime dans les memes unites et se convertit avec
-    // la meme emprise : c'est le meme raisonnement, applique a une largeur au
-    // lieu d'une tolerance.
+    // Sans `centerAndFit`, la sortie EST dans les unites du document : il n'y a
+    // rien a convertir.
     float flattenTolSrc = opt.flattenTol;
     float minStrokeSrc  = opt.minStrokeWorldWidth;
     if (opt.centerAndFit)
@@ -397,8 +360,8 @@ bool svg_to_shape_groups(const std::string& filename, const SvgExtrudeOptions& o
     }
 
     // Un lot par region a produire. Le decoupage est fait ici parce que la regle
-    // de remplissage -- comme la peinture -- est une propriete de la forme
-    // SOURCE, que la liste de contours ne porte pas.
+    // de remplissage, comme la peinture, est une propriete de la forme SOURCE
+    // que la liste de contours ne porte pas.
     std::vector<ShapeLot> lots;
 
     unsigned int rank = 0u;
@@ -420,20 +383,15 @@ bool svg_to_shape_groups(const std::string& filename, const SvgExtrudeOptions& o
         if (!hasFill && !(hasStroke && opt.strokeToVolume)) continue;
 
         // La decision se prend PAR CHEMIN, sur NSVGpath::closed, et non par forme
-        // sur l'attribut `fill` : un meme <g> peut melanger des contours fermes et
-        // des polylignes ouvertes. nanosvg renseigne ce drapeau fidelement --
-        // `<polygon>` et `<path ... Z>` donnent closed = 1, `<polyline>` et un
-        // `<path>` sans Z donnent 0 (nanosvg.h:2826-2833).
+        // sur l'attribut `fill` : un meme <g> peut melanger des contours fermes
+        // et des polylignes ouvertes. `<polygon>` et `<path ... Z>` donnent
+        // closed = 1, `<polyline>` et un `<path>` sans Z donnent 0
+        // (nanosvg.h:2826-2833).
         //
         //   ferme + fill -> frontiere de SURFACE, tessellation (>= 3 points)
         //   ferme, sans  -> ANNEAU : le trait des deux bords de la boucle,
         //                   arete de fermeture comprise (>= 3 points)
         //   ouvert       -> LIGNE, epaissie de son stroke-width (>= 2 points)
-        //
-        // C'est ce qui manquait : sans lui, une polyligne ouverte etait refermee
-        // d'office pour etre remplie. Sur un trace qui se replie sur lui-meme
-        // (courbe du dragon) le remplissage degenere en damier, faute de pouvoir
-        // designer un interieur.
         std::vector<std::vector<Vector2f>> filled;
         std::vector<std::vector<std::array<float, 2>>> openPaths;
 
@@ -442,9 +400,9 @@ bool svg_to_shape_groups(const std::string& filename, const SvgExtrudeOptions& o
         // regions distinctes de la meme forme.
         std::vector<std::vector<std::array<float, 2>>> strokeRings;
 
-        // Le trait d'une forme REMPLIE est gouverne par `strokeOnFilledShapes`
-        // (D7). Celui d'une forme SANS remplissage ne l'est pas : il est la seule
-        // geometrie que la forme produise, et `strokeToVolume` seul le gouverne.
+        // `strokeOnFilledShapes` ne gouverne que le trait d'une forme REMPLIE.
+        // Celui d'une forme SANS remplissage est la seule geometrie qu'elle
+        // produise, et releve de `strokeToVolume` seul.
         const bool ringsWanted = opt.strokeOnFilledShapes && hasStroke;
 
         for (const NSVGpath* path = shape->paths; path; path = path->next)
@@ -461,8 +419,8 @@ bool svg_to_shape_groups(const std::string& filename, const SvgExtrudeOptions& o
             {
                 // Un trace FERME donne un ANNEAU : ses deux bords, arete de
                 // fermeture comprise. Le seuil de trois points est celui de
-                // strokeClosedToContours -- une boucle a deux points n'a pas
-                // d'interieur, donc pas d'anneau, et son trait est un ruban.
+                // strokeClosedToContours : une boucle a deux points n'a pas
+                // d'interieur, son trait est un ruban.
                 strokeRings.push_back(toArrays(pts));
             }
             else if (opt.strokeToVolume && hasStroke)
@@ -472,8 +430,8 @@ bool svg_to_shape_groups(const std::string& filename, const SvgExtrudeOptions& o
             }
             else if (hasFill && pts.size() >= 3)
             {
-                // Ouvert mais sans trait exploitable : on retombe sur l'ancien
-                // comportement, nanosvg refermant le trace pour le remplir.
+                // Ouvert mais sans trait exploitable : nanosvg referme le trace
+                // pour le remplir.
                 filled.push_back(std::move(pts));
             }
         }
@@ -497,8 +455,8 @@ bool svg_to_shape_groups(const std::string& filename, const SvgExtrudeOptions& o
             // SvgExtrudeOptions::minStrokeWorldWidth).
             if (w < minStrokeSrc) w = minStrokeSrc;
 
-            // Traduction des conventions nanosvg vers l'API partagee : c'est a
-            // l'appelant de la faire, strokeToContours ne connait pas nanosvg.
+            // strokeToContours ne connait pas nanosvg : la traduction des
+            // conventions est a la charge de l'appelant.
             const StrokeJoin join = (shape->strokeLineJoin == NSVG_JOIN_MITER) ? StrokeJoin::Miter
                                   : (shape->strokeLineJoin == NSVG_JOIN_BEVEL) ? StrokeJoin::Bevel
                                                                                : StrokeJoin::Round;
@@ -518,18 +476,16 @@ bool svg_to_shape_groups(const std::string& filename, const SvgExtrudeOptions& o
 
                 ShapeLot lot;
                 lot.contours = std::move(converted);
-                // Les contours sortis de Clipper2 portent leur propre orientation :
-                // enveloppes en sens positif, trous en sens inverse -- exactement la
-                // convention de NonZero, qui soustrait donc les trous (l'interieur
-                // d'une boucle du trace) sans qu'on ait a reorienter.
+                // Les contours sortis de Clipper2 portent DEJA leur orientation,
+                // enveloppes et trous en sens opposes : c'est la convention de
+                // NonZero, il n'y a rien a reorienter.
                 lot.evenOdd = false;
                 lot.paint   = readPaint(shape, rank, /*hasFill=*/false);
                 lots.push_back(std::move(lot));
             };
 
             // L'anneau des contours fermes, puis le ruban des traces ouverts :
-            // deux lots parce que les deux geometries sont distinctes, un seul
-            // rang parce qu'ils sont le meme trait de la meme forme.
+            // deux lots, un seul rang -- c'est le meme trait de la meme forme.
             pushStrokeLot(strokeClosedToContours(strokeRings, w, join));
             pushStrokeLot(strokeToContours(openPaths, w, join, cap));
         }
@@ -571,12 +527,11 @@ bool svg_to_shape_groups(const std::string& filename, const SvgExtrudeOptions& o
             contours.push_back(std::move(c));
         }
 
-        // Chaque forme resout SA regle ici. C'est le seul endroit ou elle est
-        // encore connue : la region rendue ne la porte pas.
+        // Dernier endroit ou la regle de remplissage de la forme est connue : la
+        // region rendue ne la porte pas.
         SvgShapeGroup group;
         group.contours = resolveShape(contours, lot.evenOdd);
-        // Un lot qui ne resout sur aucune region ne rend pas de groupe : un
-        // groupe vide ne porterait qu'une peinture sans surface a peindre.
+        // Un lot qui ne resout sur aucune region ne rend pas de groupe.
         if (group.contours.empty()) continue;
         group.paint = std::move(lot.paint);
         out.push_back(std::move(group));
@@ -606,8 +561,7 @@ bool svg_to_contours(const std::string& filename, const SvgExtrudeOptions& opt,
 
 // Aire nette d'une region orientee par Clipper2 : enveloppes positives, trous
 // negatifs, la somme signee est donc l'aire reellement couverte. Accumulee en
-// double : quelques milliers de contours en float perdraient les derniers
-// chiffres, et ces aires sont comparees entre elles.
+// double, ces aires etant comparees entre elles.
 static double netContourArea(const std::vector<ExtrudeContour>& region)
 {
     double sum = 0.0;
@@ -628,9 +582,9 @@ struct GroupBox
 };
 
 // Contact simple compris : deux boites qui se touchent par un bord comptent
-// comme secantes. Le predicat est un MAJORANT du recouvrement reel, et c'est le
-// sens qui preserve la correction -- un partenaire de trop coute du temps, un
-// partenaire manquant rend une region trop grande, en silence.
+// comme secantes. Le predicat doit rester un MAJORANT du recouvrement reel : un
+// partenaire de trop coute du temps, un partenaire manquant rend une region
+// trop grande, en silence.
 bool boxesOverlap(const GroupBox& a, const GroupBox& b)
 {
     if (!a.valid || !b.valid) return false;
@@ -649,12 +603,11 @@ void svg_subtract_overlaps(std::vector<SvgShapeGroup>& groups, SvgOverlapStats* 
     // celles du dessous, longtemps apres que sa propre region a remplace son
     // contenu dans `groups`.
     //
-    // Elles sont NORMALISEES au passage -- une union de la forme avec rien --,
-    // et c'est cette passe qui rend la suite exacte : elle garantit que le
-    // nombre de tours d'une forme vaut zero hors d'elle et une valeur unique de
-    // meme signe dedans. Sans elle, concatener plusieurs formes en un seul clip
-    // laisserait leurs nombres de tours s'annuler sous NonZero, et un trou du
-    // dessus repercerait la region du dessous (cf. import_svg.h).
+    // L'union de chaque forme avec rien la NORMALISE, et cette passe est
+    // l'hypothese qui rend la suite exacte : sans elle, concatener plusieurs
+    // formes en un seul clip laisserait leurs nombres de tours s'annuler sous
+    // NonZero, et un trou du dessus repercerait la region du dessous (cf.
+    // import_svg.h).
     std::vector<std::vector<ExtrudeContour>> shapes(n);
     std::vector<GroupBox> boxes(n);
     for (size_t k = 0; k < n; ++k)
@@ -671,9 +624,8 @@ void svg_subtract_overlaps(std::vector<SvgShapeGroup>& groups, SvgOverlapStats* 
     double keptArea  = 0.0;
 
     // Contours des formes sus-jacentes qui recouvrent la forme courante. Le
-    // balayage va du dernier groupe au premier : nanosvg chaine ses formes en
-    // ordre de document, qui est l'ordre du peintre, donc le dernier est
-    // au-dessus.
+    // balayage va du dernier groupe au premier : l'ordre des groupes est celui
+    // du document, donc du peintre, et le dernier est au-dessus.
     std::vector<ExtrudeContour> covering;
 
     for (size_t k = n; k-- > 0; )
@@ -693,17 +645,16 @@ void svg_subtract_overlaps(std::vector<SvgShapeGroup>& groups, SvgOverlapStats* 
 
         if (groups[k].contours.empty())
         {
-            // Une forme d'aire nulle n'a pas ete recouverte : elle n'avait rien a
-            // perdre. Les compter ensemble ferait passer une degenerescence pour
-            // un effet du recouvrement.
+            // Une forme d'aire nulle n'a rien perdu : la compter ici ferait
+            // passer une degenerescence pour un effet du recouvrement.
             if (shapeArea > 0.0) ++fullyCovered;
         }
         else
         {
             const double kept = netContourArea(groups[k].contours);
             keptArea += kept;
-            // Seuil RELATIF : la différence réaligne ses sommets sur la grille de
-            // Clipper2, donc l'égalité exacte n'est pas un critère (cf.
+            // Seuil RELATIF : la difference realigne ses sommets sur la grille de
+            // Clipper2, donc l'egalite exacte n'est pas un critere (cf.
             // SvgOverlapStats::partiallyCoveredGroups).
             if (shapeArea > 0.0 && kept < shapeArea * (1.0 - 1e-6))
                 ++partiallyCovered;
@@ -736,7 +687,7 @@ static unsigned int groupColor(const SvgShapePaint& paint, bool strokeUsesStroke
 
 // Materiau d'une couleur empaquetee a la convention nanosvg (r | g<<8 | b<<16 |
 // a<<24). L'alpha est STOCKE : MaterialColor le porte, meme si aucun etage aval
-// ne le transmet aujourd'hui.
+// ne le transmet.
 static MaterialColor* makeColorMaterial(unsigned int rgba, unsigned int index)
 {
     auto* m = new MaterialColor((unsigned char)( rgba        & 0xFFu),
@@ -795,15 +746,13 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
     // Un Append par groupe des que la palette OU la marqueterie le demande.
     //
     // La palette l'exige parce qu'un Append porte UN materiau. La marqueterie
-    // l'exige pour une raison qui n'a rien a voir avec la couleur : elle rend les
-    // regions ADJACENTES, et un polygone glutess unique les refond alors en une
-    // seule -- leurs aretes de frontiere communes cessent d'etre des aretes de
-    // triangle de capot, et les parois qui s'appuient dessus sont abandonnees en
-    // silence (« tessellation gap », extrude_contours.cpp). Le solide n'est plus
-    // ferme et son volume signe ne vaut plus rien. C'est exactement la reserve
-    // que contour_ops.h:104 leve : « une soustraction qui alimente une
-    // tessellation INDEPENDANTE n'a pas ce probleme » -- a condition de la lui
-    // donner.
+    // l'exige independamment de la couleur : elle rend les regions ADJACENTES,
+    // et un polygone glutess unique les refondrait en une seule -- leurs aretes
+    // de frontiere communes cesseraient d'etre des aretes de triangle de capot,
+    // et les parois qui s'appuient dessus seraient abandonnees en silence
+    // (« tessellation gap », extrude_contours.cpp), laissant un solide ouvert
+    // au volume signe sans valeur. C'est la condition posee par
+    // contour_ops.h:104.
     const bool perGroupAppend =
         opt.perShapeMaterials
         || opt.overlapPolicy == SvgExtrudeOptions::OverlapPolicy::Subtract;
@@ -839,8 +788,6 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
 
             // Un materiau sans face n'entre pas dans la palette : il figurerait
             // dans la table du Mesh sans apparaitre dans aucun MaterialRange.
-            // Sous marqueterie le cas est courant -- un groupe entierement
-            // recouvert ne tessele rien.
             if (!emitted && isNewColor)
             {
                 materialOfColor.erase(rgba);
@@ -859,8 +806,9 @@ Mesh* import_svg_extruded(const std::string& filename, const SvgExtrudeOptions& 
     {
         // Chemin monolithique : UNE tessellation pour tout le document, sur la
         // concatenation des groupes -- exactement ce que svg_to_contours rend. La
-        // regle NONZERO joue donc entre formes, et aucune face ne se rattache a un
-        // groupe, d'ou une correspondance de faces vide (cf. SvgExtrudeMapping).
+        // regle NONZERO joue donc entre formes, et aucune face ne se rattache a
+        // un groupe, d'ou une correspondance de faces vide (cf.
+        // SvgExtrudeMapping).
         std::vector<ExtrudeContour> contours;
         for (const SvgShapeGroup& g : groups)
             contours.insert(contours.end(), g.contours.begin(), g.contours.end());

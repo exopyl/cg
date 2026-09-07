@@ -130,7 +130,7 @@
       "param": "useSvgColors",
       "label": "Couleurs du fichier",
       "type": "bool",
-      "hint": "UN réglage, DEUX effets : chaque forme prend la couleur du document, ET la matière que les formes du dessus recouvrent est retirée. Le second n'est pas un supplément — sans lui, deux formes superposées gardent deux capots coplanaires, que le rendu fait clignoter. Décoché, la pièce sort d'un seul tenant et « Couleur de la pièce » la peint. ⚠ Les couleurs sont VISIBLES ici et ne franchissent aucun export.",
+      "hint": "UN réglage, DEUX effets : chaque forme prend la couleur du document, ET la matière que les formes du dessus recouvrent est retirée. Le second n'est pas un supplément — sans lui, deux formes superposées gardent deux capots coplanaires, que le rendu fait clignoter. Décoché, la pièce sort d'un seul tenant et « Couleur de la pièce » la peint. Les couleurs franchissent l'export OBJ et l'export GLB : l'archive OBJ porte un .mtl à côté du .obj, le GLB embarque ses matériaux dans un seul fichier, un par teinte. Le STL, lui, ne porte pas de couleur — c'est le format qui ne sait pas.",
       "group": "Couleur"
     },
     {
@@ -146,7 +146,7 @@
       "param": "color",
       "label": "Couleur de la pièce",
       "type": "color",
-      "hint": "Elle appartient au DOCUMENT et non à la vue : on la choisit une fois, on la retrouve en rouvrant le fichier. Elle ne peint QUE les faces sans matériau — donc rien du tout quand « Couleurs du fichier » est coché. ⚠ Elle ne franchit aucun des deux exports : le STL ne porte pas de couleur, et l'OBJ rendu ici est minimal, sans fichier de matériaux.",
+      "hint": "Elle appartient au DOCUMENT et non à la vue : on la choisit une fois, on la retrouve en rouvrant le fichier. Elle ne peint QUE les faces sans matériau — donc rien du tout quand « Couleurs du fichier » est coché. Elle franchit l'export OBJ, qui livre un .mtl à côté du .obj dans l'archive, et l'export GLB, qui embarque ses matériaux ; pas le STL, format sans couleur.",
       "group": "Couleur",
       "disableWhen": {
         "node": 3,
@@ -337,7 +337,7 @@
     },
     {
       "name": "Couleur",
-      "hint": "Les couleurs du document, ou une teinte unique si on les écarte. Aucune ne franchit l'export."
+      "hint": "Les couleurs du document, ou une teinte unique si on les écarte. Elles franchissent l'export OBJ, dont l'archive porte le .mtl."
     }
   ],
   "sourcesGroup": "Fichier SVG"

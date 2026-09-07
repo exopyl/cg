@@ -40,6 +40,15 @@ public:
 	static int export_obj (const Mesh& mesh, const char *filename,
 			       bool emitObjectGroups = false);
 
+	// Le SEUL .obj, en memoire. `basename` (sans extension) nomme le fichier
+	// virtuel, et de lui derive la ligne `mtllib <basename>.mtl` quand le
+	// maillage porte des materiaux.
+	//
+	// ⚠ L'appelant qui ne livre pas le .mtl laisse une reference non resolue :
+	// le lecteur ne signale pas d'erreur, il affiche le modele sans ses couleurs.
+	static std::string export_obj_bytes (const Mesh& mesh, const std::string& basename,
+					     bool emitObjectGroups = false);
+
 	// Le meme export, mais les DEUX fichiers dans UNE archive ZIP : un OBJ ne peut
 	// pas embarquer ses materiaux, il les reference par `mtllib`, donc un export
 	// colore compte forcement deux fichiers. Les livrer zippes evite a l'appelant
@@ -58,6 +67,21 @@ public:
 	// qui rend les octets au navigateur.
 	static std::string export_obj_zip_bytes (const Mesh& mesh, const std::string& basename,
 						 bool emitObjectGroups = false);
+
+	// glTF BINAIRE (.glb) : geometrie ET materiaux dans un SEUL fichier, la ou
+	// l'OBJ exige un .mtl compagnon. Une primitive par plage de materiau, les
+	// accessors d'attributs partages (cf. mesh_io_gltf.cpp).
+	//
+	// La conversion d'unite et d'orientation est portee par le NOEUD ; les
+	// coordonnees ecrites sont celles du maillage, comme a l'export OBJ.
+	//
+	// N'embarque PAS les images : cgimg n'a d'encodeur ni PNG ni JPEG, soit
+	// exactement les formats qu'un GLB accepte. Un materiau texture sort avec sa
+	// teinte diffuse seule.
+	//
+	// Chaine vide / -1 quand le maillage n'a ni sommet ni face.
+	static int export_glb (const Mesh& mesh, const char *filename);
+	static std::string export_glb_bytes (const Mesh& mesh);
 
 private:
 	static int import_mtl (Mesh& mesh, const char *filename, const char *path);

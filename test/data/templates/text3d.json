@@ -231,7 +231,7 @@
       "label": "Couleur de la pièce",
       "type": "color",
       "group": "Couleur",
-      "hint": "Elle appartient au DOCUMENT et non à la vue : on la choisit une fois, on la retrouve en rouvrant le fichier. ⚠ Elle ne franchit aucun des deux exports — le STL ne porte pas de couleur, et l'OBJ rendu ici est minimal, sans fichier de matériaux."
+      "hint": "Elle appartient au DOCUMENT et non à la vue : on la choisit une fois, on la retrouve en rouvrant le fichier. Elle franchit l'export OBJ, dont l'archive porte le .mtl, et l'export GLB, qui embarque ses matériaux ; pas le STL, format sans couleur."
     },
     {
       "node": 2,

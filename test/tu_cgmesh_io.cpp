@@ -1169,6 +1169,133 @@ TEST(TEST_cgmesh_io, obj_mtl_is_opaque_and_has_no_stray_specular)
 }
 
 // ---------------------------------------------------------------------------
+//  Aller-retour OBJ+MTL : importer, reexporter, reimporter
+// ---------------------------------------------------------------------------
+// L'ORACLE EST GRATUIT : mesh_io_obj.cpp sait deja LIRE ce qu'il ecrit. Un
+// format dont l'ecrivain et le lecteur vivent dans la meme unite se verifie
+// donc sans fichier de reference, en comparant le maillage relu au maillage lu.
+//
+// Ce que ce test surveille en particulier : import_mtl instancie un
+// MaterialColorExt pour chaque `newmtl` (GetType() == MATERIAL_COLOR_ADV).
+// L'ecrivain MTL doit savoir reecrire CE genre-la, sans quoi tout fichier relu
+// puis reexporte ressort avec un .obj plein de `usemtl` et un .mtl sans un seul
+// `newmtl` -- le modele perd TOUTES ses couleurs, et aucun lecteur ne signale
+// d'erreur : il ne trouve simplement pas les materiaux nommes.
+TEST(TEST_cgmesh_io, obj_mtl_survives_a_round_trip)
+{
+    // Un OBJ+MTL du depot, deux materiaux, une face chacun.
+    Mesh first;
+    ASSERT_EQ(MeshIO::import_obj(first, "./test/data/obj/multi_objects_mtl.obj"), 0);
+    ASSERT_EQ(first.GetNMaterials(), 2u) << "la source doit porter ses deux materiaux";
+    // Le genre importe : c'est lui que l'ecrivain doit savoir traiter.
+    for (unsigned int i = 0; i < first.GetNMaterials(); ++i)
+        ASSERT_EQ(first.GetMaterial(i)->GetType(), MATERIAL_COLOR_ADV)
+            << "import_mtl est cense produire des MaterialColorExt";
+
+    const char* objPath = "./tu_obj_roundtrip.obj";
+    const char* mtlPath = "./tu_obj_roundtrip.mtl";
+    ASSERT_EQ(MeshIO::export_obj(first, objPath), 0);
+
+    // Le .mtl reexporte doit DECLARER les materiaux, pas seulement exister.
+    std::string mtl;
+    {
+        std::ifstream f(mtlPath);
+        mtl.assign((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    }
+    auto countLines = [](const std::string& text, const std::string& head) {
+        unsigned int n = 0;
+        size_t pos = 0;
+        while ((pos = text.find(head, pos)) != std::string::npos)
+        {
+            if (pos == 0 || text[pos - 1] == '\n') ++n;
+            pos += head.size();
+        }
+        return n;
+    };
+    EXPECT_EQ(countLines(mtl, "newmtl "), first.GetNMaterials())
+        << "un `newmtl` par materiau du maillage\n" << mtl;
+
+    // Relecture : c'est elle qui juge, un `newmtl` peut etre present et faux.
+    Mesh second;
+    ASSERT_EQ(MeshIO::import_obj(second, objPath), 0);
+    EXPECT_EQ(second.GetNMaterials(), first.GetNMaterials())
+        << "l'aller-retour doit rendre le MEME nombre de materiaux";
+
+    // Noms et couleurs, materiau par materiau. Kd est ecrit en decimal : la
+    // tolerance est celle d'un canal 8 bits, 1/255.
+    for (unsigned int i = 0; i < first.GetNMaterials() && i < second.GetNMaterials(); ++i)
+    {
+        const auto* a = dynamic_cast<const MaterialColorExt*>(first.GetMaterial(i));
+        const auto* b = dynamic_cast<const MaterialColorExt*>(second.GetMaterial(i));
+        ASSERT_NE(a, nullptr);
+        ASSERT_NE(b, nullptr) << "materiau " << i << " perdu ou d'un autre genre";
+        EXPECT_EQ(a->GetName(), b->GetName());
+        for (int c = 0; c < 3; ++c)
+            EXPECT_NEAR(a->GetDiffuse()[c], b->GetDiffuse()[c], 1.f / 255.f)
+                << "canal " << c << " du materiau " << a->GetName();
+    }
+
+    // AFFECTATION PAR FACE, comparee par NOM : les identifiants pourraient se
+    // renumeroter sans que le rendu change, un nom non.
+    auto nameOfFaceMaterial = [](const Mesh& m, unsigned int f) {
+        const int id = m.GetFaceMaterialId(f);
+        const Material* mat = (id == (int)MATERIAL_NONE) ? nullptr
+                                                         : m.GetMaterial((unsigned int)id);
+        return mat ? mat->GetName() : std::string("<aucun>");
+    };
+    ASSERT_EQ(second.GetNFaces(), first.GetNFaces());
+    for (unsigned int f = 0; f < first.GetNFaces(); ++f)
+        EXPECT_EQ(nameOfFaceMaterial(first, f), nameOfFaceMaterial(second, f))
+            << "face " << f << " : materiau different apres aller-retour";
+
+    std::remove(objPath);
+    std::remove(mtlPath);
+}
+
+// `map_Kd` designe un fichier IMAGE que l'ecrivain ne produit pas : il n'a pas
+// d'encodeur pour les formats qu'un map_Kd nomme. La ligne ne doit donc etre
+// ecrite que lorsqu'elle RESOUT -- image deja presente a cote du .mtl. Sinon
+// elle pend dans le vide, et le symptome est muet : le modele sort blanc.
+//
+// Les deux sens sont eprouves ici. Le cas PRESENT est ce qui rend le cas ABSENT
+// probant : sans lui, une ligne map_Kd jamais ecrite passerait aussi le test.
+TEST(TEST_cgmesh_io, obj_mtl_map_kd_is_written_only_when_the_image_is_there)
+{
+    Mesh mesh;
+    float verts[] = { 0,0,0, 1,0,0, 1,1,0, 0,1,0 };
+    mesh.SetVertices(4, verts);
+    unsigned int faces[] = { 0,1,2,3 };
+    mesh.SetFaces(1, 4, faces);
+    const unsigned char rgba[4] = { 255, 0, 0, 255 };
+    auto* t = new MaterialTexture(std::string("tu_mapkd_tex.ppm"), 1, 1, rgba);
+    t->SetName("peau");
+    mesh.Material_Add(t);
+    mesh.SetFaceMaterialId(0, 0);
+
+    auto readAll = [](const char* p) {
+        std::ifstream f(p);
+        return std::string((std::istreambuf_iterator<char>(f)),
+                            std::istreambuf_iterator<char>());
+    };
+
+    // (a) l'image est la : la reference resout, donc elle s'ecrit.
+    { std::ofstream img("./tu_mapkd_tex.ppm", std::ios::binary); img << "P6\n1 1\n255\n"; }
+    ASSERT_EQ(MeshIO::export_obj(mesh, "./tu_mapkd_present.obj"), 0);
+    EXPECT_NE(readAll("./tu_mapkd_present.mtl").find("map_Kd tu_mapkd_tex.ppm"), std::string::npos)
+        << "l'image est a cote du .mtl : map_Kd doit la designer";
+
+    // (b) l'image n'est pas la : pas de reference pendante.
+    std::remove("./tu_mapkd_tex.ppm");
+    ASSERT_EQ(MeshIO::export_obj(mesh, "./tu_mapkd_absent.obj"), 0);
+    EXPECT_EQ(readAll("./tu_mapkd_absent.mtl").find("map_Kd"), std::string::npos)
+        << "aucune image livree : la ligne map_Kd designerait un fichier absent";
+
+    for (const char* p : { "./tu_mapkd_present.obj", "./tu_mapkd_present.mtl",
+                           "./tu_mapkd_absent.obj",  "./tu_mapkd_absent.mtl" })
+        std::remove(p);
+}
+
+// ---------------------------------------------------------------------------
 //  OBJ + MTL dans une archive ZIP
 // ---------------------------------------------------------------------------
 // Code au niveau OCTET (en-tetes, offsets, CRC) : il se verifie en RELISANT
@@ -1276,6 +1403,56 @@ TEST(TEST_cgmesh_io, obj_zip_omits_the_mtl_when_there_is_no_material)
         if (rd32(i) == 0x06054b50u) { eocd = i; break; }
     ASSERT_NE(eocd, std::string::npos);
     EXPECT_EQ(rd16(eocd + 10), 1u) << "une seule entree attendue : le .obj";
+}
+
+// export_obj_bytes : le seul .obj, en memoire.
+//
+// Ce qui se verifie ici est qu'il n'y a QU'UN ecrivain OBJ. Un second, meme
+// « minimal », divergerait du premier sans que rien ne le signale -- c'est ce
+// qu'octet pour octet interdit.
+TEST(TEST_cgmesh_io, obj_bytes_are_exactly_what_export_obj_writes)
+{
+    Mesh mesh;
+    float verts[] = { 0,0,0, 1,0,0, 1,1,0, 0,1,0 };
+    mesh.SetVertices(4, verts);
+    unsigned int faces[] = { 0,1,2,3 };
+    mesh.SetFaces(1, 4, faces);
+    auto* c = new MaterialColor(10, 200, 30);
+    c->SetName("vert_pomme");
+    mesh.Material_Add(c);
+    mesh.SetFaceMaterialId(0, 0);
+
+    const std::string bytes = MeshIO::export_obj_bytes(mesh, "piece");
+    ASSERT_FALSE(bytes.empty());
+
+    ASSERT_EQ(MeshIO::export_obj(mesh, "./piece.obj"), 0);
+    std::string onDisk;
+    {
+        std::ifstream f("./piece.obj", std::ios::binary);
+        onDisk.assign((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    }
+    EXPECT_EQ(bytes, onDisk) << "un seul ecrivain OBJ : les deux sorties sont le meme fichier";
+
+    // Le `mtllib` derive du RADICAL passe, et non du chemin d'un fichier reel.
+    EXPECT_NE(bytes.find("mtllib piece.mtl"), std::string::npos) << bytes;
+    EXPECT_NE(bytes.find("usemtl vert_pomme"), std::string::npos) << bytes;
+
+    std::remove("./piece.obj");
+    std::remove("./piece.mtl");
+}
+
+// Sans materiau : pas de `mtllib`, donc rien a resoudre pour le lecteur.
+TEST(TEST_cgmesh_io, obj_bytes_omit_the_mtllib_when_there_is_no_material)
+{
+    Mesh mesh;
+    float verts[] = { 0,0,0, 1,0,0, 1,1,0 };
+    mesh.SetVertices(3, verts);
+    unsigned int faces[] = { 0,1,2 };
+    mesh.SetFaces(1, 3, faces);
+
+    const std::string bytes = MeshIO::export_obj_bytes(mesh, "nu");
+    ASSERT_FALSE(bytes.empty());
+    EXPECT_EQ(bytes.find("mtllib"), std::string::npos) << bytes;
 }
 
 namespace

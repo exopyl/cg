@@ -697,6 +697,11 @@ int MeshIO::export_obj (const Mesh& mesh, const char *filename, bool emitObjectG
 		fprintf (fp, "# Wavefront material file\n");
 		fprintf (fp, "\n");
 
+		// Repertoire du .mtl : c'est LA que les noms de fichiers qu'il cite --
+		// map_Kd -- sont resolus par un lecteur.
+		const std::filesystem::path mtlDir =
+			std::filesystem::path (filematname).parent_path ();
+
 		for (unsigned int i = 0; i < mesh.GetNMaterials (); ++i)
 		{
 			const Material *pMaterial = mesh.GetMaterial (i);
@@ -745,7 +750,43 @@ int MeshIO::export_obj (const Mesh& mesh, const char *filename, bool emitObjectG
 				// Opacite, et non transparence -- cf. la branche couleur.
 				fprintf (fp, "d 1.000000\n");
 				fprintf (fp, "illum 2\n");
-				fprintf (fp, "map_Kd %s\n", pMaterialTexture->GetFilename().c_str());
+				// `map_Kd` n'est ecrit QUE SI l'image est la, a cote du .mtl :
+				// cet ecrivain n'en livre aucune, et un map_Kd non resolu ne
+				// provoque aucune erreur chez un lecteur -- le modele sort
+				// blanc, en silence.
+				const std::string texName = pMaterialTexture->GetFilename();
+				std::error_code ec;
+				if (!texName.empty() &&
+				    std::filesystem::exists (mtlDir / texName, ec) && !ec)
+					fprintf (fp, "map_Kd %s\n", texName.c_str());
+				fprintf (fp, "\n");
+			}
+			break;
+			case MATERIAL_COLOR_ADV:
+			{
+				const MaterialColorExt *pExt = dynamic_cast<const MaterialColorExt*> (pMaterial);
+				if (!pExt)
+					break;
+				fprintf (fp, "newmtl %s\n", objMaterialName (pMaterial, i).c_str());
+				fprintf (fp, "Ka %f %f %f\n",
+					 pExt->GetAmbient()[0], pExt->GetAmbient()[1], pExt->GetAmbient()[2]);
+				fprintf (fp, "Kd %f %f %f\n",
+					 pExt->GetDiffuse()[0], pExt->GetDiffuse()[1], pExt->GetDiffuse()[2]);
+				fprintf (fp, "Ks %f %f %f\n",
+					 pExt->GetSpecular()[0], pExt->GetSpecular()[1], pExt->GetSpecular()[2]);
+				// L'exposant Phong est STOCKE en fraction de 128 (GL_SHININESS y
+				// plafonne, cf. import_mtl) ; le format, lui, l'attend a son
+				// echelle. Les deux conversions sont donc exactement inverses.
+				fprintf (fp, "Ns %f\n", pExt->GetShininess() * 128.f);
+				// OPACITE, et non transparence -- cf. la branche couleur. Un
+				// alpha nul n'est pas une intention : MaterialColorExt nait a
+				// zero sur les quatre canaux, et `d 0` rendrait le modele
+				// invisible.
+				const float alpha = pExt->GetDiffuse()[3];
+				fprintf (fp, "d %f\n", (alpha > 0.f) ? alpha : 1.f);
+				// illum 2 : diffus ET speculaire, les deux termes que ce
+				// materiau porte.
+				fprintf (fp, "illum 2\n");
 				fprintf (fp, "\n");
 			}
 			break;
@@ -873,46 +914,74 @@ struct TempDirGuard
 	}
 };
 
-} // namespace
-
-std::string MeshIO::export_obj_zip_bytes (const Mesh& mesh, const std::string& basename,
-					  bool emitObjectGroups)
+// Radical d'entree, ramene a un nom de fichier sur.
+//
+// Seul le DERNIER composant est retenu : les points d'entree sont publics, et un
+// basename tel que "../evade" ecrirait hors du repertoire prive ouvert plus bas.
+// Un radical vide donnerait des entrees nommees ".obj", d'ou le defaut.
+std::string safeStem (const std::string& basename)
 {
-	// Un radical vide donnerait des entrees nommees ".obj" : on garde un defaut.
-	//
-	// On ne retient que le DERNIER composant : la fonction est publique, et un
-	// basename tel que "../evade" ecrirait sinon hors du repertoire prive ouvert
-	// ci-dessous -- ce qui ramenerait exactement le probleme qu'il ferme. Les
-	// appelants reels n'y perdent rien : export_obj_zip passe deja un radical sans
-	// repertoire (stemOf) et les ponts WASM filtrent sur alnum/'-'/'_'.
 	std::string stem = std::filesystem::path(basename).filename().string();
 	if (stem.empty() || stem == "." || stem == "..")
 		stem = "model";
+	return stem;
+}
 
+// Le couple OBJ+MTL, en memoire. `mtl` est vide quand le maillage ne porte aucun
+// materiau : export_obj n'ecrit alors pas de compagnon, et l'OBJ ne contient pas
+// de ligne mtllib.
+struct ObjPairBytes
+{
+	std::string obj;
+	std::string mtl;
+};
+
+// Fait ecrire export_obj dans un repertoire temporaire PRIVE, puis relit les
+// deux fichiers. Rend false si rien n'a pu etre ecrit.
+bool exportObjPairToMemory (const Mesh& mesh, const std::string& stem,
+			    bool emitObjectGroups, ObjPairBytes& out)
+{
 	TempDirGuard tmp{ makePrivateTempDir() };
 	if (tmp.dir.empty())
-		return std::string();
+		return false;
 
 	const std::string objPath = (tmp.dir / (stem + ".obj")).string();
 	const std::string mtlPath = (tmp.dir / (stem + ".mtl")).string();
 
-	if (export_obj (mesh, objPath.c_str(), emitObjectGroups) != 0)
+	if (MeshIO::export_obj (mesh, objPath.c_str(), emitObjectGroups) != 0)
+		return false;
+
+	out.obj = slurpFile (objPath);
+	out.mtl = slurpFile (mtlPath);
+	// Nettoyage : TempDirGuard emporte les fichiers avec le repertoire.
+	return !out.obj.empty();
+}
+
+} // namespace
+
+std::string MeshIO::export_obj_bytes (const Mesh& mesh, const std::string& basename,
+				      bool emitObjectGroups)
+{
+	ObjPairBytes pair;
+	if (!exportObjPairToMemory (mesh, safeStem (basename), emitObjectGroups, pair))
+		return std::string();
+	return pair.obj;
+}
+
+std::string MeshIO::export_obj_zip_bytes (const Mesh& mesh, const std::string& basename,
+					  bool emitObjectGroups)
+{
+	const std::string stem = safeStem (basename);
+
+	ObjPairBytes pair;
+	if (!exportObjPairToMemory (mesh, stem, emitObjectGroups, pair))
 		return std::string();
 
 	std::vector<ZipManager::Entry> entries;
-	const std::string obj = slurpFile (objPath);
-	if (!obj.empty())
-		entries.push_back ({ stem + ".obj", obj });
-	// Absent quand le maillage ne porte aucun materiau : export_obj n'ecrit alors
-	// pas de .mtl, et l'OBJ ne contient pas de ligne mtllib.
-	const std::string mtl = slurpFile (mtlPath);
-	if (!mtl.empty())
-		entries.push_back ({ stem + ".mtl", mtl });
+	entries.push_back ({ stem + ".obj", pair.obj });
+	if (!pair.mtl.empty())
+		entries.push_back ({ stem + ".mtl", pair.mtl });
 
-	// Nettoyage : TempDirGuard emporte les deux fichiers avec le repertoire.
-
-	if (entries.empty())
-		return std::string();
 	return ZipManager::BuildStored (entries);
 }
 

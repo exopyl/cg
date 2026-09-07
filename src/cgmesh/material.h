@@ -180,6 +180,14 @@ public:
 	{
 		memcpy (diffuse, m_fDiffuse, 4*sizeof(float));
 	};
+	// Lecture SANS COPIE, et surtout accessible depuis un `const Material*` :
+	// c'est la forme dont l'ecriture d'un fichier a besoin, elle qui ne detient
+	// jamais qu'une vue constante du maillage. Meme surface que MaterialTexture.
+	inline const float* GetAmbient   (void) const { return m_fAmbient; }
+	inline const float* GetDiffuse   (void) const { return m_fDiffuse; }
+	inline const float* GetSpecular  (void) const { return m_fSpecular; }
+	inline const float* GetEmission  (void) const { return m_fEmission; }
+	inline float        GetShininess (void) const { return m_fShininess[0]; }
 	inline void SetSpecular (float fR, float fG, float fB, float fA)
 	{
 		m_fSpecular[0] = fR;

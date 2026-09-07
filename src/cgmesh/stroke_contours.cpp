@@ -37,18 +37,16 @@ inflate (const std::vector<std::vector<std::array<float, 2>>>& polylines,
 		return out;
 
 	// InflatePaths termine par un Union (clipper.offset.cpp) : les recouvrements
-	// sont resolus par la bibliotheque, ce qui rend cette voie praticable sur un
-	// trace qui se touche lui-meme des milliers de fois.
+	// sont resolus par la bibliotheque.
 	//
 	// precision 6 et non le defaut 2 : les traces peuvent faire 0.2 unite de large
 	// sur un canevas de 250, et deux decimales arrondiraient la moitie de cette
 	// epaisseur.
 	//
-	// A savoir : cette precision fait sortir des points consecutifs separes d'un
-	// ULP de float une fois l'echelle changee en aval. C'est sans consequence ici,
-	// tessellateContours (extrude_contours.cpp) les fusionnant avant tessellation
-	// -- sans quoi glutess les ecarterait et chaque doublon emporterait trois
-	// parois laterales.
+	// Cette precision fait sortir des points consecutifs separes d'un ULP de float
+	// une fois l'echelle changee en aval ; tessellateContours
+	// (extrude_contours.cpp) les fusionne avant tessellation, sans quoi glutess
+	// les ecarterait et chaque doublon emporterait trois parois laterales.
 	const PathsD inflated = InflatePaths (paths, 0.5 * (double)width, jt, et,
 	                                      /*miter_limit*/ 2.0, /*precision*/ 6);
 
@@ -74,10 +72,10 @@ strokeToContours (const std::vector<std::vector<std::array<float, 2>>>& polyline
 	// `EndType::Round`/`Square`/`Butt` decalent les DEUX cotes d'un chemin ouvert
 	// et lui posent une extremite.
 	//
-	// Deux points suffisent pour un trait -- contrairement a un contour a
-	// remplir, qui en exige trois. Un point ISOLE n'a en revanche aucune
-	// direction, donc aucune epaisseur : les SVG generes en contiennent
-	// (`<path d="M239.9,239.8 "/>`), il faut les ecarter explicitement.
+	// Deux points suffisent pour un trait, contrairement a un contour a remplir
+	// qui en exige trois. Un point ISOLE n'a aucune direction, donc aucune
+	// epaisseur : un SVG peut en contenir (`<path d="M239.9,239.8 "/>`), d'ou le
+	// seuil explicite.
 	const EndType et = (cap == StrokeCap::Butt)   ? EndType::Butt
 	                 : (cap == StrokeCap::Square) ? EndType::Square
 	                                              : EndType::Round;
@@ -88,12 +86,10 @@ std::vector<std::vector<std::array<float, 2>>>
 strokeClosedToContours (const std::vector<std::vector<std::array<float, 2>>>& contours,
                         float width, StrokeJoin join)
 {
-	// `EndType::Joined` traite le chemin comme une BOUCLE : Clipper2 le decale
-	// une fois a l'endroit et une fois a l'envers (OffsetOpenJoined,
-	// clipper.offset.cpp), puis unit les deux sous la regle Positive -- les
-	// nombres d'enroulement s'annulent a l'interieur, ce qui laisse exactement
-	// l'anneau. L'arete de fermeture est parcourue par le decalage lui-meme, il
-	// n'y a donc pas de point a repeter.
+	// `EndType::Joined` traite le chemin comme une BOUCLE : Clipper2 le decale a
+	// l'endroit puis a l'envers (OffsetOpenJoined, clipper.offset.cpp) et unit
+	// les deux sous la regle Positive, ce qui laisse exactement l'anneau. Le
+	// decalage parcourt l'arete de fermeture : aucun point a repeter.
 	return inflate (contours, width, toJoinType (join), EndType::Joined,
 	                /*minPoints*/ 3);
 }

@@ -881,10 +881,13 @@ bool VMeshesIO::export_3ds(VMeshes& vm, const char* filename)
 {
 	return false;
 }
-#define TINYGLTF_IMPLEMENTATION
-#define TINYGLTF_NO_STB_IMAGE
-#define TINYGLTF_NO_STB_IMAGE_WRITE
-#define TINYGLTF_NO_INCLUDE_JSON
+// tinygltf : SEULES les declarations ici. Son implementation vit dans
+// tinygltf_impl.cpp, unite dediee compilee en natif ET en WebAssembly -- cette
+// unite-ci ne l'est qu'en natif, et l'ecrivain GLB de maker n'aurait alors rien
+// a lier. Les trois options TINYGLTF_NO_* viennent de CMakeLists.txt (PUBLIC) :
+// elles changent la classe TinyGLTF elle-meme, donc toutes les unites doivent
+// les voir. TINYGLTF_NO_INCLUDE_JSON impose l'inclusion de nlohmann/json.hpp
+// ci-dessous, avant l'en-tete.
 #define STB_IMAGE_IMPLEMENTATION
 
 #ifdef _WIN32

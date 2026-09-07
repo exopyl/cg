@@ -50,6 +50,12 @@ if (EMSCRIPTEN)
         # .mtl en un seul fichier, et servira au 3MF. Aucune dependance -- zlib
         # n'est pas requis pour du "stored".
         ${PROJECT_SOURCE_DIR}/zip_manager.cpp
+        # Ecrivain GLB (glTF binaire) + l'unite qui porte l'implementation de
+        # tinygltf. vmeshes_io.cpp, qui la portait, reste EXCLU d'ici : il tire le
+        # lecteur 3DS, stb_image et windows.h. Sans tinygltf_impl.cpp, mesh_io_gltf
+        # compilerait et ne LIERAIT pas.
+        ${PROJECT_SOURCE_DIR}/tinygltf_impl.cpp
+        ${PROJECT_SOURCE_DIR}/mesh_io_gltf.cpp
         ${PROJECT_SOURCE_DIR}/extracted_line.cpp
         # generateurs de geometrie (parameterized_shapes.cpp les reference tous)
         ${PROJECT_SOURCE_DIR}/surface_basic.cpp
@@ -138,6 +144,23 @@ target_include_directories(cgmesh PUBLIC ${PROJECT_SOURCE_DIR})
 # clipper.engine.h, et un avertissement qu'on apprend a ignorer ne sert plus.
 target_include_directories(cgmesh SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../extern)
 target_link_libraries(cgmesh cgimg)
+
+# tinygltf : options de compilation, en PUBLIC et non par fichier.
+#
+# Elles conditionnent l'initialiseur par defaut de membres de tinygltf::TinyGLTF
+# (LoadImageData / WriteImageData pointent sur les fonctions stb ou sur nullptr).
+# Une unite qui inclurait tiny_gltf.h sans elles definirait donc une AUTRE classe
+# du meme nom : violation de la regle de definition unique, que le lien ne
+# signale pas. PUBLIC parce que les consommateurs de cgmesh -- a commencer par la
+# suite de tests, qui relit un GLB avec tinygltf -- incluent le meme en-tete.
+#
+# NO_STB_IMAGE / NO_STB_IMAGE_WRITE : cgmesh decode ses images avec cgimg, et
+# vmeshes_io.cpp fournit ses propres rappels. NO_INCLUDE_JSON : nlohmann est
+# vendorise sous extern/, l'en-tete doit etre inclus par l'appelant.
+target_compile_definitions(cgmesh PUBLIC
+    TINYGLTF_NO_STB_IMAGE
+    TINYGLTF_NO_STB_IMAGE_WRITE
+    TINYGLTF_NO_INCLUDE_JSON)
 
 # std::thread (thickness parallelisation) needs pthread on Linux; Threads::Threads
 # is a no-op on MSVC. Plain signature (matching the cgimg link above) propagates
