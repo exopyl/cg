@@ -42,11 +42,12 @@
     {
       "name": "ci-linux",
       "displayName": "CI (Linux, Ninja)",
-      "description": "Workflow GitHub Actions Linux: OpenNURBS depuis cg_binaries dans .deps/, OCCT via apt (find_package). Restreint a Linux par condition : EXTERN_OPENNURBS et EXTERN_LIB3MF pointent sous .deps/cg_binaries/, que seule l'etape de telechargement du workflow cree. Sans cette condition, Visual Studio propose le preset sur Windows et sa configuration echoue sur un repertoire d'inclusion absent.",
+      "description": "Workflow GitHub Actions Linux: OpenNURBS depuis cg_binaries dans .deps/, OCCT via apt (find_package). ENABLE_CGRE=ON bati et teste cgre sans sinaia ni wxWidgets -- c'est ce qui fait tourner tu_cgre_material_renderer.cpp en CI. Aucun paquet OpenGL n'est requis pour cela : glad ouvre libGL par dlopen a l'execution, et le registre de materiaux teste n'appelle aucune fonction GL. Restreint a Linux par condition : EXTERN_OPENNURBS et EXTERN_LIB3MF pointent sous .deps/cg_binaries/, que seule l'etape de telechargement du workflow cree. Sans cette condition, Visual Studio propose le preset sur Windows et sa configuration echoue sur un repertoire d'inclusion absent.",
       "inherits": "_base",
       "generator": "Ninja",
       "cacheVariables": {
         "EXTERN_OPENNURBS": "${sourceDir}/.deps/cg_binaries/opennurbs-v8.27.26019.16021",
+        "ENABLE_CGRE": "ON",
         "ENABLE_POISSON": "ON",
         "ENABLE_LIB3MF": "ON",
         "EXTERN_LIB3MF": "${sourceDir}/.deps/cg_binaries/lib3mf-2.5.0"

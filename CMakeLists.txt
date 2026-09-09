@@ -71,6 +71,7 @@ if (EMSCRIPTEN)
     set(ENABLE_ZLIB      Off)
     set(ENABLE_SINAIA    Off)
     set(ENABLE_SULINA    Off)
+    set(ENABLE_CGRE      Off)
 
     # -fexceptions sur TOUTE la cible WASM (cgmath, cgimg, cgmesh, maker).
     # Sans cela, un `throw` dans cgmath (ex. buildFoilRing sur des parametres
@@ -153,6 +154,14 @@ endif ()
 # Options
 set(ENABLE_COVERAGE Off CACHE BOOL "Enable coverage.")
 set(ENABLE_SINAIA Off CACHE BOOL "Enable sinaia.")
+# cgre a sa propre option, distincte de ENABLE_SINAIA : sinaia est son seul
+# consommateur applicatif, mais la bibliotheque se BATIT et se TESTE sans lui,
+# donc sans wxWidgets. C'est ce qui la fait entrer dans la CI Linux.
+set(ENABLE_CGRE Off CACHE BOOL "Build the cgre OpenGL render library.")
+# sinaia s'appuie sur cgre : l'activer l'implique.
+if (ENABLE_SINAIA)
+    set(ENABLE_CGRE On)
+endif ()
 set(ENABLE_MAKER Off CACHE BOOL "Build the maker WebAssembly module (Emscripten only).")
 set(ENABLE_CGNET_DEMO Off CACHE BOOL "Build the cgnet_demo executable.")
 set(ENABLE_RECONSTRUCTION_CLI Off CACHE BOOL "Build the reconstruction-cli executable (image-based 3D reconstruction; links ONNX Runtime).")
@@ -238,7 +247,11 @@ add_subdirectory(src/cggraph/ui)
 if ( WIN32 )
 	add_subdirectory(src/cgnet)
 endif ()
-if ( ENABLE_SINAIA )
+# POSITION CONTRAINTE DES DEUX COTES. Apres src/cgmesh, parce que
+# src/cgre/CMakeLists.txt modifie la cible cgmesh. Avant add_subdirectory(test),
+# sans quoi le `if (TARGET cgre)` de test/CMakeLists.txt est faux et
+# CG_HAS_CGRE n'est pas defini : le test du module se compile a rien.
+if ( ENABLE_CGRE )
 	add_subdirectory(src/cgre)
 endif ()
 

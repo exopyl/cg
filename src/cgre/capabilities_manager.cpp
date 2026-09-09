@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 #include "gl_wrapper.h"
@@ -307,8 +308,6 @@ void CapabilitiesManager::GetFramebufferObject(std::string& frameBufferObjet) co
 	frameBufferObjet.clear();
 
 	// ref : https://www.khronos.org/opengles/sdk/docs/man/xhtml/glGetFramebufferAttachmentParameteriv.xml
-
-	PFNGLGETFRAMEBUFFERATTACHMENTPARAMETERIVPROC glGetFramebufferAttachmentParameteriv = (PFNGLGETFRAMEBUFFERATTACHMENTPARAMETERIVPROC)wglGetProcAddress("glGetFramebufferAttachmentParameteriv");
 
 	// print max # of colorbuffers supported by FBO
 	int colorBufferCount = 0;
