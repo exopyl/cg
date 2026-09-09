@@ -1,5 +1,7 @@
 #include "material_renderer.h"
 
+#include "diagnostics.h"
+
 MaterialRenderer *MaterialRenderer::m_pInstance = new MaterialRenderer;
 
 // ---------------------------------------------------------------------------
@@ -62,6 +64,32 @@ static void BindReflectionUnit (GLuint texId, float amount)
 	glEnable (GL_TEXTURE_GEN_S);
 	glEnable (GL_TEXTURE_GEN_T);
 	glActiveTexture (GL_TEXTURE0);   // laisser l'unite 0 courante pour la suite
+}
+
+// ---------------------------------------------------------------------------
+//  Exposant speculaire : la conversion, et sa borne
+// ---------------------------------------------------------------------------
+// Material::GetShininess() est une FRACTION dans [0,1] ; OpenGL veut un exposant
+// dans [0,128]. D'ou le facteur 128.
+//
+// La borne n'est pas de la prudence gratuite : glMaterialf(GL_SHININESS, x) rend
+// GL_INVALID_VALUE hors de [0,128] et l'appel est alors IGNORE -- l'exposant
+// garde donc la valeur laissee par le materiau precedent, et l'apparence d'un
+// objet depend de ce qui a ete dessine avant lui. Sans controle d'erreur GL, cela
+// ne se voyait pas.
+//
+// Le cas qui l'a revele : l'importateur glTF ecrivait SetShininess(32.f), c'est-a-dire
+// un exposant GL brut la ou les quatre autres importateurs ecrivent une fraction
+// (OBJ Ns/128, 3DS Power/100, 3DM Shine/255, bibliotheque interne <= 0.25).
+// 128 x 32 = 4096. La source est corrigee dans vmeshes_io.cpp, mais la borne reste :
+// c'est ici qu'est la frontiere avec GL, et c'est ici que son contrat se tient,
+// quelle que soit la valeur qu'un importateur presente demain.
+static GLfloat GlShininess (float fraction)
+{
+	float exponent = 128.f * fraction;
+	if (exponent < 0.f)   exponent = 0.f;
+	if (exponent > 128.f) exponent = 128.f;
+	return (GLfloat)exponent;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,53 +157,141 @@ static bool UploadTextureImage (Img *pImage)
 	const unsigned int nh = (h > (unsigned int)maxSize) ? (unsigned int)maxSize : h;
 	if (scaled.resize (nw, nh, 1) != 0)    // mode 1 : bilineaire
 	{
-		printf ("MaterialRenderer: texture %ux%u au-dela de GL_MAX_TEXTURE_SIZE=%d, "
-		        "reduction impossible\n", w, h, (int)maxSize);
+		cgre::Logf ("MaterialRenderer : texture %ux%u au-dela de GL_MAX_TEXTURE_SIZE=%d, "
+		            "reduction impossible.", w, h, (int)maxSize);
 		return false;
 	}
-	printf ("MaterialRenderer: texture %ux%u reduite a %ux%u (GL_MAX_TEXTURE_SIZE=%d)\n",
-	        w, h, nw, nh, (int)maxSize);
+	cgre::Logf ("MaterialRenderer : texture %ux%u reduite a %ux%u (GL_MAX_TEXTURE_SIZE=%d).",
+	            w, h, nw, nh, (int)maxSize);
 	glTexImage2D (GL_TEXTURE_2D, 0, 4, nw, nh, 0, GL_RGBA, GL_UNSIGNED_BYTE, scaled.data());
+	CGRE_CHECK_GL ("MaterialRenderer::UploadTextureImage (reduite)");
 	return GenerateMipmaps ();
 }
 
 MaterialRenderer::MaterialRenderer()
 {
-	m_nMaterials = 0;
-	for (unsigned int i = 0; i < 256; i++)
-	{
-		m_pReflTexturesId[i] = 0;
-		m_pReflAmount[i]     = 0.f;
-	}
+	// Rien a initialiser : Entry initialise ses membres a la declaration, et le
+	// vecteur part vide. C'est ce qui corrige au passage m_pTexturesId, seul des
+	// cinq anciens tableaux a n'avoir jamais ete remis a zero -- un
+	// MATERIAL_TEXTURE dont GetImage() est nul saute le glGenTextures, et
+	// ActivateMaterial faisait ensuite un glBindTexture sur une valeur
+	// indeterminee.
 }
 
 MaterialRenderer::~MaterialRenderer()
 {
+	// Volontairement vide, et ce n'est pas un oubli : ce destructeur ne s'execute
+	// jamais (le singleton est un `new` jamais rendu), et s'il s'executait ce
+	// serait a la destruction des statiques, apres la disparition du contexte GL
+	// -- ou glDeleteTextures n'a plus de sens. La liberation reelle a lieu dans
+	// RemoveMaterial, au fil de l'eau ; le pilote reprend le reste a la sortie du
+	// processus.
+}
+
+void MaterialRenderer::ReleaseEntry (Entry& entry)
+{
+	if (entry.textureId != 0)
+		glDeleteTextures (1, &entry.textureId);
+	if (entry.reflTextureId != 0)
+		glDeleteTextures (1, &entry.reflTextureId);
+
+	entry = Entry ();
+}
+
+MaterialRenderer::MaterialGlInfo MaterialRenderer::GetGlInfo (unsigned int id) const
+{
+	MaterialGlInfo info;
+	if (id >= m_materials.size ())
+		return info;                     // emplacement inconnu : rien a echantillonner
+
+	const Entry& entry = m_materials[id];
+	if (entry.pMaterial == nullptr)
+		return info;                     // emplacement libere
+
+	info.hasTexture    = (entry.textureId != 0);
+	info.hasReflection = (entry.reflTextureId != 0 && entry.reflAmount > 0.f);
+	info.reflAmount    = entry.reflAmount;
+	return info;
+}
+
+void MaterialRenderer::RemoveMaterial (Material *pMaterial)
+{
+	if (!pMaterial) return;
+
+	const auto it = m_indexByMaterial.find (pMaterial);
+	if (it == m_indexByMaterial.end ())
+		return;                          // jamais enregistre : rien a faire
+
+	const int index = it->second;
+	m_indexByMaterial.erase (it);
+
+	if (index < 0 || index >= (int)m_materials.size ())
+		return;
+
+	ReleaseEntry (m_materials[index]);
+	m_freeSlots.push_back (index);
+
+	CGRE_CHECK_GL ("MaterialRenderer::RemoveMaterial");
 }
 
 int MaterialRenderer::AddMaterial (Material *pMaterial)
 {
 	if (!pMaterial) return -1;
 
-	// Search if already added
-	for (unsigned int i = 0; i < m_nMaterials; i++)
+	const MaterialType type = pMaterial->GetType ();
+	const std::string  name = pMaterial->GetName ();
+
+	// Deja enregistre ? Recherche en O(1). L'adresse est desormais une cle fiable
+	// : RemoveMaterial retire l'entree quand le maillage proprietaire disparait,
+	// donc le registre ne contient plus de pointeur pendant.
+	const auto it = m_indexByMaterial.find (pMaterial);
+	if (it != m_indexByMaterial.end ())
 	{
-		if (m_pMaterials[i] == pMaterial)
-			return (int)i;
+		Entry& existing = m_materials[it->second];
+
+		// Garde-fou. Si l'identite ne correspond pas, c'est qu'un chemin de
+		// suppression a ete oublie et que l'allocateur a recycle l'adresse : le
+		// dire, puis reconstruire l'entree plutot que de rendre l'ancienne
+		// texture pour un materiau qui n'a plus rien a voir.
+		if (existing.type != type || existing.name != name)
+		{
+			cgre::Logf ("MaterialRenderer : adresse de materiau recyclee (« %s » "
+			            "remplace « %s ») -- un RemoveMaterial a ete manque.",
+			            name.c_str (), existing.name.c_str ());
+			ReleaseEntry (existing);
+		}
+		else
+			return it->second;
 	}
 
-	if (m_nMaterials >= 256)
-		return - 1;
+	// Emplacement : on reutilise ceux liberes par RemoveMaterial avant d'agrandir.
+	// Plus aucun plafond : les 256 entrees en dur faisaient basculer en bleu par
+	// defaut, sans message, tous les maillages ouverts au-dela.
+	int index;
+	if (!m_freeSlots.empty ())
+	{
+		index = m_freeSlots.back ();
+		m_freeSlots.pop_back ();
+	}
+	else
+	{
+		index = (int)m_materials.size ();
+		m_materials.emplace_back ();
+	}
 
-	m_pMaterials[m_nMaterials] = pMaterial;
+	Entry& entry = m_materials[index];
+	entry.pMaterial = pMaterial;
+	entry.type      = type;
+	entry.name      = name;
+	m_indexByMaterial[pMaterial] = index;
 
-	if (pMaterial->GetType () == MATERIAL_TEXTURE)
+	if (type == MATERIAL_TEXTURE)
 	{
 		MaterialTexture *pMaterialTexture = dynamic_cast<MaterialTexture*> (pMaterial);
 		if (pMaterialTexture && pMaterialTexture->GetImage())
 		{
-			glGenTextures(1, &m_pTexturesId[m_nMaterials]);
-			glBindTexture(GL_TEXTURE_2D, m_pTexturesId[m_nMaterials]);
+			glGenTextures(1, &entry.textureId);
+			glBindTexture(GL_TEXTURE_2D, entry.textureId);
 
 			const bool mipmapped = UploadTextureImage (pMaterialTexture->GetImage ());
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
@@ -190,8 +306,8 @@ int MaterialRenderer::AddMaterial (Material *pMaterial)
 		// repliement ferait apparaitre une couture sur la silhouette.
 		if (pMaterialTexture && pMaterialTexture->GetReflectionImage())
 		{
-			glGenTextures(1, &m_pReflTexturesId[m_nMaterials]);
-			glBindTexture(GL_TEXTURE_2D, m_pReflTexturesId[m_nMaterials]);
+			glGenTextures(1, &entry.reflTextureId);
+			glBindTexture(GL_TEXTURE_2D, entry.reflTextureId);
 			const bool reflMipmapped = UploadTextureImage (pMaterialTexture->GetReflectionImage ());
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
 			                reflMipmapped ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
@@ -210,23 +326,28 @@ int MaterialRenderer::AddMaterial (Material *pMaterial)
 			float amount = (ks[0] + ks[1] + ks[2]) / 3.f;
 			if (amount < 0.f) amount = 0.f;
 			if (amount > 1.f) amount = 1.f;
-			m_pReflAmount[m_nMaterials] = amount;
+			entry.reflAmount = amount;
 		}
 	}
-	m_nMaterials++;
-	return m_nMaterials-1;
+
+	CGRE_CHECK_GL ("MaterialRenderer::AddMaterial");
+	return index;
 }
 
 void MaterialRenderer::ActivateMaterial (unsigned int id)
 {
-	if (id >= m_nMaterials || m_pMaterials[id] == nullptr)
+	// Un emplacement libere (RemoveMaterial) a un pMaterial nul : un identifiant
+	// devenu perime n'active donc plus rien -- l'appelant retombe sur le materiau
+	// par defaut -- au lieu de lier la texture d'un materiau disparu.
+	if (id >= m_materials.size () || m_materials[id].pMaterial == nullptr)
 		return;
 
-	Material *pMaterial = m_pMaterials[id];
+	const Entry& entry = m_materials[id];
+	Material *pMaterial = entry.pMaterial;
 	if (pMaterial->GetType () == MATERIAL_TEXTURE)
 	{
 		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, m_pTexturesId[id]);
+		glBindTexture(GL_TEXTURE_2D, entry.textureId);
 
 		// The texture environment is GL_MODULATE: the sampled texel is
 		// multiplied by the lit surface colour. Drive that colour from the
@@ -239,11 +360,11 @@ void MaterialRenderer::ActivateMaterial (unsigned int id)
 			glMaterialfv (GL_FRONT_AND_BACK, GL_AMBIENT,  pTex->GetAmbient());
 			glMaterialfv (GL_FRONT_AND_BACK, GL_DIFFUSE,  pTex->GetDiffuse());
 			glMaterialfv (GL_FRONT_AND_BACK, GL_SPECULAR, pTex->GetSpecular());
-			glMaterialf  (GL_FRONT_AND_BACK, GL_SHININESS, 128.f * pTex->GetShininess());
+			glMaterialf  (GL_FRONT_AND_BACK, GL_SHININESS, GlShininess (pTex->GetShininess()));
 			// Lighting-off path: texel modulated by the current colour.
 			glColor4fv (pTex->GetDiffuse());
 		}
-		BindReflectionUnit (m_pReflTexturesId[id], m_pReflAmount[id]);
+		BindReflectionUnit (entry.reflTextureId, entry.reflAmount);
 	}
 	else if (pMaterial->GetType () == MATERIAL_COLOR_ADV)
 	{
@@ -257,7 +378,7 @@ void MaterialRenderer::ActivateMaterial (unsigned int id)
 			glMaterialfv (GL_FRONT_AND_BACK, GL_AMBIENT, pMatColExt->m_fAmbient);
 			glMaterialfv (GL_FRONT_AND_BACK, GL_DIFFUSE, pMatColExt->m_fDiffuse);
 			glMaterialfv (GL_FRONT_AND_BACK, GL_SPECULAR, pMatColExt->m_fSpecular);
-			glMaterialf (GL_FRONT_AND_BACK, GL_SHININESS, 128. * pMatColExt->m_fShininess[0]);
+			glMaterialf (GL_FRONT_AND_BACK, GL_SHININESS, GlShininess (pMatColExt->m_fShininess[0]));
 			glMaterialfv (GL_FRONT_AND_BACK, GL_EMISSION, pMatColExt->m_fEmission);
 
 			// For when lighting is OFF
@@ -363,7 +484,7 @@ void MaterialRenderer::SetMaterial (MaterialColorExt::MaterialColorExtType eType
   
 	// shininess
 	//mat[0] = 128 * material_parameters[10*index+9];
-	glMaterialf (GL_FRONT_AND_BACK, GL_SHININESS, 128. * pMatColExt->m_fShininess[0]);
+	glMaterialf (GL_FRONT_AND_BACK, GL_SHININESS, GlShininess (pMatColExt->m_fShininess[0]));
   
 	glMaterialfv (GL_FRONT_AND_BACK, GL_EMISSION, pMatColExt->m_fEmission);
 }

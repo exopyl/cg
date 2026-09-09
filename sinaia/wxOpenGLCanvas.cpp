@@ -94,6 +94,18 @@ const int* MyGLCanvas::GetDefaultAttributes()
 	return attributes;
 }
 
+wxGLContext* MyGLCanvas::s_pSharedContext = nullptr;
+
+void MyGLCanvas::SetSharedContext (wxGLContext* pContext)
+{
+	s_pSharedContext = pContext;
+}
+
+wxGLContext* MyGLCanvas::GetSharedContext ()
+{
+	return s_pSharedContext;
+}
+
 //
 //
 //
@@ -101,7 +113,11 @@ MyGLCanvas::MyGLCanvas(wxWindow *parent, wxTextCtrl* pCtrlLog, int *args)
 	: wxGLCanvas(parent, wxID_ANY, args ? args : GetDefaultAttributes(), wxDefaultPosition, wxDefaultSize, wxWANTS_CHARS)
 {
 	m_CtrlLog = pCtrlLog;
-	m_context = new wxGLContext(this);
+	// Cree en PARTAGE avec le contexte racine de MyFrame (cf. SetSharedContext) :
+	// textures, VBO et programmes GLSL sont alors communs a tous les onglets. Si
+	// la racine n'a pas ete posee, wx recoit nullptr et l'on retombe sur
+	// l'ancien comportement -- un groupe de partage par canvas.
+	m_context = new wxGLContext(this, s_pSharedContext);
 	//m_context->SetCurrent(static_cast<wxGLCanvas>(this));
 
 	wglMakeCurrent(this->GetHDC(), m_context->GetGLRC());
@@ -150,6 +166,14 @@ MyGLCanvas::~MyGLCanvas()
 {
 	if (m_pVModels)
 	{
+		// RemoveMesh libere desormais les textures des materiaux du maillage : il
+		// faut donc un contexte courant, sinon glDeleteTextures ne fait rien et
+		// elles survivent jusqu'a la fin du processus. On ne le pose que si la
+		// fenetre est encore a l'ecran -- a la fermeture de l'application elle ne
+		// l'est plus, et le pilote reprend tout de toute facon.
+		if (IsShownOnScreen())
+			SetCurrent(*m_context);
+
 		for (auto& mdl : m_pVModels->GetModels())
 			for (auto* mesh : mdl->m_meshes.GetMeshes())
 				if (mesh) MeshRenderer::getInstance()->RemoveMesh(mesh);
@@ -268,13 +292,33 @@ void MyGLCanvas::AdoptScene(VMeshes* pObject)
 
 void MyGLCanvas::ApplyNormalization(bool normalize)
 {
-	VMeshes* vm = GetVMeshes();
-	if (!vm) return;
+	if (!m_pVModels) return;
 
-	for (const auto& mesh : vm->GetMeshes())
-	{
+	// TOUTE LA SCENE, pas le premier fichier.
+	//
+	// Cette fonction passait par GetVMeshes(), qui ne rend que le Model n° 0
+	// (« comportement mono-fichier conservé », wxOpenGLCanvas.cpp:219). Depuis que
+	// la vue accepte plusieurs fichiers, Treatments > Normalize ne touchait donc
+	// que le premier : les suivants gardaient leur echelle d'origine.
+	//
+	// Et la transformation est COMMUNE a tous les maillages -- un seul centre, un
+	// seul facteur, derives de la boite englobante agregee. Normaliser chaque
+	// Model separement, en appelant VMeshes::Normalize par modele, les ramenerait
+	// tous a la meme taille et les empilerait a l'origine : la comparaison de
+	// plusieurs reconstructions, qui est l'usage meme du multi-fichier, n'aurait
+	// plus de sens.
+	//
+	// Les modeles masques sont inclus : les laisser de cote ferait reapparaitre
+	// un modele a une echelle sans rapport le jour ou on le reaffiche.
+	std::vector<Mesh*> allMeshes;
+	for (const auto& mdl : m_pVModels->GetModels())
+		for (auto* mesh : mdl->m_meshes.GetMeshes())
+			if (mesh) allMeshes.push_back(mesh);
+
+	if (allMeshes.empty()) return;
+
+	for (auto* mesh : allMeshes)
 		mesh->ComputeNormals();
-	}
 
 	if (normalize)
 	{
@@ -286,7 +330,7 @@ void MyGLCanvas::ApplyNormalization(bool normalize)
 		// aligne sur celui de Normalize, sinon une regeneration parametrique
 		// changerait la taille du modele sous le curseur.
 		BoundingBox raw;
-		for (const auto& mesh : vm->GetMeshes())
+		for (auto* mesh : allMeshes)
 		{
 			mesh->computebbox();
 			raw.AddBoundingBox(mesh->bbox());
@@ -296,12 +340,20 @@ void MyGLCanvas::ApplyNormalization(bool normalize)
 		m_normScale = (largest > 0.f) ? VMeshes::kNormalizedSize / largest : 1.f;
 		m_hasNormalization = true;
 
-		vm->Normalize(); // recentre, remet a l echelle, et met a jour les bboxes
+		// Applique a la main plutot que par VMeshes::Normalize, qui recalcule sa
+		// propre boite par VMeshes et ne saurait donc pas partager un centre et un
+		// facteur entre plusieurs Model.
+		for (auto* mesh : allMeshes)
+		{
+			mesh->translate(-m_normCenter[0], -m_normCenter[1], -m_normCenter[2]);
+			mesh->scale(m_normScale);
+			mesh->IncrementRevision();   // sans quoi le VBO garde l'ancienne geometrie
+		}
 	}
 
 	// Always compute the aggregate bounding box for all meshes AFTER potential normalization
 	BoundingBox aggregateBbox;
-	for (const auto& mesh : vm->GetMeshes())
+	for (auto* mesh : allMeshes)
 	{
 		mesh->computebbox(); // Ensure individual mesh bboxes are up-to-date
 		aggregateBbox.AddBoundingBox(mesh->bbox());
@@ -349,8 +401,12 @@ void MyGLCanvas::RefreshGeometryState()
 	// après une normalisation (recentrage/mise à l'échelle) : sans ce rebuild, le
 	// BVH référencerait les positions d'avant, RayNearestSurface raterait tous les
 	// triangles et le survol (bbox jaune) disparaîtrait. Couvre aussi le chargement.
-	if (m_pVModels && m_pVModels->GetNModels() > 0)
-		m_pVModels->GetModels()[0]->BuildBVH();
+	//
+	// TOUS les modèles, pas seulement le premier : la normalisation déplace
+	// désormais la scène entière, donc tous les BVH sont périmés, pas un seul.
+	if (m_pVModels)
+		for (const auto& mdl : m_pVModels->GetModels())
+			if (mdl) mdl->BuildBVH();
 
 	Refresh(false);
 }
@@ -363,6 +419,64 @@ void MyGLCanvas::RefreshGeometryState()
 // We fit the sphere *centred on the origin* that contains the model, which
 // just guarantees it stays visible and inside the clip planes.
 //
+// ---------------------------------------------------------------------------
+//  Reglages deterministes de la camera (harnais de captures)
+// ---------------------------------------------------------------------------
+// tb_transform est consomme par glMultMatrixf, donc stocke en COLONNE-MAJEUR :
+// tb_transform[colonne][ligne]. On y ecrit R = Rx(elevation) * Ry(azimut).
+void MyGLCanvas::SetCameraOrientation (float azimuthDeg, float elevationDeg)
+{
+	if (!m_pTrackball) return;
+
+	const float kDegToRad = 3.14159265358979f / 180.f;
+	const float ca = std::cos (azimuthDeg   * kDegToRad);
+	const float sa = std::sin (azimuthDeg   * kDegToRad);
+	const float ce = std::cos (elevationDeg * kDegToRad);
+	const float se = std::sin (elevationDeg * kDegToRad);
+
+	GLfloat (&m)[4][4] = m_pTrackball->tb_transform;
+
+	m[0][0] =  ca;      m[1][0] = 0.f;  m[2][0] =  sa;      m[3][0] = 0.f;
+	m[0][1] =  se * sa; m[1][1] = ce;   m[2][1] = -se * ca; m[3][1] = 0.f;
+	m[0][2] = -ce * sa; m[1][2] = se;   m[2][2] =  ce * ca; m[3][2] = 0.f;
+	m[0][3] = 0.f;      m[1][3] = 0.f;  m[2][3] = 0.f;      m[3][3] = 1.f;
+
+	// La rotation seule : le panoramique reste ou l'utilisateur l'a laisse,
+	// sinon `camera azel` deplacerait aussi le cadrage sans le dire.
+	Refresh (false);
+}
+
+void MyGLCanvas::SetCameraZoom (float zoom)
+{
+	if (!m_pTrackball) return;
+	m_pTrackball->set_zoom (zoom);
+	UpdateSceneRadius ();
+	Refresh (false);
+}
+
+float MyGLCanvas::GetCameraZoom () const
+{
+	return m_pTrackball ? m_pTrackball->zoom : 0.f;
+}
+
+// Remet orientation ET panoramique a zero, puis recadre sur la scene visible.
+// C'est le point de depart de toute capture de reference.
+void MyGLCanvas::ResetCamera ()
+{
+	if (!m_pTrackball) return;
+	m_pTrackball->ResetTransformations ();
+	if (m_pVModels)
+	{
+		// Meme cadrage que l'ajout d'un fichier a la scene : bbox agregee des
+		// modeles visibles, elargie a la grille pour ne pas la rogner.
+		BoundingBox bb = m_pVModels->AggregateBBox (true);
+		bb.AddPoint ( 2.f,  2.f,  1.f);
+		bb.AddPoint (-2.f, -2.f, -1.f);
+		FrameCamera (bb);
+	}
+	Refresh (false);
+}
+
 void MyGLCanvas::FrameCamera(const BoundingBox& bbox)
 {
 	if (bbox.IsEmpty())
@@ -1540,34 +1654,50 @@ bool MyGLCanvas::GetBoundingBox (void)
 	return m_bBoundingBox;
 }
 
+// Les compteurs interrogent le cache par revision du MeshDataManager plutot
+// qu'une copie conservee dans prop. Ils sont appelés à l'affichage du panneau,
+// pas par image : le parcours de la scène y est sans conséquence.
 unsigned int MyGLCanvas::GetNNonManifoldEdges() const
 {
-	unsigned int nNonManifoldEdges = 0;
-	for (auto& element : prop.nonManifoldEdges)
-		nNonManifoldEdges += element.second.size() / 2;
-	return nNonManifoldEdges;
+	unsigned int n = 0;
+	if (m_pVModels)
+		for (const auto& mdl : m_pVModels->GetModels())
+			for (const auto& mesh : mdl->m_meshes.GetMeshes())
+				if (mesh)
+					n += (unsigned int)MeshDataManager::GetInstance()
+					         .GetTopologicIssues(mesh).nonManifoldEdges.size() / 2;
+	return n;
 }
 unsigned int MyGLCanvas::GetNBorders() const
 {
-	unsigned int nBorders = 0;
-	for (auto& element : prop.borders)
-		nBorders += element.second.size() / 2;
-	return nBorders;
+	unsigned int n = 0;
+	if (m_pVModels)
+		for (const auto& mdl : m_pVModels->GetModels())
+			for (const auto& mesh : mdl->m_meshes.GetMeshes())
+				if (mesh)
+					n += (unsigned int)MeshDataManager::GetInstance()
+					         .GetTopologicIssues(mesh).borders.size() / 2;
+	return n;
 }
 
+// N'ALIMENTE PLUS prop. Cette fonction recopiait, pour CHAQUE maillage de la
+// scène, ses arêtes non-manifold et ses bords dans deux std::map portées par
+// rendering_properties_s — laquelle est copiée par valeur à chaque maillage et à
+// chaque image. Le dessin devenait quadratique en nombre de maillages, au point
+// de figer l'application dès qu'on ouvrait deux fichiers ordinaires ensemble.
+//
+// mesh_draw lit maintenant directement le cache pour le seul maillage qu'il
+// dessine. Il reste utile de préchauffer ce cache ici : le calcul topologique
+// d'un gros maillage prend du temps, autant le payer au chargement plutôt qu'à
+// la première image où l'utilisateur coche « warning ».
 void MyGLCanvas::UpdateTopologicIssues()
 {
-	prop.nonManifoldEdges.clear();
-	prop.borders.clear();
 	if (m_pVModels)
 	{
 		for (const auto& mdl : m_pVModels->GetModels())
 			for (const auto& mesh : mdl->m_meshes.GetMeshes())
-			{
-				const auto& issues = MeshDataManager::GetInstance().GetTopologicIssues(mesh);
-				prop.nonManifoldEdges.insert(std::make_pair(mesh, issues.nonManifoldEdges));
-				prop.borders.insert(std::make_pair(mesh, issues.borders));
-			}
+				if (mesh)
+					(void)MeshDataManager::GetInstance().GetTopologicIssues(mesh);
 	}
 }
 

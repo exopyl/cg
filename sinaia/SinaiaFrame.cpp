@@ -927,6 +927,55 @@ MyFrame::MyFrame(wxWindow* parent,
 
 
 
+    // PUITS DE JOURNALISATION DE cgre -- a poser avant le premier appel a cgre.
+    //
+    // cgre etait muet ici : ses messages partaient sur stdout / stderr, qu'une
+    // application wxWidgets sans console ne montre a personne. Un shader qui ne
+    // compile pas s'y presentait comme un ecran noir sans explication. On y
+    // branche la fenetre « Logging Window », deja construite plus haut.
+    //
+    // Le puits est retire dans ~MyFrame : il capture `this`, et Log() ecrit dans
+    // m_pWndLogging.
+    cgre::SetLogSink([this](const std::string& message) { Log(message); });
+
+    // CONTEXTE GL RACINE -- doit etre cree AVANT le premier MyGLCanvas.
+    //
+    // CreateNotebook() juste en dessous instancie deja un MyGLCanvas : la racine
+    // doit exister maintenant pour que ce premier canvas, comme tous les
+    // suivants, soit cree en partage avec elle (MyGLCanvas::SetSharedContext).
+    // Sans partage, chaque onglet a son propre groupe d'objets GL et un
+    // identifiant de texture, de VBO ou de programme GLSL ne vaut que dans
+    // l'onglet qui l'a cree.
+    //
+    // Le format de pixel doit etre IDENTIQUE a celui des canvas de rendu, sans
+    // quoi wglShareLists echoue : d'ou GetDefaultAttributes() ici aussi. Le
+    // canvas d'amorcage precedent utilisait les attributs par defaut de wx
+    // (ni MSAA, ni profondeur 24), ce qui aurait interdit tout partage.
+    //
+    // Ce canvas ne porte que le contexte : jamais affiche, jamais confie a
+    // l'AUI, et vivant tant que la fenetre l'est -- le groupe de partage doit
+    // survivre a la fermeture de n'importe quel onglet.
+    m_pGLRootCanvas = new wxGLCanvas(this, wxID_ANY, MyGLCanvas::GetDefaultAttributes());
+    m_pGLRootCanvas->Hide();
+    m_pGLRootContext = new wxGLContext(m_pGLRootCanvas);
+    wglMakeCurrent(m_pGLRootCanvas->GetHDC(), m_pGLRootContext->GetGLRC());
+
+    if (gladLoaderLoadWGL(m_pGLRootCanvas->GetHDC()) == 0 || gladLoaderLoadGL() == 0)
+    {
+        // Auparavant : printf() puis `return`, qui abandonnait le constructeur en
+        // laissant une fenetre a moitie batie. On journalise et on poursuit : les
+        // canvas rechargent glad de leur cote et le defaut reste visible.
+        Log(_T("Echec de l'initialisation du contexte OpenGL racine."));
+    }
+    else
+    {
+        MyGLCanvas::SetSharedContext(m_pGLRootContext);
+
+        std::string strCardInfo;
+        CapabilitiesManager::getInstance()->GetCardInfo(strCardInfo);
+        Log(strCardInfo);
+    }
+
     m_mgr.AddPane(CreateNotebook(), wxAuiPaneInfo().Name(wxT("notebook_content")).CenterPane().PaneBorder(false));
 
     // add the toolbars to the manager
@@ -984,29 +1033,27 @@ MyFrame::MyFrame(wxWindow* parent,
 
 
 
-    auto glCanvas = new wxGLCanvas(this);
-    auto glContext = new wxGLContext(glCanvas);
-    wglMakeCurrent(glCanvas->GetHDC(), glContext->GetGLRC());
-
-    // 
-    int version = gladLoaderLoadWGL(glCanvas->GetHDC());
-    int versionGL = gladLoaderLoadGL();
-    if (version == 0) {
-        printf("Failed to initialize OpenGL context\n");
-        return;
-    }
-
-    float fversion = CapabilitiesManager::getInstance()->GetVersion();
-    std::string str;
-    CapabilitiesManager::getInstance()->GetCardInfo(str);
-    Log(str);
-    ShadersManager::getInstance()->Initialize();
-
+    // Le canvas d'amorcage GL qui se trouvait ici a ete remonte avant
+    // CreateNotebook() : il devait exister avant le premier MyGLCanvas pour
+    // servir de racine au groupe de partage. Voir le commentaire la-bas.
 }
 
 MyFrame::~MyFrame()
 {
     m_mgr.UnInit();
+
+    // La racine de partage cesse d'etre publiee avant que quoi que ce soit ne
+    // soit detruit : un MyGLCanvas cree apres ce point retomberait sur un
+    // contexte non partage plutot que sur un pointeur pendant. Le contexte
+    // lui-meme n'est PAS supprime ici -- les contextes des canvas encore vivants
+    // appartiennent au meme groupe de partage et ne sont detruits qu'ensuite,
+    // avec les fenetres filles.
+    MyGLCanvas::SetSharedContext(nullptr);
+
+    // Le puits capture `this` et ecrit dans m_pWndLogging : le retirer avant que
+    // la fenetre ne parte, sinon un message emis par cgre pendant la destruction
+    // des canvas ecrirait dans un controle detruit.
+    cgre::SetLogSink(nullptr);
 }
 
 wxAuiDockArt* MyFrame::GetDockArt()

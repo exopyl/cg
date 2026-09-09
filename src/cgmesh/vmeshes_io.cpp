@@ -1378,7 +1378,18 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
                     pMatExt->SetDiffuse(baseColor[0], baseColor[1], baseColor[2], baseColor[3]);
                     pMatExt->SetAmbient(0.2f, 0.2f, 0.2f, 1.0f);
                     pMatExt->SetSpecular(0.5f, 0.5f, 0.5f, 1.0f);
-                    pMatExt->SetShininess(32.0f);
+                    // FRACTION dans [0,1], pas un exposant OpenGL. Le rendu
+                    // multiplie par 128 (MaterialRenderer::GlShininess), donc
+                    // 0.25 vaut l'exposant 32 qui etait visiblement vise ici.
+                    //
+                    // La valeur precedente, 32.f, donnait 128 x 32 = 4096 : hors
+                    // de l'intervalle [0,128] qu'impose la specification, donc
+                    // glMaterialf rendait GL_INVALID_VALUE et l'appel etait
+                    // IGNORE -- l'exposant speculaire d'un glTF sans texture
+                    // heritait de celui du materiau dessine juste avant. Les
+                    // quatre autres importateurs ecrivent bien une fraction :
+                    // OBJ Ns/128, 3DS Power/100, 3DM Shine/255.
+                    pMatExt->SetShininess(0.25f);
                     pMaterial = pMatExt;
                 }
 

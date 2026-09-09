@@ -391,6 +391,14 @@ private:
 
 	wxTextCtrl* m_pWndLogging;
 
+	// Racine du groupe de partage GL. Ce canvas n'est jamais affiche : il ne sert
+	// qu'a porter le contexte avec lequel TOUS les MyGLCanvas sont crees en
+	// partage (cf. MyGLCanvas::SetSharedContext). Il doit exister avant le
+	// premier canvas et survivre a la fermeture de n'importe quel onglet, donc sa
+	// duree de vie est celle de la fenetre.
+	wxGLCanvas*  m_pGLRootCanvas  = nullptr;
+	wxGLContext* m_pGLRootContext = nullptr;
+
 	MyGLCanvas* m_pGLCanvas;
 
 	wxAuiNotebook* m_pCtrl;

@@ -3,11 +3,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <type_traits>
+
 #include "gl_wrapper.h"
 
 #include "mesh_renderer.h"
 #include "material_renderer.h"
+#include "diagnostics.h"
 #include "../cgmesh/mesh_data_manager.h"
+
+// VERROU. Cette structure est copiee par valeur a chaque maillage et a chaque
+// image ; y remettre un conteneur a allocation dynamique ramenerait le cout
+// quadratique qui figeait l'application. Le compilateur le refusera desormais.
+static_assert (std::is_trivially_copyable<rendering_properties_s>::value,
+               "rendering_properties_s doit rester trivialement copiable : elle est "
+               "copiee par maillage et par image. Voir le commentaire de sa definition.");
 
 void rendering_properties_init (rendering_properties_s &prop)
 {
@@ -39,10 +49,35 @@ float pointsize = 1.;
 
 
 
-void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& materialIds)
+void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& materialIds,
+                bool surfaceAlreadyDrawn)
 {
 	if (!mesh)
 		return;
+
+	// TOUT CE QUI EST CONSTANT POUR LE MAILLAGE, hisse hors des boucles.
+	//
+	// Ces accesseurs rendent des references (mesh.h), donc rien n'est copie ;
+	// mais ils etaient appeles par SOMMET, et surtout leurs gardes DIVERGEAIENT
+	// d'une branche a l'autre.
+	//
+	// C'est de cette divergence qu'est ne le defaut : la garde `.empty()` sur les
+	// coordonnees de texture etait presente dans les TROIS copies du bloc
+	// triangle et absente des QUATRE copies du bloc quad. Un maillage a faces
+	// quadrangulaires dont les faces annoncent des UV sans que le vecteur en
+	// porte faisait un operator[] sur un vecteur vide -- donc, cote MSVC, un
+	// deref de nullptr des le premier quad.
+	//
+	// Les normales n'etaient gardees NI par .empty() ni par indice, alors que
+	// mesh.h:594 previent que c'est a l'appelant d'appeler ComputeNormals().
+	const std::vector<float>& vertices = mesh->GetVertices ();
+	const std::vector<float>& vnormals = mesh->GetVertexNormals ();
+	const std::vector<float>& fnormals = mesh->GetFaceNormals ();
+	const std::vector<float>& uvs      = mesh->GetTextureCoordinates ();
+	const std::vector<float>& vcolors  = mesh->GetVertexColors ();
+	const bool hasVNormals = !vnormals.empty ();
+	const bool hasFNormals = !fnormals.empty ();
+	const bool hasVColors  = !vcolors.empty ();
 
 	if (prop.clipping_plane_active)
 	{
@@ -80,7 +115,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 			// Lighting is disabled for this pass (above), so per-vertex colours
 			// from a coloured cloud (.ply/.pset/.pts) must be applied whenever
 			// present — gating on !prop.light left coloured clouds all red.
-			if (!mesh->GetVertexColors ().empty())
+			if (hasVColors)
 				glColor3f (mesh->GetVertexColors ()[3*i],
 					   mesh->GetVertexColors ()[3*i+1],
 					   mesh->GetVertexColors ()[3*i+2]);
@@ -93,7 +128,10 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 	}
 
 	// vertex normals
-	if (prop.display_vertex_normals)
+	// hasVNormals : cet overlay lisait GetVertexNormals()[3*i] sans aucune garde,
+	// alors qu'il s'affiche precisement quand on doute des normales -- donc,
+	// potentiellement, quand ComputeNormals n'a pas ete appele.
+	if (prop.display_vertex_normals && hasVNormals)
 	{
 		float fVertexNormalsScale = 0.2f;
 		glPushAttrib (GL_ALL_ATTRIB_BITS);
@@ -115,7 +153,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 	}
 
 	// polygons
-	if (prop.display_fill)
+	if (prop.display_fill && !surfaceAlreadyDrawn)
 	{
 		glEnable(GL_POLYGON_OFFSET_FILL);
 		glPolygonOffset(1.0, 1.0);
@@ -156,7 +194,14 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 		for (unsigned int i=0; i<mesh->GetNFaces (); i++)
 		{
 			auto pFace = mesh->FaceAt (i);
-			
+
+			// Constant pour la FACE, plus reevalue par sommet : la meme condition
+			// l'etait 3 fois (triangle) ou 4 fois (quad), et chaque pFace->... passe
+			// par ConstFaceRef::IsValid() puis Mesh::FaceExists().
+			const bool hasUVThisFace = !uvs.empty ()
+			                           && pFace->UsesTextureCoordinates ()
+			                           && pFace->HasTexCoordIndices ();
+
 			// Material management
 			int meshMatId = pFace->GetMaterialId();
 			if (useMeshMaterials && meshMatId != MATERIAL_NONE && meshMatId != i_current_material)
@@ -189,48 +234,48 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 				glBegin (GL_TRIANGLES);
 
 				// Face Normal (always used for FLAT shading or as base)
-				glNormal3f (mesh->GetFaceNormals ()[3*i], mesh->GetFaceNormals ()[3*i+1], mesh->GetFaceNormals ()[3*i+2]);
+				if (hasFNormals) glNormal3f (fnormals[3*i], fnormals[3*i+1], fnormals[3*i+2]);
 
 				// Vertex A
-				if (useVertexColors || (!mesh->GetVertexColors ().empty() && !prop.light && i_current_material == -1))
-					glColor3f (mesh->GetVertexColors ()[3*a], mesh->GetVertexColors ()[3*a+1], mesh->GetVertexColors ()[3*a+2]);
-				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices () && !mesh->GetTextureCoordinates ().empty())
+				if (useVertexColors || (hasVColors && !prop.light && i_current_material == -1))
+					glColor3f (vcolors[3*a], vcolors[3*a+1], vcolors[3*a+2]);
+				if (hasUVThisFace)
 				{
 					glColor3f (1., 1., 1.);
-					float u = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (0)];
-					float v = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (0)+1];
-					glTexCoord2f(u, v);
+					const unsigned int ti = pFace->GetTexCoordIndex (0);
+					// Indice issu du FICHIER : il n'etait borne nulle part.
+					if (2*ti + 1 < uvs.size ()) glTexCoord2f (uvs[2*ti], uvs[2*ti+1]);
 				}
 				if (prop.smooth)
-					glNormal3f (mesh->GetVertexNormals ()[3*a], mesh->GetVertexNormals ()[3*a+1], mesh->GetVertexNormals ()[3*a+2]);
+					if (hasVNormals) glNormal3f (vnormals[3*a], vnormals[3*a+1], vnormals[3*a+2]);
 				glVertex3f (mesh->GetVertices ()[3*a], mesh->GetVertices ()[3*a+1], mesh->GetVertices ()[3*a+2]);
 				
 				// Vertex B
-				if (useVertexColors || (!mesh->GetVertexColors ().empty() && !prop.light && i_current_material == -1))
-					glColor3f (mesh->GetVertexColors ()[3*b], mesh->GetVertexColors ()[3*b+1], mesh->GetVertexColors ()[3*b+2]);
-				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices () && !mesh->GetTextureCoordinates ().empty())
+				if (useVertexColors || (hasVColors && !prop.light && i_current_material == -1))
+					glColor3f (vcolors[3*b], vcolors[3*b+1], vcolors[3*b+2]);
+				if (hasUVThisFace)
 				{
 					glColor3f (1., 1., 1.);
-					float u = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (1)];
-					float v = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (1)+1];
-					glTexCoord2f(u, v);
+					const unsigned int ti = pFace->GetTexCoordIndex (1);
+					// Indice issu du FICHIER : il n'etait borne nulle part.
+					if (2*ti + 1 < uvs.size ()) glTexCoord2f (uvs[2*ti], uvs[2*ti+1]);
 				}
 				if (prop.smooth)
-					glNormal3f (mesh->GetVertexNormals ()[3*b], mesh->GetVertexNormals ()[3*b+1], mesh->GetVertexNormals ()[3*b+2]);
+					if (hasVNormals) glNormal3f (vnormals[3*b], vnormals[3*b+1], vnormals[3*b+2]);
 				glVertex3f (mesh->GetVertices ()[3*b], mesh->GetVertices ()[3*b+1], mesh->GetVertices ()[3*b+2]);
 				
 				// Vertex C
-				if (useVertexColors || (!mesh->GetVertexColors ().empty() && !prop.light && i_current_material == -1))
-					glColor3f (mesh->GetVertexColors ()[3*c], mesh->GetVertexColors ()[3*c+1], mesh->GetVertexColors ()[3*c+2]);
-				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices () && !mesh->GetTextureCoordinates ().empty())
+				if (useVertexColors || (hasVColors && !prop.light && i_current_material == -1))
+					glColor3f (vcolors[3*c], vcolors[3*c+1], vcolors[3*c+2]);
+				if (hasUVThisFace)
 				{
 					glColor3f (1., 1., 1.);
-					float u = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (2)];
-					float v = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (2)+1];
-					glTexCoord2f(u, v);
+					const unsigned int ti = pFace->GetTexCoordIndex (2);
+					// Indice issu du FICHIER : il n'etait borne nulle part.
+					if (2*ti + 1 < uvs.size ()) glTexCoord2f (uvs[2*ti], uvs[2*ti+1]);
 				}
 				if (prop.smooth)
-					glNormal3f (mesh->GetVertexNormals ()[3*c], mesh->GetVertexNormals ()[3*c+1], mesh->GetVertexNormals ()[3*c+2]);
+					if (hasVNormals) glNormal3f (vnormals[3*c], vnormals[3*c+1], vnormals[3*c+2]);
 				glVertex3f (mesh->GetVertices ()[3*c], mesh->GetVertices ()[3*c+1], mesh->GetVertices ()[3*c+2]);
 
 				glEnd ();
@@ -243,44 +288,44 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 				unsigned int d = pFace->GetVertex (3);
 				glBegin (GL_QUADS);
 
-				glNormal3f (mesh->GetFaceNormals ()[3*i], mesh->GetFaceNormals ()[3*i+1], mesh->GetFaceNormals ()[3*i+2]);
-				//glNormal3f (mesh->GetVertexNormals ()[3*a], mesh->GetVertexNormals ()[3*a+1], mesh->GetVertexNormals ()[3*a+2]);
-				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices ())
+				if (hasFNormals) glNormal3f (fnormals[3*i], fnormals[3*i+1], fnormals[3*i+2]);
+				//if (hasVNormals) glNormal3f (vnormals[3*a], vnormals[3*a+1], vnormals[3*a+2]);
+				if (hasUVThisFace)
 				{
 					glColor3f (1., 1., 1.);
-					float u = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (0)];
-					float v = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (0)+1];
-					glTexCoord2f(u, v);
+					const unsigned int ti = pFace->GetTexCoordIndex (0);
+					// Indice issu du FICHIER : il n'etait borne nulle part.
+					if (2*ti + 1 < uvs.size ()) glTexCoord2f (uvs[2*ti], uvs[2*ti+1]);
 				}
 				glVertex3f (mesh->GetVertices ()[3*a], mesh->GetVertices ()[3*a+1], mesh->GetVertices ()[3*a+2]);
 				
-				//glNormal3f (mesh->GetVertexNormals ()[3*b], mesh->GetVertexNormals ()[3*b+1], mesh->GetVertexNormals ()[3*b+2]);
-				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices ())
+				//if (hasVNormals) glNormal3f (vnormals[3*b], vnormals[3*b+1], vnormals[3*b+2]);
+				if (hasUVThisFace)
 				{
 					glColor3f (1., 1., 1.);
-					float u = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (1)];
-					float v = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (1)+1];
-					glTexCoord2f(u, v);
+					const unsigned int ti = pFace->GetTexCoordIndex (1);
+					// Indice issu du FICHIER : il n'etait borne nulle part.
+					if (2*ti + 1 < uvs.size ()) glTexCoord2f (uvs[2*ti], uvs[2*ti+1]);
 				}
 				glVertex3f (mesh->GetVertices ()[3*b], mesh->GetVertices ()[3*b+1], mesh->GetVertices ()[3*b+2]);
 				
-				//glNormal3f (mesh->GetVertexNormals ()[3*c], mesh->GetVertexNormals ()[3*c+1], mesh->GetVertexNormals ()[3*c+2]);
-				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices ())
+				//if (hasVNormals) glNormal3f (vnormals[3*c], vnormals[3*c+1], vnormals[3*c+2]);
+				if (hasUVThisFace)
 				{
 					glColor3f (1., 1., 1.);
-					float u = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (2)];
-					float v = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (2)+1];
-					glTexCoord2f(u, v);
+					const unsigned int ti = pFace->GetTexCoordIndex (2);
+					// Indice issu du FICHIER : il n'etait borne nulle part.
+					if (2*ti + 1 < uvs.size ()) glTexCoord2f (uvs[2*ti], uvs[2*ti+1]);
 				}
 				glVertex3f (mesh->GetVertices ()[3*c], mesh->GetVertices ()[3*c+1], mesh->GetVertices ()[3*c+2]);
 				
-				//glNormal3f (mesh->GetVertexNormals ()[3*d], mesh->GetVertexNormals ()[3*d+1], mesh->GetVertexNormals ()[3*d+2]);
-				if (pFace->UsesTextureCoordinates () && pFace->HasTexCoordIndices ())
+				//if (hasVNormals) glNormal3f (vnormals[3*d], vnormals[3*d+1], vnormals[3*d+2]);
+				if (hasUVThisFace)
 				{
 					glColor3f (1., 1., 1.);
-					float u = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (3)];
-					float v = mesh->GetTextureCoordinates ()[2*pFace->GetTexCoordIndex (3)+1];
-					glTexCoord2f(u, v);
+					const unsigned int ti = pFace->GetTexCoordIndex (3);
+					// Indice issu du FICHIER : il n'etait borne nulle part.
+					if (2*ti + 1 < uvs.size ()) glTexCoord2f (uvs[2*ti], uvs[2*ti+1]);
 				}
 				glVertex3f (mesh->GetVertices ()[3*d], mesh->GetVertices ()[3*d+1], mesh->GetVertices ()[3*d+2]);
 				glEnd ();
@@ -389,28 +434,26 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
+		// Lu PAR REFERENCE, et pour CE maillage seulement. L'ancienne version
+		// parcourait les problemes de toute la scene -- donc les redessinait M
+		// fois par image, une fois par maillage -- et copiait le vecteur de
+		// chaque entree au passage (`auto edges = element.second`).
+		const MeshDataManager::TopologicIssues& issues =
+			MeshDataManager::GetInstance ().GetTopologicIssues (mesh);
+		const std::vector<float>& vertices = mesh->GetVertices ();
+
 		// non manifold
 		glColor3f(1., 0., 0.);
 		glBegin(GL_LINES);
-		for (auto& element : prop.nonManifoldEdges)
-		{
-			auto mesh = element.first;
-			auto edges = element.second;
-			for (auto index : edges)
-				glVertex3f(mesh->GetVertices ()[3 * index], mesh->GetVertices ()[3 * index + 1], mesh->GetVertices ()[3 * index + 2]);
-		}
+		for (unsigned int index : issues.nonManifoldEdges)
+			glVertex3f (vertices[3*index], vertices[3*index+1], vertices[3*index+2]);
 		glEnd();
 
 		// borders
 		glColor3f(1., 1., 0.);
 		glBegin(GL_LINES);
-		for (auto& element : prop.borders)
-		{
-			auto mesh = element.first;
-			auto edges = element.second;
-			for (auto index : edges)
-				glVertex3f(mesh->GetVertices ()[3 * index], mesh->GetVertices ()[3 * index + 1], mesh->GetVertices ()[3 * index + 2]);
-		}
+		for (unsigned int index : issues.borders)
+			glVertex3f (vertices[3*index], vertices[3*index+1], vertices[3*index+2]);
 		glEnd();
 
 		glPopAttrib();
@@ -426,6 +469,12 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 	{
 		glDisable(GL_CLIP_PLANE0);
 	}
+
+	// Les surcouches (fil de fer, points, normales, diagnostic) passent toutes
+	// par ici, APRES DrawMaterialGroups. Sans ce point de controle, une erreur
+	// nee dans cette fonction n'etait vidangee qu'au dessin SUIVANT et se voyait
+	// donc attribuee a DrawMaterialGroups -- diagnostic trompeur.
+	CGRE_CHECK_GL ("mesh_draw");
 }
 
 
@@ -434,10 +483,8 @@ MeshRenderer *MeshRenderer::m_pInstance = new MeshRenderer;
 
 MeshRenderer::MeshRenderer()
 {
-	m_displayListManager = new DisplayListManager ();
-	m_vertexArrayManager = new VertexArrayManager ();
+
 	m_vboManager = new VBOManager();
-	m_vertexBufferManager = new VertexBufferManager ();
 }
 
 MeshRenderer::~MeshRenderer()
@@ -459,17 +506,8 @@ int MeshRenderer::AddMesh (Mesh *pMesh, CG_rendering_method method)
 	{
 	case CG_RENDERING_DEFAULT:
 		break;
-	case CG_RENDERING_DISPLAY_LIST:
-		el.id = m_displayListManager->addMesh (pMesh);
-		break;
-	case CG_RENDERING_VERTEX_ARRAY:
-		el.id = m_vertexArrayManager->addMesh (pMesh);
-		break;
 	case CG_RENDERING_VBO:
 		el.id = m_vboManager->addMesh (pMesh);
-		break;
-	case CG_RENDERING_VERTEX_BUFFER:
-		el.id = m_vertexBufferManager->addMesh (pMesh);
 		break;
 	default:
 		break;
@@ -488,11 +526,42 @@ void MeshRenderer::RemoveMesh (Mesh *pMesh)
 		return;
 	const int id = it->second;
 	m_meshToId.erase(it);
+	// LIBERER LES MATERIAUX DU MAILLAGE avant de lacher le pointeur.
+	//
+	// Le maillage est encore vivant a cet instant (les appelants -- fermeture
+	// d'onglet, rechargement de modele -- appellent RemoveMesh AVANT de detruire
+	// la scene), donc on peut encore enumerer ses materiaux. C'est le seul moment
+	// ou c'est possible.
+	//
+	// Inconditionnel, sans comptage de references : Mesh::m_materials est un
+	// vector<unique_ptr<Material>>, chaque maillage possede donc les siens et il
+	// n'y a aucun partage entre maillages.
+	for (unsigned int i = 0; i < pMesh->GetNMaterials (); i++)
+	{
+		if (Material *pMaterial = pMesh->GetMaterial (i))
+			MaterialRenderer::getInstance ()->RemoveMaterial (pMaterial);
+	}
+
 	if (id >= 0 && id < (int)m_meshes.size())
 	{
+		// LIBERER LES TAMPONS GPU DU MAILLAGE. Sans cela, les cinq objets GL
+		// (positions, normales, couleurs, UV, indices) restaient en VRAM pour la
+		// duree du processus : sur un maillage de 2 M de triangles, de l'ordre de
+		// 72 Mo abandonnes a chaque cycle recharger / fermer.
+		if (m_meshes[id].method == CG_RENDERING_VBO)
+			m_vboManager->removeMesh (m_meshes[id].id);
+		m_meshes[id].id = -1;
+
 		// Mark slot vacant so Draw() skips it; we keep the slot to preserve
 		// ids of other entries (other tabs / canvases) into m_meshes.
 		m_meshes[id].pMesh = nullptr;
+
+		// Le cache d'identifiants de materiaux devient caduc en meme temps : les
+		// emplacements qu'il designe viennent d'etre rendus et seront reattribues.
+		// GetMaterialRendererIds rend deja un vecteur vide pour un pMesh nul, mais
+		// autant ne pas conserver des indices perimes.
+		m_meshes[id].materialCache.rendererIds.clear ();
+		m_meshes[id].materialCache.revision = (uint64_t)-1;
 	}
 }
 
@@ -566,44 +635,21 @@ void MeshRenderer::Draw (int id)
 	case CG_RENDERING_DEFAULT:
 		mesh_draw (el.pMesh, el.properties, GetMaterialRendererIds(id));
 		break;
-	case CG_RENDERING_VERTEX_ARRAY:
-		if (el.properties.display_fill)
-		{
-			activateMeshMaterial();
-			m_vertexArrayManager->Draw (el.id);
-		}
-
-		// Always call mesh_draw for extras (wireframe, points, warnings)
-		{
-			rendering_properties_s extras = el.properties;
-			extras.display_fill = 0; // Surface already handled
-			mesh_draw(el.pMesh, extras, GetMaterialRendererIds(id));
-		}
-		break;
-	case CG_RENDERING_DISPLAY_LIST:
-		activateMeshMaterial();
-		m_displayListManager->Draw (el.id);
-		break;
 	case CG_RENDERING_VBO:
 		if (el.properties.display_fill)
 		{
 			// One draw call per material run (handles single- and
 			// multi-material meshes); activates each material in turn.
 			m_vboManager->DrawMaterialGroups (el.id, GetMaterialRendererIds(id), !el.properties.smooth,
-			                                  el.properties.shading == CG_shading_mode::Materials);
+			                                  el.properties.shading == CG_shading_mode::Materials,
+			                                  el.properties.shading == CG_shading_mode::VertexColors);
 		}
 
 		// Overlays (wireframe, points, vertex normals, warnings) still go
-		// through the legacy mesh_draw path — mirror VERTEX_ARRAY.
-		{
-			rendering_properties_s extras = el.properties;
-			extras.display_fill = 0; // Surface already handled
-			mesh_draw(el.pMesh, extras, GetMaterialRendererIds(id));
-		}
-		break;
-	case CG_RENDERING_VERTEX_BUFFER:
-		activateMeshMaterial();
-		m_vertexBufferManager->Draw (el.id);
+		// through the legacy mesh_draw path. Un DRAPEAU, plus une copie de
+		// `el.properties` : celle-ci dupliquait la structure entiere par maillage
+		// et par image.
+		mesh_draw(el.pMesh, el.properties, GetMaterialRendererIds(id), /*surfaceAlreadyDrawn*/ true);
 		break;
 	default:
 		break;
@@ -611,6 +657,8 @@ void MeshRenderer::Draw (int id)
 
 	if (el.properties.clipping_plane_active)
 		glDisable(GL_CLIP_PLANE0);
+
+	CGRE_CHECK_GL ("MeshRenderer::Draw");
 }
 
 int MeshRenderer::GetMeshId (Mesh *pMesh, CG_rendering_method method)

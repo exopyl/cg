@@ -399,6 +399,203 @@ std::string cmdScreenshot(MyFrame* frame, const std::string& path)
     return os.str();
 }
 
+// ---------------------------------------------------------------------------
+//  HARNAIS DE CAPTURES : camera deterministe, bascules d'affichage, controle GL
+// ---------------------------------------------------------------------------
+// Une capture de reference n'est un oracle que si elle est reproductible. Il
+// faut donc pouvoir poser exactement le meme point de vue et les memes options
+// d'affichage d'une execution a l'autre -- ce que la souris et les menus ne
+// permettent pas. Avec `open`, `screenshot` et ces trois commandes, un script
+// peut balayer N modeles x M reglages et comparer aux images de reference.
+//
+// C'est aussi le seul filet de ce module : cgre n'a aucun test, et la seule
+// facon de juger un rendu reste de le regarder.
+
+std::string cmdCamera(MyFrame* frame, const std::string& args)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    std::istringstream iss(args);
+    std::string sub;
+    iss >> sub;
+
+    if (sub.empty() || sub == "show")
+    {
+        const float zoom = callOnMain([frame]() -> float {
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            return c ? c->GetCameraZoom() : 0.f;
+        });
+        std::ostringstream os;
+        os << "camera zoom = " << zoom << "\nOK\n";
+        return os.str();
+    }
+
+    if (sub == "reset")
+    {
+        const bool ok = callOnMain([frame]() -> bool {
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            if (!c) return false;
+            c->ResetCamera();
+            return true;
+        });
+        return ok ? "camera reset\nOK\n" : "ERR no active view\n";
+    }
+
+    if (sub == "azel")
+    {
+        float az = 0.f, el = 0.f;
+        iss >> az >> el;
+        if (iss.fail()) return "ERR usage: camera azel AZ EL   (degrees)\n";
+        const bool ok = callOnMain([frame, az, el]() -> bool {
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            if (!c) return false;
+            c->SetCameraOrientation(az, el);
+            return true;
+        });
+        if (!ok) return "ERR no active view\n";
+        std::ostringstream os;
+        os << "camera azel " << az << " " << el << "\nOK\n";
+        return os.str();
+    }
+
+    if (sub == "zoom")
+    {
+        float z = 0.f;
+        iss >> z;
+        if (iss.fail()) return "ERR usage: camera zoom Z   (negative = further away)\n";
+        const bool ok = callOnMain([frame, z]() -> bool {
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            if (!c) return false;
+            c->SetCameraZoom(z);
+            return true;
+        });
+        if (!ok) return "ERR no active view\n";
+        std::ostringstream os;
+        os << "camera zoom " << z << "\nOK\n";
+        return os.str();
+    }
+
+    return "ERR usage: camera [show|reset|azel AZ EL|zoom Z]\n";
+}
+
+std::string cmdShading(MyFrame* frame, const std::string& arg)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    // -1 : pas de changement, on se contente de rapporter.
+    int want = -1;
+    if      (arg == "materials")    want = (int)CG_shading_mode::Materials;
+    else if (arg == "neutral")      want = (int)CG_shading_mode::Neutral;
+    else if (arg == "vertexcolors") want = (int)CG_shading_mode::VertexColors;
+    else if (!arg.empty())
+        return "ERR usage: shading [materials|neutral|vertexcolors]\n";
+
+    const int mode = callOnMain([frame, want]() -> int {
+        MyGLCanvas* c = frame->GetActiveCanvas();
+        if (!c) return -1;
+        if (want >= 0) c->SetShadingMode((CG_shading_mode)want);
+        return (int)c->GetShadingMode();
+    });
+
+    if (mode < 0) return "ERR no active view\n";
+
+    const char* name = (mode == (int)CG_shading_mode::Neutral)      ? "neutral"
+                     : (mode == (int)CG_shading_mode::VertexColors) ? "vertexcolors"
+                                                                    : "materials";
+    return std::string("shading ") + name + "\nOK\n";
+}
+
+std::string cmdToggle(MyFrame* frame, const std::string& args)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    std::istringstream iss(args);
+    std::string what, state;
+    iss >> what >> state;
+
+    if (what.empty())
+        return "ERR usage: toggle fill|wireframe|points|warning|repere|grid|lighting [on|off]\n";
+
+    int want = -1;                      // -1 : bascule
+    if      (state == "on")  want = 1;
+    else if (state == "off") want = 0;
+    else if (!state.empty())
+        return "ERR usage: toggle WHAT [on|off]\n";
+
+    // -1 : vue absente ; -2 : nom inconnu.
+    const int result = callOnMain([frame, what, want]() -> int {
+        MyGLCanvas* c = frame->GetActiveCanvas();
+        if (!c) return -1;
+
+        // `Change*` bascule ; pour forcer un etat on ne bascule que si l'etat
+        // courant differe de celui demande. C'est ce qui rend un script
+        // idempotent, donc rejouable.
+        auto apply = [want](bool current, auto change) {
+            if (want < 0 || (want != 0) != current) change();
+        };
+
+        if      (what == "fill")      apply(c->GetFill(),      [c]{ c->ChangeFill(); });
+        else if (what == "wireframe") apply(c->GetWireframe(), [c]{ c->ChangeWireframe(); });
+        else if (what == "points")    apply(c->GetPoint(),     [c]{ c->ChangePoint(); });
+        else if (what == "warning")   apply(c->GetWarning(),   [c]{ c->ChangeWarning(); });
+        else if (what == "repere")    apply(c->GetRepere(),    [c]{ c->ChangeRepere(); });
+        else if (what == "grid")      apply(c->GetGrid(),      [c]{ c->ChangeGrid(); });
+        else if (what == "lighting")  c->SetLighting(want < 0 ? !c->GetLighting() : (want != 0));
+        else return -2;
+
+        if      (what == "fill")      return c->GetFill()      ? 1 : 0;
+        else if (what == "wireframe") return c->GetWireframe() ? 1 : 0;
+        else if (what == "points")    return c->GetPoint()     ? 1 : 0;
+        else if (what == "warning")   return c->GetWarning()   ? 1 : 0;
+        else if (what == "repere")    return c->GetRepere()    ? 1 : 0;
+        else if (what == "grid")      return c->GetGrid()      ? 1 : 0;
+        return c->GetLighting() ? 1 : 0;
+    });
+
+    if (result == -1) return "ERR no active view\n";
+    if (result == -2)
+        return "ERR unknown toggle: " + what
+             + " (fill|wireframe|points|warning|repere|grid|lighting)\n";
+
+    return "toggle " + what + " " + (result ? "on" : "off") + "\nOK\n";
+}
+
+// Controle d'erreur GL de cgre. Eteint par defaut : un glGetError par point de
+// controle peut serialiser le pipeline. On l'allume le temps d'un diagnostic,
+// les erreurs partent alors dans la fenetre « Logging Window ».
+std::string cmdGlCheck(const std::string& arg)
+{
+    if      (arg == "on")  cgre::SetGlCheckEnabled(true);
+    else if (arg == "off") cgre::SetGlCheckEnabled(false);
+    else if (!arg.empty()) return "ERR usage: glcheck [on|off]\n";
+
+    return std::string("glcheck ") + (cgre::IsGlCheckEnabled() ? "on" : "off") + "\nOK\n";
+}
+
+// Bascule du rendu de surface par shader. ACTIF au demarrage depuis la
+// validation par captures de reference ; `off` restaure le pipeline fixe, ce qui
+// reste le seul moyen de comparer A/B dans une meme session -- cgre n'ayant
+// aucun test de rendu.
+std::string cmdShader(MyFrame* frame, const std::string& arg)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    int want = -1;
+    if      (arg == "on")  want = 1;
+    else if (arg == "off") want = 0;
+    else if (!arg.empty()) return "ERR usage: shader [on|off]\n";
+
+    // Sur le fil principal : la bascule doit etre suivie d'un repaint, et la
+    // construction du programme exige un contexte GL courant.
+    const bool on = callOnMain([frame, want]() -> bool {
+        if (want >= 0) cgre::SetSurfaceShaderEnabled(want != 0);
+        if (MyGLCanvas* c = frame->GetActiveCanvas()) c->Refresh(false);
+        return cgre::IsSurfaceShaderEnabled();
+    });
+
+    return std::string("shader ") + (on ? "on" : "off") + "\nOK\n";
+}
+
 std::string cmdHelp()
 {
     return
@@ -415,6 +612,15 @@ std::string cmdHelp()
         "  drop N                     move model N down onto the Z = 0 plane\n"
         "  normalize                  recentre + scale the active model to the target size\n"
         "  screenshot PATH            save current viewport to PATH as PNG\n"
+        "  camera [show|reset|azel AZ EL|zoom Z]\n"
+        "                             deterministic camera, for reference renders\n"
+        "  shading [materials|neutral|vertexcolors]\n"
+        "                             shading mode (no arg: report current)\n"
+        "  toggle WHAT [on|off]       fill|wireframe|points|warning|repere|grid|lighting\n"
+        "                             (no on/off: flip it)\n"
+        "  glcheck [on|off]           cgre OpenGL error checking -> Logging Window\n"
+        "  shader [on|off]            surface rendering through the GLSL program\n"
+        "                             (on by default; 'off' restores the fixed pipeline)\n"
         "  help                       this help\n"
         "  quit                       close the connection\n"
         "OK\n";
@@ -478,6 +684,36 @@ cgnet::Reply dispatch(const std::string& rawLine, MyFrame* frame)
         std::string arg;
         std::getline(iss, arg);
         return { cmdCuttingMat(frame, trim(arg)), false };
+    }
+    if (cmd == "camera")
+    {
+        std::string args;
+        std::getline(iss, args);
+        return { cmdCamera(frame, trim(args)), false };
+    }
+    if (cmd == "shading")
+    {
+        std::string arg;
+        std::getline(iss, arg);
+        return { cmdShading(frame, trim(arg)), false };
+    }
+    if (cmd == "toggle")
+    {
+        std::string args;
+        std::getline(iss, args);
+        return { cmdToggle(frame, trim(args)), false };
+    }
+    if (cmd == "shader")
+    {
+        std::string arg;
+        std::getline(iss, arg);
+        return { cmdShader(frame, trim(arg)), false };
+    }
+    if (cmd == "glcheck")
+    {
+        std::string arg;
+        std::getline(iss, arg);
+        return { cmdGlCheck(trim(arg)), false };
     }
     if (cmd == "normalize")
         return { cmdNormalize(frame), false };

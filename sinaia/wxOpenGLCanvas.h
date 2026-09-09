@@ -28,6 +28,28 @@ class MyGLCanvas: public wxGLCanvas
 public:
 	static const int* GetDefaultAttributes();
 
+	// CONTEXTE DE PARTAGE UNIQUE.
+	//
+	// Chaque onglet du notebook est un MyGLCanvas distinct, donc un contexte GL
+	// distinct. Sans partage, un identifiant d'objet GL (texture, VBO, et demain
+	// programme GLSL) cree dans un onglet est INVALIDE dans les autres : c'est ce
+	// qui oblige CuttingMat a instancier son tapis par canvas plutot que de le
+	// partager, au prix de 54 Mo de texture dupliques par onglet (voir le
+	// commentaire de CuttingMat.h).
+	//
+	// Le contexte racine est cree une seule fois par MyFrame, AVANT tout canvas,
+	// avec le MEME format de pixel que les canvas de rendu -- wglShareLists
+	// l'exige. Tous les contextes de canvas sont ensuite crees en partage avec
+	// lui, ce qui place textures, tampons, shaders et programmes dans un groupe
+	// de partage unique.
+	//
+	// ATTENTION pour la suite : le groupe de partage couvre les objets de DONNEES
+	// (textures, buffers, shaders, programmes, renderbuffers) mais PAS les objets
+	// conteneurs -- VAO et FBO restent propres a chaque contexte et devront etre
+	// crees par canvas.
+	static void         SetSharedContext (wxGLContext* pContext);
+	static wxGLContext* GetSharedContext ();
+
 	wxGLContext*	m_context = nullptr;
 	wxTextCtrl*		m_CtrlLog = nullptr; // TODO : replace with a lambda
 	
@@ -105,6 +127,22 @@ public:
 	// bascule -- voir CG_shading_mode (cgre/mesh_renderer.h).
 	void SetShadingMode (CG_shading_mode mode) { prop.shading = mode; Refresh(false); };
 	CG_shading_mode GetShadingMode (void) const { return prop.shading; };
+
+	// ------------------------------------------------------------------
+	// Reglages DETERMINISTES de la camera, pour le harnais de captures.
+	// ------------------------------------------------------------------
+	// Une capture de reference n'a de valeur que si elle est reproductible : il
+	// faut pouvoir poser exactement le meme point de vue d'une execution a
+	// l'autre, ce que la manipulation a la souris ne permet pas. D'ou ces
+	// reglages, pilotables depuis la console distante.
+	//
+	// Convention de ce harnais : azimut = rotation autour de Y (lacet),
+	// elevation = rotation autour de X appliquee ENSUITE (tangage), en degres.
+	// (0, 0) laisse l'orientation neutre.
+	void  SetCameraOrientation (float azimuthDeg, float elevationDeg);
+	void  SetCameraZoom (float zoom);
+	float GetCameraZoom () const;
+	void  ResetCamera ();
 
 	void ChangeFill (void);
 	bool GetFill (void);
@@ -235,6 +273,11 @@ private:
 	// Model dont l'AABB est traversée en PREMIER par le rayon souris (picking au
 	// niveau FICHIER), ou nullptr. N'inspecte que les Model visibles.
 	Model* PickModel(int x, int y);
+
+	// Racine du groupe de partage GL (voir SetSharedContext). Appartient a
+	// MyFrame, qui la cree avant tout canvas et la conserve pour la duree de
+	// l'application : ce canvas n'en est jamais proprietaire.
+	static wxGLContext* s_pSharedContext;
 
 	bool m_bInitialized;
 

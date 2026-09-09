@@ -2,7 +2,6 @@
 
 #include "../cgmesh/cgmesh.h"
 #include "vertex_buffer_manager.h"
-#include "display_list_manager.h"
 
 
 #define FLAG_POINTS      1
@@ -10,11 +9,19 @@
 #define FLAG_FILL        4
 #define FLAG_NORMALIZED  8
 
+// COMMENT la geometrie est envoyee au GPU.
+//
+// Trois valeurs ont ete retirees -- DISPLAY_LIST, VERTEX_ARRAY, VERTEX_BUFFER.
+// Aucune n'etait jamais demandee (sinaia demande VBO, cf. wxOpenGLCanvas.cpp et
+// CuttingMat.cpp), et chacune portait un defaut avere : DisplayListManager
+// ecrivait hors de son tableau de 8 des le 9e maillage, sur le tas ;
+// VertexArrayManager appelait glDrawElements avec 3*GetNFaces() alors que la
+// source est triangulee, donc geometrie tronquee sur des quads ou lecture hors
+// bornes ; VertexBufferManager fuyait un malloc par maillage et ne supprimait
+// aucun objet GL -- et son VAO d'attributs generiques ne liait aucun programme,
+// donc ne pouvait rien afficher.
 enum CG_rendering_method {	CG_RENDERING_DEFAULT = 0,
-							CG_RENDERING_DISPLAY_LIST,
-							CG_RENDERING_VERTEX_ARRAY,
-							CG_RENDERING_VBO,
-							CG_RENDERING_VERTEX_BUFFER	};
+							CG_RENDERING_VBO	};
 
 // MODE D'OMBRAGE : d'ou vient la couleur des faces.
 //
@@ -58,8 +65,21 @@ typedef struct rendering_properties
 	int clipping_plane_active;
 	float clipping_plane_z;
 
-	map<Mesh*, vector<unsigned int>> nonManifoldEdges;
-	map<Mesh*, vector<unsigned int>> borders;
+	// NE RIEN METTRE ICI QUI ALLOUE. Cette structure est copiee par VALEUR a
+	// chaque maillage et a chaque image (MeshRenderer::SetProperties, puis le
+	// chemin VBO). Elle a longtemps porte deux
+	//     map<Mesh*, vector<unsigned int>>
+	// -- les aretes non-manifold et les bords de TOUTE la scene -- que
+	// UpdateTopologicIssues remplissait d'une entree par maillage. Le cout par
+	// image etait donc QUADRATIQUE en nombre de maillages : ~8*M^2 allocations,
+	// plus la recopie des indices, std::map::operator= ne recyclant pas ses
+	// noeuds. Deux fichiers ordinaires ouverts ensemble -- un maillage lourd et
+	// un fichier a 223 objets -- suffisaient a rendre l'application inutilisable.
+	//
+	// Ces donnees appartiennent a la SCENE, pas aux proprietes de rendu d'un
+	// maillage. mesh_draw les lit desormais directement dans
+	// MeshDataManager::GetTopologicIssues(mesh), par reference et pour le seul
+	// maillage qu'il dessine, avec le cache par revision qui existait deja.
 
 } rendering_properties_s;
 
@@ -81,7 +101,13 @@ void rendering_properties_init (rendering_properties_s &prop);
 
 // direct drawing
 //
-extern void  mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& materialIds = vector<int>());
+// `surfaceAlreadyDrawn` : la surface a deja ete emise par un chemin rapide, on
+// ne dessine que les surcouches. Remplace la copie complete de `prop` que le
+// chemin VBO faisait pour y mettre display_fill = 0 -- copie devenue le second
+// facteur quadratique du dessin.
+extern void  mesh_draw (Mesh *mesh, rendering_properties_s &prop,
+                        const vector<int>& materialIds = vector<int>(),
+                        bool surfaceAlreadyDrawn = false);
 
 
 //
@@ -108,10 +134,7 @@ public:
 private:
 	static MeshRenderer *m_pInstance;
 
-	DisplayListManager	*m_displayListManager;
-	VertexArrayManager *m_vertexArrayManager;
 	VBOManager *m_vboManager;
-	VertexBufferManager *m_vertexBufferManager;
 
 	std::vector<rendering_element_s> m_meshes;
 	map<Mesh*, int> m_meshToId; // New mapping

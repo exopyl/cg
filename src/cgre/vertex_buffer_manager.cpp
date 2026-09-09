@@ -1,149 +1,12 @@
 #include "gl_wrapper.h"
 
 #include "vertex_buffer_manager.h"
+
+#include "diagnostics.h"
+#include "gl_program.h"
 #include "material_renderer.h"
+#include "surface_program.h"
 #include "../cgmesh/mesh_data_manager.h"
-
-VertexBufferManager::VertexBufferManager()
-{
-	m_idCurrent = 0;
-}
-
-VertexBufferManager::~VertexBufferManager()
-{
-	m_idCurrent = 0;
-}
-
-int VertexBufferManager::addMesh (Mesh *mesh)
-{
-	std::vector<unsigned int> indices = mesh->GetTriangles();
-	if (indices.empty())
-		return -1;
-
-	int nVertices = mesh->GetNVertices ();
-	int nTriangles = mesh->GetNFaces ();
-	const float* pVertices = mesh->GetVertices ().data();
-	const float* pVertexNormals = mesh->GetVertexNormals ().data();
-
-	GLfloat* data = (GLfloat*)malloc(6*nVertices*sizeof(GLfloat));
-	for (int i=0; i<nVertices; i++)
-	{
-		data[6*i]   = pVertices[3*i];
-		data[6*i+1] = pVertices[3*i+1];
-		data[6*i+2] = pVertices[3*i+2];
-		data[6*i+3] = pVertexNormals[3*i];
-		data[6*i+4] = pVertexNormals[3*i+1];
-		data[6*i+5] = pVertexNormals[3*i+2];
-	}
-	GLuint id;
-	glGenVertexArrays(1, &id);
-	glBindVertexArray(id);
-
-	GLuint m_indicesBuf, m_bufHandle;
-	glGenBuffers(1, &m_indicesBuf);
-	glGenBuffers(1, &m_bufHandle);
-
-	glBindBuffer(GL_ARRAY_BUFFER, m_bufHandle);
-	glBufferData(GL_ARRAY_BUFFER, 6*nVertices*sizeof(GLfloat), data, GL_STATIC_DRAW);
-
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0);
-	glEnableVertexAttribArray(0);
-
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
-	glEnableVertexAttribArray(1);
-
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_indicesBuf);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3*nTriangles*sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
-
-	glBindVertexArray(0);
-
-	// store info
-	vbInfo info = {id, 3*nTriangles};
-	m_mapVertexBuffer[m_idCurrent++] = info;
-
-	return m_idCurrent-1;
-}
-
-
-void VertexBufferManager::Draw (int id)
-{
-	vbInfo info = m_mapVertexBuffer[id];
-
-	glBindVertexArray(info.id);
-	glDrawElements(GL_TRIANGLES, info.size, GL_UNSIGNED_INT, 0);
-	glBindVertexArray(0);
-}
-
-
-//
-// Vertex Array
-//
-// http://raptor.developpez.com/tutorial/opengl/vbo/
-//
-VertexArrayManager::VertexArrayManager()
-{
-	m_idCurrent = 0;
-}
-
-VertexArrayManager::~VertexArrayManager()
-{
-	m_idCurrent = 0;
-}
-
-int VertexArrayManager::addMesh (Mesh *mesh)
-{
-	m_mapVertexArray[m_idCurrent++] = mesh;
-	return m_idCurrent-1;
-}
-
-
-void VertexArrayManager::Draw (int id)
-{
-	Mesh* mesh = m_mapVertexArray[id];
-	if (!mesh)
-		return;
-
-	const std::vector<unsigned int>& triangles = MeshDataManager::GetInstance().GetTriangles(mesh);
-	if (triangles.empty())
-		return;
-
-	const float* pVertices = mesh->GetVertices ().data();
-
-	const bool bHasNormals   = !mesh->GetVertexNormals ().empty();
-	const bool bHasColors    = !mesh->GetVertexColors ().empty();
-	const bool bHasTexCoords = !mesh->GetTextureCoordinates ().empty();
-
-	glEnableClientState(GL_VERTEX_ARRAY);
-	if (bHasNormals)
-		glEnableClientState(GL_NORMAL_ARRAY);
-	if (bHasColors)
-		glEnableClientState(GL_COLOR_ARRAY);
-	if (bHasTexCoords)
-		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-
-	glVertexPointer(3, GL_FLOAT, 0, mesh->GetVertices ().data());
-	if (bHasNormals)
-		glNormalPointer (GL_FLOAT, 0, mesh->GetVertexNormals ().data());
-	if (bHasColors)
-		glColorPointer(3, GL_FLOAT, 0, mesh->GetVertexColors ().data());
-	if (bHasTexCoords)
-		glTexCoordPointer(2, GL_FLOAT, 0, mesh->GetTextureCoordinates ().data());
-
-	glEnable(GL_POLYGON_OFFSET_FILL);
-	glPolygonOffset(1.0, 1.0);
-
-	glDrawElements(GL_TRIANGLES, 3*mesh->GetNFaces (), GL_UNSIGNED_INT, triangles.data());
-
-	glDisable(GL_POLYGON_OFFSET_FILL);
-
-	if (bHasTexCoords)
-		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	if (bHasColors)
-		glDisableClientState(GL_COLOR_ARRAY);
-	if (bHasNormals)
-		glDisableClientState(GL_NORMAL_ARRAY);
-	glDisableClientState(GL_VERTEX_ARRAY);
-}
 
 //
 // VBO
@@ -271,6 +134,24 @@ void VBOManager::uploadMesh(Mesh* mesh, vboInfo& info, bool flat)
 	info.revision = mesh->GetRevision();
 	info.flat = flat;
 	(void)nRenderVerts;
+
+	// Un glBufferData a court de VRAM echoue en silence : sans ce controle, le
+	// symptome est une geometrie qui disparait, pas un message.
+	CGRE_CHECK_GL ("VBOManager::uploadMesh");
+}
+
+void VBOManager::removeMesh (int id)
+{
+	if (id < 0) return;
+
+	const auto it = m_mapVBO.find ((unsigned int)id);
+	if (it == m_mapVBO.end ())
+		return;
+
+	releaseBuffers (it->second);
+	m_mapVBO.erase (it);
+
+	CGRE_CHECK_GL ("VBOManager::removeMesh");
 }
 
 int VBOManager::addMesh (Mesh *mesh)
@@ -345,7 +226,7 @@ void VBOManager::Draw (int id)
 }
 
 void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds, bool flat,
-                                    bool useMeshMaterials)
+                                    bool useMeshMaterials, bool useVertexColors)
 {
 	auto it = m_mapVBO.find(id);
 	if (it == m_mapVBO.end())
@@ -393,6 +274,8 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info.iboIndices);
 
+	CGRE_CHECK_GL ("VBOManager::DrawMaterialGroups (etat client)");
+
 	glEnable(GL_POLYGON_OFFSET_FILL);
 	glPolygonOffset(1.0f, 1.0f);
 
@@ -403,6 +286,31 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 	else
 		MaterialRenderer::ActivateNeutralMaterial ();
 
+	// SECOND CHEMIN DE DESSIN. Le programme n'est lie que pour la surface, et
+	// delie juste apres la boucle : les surcouches, le repere et la grille
+	// continuent en fixe-fonction, ce que le contexte de compatibilite autorise.
+	// Si la construction du programme a echoue, `prog` est nul et l'on reste sur
+	// le pipeline fixe -- degrade, jamais casse.
+	const cgre::GlProgram* prog = cgre::IsSurfaceShaderEnabled () ? cgre::SurfaceProgram ()
+	                                                             : nullptr;
+	if (prog)
+	{
+		prog->Use ();
+		// Unites d'echantillonnage, fixees une fois : ce sont celles auxquelles
+		// MaterialRenderer::ActivateMaterial lie deja ses textures.
+		prog->SetInt ("uAlbedo", 0);
+		prog->SetInt ("uReflection", 1);
+		// Le mode « couleurs par sommet » n'a de sens que si le maillage en porte.
+		prog->SetInt ("uUseVertexColors", (useVertexColors && info.hasColors) ? 1 : 0);
+		// Etat par defaut, valable pour le materiau neutre comme pour celui par
+		// defaut : ni texture ni reflet. Chaque plage qui en a le corrige.
+		prog->SetInt   ("uUseTexture", 0);
+		prog->SetInt   ("uUseReflection", 0);
+		prog->SetFloat ("uReflAmount", 0.f);
+	}
+
+	CGRE_CHECK_GL ("VBOManager::DrawMaterialGroups (materiau de base)");
+
 	for (const Mesh::MaterialRange& r : info.materialRanges)
 	{
 		if (useMeshMaterials &&
@@ -411,10 +319,31 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 		    rendererIds[r.materialId] != -1)
 		{
 			MaterialRenderer::getInstance()->ActivateMaterial(rendererIds[r.materialId]);
+
+			// Sous programme lie, glEnable(GL_TEXTURE_2D) ne decide plus rien :
+			// c'est l'uniforme qui dit au fragment s'il doit echantillonner.
+			if (prog)
+			{
+				const MaterialRenderer::MaterialGlInfo mi =
+					MaterialRenderer::getInstance()->GetGlInfo (rendererIds[r.materialId]);
+				prog->SetInt   ("uUseTexture", (mi.hasTexture && info.hasTexCoords) ? 1 : 0);
+				prog->SetInt   ("uUseReflection", mi.hasReflection ? 1 : 0);
+				prog->SetFloat ("uReflAmount", mi.reflAmount);
+			}
 		}
 		glDrawElements(GL_TRIANGLES, r.count, GL_UNSIGNED_INT,
 		               (const GLvoid*)(size_t)(r.offset * sizeof(unsigned int)));
 	}
+
+	// HORS DE LA BOUCLE, deliberement. glGetError peut serialiser le pipeline :
+	// un controle par plage de materiau rendait l'application inutilisable sur un
+	// maillage a nombreux materiaux des que `glcheck` etait allume. La file
+	// d'erreurs etant globale, un controle apres la boucle attrape les memes
+	// erreurs -- il dit seulement « dans la boucle » plutot que « a la plage 47 »,
+	// ce qui suffit largement pour localiser.
+	if (prog) cgre::GlProgram::Unuse ();
+
+	CGRE_CHECK_GL ("VBOManager::DrawMaterialGroups (boucle de dessin)");
 
 	glDisable(GL_POLYGON_OFFSET_FILL);
 
@@ -425,4 +354,6 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 	if (info.hasColors)    glDisableClientState(GL_COLOR_ARRAY);
 	if (info.hasNormals)   glDisableClientState(GL_NORMAL_ARRAY);
 	glDisableClientState(GL_VERTEX_ARRAY);
+
+	CGRE_CHECK_GL ("VBOManager::DrawMaterialGroups");
 }

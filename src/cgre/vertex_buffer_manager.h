@@ -5,50 +5,6 @@ using namespace std;
 
 #include "../cgmesh/cgmesh.h"
 
-//
-// ref : http://antongerdelan.net/opengl/vertexbuffers.html
-//
-
-typedef struct vbInfo
-{
-	GLuint id;
-	unsigned int size;
-} vbInfo;
-
-class VertexBufferManager
-{
-public:
-	VertexBufferManager ();
-	~VertexBufferManager ();
-
-	int addMesh (Mesh *mesh);
-	void Draw (int id);
-
-private:
-	int m_idCurrent;
-	std::map<unsigned int,vbInfo> m_mapVertexBuffer;
-};
-
-//
-// vertex array
-//
-class VertexArrayManager
-{
-public:
-	VertexArrayManager ();
-	~VertexArrayManager ();
-
-	int addMesh (Mesh *mesh);
-	void Draw (int id);
-
-private:
-	int m_idCurrent;
-	std::map<unsigned int,Mesh*> m_mapVertexArray;
-};
-
-//
-//
-//
 typedef struct vboInfo
 {
 	Mesh*     pMesh;        // kept for revision-based re-upload
@@ -78,6 +34,29 @@ public:
 	~VBOManager ();
 
 	int addMesh (Mesh *mesh);
+
+	// RETRAIT D'UN MAILLAGE : libere ses cinq objets GL (positions, normales,
+	// couleurs, UV, indices) et rend l'entree.
+	//
+	// Il n'existait pas. releaseBuffers etait PRIVEE et n'etait appelee que par
+	// ~VBOManager -- lequel appartient au singleton MeshRenderer, cree par un
+	// `new` jamais rendu, donc jamais execute. Consequence : MeshRenderer::RemoveMesh
+	// se contentait de marquer l'emplacement vacant et tous les tampons restaient
+	// en VRAM pour la duree du processus. Sur un maillage de 2 M de triangles,
+	// c'est de l'ordre de 72 Mo abandonnes a chaque cycle recharger / fermer, sans
+	// aucun message -- le module n'ayant aucun controle d'erreur GL, un
+	// glBufferData finissant par manquer de memoire se serait traduit par une
+	// geometrie qui disparait.
+	//
+	// PRECONDITION : un contexte GL du groupe de partage doit etre courant, sinon
+	// glDeleteBuffers ne fait rien. C'est pourquoi ~MyGLCanvas pose le sien avant
+	// sa boucle de retrait.
+	//
+	// Les identifiants ne sont JAMAIS reutilises (m_idCurrent ne fait
+	// qu'augmenter) : un identifiant perime ne peut donc pas designer les tampons
+	// d'un autre maillage, la recherche echoue simplement.
+	void removeMesh (int id);
+
 	void Draw (int id);
 
 	// Draw the mesh grouped by material: one glDrawElements per material run,
@@ -89,8 +68,11 @@ public:
 	// du remplissage par defaut -- continuait d'activer les textures quel que
 	// soit le mode d'ombrage demande, et le mode « neutre » ne changeait rien a
 	// l'ecran.
+	// `useVertexColors` : mode d'ombrage « couleurs par sommet ». Le pipeline fixe
+	// l'obtenait par glEnable(GL_COLOR_MATERIAL), qui n'a plus d'effet sous
+	// programme lie -- le shader doit donc se le faire dire.
 	void DrawMaterialGroups (int id, const std::vector<int>& rendererIds, bool flat = false,
-	                         bool useMeshMaterials = true);
+	                         bool useMeshMaterials = true, bool useVertexColors = false);
 
 private:
 	void uploadMesh(Mesh* mesh, vboInfo& info, bool flat);

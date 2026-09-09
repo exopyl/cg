@@ -182,6 +182,18 @@ target_link_libraries(${PROJECT_NAME} cgmath cgimg cgmesh cggraph cggraph_nodes 
 if ( WIN32 )
     target_link_libraries(${PROJECT_NAME} cgnet)
 endif ()
+
+# cgre : la cible n'existe que sous ENABLE_SINAIA (voir le CMakeLists racine), et
+# le module est Windows uniquement -- WGL en dur, pas de portage. On teste donc ce
+# qui est testable la ou il existe, plutot que rien du tout partout.
+#
+# Le fichier de test est ramasse par le file(GLOB) ci-dessus quelle que soit la
+# plateforme : c'est CG_HAS_CGRE qui le vide sur les configurations sans cgre, la
+# CI Linux comprise. Sans cette definition, il ne compile a rien.
+if ( TARGET cgre )
+    target_link_libraries(${PROJECT_NAME} cgre)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CG_HAS_CGRE)
+endif ()
 if ( ENABLE_COVERAGE )
     if ( UNIX )
         target_link_libraries(${PROJECT_NAME} pthread gcov)

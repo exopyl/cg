@@ -1,53 +1,22 @@
 #pragma once
 
-#include <cgmath/cgmath.h>
+//
+// Widgets de scene : ce que le moteur dessine EN PLUS des maillages.
+//
+// Ce fichier exposait dix-huit fonctions ; deux seulement avaient un appelant
+// (`repere_draw` et `draw_grid`, depuis sinaia/wxOpenGLCanvas.cpp). Les seize
+// autres ont ete retirees, et il vaut la peine de dire pourquoi : plusieurs
+// d'entre elles -- draw_sphere, draw_teapot, draw_point, draw_plane, draw_arc --
+// avaient une signature publique, un corps qui empilait et depilait l'etat GL,
+// et un appel a GLUT COMMENTE au milieu. Elles ne dessinaient donc rien. C'etait
+// une API qui ment : LightRenderer::DisplayLight appelait draw_sphere en croyant
+// afficher les lampes.
+//
+// `screenshot` est partie avec elles : jamais appelee (sinaia a sa propre
+// commande, RemoteConsole.cpp), et affligee d'un depassement de tas -- elle
+// allouait 3*w*h octets la ou glReadPixels en ecrit ceil(3*w/4)*4 par ligne,
+// GL_PACK_ALIGNMENT valant 4 par defaut.
+//
 
-#include "framerate.h"
-
-// tools
-extern void screenshot (int win_width, int win_height);
-
-// utils
 extern void repere_draw (void);
-extern void repere_draw2 (void);
 extern void draw_grid (float size = 2., int step = 10);
-
-//extern void display_framerate (CFrameRate& framerate);
-
-//
-// drawing
-//
-
-// glut
-extern void draw_cube (void);
-extern void draw_sphere (float r = 2.);
-extern void draw_teapot ();
-
-// points
-extern void draw_point (const Vector3& pt);
-extern void draw_point (const Vector3& pt, float r, float g, float b);
-extern int  draw_point (const Vector3& pt, int id);
-
-// vector
-extern void draw_vector (const Vector3& v, const Vector3& n, float r = 0.0, float g = 0.0, float b = 0.0);
-
-// segment
-extern void draw_segment (const Vector3& v1, const Vector3& v2, float r = 0.0, float g = 0.0, float b = 0.0);
-
-// lines
-extern void draw_line (const Vector3& begin, const Vector3& end, float r, float g, float b);
-extern int  draw_line (const Vector3& begin, const Vector3& end, int id); /* with id on extremities */
-
-// planes
-extern void draw_plane (const Vector3& pt, const Vector3& normale);
-extern int  draw_plane (const Vector3& pt, const Vector3& normale, int id);
-
-// circles
-#define N_SLICES 100
-extern void draw_circle (float x, float y, float z, float radius);
-extern void draw_arc (float x, float y, float z, float radius, float begin, float end);
-extern int  draw_arc (float x, float y, float z, float radius, float begin, float end, int id); /* with id on extremities */
-
-// sphere
-extern void draw_sphere2 (int n);
-

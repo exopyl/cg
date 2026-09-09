@@ -58,6 +58,16 @@
       }
     },
     {
+      "name": "ci-linux-asan",
+      "displayName": "CI Linux -- ASan + UBSan",
+      "description": "Meme configuration que ci-linux, plus les sanitizers. HERITE de ci-linux plutot que de recopier ses chemins : deux listes EXTERN_* a tenir a jour finiraient par diverger, et c'est la copie oubliee qui casserait. Debug et non Release : ASan a besoin des symboles pour rendre une pile lisible, et les assertions du depot participent au diagnostic. Restreint a Linux par heritage de la condition de ci-linux.",
+      "inherits": "ci-linux",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CG_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
       "name": "ci-linux-boilerplate",
       "displayName": "CI Linux -- canvas ImGui et son hote natif",
       "description": "Meme configuration que ci-linux, ENABLE_CGGRAPH_BOILERPLATE en plus. Sa raison d'etre est de faire BATIR le canvas et cggraph-boilerplate : sans ce preset, le canvas n'a qu'un hote construit -- celui de la cible WebAssembly -- et D4, « un seul canvas pour les deux hotes », n'est plus verifiable. Ne lance aucun test : TU est deja couvert par ci-linux, et ce qui se prouve ici est l'edition de liens. Restreint a Linux par condition : EXTERN_OPENNURBS et EXTERN_LIB3MF pointent sous .deps/cg_binaries/, que seule l'etape de telechargement du workflow cree. Sans cette condition, Visual Studio propose le preset sur Windows et sa configuration echoue sur un repertoire d'inclusion absent.",
@@ -108,6 +118,10 @@
       "configurePreset": "maker-wasm"
     },
     {
+      "name": "ci-linux-asan",
+      "configurePreset": "ci-linux-asan"
+    },
+    {
       "name": "ci-linux-boilerplate",
       "configurePreset": "ci-linux-boilerplate",
       "targets": [
@@ -124,6 +138,21 @@
     {
       "name": "ci-linux",
       "configurePreset": "ci-linux",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "ci-linux-asan",
+      "configurePreset": "ci-linux-asan",
       "output": {
         "outputOnFailure": true
       },
