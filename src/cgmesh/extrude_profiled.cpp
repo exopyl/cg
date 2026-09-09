@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <unordered_map>
 #include <vector>
 
@@ -121,7 +122,13 @@ struct CellHash
 {
 	std::size_t operator() (const Cell& c) const
 	{
-		return (std::size_t)(c.x * 73856093) ^ (std::size_t)(c.y * 19349663);
+		// Le produit se calcule en NON SIGNE, ou le debordement est defini
+		// (modulo 2^32) et constitue le comportement voulu d'un hachage. En
+		// `int` il serait indefini : avec kCell = 0.1, un indice de cellule
+		// depasse INT_MAX / 73856093 des |coordonnee| >= 2,9 mm.
+		const std::uint32_t hx = (std::uint32_t)c.x * 73856093u;
+		const std::uint32_t hy = (std::uint32_t)c.y * 19349663u;
+		return (std::size_t)(hx ^ hy);
 	}
 };
 

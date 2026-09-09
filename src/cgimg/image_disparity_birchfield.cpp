@@ -158,8 +158,10 @@ void computeIntensityGradientsX(Img *m_pImgLeft,
    int max1, min1, max2, min2;
    int i, j;
    
-   // Initially, declare all pixels to be NOT intensity gradients
-   for (i = 0 ; i < COLS ; i++)
+   // Initially, declare all pixels to be NOT intensity gradients.
+   // The whole declared extent is written, SLOP margin included: the callers
+   // read that margin.
+   for (i = 0 ; i < COLS+SLOP ; i++)
    {
       no_igL[i] = NO_IG_PEN;
       no_igR[i] = NO_IG_PEN;
@@ -257,7 +259,7 @@ void computeIntensityGradientsX(Img *m_pImgLeft,
 //
 void fillDissimilarityTable(Img *pImgLeft,//unsigned char imgL[ROWS][COLS], 
 							Img *pImgRight,//unsigned char imgR[ROWS][COLS],
-							int dis[COLS][MAXDISP + 1], 
+							int dis[COLS+SLOP][MAXDISP + 1], 
 							int scanline)
 {
 
@@ -289,10 +291,17 @@ void fillDissimilarityTable(Img *pImgLeft,//unsigned char imgL[ROWS][COLS],
       dimgR[y] = 2 * q1;
    }
 
-   for (y = 0 ; y < COLS ; y++)
+   // The whole declared extent is written, SLOP margin included. A match whose
+   // left pixel falls outside the scanline does not exist: its cost is INF, so
+   // it can never pass the ymin / xmin pruning thresholds. A zero cost would be
+   // cheaper than any real match and would win them.
+   for (y = 0 ; y < COLS+SLOP ; y++)
       for (alpha = 0 ; alpha <= MAXDISP ; alpha++)  {
          x = y + alpha;
-         if (x < COLS)  {
+         if (y >= COLS || x >= COLS)  {
+            dis[y][alpha] = INF;
+         }
+         else  {
             p0 = dimgL[x];
             p1 = himgL[x];
             p2 = himgL[x + 1];
@@ -964,7 +973,7 @@ void DisparityBirchfield::Process(void)
 		// Fill tables
 		fillDissimilarityTable(m_pImgLeft, m_pImgRight, dis, scanline);
 		//if (ptr_ig == nullptr)
-			computeIntensityGradientsX(m_pImgLeft, m_pImgLeft, scanline, no_igL, no_igR);
+			computeIntensityGradientsX(m_pImgLeft, m_pImgRight, scanline, no_igL, no_igR);
 		//else
 		//{
 		//	memcpy(no_igL, q_no_igL[scanline], (COLS+SLOP)*sizeof(int));
@@ -1007,8 +1016,10 @@ void DisparityBirchfield::Process(void)
 		}
 
 #else
-		// Initialize arrays
-		for (y_p = 1 ; y_p < COLS ; y_p++)
+		// Initialize arrays over their whole declared extent: the SLOP margin
+		// cells of phi and xmin are read as comparison thresholds by the node
+		// expansions below, before any of them is written.
+		for (y_p = 1 ; y_p < COLS+SLOP ; y_p++)
 		{
 			xmin[y_p] = INF;
 			for (delta_p = 0 ; delta_p <= MAXDISP ; delta_p++)

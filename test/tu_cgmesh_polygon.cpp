@@ -176,6 +176,50 @@ TEST(TEST_cgmesh_polygon, SymmetryZabrodsky_CenteredSquare_FiniteAxis)
 	EXPECT_TRUE(std::isfinite(slope)) << "a symmetric square must yield a finite symmetry-axis slope";
 }
 
+// ATTENTION -- les deux tests qui suivent sont AVEUGLES sous MSVC : sans
+// sanitizer, un debordement de lecture en tas ne se manifeste par rien. Leur
+// oracle est ASan (preset ci-linux-asan), pas leur assertion. Le test ci-dessus
+// en est l'illustration : il passait deja sous MSVC alors que la fonction lisait
+// 12 octets au-dela de son propre tableau d'entree, parce que isfinite() est
+// satisfait par presque n'importe quelle configuration d'octets.
+//
+// n >= 4 fait deborder la lecture de l'ordonnee du sommet apparie ; un hexagone
+// couvre le cas ou le debordement ne survient pas des la premiere iteration.
+TEST(TEST_cgmesh_polygon, SymmetryZabrodsky_Hexagon_StaysInBounds)
+{
+	float pts[12];
+	for (int i = 0; i < 6; i++)
+	{
+		pts[2*i]   = std::cos(6.2831853f * (float)i / 6.f);
+		pts[2*i+1] = std::sin(6.2831853f * (float)i / 6.f);
+	}
+	Polygon2 hex; hex.input(pts, 6);
+
+	float xc = 9.f, yc = 9.f, slope = std::nanf("");
+	hex.search_symmetry_zabrodsky(&xc, &yc, &slope);
+
+	EXPECT_TRUE(std::isfinite(slope)) << "a regular hexagon must yield a finite symmetry-axis slope";
+}
+
+// Un contour vide ou degenere doit sortir sans lire ni ecrire hors bornes. Le
+// contrat de sortie est celui du retour anticipe deja en place pour un nombre de
+// contours different de 1 : les parametres de sortie ne sont PAS renseignes.
+TEST(TEST_cgmesh_polygon, SymmetryZabrodsky_DegenerateContour_DoesNotCrash)
+{
+	for (int n = 0; n <= 2; n++)
+	{
+		float pts[4] = { 0.f, 0.f, 1.f, 1.f };
+		Polygon2 p; p.input(pts, n);
+
+		float xc = 9.f, yc = 9.f, slope = 9.f;
+		p.search_symmetry_zabrodsky(&xc, &yc, &slope);
+
+		EXPECT_FLOAT_EQ(xc, 9.f) << "un contour degenere ne doit rien produire, n=" << n;
+		EXPECT_FLOAT_EQ(yc, 9.f) << "un contour degenere ne doit rien produire, n=" << n;
+		EXPECT_FLOAT_EQ(slope, 9.f) << "un contour degenere ne doit rien produire, n=" << n;
+	}
+}
+
 // Smoke tests: the signature / Pridmore symmetry detectors (void, output via
 // side channels) must at least run on a valid polygon without crashing.
 TEST(TEST_cgmesh_polygon, SymmetrySignature_Smoke)

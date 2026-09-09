@@ -5,8 +5,23 @@
 #include "mesh.h"
 
 // PoissonRecon (master vendorisé). PreProcessor.h doit précéder Reconstructors.h.
+//
+// SANITIZED_PR est la variante d'implémentation que PoissonRecon fournit pour un
+// code exempt d'UB (décalages à gauche sur des offsets négatifs, accès concurrents
+// non atomiques) ; PreProcessor.h la laisse commentée et respecte une définition
+// antérieure. Elle est posée ici plutôt que dans le build, et sans condition sur
+// les sanitizers : cette unité de traduction est la seule qui instancie la
+// bibliothèque, et un binaire livré doit être celui que la CI instrumente.
+#define SANITIZED_PR
 #include "PreProcessor.h"
 #include "Reconstructors.h"
+
+// PreProcessor.h annule plusieurs de ses propres drapeaux par #undef. Si une mise à
+// jour de PoissonRecon traitait ainsi celui-ci, la définition ci-dessus serait perdue
+// en silence : la compilation doit alors échouer, pas retomber sur la variante à UB.
+#ifndef SANITIZED_PR
+#error "PoissonRecon: SANITIZED_PR annule par les en-tetes de la bibliotheque."
+#endif
 
 #include <algorithm>
 #include <vector>
@@ -89,6 +104,11 @@ Mesh* poisson_reconstruct(const float* positions, const float* normals, size_t n
 
     ReconType::SolutionParameters<PReal> sp;
     sp.depth = (unsigned int)params.depth;
+    // Contrat de PoissonRecon : fullDepth <= solveDepth <= depth. solveDepth suit
+    // depth, mais fullDepth vaut 5 par défaut : sans cette borne, toute profondeur
+    // inférieure à 5 laisse un jeu de paramètres incohérent, que la bibliothèque
+    // rectifie elle-même en émettant un avertissement.
+    sp.fullDepth = std::min<unsigned int>(sp.fullDepth, sp.depth);
 
     CloudStream stream(positions, normals, n);
     Implicit* implicit = Solver::Solve(stream, sp);

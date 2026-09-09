@@ -48,6 +48,20 @@
 #define NBT_MAX_LIST_ITEMS (4u * 1024u * 1024u)
 #define NBT_MAX_COMPOUND_TAGS (1u * 1024u * 1024u)
 
+/* Plafond du DOMAINE de nbt_type, dernier enumerateur declare. Le type d'un tag
+ * comme le type d'element d'une liste tiennent chacun sur un octet du fichier,
+ * qui en porte 256 valeurs quand l'enumeration n'en definit que onze. Un octet
+ * hors domaine se refuse donc AVANT la conversion : charger une valeur etrangere
+ * a l'enumeration depuis un objet de ce type est un comportement indefini, avant
+ * meme tout usage de la valeur. La regle qui en decoule tient en une phrase --
+ * lire l'octet dans un entier, valider, convertir ensuite. */
+#define NBT_MAX_TYPE ((unsigned int)TAG_COMPOUND)
+
+static int nbt_type_is_valid(unsigned int t)
+{
+    return t <= NBT_MAX_TYPE;
+}
+
 /* gzread rend le nombre d'octets lus, 0 en fin de flux, -1 en erreur. Une
  * lecture PARTIELLE laisse la fin du tampon indeterminee : seule l'egalite
  * stricte vaut succes. */
@@ -91,25 +105,40 @@ int nbt_parse(nbt_file *nbt, const char *filename)
 
 int nbt_read_tag(nbt_file *nbt, nbt_tag **parent)
 {
-    nbt_type type = (nbt_type)0;
+    unsigned char raw = (unsigned char)TAG_END;
+
+    (*parent)->name = nullptr;
+    (*parent)->value = nullptr;
 
     /* Read the type
+     *
+     * L'octet se lit dans un entier, jamais directement dans un nbt_type : le
+     * fichier n'est pas tenu de rester dans le domaine de l'enumeration.
      *
      * Le type NON LU valait auparavant la valeur indeterminee de la pile. Comme
      * nbt_read_compound boucle jusqu'a TAG_END, un fichier tronque dont l'octet
      * fantome differait de TAG_END faisait boucler la lecture SANS FIN, en
      * reallouant a chaque tour. On rend TAG_END, qui termine proprement. */
-    if (!nbt_read_exact(nbt, &type, 1))
+    if (!nbt_read_exact(nbt, &raw, 1))
     {
         (*parent)->type = TAG_END;
-        (*parent)->name = nullptr;
-        (*parent)->value = nullptr;
         return TAG_END;
     }
 
+    /* Un octet hors domaine rend la suite du flux ininterpretable : le reste du
+     * tag n'a plus de structure connue. On termine le compound comme le ferait
+     * une fin de flux, plutot que de deviner. */
+    if (!nbt_type_is_valid(raw))
+    {
+        fprintf(stderr, "nbt: type de tag %u refuse (plafond %u)\n",
+                (unsigned int)raw, NBT_MAX_TYPE);
+        (*parent)->type = TAG_END;
+        return TAG_END;
+    }
+
+    const nbt_type type = (nbt_type)raw;
+
     (*parent)->type = type;
-    (*parent)->name = nullptr;
-    (*parent)->value = nullptr;
 
     if (type != TAG_END) /* TAG_END has no name */
         nbt_read_string(nbt, &((*parent)->name));
@@ -398,16 +427,26 @@ int nbt_read_string(nbt_file *nbt, char **out)
 
 int32_t nbt_read_list(nbt_file *nbt, char *type_out, void ***target)
 {
-    char type;
+    unsigned char raw;
     int32_t len;
     int i;
 
     *target = nullptr;
     *type_out = (char)TAG_END;
 
-    if (!nbt_read_exact(nbt, &type, 1))
+    if (!nbt_read_exact(nbt, &raw, 1))
         return 0;
-    *type_out = type;
+
+    /* Meme regle que pour le type d'un tag. Elle compte doublement ici : la
+     * valeur est recopiee dans `nbt_list::type`, ou une valeur hors domaine
+     * serait rechargee a chaque parcours, impression ou liberation de la liste. */
+    if (!nbt_type_is_valid(raw))
+    {
+        fprintf(stderr, "nbt: type d'element de liste %u refuse (plafond %u)\n",
+                (unsigned int)raw, NBT_MAX_TYPE);
+        return 0;
+    }
+    *type_out = (char)raw;
 
     if (!nbt_read_exact(nbt, &len, sizeof(len)))
         return 0;
@@ -435,7 +474,7 @@ int32_t nbt_read_list(nbt_file *nbt, char *type_out, void ***target)
         return 0;
 
     for (i = 0; i < len; ++i)
-        nbt_read(nbt, (nbt_type)type, &((*target)[i]));
+        nbt_read(nbt, (nbt_type)raw, &((*target)[i]));
 
     return len;
 }
@@ -457,7 +496,10 @@ int32_t nbt_read_compound(nbt_file *nbt, nbt_tag ***listptr)
         (*listptr)[i] = (nbt_tag*)malloc(sizeof(nbt_tag));
         if ((*listptr)[i] == nullptr)
             break;
-        nbt_type last = (nbt_type)nbt_read_tag(nbt, &((*listptr)[i]));
+        /* Le compte-rendu de nbt_read_tag reste un entier : seule son egalite a
+         * TAG_END est consultee, et le convertir en nbt_type ferait dependre ce
+         * site d'un domaine garanti ailleurs. */
+        const int last = nbt_read_tag(nbt, &((*listptr)[i]));
 
         nbt_tag **grown = (nbt_tag**)realloc(*listptr, sizeof(nbt_tag *) * (i+2));
         if (grown == nullptr)
@@ -1292,14 +1334,29 @@ int nbt_set_list(nbt_tag *t, void **v, int len, nbt_type type)
 
     if (t->type != TAG_LIST) return 1;
 
+    // CONTRAT DES TROIS SETTERS A LONGUEUR (liste, tableau d'octets, compound),
+    // identique a celui que la partie lecture annonce en tete de fichier :
+    //   - longueur negative : refusee. Elle devient un size_t enorme a
+    //     l'allocation, et le chemin `len > 0` ci-dessous la prendrait pour un
+    //     succes en enregistrant une longueur negative.
+    //   - longueur nulle : contenu nul, aucune allocation. malloc(0) peut rendre
+    //     nullptr legitimement -- le traiter comme un echec ferait echouer
+    //     nbt_new_list sans raison -- et memcpy exige deux pointeurs non nuls
+    //     meme pour zero octet.
+    if (len < 0) return 1;
+
     temp.type = type;
     temp.length = len;
+    temp.content = nullptr;
 
-    temp.content = (void**)malloc(sizeof(void *) * len);
-    if (temp.content == nullptr)
-        return 1;
+    if (len > 0)
+    {
+        temp.content = (void**)malloc(sizeof(void *) * len);
+        if (temp.content == nullptr)
+            return 1;
 
-    memcpy(temp.content, v, sizeof(void *) * len);
+        memcpy(temp.content, v, sizeof(void *) * len);
+    }
 
     // nbt_change_value ne reprend la propriete de temp.content QU'EN CAS DE
     // SUCCES : sur echec d'allocation interne il renvoie 1 sans rien reprendre, et
@@ -1318,13 +1375,20 @@ int nbt_set_byte_array(nbt_tag *t, unsigned char *v, int len)
 
     if (t->type != TAG_BYTE_ARRAY) return 1;
 
+    // Contrat de nbt_set_list.
+    if (len < 0) return 1;
+
     temp.length = len;
+    temp.content = nullptr;
 
-    temp.content = (unsigned char*)malloc(sizeof(unsigned char) * len);
-    if (temp.content == nullptr)
-        return 1;
+    if (len > 0)
+    {
+        temp.content = (unsigned char*)malloc(sizeof(unsigned char) * len);
+        if (temp.content == nullptr)
+            return 1;
 
-    memcpy(temp.content, v, len);
+        memcpy(temp.content, v, len);
+    }
 
     // Meme transfert conditionnel que ci-dessus (cpp:S3584, nbt.cpp:1125).
     if (nbt_change_value(t, &temp, sizeof(temp)) != 0)
@@ -1341,18 +1405,27 @@ int nbt_set_compound(nbt_tag *t, nbt_tag *tags, int len)
 
     if (t->type != TAG_COMPOUND) return 1;
 
+    // Contrat de nbt_set_list. La longueur nulle est le seul cas qu'emprunte
+    // nbt_new_compound.
+    if (len < 0) return 1;
+
     temp.length = len;
+    temp.tags = nullptr;
 
-    temp.tags = (nbt_tag**)malloc(sizeof(nbt_tag *) * len);
-    if (temp.tags == nullptr)
-        return 1;
+    if (len > 0)
+    {
+        temp.tags = (nbt_tag**)malloc(sizeof(nbt_tag *) * len);
+        if (temp.tags == nullptr)
+            return 1;
 
-    // NOTE non corrigee : ce memcpy copie `len` OCTETS alors que la destination
-    // fait sizeof(nbt_tag*) * len, et la source est declaree `nbt_tag*` quand la
-    // destination est `nbt_tag**`. Il y a une confusion de type dans la signature
-    // elle-meme ; ajuster la taille sans la resoudre rendrait le defaut pire.
-    // Signale plutot que rustine -- la fonction n'a aucun appelant.
-    memcpy(temp.tags, tags, len);
+        // DETTE : ce memcpy copie `len` OCTETS alors que la destination fait
+        // sizeof(nbt_tag*) * len, et la source est declaree `nbt_tag*` quand la
+        // destination est `nbt_tag**`. La confusion de type est dans la signature
+        // elle-meme ; ajuster la taille sans la resoudre rendrait le defaut pire.
+        // Aucun appelant du depot n'atteint cette branche -- nbt_new_compound est
+        // le seul, avec len == 0 -- mais nbt.h expose la fonction.
+        memcpy(temp.tags, tags, len);
+    }
 
     // Meme transfert conditionnel que ci-dessus (cpp:S3584, nbt.cpp:1142).
     if (nbt_change_value(t, &temp, sizeof(temp)) != 0)

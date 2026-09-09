@@ -125,7 +125,13 @@ Cset_lines::cantzler_merge_edges (int n_candidates, float tolerance)
 	// half candidates are edges
 	for (i=0; i<n_candidates/2; i++)
 	{
-		int index = n_extracted_lines*rand()/(RAND_MAX+1.0);
+		// Le produit se calcule en double : en int, `n_extracted_lines * rand()`
+		// sort du type des que RAND_MAX vaut 2^31-1 (glibc) et que le facteur
+		// atteint 2. La valeur rendue est celle de l'arithmetique exacte, donc
+		// identique a celle produite la ou aucun debordement n'avait lieu
+		// (MSVC, RAND_MAX = 32767). Meme regle aux deux tirages d'indice de
+		// ligne de la boucle suivante.
+		int index = (double)n_extracted_lines*rand()/(RAND_MAX+1.0);
 		extracted_lines[index]->get_begin (v1[i]);
 		extracted_lines[index]->get_end (v2[i]);
 		extracted_lines[index]->get_direction (dir[i]);
@@ -152,14 +158,14 @@ Cset_lines::cantzler_merge_edges (int n_candidates, float tolerance)
 		int index11, index12, index21, index22;
 
 		// first vertex
-		index11 = n_extracted_lines*rand()/(RAND_MAX+1.0);
+		index11 = (double)n_extracted_lines*rand()/(RAND_MAX+1.0);
 		index12 = 1+(int)(2.0*rand()/(RAND_MAX+1.0));
 		assert (index12 == 1 || index12 == 2);
 		if (index12 == 1) extracted_lines[index11]->get_begin (v1[i]);
 		if (index12 == 2) extracted_lines[index11]->get_end (v1[i]);
 
 		// second vertex
-		index21 = n_extracted_lines*rand()/(RAND_MAX+1.0);
+		index21 = (double)n_extracted_lines*rand()/(RAND_MAX+1.0);
 		index22 = 1+(int)(2.0*rand()/(RAND_MAX+1.0));
 		assert (index22 == 1 || index22 == 2);
 		if (index22 == 1) extracted_lines[index21]->get_begin (v2[i]);

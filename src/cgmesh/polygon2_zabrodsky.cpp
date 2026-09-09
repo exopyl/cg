@@ -15,6 +15,11 @@ Polygon2::search_symmetry_zabrodsky (float *xc, float *yc, float *slope)
   int n = (int)m_contours[0].size();
   float *pPoints = (float*)m_contours[0].data();
 
+  // Zabrodsky apparie chaque sommet avec son symetrique : sous trois sommets il
+  // n'y a aucune paire a former, et data() d'un contour vide est nul.
+  if (n < 3)
+    return;
+
   // centerize the contour
   centerize ();
 
@@ -48,7 +53,7 @@ Polygon2::search_symmetry_zabrodsky (float *xc, float *yc, float *slope)
 	  i1 = (i+j >= n)? i+j-n : i+j;
 	  i2 = (i-j < 0)? i-j+n : i-j;
 	  x1 = pPoints[2*i1];
-	  y1 = pPoints[2*i+11];
+	  y1 = pPoints[2*i1+1];
 	  x2 = pPoints[2*i2];
 	  y2 = pPoints[2*i2+1];
       

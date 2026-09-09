@@ -12,9 +12,10 @@
 // n'etait exerce que par un test sans oracle, sur une paire reelle depourvue de
 // verite terrain : on ne pouvait rien affirmer de son resultat.
 //
-// Ici la paire est SYNTHETIQUE. L'image droite est l'image gauche translatee
-// d'une quantite CONNUE, donc la disparite attendue est cette quantite, et on
-// peut l'exiger au pixel pres.
+// Ici les paires sont SYNTHETIQUES et leur verite terrain est donc CONNUE :
+// makePair produit une translation globale d'une quantite donnee, et
+// makeOccluderPair un plan a deux disparites. Dans les deux cas la disparite
+// attendue s'exige au pixel pres.
 //
 // ---------- Contraintes de l'implementation, constatees par lecture ---------
 //
@@ -72,6 +73,83 @@ void makePair (Img& left, Img& right, int d)
 			right.set_pixel (x, y, r, r, r, 255);
 		}
 	}
+}
+
+// --------------------------------------------------------------------------
+// Paire « occulteur » : un rectangle opaque a la disparite kOccD, pose devant
+// un fond a la disparite 0. Il occupe les colonnes [kObjLo, kObjHi] de l'image
+// GAUCHE, donc [kObjLo - kOccD, kObjHi - kOccD] de la droite.
+//
+// Contrairement a makePair, les deux vues ne sont PAS la meme image translatee :
+// leurs cartes de gradients d'intensite different. La texture de l'objet est
+// choisie pour qu'elles divergent a son bord DROIT, seul endroit ou la
+// contrainte « une discontinuite de profondeur doit coincider avec un gradient
+// d'intensite » decide du resultat :
+//
+//   - colonnes [kFlatLo, kFlatHi] : intensite constante, donc aucune fenetre de
+//     3 px qui s'y inscrit ne varie. La fenetre lue dans l'image GAUCHE a
+//     l'indice kObjHi - kOccD y tombe entierement ;
+//   - trois dernieres colonnes de l'objet : un creneau 0/255/0. Dans l'image
+//     DROITE ces colonnes occupent [kObjHi - kOccD - 2, kObjHi - kOccD], soit
+//     exactement la fenetre lue au meme indice.
+//
+// La transition kOccD -> 0 y est donc AUTORISEE par les gradients de l'image
+// droite et INTERDITE par ceux de la gauche : c'est ce qui rend la paire
+// discriminante.
+const int kOccD   = 8;    // disparite de l'occulteur
+const int kObjLo  = 200;  // premiere colonne de l'objet, image gauche
+const int kObjHi  = 300;  // derniere colonne de l'objet, image gauche
+const int kFlatLo = 261;  // plage d'intensite constante, image gauche
+const int kFlatHi = 297;
+
+static_assert (kFlatLo <= kObjHi - kOccD - 2 && kObjHi - kOccD <= kFlatHi,
+	"la fenetre lue dans l'image gauche doit etre entierement plate");
+static_assert (kFlatHi < kObjHi - 2,
+	"les trois dernieres colonnes de l'objet doivent rester texturees");
+
+void makeOccluderPair (Img& left, Img& right)
+{
+	std::vector<unsigned char> bg (kW), obj (kW);
+	unsigned int seed = 987654321u;
+
+	left  = Img (kW, kH);
+	right = Img (kW, kH);
+	for (unsigned int y = 0; y < kH; y++)
+	{
+		for (unsigned int x = 0; x < kW; x++)
+			bg[x] = (unsigned char)lcg (seed);
+		for (int x = kObjLo; x <= kObjHi; x++)
+		{
+			if (x >= kFlatLo && x <= kFlatHi)   obj[x] = 128;
+			else if (x == kObjHi - 2)           obj[x] = 0;
+			else if (x == kObjHi - 1)           obj[x] = 255;
+			else if (x == kObjHi)               obj[x] = 0;
+			else                                obj[x] = (unsigned char)lcg (seed);
+		}
+		for (int x = 0; x < (int)kW; x++)
+		{
+			// L'objet cache le fond en x a gauche, en x - kOccD a droite.
+			const int rx = x + kOccD;
+			const unsigned char l = (x  >= kObjLo && x  <= kObjHi) ? obj[x]  : bg[x];
+			const unsigned char r = (rx >= kObjLo && rx <= kObjHi) ? obj[rx] : bg[x];
+			left.set_pixel  (x, y, l, l, l, 255);
+			right.set_pixel (x, y, r, r, r, 255);
+		}
+	}
+}
+
+// Part des pixels de la bande de colonnes [x0, x1] qui portent la disparite
+// `value`, toutes lignes confondues.
+double fractionEqual (Img& d, int x0, int x1, int value)
+{
+	long total = 0, hits = 0;
+	for (unsigned int y = 0; y < d.height(); y++)
+		for (int x = x0; x <= x1; x++)
+		{
+			total++;
+			if (d.get_r ((unsigned int)x, y) == value) hits++;
+		}
+	return total ? (double)hits / (double)total : 0.0;
 }
 
 // Disparite la plus frequente sur une bande interieure, et sa part. On ecarte
@@ -207,4 +285,37 @@ TEST(TEST_cgimg_disparity, occlusion_penalty_changes_the_result)
 	// Une penalite nulle autorise les occlusions sans cout ; une penalite tres
 	// forte les interdit en pratique. Les deux cartes ne peuvent pas coincider.
 	EXPECT_NE (run (0), run (500));
+}
+
+// Bord droit d'un occulteur. Les tests ci-dessus emploient une paire dont les
+// deux vues sont la meme texture translatee : leurs gradients d'intensite
+// coincident partout, donc rien n'y distingue les gradients de la vue droite de
+// ceux de la gauche. Cette paire-ci les fait diverger a l'endroit exact ou
+// l'algorithme consulte les seconds -- la ou la disparite retombe de celle de
+// l'objet a celle du fond.
+TEST(TEST_cgimg_disparity, occluder_right_border_needs_the_right_view_gradients)
+{
+	Img left, right;
+	makeOccluderPair (left, right);
+
+	DisparityBirchfield d;
+	// La penalite d'occlusion et la recompense sont des variables GLOBALES du
+	// module, pas des membres : le dernier test qui les regle les laisse en
+	// place pour les suivants. Elles sont donc fixees ici a leurs valeurs par
+	// defaut, faute de quoi le verdict dependrait de l'ordre d'execution.
+	d.setOcclusionPenalty (25);
+	d.setReward (5);
+	d.SetStereoPair (&left, &right);
+	d.Process ();
+
+	Img* out = d.GetDisparity ();
+	ASSERT_NE (out, nullptr);
+
+	// Verite terrain : l'objet est a kOccD jusqu'a kObjHi inclus, le fond au-dela
+	// est a 0. Les colonnes kObjHi+1 a kObjHi+7 sont laissees de cote, la
+	// discontinuite s'y etale sur quelques pixels.
+	EXPECT_GT (fractionEqual (*out, 250, kObjHi, kOccD), 0.99)
+		<< "l'occulteur doit garder sa disparite jusqu'a son bord droit";
+	EXPECT_GT (fractionEqual (*out, kObjHi + 8, 400, 0), 0.99)
+		<< "le fond a droite de l'occulteur doit revenir a la disparite nulle";
 }

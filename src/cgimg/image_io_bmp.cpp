@@ -194,6 +194,17 @@ struct bmp_bitmap_header_s
   uint32 colorimportant;
 };
 
+// BMP stores its 32-bit header fields little-endian, and the 14-byte file header
+// shifts the whole DIB header to offsets that are not multiples of 4. Reading such a
+// field through a pointer cast is therefore always misaligned: assemble it byte by byte.
+static uint32 read_uint32_le (const char *p)
+{
+	return  (uint32)(uchar)p[0]
+	     | ((uint32)(uchar)p[1] << 8)
+	     | ((uint32)(uchar)p[2] << 16)
+	     | ((uint32)(uchar)p[3] << 24);
+}
+
 int ImgIO::import_bmp (Img& img, const char *filename)
 {
 	// check size of int
@@ -215,10 +226,10 @@ int ImgIO::import_bmp (Img& img, const char *filename)
 	}
 
 	//it seems gimp sometimes makes its headers small, so we have to do this. hence all the fseeks
-	int offset=*(unsigned int*)(header+10);
+	int offset=(int32)read_uint32_le(header+10);
 
-	int width=*(int*)(header+18);
-	int height=*(int*)(header+22);
+	int width=(int32)read_uint32_le(header+18);
+	int height=(int32)read_uint32_le(header+22);
 	//now the bitmap knows how big it is it can allocate its memory
 	img.resize_memory (width, height);
 
