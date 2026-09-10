@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstring>
 #include <filesystem>
+#include <memory>
 #include <random>
 #include <sstream>
 #include <string>
@@ -13,6 +14,8 @@
 #include <system_error>
 #include <vector>
 
+#include "material_convert.h"
+#include "material_pbr.h"
 #include "mesh.h"
 #include "mesh_io.h"
 #include "io_path_guard.h"
@@ -614,6 +617,24 @@ int MeshIO::export_obj (const Mesh& mesh, const char *filename, bool emitObjectG
 			fprintf (fp, "vt %f %f\n", mesh.GetTextureCoordinates ()[2*i], mesh.GetTextureCoordinates ()[2*i+1]);
 	}
 
+	// PERTES ASSUMEES, ECRITES DANS LE FICHIER ET NON SUBIES EN SILENCE.
+	//
+	// Le format Wavefront n'a qu'UN jeu de coordonnees de texture (`vt`) et
+	// aucun attribut de tangente : un maillage qui en porte les perd
+	// integralement a l'export. Le lecteur qui reprend ce .obj ne peut pas
+	// deviner qu'il manque quelque chose -- d'ou ces commentaires, au meme
+	// titre que le `map_Kd` non resolu du .mtl. Un consommateur qui a besoin
+	// de ces attributs doit passer par le GLB (MeshIO::export_glb_bytes), qui
+	// les ecrit tous deux.
+	if (!mesh.GetTextureCoordinates1 ().empty())
+		fprintf (fp, "# PERTE : second jeu d'UV (%u entrees) non ecrit --"
+			     " le format OBJ ne represente qu'un jeu.\n",
+			 mesh.GetNTextureCoordinates1 ());
+	if (mesh.GetNTangents () > 0)
+		fprintf (fp, "# PERTE : tangentes par sommet (%u) non ecrites --"
+			     " le format OBJ n'a pas d'attribut de tangente.\n",
+			 mesh.GetNTangents ());
+
 	//
 	// faces
 	//
@@ -707,6 +728,25 @@ int MeshIO::export_obj (const Mesh& mesh, const char *filename, bool emitObjectG
 			const Material *pMaterial = mesh.GetMaterial (i);
 			if (!pMaterial)
 				continue;
+
+			// MATERIAL_PBR n'a PAS de representation MTL : le format ne connait
+			// ni facteur metallique ni rugosite. On ecrit donc sa PROJECTION
+			// Phong, qui est un MaterialTexture ou un MaterialColorExt et
+			// retombe ainsi dans les branches ci-dessous.
+			//
+			// Sans cela le `newmtl` manquait alors que le `usemtl` etait ecrit
+			// depuis les faces, inconditionnellement : le .mtl ne definissait
+			// pas le materiau cite, et tout lecteur rendait le modele BLANC
+			// sans un mot. La projection porte le nom du materiau source, donc
+			// le `newmtl` produit resout bien le `usemtl` deja ecrit.
+			std::unique_ptr<Material> projected;
+			if (const MaterialPbr *pPbr = dynamic_cast<const MaterialPbr*> (pMaterial))
+			{
+				projected = cgpbr::toPhong (*pPbr);
+				if (projected)
+					pMaterial = projected.get ();
+			}
+
 			switch (pMaterial->GetType ())
 			{
 			case MATERIAL_COLOR:

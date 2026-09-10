@@ -13,6 +13,8 @@
 #include "cgre2/Texture.hpp"
 #include "cgre2/Vertex.hpp"
 
+#include "material_convert.h"
+#include "material_pbr.h"
 #include "mesh.h"
 #include "mesh_raycast.h"
 #include "octree.h"
@@ -35,6 +37,7 @@
 #include <array>
 #include <cstring>
 #include <filesystem>
+#include <memory>
 #include <utility>
 
 namespace {
@@ -954,6 +957,22 @@ void CgreQuickItem::rebuildMeshBuffers()
                 if (mid >= 0)
                     mat = mesh->GetMaterial(static_cast<unsigned int>(mid));
             }
+            // MATERIAL_PBR : la resolution ci-dessous ne connait que les trois
+            // types Phong, et un type inconnu y laisserait la couleur de repli
+            // (0.6, 0.7, 1.0) — un modele glTF importe sortirait bleu pale et
+            // sans son albedo. On travaille donc sur sa PROJECTION, qui est un
+            // MaterialTexture ou un MaterialColorExt.
+            //
+            // La projection est un objet TEMPORAIRE : loadAlbedo n'en conserve
+            // rien (il televerse les pixels et cle le cache sur le nom), donc
+            // sa duree de vie limitee a cette iteration suffit.
+            std::unique_ptr<Material> projected;
+            if (const MaterialPbr *pbr = dynamic_cast<const MaterialPbr *>(mat)) {
+                projected = cgpbr::toPhong(*pbr);
+                if (projected)
+                    mat = projected.get();
+            }
+
             // In curvature mode we shade purely from per-vertex colours (the
             // heatmap), so skip material colour/texture resolution entirely
             // (no texture bound → white fallback → colour = vertex colour).

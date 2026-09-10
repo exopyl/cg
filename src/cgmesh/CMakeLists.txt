@@ -30,6 +30,25 @@ if (EMSCRIPTEN)
         ${PROJECT_SOURCE_DIR}/chull.cpp
         ${PROJECT_SOURCE_DIR}/material.cpp
         ${PROJECT_SOURCE_DIR}/materials_manager.cpp
+        # OBLIGATOIRES bien que maker n'importe aucun glTF : mesh_io_gltf.cpp
+        # (declare plus bas, il ECRIT du GLB) appelle desormais
+        # cgpbr::srgbToLinear, definie dans material_convert.cpp -- laquelle
+        # instancie MaterialPbr, donc reclame la vtable portee par
+        # material_pbr.cpp. Les omettre laisserait mesh_io_gltf.cpp compiler
+        # sans LIER, et emsdk etant absent de la machine de developpement, rien
+        # ici ne le signalerait.
+        #
+        # mesh_io_gltf_pbr.cpp reste EXCLU : la LECTURE d'un materiau glTF tire
+        # tinygltf, et aucune unite de cette liste ne la reference.
+        #
+        # tangents.cpp reste EXCLU pour la meme raison : son unique appelant est
+        # vmeshes_io.cpp, lui-meme exclu. mesh.cpp PORTE les tangentes mais ne
+        # les CALCULE pas -- le calcul vit en fonctions libres, hors de Mesh.
+        # Le jour ou une unite de cette liste appelle generateTangents, il faut
+        # l'ajouter ici : elle compilerait sans LIER, et emsdk etant absent de
+        # la machine de developpement, rien ici ne le signalerait.
+        ${PROJECT_SOURCE_DIR}/material_pbr.cpp
+        ${PROJECT_SOURCE_DIR}/material_convert.cpp
         # Serialisation OBJ (+MTL) : extraite de mesh_io.cpp precisement pour etre
         # compilable ici. mesh_io.cpp lui-meme reste EXCLU -- il depend de
         # mesh_io_3ds.h et mesh_io_rply.h, soit deux formats binaires entiers a

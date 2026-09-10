@@ -170,18 +170,35 @@ public:
 
 	struct PolygonRenderData
 	{
-		std::vector<float>        positions; // 3 floats per render-vertex
-		std::vector<float>        normals;   // 3 floats per render-vertex
-		std::vector<float>        texCoords; // 2 floats per render-vertex (empty if absent)
-		std::vector<float>        colors;    // 3 floats per render-vertex (empty if absent)
-		std::vector<unsigned int> indices;   // triangle indices into the above,
-		                                     // grouped by material
+		std::vector<float>        positions;  // 3 floats per render-vertex
+		std::vector<float>        normals;    // 3 floats per render-vertex
+		std::vector<float>        texCoords;  // 2 floats per render-vertex (empty if absent)
+		std::vector<float>        texCoords1; // 2 floats per render-vertex (empty if absent)
+		std::vector<float>        tangents;   // 4 floats per render-vertex (empty if absent)
+		std::vector<float>        colors;     // 3 floats per render-vertex (empty if absent)
+		std::vector<unsigned int> indices;    // triangle indices into the above,
+		                                      // grouped by material
 		std::vector<MaterialRange> materialRanges; // one run per material
 	};
 	// flat=false (smooth): triangles share topology slots and use per-vertex
 	// normals. flat=true: every face (triangles included) is expanded into its
 	// own non-shared corners carrying the face normal, so each triangle is
 	// uniformly shaded (true flat shading, independent of vertex welding).
+	//
+	// ⚠ REGLE EN VIGUEUR : CETTE FONCTION EST APPELEE AU (RE)TELEVERSEMENT DU
+	// VBO, JAMAIS PAR IMAGE. Les deux moteurs qui l'utilisent la gardent :
+	// VBOManager::Draw ne rappelle uploadMesh que si la revision du maillage a
+	// change (src/cgre/vertex_buffer_manager.cpp), et sulina ne passe que par
+	// CgreQuickItem::rebuildMeshBuffers, appele sur evenement et non depuis
+	// onBeforeRenderPassRecording.
+	//
+	// Cette regle est une CONDITION D'ACCEPTABILITE, pas une observation : les
+	// tableaux tangents et texCoords1 ajoutent 24 octets par sommet de rendu
+	// (4 flottants + 2), soit un tiers de plus que les 44 octets d'un sommet
+	// position + normale + UV + couleur. Le cout est nul tant que le maillage
+	// ne porte ni tangentes ni second jeu -- les tableaux restent VIDES -- mais
+	// un appelant qui rappellerait cette fonction par image le paierait a
+	// chaque image. Un tel appelant doit mettre en cache, pas etre absous.
 	PolygonRenderData BuildPolygonRenderData(bool flat = false) const;
 
 	// Replace every N-gon face (N>=4) with (N-2) triangle Face objects
@@ -471,6 +488,72 @@ public:
 	int SetVertexNormalComponent (unsigned int i, unsigned int dim, float value);
 	// 3 * GetNVertices() zeros.
 	void InitVertexNormals (void);
+
+	// Tangentes par sommet : 4 flottants par sommet -- xyz la tangente, w le
+	// signe de main (+1 ou -1), convention de l'attribut TANGENT de glTF 2.0 et
+	// de cgre2::VertexPBR. Le nuanceur en tire la bitangente par
+	// cross (N, T) * w.
+	//
+	// OPTIONNELLES, donc VIDES par defaut : c'est l'absence du tableau qui dit
+	// « ce maillage n'a pas de tangentes », comme pour m_faceRemoved et les
+	// tableaux d'UV par face. Un remplissage par defaut masquerait l'absence
+	// derriere une donnee d'apparence valide.
+	//
+	// DERIVATION, comme les normales par sommet : les ecrire NE TOUCHE PAS la
+	// revision de geometrie. Le calcul vit dans tangents.h, en fonctions libres.
+	//
+	// TROIS categories d'operations, et la troisieme est la dangereuse :
+	//
+	//  - CE QUI LES PERD, comme les couleurs et les normales par sommet :
+	//    Append, SetVertices avec un compte DIFFERENT, et toute operation qui
+	//    construit un maillage NEUF -- la decimation (simplification.h)
+	//    notamment. Cas benin : l'absence du tableau est le signal.
+	//  - CE QUI LES TRANSPORTE : DeleteVertices, SplitVerticesByUVSeams (recopie
+	//    exacte vers les duplicats du sommet source), MergeVertices (recopie
+	//    celles du REPRESENTANT, approximatives apres soudure -- les tangentes
+	//    ne sont pas un critere de fusion).
+	//  - CE QUI LES REND FAUSSES SANS LES PERDRE : toute operation qui deplace
+	//    les sommets a compte CONSTANT -- SetVertices avec le meme compte, donc
+	//    smoothing_laplacian et smoothing_taubin, les transformations
+	//    geometriques, add_gaussian_noise. Le tableau survit, parallele et
+	//    d'apparence valide, mais decrit la geometrie d'AVANT.
+	//
+	// C'est cette troisieme categorie que AreTangentsValid() detecte : elle
+	// confronte l'estampille posee a l'ecriture a la revision de geometrie
+	// courante, exactement comme AreTensorsValid() pour les tenseurs.
+	unsigned int GetNTangents (void) const
+		{ return (unsigned int)(m_vertexTangents.size () / 4); }
+	const std::vector<float>& GetVertexTangents (void) const { return m_vertexTangents; }
+	// Remplace le tableau entier. Taille acceptee : 4 * GetNVertices(), ou 0.
+	// Toute autre taille est refusee et laisse le tableau inchange.
+	//
+	// Estampille les tangentes contre la revision courante, ou invalide
+	// l'estampille quand le tableau rendu est vide.
+	int SetVertexTangents (std::vector<float> tangents);
+	// Ecriture d'UNE tangente. NE RE-ESTAMPILLE PAS : une ecriture partielle ne
+	// dit rien de la fraicheur du reste du tableau. Un remplissage sommet par
+	// sommet apres une edition de geometrie doit donc finir par
+	// SetVertexTangents, ou assumer que AreTangentsValid() rende faux.
+	int SetVertexTangent (unsigned int i, float x, float y, float z, float w);
+	// Vrai quand le maillage porte des tangentes ET qu'aucune edition de
+	// geometrie n'a eu lieu depuis leur ecriture.
+	//
+	// CONSERVATEUR par construction : la reponse est « calculees sur CETTE
+	// geometrie », pas « exactes ». Deux situations rendent faux sur des
+	// tangentes pourtant justes :
+	//
+	//  - une operation qui les TRANSPORTE sans deplacer de sommet --
+	//    DeleteVertices -- incremente tout de meme la revision ;
+	//  - une ecriture posee AVANT d'autres editions du maillage, meme
+	//    etrangeres aux positions : ecrire les faces, poser les indices d'UV
+	//    ou changer un materiau incremente la revision et perime l'estampille.
+	//
+	// Consequence pour tout producteur de tangentes : appeler
+	// SetVertexTangents EN DERNIER, une fois la geometrie figee. Un faux
+	// « perime » coute un recalcul ; un faux « valide » donnerait un eclairage
+	// faux sans signal.
+	bool AreTangentsValid (void) const;
+
 	// Remplace TOUTES les faces par nFaces faces de meme arite, en liberant les
 	// anciennes. Incremente la revision.
 	//
@@ -544,6 +627,14 @@ public:
 	// operation — general-purpose (rendering, decimation that must carry UVs,
 	// export). No-op if the mesh has no UVs or its UVs are already
 	// vertex-parallel. Bumps the geometry revision.
+	//
+	// LE DECOUPAGE PORTE SUR LES COUTURES DU JEU 0, ET C'EST SUFFISANT tant que
+	// le jeu 1 reste parallele aux sommets : un jeu deja parallele n'a pas de
+	// couture. Le jeu 1, les tangentes, les couleurs et les normales sont
+	// simplement RECOPIES depuis le sommet source vers ses duplicats.
+	//
+	// ⚠ Cette suffisance est CONDITIONNELLE a l'asymetrie des deux jeux, dont
+	// la portee est enoncee une seule fois : voir GetTextureCoordinates1.
 	void SplitVerticesByUVSeams (void);
 	// Weld vertices closer than `tolerance`. The weld is geometric: vertex
 	// normals are NOT a criterion (callers recompute them afterwards), so all
@@ -641,6 +732,34 @@ public:
 	const std::vector<float>& GetTextureCoordinates (void) const { return m_texCoords; }
 	int SetTextureCoordinate (unsigned int i, float u, float v);
 	int SetTextureCoordinates (std::vector<float> uv, unsigned int nTexCoords);
+
+	// SECOND JEU DE COORDONNEES DE TEXTURE (TEXCOORD_1 de glTF), typiquement
+	// une parametrisation separee pour l'occlusion ambiante ou une carte de
+	// lumiere.
+	//
+	// UNE SEULE FORME, ET C'EST DELIBERE. Le jeu 0 en a deux -- un tableau du
+	// maillage adresse par des indices de coin (modele OBJ) et des valeurs par
+	// coin -- parce que deux formats l'exigent. Le jeu 1 n'existe que dans
+	// glTF, dont l'accesseur est indexe PAR SOMMET : il est donc PARALLELE AUX
+	// SOMMETS, taille 2 * GetNVertices() ou 0, et rien ne l'adresse par coin.
+	//
+	// Cette asymetrie est ce qui evite d'avoir a decouper les sommets sur
+	// l'UNION des coutures des deux jeux : un jeu deja parallele aux sommets
+	// n'a aucune couture a decouper. Ajouter un jour un modele par coin pour le
+	// jeu 1 rendrait ce decoupage OBLIGATOIRE, et
+	// Mesh::SplitVerticesByUVSeams produirait alors plus de sommets qu'aujourd'hui.
+	//
+	// Le compte n'est PAS un membre separe : il se derive du tableau, ce qui
+	// interdit par construction le desaccord dont souffre le jeu 0.
+	//
+	// Memes operations qui le perdent et le transportent que les tangentes
+	// (cf. GetVertexTangents).
+	unsigned int GetNTextureCoordinates1 (void) const
+		{ return (unsigned int)(m_texCoords1.size () / 2); }
+	const std::vector<float>& GetTextureCoordinates1 (void) const { return m_texCoords1; }
+	// Remplace le tableau entier. Taille acceptee : 2 * GetNVertices(), ou 0.
+	// Toute autre taille est refusee et laisse le tableau inchange.
+	int SetTextureCoordinates1 (std::vector<float> uv);
 	const std::vector<unsigned int>& GetPoints (void) const { return m_points; }
 	void AddPoint (unsigned int v);
 	void SetPoints (std::vector<unsigned int> points);
@@ -813,8 +932,15 @@ private:
 	unsigned int m_nTexCoords;
 	std::vector<float> m_texCoords;
 
+	// Jeu 1 : PARALLELE AUX SOMMETS (2 par sommet) ou VIDE. Voir
+	// GetTextureCoordinates1.
+	std::vector<float> m_texCoords1;
+
 	std::vector<float> m_vertexNormals;
 	std::vector<float> m_vertexColors;
+
+	// 4 par sommet (xyz + signe de main) ou VIDE. Voir GetVertexTangents.
+	std::vector<float> m_vertexTangents;
 
 	std::vector<MaterialPtr>               m_materials;
 
@@ -834,4 +960,8 @@ private:
 	// Geometry revision at which m_tensors was last computed; (uint64_t)-1
 	// means "never computed / invalid".
 	uint64_t m_tensorsRevision = (uint64_t)-1;
+	// Meme role pour m_vertexTangents. Voir GetVertexTangents /
+	// AreTangentsValid : c'est le seul moyen de distinguer des tangentes
+	// fraiches de tangentes survivantes a un deplacement de sommets.
+	uint64_t m_tangentsRevision = (uint64_t)-1;
 };

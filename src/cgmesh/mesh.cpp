@@ -36,11 +36,14 @@ void Mesh::Init ()
 	m_materials.clear();
 	m_nTexCoords = 0;
 	m_texCoords.clear();
+	m_texCoords1.clear();
+	m_vertexTangents.clear();
 	m_lines.clear();
 	m_points.clear();
 	m_tensors.clear();
 	m_revision = 0;
 	m_tensorsRevision = (uint64_t)-1;
+	m_tangentsRevision = (uint64_t)-1;
 }
 
 void Mesh::InitVertexColors (float r, float g, float b)
@@ -165,6 +168,10 @@ void Mesh::InitVertices (unsigned int nVertices)
 	m_pVertices.clear();
 	m_vertexColors.clear();
 	m_vertexNormals.clear();
+	// Attributs OPTIONNELS : vides, et non dimensionnes a zero. Leur absence
+	// est le signal, pas une valeur par defaut.
+	m_vertexTangents.clear();
+	m_texCoords1.clear();
 
 	m_nVertices = nVertices;
 	if (m_nVertices)
@@ -762,6 +769,14 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat) const
     const bool hasUV      = !m_texCoords.empty();
     const bool hasColors  = !m_vertexColors.empty();
 
+    // Jeu 1 et tangentes : PARALLELES AUX SOMMETS par contrat, donc pas de
+    // predicat par coin comme pour le jeu 0. Un tableau VIDE reste vide en
+    // sortie -- aucun remplissage par defaut, qui masquerait l'absence derriere
+    // une donnee d'apparence valide et ferait croire au consommateur qu'il
+    // dispose d'une base tangente.
+    const bool hasUV1      = !m_texCoords1.empty();
+    const bool hasTangents = !m_vertexTangents.empty();
+
     // Per-corner UVs (OBJ f v/vt/vn): a shared vertex carries DIFFERENT UVs in
     // different faces, so the UV cannot be stored per vertex. Such a mesh keeps
     // face->HasTexCoordIndices () where at least one corner's UV index
@@ -800,6 +815,8 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat) const
         out.positions.assign(m_pVertices.begin(),           m_pVertices.end());
         if (hasNormals) out.normals.assign  (m_vertexNormals.begin(),       m_vertexNormals.end());
         if (hasUV)      out.texCoords.assign(m_texCoords.begin(),  m_texCoords.end());
+        if (hasUV1)     out.texCoords1.assign(m_texCoords1.begin(), m_texCoords1.end());
+        if (hasTangents) out.tangents.assign(m_vertexTangents.begin(), m_vertexTangents.end());
         if (hasColors)  out.colors.assign   (m_vertexColors.begin(),        m_vertexColors.end());
     }
     out.indices.reserve(3u * GetNFaces ());
@@ -884,6 +901,41 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat) const
                 {
                     out.texCoords.push_back(0.0f);
                     out.texCoords.push_back(0.0f);
+                }
+            }
+
+            if (hasUV1)
+            {
+                if (2*vi + 1 < m_texCoords1.size())
+                {
+                    out.texCoords1.push_back(m_texCoords1[2*vi + 0]);
+                    out.texCoords1.push_back(m_texCoords1[2*vi + 1]);
+                }
+                else
+                {
+                    out.texCoords1.push_back(0.0f);
+                    out.texCoords1.push_back(0.0f);
+                }
+            }
+
+            if (hasTangents)
+            {
+                if (4*vi + 3 < m_vertexTangents.size())
+                {
+                    out.tangents.push_back(m_vertexTangents[4*vi + 0]);
+                    out.tangents.push_back(m_vertexTangents[4*vi + 1]);
+                    out.tangents.push_back(m_vertexTangents[4*vi + 2]);
+                    out.tangents.push_back(m_vertexTangents[4*vi + 3]);
+                }
+                else
+                {
+                    // Hors bornes : base degeneree plutot qu'une lecture hors
+                    // tableau. Ce cas suppose un tableau de tangentes desaccorde
+                    // du nombre de sommets, que SetVertexTangents refuse.
+                    out.tangents.push_back(1.0f);
+                    out.tangents.push_back(0.0f);
+                    out.tangents.push_back(0.0f);
+                    out.tangents.push_back(1.0f);
                 }
             }
 
@@ -1040,6 +1092,8 @@ int Mesh::SetVertices (unsigned int nVertices, const float *pVertices)
 	{
 		m_vertexColors.clear();
 		m_vertexNormals.clear();
+		m_vertexTangents.clear();
+		m_texCoords1.clear();
 	}
 
 	IncrementRevision ();
@@ -1185,6 +1239,51 @@ int Mesh::SetTextureCoordinates (std::vector<float> uv, unsigned int nTexCoords)
 	m_texCoords  = std::move (uv);
 	m_nTexCoords = nTexCoords;
 	IncrementRevision ();
+	return 0;
+}
+
+int Mesh::SetTextureCoordinates1 (std::vector<float> uv)
+{
+	// PARALLELE AUX SOMMETS ou VIDE, jamais autre chose : c'est l'invariant qui
+	// permet de deriver le compte du tableau. Une taille intermediaire serait
+	// acceptee en silence par un simple move, et toute lecture ulterieure
+	// indexee par sommet sortirait des bornes.
+	if (!uv.empty () && uv.size () != 2u * (size_t)m_nVertices)
+		return -1;
+	m_texCoords1 = std::move (uv);
+	// Des UV sont des DONNEES SOURCE, pas une derivation : meme regle que
+	// SetTextureCoordinate pour le jeu 0.
+	IncrementRevision ();
+	return 0;
+}
+
+int Mesh::SetVertexTangents (std::vector<float> tangents)
+{
+	if (!tangents.empty () && tangents.size () != 4u * (size_t)m_nVertices)
+		return -1;
+	m_vertexTangents = std::move (tangents);
+	// DERIVATION : pas d'increment, meme regle que les normales par sommet.
+	// Incrementer ici invaliderait les tenseurs, qui ne sont pour rien dans une
+	// ecriture de tangentes.
+	//
+	// L'ESTAMPILLE, elle, est posee : c'est ce qui remplace l'increment pour
+	// detecter des tangentes perimees, sur le modele de MarkTensorsComputed.
+	m_tangentsRevision = m_vertexTangents.empty () ? (uint64_t)-1 : m_revision;
+	return 0;
+}
+
+bool Mesh::AreTangentsValid (void) const
+{
+	return !m_vertexTangents.empty () && m_tangentsRevision == m_revision;
+}
+
+int Mesh::SetVertexTangent (unsigned int i, float x, float y, float z, float w)
+{
+	if (4*(size_t)i+3 >= m_vertexTangents.size()) return -1;
+	m_vertexTangents[4*(size_t)i]   = x;
+	m_vertexTangents[4*(size_t)i+1] = y;
+	m_vertexTangents[4*(size_t)i+2] = z;
+	m_vertexTangents[4*(size_t)i+3] = w;
 	return 0;
 }
 
@@ -1549,6 +1648,8 @@ int Mesh::Append (Mesh *m)
 	// porte -- a faire le jour ou un appelant en a besoin.
 	m_vertexColors.clear();
 	m_vertexNormals.clear();
+	m_vertexTangents.clear();
+	m_texCoords1.clear();
 
 	m_faceVertices.swap (outVerts);
 	m_faceMaterial.swap (outMaterial);
@@ -1684,14 +1785,26 @@ int Mesh::DeleteVertices (funcptr_v func)
 				m_vertexColors[3*nVertices+1] = m_vertexColors[3*i+1];
 				m_vertexColors[3*nVertices+2] = m_vertexColors[3*i+2];
 			}
+			if (!m_texCoords1.empty())
+			{
+				m_texCoords1[2*(size_t)nVertices]   = m_texCoords1[2*(size_t)i];
+				m_texCoords1[2*(size_t)nVertices+1] = m_texCoords1[2*(size_t)i+1];
+			}
+			if (!m_vertexTangents.empty())
+			{
+				m_vertexTangents[4*(size_t)nVertices]   = m_vertexTangents[4*(size_t)i];
+				m_vertexTangents[4*(size_t)nVertices+1] = m_vertexTangents[4*(size_t)i+1];
+				m_vertexTangents[4*(size_t)nVertices+2] = m_vertexTangents[4*(size_t)i+2];
+				m_vertexTangents[4*(size_t)nVertices+3] = m_vertexTangents[4*(size_t)i+3];
+			}
 
 			nVertices++;
 		}
 	}
 	m_nVertices = nVertices;
 
-	// Les trois tableaux ont ete COMPACTES en place mais gardaient leur ancienne
-	// taille. Sans ce redimensionnement, size() != 3*m_nVertices, et les
+	// Les tableaux par sommet ont ete COMPACTES en place mais gardaient leur
+	// ancienne taille. Sans ce redimensionnement, size() != 3*m_nVertices, et les
 	// operations ulterieures qui testent ce parallelisme a l'egalite exacte
 	// (MergeVertices, SplitVerticesByUVSeams) abandonnent silencieusement les
 	// couleurs et les normales.
@@ -1700,6 +1813,10 @@ int Mesh::DeleteVertices (funcptr_v func)
 		m_vertexNormals.resize (3*m_nVertices);
 	if (!m_vertexColors.empty())
 		m_vertexColors.resize (3*m_nVertices);
+	if (!m_texCoords1.empty())
+		m_texCoords1.resize (2*(size_t)m_nVertices);
+	if (!m_vertexTangents.empty())
+		m_vertexTangents.resize (4*(size_t)m_nVertices);
 
 	IncrementRevision ();
 	return 0;
@@ -1908,10 +2025,17 @@ void Mesh::SplitVerticesByUVSeams (void)
 
 	const bool hasC = m_vertexColors.size()  == 3u * (size_t)m_nVertices;
 	const bool hasN = m_vertexNormals.size() == 3u * (size_t)m_nVertices;
+	// Jeu 1 et tangentes : PARALLELES AUX SOMMETS, donc sans couture propre.
+	// Ils se recopient du sommet source vers ses duplicats, exactement comme
+	// les couleurs et les normales -- aucun sommet supplementaire n'est requis
+	// par leur presence. Sans cette recopie, leurs tableaux garderaient
+	// l'ANCIEN nombre de sommets et toute lecture ulterieure serait decalee.
+	const bool hasU1 = m_texCoords1.size()     == 2u * (size_t)m_nVertices;
+	const bool hasT  = m_vertexTangents.size() == 4u * (size_t)m_nVertices;
 	const unsigned int NO_UV = 0xFFFFFFFFu;                // sentinel for corners without UV
 
 	std::map<std::pair<unsigned int, unsigned int>, unsigned int> remap; // (vertex, uvIndex) -> new vertex
-	std::vector<float> newV, newUV, newC, newN;
+	std::vector<float> newV, newUV, newC, newN, newU1, newT;
 	unsigned int newNv = 0;
 
 	for (unsigned int f = 0; f < GetNFaces (); f++)
@@ -1950,6 +2074,14 @@ void Mesh::SplitVerticesByUVSeams (void)
 
 				if (hasC) { newC.push_back(m_vertexColors[3*vi]); newC.push_back(m_vertexColors[3*vi+1]); newC.push_back(m_vertexColors[3*vi+2]); }
 				if (hasN) { newN.push_back(m_vertexNormals[3*vi]); newN.push_back(m_vertexNormals[3*vi+1]); newN.push_back(m_vertexNormals[3*vi+2]); }
+				if (hasU1) { newU1.push_back(m_texCoords1[2*(size_t)vi]); newU1.push_back(m_texCoords1[2*(size_t)vi+1]); }
+				if (hasT)
+				{
+					newT.push_back(m_vertexTangents[4*(size_t)vi]);
+					newT.push_back(m_vertexTangents[4*(size_t)vi+1]);
+					newT.push_back(m_vertexTangents[4*(size_t)vi+2]);
+					newT.push_back(m_vertexTangents[4*(size_t)vi+3]);
+				}
 			}
 			else
 			{
@@ -1968,6 +2100,22 @@ void Mesh::SplitVerticesByUVSeams (void)
 	m_nTexCoords = newNv;                         // vertex-parallel: one UV per vertex
 	if (hasC) m_vertexColors  = std::move(newC);
 	if (hasN) m_vertexNormals = std::move(newN);
+	// MEME POLITIQUE QUE MergeVertices pour le jeu 1 et les tangentes : un
+	// tableau qui n'etait deja pas parallele aux sommets a l'entree ne peut pas
+	// etre reindexe, et le nombre de sommets vient de changer. On le VIDE
+	// plutot que de le laisser a l'ancienne taille -- BuildPolygonRenderData
+	// comblerait le manque par (0,0) et (1,0,0,1), une parametrisation et une
+	// base tangente inventees que rien ne distingue des vraies. Une absente, au
+	// contraire, se voit.
+	//
+	// Les couleurs et les normales ci-dessus gardent l'ancien comportement :
+	// elles sont recalculables (ComputeNormals) ou decoratives, et le motif est
+	// preexistant. Ce n'est pas une regle differente, c'est une dette
+	// differente -- consignee dans debt_cgmesh.md.
+	if (hasU1) m_texCoords1 = std::move(newU1);
+	else       m_texCoords1.clear();
+	if (hasT)  m_vertexTangents = std::move(newT);
+	else       m_vertexTangents.clear();
 
 	IncrementRevision();
 }
@@ -1999,6 +2147,10 @@ int Mesh::MergeVertices (float tolerance)
 	                        && m_vertexNormals.size()      == 3u * m_nVertices;
 	const bool colorParallel = !m_vertexColors.empty()
 	                        && m_vertexColors.size()       == 3u * m_nVertices;
+	const bool uv1Parallel   = !m_texCoords1.empty()
+	                        && m_texCoords1.size()         == 2u * m_nVertices;
+	const bool tangentParallel = !m_vertexTangents.empty()
+	                        && m_vertexTangents.size()     == 4u * m_nVertices;
 
 	unsigned int *remap = new unsigned int[m_nVertices];
 	float *newVertices = new float[3 * m_nVertices];
@@ -2077,6 +2229,18 @@ int Mesh::MergeVertices (float tolerance)
 					const float dv = m_texCoords[2 * jOrig + 1] - m_texCoords[2 * i + 1];
 					if (du * du + dv * dv > uvTol2) continue;
 				}
+				// Le jeu 1 est un critere au meme titre que le jeu 0 : deux
+				// sommets coincidents appartenant a deux ilots de carte de
+				// lumiere distincts ne doivent pas fusionner, sans quoi l'un
+				// des deux ilots herite de la parametrisation de l'autre. Les
+				// TANGENTES, elles, ne sont PAS un critere -- derivation, meme
+				// regle que les normales : l'appelant les regenere.
+				if (uv1Parallel)
+				{
+					const float du = m_texCoords1[2 * jOrig    ] - m_texCoords1[2 * i    ];
+					const float dv = m_texCoords1[2 * jOrig + 1] - m_texCoords1[2 * i + 1];
+					if (du * du + dv * dv > uvTol2) continue;
+				}
 				if (colorParallel)
 				{
 					const float dr = m_vertexColors[3 * jOrig    ] - m_vertexColors[3 * i    ];
@@ -2126,6 +2290,41 @@ int Mesh::MergeVertices (float tolerance)
 		}
 		m_texCoords = std::move(newUVs);
 		m_nTexCoords = nNewVertices;
+	}
+
+	if (uv1Parallel)
+	{
+		std::vector<float> newUVs1(2 * (size_t)nNewVertices);
+		for (unsigned int ni = 0; ni < nNewVertices; ++ni)
+		{
+			const unsigned int orig = newOrig[ni];
+			newUVs1[2 * (size_t)ni    ] = m_texCoords1[2 * (size_t)orig    ];
+			newUVs1[2 * (size_t)ni + 1] = m_texCoords1[2 * (size_t)orig + 1];
+		}
+		m_texCoords1 = std::move(newUVs1);
+	}
+	else if (!m_texCoords1.empty())
+	{
+		// Taille desaccordee du nombre de sommets : le tableau ne peut plus
+		// etre indexe par sommet. On le VIDE plutot que de le tronquer -- une
+		// parametrisation tronquee est fausse en silence, une absente se voit.
+		m_texCoords1.clear();
+	}
+
+	if (tangentParallel)
+	{
+		std::vector<float> newTangents(4 * (size_t)nNewVertices);
+		for (unsigned int ni = 0; ni < nNewVertices; ++ni)
+		{
+			const unsigned int orig = newOrig[ni];
+			for (int k = 0; k < 4; ++k)
+				newTangents[4 * (size_t)ni + k] = m_vertexTangents[4 * (size_t)orig + k];
+		}
+		m_vertexTangents = std::move(newTangents);
+	}
+	else if (!m_vertexTangents.empty())
+	{
+		m_vertexTangents.clear();
 	}
 
 	if (normParallel)

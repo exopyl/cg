@@ -5,11 +5,18 @@
 #include "../cgimg/cgimg.h"
 
 // material definition
+//
+// TOUTE VALEUR NOUVELLE S'AJOUTE EN FIN. MATERIAL_NONE = (unsigned)-1 sert de
+// sentinelle a MaterialRange::materialId (mesh.h) et les valeurs 0..2 sont
+// comparees telles quelles par une trentaine de sites de dispatch, tous ecrits
+// en cascade de `if` avec repli et AUCUN `switch` exhaustif : inserer une valeur
+// au milieu deplacerait les autres sans qu'aucun compilateur ne le signale.
 enum MaterialType {
 	MATERIAL_NONE = ((unsigned int)-1),
 	MATERIAL_COLOR = 0,
 	MATERIAL_COLOR_ADV = 1,
-	MATERIAL_TEXTURE = 2
+	MATERIAL_TEXTURE = 2,
+	MATERIAL_PBR = 3
 };
 
 //
@@ -234,6 +241,13 @@ class MaterialTexture : public Material
 public:
 	MaterialTexture (char const *filename, char const *path = nullptr);
 	MaterialTexture (const std::string &name, unsigned int width, unsigned int height, const unsigned char *rgbaPixels);
+	// Construction sur une image DEJA DECODEE, PARTAGEE et non dupliquee.
+	//
+	// C'est la seule forme qui permette a une projection (cf. cgpbr::toPhong)
+	// d'emporter la carte d'un materiau source sans recopier ses pixels : les
+	// trois autres constructeurs decodent un fichier ou copient un tampon.
+	// `name` sert de nom de fichier -- donc de cle de cache cote rendu.
+	MaterialTexture (const std::string &name, std::shared_ptr<Img> image);
 	MaterialTexture (unsigned int nWidth, unsigned int nHeight);
 	MaterialTexture (const MaterialTexture &m); // constructor of copy
 	~MaterialTexture () override;
@@ -244,6 +258,10 @@ public:
 	void Dump (void) override;
 	std::string GetFilename () const;
 	Img* GetImage ();
+	// Lecture accessible depuis un `const Material*` -- la forme dont dispose
+	// tout ecrivain de fichier, qui ne detient jamais qu'une vue constante du
+	// maillage. Meme surface que GetReflectionImage ().
+	const Img* GetImage () const { return m_pImage.get(); }
 
 	// Carte de REFLEXION, facultative, en plus de la texture diffuse.
 	//

@@ -15,9 +15,13 @@
 #include <cstdio>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "material_pbr.h"
+#include "mesh_io_gltf_pbr.h"
+#include "tangents.h"
 #include "mesh_io_rply.h"
 #include "mesh_io_3ds.h"
 
@@ -977,29 +981,215 @@ bool DummyLoadImageData(tinygltf::Image* image, const int image_idx, std::string
 
 namespace
 {
-template <typename T>
-const T* GetAccessorDataPtr(const tinygltf::Model& model, const tinygltf::Accessor& accessor)
+// Acces BORNE au tableau des accesseurs, rend nullptr hors bornes.
+//
+// Les indices d'accesseur viennent du fichier et de nulle part d'ailleurs :
+// `primitive.attributes` est un map<string,int> que ParsePrimitive remplit par
+// ParseStringIntegerProperty, `primitive.indices` un int lu de la meme facon,
+// et NI L'UN NI L'AUTRE n'est confronte a model.accessors.size(). Indexer
+// directement, c'est indexer par un entier arbitraire de l'entree.
+const tinygltf::Accessor* AccessorAt(const tinygltf::Model& model, int index)
 {
-    if (accessor.bufferView < 0)
+    if (index < 0 || index >= static_cast<int>(model.accessors.size()))
         return nullptr;
-
-    const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
-    const tinygltf::Buffer& buffer = model.buffers[view.buffer];
-    return reinterpret_cast<const T*>(&buffer.data[view.byteOffset + accessor.byteOffset]);
+    return &model.accessors[index];
 }
 
-bool CopyFloatAccessorVec2(std::vector<float>& dst, const tinygltf::Model& model, const tinygltf::Accessor& accessor)
+// Meme regle un cran plus bas : `bufferView.buffer` est lui aussi un entier du
+// fichier que tinygltf ne borne pas.
+const tinygltf::BufferView* BufferViewAt(const tinygltf::Model& model, int index)
 {
-    if (accessor.type != TINYGLTF_TYPE_VEC2 || accessor.bufferView < 0)
+    if (index < 0 || index >= static_cast<int>(model.bufferViews.size()))
+        return nullptr;
+    return &model.bufferViews[index];
+}
+
+const tinygltf::Buffer* BufferAt(const tinygltf::Model& model, int index)
+{
+    if (index < 0 || index >= static_cast<int>(model.buffers.size()))
+        return nullptr;
+    return &model.buffers[index];
+}
+
+// Copie d'un accessor VEC3 flottant, EN RESPECTANT byteStride.
+//
+// La foulee n'est pas une optimisation exotique : un GLB a tampon ENTRELACE
+// range POSITION et NORMAL dans une meme vue, separes par la foulee declaree
+// sur celle-ci. Une lecture contigue y prendrait la normale du sommet i pour la
+// position du sommet i+1 -- geometrie fausse, aucune erreur, aucun
+// avertissement.
+//
+// Accessor::ByteStride rend la taille d'un element quand la vue ne declare
+// aucune foulee : le cas non entrelace passe donc par le meme chemin.
+//
+// Rend false -- donc primitive ignoree -- sur tout ce qui n'est pas lisible :
+// mauvais type, indices hors bornes, foulee trop courte, ou tampon trop court
+// pour le dernier element. Le dernier controle est indispensable : un accessor
+// est une DECLARATION du fichier, que tinygltf ne confronte pas au tampon.
+bool CopyFloatAccessorVec3(std::vector<float>& dst, const tinygltf::Model& model,
+                           const tinygltf::Accessor& accessor)
+{
+    if (accessor.type != TINYGLTF_TYPE_VEC3 ||
+        accessor.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT ||
+        accessor.bufferView < 0 ||
+        accessor.bufferView >= static_cast<int>(model.bufferViews.size()))
         return false;
 
     const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
+    if (view.buffer < 0 || view.buffer >= static_cast<int>(model.buffers.size()))
+        return false;
     const tinygltf::Buffer& buffer = model.buffers[view.buffer];
-    const unsigned char* data = buffer.data.data() + view.byteOffset + accessor.byteOffset;
+
+    const int stride = accessor.ByteStride(view);
+    const size_t element = 3 * sizeof(float);
+    if (stride < static_cast<int>(element))
+        return false;
+
+    dst.clear();
+    if (accessor.count == 0)
+        return false;
+    // `count` est un compte d'ELEMENTS, chacun d'au moins 2 octets : il ne peut
+    // jamais depasser la taille du tampon exprimee en OCTETS. Ce plafond est
+    // pose AVANT toute multiplication -- `span` comme `count * K` deborderaient
+    // sinon en size_t, le premier en faisant PASSER le controle de portee, le
+    // second en SOUS-ALLOUANT dst pendant que la boucle, elle, tourne `count`
+    // fois. Le fichier est une entree non fiable et tinygltf ne borne pas
+    // `count`.
+    if (accessor.count > buffer.data.size())
+        return false;
+
+    // Les deux decalages sont des size_t du fichier : leur somme peut
+    // BOUCLER. Bornee ici, elle rend `span` non bouclant a son tour, la
+    // foulee etant plafonnee a 252 par ParseBufferView.
+    const size_t base = view.byteOffset + accessor.byteOffset;
+    if (base > buffer.data.size())
+        return false;
+    const size_t span = base + (accessor.count - 1) * static_cast<size_t>(stride) + element;
+    if (span > buffer.data.size())
+        return false;
+
+    dst.resize(accessor.count * 3);
+    for (size_t i = 0; i < accessor.count; ++i)
+        memcpy(&dst[3 * i], buffer.data.data() + base + i * static_cast<size_t>(stride), element);
+    return true;
+}
+
+// Copie d'un accessor VEC4 flottant, memes controles que la version VEC3.
+//
+// Restreinte au type FLOAT : glTF 2.0 de base n'autorise que lui pour TANGENT,
+// BYTE et SHORT normalises relevant de KHR_mesh_quantization. Aucun exportateur
+// courant ne les emet et une conversion non testee vaut moins qu'un refus
+// franc -- refuser laisse la generation prendre le relais, convertir de travers
+// donnerait une base tangente fausse sans aucun signal.
+bool CopyFloatAccessorVec4(std::vector<float>& dst, const tinygltf::Model& model,
+                           const tinygltf::Accessor& accessor)
+{
+    if (accessor.type != TINYGLTF_TYPE_VEC4 ||
+        accessor.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT ||
+        accessor.bufferView < 0 ||
+        accessor.bufferView >= static_cast<int>(model.bufferViews.size()))
+        return false;
+
+    const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
+    if (view.buffer < 0 || view.buffer >= static_cast<int>(model.buffers.size()))
+        return false;
+    const tinygltf::Buffer& buffer = model.buffers[view.buffer];
+
+    const int stride = accessor.ByteStride(view);
+    const size_t element = 4 * sizeof(float);
+    if (stride < static_cast<int>(element))
+        return false;
+
+    dst.clear();
+    if (accessor.count == 0)
+        return false;
+    // Meme plafond que la version VEC3, et pour la meme raison : il ferme le
+    // debordement de `span` et celui de `count * 4`.
+    if (accessor.count > buffer.data.size())
+        return false;
+
+    // Les deux decalages sont des size_t du fichier : leur somme peut
+    // BOUCLER. Bornee ici, elle rend `span` non bouclant a son tour, la
+    // foulee etant plafonnee a 252 par ParseBufferView.
+    const size_t base = view.byteOffset + accessor.byteOffset;
+    if (base > buffer.data.size())
+        return false;
+    const size_t span = base + (accessor.count - 1) * static_cast<size_t>(stride) + element;
+    if (span > buffer.data.size())
+        return false;
+
+    dst.resize(accessor.count * 4);
+    for (size_t i = 0; i < accessor.count; ++i)
+        memcpy(&dst[4 * i], buffer.data.data() + base + i * static_cast<size_t>(stride), element);
+    return true;
+}
+
+// Copie d'un accessor VEC2, memes controles de bornes que les versions VEC3 et
+// VEC4.
+//
+// Le type de composante est soumis a une LISTE BLANCHE de cinq entrees.
+// glTF 2.0 de base n'autorise pour TEXCOORD_n que FLOAT, UNSIGNED_BYTE
+// normalise et UNSIGNED_SHORT normalise ; BYTE et SHORT normalises relevent de
+// KHR_mesh_quantization. Les cinq sont acceptes -- la tolerance sur les deux
+// types signes ne coute rien et les exportateurs s'en servent pour compresser
+// les UV -- mais ce qui n'est pas dans la liste est REFUSE.
+//
+// Le refus est la raison d'etre de la liste : ParseAccessor ne valide que
+// BYTE <= componentType <= DOUBLE, donc un TEXCOORD_n en UNSIGNED_INT (5125) ou
+// DOUBLE (5130) traverse tinygltf sans un mot. Converti par defaut, il
+// produirait un tableau d'UV TOUTES NULLES declare valide, qui alimente le
+// choix du jeu puis la generation de la base tangente : une parametrisation
+// inventee, sans aucun signal.
+bool CopyFloatAccessorVec2(std::vector<float>& dst, const tinygltf::Model& model, const tinygltf::Accessor& accessor)
+{
+    if (accessor.type != TINYGLTF_TYPE_VEC2 ||
+        accessor.bufferView < 0 ||
+        accessor.bufferView >= static_cast<int>(model.bufferViews.size()))
+        return false;
+
+    switch (accessor.componentType)
+    {
+    case TINYGLTF_COMPONENT_TYPE_FLOAT:
+    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+    case TINYGLTF_COMPONENT_TYPE_BYTE:
+    case TINYGLTF_COMPONENT_TYPE_SHORT:
+        break;
+    default:
+        return false;
+    }
+
+    const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
+    if (view.buffer < 0 || view.buffer >= static_cast<int>(model.buffers.size()))
+        return false;
+    const tinygltf::Buffer& buffer = model.buffers[view.buffer];
+
     const int stride = accessor.ByteStride(view);
     const int componentSize = tinygltf::GetComponentSizeInBytes(static_cast<uint32_t>(accessor.componentType));
     if (componentSize <= 0 || stride < 2 * componentSize)
         return false;
+
+    dst.clear();
+    if (accessor.count == 0)
+        return false;
+    // Meme plafond que les versions VEC3 et VEC4. Il tient ici aussi avec la
+    // plus petite composante du format : `stride >= 2 * componentSize >= 2`,
+    // donc `count` elements occupent au moins `2 * count` octets.
+    if (accessor.count > buffer.data.size())
+        return false;
+
+    const size_t element = 2 * static_cast<size_t>(componentSize);
+    // Les deux decalages sont des size_t du fichier : leur somme peut
+    // BOUCLER. Bornee ici, elle rend `span` non bouclant a son tour, la
+    // foulee etant plafonnee a 252 par ParseBufferView.
+    const size_t base = view.byteOffset + accessor.byteOffset;
+    if (base > buffer.data.size())
+        return false;
+    const size_t span = base + (accessor.count - 1) * static_cast<size_t>(stride) + element;
+    if (span > buffer.data.size())
+        return false;
+
+    const unsigned char* data = buffer.data.data() + base;
 
     auto convertComponent = [&accessor](const unsigned char* componentData) -> float
     {
@@ -1028,6 +1218,8 @@ bool CopyFloatAccessorVec2(std::vector<float>& dst, const tinygltf::Model& model
             return accessor.normalized ? (value < 0.0f ? value / 32768.0f : value / 32767.0f) : value;
         }
         default:
+            // Inatteignable : la liste blanche en tete de fonction a deja
+            // refuse tout ce qui n'est pas l'un des cinq cas ci-dessus.
             return 0.0f;
         }
     };
@@ -1035,7 +1227,7 @@ bool CopyFloatAccessorVec2(std::vector<float>& dst, const tinygltf::Model& model
     dst.resize(accessor.count * 2);
     for (size_t i = 0; i < accessor.count; ++i)
     {
-        const unsigned char* uv = data + i * stride;
+        const unsigned char* uv = data + i * static_cast<size_t>(stride);
         dst[2 * i] = convertComponent(uv);
         dst[2 * i + 1] = convertComponent(uv + componentSize);
     }
@@ -1160,6 +1352,20 @@ void Mat4TransformPoint(const GltfMat4& t, const float in[3], float out[3])
                                       t.m[4 + row]  * in[1] +
                                       t.m[8 + row]  * in[2] +
                                       t.m[12 + row]);
+}
+
+// Bloc 3x3 applique tel quel, destine aux TANGENTES.
+//
+// Une tangente n'est pas une normale : elle est PORTEE PAR la surface, pas
+// perpendiculaire a elle. Elle se transforme donc par la matrice elle-meme et
+// NON par son inverse transposee -- lui appliquer la matrice des normales la
+// ferait sortir du plan tangent sous toute echelle non uniforme.
+void Mat3TransformVector(const GltfMat4& t, const float in[3], float out[3])
+{
+    for (int row = 0; row < 3; ++row)
+        out[row] = static_cast<float>(t.m[row]     * in[0] +
+                                      t.m[4 + row] * in[1] +
+                                      t.m[8 + row] * in[2]);
 }
 
 // Bloc 3x3 destine aux NORMALES : l'inverse TRANSPOSEE, et non la matrice
@@ -1303,14 +1509,20 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
 			}
 
             // Positions
-			if (primitive.attributes.find("POSITION") == primitive.attributes.end())
+			auto posIt = primitive.attributes.find("POSITION");
+			if (posIt == primitive.attributes.end())
 			{
 				continue;
 			}
 
-			const tinygltf::Accessor& posAccessor = model.accessors[primitive.attributes.at("POSITION")];
-            const float* positions = GetAccessorDataPtr<float>(model, posAccessor);
-            if (!positions || posAccessor.type != TINYGLTF_TYPE_VEC3 || posAccessor.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT)
+			const tinygltf::Accessor* posAccessorPtr = AccessorAt(model, posIt->second);
+			if (!posAccessorPtr)
+			{
+				continue;
+			}
+			const tinygltf::Accessor& posAccessor = *posAccessorPtr;
+            std::vector<float> positions;
+            if (!CopyFloatAccessorVec3(positions, model, posAccessor))
             {
                 continue;
             }
@@ -1323,13 +1535,56 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
 
             if (hasIndices)
             {
-                indexAccessorPtr = &model.accessors[primitive.indices];
-                if (indexAccessorPtr->bufferView < 0)
+                indexAccessorPtr = AccessorAt(model, primitive.indices);
+                if (!indexAccessorPtr)
                 {
                     continue;
                 }
-                indexViewPtr = &model.bufferViews[indexAccessorPtr->bufferView];
-                indexBufferPtr = &model.buffers[indexViewPtr->buffer];
+                indexViewPtr = BufferViewAt(model, indexAccessorPtr->bufferView);
+                if (!indexViewPtr)
+                {
+                    continue;
+                }
+                indexBufferPtr = BufferAt(model, indexViewPtr->buffer);
+                if (!indexBufferPtr)
+                {
+                    continue;
+                }
+                // PORTEE DES INDICES DANS LE TAMPON. Les deux boucles
+                // indexees d'ecriture des faces adressent le tampon par un
+                // pointeur brut, sans repasser par un copieur : le controle
+                // de portee que les copieurs portent pour les attributs doit
+                // donc etre pose ici. `count` n'y est pas plus borne
+                // qu'ailleurs -- tinygltf valide l'indice de l'accesseur et
+                // celui de sa vue, jamais la place que `count` reclame.
+                //
+                // Plafond avant multiplication, meme raison que dans les
+                // copieurs : un element d'indice occupe au moins un octet,
+                // donc `count` ne peut depasser la taille du tampon en octets,
+                // et ce plafond ferme le debordement de `count * taille`.
+                {
+                    const int indexComponentSize = tinygltf::GetComponentSizeInBytes(
+                        static_cast<uint32_t>(indexAccessorPtr->componentType));
+                    if (indexComponentSize <= 0)
+                    {
+                        continue;
+                    }
+                    if (indexAccessorPtr->count > indexBufferPtr->data.size())
+                    {
+                        continue;
+                    }
+                    const size_t indexBase = indexViewPtr->byteOffset + indexAccessorPtr->byteOffset;
+                    if (indexBase > indexBufferPtr->data.size())
+                    {
+                        continue;
+                    }
+                    const size_t indexSpan = indexBase +
+                        indexAccessorPtr->count * static_cast<size_t>(indexComponentSize);
+                    if (indexSpan > indexBufferPtr->data.size())
+                    {
+                        continue;
+                    }
+                }
                 triangleCount = indexAccessorPtr->count / 3;
             }
             else
@@ -1345,57 +1600,49 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
             pMesh->Init(posAccessor.count, static_cast<unsigned int>(triangleCount));
 
             int texCoordSet = 0;
+            // Materiau UNE FOIS POSSEDE PAR LE MAILLAGE. Sert a recrire les
+            // uvSet quand les deux jeux sont permutes plus bas ; nul quand la
+            // primitive n'a pas de materiau PBR.
+            MaterialPbr* pbrOnMesh = nullptr;
+            // Vrai quand le materiau porte une CARTE DE NORMALES : elle seule
+            // rend la base tangente indispensable. Sans carte de normales, une
+            // tangente ne sert a rien et la calculer serait du travail et de la
+            // memoire pour un attribut que personne ne lit.
+            //
+            // Le JEU sur lequel la batir n'est pas lu ici : il est relu apres la
+            // recriture des uvSet, seul moment ou l'attribut designe un jeu DU
+            // MAILLAGE.
+            bool needsTangentBasis = false;
 
-            // Map glTF material to Mesh material
+            // MATERIAU : lu ENTIER, et porte tel quel par le maillage.
+            //
+            // cgpbr::materialFromGltf rend un MaterialPbr -- cinq cartes, sept
+            // facteurs, mode d'alpha -- la ou ce bloc fabriquait un
+            // MaterialColorExt dont le speculaire et la brillance etaient des
+            // CONSTANTES : metallicFactor et roughnessFactor du fichier
+            // n'atteignaient jamais le maillage.
+            //
+            // Aucune conversion colorimetrique ici : baseColorFactor est
+            // LINEAIRE et MaterialPbr est le conteneur du format, donc il le
+            // garde lineaire. La conversion vers le sRGB des materiaux du depot
+            // appartient a la projection cgpbr::toPhong, seul endroit ou la
+            // frontiere entre les deux modeles est franchie.
             if (primitive.material >= 0 && primitive.material < (int)model.materials.size()) {
-                const auto& gltfMat = model.materials[primitive.material];
-                Material* pMaterial = nullptr;
-                const auto& baseColor = gltfMat.pbrMetallicRoughness.baseColorFactor;
-                const auto& baseColorTexture = gltfMat.pbrMetallicRoughness.baseColorTexture;
-
-                if (baseColorTexture.index >= 0 && baseColorTexture.index < (int)model.textures.size())
+                std::unique_ptr<MaterialPbr> pMaterial =
+                    cgpbr::materialFromGltf(model, primitive.material);
+                if (pMaterial)
                 {
-                    const tinygltf::Texture& gltfTexture = model.textures[baseColorTexture.index];
-                    if (gltfTexture.source >= 0 && gltfTexture.source < (int)model.images.size())
-                    {
-                        const tinygltf::Image& gltfImage = model.images[gltfTexture.source];
-                        if (!gltfImage.image.empty() && gltfImage.width > 0 && gltfImage.height > 0)
-                        {
-                            pMaterial = new MaterialTexture(
-                                gltfImage.name.empty() ? gltfMat.name : gltfImage.name,
-                                static_cast<unsigned int>(gltfImage.width),
-                                static_cast<unsigned int>(gltfImage.height),
-                                gltfImage.image.data());
-                            texCoordSet = baseColorTexture.texCoord;
-                        }
-                    }
-                }
+                    // Le jeu d'UV a lire est celui que designe la carte de
+                    // couleur de base, ramene a 0 ou 1 par la lecture.
+                    if (pMaterial->HasMap(cgpbr::MapSlot::base_color))
+                        texCoordSet = pMaterial->GetMap(cgpbr::MapSlot::base_color).uvSet;
 
-                if (!pMaterial)
-                {
-                    auto pMatExt = new MaterialColorExt();
-                    pMatExt->SetName(gltfMat.name);
-                    pMatExt->SetDiffuse(baseColor[0], baseColor[1], baseColor[2], baseColor[3]);
-                    pMatExt->SetAmbient(0.2f, 0.2f, 0.2f, 1.0f);
-                    pMatExt->SetSpecular(0.5f, 0.5f, 0.5f, 1.0f);
-                    // FRACTION dans [0,1], pas un exposant OpenGL. Le rendu
-                    // multiplie par 128 (MaterialRenderer::GlShininess), donc
-                    // 0.25 vaut l'exposant 32 qui etait visiblement vise ici.
-                    //
-                    // La valeur precedente, 32.f, donnait 128 x 32 = 4096 : hors
-                    // de l'intervalle [0,128] qu'impose la specification, donc
-                    // glMaterialf rendait GL_INVALID_VALUE et l'appel etait
-                    // IGNORE -- l'exposant speculaire d'un glTF sans texture
-                    // heritait de celui du materiau dessine juste avant. Les
-                    // quatre autres importateurs ecrivent bien une fraction :
-                    // OBJ Ns/128, 3DS Power/100, 3DM Shine/255.
-                    pMatExt->SetShininess(0.25f);
-                    pMaterial = pMatExt;
-                }
+                    needsTangentBasis = pMaterial->HasMap(cgpbr::MapSlot::normal);
 
-                pMaterial->SetName(gltfMat.name);
-                int matId = pMesh->Material_Add(pMaterial);
-                pMesh->ApplyMaterial(matId); // Set default material for all faces
+                    const unsigned int matId = pMesh->Material_Add(pMaterial.release());
+                    pbrOnMesh = dynamic_cast<MaterialPbr*>(pMesh->GetMaterial(matId));
+                    pMesh->ApplyMaterial(matId); // Set default material for all faces
+                }
             }
 
             for (size_t i = 0; i < posAccessor.count; i++) {
@@ -1406,14 +1653,15 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
 
             // Normals
             bool hasNormals = false;
-            if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
-                const tinygltf::Accessor& normAccessor = model.accessors[primitive.attributes.at("NORMAL")];
-                const float* normals = GetAccessorDataPtr<float>(model, normAccessor);
+            auto normIt = primitive.attributes.find("NORMAL");
+            const tinygltf::Accessor* normAccessorPtr =
+                (normIt != primitive.attributes.end()) ? AccessorAt(model, normIt->second) : nullptr;
+            if (normAccessorPtr) {
+                const tinygltf::Accessor& normAccessor = *normAccessorPtr;
+                std::vector<float> normals;
 
-                if (normals &&
-                    normAccessor.count == posAccessor.count &&
-                    normAccessor.type == TINYGLTF_TYPE_VEC3 &&
-                    normAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT) {
+                if (normAccessor.count == posAccessor.count &&
+                    CopyFloatAccessorVec3(normals, model, normAccessor)) {
                     for (size_t i = 0; i < normAccessor.count; i++) {
                         const float* n = &normals[i * 3];
                         double t[3];
@@ -1437,16 +1685,155 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
                 }
             }
 
-            std::vector<float> textureCoordinates;
-            const std::string texCoordAttribute = "TEXCOORD_" + std::to_string(texCoordSet);
-            auto texCoordIt = primitive.attributes.find(texCoordAttribute);
-            if (texCoordIt != primitive.attributes.end())
+            // LES DEUX JEUX D'UV.
+            //
+            // Le jeu que designe la carte de couleur de base est monte au rang
+            // 0 du maillage, l'autre au rang 1 -- et non chacun a son rang
+            // d'origine. Deux raisons :
+            //
+            //  - le chemin de rendu a fonction fixe (cgre, VBOManager) ne
+            //    connait qu'UN jeu, le 0. Monter TEXCOORD_1 au rang 1 quand
+            //    c'est lui qui porte la couleur de base texturerait le modele
+            //    avec la mauvaise parametrisation, en silence ;
+            //  - c'est la permutation qui rend `uvSet` HONNETE : apres cette
+            //    lecture, l'attribut designe un jeu DU MAILLAGE, pas un
+            //    attribut du fichier. Les cartes sont donc recrites en
+            //    consequence -- laisser une carte annoncer 1 quand sa
+            //    parametrisation a ete montee au rang 0 serait exactement le
+            //    mensonge que ce chantier supprime.
+            //
+            // LES DEUX jeux arrivent PARALLELES AUX SOMMETS : un accessor dont
+            // le compte differe de celui des positions est refuse, pas tronque.
+            // C'est un invariant de Mesh pour le jeu 1 ; pour le jeu 0, c'est
+            // une consequence de la facon dont les faces sont ecrites plus bas,
+            // qui adresse les UV par indice de sommet.
             {
-                const tinygltf::Accessor& texAccessor = model.accessors[texCoordIt->second];
-                if (CopyFloatAccessorVec2(textureCoordinates, model, texAccessor))
+                auto readUvSet = [&](int set, std::vector<float>& dst) -> bool
                 {
-                    pMesh->SetTextureCoordinates (textureCoordinates,
-                                                  static_cast<unsigned int>(texAccessor.count));
+                    auto it = primitive.attributes.find("TEXCOORD_" + std::to_string(set));
+                    if (it == primitive.attributes.end())
+                        return false;
+                    const tinygltf::Accessor* acc = AccessorAt(model, it->second);
+                    if (acc == nullptr)
+                        return false;
+                    return CopyFloatAccessorVec2(dst, model, *acc) && !dst.empty();
+                };
+
+                std::vector<float> primary, secondary;
+                bool hasPrimary = readUvSet(texCoordSet, primary);
+                if (!hasPrimary && texCoordSet != 0)
+                {
+                    // Le materiau designe un jeu que la primitive n'a pas :
+                    // fichier non conforme (glTF exige des indices de TEXCOORD
+                    // consecutifs a partir de 0). On retombe sur le jeu 0
+                    // plutot que de laisser le maillage sans UV.
+                    texCoordSet = 0;
+                    hasPrimary = readUvSet(0, primary);
+                }
+                const bool hasSecondary = readUvSet(texCoordSet == 0 ? 1 : 0, secondary);
+
+                // LES DEUX jeux sont soumis au meme contrat de taille. Les faces
+                // adressent le jeu 0 par INDICE DE SOMMET (SetTexCoord ci-dessous
+                // recopie l'indice de sommet) : un tableau plus court que les
+                // positions serait indexe hors de ses bornes par tout
+                // consommateur qui suit cette indirection.
+                if (hasPrimary && primary.size() == 2 * posAccessor.count)
+                    pMesh->SetTextureCoordinates (primary,
+                                                  static_cast<unsigned int>(primary.size() / 2));
+                if (hasSecondary && secondary.size() == 2 * posAccessor.count)
+                    pMesh->SetTextureCoordinates1 (std::move(secondary));
+
+                // RECRITURE DES uvSet, en deux temps.
+                //
+                //  1. permutation, quand les deux jeux ont ete echanges ;
+                //  2. RABATTEMENT SUR LE SEUL JEU NON VIDE, dans les DEUX sens.
+                //     Sans lui, une carte d'occlusion sur TEXCOORD_1 dans un
+                //     fichier qui n'en porte pas -- ou dont l'accessor a ete
+                //     refuse -- annoncerait un jeu que personne ne peut
+                //     echantillonner. Le cas symetrique existe : le jeu 0 peut
+                //     etre vide alors que le 1 est lu, si l'accessor de
+                //     TEXCOORD_0 est refuse (type, foulee, compte) et pas
+                //     l'autre. Ce que le rabattement epargne au consommateur,
+                //     c'est le cas ou un jeu existe et ou uvSet designe
+                //     l'AUTRE ; il ne le dispense pas de verifier que le jeu
+                //     vise est non vide, le maillage pouvant n'en porter aucun.
+                //
+                //     Le rabattement ne pretend PAS que le jeu restant porte la
+                //     bonne parametrisation -- il n'y en a plus qu'une. Il
+                //     garantit seulement que uvSet designe un tableau qui
+                //     existe. Les deux jeux vides laissent 0, valeur neutre.
+                if (pbrOnMesh != nullptr)
+                {
+                    const bool swapped = (texCoordSet != 0);
+                    const bool set0Exists = !pMesh->GetTextureCoordinates ().empty ();
+                    const bool set1Exists = !pMesh->GetTextureCoordinates1 ().empty ();
+                    for (int s = 0; s < static_cast<int>(cgpbr::MapSlot::count); ++s)
+                    {
+                        const cgpbr::MapSlot slot = static_cast<cgpbr::MapSlot>(s);
+                        if (!pbrOnMesh->HasMap(slot))
+                            continue;
+                        cgpbr::TextureRef ref = pbrOnMesh->GetMap(slot);
+                        if (swapped)
+                            ref.uvSet = (ref.uvSet == 0) ? 1 : 0;
+                        if (ref.uvSet == 1 && !set1Exists)
+                            ref.uvSet = 0;
+                        else if (ref.uvSet == 0 && !set0Exists && set1Exists)
+                            ref.uvSet = 1;
+                        pbrOnMesh->SetMap(slot, std::move(ref));
+                    }
+                }
+            }
+
+            // TANGENTES DU FICHIER. Elles priment sur toute generation : leur
+            // auteur connait la parametrisation utilisee pour cuire la carte
+            // de normales, ce qu'une reconstruction ne peut que retrouver
+            // approximativement.
+            //
+            // LUES ICI, POSEES EN FIN D'IMPORT. SetVertexTangents estampille les
+            // tangentes contre la revision COURANTE ; les poser avant l'ecriture
+            // des faces les ferait declarer perimees par AreTangentsValid(), car
+            // chaque SetNVertices / SetVertex / SetTexCoord incremente la
+            // revision. Les tangentes de l'auteur sortiraient marquees plus
+            // vieilles que la geometrie, et un consommateur qui suit le contrat
+            // les regenererait -- exactement ce que leur primaute interdit.
+            std::vector<float> fileTangents;
+            {
+                auto it = primitive.attributes.find("TANGENT");
+                const tinygltf::Accessor* acc =
+                    (it != primitive.attributes.end()) ? AccessorAt(model, it->second) : nullptr;
+                // LA COPIE D'ABORD, LE CONTRAT DE TAILLE ENSUITE. Ce copieur
+                // est le seul dont l'unique appel etait garde par une egalite
+                // avec un AUTRE accessor : sa sureté memoire reposait alors sur
+                // les controles de POSITION, pas sur les siens. C'est la
+                // dependance croisee qui a produit B1. L'ordre inverse coute
+                // une copie sur un fichier non conforme -- bornee par le
+                // controle de portee du copieur, donc par la taille du tampon.
+                if (acc != nullptr &&
+                    CopyFloatAccessorVec4(fileTangents, model, *acc) &&
+                    acc->count == posAccessor.count)
+                {
+                    for (size_t i = 0; i < acc->count; ++i)
+                    {
+                        float t[3];
+                        Mat3TransformVector(instance.xform, &fileTangents[4 * i], t);
+                        const double len = std::sqrt((double)t[0]*t[0] +
+                                                     (double)t[1]*t[1] +
+                                                     (double)t[2]*t[2]);
+                        const double inv = (len > 1e-20) ? 1.0 / len : 0.0;
+                        fileTangents[4 * i]     = (float)(t[0] * inv);
+                        fileTangents[4 * i + 1] = (float)(t[1] * inv);
+                        fileTangents[4 * i + 2] = (float)(t[2] * inv);
+                        // Une transformation MIROIR inverse le sens de la
+                        // base : la bitangente reconstruite par
+                        // cross (N, T) * w pointerait du mauvais cote si w
+                        // traversait inchange.
+                        if (mirrored)
+                            fileTangents[4 * i + 3] = -fileTangents[4 * i + 3];
+                    }
+                }
+                else
+                {
+                    fileTangents.clear();
                 }
             }
 
@@ -1534,6 +1921,39 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
             pMesh->SetName (gltfMesh.name);
             if (!hasNormals)
                 pMesh->ComputeNormals();
+
+            // POSE DES TANGENTES DU FICHIER, au meme point du flot que la
+            // generation : la geometrie est figee, donc l'estampille posee ici
+            // vaut la revision courante et AreTangentsValid() rend vrai.
+            const bool hasTangents = !fileTangents.empty();
+            if (hasTangents)
+                pMesh->SetVertexTangents(std::move(fileTangents));
+
+            // GENERATION, seulement si le materiau a une carte de normales et
+            // que le fichier n'a pas fourni de TANGENT. APRES ComputeNormals :
+            // l'orthogonalisation lit les normales par sommet.
+            //
+            // LE JEU EST CELUI QUE LA CARTE DE NORMALES ECHANTILLONNE, relu
+            // apres la recriture des uvSet -- glTF 2.0 attache le TANGENT aux
+            // coordonnees de la normalTexture, et une base batie sur une autre
+            // parametrisation est valide, unitaire, et fausse sans signal.
+            if (!hasTangents && needsTangentBasis)
+            {
+                const unsigned int normalUvSet =
+                    (pbrOnMesh != nullptr && pbrOnMesh->HasMap(cgpbr::MapSlot::normal))
+                        ? pbrOnMesh->GetMap(cgpbr::MapSlot::normal).uvSet : 0u;
+                // Le refus est SILENCIEUX cote generateTangents -- il rend un
+                // booleen. Sans cette trace, un maillage a carte de normales et
+                // sans UV repartirait sans base tangente et sans rien qui le
+                // dise, ce qui est precisement le cas ou l'eclairage sera faux.
+                if (!generateTangents(*pMesh, normalUvSet))
+                    fprintf (stderr,
+                             "import_gltf: '%s' porte une carte de normales mais "
+                             "aucune coordonnee de texture dans le jeu %u ; "
+                             "maillage sans base tangente.\n",
+                             gltfMesh.name.c_str(), normalUvSet);
+            }
+
             vm.AddMesh(pMesh);
         }
     }

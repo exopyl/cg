@@ -55,6 +55,8 @@
 #include <vector>
 
 #include "material.h"
+#include "material_convert.h"
+#include "material_pbr.h"
 #include "mesh.h"
 #include "mesh_io.h"
 
@@ -66,16 +68,9 @@
 
 namespace {
 
-// sRGB -> lineaire, la courbe exacte de la specification (et non l'approximation
-// en puissance 2,2). baseColorFactor est defini dans l'espace LINEAIRE.
-double srgbToLinear (double c)
-{
-	if (c <= 0.0)
-		return 0.0;
-	if (c >= 1.0)
-		return 1.0;
-	return (c <= 0.04045) ? (c / 12.92) : std::pow ((c + 0.055) / 1.055, 2.4);
-}
+// sRGB -> lineaire : la courbe vit dans material_convert.h, en exemplaire
+// unique. baseColorFactor est defini dans l'espace LINEAIRE.
+using cgpbr::srgbToLinear;
 
 // Le gris par defaut de Mesh::InitVertices. Sert de reference au test « le
 // maillage est-il peint ? » et de couleur au materiau de remplacement.
@@ -128,8 +123,73 @@ int appendFloatAccessor (tinygltf::Model& model, int bufferView, size_t count, i
 // `mat` nul designe la plage MATERIAL_NONE : elle recoit un gris EXPLICITE et non
 // l'absence de materiau, qui renverrait au defaut du lecteur -- lequel est
 // metallique, donc noir.
+// Nom de materiau tel qu'ECRIT dans le fichier : celui du materiau, ou son
+// indice a defaut. Un materiau glTF sans nom est licite, mais illisible dans un
+// editeur.
+std::string gltfMaterialName (const Material* mat, unsigned int index)
+{
+	if (mat != nullptr && !mat->GetName().empty())
+		return mat->GetName();
+	char buf[32];
+	std::snprintf (buf, sizeof(buf), "material_%u", index);
+	return buf;
+}
+
+// MaterialPbr -> materiau glTF : ALLER SIMPLE, sans passer par Phong.
+//
+// Ce materiau EST le modele du format : ses facteurs s'ecrivent tels quels. Les
+// projeter en Phong puis reconstruire perdrait alphaMode, alphaCutoff,
+// doubleSided, normalScale et occlusionStrength, et arrondirait metallic et
+// roughness au passage.
+//
+// Aucune conversion colorimetrique : baseColorFactor et emissiveFactor sont
+// LINEAIRES des deux cotes. srgbToLinear ne s'applique qu'aux materiaux Phong
+// du depot, qui sont en sRGB.
+//
+// HORS PERIMETRE : les CINQ CARTES. cgimg n'a d'encodeur ni PNG ni JPEG
+// (ImgIO::export_png rend -1, src/cgimg/image_io_png.cpp), soit exactement les
+// deux formats qu'un GLB accepte. Un MaterialPbr texture sort donc avec ses
+// facteurs et sans ses images -- silencieusement, faute de canal pour le dire.
+tinygltf::Material pbrToGltfMaterial (const MaterialPbr& src, unsigned int index)
+{
+	const cgpbr::Factors& f = src.GetFactors();
+
+	tinygltf::Material out;
+	out.name = gltfMaterialName (&src, index);
+
+	out.pbrMetallicRoughness.baseColorFactor = {
+		f.baseColor[0], f.baseColor[1], f.baseColor[2], f.baseColor[3]
+	};
+	out.pbrMetallicRoughness.metallicFactor  = f.metallic;
+	out.pbrMetallicRoughness.roughnessFactor = f.roughness;
+	out.emissiveFactor = { f.emissive[0], f.emissive[1], f.emissive[2] };
+
+	// normalScale et occlusionStrength appartiennent, dans le format, a la
+	// REFERENCE de texture qui les porte. Aucune carte n'etant ecrite, tinygltf
+	// omet les deux objets et ces deux facteurs ne survivent pas au fichier.
+	// Les poser reste juste : ils seront ecrits le jour ou les cartes le seront.
+	out.normalTexture.scale       = f.normalScale;
+	out.occlusionTexture.strength = f.occlusionStrength;
+	out.alphaCutoff               = f.alphaCutoff;
+	out.doubleSided               = src.IsDoubleSided();
+
+	switch (src.GetAlphaMode())
+	{
+	case cgpbr::AlphaMode::mask:  out.alphaMode = "MASK";  break;
+	case cgpbr::AlphaMode::blend: out.alphaMode = "BLEND"; break;
+	case cgpbr::AlphaMode::opaque:
+	default:                      out.alphaMode = "OPAQUE"; break;
+	}
+
+	return out;
+}
+
 tinygltf::Material toGltfMaterial (const Material* mat, unsigned int index)
 {
+	// Un materiau deja PBR ne se projette pas : il s'ecrit.
+	if (const MaterialPbr* pbr = dynamic_cast<const MaterialPbr*> (mat))
+		return pbrToGltfMaterial (*pbr, index);
+
 	tinygltf::Material out;
 
 	double r = kDefaultGrey, g = kDefaultGrey, b = kDefaultGrey, a = 1.0;
@@ -157,13 +217,7 @@ tinygltf::Material toGltfMaterial (const Material* mat, unsigned int index)
 		a = tex->GetDiffuse()[3];
 	}
 
-	if (mat != nullptr && !mat->GetName().empty())
-		out.name = mat->GetName();
-	else {
-		char buf[32];
-		std::snprintf (buf, sizeof(buf), "material_%u", index);
-		out.name = buf;
-	}
+	out.name = gltfMaterialName (mat, index);
 
 	out.pbrMetallicRoughness.baseColorFactor = {
 		srgbToLinear (r), srgbToLinear (g), srgbToLinear (b), a
@@ -242,6 +296,27 @@ std::string MeshIO::export_glb_bytes (const Mesh& mesh)
 		uvAcc = appendFloatAccessor (model, view, nv, TINYGLTF_TYPE_VEC2);
 	}
 
+	// TEXCOORD_1 et TANGENT : ecrits SEULEMENT si le maillage les porte.
+	// BuildPolygonRenderData laisse les tableaux VIDES sinon, et un attribut
+	// synthetise ici mentirait sur le contenu du fichier -- un TANGENT
+	// (1,0,0,1) uniforme est indiscernable d'une base tangente reelle pour le
+	// lecteur, qui s'en servirait au lieu de la recalculer.
+	int uv1Acc = -1;
+	if (rd.texCoords1.size() == nv * 2) {
+		const int view = appendBufferView (model, bin, rd.texCoords1.data(),
+						   rd.texCoords1.size() * sizeof(float),
+						   TINYGLTF_TARGET_ARRAY_BUFFER);
+		uv1Acc = appendFloatAccessor (model, view, nv, TINYGLTF_TYPE_VEC2);
+	}
+
+	int tanAcc = -1;
+	if (rd.tangents.size() == nv * 4) {
+		const int view = appendBufferView (model, bin, rd.tangents.data(),
+						   rd.tangents.size() * sizeof(float),
+						   TINYGLTF_TARGET_ARRAY_BUFFER);
+		tanAcc = appendFloatAccessor (model, view, nv, TINYGLTF_TYPE_VEC4);
+	}
+
 	// COLOR_0 SEULEMENT si le maillage est PEINT. Mesh::InitVertices remplit
 	// m_vertexColors du gris 0,5 pour TOUT maillage : emettre l'attribut
 	// inconditionnellement ferait MULTIPLIER baseColorFactor par 0,5 chez tout
@@ -312,6 +387,8 @@ std::string MeshIO::export_glb_bytes (const Mesh& mesh)
 		prim.attributes["POSITION"] = posAcc;
 		if (normAcc >= 0) prim.attributes["NORMAL"] = normAcc;
 		if (uvAcc >= 0)   prim.attributes["TEXCOORD_0"] = uvAcc;
+		if (uv1Acc >= 0)  prim.attributes["TEXCOORD_1"] = uv1Acc;
+		if (tanAcc >= 0)  prim.attributes["TANGENT"] = tanAcc;
 		if (colAcc >= 0)  prim.attributes["COLOR_0"] = colAcc;
 
 		if (range.materialId < mesh.GetNMaterials())

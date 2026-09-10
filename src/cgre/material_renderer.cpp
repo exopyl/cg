@@ -2,6 +2,9 @@
 
 #include "diagnostics.h"
 
+#include "../cgmesh/material_convert.h"
+#include "../cgmesh/material_pbr.h"
+
 MaterialRenderer *MaterialRenderer::m_pInstance = new MaterialRenderer;
 
 // ---------------------------------------------------------------------------
@@ -285,9 +288,20 @@ int MaterialRenderer::AddMaterial (Material *pMaterial)
 	entry.name      = name;
 	m_indexByMaterial[pMaterial] = index;
 
-	if (type == MATERIAL_TEXTURE)
+	// Un MATERIAL_PBR est enregistre PAR SA PROJECTION : c'est elle qui porte
+	// les canaux que le pipeline fixe sait consommer, et sa carte de couleur de
+	// base -- partagee, pas dupliquee -- qui doit etre televersee ci-dessous.
+	if (type == MATERIAL_PBR)
 	{
-		MaterialTexture *pMaterialTexture = dynamic_cast<MaterialTexture*> (pMaterial);
+		if (const MaterialPbr *pPbr = dynamic_cast<const MaterialPbr*> (pMaterial))
+			entry.projection = cgpbr::toPhong (*pPbr);
+	}
+
+	Material *pEffective = entry.projection ? entry.projection.get () : pMaterial;
+
+	if (pEffective->GetType () == MATERIAL_TEXTURE)
+	{
+		MaterialTexture *pMaterialTexture = dynamic_cast<MaterialTexture*> (pEffective);
 		if (pMaterialTexture && pMaterialTexture->GetImage())
 		{
 			glGenTextures(1, &entry.textureId);
@@ -343,7 +357,9 @@ void MaterialRenderer::ActivateMaterial (unsigned int id)
 		return;
 
 	const Entry& entry = m_materials[id];
-	Material *pMaterial = entry.pMaterial;
+	// La PROJECTION quand il y en a une (MATERIAL_PBR) : la cascade ci-dessous
+	// est sans repli, elle ne doit donc voir que des types qu'elle traite.
+	Material *pMaterial = entry.projection ? entry.projection.get () : entry.pMaterial;
 	if (pMaterial->GetType () == MATERIAL_TEXTURE)
 	{
 		glEnable(GL_TEXTURE_2D);

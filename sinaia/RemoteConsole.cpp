@@ -5,14 +5,17 @@
 
 #include "../src/cgmesh/mesh.h"
 #include "../src/cgmesh/material.h"
+#include "../src/cgmesh/material_pbr.h"
 #include "../src/cgmesh/vmeshes.h"
 
 #include <wx/app.h>
 #include <wx/string.h>
 
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <future>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -203,7 +206,66 @@ std::string cmdMaterial(MyFrame* frame, int n, int matId)
     if (t == MATERIAL_COLOR)     tname = "MATERIAL_COLOR";
     if (t == MATERIAL_COLOR_ADV) tname = "MATERIAL_COLOR_ADV";
     if (t == MATERIAL_TEXTURE)   tname = "MATERIAL_TEXTURE";
+    if (t == MATERIAL_PBR)       tname = "MATERIAL_PBR";
     os << "type " << tname << "\n";
+
+    // MATERIAL_PBR : decrit par ses PROPRES champs, et non par sa projection
+    // Phong, AVANT la cascade de dynamic_cast qui suit -- celle-ci ne connait
+    // que les classes historiques et rendrait « MATERIAL_NONE », faux et non
+    // vide. Ce bloc rend ce que le fichier dit, facteurs metallique et rugosite
+    // compris, precisement ce que la projection Phong jette.
+    if (const MaterialPbr* pbr = dynamic_cast<const MaterialPbr*>(mat))
+    {
+        const cgpbr::Factors& f = pbr->GetFactors();
+        char buf[220];
+        std::snprintf(buf, sizeof(buf), "baseColor %g %g %g %g\n",
+                      f.baseColor[0], f.baseColor[1], f.baseColor[2], f.baseColor[3]);
+        os << buf;
+        std::snprintf(buf, sizeof(buf), "emissive %g %g %g\n",
+                      f.emissive[0], f.emissive[1], f.emissive[2]);
+        os << buf;
+        std::snprintf(buf, sizeof(buf), "metallic %g\nroughness %g\n",
+                      f.metallic, f.roughness);
+        os << buf;
+        std::snprintf(buf, sizeof(buf),
+                      "normalScale %g\nocclusionStrength %g\nalphaCutoff %g\n",
+                      f.normalScale, f.occlusionStrength, f.alphaCutoff);
+        os << buf;
+        const char* am = (pbr->GetAlphaMode() == cgpbr::AlphaMode::mask)  ? "MASK"
+                       : (pbr->GetAlphaMode() == cgpbr::AlphaMode::blend) ? "BLEND"
+                                                                          : "OPAQUE";
+        os << "alphaMode " << am << "\n";
+        os << "doubleSided " << (pbr->IsDoubleSided() ? 1 : 0) << "\n";
+
+        static const char* const kSlotNames[] = {
+            "base_color", "normal", "metallic_roughness", "occlusion", "emissive"
+        };
+        // Table INDEXEE PAR MapSlot : un emplacement ajoute a l'enumeration
+        // (clearcoat, specular...) ferait lire kSlotNames hors bornes et
+        // passerait un pointeur indetermine a %s, sans un mot du compilateur.
+        //
+        // ⚠ CE QUE LA GARDE NE COUVRE PAS : elle protege le CARDINAL, pas
+        // l'ORDRE. Reordonner MapSlot laisse `count == 5` et fait afficher les
+        // mauvais libelles -- defaut cosmetique, invisible a la compilation.
+        // L'ordre de cette table doit suivre celui de l'enumeration.
+        static_assert (std::size (kSlotNames)
+                           == static_cast<std::size_t>(cgpbr::MapSlot::count),
+                       "kSlotNames doit couvrir exactement cgpbr::MapSlot");
+        for (int s = 0; s < static_cast<int>(cgpbr::MapSlot::count); ++s)
+        {
+            const cgpbr::MapSlot slot = static_cast<cgpbr::MapSlot>(s);
+            if (!pbr->HasMap(slot))
+                continue;
+            const cgpbr::TextureRef& ref = pbr->GetMap(slot);
+            std::snprintf(buf, sizeof(buf), "map %s \"%s\" %s uv%u\n",
+                          kSlotNames[s], ref.name.c_str(),
+                          (ref.colorSpace == cgpbr::ColorSpace::srgb) ? "sRGB" : "linear",
+                          (unsigned)ref.uvSet);
+            os << buf;
+        }
+        os << "OK\n";
+        return os.str();
+    }
 
     if (auto* ext = dynamic_cast<MaterialColorExt*>(mat))
     {

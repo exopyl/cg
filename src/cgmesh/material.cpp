@@ -1,6 +1,7 @@
 #include "material.h"
 
 #include <string>
+#include <utility>
 
 // ---------------------------------------------------------------------------
 //  Rattrapage des noms de texture TRONQUES par le format 3DS
@@ -189,6 +190,13 @@ MaterialTexture::MaterialTexture (const std::string &name, unsigned int width, u
 	}
 
 	memcpy(m_pImage->data(), rgbaPixels, 4 * width * height * sizeof(unsigned char));
+}
+
+// L'image est PARTAGEE (shared_ptr) et non dupliquee : c'est la meme regle que
+// le constructeur de copie, et la raison d'etre de ce constructeur.
+MaterialTexture::MaterialTexture (const std::string &name, std::shared_ptr<Img> image)
+	: m_filename (name), m_pImage (std::move (image))
+{
 }
 
 MaterialTexture::MaterialTexture (unsigned int nWidth, unsigned int nHeight)

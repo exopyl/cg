@@ -15,6 +15,7 @@
 #endif
 
 #include "../src/cgmesh/cgmesh.h"
+#include "../src/cgmesh/material_pbr.h"
 #include "../src/cgmesh/mesh_io.h"       // MeshIO::export_obj (points d entree par format)
 #include "../src/cgmesh/zip_manager.h"   // ZipManager::Crc32, pour verifier l archive
 
@@ -706,9 +707,19 @@ TEST(TEST_cgmesh_io, glb_duck)
             foundTexCoords = true;
         }
         for (unsigned int i = 0; i < pMesh->GetNMaterials(); ++i) {
-            MaterialTexture* mt = dynamic_cast<MaterialTexture*>(pMesh->GetMaterial(i));
-            if (mt && mt->GetImage()) {
-                foundTexture = true;
+            // L'import glTF pose desormais un MaterialPbr : l'image de la
+            // texture vit dans son emplacement base_color, non plus dans un
+            // MaterialTexture. Les deux formes sont acceptees ici -- ce que ce
+            // test enonce est que L'IMAGE SURVIT a l'import, pas le type
+            // concret qui la porte.
+            Material* pMat = pMesh->GetMaterial(i);
+            if (MaterialTexture* mt = dynamic_cast<MaterialTexture*>(pMat)) {
+                if (mt->GetImage())
+                    foundTexture = true;
+            }
+            else if (MaterialPbr* pbr = dynamic_cast<MaterialPbr*>(pMat)) {
+                if (pbr->HasMap(cgpbr::MapSlot::base_color))
+                    foundTexture = true;
             }
         }
     }

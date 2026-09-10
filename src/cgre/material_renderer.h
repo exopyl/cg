@@ -4,6 +4,7 @@
 
 #include "../cgmesh/cgmesh.h"
 
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -90,6 +91,19 @@ private:
 		// au lieu de se voir rendre l'ancienne texture en silence.
 		MaterialType type = MATERIAL_NONE;
 		std::string  name;
+
+		// PROJECTION Phong d'un MATERIAL_PBR, calculee une fois a l'insertion.
+		//
+		// Le pipeline fixe d'OpenGL ne connait que le modele de Phong : un
+		// materiau PBR n'a aucune branche dans ActivateMaterial, et la cascade
+		// y est SANS REPLI -- l'objet heriterait donc de l'etat GL du materiau
+		// dessine juste avant. La projection lui rend un type que la cascade
+		// sait traiter.
+		//
+		// Detenue ici plutot que recalculee a chaque activation : la projection
+		// alloue, et ActivateMaterial est appelee a chaque rendu de plage.
+		// nullptr pour tout materiau qui n'est pas PBR.
+		std::unique_ptr<Material> projection;
 
 		GLuint textureId     = 0;
 		// Carte de reflexion, 0 si aucune. Objet GL distinct : un materiau peut

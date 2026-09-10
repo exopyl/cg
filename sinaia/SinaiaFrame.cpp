@@ -20,6 +20,8 @@
 #include <wx/dcgraph.h>     // wxGCDC
 #include <vector>
 #include <chrono>
+#include <cstddef>
+#include <iterator>
 
 #include "sinaia.xpm"
 
@@ -49,6 +51,7 @@
 #include "../src/cgmesh/parameterized_shapes.h"
 #include "../src/cgmath/font.h"   // KerningStatus : signaler un crenage illisible
 #include "../src/cgmesh/normals.h"
+#include "../src/cgmesh/material_pbr.h"
 
 namespace {
 
@@ -2263,6 +2266,64 @@ void MyFrame::UpdatePropertiesGrid()
                                     wxString::Format("  Ambient: RGB(%.2f, %.2f, %.2f)",
                                                      mce->m_fAmbient[0], mce->m_fAmbient[1], mce->m_fAmbient[2]),
                                     swatch(mce->m_fAmbient[0], mce->m_fAmbient[1], mce->m_fAmbient[2]));
+                            }
+                            break;
+                        }
+                        case MATERIAL_PBR:
+                        {
+                            // Branche propre au PBR : le `default` ci-dessous
+                            // reduirait le materiau a son nom. Les deux
+                            // facteurs affiches sont ceux qu'aucun materiau
+                            // Phong ne porte, donc ceux que la projection perd.
+                            MaterialPbr* mp = dynamic_cast<MaterialPbr*>(mat);
+                            if (mp)
+                            {
+                                const cgpbr::Factors& f = mp->GetFactors();
+                                m_hierarchyMaterials->AppendItem(matItem,
+                                    wxString::Format("Type: PBR (metallic-roughness)"), kMatIconFile);
+                                m_hierarchyMaterials->AppendItem(matItem,
+                                    wxString::Format("  Base color: RGBA(%.2f, %.2f, %.2f, %.2f)",
+                                                     f.baseColor[0], f.baseColor[1],
+                                                     f.baseColor[2], f.baseColor[3]),
+                                    swatch(f.baseColor[0], f.baseColor[1], f.baseColor[2]));
+                                m_hierarchyMaterials->AppendItem(matItem,
+                                    wxString::Format("  Metallic: %.3f   Roughness: %.3f",
+                                                     f.metallic, f.roughness),
+                                    kMatIconFile);
+
+                                static const char* const kPbrSlotNames[] = {
+                                    "Base color", "Normal", "Metallic-roughness",
+                                    "Occlusion", "Emissive"
+                                };
+                                // Table INDEXEE PAR MapSlot : un emplacement
+                                // ajoute a l'enumeration ferait lire hors
+                                // bornes, sans un mot du compilateur.
+                                //
+                                // ⚠ La garde porte sur le CARDINAL, pas sur
+                                // l'ORDRE : reordonner MapSlot laisse
+                                // `count == 5` et fait afficher les mauvais
+                                // libelles. L'ordre de cette table doit suivre
+                                // celui de l'enumeration.
+                                static_assert (std::size (kPbrSlotNames)
+                                                   == static_cast<std::size_t>(cgpbr::MapSlot::count),
+                                               "kPbrSlotNames doit couvrir exactement cgpbr::MapSlot");
+                                for (int s = 0; s < static_cast<int>(cgpbr::MapSlot::count); ++s)
+                                {
+                                    const cgpbr::MapSlot slot = static_cast<cgpbr::MapSlot>(s);
+                                    if (!mp->HasMap(slot))
+                                        continue;
+                                    const cgpbr::TextureRef& ref = mp->GetMap(slot);
+                                    // Le jeu d'UV designe un jeu DU MAILLAGE
+                                    // (cf. material_pbr.h), pas l'indice ecrit
+                                    // dans le fichier : l'afficher evite de
+                                    // chercher un TEXCOORD_1 absent du .gltf.
+                                    m_hierarchyMaterials->AppendItem(matItem,
+                                        wxString::Format("  %s map: %s  (UV%u)",
+                                                         kPbrSlotNames[s],
+                                                         wxString(ref.name),
+                                                         (unsigned)ref.uvSet),
+                                        kMatIconFile);
+                                }
                             }
                             break;
                         }
