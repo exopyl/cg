@@ -4,8 +4,12 @@
 
 #include <cstddef>
 
+#include <memory>
+
 #include "../src/cgimg/image.h"
 #include "material.h"
+#include "material_convert.h"
+#include "material_pbr.h"
 #include "mesh.h"
 
 namespace maker
@@ -28,6 +32,33 @@ emscripten::val DescribeMaterial (Material *mat)
 {
 	using namespace emscripten;
 	val m = val::object ();
+
+	// MATERIAL_PBR : decrit par sa PROJECTION Phong, faute de branche propre.
+	// Sans elle, la cascade ci-dessous retomberait sur kind:"none" et l'apercu
+	// perdrait la couleur en silence.
+	//
+	// BRANCHE DEFENSIVE, aujourd'hui INATTEIGNABLE : le seul producteur de
+	// MaterialPbr est cgpbr::materialFromGltf, dont l'unite -- comme
+	// vmeshes_io.cpp, qui l'appelle -- est EXCLUE de la liste de sources
+	// Emscripten (src/cgmesh/CMakeLists.txt). maker n'importe donc aucun glTF.
+	// Elle est ici pour que l'ajout futur d'un import ne reintroduise pas la
+	// perte silencieuse.
+	std::unique_ptr<Material> projected;
+	if (MaterialPbr *pbr = dynamic_cast<MaterialPbr *> (mat)) {
+		projected = cgpbr::toPhong (*pbr);
+		// Sans carte de couleur de base, la projection est un MaterialColorExt,
+		// que la cascade ci-dessous ne connait pas : on decrit sa diffuse ici.
+		if (const MaterialColorExt *ext =
+		        dynamic_cast<const MaterialColorExt *> (projected.get ())) {
+			m.set ("kind", std::string ("color"));
+			m.set ("r", ext->GetDiffuse ()[0]);
+			m.set ("g", ext->GetDiffuse ()[1]);
+			m.set ("b", ext->GetDiffuse ()[2]);
+			return m;
+		}
+		if (projected)
+			mat = projected.get ();   // MaterialTexture : la cascade sait faire
+	}
 
 	if (MaterialTexture *tex = dynamic_cast<MaterialTexture *> (mat)) {
 		Img *img = tex->GetImage ();
@@ -85,6 +116,14 @@ emscripten::val BuildMeshPayload (const Mesh *mesh, MeshPayloadBuffers &bufs)
 		bufs.normals.swap (rd.normals);
 		bufs.uvs.swap (rd.texCoords);
 		bufs.indices.swap (rd.indices);
+
+		// PERTE ASSUMEE : rd.texCoords1 et rd.tangents ne sont PAS transmis.
+		// Le visualiseur du navigateur n'a ni carte de lumiere ni carte de
+		// normales, donc aucun consommateur. Les tableaux sont d'ailleurs
+		// toujours VIDES ici -- leur seul producteur est l'import glTF, dont
+		// l'unite (vmeshes_io.cpp) est exclue de la liste de sources
+		// Emscripten. La ligne existe pour que l'ajout futur d'un import ne
+		// laisse pas la perte sans trace.
 
 		// COULEURS PAR SOMMET, mais seulement les VRAIES. Mesh::InitVertices
 		// remplit m_vertexColors de gris 0,5 (mesh.cpp:174) : tout maillage en
