@@ -19,11 +19,9 @@
 //
 // REPÈRE. Le modèle n'est JAMAIS déplacé : c'est le tapis qui vient à lui.
 //
-// Deux raisons de ne pas toucher au modèle. D'abord la caméra, qui orbite
-// l'origine du monde (cf. MyGLCanvas::FrameCamera) : un modèle décalé pour venir
-// se poser tournerait en orbite au lieu de tourner sur lui-même. Ensuite les
-// coordonnées elles-mêmes — l'import ne normalise pas par défaut, donc elles ont
-// un sens métrique, et les modifier ferait mentir toute cote lue ensuite.
+// La raison est dans les coordonnées elles-mêmes : l'import ne normalise pas par
+// défaut, donc elles ont un sens métrique, et les modifier ferait mentir toute
+// cote lue ensuite.
 //
 // Le placement se répartit donc ainsi :
 //   - EN X ET Y, une translation CUITE au chargement, qui met le centre du
@@ -77,17 +75,22 @@ public:
 	// de la scène visible, calculé par MyGLCanvas::UpdateCuttingMatLevel.
 	void Draw(bool light, float z);
 
-	// Rayon de la sphère centrée sur l'ORIGINE qui contient le tapis posé à la cote
-	// `z`. Statique et calculé sur les cotes du fichier, donc disponible SANS
-	// charger l'asset : la caméra en a besoin pour ses plans de coupe, et elle les
-	// règle avant que le tapis n'ait jamais été dessiné.
+	// Boîte englobante monde du tapis posé à la cote `z`. Statique et calculée sur
+	// les cotes du fichier, donc disponible SANS charger l'asset : la caméra en a
+	// besoin pour ses plans de coupe, et elle les règle avant que le tapis n'ait
+	// jamais été dessiné.
 	//
-	// Sans ce rayon, la plaque (450 mm de large) sortirait du plan far dès que
+	// Une BOÎTE et non un rayon : la caméra l'unit à la boîte de la scène visible
+	// avant d'en tirer une sphère, et un rayon seul ne dirait pas où le tapis se
+	// trouve. Il faudrait alors le supposer centré sur l'origine du monde, ce qui
+	// gonfle la sphère de profondeur de toute l'excentricité de la scène.
+	//
+	// Sans cette boîte, la plaque (450 mm de large) sortirait du plan far dès que
 	// le modèle observé est petit — ses coins disparaîtraient. C'est le même
-	// besoin que couvre l'`aggregateBbox.AddPoint(2, 2, 1)` d'ApplyNormalization
+	// besoin que couvrait l'`aggregateBbox.AddPoint(2, 2, 1)` d'ApplyNormalization
 	// pour la grille, mais réglé sur les plans de coupe seuls : élargir la boîte
 	// de cadrage éloignerait aussi la caméra, et le modèle serait vu de trop loin.
-	static float BoundingRadius(float z);
+	static void Bounds(float z, float outMin[3], float outMax[3]);
 
 private:
 	bool Load();

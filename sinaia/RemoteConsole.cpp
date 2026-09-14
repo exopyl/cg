@@ -13,8 +13,10 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <future>
+#include <iomanip>
 #include <iterator>
 #include <sstream>
 #include <string>
@@ -433,6 +435,38 @@ std::string cmdOpen(MyFrame* frame, const std::string& path)
     return "opened " + path + "\nOK\n";
 }
 
+// AJOUTER un fichier a la vue COURANTE, sans remplacer la scene ni renormaliser :
+// le pendant scripte du glisser-deposer depuis le panneau des fichiers.
+//
+// C'est l'instrument qui manquait : sans lui, une scene multi-fichiers -- le cas
+// d'usage meme du pivot par modele -- n'etait pas constructible depuis la console,
+// donc « la bonne cible est-elle choisie ? » n'etait pas mesurable. `open` ouvre
+// un ONGLET, il ne superpose pas.
+std::string cmdAppend(MyFrame* frame, const std::string& path)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    struct Res { int code; std::size_t count; };
+    const Res r = callOnMain([frame, &path]() -> Res {
+        MyGLCanvas* c = frame->GetActiveCanvas();
+        if (!c) return { -1, 0 };
+        const wxString wxPath = wxString::FromUTF8(path.c_str());
+        if (!wxFileExists(wxPath))
+            return { -2, 0 };
+        if (!c->AppendModel(wxPath))
+            return { -3, 0 };
+        return { 0, c->GetVModels() ? c->GetVModels()->GetNModels() : 0 };
+    });
+
+    if (r.code == -1) return "ERR no active view (open a model first)\n";
+    if (r.code == -2) return "ERR append failed (file not found): " + path + "\n";
+    if (r.code == -3) return "ERR append failed (unsupported or empty file): " + path + "\n";
+
+    std::ostringstream os;
+    os << "appended " << path << "\nmodels " << r.count << "\nOK\n";
+    return os.str();
+}
+
 std::string cmdScreenshot(MyFrame* frame, const std::string& path)
 {
     if (!frame) return "ERR frame unavailable\n";
@@ -483,12 +517,34 @@ std::string cmdCamera(MyFrame* frame, const std::string& args)
 
     if (sub.empty() || sub == "show")
     {
-        const float zoom = callOnMain([frame]() -> float {
+        MyGLCanvas::CameraInfo info;
+        const bool ok = callOnMain([frame, &info]() -> bool {
             MyGLCanvas* c = frame->GetActiveCanvas();
-            return c ? c->GetCameraZoom() : 0.f;
+            return c && c->GetCameraInfo(info);
         });
+        if (!ok) return "ERR no active view\n";
+
+        // Une valeur par ligne, « cle valeurs » : un script lit un champ sans
+        // decouper une phrase. L'ancienne forme (« camera zoom = Z ») n'avait
+        // aucun consommateur -- verifie sur les scripts du depot.
         std::ostringstream os;
-        os << "camera zoom = " << zoom << "\nOK\n";
+        os << "pivot "        << info.pivot[0] << " " << info.pivot[1] << " " << info.pivot[2] << "\n";
+        os << "eye "          << info.eye[0]   << " " << info.eye[1]   << " " << info.eye[2]   << "\n";
+        os << "distance "     << info.distance << "\n";
+        os << "zoom "         << -info.distance << "\n";
+        os << "near "         << info.zNear << "\n";
+        os << "far "          << info.zFar  << "\n";
+        // Les deux spheres : celle de PROFONDEUR (centre + rayon) fixe near/far,
+        // celle de CADRAGE (rayon seul, centree sur le pivot) borne le dolly.
+        // Le centre de profondeur n'est pas l'origine du monde : sans lui, un
+        // script ne peut pas verifier que les plans encadrent bien la scene.
+        os << "scene_center "   << info.sceneCenter[0] << " " << info.sceneCenter[1]
+                                << " " << info.sceneCenter[2] << "\n";
+        os << "scene_radius "   << info.sceneRadius << "\n";
+        os << "framing_radius " << info.framingRadius << "\n";
+        os << "fov_y_deg "      << info.fovYDeg << "\n";
+        os << "viewport "     << info.viewportWidth << " " << info.viewportHeight << "\n";
+        os << "OK\n";
         return os.str();
     }
 
@@ -537,7 +593,313 @@ std::string cmdCamera(MyFrame* frame, const std::string& args)
         return os.str();
     }
 
-    return "ERR usage: camera [show|reset|azel AZ EL|zoom Z]\n";
+    // Forme POSITIVE de `camera zoom`. Les deux coexistent : le signe de `zoom`
+    // est un contrat documente (negatif = plus loin), et le changer casserait
+    // tout appelant ecrit contre lui.
+    if (sub == "dist")
+    {
+        float d = 0.f;
+        iss >> d;
+        if (iss.fail() || !(d > 0.f))
+            return "ERR usage: camera dist D   (D > 0, world units; same as 'camera zoom -D')\n";
+
+        // La distance appliquee peut differer de celle demandee : set_zoom la
+        // borne contre le rayon de scene. C'est elle qu'on rapporte.
+        const float applied = callOnMain([frame, d]() -> float {
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            if (!c) return 0.f;
+            c->SetCameraZoom(-d);
+            return -c->GetCameraZoom();
+        });
+        if (applied <= 0.f) return "ERR no active view\n";
+        std::ostringstream os;
+        os << "camera dist " << applied << "\nOK\n";
+        return os.str();
+    }
+
+    // PIVOT : le centre d'orbite. `camera pivot X Y Z` le pose sans toucher a la
+    // distance -- choisir autour de quoi on tourne n'est pas choisir de combien
+    // on recule. `camera pivot auto` recadre sur la bbox agregee visible, ce que
+    // fait aussi `camera reset`, mais SANS remettre l'orientation a zero.
+    if (sub == "pivot")
+    {
+        std::string mode;
+        iss >> mode;
+
+        if (mode == "auto")
+        {
+            const bool ok = callOnMain([frame]() -> bool {
+                MyGLCanvas* c = frame->GetActiveCanvas();
+                return c && c->FrameVisibleScene();
+            });
+            if (!ok) return "ERR no active view, or no visible model to frame\n";
+            return "camera pivot auto\nOK\n";
+        }
+
+        // RECENTRER SUR UN MODELE, par son indice dans la scene -- le meme que
+        // `drop N` et que le panneau "Models". Pendant scripte de la touche F.
+        //
+        // Un indice hors bornes est une ERREUR explicite et non un repli sur la
+        // scene entiere : un script qui se trompe d'indice doit s'en apercevoir,
+        // pas recevoir un cadrage plausible.
+        if (mode == "model")
+        {
+            long   n     = -1;
+            bool   parsed = false;
+            {
+                std::string tok;
+                iss >> tok;
+                if (!tok.empty())
+                {
+                    char* end = nullptr;
+                    n = std::strtol(tok.c_str(), &end, 10);
+                    parsed = (end && *end == '\0');
+                }
+            }
+            if (!parsed)
+                return "ERR usage: camera pivot model N   (N = model index, as in 'drop N')\n";
+
+            struct Res { int code; std::size_t count; float r; };
+            const Res r = callOnMain([frame, n]() -> Res {
+                MyGLCanvas* c = frame->GetActiveCanvas();
+                if (!c || !c->GetVModels()) return { -1, 0, 0.f };
+                const std::size_t count = c->GetVModels()->GetNModels();
+                if (n < 0 || (std::size_t)n >= count) return { -2, count, 0.f };
+                if (!c->FrameModelByIndex((std::size_t)n)) return { -3, count, 0.f };
+                MyGLCanvas::CameraInfo info;
+                c->GetCameraInfo(info);
+                return { 0, count, info.framingRadius };
+            });
+
+            if (r.code == -1) return "ERR no model loaded\n";
+            if (r.code == -2)
+            {
+                std::ostringstream os;
+                os << "ERR model index " << n << " out of range (scene has " << r.count
+                   << (r.count == 1 ? " model" : " models") << ", valid 0.."
+                   << (r.count ? r.count - 1 : 0) << ")\n";
+                return os.str();
+            }
+            if (r.code == -3) return "ERR model has no geometry to frame (empty or degenerate bbox)\n";
+
+            std::ostringstream os;
+            os << "camera pivot model " << n << "\nframing_radius " << r.r << "\nOK\n";
+            return os.str();
+        }
+
+        // CADRER SUR LA BASE DE COUPE. Le tapis reste hors de la sphere de
+        // cadrage : on le vise, on ne l'y fait pas entrer (Q-2).
+        if (mode == "mat")
+        {
+            struct Res { int code; float r; };
+            const Res r = callOnMain([frame]() -> Res {
+                MyGLCanvas* c = frame->GetActiveCanvas();
+                if (!c) return { -1, 0.f };
+                if (!c->FrameCuttingMat()) return { -2, 0.f };
+                MyGLCanvas::CameraInfo info;
+                c->GetCameraInfo(info);
+                return { 0, info.framingRadius };
+            });
+            if (r.code == -1) return "ERR no active view\n";
+            if (r.code == -2) return "ERR cutting mat has no extent\n";
+            std::ostringstream os;
+            os << "camera pivot mat\nframing_radius " << r.r << "\nOK\n";
+            return os.str();
+        }
+
+        // POSER LE PIVOT SUR LA SURFACE SOUS UN PIXEL -- le pendant scripte de
+        // Alt + clic gauche.
+        //
+        // Elle appelle SetPivotFromPixel, le point d'entree du geste, et NON une
+        // replique de son calcul : une replique mesurerait sa propre exactitude,
+        // pas celle du geste. Le `t` et le point d'impact sont rendus parce que
+        // le critere les demande -- « le pivot est sur le rayon de
+        // `camera unproject PX PY`, a la distance t » ne se verifie pas sans eux.
+        if (mode == "pick")
+        {
+            float px = 0.f, py = 0.f;
+            iss >> px >> py;
+            if (iss.fail())
+                return "ERR usage: camera pivot pick PX PY   (viewport pixels, y downwards)\n";
+
+            // Le nom du modele touche est lu DANS le lambda, sur le thread
+            // principal : la scene peut etre remplacee entre deux commandes, et
+            // un Model* rapporte ici serait deja pendouillant.
+            struct Reply { MyGLCanvas::PivotPick pick; std::string hit; };
+            const Reply r = callOnMain([frame, px, py]() -> Reply {
+                Reply out;
+                MyGLCanvas* c = frame->GetActiveCanvas();
+                if (!c) return out;                    // status reste NoView
+                out.pick = c->SetPivotFromPixel(px, py);
+                if (out.pick.model) out.hit = out.pick.model->m_name;
+                return out;
+            });
+
+            std::ostringstream os;
+            switch (r.pick.status)
+            {
+            case MyGLCanvas::PivotPickStatus::NoView:
+                return "ERR no active view, or viewport is empty\n";
+            case MyGLCanvas::PivotPickStatus::OutOfViewport:
+                os << "ERR pixel " << px << " " << py << " is outside the viewport (0.."
+                   << r.pick.viewportWidth << " x 0.." << r.pick.viewportHeight << ")\n";
+                return os.str();
+            case MyGLCanvas::PivotPickStatus::NoHit:
+                os << "ERR no surface under pixel " << px << " " << py
+                   << " (pivot unchanged)\n";
+                return os.str();
+            default:
+                break;
+            }
+
+            os << "pixel " << std::fixed << std::setprecision(3) << px << " " << py << "\n";
+            os.unsetf(std::ios::floatfield);
+            os << std::setprecision(6);
+            os << "pivot " << r.pick.point[0] << " " << r.pick.point[1] << " "
+               << r.pick.point[2] << "\n";
+            os << "t " << r.pick.t << "\n";
+            os << "hit " << (r.hit.empty() ? std::string("unnamed") : r.hit) << "\n";
+            os << "viewport " << r.pick.viewportWidth << " " << r.pick.viewportHeight << "\n";
+            os << "OK\n";
+            return os.str();
+        }
+
+        // Relecture depuis le debut de l'argument : `mode` a deja consomme X.
+        std::istringstream coords(args);
+        std::string skip;
+        float x = 0.f, y = 0.f, z = 0.f;
+        coords >> skip >> x >> y >> z;
+        if (coords.fail())
+            return "ERR usage: camera pivot X Y Z | camera pivot auto | "
+                   "camera pivot model N | camera pivot mat | "
+                   "camera pivot pick PX PY\n";
+
+        const bool ok = callOnMain([frame, x, y, z]() -> bool {
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            return c && c->SetCameraPivot(x, y, z);
+        });
+        if (!ok) return "ERR no active view\n";
+        std::ostringstream os;
+        os << "camera pivot " << x << " " << y << " " << z << "\nOK\n";
+        return os.str();
+    }
+
+    // PANORAMIQUE scripte, en PIXELS ecran. Il emprunte le meme point d'entree
+    // que le glisser du bouton du milieu, donc le critere « le point sous le
+    // curseur y reste » porte sur la loi reelle et non sur une replique.
+    if (sub == "pan")
+    {
+        float dx = 0.f, dy = 0.f;
+        iss >> dx >> dy;
+        if (iss.fail())
+            return "ERR usage: camera pan DX DY   (screen pixels, y downwards)\n";
+
+        const bool ok = callOnMain([frame, dx, dy]() -> bool {
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            return c && c->PanCamera(dx, dy);
+        });
+        if (!ok) return "ERR no active view\n";
+        std::ostringstream os;
+        os << "camera pan " << dx << " " << dy << "\nOK\n";
+        return os.str();
+    }
+
+    // PROJECTION monde -> pixels : l'instrument des criteres exprimes en pixels.
+    // Origine en HAUT A GAUCHE, comme les evenements souris.
+    if (sub == "project")
+    {
+        float x = 0.f, y = 0.f, z = 0.f;
+        iss >> x >> y >> z;
+        if (iss.fail())
+            return "ERR usage: camera project X Y Z   (world point -> viewport pixels)\n";
+
+        const float world[3] = { x, y, z };
+        const MyGLCanvas::ProjectedPoint p = callOnMain([frame, &world]() -> MyGLCanvas::ProjectedPoint {
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            return c ? c->ProjectPoint(world) : MyGLCanvas::ProjectedPoint();
+        });
+
+        std::ostringstream os;
+        switch (p.status)
+        {
+        case MyGLCanvas::ProjectStatus::NoCamera:
+            return "ERR no active view\n";
+        case MyGLCanvas::ProjectStatus::EmptyViewport:
+            return "ERR viewport is empty (window minimised?)\n";
+        case MyGLCanvas::ProjectStatus::BehindEye:
+            os << "ERR point is behind the eye (clip w = " << p.eyeDepth << ")\n";
+            return os.str();
+        case MyGLCanvas::ProjectStatus::ClippedByNear:
+            os << "ERR point is in front of the near plane (eye depth = " << p.eyeDepth
+               << ", ndc z = " << p.ndcZ << ")\n";
+            return os.str();
+        default:
+            break;
+        }
+
+        os << "world " << x << " " << y << " " << z << "\n";
+        os << "pixel " << std::fixed << std::setprecision(3)
+           << p.pixelX << " " << p.pixelY << "\n";
+        os << "center " << 0.5f * p.viewportWidth << " " << 0.5f * p.viewportHeight << "\n";
+        os.unsetf(std::ios::floatfield);
+        os << std::setprecision(6);
+        os << "ndc " << p.ndcX << " " << p.ndcY << " " << p.ndcZ << "\n";
+        os << "depth " << p.eyeDepth << "\n";
+        os << "viewport " << p.viewportWidth << " " << p.viewportHeight << "\n";
+        if (p.status == MyGLCanvas::ProjectStatus::OkBeyondFar)
+            os << "note beyond the far plane (not drawn)\n";
+        os << "OK\n";
+        return os.str();
+    }
+
+    // DEPROJECTION pixels -> rayon monde : l'INVERSE de `camera project`, et le
+    // seul moyen d'exercer le picking sans souris.
+    //
+    // Deux criteres reposent dessus :
+    //   - l'aller-retour : le rayon rendu pour le pixel que `camera project`
+    //     donne d'un point monde doit repasser par ce point. Controle NUMERIQUE,
+    //     scriptable, qui ne depend d'aucun pixel de rendu ;
+    //   - la fraicheur : une orientation posee par `camera azel` ne declenche
+    //     qu'un Refresh(false), qui PLANIFIE la peinture sans l'executer. Un
+    //     rayon construit depuis l'etat GL lirait l'image precedente.
+    if (sub == "unproject")
+    {
+        float px = 0.f, py = 0.f;
+        iss >> px >> py;
+        if (iss.fail())
+            return "ERR usage: camera unproject PX PY   (viewport pixels, y downwards)\n";
+
+        // Le nom du modele touche est lu SUR LE THREAD PRINCIPAL, avec le rayon :
+        // la scene peut etre remplacee entre deux commandes, et un Model* rendu
+        // ici serait deja pendouillant.
+        struct Reply { MyGLCanvas::PickedRay ray; std::string hit; };
+        const Reply r = callOnMain([frame, px, py]() -> Reply {
+            Reply out;
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            if (!c) return out;
+            out.ray = c->UnprojectPixel(px, py);
+            if (out.ray.model) out.hit = out.ray.model->m_name;
+            return out;
+        });
+
+        if (!r.ray.valid)
+            return "ERR no active view, or viewport is empty\n";
+
+        std::ostringstream os;
+        os << "pixel " << std::fixed << std::setprecision(3) << px << " " << py << "\n";
+        os.unsetf(std::ios::floatfield);
+        os << std::setprecision(6);
+        os << "origin "    << r.ray.origin[0]    << " " << r.ray.origin[1]    << " " << r.ray.origin[2]    << "\n";
+        os << "direction " << r.ray.direction[0] << " " << r.ray.direction[1] << " " << r.ray.direction[2] << "\n";
+        os << "hit " << (r.hit.empty() ? std::string("none") : r.hit) << "\n";
+        os << "viewport " << r.ray.viewportWidth << " " << r.ray.viewportHeight << "\n";
+        os << "OK\n";
+        return os.str();
+    }
+
+    return "ERR usage: camera [show|reset|azel AZ EL|zoom Z|dist D|pivot X Y Z|pivot auto|"
+           "pivot model N|pivot mat|pivot pick PX PY|pan DX DY|project X Y Z|"
+           "unproject PX PY]\n";
 }
 
 std::string cmdShading(MyFrame* frame, const std::string& arg)
@@ -670,12 +1032,45 @@ std::string cmdHelp()
         "  material N M               material M of mesh N: type, colors\n"
         "  flip N                     flip winding of every face of mesh N\n"
         "  open PATH                  load a model file into a new tab\n"
+        "  append PATH                add a model file to the CURRENT view, world\n"
+        "                             coordinates kept (no normalisation) -- the\n"
+        "                             scripted form of the drag & drop\n"
         "  cuttingmat [on|off]        show / hide the cutting mat (no arg: toggle)\n"
         "  drop N                     move model N down onto the Z = 0 plane\n"
         "  normalize                  recentre + scale the active model to the target size\n"
         "  screenshot PATH            save current viewport to PATH as PNG\n"
-        "  camera [show|reset|azel AZ EL|zoom Z]\n"
-        "                             deterministic camera, for reference renders\n"
+        "  camera [show|reset|azel AZ EL|zoom Z|dist D|pivot X Y Z|pivot auto|\n"
+        "          pivot model N|pivot mat|pivot pick PX PY|pan DX DY|\n"
+        "          project X Y Z|unproject PX PY]\n"
+        "                             deterministic camera, for reference renders.\n"
+        "                             show: pivot, eye, distance, near/far, depth\n"
+        "                             sphere (centre + radius), framing radius,\n"
+        "                             fov and viewport -- one per line.\n"
+        "                             zoom Z: signed (negative = further away).\n"
+        "                             dist D: same, positive form (D > 0).\n"
+        "                             pivot X Y Z: orbit centre, distance unchanged.\n"
+        "                             pivot auto: reframe on the visible models.\n"
+        "                             pivot model N: reframe on THAT model alone --\n"
+        "                             pivot at its bbox centre, distance from ITS\n"
+        "                             half-diagonal (key F does the same on the\n"
+        "                             selected model). Out of range is an error.\n"
+        "                             pivot mat: reframe on the cutting mat.\n"
+        "                             pivot pick PX PY: put the pivot on the SURFACE\n"
+        "                             point under that pixel, DISTANCE UNCHANGED --\n"
+        "                             the scripted form of Alt + left click. Replies\n"
+        "                             with the pivot, the ray parameter t and the\n"
+        "                             model hit. A ray that hits nothing is an error\n"
+        "                             and leaves the pivot where it was.\n"
+        "                             pan DX DY: screen-pixel pan. It MOVES THE\n"
+        "                             PIVOT, so the point under the cursor stays\n"
+        "                             under it at any distance.\n"
+        "                             project X Y Z: world point -> viewport pixels,\n"
+        "                             ORIGIN TOP-LEFT, y downwards, as mouse events.\n"
+        "                             Errors out when the point is behind the eye or\n"
+        "                             in front of the near plane.\n"
+        "                             unproject PX PY: the INVERSE -- viewport pixel\n"
+        "                             -> world ray (origin + direction) and the Model\n"
+        "                             it hits, same convention, same camera source.\n"
         "  shading [materials|neutral|vertexcolors]\n"
         "                             shading mode (no arg: report current)\n"
         "  toggle WHAT [on|off]       fill|wireframe|points|warning|repere|grid|lighting\n"
@@ -792,6 +1187,14 @@ cgnet::Reply dispatch(const std::string& rawLine, MyFrame* frame)
         path = trim(path);
         if (path.empty()) return { "ERR usage: open PATH\n", false };
         return { cmdOpen(frame, path), false };
+    }
+    if (cmd == "append")
+    {
+        std::string path;
+        std::getline(iss, path);
+        path = trim(path);
+        if (path.empty()) return { "ERR usage: append PATH\n", false };
+        return { cmdAppend(frame, path), false };
     }
 
     return { "ERR unknown command: " + cmd + " (try 'help')\n", false };

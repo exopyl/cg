@@ -5,9 +5,6 @@
 
 namespace cgre2 {
 
-static constexpr float PI = 3.14159265f;
-static constexpr float PI_OVER_2 = PI / 2.0f;
-
 Trackball::Trackball() {
     // Initialize transform to identity (column-major: m_transform[col][row])
     for (int col = 0; col < 4; col++)
@@ -21,13 +18,30 @@ void Trackball::setDimensions(int width, int height) {
 }
 
 void Trackball::pointToVector(int x, int y, float v[3]) const {
-    // Project x, y onto a hemisphere centered within width, height
-    // Ported from cgre Ctrackball::tbPointToVector
-    v[0] = (2.0f * x - m_width) / static_cast<float>(m_width);
-    v[1] = (m_height - 2.0f * y) / static_cast<float>(m_height);
-    float d = std::sqrt(v[0] * v[0] + v[1] * v[1]);
-    v[2] = std::cos(PI_OVER_2 * ((d < 1.0f) ? d : 1.0f));
-    float a = 1.0f / std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    // Map the cursor to a point on the virtual trackball (Bell/Shoemake): a
+    // sphere near the centre, smoothly continued by a hyperbolic sheet toward
+    // the edges. Both the value and its first derivative are continuous at the
+    // sphere/hyperbola seam, so the rotation speed stays uniform across the
+    // whole window and no region is a dead zone.
+    //
+    // Both axes are normalised by the *same* dimension, the smaller one, so the
+    // unit disc is inscribed in the window and stays circular: a drag of N
+    // pixels yields the same rotation whatever its direction. The domain
+    // therefore exceeds ±1 along the long axis, which the hyperbolic sheet
+    // handles.
+    const float side = static_cast<float>(m_width < m_height ? m_width : m_height);
+    v[0] = (2.0f * x - m_width) / side;
+    v[1] = (m_height - 2.0f * y) / side;
+
+    const float r = 1.0f;  // trackball radius, in the normalised plane
+    const float d2 = v[0] * v[0] + v[1] * v[1];
+    if (d2 <= r * r * 0.5f) {
+        v[2] = std::sqrt(r * r - d2);  // inside the sphere: project onto it
+    } else {
+        v[2] = (r * r * 0.5f) / std::sqrt(d2);  // outside: hyperbolic sheet
+    }
+
+    const float a = 1.0f / std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
     v[0] *= a;
     v[1] *= a;
     v[2] *= a;
@@ -62,8 +76,14 @@ void Trackball::onMouseMove(int x, int y) {
     float dy = currentPosition[1] - m_lastPosition[1];
     float dz = currentPosition[2] - m_lastPosition[2];
 
-    // Angle proportional to the length of mouse movement
-    float angleDeg = 180.0f * std::sqrt(dx * dx + dy * dy + dz * dz);
+    // The rotation angle is the geometric angle between the two trackball
+    // vectors. Both are unit vectors, so their chord c gives the angle as
+    // 2*asin(c/2) radians.
+    float halfChord = 0.5f * std::sqrt(dx * dx + dy * dy + dz * dz);
+    if (halfChord > 1.0f) {
+        halfChord = 1.0f;  // rounding can push the chord past 2
+    }
+    const float angleRad = 2.0f * std::asin(halfChord);
 
     // Axis of rotation = cross product (last × current), same as cgre original
     float axis[3];
@@ -78,7 +98,6 @@ void Trackball::onMouseMove(int x, int y) {
 
     // Build rotation matrix using Rodrigues' formula
     // R = I*cos(θ) + (1-cos(θ))*(axis⊗axis) + sin(θ)*[axis]×
-    float angleRad = angleDeg * PI / 180.0f;
     float c = std::cos(angleRad);
     float s = std::sin(angleRad);
 

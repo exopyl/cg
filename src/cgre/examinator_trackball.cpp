@@ -3,35 +3,42 @@
 
 #include "examinator_trackball.h"
 
+// Dolly rates, expressed as the exponent applied to the eye distance.
+// Right-drag over the full window height multiplies the distance by e^2 (7.4x);
+// one wheel notch by e^0.1 (1.1x), matching the usual 10%-per-notch feel.
+static const float kDragDollyRate  = 2.0f;
+static const float kWheelDollyRate = 0.1f;
+
+// Eye distance bounds used when no scene radius is known.
+static const float kFallbackMinDistance = 0.01f;
+static const float kFallbackMaxDistance = 1000.f;
+
+static const GLfloat kIdentity4x4[16] = {
+	1.f, 0.f, 0.f, 0.f,
+	0.f, 1.f, 0.f, 0.f,
+	0.f, 0.f, 1.f, 0.f,
+	0.f, 0.f, 0.f, 1.f
+};
+
 Ctrackball::Ctrackball ()
 {
 	gl_window_width = 0;
 	gl_window_height = 0;
-	zoom = -5.f;
-	xtrans = 0.f;
-	ytrans = 0.f;
+	m_orbit.SetDistance (5.f);
 
-  for (int i=0; i<3; i++)
-  {
-	tb_lastposition[i] = 0.;
-	tb_axis[i] = 0.;
-  }
-  tb_angle =  0.f;
-  for (int i=0; i<4; i++)
-    for (int j=0; j<4; j++)
-	    tb_transform[i][j] = (i == j)? 1.0 : 0.0;
+	for (int i=0; i<3; i++)
+		tb_lastposition[i] = 0.;
 
 	tb_state = RELEASED;
 	tb_button = 0;
-	m_fZoomPrecision = 1.0;
-	xtrans = 0.;
-	ytrans = 0.;
 	lastX = 0;
 	lastY = 0;
 
 	m_zNear = .01f;
 	m_zFar  = 10.f;
-	m_sceneRadius = 0.f;
+	m_depthCenter[0] = m_depthCenter[1] = m_depthCenter[2] = 0.f;
+	m_depthRadius   = 0.f;
+	m_framingRadius = 0.f;
 }
 
 void
@@ -41,11 +48,15 @@ Ctrackball::tbPointToVector(int x, int y, float v[3])
   // sphere near the centre, smoothly continued by a hyperbolic sheet toward the
   // edges. Both the value AND its first derivative are continuous at the
   // sphere/hyperbola seam, so the rotation speed stays uniform across the whole
-  // window. (The previous cos() mapping had zero slope at the centre and a peak
-  // near the edge, so a slow 1-pixel move near a border produced an outsized
-  // rotation jump — the "saccadé" reported when dragging near the edges.)
-  v[0] = (2.0 * x - gl_window_width)  / gl_window_width;
-  v[1] = (gl_window_height - 2.0 * y) / gl_window_height;
+  // window.
+  //
+  // Both axes are normalised by the *same* dimension, the smaller one, so the
+  // unit disc is inscribed in the window and stays circular: a drag of N pixels
+  // yields the same rotation whatever its direction. The domain therefore
+  // exceeds +-1 along the long axis, which the hyperbolic sheet handles.
+  const double side = (gl_window_width < gl_window_height)? gl_window_width : gl_window_height;
+  v[0] = (2.0 * x - gl_window_width)  / side;
+  v[1] = (gl_window_height - 2.0 * y) / side;
 
   const double r  = 1.0;             // trackball radius (in the normalised plane)
   const double d2 = v[0] * v[0] + v[1] * v[1];
@@ -72,7 +83,11 @@ Ctrackball::mouse_press (int button, int state, int x, int y)
 			case LEFT_BUTTON:
 				tb_state  = PRESSED;
 				tb_button = LEFT_BUTTON;
-				tbPointToVector(x, y, tb_lastposition);
+				// Without valid dimensions tbPointToVector would divide by zero
+				// and seed tb_lastposition with NaN, which the accumulated
+				// rotation then keeps forever.
+				if (has_valid_dimensions ())
+					tbPointToVector(x, y, tb_lastposition);
 				break;
 
 			case RIGHT_BUTTON:
@@ -81,7 +96,7 @@ Ctrackball::mouse_press (int button, int state, int x, int y)
 				lastX = x; lastY = y;
 				break;
 
-			case MIDDLE_BUTTON:			
+			case MIDDLE_BUTTON:
 				tb_state  = PRESSED;
 				tb_button = MIDDLE_BUTTON;
 				lastX = x; lastY = y;
@@ -96,88 +111,112 @@ void
 Ctrackball::mouse_move (int x, int y)
 {
   GLfloat current_position[3], dx, dy, dz;
+  if (!has_valid_dimensions ())
+    return;
   if (tb_state == PRESSED)
     {
       switch (tb_button)
 	{
 	case  LEFT_BUTTON:
 	  tbPointToVector(x, y, current_position);
-	  
-	  // calculate the angle to rotate by (directly proportional
-	  // to the length of the mouse movement)
+
+	  // The rotation angle is the geometric angle between the two trackball
+	  // vectors. Both are unit vectors, so their chord c gives the angle as
+	  // 2*asin(c/2) radians.
 	  dx = (current_position[0] - tb_lastposition[0]);
 	  dy = (current_position[1] - tb_lastposition[1]);
 	  dz = (current_position[2] - tb_lastposition[2]);
-	  tb_angle = 180.0 * sqrt(dx * dx + dy * dy + dz * dz);
-	  
-	  // calculate the axis of rotation (cross product)
-	  tb_axis[0] = tb_lastposition[1] * current_position[2] -
-	    tb_lastposition[2] * current_position[1];
-	  tb_axis[1] = tb_lastposition[2] * current_position[0] -
-	    tb_lastposition[0] * current_position[2];
-	  tb_axis[2] = tb_lastposition[0] * current_position[1] -
-	    tb_lastposition[1] * current_position[0];
-	  
+	  {
+	    double half_chord = 0.5 * sqrt(dx * dx + dy * dy + dz * dz);
+	    if (half_chord > 1.0)   // rounding can push the chord past 2
+	      half_chord = 1.0;
+	    const double angleRad = 2.0 * asin (half_chord);
+
+	    // axis of rotation (cross product), in screen space
+	    const GLfloat axis[3] = {
+	      tb_lastposition[1] * current_position[2] -
+	        tb_lastposition[2] * current_position[1],
+	      tb_lastposition[2] * current_position[0] -
+	        tb_lastposition[0] * current_position[2],
+	      tb_lastposition[0] * current_position[1] -
+	        tb_lastposition[1] * current_position[0]
+	    };
+
+	    // L'accumulation se fait en Rodrigues sur CPU. Elle garde contre l'axe
+	    // degenere et reorthonormalise la rotation a chaque pas, ce que
+	    // l'aller-retour par la pile de matrices GL ne faisait ni l'un ni
+	    // l'autre -- et elle s'execute sans contexte GL, donc elle se teste.
+	    m_orbit.Orbit (axis, (float)angleRad);
+	  }
+
 	  // reset for next time
 	  tb_lastposition[0] = current_position[0];
 	  tb_lastposition[1] = current_position[1];
 	  tb_lastposition[2] = current_position[2];
-	  
-	  glPushMatrix();
-	  glLoadIdentity();
-	  glRotatef(tb_angle, tb_axis[0], tb_axis[1], tb_axis[2]);
-	  glMultMatrixf((GLfloat *)tb_transform);
-	  glGetFloatv(GL_MODELVIEW_MATRIX, (GLfloat *)tb_transform);
-	  glPopMatrix();
 	  break;
 
 	case MIDDLE_BUTTON:
-	  xtrans += 1.*(x-lastX)/(double)gl_window_width*1;
-	  ytrans += -1.*(y-lastY)/(double)gl_window_height*1;
+	  pan_screen ((float)(x - lastX), (float)(y - lastY));
 	  lastX = x; lastY = y;
 	  break;
 
 	case RIGHT_BUTTON:
-	  zoom += (m_fZoomPrecision)*(y-lastY)/(double)gl_window_height*5;
+	  // Dolly is multiplicative: the same drag always divides the eye distance
+	  // by the same factor, so the step stays usable at any scale. Dragging
+	  // down moves the eye closer.
+	  set_distance (m_orbit.GetDistance () * expf (-kDragDollyRate * (float)(y - lastY) / (float)gl_window_height));
 	  lastX = x; lastY = y;
 	  break;
 	}
     }
 }
 
-void Ctrackball::key_pressed  (unsigned char key)
+void
+Ctrackball::get_clip_planes (float *zNear, float *zFar) const
 {
+	if (!zNear || !zFar)
+		return;
 
+	// Valeurs de repli tant qu'aucune sphere de profondeur n'est publiee.
+	*zNear = m_zNear;
+	*zFar  = m_zFar;
+
+	// La sphere connue, les plans l'encadrent depuis l'OEIL : ||e - s||, et non
+	// la distance d'oeil. Les deux ne coincident que si le pivot est au centre
+	// de la scene, ce qui n'est plus vrai des que le pivot suit un modele
+	// excentre.
+	if (m_depthRadius > 0.f)
+		m_orbit.ClipPlanes (m_depthCenter, m_depthRadius, zNear, zFar);
 }
 
-void Ctrackball::set_camera (void)
+float
+Ctrackball::aspect_ratio () const
 {
-	// adjust perspective
-	float fovyInDegrees = 45.f;
-	float aspectRatio = (float)gl_window_width / (float)gl_window_height;
-	float zNear = m_zNear;
-	float zFar = m_zFar;
+	// A zero height would turn the whole projection matrix into NaN, and the
+	// canvas does report 0 while minimised.
+	const float safeWidth  = (gl_window_width  > 0)? (float)gl_window_width  : 1.f;
+	const float safeHeight = (gl_window_height > 0)? (float)gl_window_height : 1.f;
+	return safeWidth / safeHeight;
+}
 
-	// When a scene radius is known, bracket the model around the current eye
-	// distance (|zoom|) so zooming never pushes it through the clip planes.
-	if (m_sceneRadius > 0.f)
-	{
-		const float dist = fabsf(zoom);
-		zFar  = dist + m_sceneRadius * 1.2f;
-		zNear = dist - m_sceneRadius * 1.2f;
-		const float minNear = zFar * 0.001f;   // keep far/near ratio sane
-		if (zNear < minNear)
-			zNear = minNear;
-	}
+void
+Ctrackball::get_projection_matrix (float m[16]) const
+{
+	const float aspectRatio = aspect_ratio ();
+	float zNear, zFar;
+	get_clip_planes (&zNear, &zFar);
 
-	float ymax = zNear * tanf(fovyInDegrees * 3.14159 / 360.0);
+	// Le demi-champ vient de la camera, en radians. Le convertir en degres pour
+	// le reconvertir ici ajouterait un arrondi que get_pick_ray, qui lit la
+	// meme grandeur, ne ferait pas : les deux operations cesseraient d'etre
+	// inverses l'une de l'autre.
+	float ymax = zNear * tanf (0.5f * m_orbit.GetFovY ());
 	// ymin = -ymax;
 	// xmin = -ymax * aspectRatio;
 	float xmax = ymax * aspectRatio;
 
 	// frustrum
-	float matrix[16];
-	//glhFrustumf2(matrix, -xmax, xmax, -ymax, ymax, zNear, zFar);
+	//glhFrustumf2(m, -xmax, xmax, -ymax, ymax, zNear, zFar);
 	float left = -xmax;
 	float right = xmax;
 	float bottom = -ymax;
@@ -187,216 +226,166 @@ void Ctrackball::set_camera (void)
 	temp2 = right - left;
 	temp3 = top - bottom;
 	temp4 = zFar - zNear;
-	matrix[0] = temp / temp2;
-	matrix[1] = 0.f;
-	matrix[2] = 0.f;
-	matrix[3] = 0.f;
-	matrix[4] = 0.f;
-	matrix[5] = temp / temp3;
-	matrix[6] = 0.f;
-	matrix[7] = 0.f;
-	matrix[8] = (right + left) / temp2;
-	matrix[9] = (top + bottom) / temp3;
-	matrix[10] = (-zFar - zNear) / temp4;
-	matrix[11] = -1.f;
-	matrix[12] = 0.f;
-	matrix[13] = 0.f;
-	matrix[14] = (-temp * zFar) / temp4;
-	matrix[15] = 0.f;
+	m[0] = temp / temp2;
+	m[1] = 0.f;
+	m[2] = 0.f;
+	m[3] = 0.f;
+	m[4] = 0.f;
+	m[5] = temp / temp3;
+	m[6] = 0.f;
+	m[7] = 0.f;
+	m[8] = (right + left) / temp2;
+	m[9] = (top + bottom) / temp3;
+	m[10] = (-zFar - zNear) / temp4;
+	m[11] = -1.f;
+	m[12] = 0.f;
+	m[13] = 0.f;
+	m[14] = (-temp * zFar) / temp4;
+	m[15] = 0.f;
+}
 
+void
+Ctrackball::get_modelview_matrix (float m[16]) const
+{
+	// La matrice de vue seule : V = T(0,0,-d).R.T(-c). Le panoramique n'ajoute
+	// plus rien ici, il est entre dans le pivot -- c'est ce qui fait que la
+	// rotation qui suit tourne bien autour de ce que l'utilisateur vient
+	// d'amener au centre.
+	const TMatrix4<float> view = m_orbit.GetViewMatrix ();
+	for (int col=0; col<4; col++)
+		for (int row=0; row<4; row++)
+			m[4*col+row] = view.at (row, col);
+}
+
+void
+Ctrackball::get_pick_ray (float ndcX, float ndcY,
+                          float origin[3], float direction[3]) const
+{
+	m_orbit.RayFromNdc (ndcX, ndcY, aspect_ratio (), origin, direction);
+}
+
+void Ctrackball::set_camera (void)
+{
+	float projection[16];
+	get_projection_matrix (projection);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glMultMatrixf((GLfloat*)matrix);
+	glMultMatrixf((GLfloat*)projection);
 
-	// modelview
+	float modelview[16];
+	get_modelview_matrix (modelview);
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
-	glTranslatef(xtrans, ytrans, zoom);
-	glMultMatrixf((GLfloat*)tb_transform);
+	glMultMatrixf((GLfloat*)modelview);
+}
+
+// Bounding the eye distance keeps the eye from reaching the pivot or crossing
+// it, which would show the model mirrored from the far side.
+//
+// Les bornes se calibrent sur le rayon de CADRAGE -- l'echelle du sujet
+// observe -- et non sur celui de profondeur. Sur celui de profondeur, un decor
+// lointain ou un tapis de 450 mm imposerait son echelle au zoom : un cube de
+// 0,1 unite pose a 500 mm demande d = 0,27 et se verrait refuser tout en deca
+// de 5,0, soit 2,4 % de la hauteur d'image au lieu de 54,5 %.
+void
+Ctrackball::set_distance (float distance)
+{
+  float minDistance = kFallbackMinDistance;
+  float maxDistance = kFallbackMaxDistance;
+  if (m_framingRadius > 0.f)
+    {
+      minDistance = m_framingRadius * 0.01f;
+      maxDistance = m_framingRadius * 100.f;
+    }
+
+  if (!(distance > minDistance))   // also catches NaN
+    distance = minDistance;
+  else if (distance > maxDistance)
+    distance = maxDistance;
+
+  m_orbit.SetDistance (distance);
 }
 
 void
-Ctrackball::set_camera_translate (void)
+Ctrackball::zoom_step (float steps)
 {
-  glTranslatef (xtrans, ytrans, zoom);
-  //glMultMatrixf ((GLfloat *)tb_transform);
-}
-
-void
-Ctrackball::set_camera_rotate (void)
-{
-  //glTranslatef (xtrans, ytrans, zoom);
-  glMultMatrixf ((GLfloat *)tb_transform);
-}
-
-void
-Ctrackball::set_inverse_camera (void)
-{
-  //glTranslatef (0.0, 0.0, -zoom);
-  float m[16];
-  get_inverse_matrix (m);
-  glMultMatrixf ((GLfloat *)m);
-}
-
-// misc
-void
-Ctrackball::get_vector (float v[3])
-{
-  v[0] = tb_transform[0][2];
-  v[1] = tb_transform[1][2];
-  v[2] = tb_transform[2][2];
+  // A positive step moves the eye closer, like a wheel rolled forward.
+  set_distance (m_orbit.GetDistance () * expf (-kWheelDollyRate * steps));
 }
 
 void
 Ctrackball::set_zoom (float _zoom)
 {
-  zoom = _zoom;
+  set_distance (fabsf (_zoom));
 }
 
 void
-Ctrackball::set_zoom_precision (float fZoomPrecision)
+Ctrackball::pan_screen (float dx, float dy)
 {
-	m_fZoomPrecision = fZoomPrecision;
+  if (!has_valid_dimensions ())
+    return;
+  m_orbit.PanScreen (dx, dy, gl_window_height);
 }
 
 void Ctrackball::ResetTransformations()
 {
-    for (int i=0; i<4; i++)
-        for (int j=0; j<4; j++)
-            tb_transform[i][j] = (i == j)? 1.0 : 0.0;
-    xtrans = 0.f;
-    ytrans = 0.f;
+    m_orbit.SetRotation (kIdentity4x4);
 }
 
 void
-Ctrackball::set_scene_radius (float radius)
+Ctrackball::set_pivot (float x, float y, float z)
 {
-	m_sceneRadius = radius;
+	m_orbit.SetPivot (x, y, z);
+}
+
+void
+Ctrackball::set_scene_spheres (const float depthCenter[3], float depthRadius,
+                               float framingRadius)
+{
+	if (depthCenter)
+		for (int i=0; i<3; i++)
+			m_depthCenter[i] = depthCenter[i];
+	m_depthRadius   = depthRadius;
+	m_framingRadius = framingRadius;
+}
+
+void
+Ctrackball::get_depth_center (float center[3]) const
+{
+	if (!center)
+		return;
+	for (int i=0; i<3; i++)
+		center[i] = m_depthCenter[i];
 }
 
 void
 Ctrackball::get_matrix (GLfloat m[4][4])
 {
-	for (int i=0; i<4; i++)
-		for (int j=0; j<4; j++)
-			m[i][j] = tb_transform[i][j];
+	const TMatrix4<float>& r = m_orbit.GetRotation ();
+	for (int col=0; col<4; col++)
+		for (int row=0; row<4; row++)
+			m[col][row] = r.at (row, col);
 }
 
 void
 Ctrackball::get_matrix (GLfloat *m)
 {
-	for (int i=0; i<4; i++)
-		for (int j=0; j<4; j++)
-			m[4*i+j] = tb_transform[i][j];
+	const TMatrix4<float>& r = m_orbit.GetRotation ();
+	for (int col=0; col<4; col++)
+		for (int row=0; row<4; row++)
+			m[4*col+row] = r.at (row, col);
 }
 
-int
-Ctrackball::get_inverse_matrix (GLfloat *m)
+void
+Ctrackball::set_rotation (const float m[16])
 {
-  int i,j;
-  float tmp[12]; // temp array for pairs
-  float src[16]; // array of transpose source matrix
-  float dst[16];
-  float det;     // determinant
-  
-  float tmp2[16];
-	for (int i=0; i<4; i++)
-		for (int j=0; j<4; j++)
-			tmp2[4*i+j] = tb_transform[i][j];
-
-  // transpose matrix
-  for (i = 0; i < 4; i++)
-  {
-    src[i]      = tmp2[i*4];
-    src[i + 4]  = tmp2[i*4 + 1];
-    src[i + 8]  = tmp2[i*4 + 2];
-    src[i + 12] = tmp2[i*4 + 3];
-  }
-  // calculate pairs for first 8 elements (cofactors)
-  tmp[0]  = src[10] * src[15];
-  tmp[1]  = src[11] * src[14];
-  tmp[2]  = src[9]  * src[15];
-  tmp[3]  = src[11] * src[13];
-  tmp[4]  = src[9]  * src[14];
-  tmp[5]  = src[10] * src[13];
-  tmp[6]  = src[8]  * src[15];
-  tmp[7]  = src[11] * src[12];
-  tmp[8]  = src[8]  * src[14];
-  tmp[9]  = src[10] * src[12];
-  tmp[10] = src[8]  * src[13];
-  tmp[11] = src[9]  * src[12];
-  // calculate first 8 elements (cofactors)
-  dst[0] =  tmp[0]*src[5] + tmp[3]*src[6] + tmp[4]*src[7];
-  dst[0] -= tmp[1]*src[5] + tmp[2]*src[6] + tmp[5]*src[7];
-  dst[1] =  tmp[1]*src[4] + tmp[6]*src[6] + tmp[9]*src[7];
-  dst[1] -= tmp[0]*src[4] + tmp[7]*src[6] + tmp[8]*src[7];
-  dst[2] =  tmp[2]*src[4] + tmp[7]*src[5] + tmp[10]*src[7];
-  dst[2] -= tmp[3]*src[4] + tmp[6]*src[5] + tmp[11]*src[7];
-  dst[3] =  tmp[5]*src[4] + tmp[8]*src[5] + tmp[11]*src[6];
-  dst[3] -= tmp[4]*src[4] + tmp[9]*src[5] + tmp[10]*src[6];
-  dst[4] =  tmp[1]*src[1] + tmp[2]*src[2] + tmp[5]*src[3];
-  dst[4] -= tmp[0]*src[1] + tmp[3]*src[2] + tmp[4]*src[3];
-  dst[5] =  tmp[0]*src[0] + tmp[7]*src[2] + tmp[8]*src[3];
-  dst[5] -= tmp[1]*src[0] + tmp[6]*src[2] + tmp[9]*src[3];
-  dst[6] =  tmp[3]*src[0] + tmp[6]*src[1] + tmp[11]*src[3];
-  dst[6] -= tmp[2]*src[0] + tmp[7]*src[1] + tmp[10]*src[3];
-  dst[7] =  tmp[4]*src[0] + tmp[9]*src[1] + tmp[10]*src[2];
-  dst[7] -= tmp[5]*src[0] + tmp[8]*src[1] + tmp[11]*src[2];
-  // calculate pairs for second 8 elements (cofactors)
-  tmp[0] = src[2]*src[7];
-  tmp[1] = src[3]*src[6];
-  tmp[2] = src[1]*src[7];
-  tmp[3] = src[3]*src[5];
-  tmp[4] = src[1]*src[6];
-  tmp[5] = src[2]*src[5];
-  tmp[6] = src[0]*src[7];
-  tmp[7] = src[3]*src[4];
-  tmp[8] = src[0]*src[6];
-  tmp[9] = src[2]*src[4];
-  tmp[10] = src[0]*src[5];
-  tmp[11] = src[1]*src[4];
-  // calculate second 8 elements (cofactors)
-  dst[8] = tmp[0]*src[13] + tmp[3]*src[14] + tmp[4]*src[15];
-  dst[8] -= tmp[1]*src[13] + tmp[2]*src[14] + tmp[5]*src[15];
-  dst[9] = tmp[1]*src[12] + tmp[6]*src[14] + tmp[9]*src[15];
-  dst[9] -= tmp[0]*src[12] + tmp[7]*src[14] + tmp[8]*src[15];
-  dst[10] = tmp[2]*src[12] + tmp[7]*src[13] + tmp[10]*src[15];
-  dst[10]-= tmp[3]*src[12] + tmp[6]*src[13] + tmp[11]*src[15];
-  dst[11] = tmp[5]*src[12] + tmp[8]*src[13] + tmp[11]*src[14];
-  dst[11]-= tmp[4]*src[12] + tmp[9]*src[13] + tmp[10]*src[14];
-  dst[12] = tmp[2]*src[10] + tmp[5]*src[11] + tmp[1]*src[9];
-  dst[12]-= tmp[4]*src[11] + tmp[0]*src[9] + tmp[3]*src[10];
-  dst[13] = tmp[8]*src[11] + tmp[0]*src[8] + tmp[7]*src[10];
-  dst[13]-= tmp[6]*src[10] + tmp[9]*src[11] + tmp[1]*src[8];
-  dst[14] = tmp[6]*src[9] + tmp[11]*src[11] + tmp[3]*src[8];
-  dst[14]-= tmp[10]*src[11] + tmp[2]*src[8] + tmp[7]*src[9];
-  dst[15] = tmp[10]*src[10] + tmp[4]*src[8] + tmp[9]*src[9];
-  dst[15]-= tmp[8]*src[9] + tmp[11]*src[10] + tmp[5]*src[8];
-  // calculate determinant
-  det=src[0]*dst[0]+src[1]*dst[1]+src[2]*dst[2]+src[3]*dst[3];
-  if (det == 0.0)
-  {
-	  return 0;
-  }
-  // calculate matrix inverse
-  det = 1/det;
-  for (j = 0; j < 16; j++)
-    m[j] = dst[j] * det;
-
-  return 1;
+	m_orbit.SetRotation (m);
 }
 
 void Ctrackball::getCameraPosition (float *x, float *y, float *z)
 {
-	glPushMatrix ();
-	glLoadIdentity ();
-	glTranslatef (0.0, 0.0, zoom);
-	glMultMatrixf ((GLfloat *)tb_transform);
-	glPopMatrix ();
+	const TVector3<float> eye = m_orbit.GetEyePosition ();
+	if (x) *x = eye.x;
+	if (y) *y = eye.y;
+	if (z) *z = eye.z;
 }
-
-void Ctrackball::getCameraDirection (float *x, float *y, float *z)
-{
-}
-
-

@@ -73,23 +73,23 @@ wxString ResolveMatPath()
 
 } // namespace
 
-float CuttingMat::BoundingRadius(float z)
+void CuttingMat::Bounds(float z, float outMin[3], float outMax[3])
 {
 	// Repere local apres translation : x dans [-225, 225], y dans [-145, 155],
-	// z dans [-3, 0] ; pose a la cote `z`, l'etendue verticale devient
-	// [z - 3, z], dont le plus grand ecart a l'origine est |z| + 3.
-	//
-	// Pas de std::max ici : gl_wrapper tire windows.h, dont la macro `max` casse
-	// l'appel qualifie. La lambda dit d'ailleurs mieux ce qu'on cherche -- la
-	// plus grande distance a l'origine sur un axe, quel que soit le signe.
-	const auto extent = [](float a, float b) {
-		const float fa = std::fabs(a), fb = std::fabs(b);
-		return (fa > fb) ? fa : fb;
-	};
-	const float ax = extent(kOffsetX, kOffsetX + kPlateLength);
-	const float ay = extent(kOffsetY, kOffsetY + kPlateWidth);
-	const float az = std::fabs(z) + kPlateThickness;
-	return std::sqrt(ax * ax + ay * ay + az * az);
+	// z dans [-3, 0] ; pose a la cote `z`, l'etendue verticale devient [z-3, z]
+	// -- la face utile est en haut, l'epaisseur descend.
+	if (outMin)
+	{
+		outMin[0] = kOffsetX;
+		outMin[1] = kOffsetY;
+		outMin[2] = z - kPlateThickness;
+	}
+	if (outMax)
+	{
+		outMax[0] = kOffsetX + kPlateLength;
+		outMax[1] = kOffsetY + kPlateWidth;
+		outMax[2] = z;
+	}
 }
 
 CuttingMat::~CuttingMat()

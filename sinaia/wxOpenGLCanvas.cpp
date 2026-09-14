@@ -145,7 +145,6 @@ MyGLCanvas::MyGLCanvas(wxWindow *parent, wxTextCtrl* pCtrlLog, int *args)
 
 	m_pTrackball = new Ctrackball ();
 	m_pTrackball->set_zoom (-5.f);
-	m_pTrackball->set_zoom_precision (2.f);
 
 	m_pMesh = nullptr;
 
@@ -359,12 +358,8 @@ void MyGLCanvas::ApplyNormalization(bool normalize)
 		aggregateBbox.AddBoundingBox(mesh->bbox());
 	}
 
-	// Add grid to bounding box to ensure it's not clipped
-	aggregateBbox.AddPoint(2.f, 2.f, 1.f);
-	aggregateBbox.AddPoint(-2.f, -2.f, -1.f);
-
 	// Frame the camera on the resulting model.
-	m_pTrackball->ResetTransformations(); // Reset camera rotation/translation
+	m_pTrackball->ResetTransformations(); // orientation neutre ; le cadrage suit
 	FrameCamera(aggregateBbox);
 
 	RefreshGeometryState();
@@ -422,8 +417,9 @@ void MyGLCanvas::RefreshGeometryState()
 // ---------------------------------------------------------------------------
 //  Reglages deterministes de la camera (harnais de captures)
 // ---------------------------------------------------------------------------
-// tb_transform est consomme par glMultMatrixf, donc stocke en COLONNE-MAJEUR :
-// tb_transform[colonne][ligne]. On y ecrit R = Rx(elevation) * Ry(azimut).
+// L'orientation est POSEE, pas accumulee : c'est ce qui rend un point de vue
+// reproductible d'une execution a l'autre. Elle est transmise en
+// COLONNE-MAJEUR, m[4*colonne + ligne], et vaut R = Rx(elevation) * Ry(azimut).
 void MyGLCanvas::SetCameraOrientation (float azimuthDeg, float elevationDeg)
 {
 	if (!m_pTrackball) return;
@@ -434,15 +430,16 @@ void MyGLCanvas::SetCameraOrientation (float azimuthDeg, float elevationDeg)
 	const float ce = std::cos (elevationDeg * kDegToRad);
 	const float se = std::sin (elevationDeg * kDegToRad);
 
-	GLfloat (&m)[4][4] = m_pTrackball->tb_transform;
+	const GLfloat m[16] = {
+		 ca,      se * sa, -ce * sa, 0.f,   // colonne 0
+		0.f,      ce,       se,      0.f,   // colonne 1
+		 sa,     -se * ca,  ce * ca, 0.f,   // colonne 2
+		0.f,     0.f,      0.f,      1.f    // colonne 3
+	};
+	m_pTrackball->set_rotation (m);
 
-	m[0][0] =  ca;      m[1][0] = 0.f;  m[2][0] =  sa;      m[3][0] = 0.f;
-	m[0][1] =  se * sa; m[1][1] = ce;   m[2][1] = -se * ca; m[3][1] = 0.f;
-	m[0][2] = -ce * sa; m[1][2] = se;   m[2][2] =  ce * ca; m[3][2] = 0.f;
-	m[0][3] = 0.f;      m[1][3] = 0.f;  m[2][3] = 0.f;      m[3][3] = 1.f;
-
-	// La rotation seule : le panoramique reste ou l'utilisateur l'a laisse,
-	// sinon `camera azel` deplacerait aussi le cadrage sans le dire.
+	// La rotation seule : ni le pivot ni la distance ne bougent, sinon
+	// `camera azel` deplacerait aussi le cadrage sans le dire.
 	Refresh (false);
 }
 
@@ -450,69 +447,341 @@ void MyGLCanvas::SetCameraZoom (float zoom)
 {
 	if (!m_pTrackball) return;
 	m_pTrackball->set_zoom (zoom);
-	UpdateSceneRadius ();
+	UpdateSceneSpheres ();
 	Refresh (false);
 }
 
 float MyGLCanvas::GetCameraZoom () const
 {
-	return m_pTrackball ? m_pTrackball->zoom : 0.f;
+	return m_pTrackball ? m_pTrackball->get_zoom () : 0.f;
 }
 
-// Remet orientation ET panoramique a zero, puis recadre sur la scene visible.
-// C'est le point de depart de toute capture de reference.
+bool MyGLCanvas::GetCameraInfo (CameraInfo& info) const
+{
+	if (!m_pTrackball) return false;
+
+	const OrbitCamera& cam = m_pTrackball->camera ();
+	const TVector3<float>& pivot = cam.GetPivot ();
+	const TVector3<float>  eye   = cam.GetEyePosition ();
+
+	info.pivot[0] = pivot.x; info.pivot[1] = pivot.y; info.pivot[2] = pivot.z;
+	info.eye[0]   = eye.x;   info.eye[1]   = eye.y;   info.eye[2]   = eye.z;
+	info.distance = cam.GetDistance ();
+	m_pTrackball->get_clip_planes (&info.zNear, &info.zFar);
+	m_pTrackball->get_depth_center (info.sceneCenter);
+	info.sceneRadius   = m_pTrackball->get_depth_radius ();
+	info.framingRadius = m_pTrackball->get_framing_radius ();
+	info.fovYDeg       = m_pTrackball->get_fov_y_deg ();
+
+	int w = 0, h = 0;
+	GetClientSize (&w, &h);
+	info.viewportWidth  = w;
+	info.viewportHeight = h;
+	return true;
+}
+
+namespace {
+
+// REPERE ECRAN <-> NDC, ecrit UNE SEULE FOIS pour les deux sens.
+//
+// Origine en HAUT A GAUCHE et y vers le BAS -- la convention des evenements
+// souris de wx, et non celle d'OpenGL. ProjectPoint et ScreenToRay etant des
+// operations inverses, la seule erreur que ce changement de repere puisse
+// porter est un signe sur y ; deux formulations distantes de trois cents
+// lignes ne le montreraient qu'au picking.
+//
+// Les bornes sont les BORDS du viewport : le pixel 0 est en ndc -1, le pixel w
+// en ndc +1. Un decalage d'un demi-pixel ici casserait l'aller-retour.
+void PixelFromNdc (float ndcX, float ndcY, int width, int height,
+                   float* pixelX, float* pixelY)
+{
+	*pixelX = (0.5f * ndcX + 0.5f) * (float)width;
+	*pixelY = (0.5f - 0.5f * ndcY) * (float)height;
+}
+
+void NdcFromPixel (float pixelX, float pixelY, int width, int height,
+                   float* ndcX, float* ndcY)
+{
+	*ndcX = 2.f * pixelX / (float)width  - 1.f;
+	*ndcY = 1.f - 2.f * pixelY / (float)height;
+}
+
+} // namespace
+
+// Projection monde -> pixels par les matrices que set_camera enverra a GL, et
+// non par celles qui s'y trouvent : voir le commentaire de la declaration.
+MyGLCanvas::ProjectedPoint MyGLCanvas::ProjectPoint (const float world[3]) const
+{
+	ProjectedPoint out;
+	if (!m_pTrackball)
+		return out;                       // status = NoCamera
+
+	int w = 0, h = 0;
+	GetClientSize (&w, &h);
+	out.viewportWidth  = w;
+	out.viewportHeight = h;
+	if (w <= 0 || h <= 0)
+	{
+		out.status = ProjectStatus::EmptyViewport;
+		return out;
+	}
+
+	float mv[16], pr[16];
+	m_pTrackball->get_modelview_matrix (mv);
+	m_pTrackball->get_projection_matrix (pr);
+
+	// eye = MV . (x,y,z,1), puis clip = P . eye. Colonne-majeur : l'element
+	// (ligne, colonne) est en [4*colonne + ligne].
+	float eye[4], clip[4];
+	for (int r = 0; r < 4; r++)
+		eye[r] = mv[0*4+r]*world[0] + mv[1*4+r]*world[1] + mv[2*4+r]*world[2] + mv[3*4+r];
+	for (int r = 0; r < 4; r++)
+		clip[r] = pr[0*4+r]*eye[0] + pr[1*4+r]*eye[1] + pr[2*4+r]*eye[2] + pr[3*4+r]*eye[3];
+
+	// w vaut -z_oeil pour ce frustum : c'est la profondeur le long de l'axe de
+	// vue. La negation du test attrape aussi NaN.
+	out.eyeDepth = clip[3];
+	if (!(clip[3] > 0.f))
+	{
+		out.status = ProjectStatus::BehindEye;
+		return out;
+	}
+
+	out.ndcX = clip[0] / clip[3];
+	out.ndcY = clip[1] / clip[3];
+	out.ndcZ = clip[2] / clip[3];
+	if (out.ndcZ < -1.f)
+	{
+		out.status = ProjectStatus::ClippedByNear;
+		return out;
+	}
+
+	PixelFromNdc (out.ndcX, out.ndcY, w, h, &out.pixelX, &out.pixelY);
+	out.status = (out.ndcZ > 1.f) ? ProjectStatus::OkBeyondFar : ProjectStatus::Ok;
+	return out;
+}
+
+// Remet l'orientation a zero, puis recadre sur la scene visible -- ce qui
+// repose pivot et distance. C'est le point de depart de toute capture de
+// reference.
 void MyGLCanvas::ResetCamera ()
 {
 	if (!m_pTrackball) return;
 	m_pTrackball->ResetTransformations ();
-	if (m_pVModels)
-	{
-		// Meme cadrage que l'ajout d'un fichier a la scene : bbox agregee des
-		// modeles visibles, elargie a la grille pour ne pas la rogner.
-		BoundingBox bb = m_pVModels->AggregateBBox (true);
-		bb.AddPoint ( 2.f,  2.f,  1.f);
-		bb.AddPoint (-2.f, -2.f, -1.f);
-		FrameCamera (bb);
-	}
+	FrameVisibleScene ();
 	Refresh (false);
 }
 
-void MyGLCanvas::FrameCamera(const BoundingBox& bbox)
+// Recadre sur la bbox agregee des modeles VISIBLES : pivot au centre, distance
+// telle que la scene tienne dans le champ. La grille suit -- elle est derivee du
+// cadrage, elle n'a plus a le contraindre.
+//
+// La base de coupe est EXCLUE : c'est un decor metrique, pas le sujet observe.
+// Elle n'entre que dans la sphere de profondeur (UpdateSceneSpheres).
+bool MyGLCanvas::FrameVisibleScene ()
 {
-	if (bbox.IsEmpty())
+	if (!m_pVModels)
+		return false;
+	const BoundingBox bb = m_pVModels->AggregateBBox (true);
+	if (bb.IsEmpty ())
+		return false;
+	FrameCamera (bb);
+	return true;
+}
+
+// RECENTRER SUR UN MODELE. Le pivot va au centre de SA bbox et la distance se
+// regle sur SA demi-diagonale : c'est ce qui distingue ce geste de
+// FrameVisibleScene, qui cadre l'agregat. Sur deux reconstructions superposees,
+// l'agregat cadre le vide entre les deux ; la cible, elle, remplit l'image.
+bool MyGLCanvas::FrameModel (Model* mdl)
+{
+	if (!mdl)
+		return false;
+
+	// La bbox est recalculee et non relue : le champ m_bbox date du dernier
+	// cadrage ou du dernier survol, et la geometrie a pu bouger depuis (drop,
+	// normalisation, regeneration d'une forme parametree).
+	//
+	// COPIE et non reference : FrameCamera relit la scene visible par
+	// AggregateBBox, qui reecrit m_bbox de chaque modele -- y compris celui-ci.
+	const BoundingBox bb = mdl->ComputeBBox ();
+	if (bb.IsEmpty ())
+		return false;
+
+	float mn[3], mx[3];
+	bb.GetMinMax (mn, mx);
+	if (BoundingSphereOfBox (mn, mx).radius <= 0.f)
+		return false;   // modele reduit a un point : aucune distance a en deduire
+
+	FrameCamera (bb);
+	Refresh (false);
+	return true;
+}
+
+bool MyGLCanvas::FrameModelByIndex (std::size_t index)
+{
+	return m_pVModels ? FrameModel (m_pVModels->GetModel (index)) : false;
+}
+
+bool MyGLCanvas::FrameSelectedModel ()
+{
+	return FrameModel (m_selectedModel);
+}
+
+// CADRER SUR LA BASE DE COUPE. Le tapis reste exclu de la sphere de cadrage
+// (D-7) -- l'y faire entrer couterait le cadrage de toutes les autres vues. On
+// le VISE donc explicitement quand on veut relire la reference metrique, ce qui
+// est une cible de plus et non une regle changee.
+bool MyGLCanvas::FrameCuttingMat ()
+{
+	float mn[3], mx[3];
+	CuttingMat::Bounds (m_cuttingMatZ, mn, mx);
+
+	BoundingBox bb;
+	bb.AddPoint (mn[0], mn[1], mn[2]);
+	bb.AddPoint (mx[0], mx[1], mx[2]);
+
+	FrameCamera (bb);
+	Refresh (false);
+	return true;
+}
+
+// Pose le pivot sans toucher a la distance : l'utilisateur choisit ce autour de
+// quoi il tourne, pas de combien il recule.
+bool MyGLCanvas::SetCameraPivot (float x, float y, float z)
+{
+	if (!m_pTrackball)
+		return false;
+	m_pTrackball->set_pivot (x, y, z);
+	Refresh (false);
+	return true;
+}
+
+// Panoramique scripte. Il passe par le meme point d'entree que le glisser du
+// bouton du milieu, sinon le critere mesurerait une replique de la loi au lieu
+// de la loi.
+bool MyGLCanvas::PanCamera (float dx, float dy)
+{
+	if (!m_pTrackball)
+		return false;
+	m_pTrackball->pan_screen (dx, dy);
+	Refresh (false);
+	return true;
+}
+
+// DEUX SPHERES, et non une. Elles repondent a deux questions differentes et se
+// confondre leur ferait donner la mauvaise reponse a l'une des deux :
+//
+//   - CADRAGE (centre de bbox, demi-diagonale) : ou placer l'oeil pour que le
+//     sujet remplisse le champ. Elle suit le sujet, donc elle est SERREE, et
+//     elle exclut la base de coupe -- un decor ne doit reculer ni la camera ni
+//     les bornes du dolly.
+//   - PROFONDEUR (centre de la scene visible UNIE a la base de coupe si elle est
+//     affichee, demi-diagonale de cette union) : que doivent encadrer les plans
+//     de coupe.
+//
+// L'ancienne forme n'en avait qu'une, `||(max|x|, max|y|, max|z|)||`, la plus
+// petite sphere centree sur l'ORIGINE. Pour un modele normalise mono-fichier
+// elle coincide exactement avec la demi-diagonale -- une bbox centree sur
+// l'origine verifie max|x| = ex/2 -- ce qui explique que le defaut ait survecu :
+// le cas le plus frequent est le seul ou les deux formules s'accordent.
+void MyGLCanvas::FrameCamera(const BoundingBox& target)
+{
+	if (target.IsEmpty())
 		return;
 
 	float mn[3], mx[3];
-	bbox.GetMinMax(mn, mx);
-	const float ax = std::max(std::fabs(mn[0]), std::fabs(mx[0]));
-	const float ay = std::max(std::fabs(mn[1]), std::fabs(mx[1]));
-	const float az = std::max(std::fabs(mn[2]), std::fabs(mx[2]));
-	const float radius = std::sqrt(ax * ax + ay * ay + az * az);
-	if (radius <= 0.f)
-		return;
+	target.GetMinMax(mn, mx);
 
-	// Distance at which a sphere of `radius` (centred on the origin) fits the
-	// vertical fov, + margin.
+	// --- sphere de CADRAGE : centre de bbox, demi-diagonale ---------------
+	const BoundingSphere framing = BoundingSphereOfBox(mn, mx);
+	if (framing.radius <= 0.f)
+		return;   // bbox degeneree : un point, aucune distance a en deduire
+
+	for (int i = 0; i < 3; ++i)
+	{
+		m_framingBoundsMin[i] = mn[i];
+		m_framingBoundsMax[i] = mx[i];
+	}
+	m_hasFramingBounds = true;
+
+	// La boite de PROFONDEUR se relit sur la scene visible et NON sur la cible.
+	// Cadrer sur un modele resserre la distance d'oeil, jamais la plage de
+	// profondeur : sinon viser B ferait sortir A de l'intervalle near/far, et le
+	// cas d'usage du multi-fichier est precisement de les voir tous les deux.
+	//
+	// Cout : un AggregateBBox par CADRAGE (chargement, reset, touche F), jamais
+	// par image -- c'est la frontiere posee par E-6.
+	const BoundingBox visible = m_pVModels ? m_pVModels->AggregateBBox(true) : BoundingBox();
+	if (!visible.IsEmpty())
+	{
+		visible.GetMinMax(m_sceneBoundsMin, m_sceneBoundsMax);
+		m_hasSceneBounds = true;
+	}
+	else
+	{
+		// Aucun modele visible (scene vide, ou cadrage sur le tapis seul) : la
+		// cible fait office de plage de profondeur, faute de mieux.
+		for (int i = 0; i < 3; ++i)
+		{
+			m_sceneBoundsMin[i] = mn[i];
+			m_sceneBoundsMax[i] = mx[i];
+		}
+		m_hasSceneBounds = true;
+	}
+
 	const float halfFovy = (m_fFovy * 0.5f) * 3.14159265f / 180.f;
 	const float sinHalf  = sinf(halfFovy);
-	const float distance = (sinHalf > 1e-4f ? radius / sinHalf : radius * 3.f) * 1.2f;
+	const float distance = (sinHalf > 1e-4f ? framing.radius / sinHalf : framing.radius * 3.f) * 1.2f;
 
+	// Les deux spheres partent EN PREMIER : set_zoom borne la distance d'oeil
+	// contre le rayon de cadrage, donc les publier apres le zoom bornerait le
+	// cadrage avec la scene PRECEDENTE.
+	// C'est aussi ce qui laisse le trackball rederiver near/far de la distance
+	// d'oeil courante a chaque image, si bien que les plans suivent le zoom.
+	UpdateSceneSpheres();
+	m_pTrackball->set_pivot(framing.center[0], framing.center[1], framing.center[2]);
 	m_pTrackball->set_zoom(-distance);
-	// Scale the zoom step to the model so right-drag zoom stays usable at any
-	// scale (the historical feel was precision 2 at distance ~5).
-	m_pTrackball->set_zoom_precision(std::max(0.5f, distance * 0.4f));
-	// Let the trackball derive near/far from the live zoom each frame so the
-	// clip planes follow the scene when zooming in/out.
-	m_sceneRadiusModel = radius;
-	UpdateSceneRadius();
 }
 
-void MyGLCanvas::UpdateSceneRadius()
+// Recalcule et publie les deux spheres. Appelee au cadrage, et a chaque
+// evenement qui change la plage de profondeur SANS changer le cadrage --
+// bascule du tapis, tapis repose a une autre cote.
+void MyGLCanvas::UpdateSceneSpheres()
 {
-	float radius = m_sceneRadiusModel;
+	if (!m_pTrackball)
+		return;
+
+	// --- CADRAGE : la CIBLE du dernier cadrage SEULE, base de coupe exclue --
+	// La grille s'en derive, elle ne le contraint plus : c'est ce qui autorise
+	// le retrait du rembourrage +-(2,2,1) chez les appelants de FrameCamera.
+	m_framingRadius = m_hasFramingBounds
+	                ? BoundingSphereOfBox(m_framingBoundsMin, m_framingBoundsMax).radius
+	                : 0.f;
+
+	// --- PROFONDEUR : scene visible UNIE a la base de coupe si affichee -----
+	float mn[3], mx[3];
+	bool  hasBox = m_hasSceneBounds;
+	for (int i = 0; i < 3; ++i)
+	{
+		mn[i] = m_sceneBoundsMin[i];
+		mx[i] = m_sceneBoundsMax[i];
+	}
+
 	if (prop.display_cutting_mat)
-		radius = std::max(radius, CuttingMat::BoundingRadius(m_cuttingMatZ));
-	m_pTrackball->set_scene_radius(radius);
+	{
+		float matMn[3], matMx[3];
+		CuttingMat::Bounds(m_cuttingMatZ, matMn, matMx);
+		for (int i = 0; i < 3; ++i)
+		{
+			mn[i] = hasBox ? std::min(mn[i], matMn[i]) : matMn[i];
+			mx[i] = hasBox ? std::max(mx[i], matMx[i]) : matMx[i];
+		}
+		hasBox = true;
+	}
+
+	const BoundingSphere depth = hasBox ? BoundingSphereOfBox(mn, mx) : BoundingSphere();
+	m_pTrackball->set_scene_spheres(depth.center, depth.radius, m_framingRadius);
 }
 
 // Signature bon marche de la scene. Tout ce qui peut deplacer le minimum Z
@@ -563,46 +832,10 @@ void MyGLCanvas::UpdateCuttingMatLevel()
 
 	m_cuttingMatZ = z;
 	// Le tapis a change de cote : les plans de coupe doivent le couvrir la.
-	UpdateSceneRadius();
+	UpdateSceneSpheres();
 }
 
 namespace {
-
-// Inverse d'une matrice 4x4 (col-major, convention OpenGL). false si singulière.
-bool invert4x4(const float m[16], float inv[16])
-{
-	inv[0]  =  m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15] + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10];
-	inv[4]  = -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15] - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10];
-	inv[8]  =  m[4]*m[9]*m[15]  - m[4]*m[11]*m[13] - m[8]*m[5]*m[15] + m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9];
-	inv[12] = -m[4]*m[9]*m[14]  + m[4]*m[10]*m[13] + m[8]*m[5]*m[14] - m[8]*m[6]*m[13] - m[12]*m[5]*m[10] + m[12]*m[6]*m[9];
-	inv[1]  = -m[1]*m[10]*m[15] + m[1]*m[11]*m[14] + m[9]*m[2]*m[15] - m[9]*m[3]*m[14] - m[13]*m[2]*m[11] + m[13]*m[3]*m[10];
-	inv[5]  =  m[0]*m[10]*m[15] - m[0]*m[11]*m[14] - m[8]*m[2]*m[15] + m[8]*m[3]*m[14] + m[12]*m[2]*m[11] - m[12]*m[3]*m[10];
-	inv[9]  = -m[0]*m[9]*m[15]  + m[0]*m[11]*m[13] + m[8]*m[1]*m[15] - m[8]*m[3]*m[13] - m[12]*m[1]*m[11] + m[12]*m[3]*m[9];
-	inv[13] =  m[0]*m[9]*m[14]  - m[0]*m[10]*m[13] - m[8]*m[1]*m[14] + m[8]*m[2]*m[13] + m[12]*m[1]*m[10] - m[12]*m[2]*m[9];
-	inv[2]  =  m[1]*m[6]*m[15]  - m[1]*m[7]*m[14]  - m[5]*m[2]*m[15] + m[5]*m[3]*m[14] + m[13]*m[2]*m[7]  - m[13]*m[3]*m[6];
-	inv[6]  = -m[0]*m[6]*m[15]  + m[0]*m[7]*m[14]  + m[4]*m[2]*m[15] - m[4]*m[3]*m[14] - m[12]*m[2]*m[7]  + m[12]*m[3]*m[6];
-	inv[10] =  m[0]*m[5]*m[15]  - m[0]*m[7]*m[13]  - m[4]*m[1]*m[15] + m[4]*m[3]*m[13] + m[12]*m[1]*m[7]  - m[12]*m[3]*m[5];
-	inv[14] = -m[0]*m[5]*m[14]  + m[0]*m[6]*m[13]  + m[4]*m[1]*m[14] - m[4]*m[2]*m[13] - m[12]*m[1]*m[6]  + m[12]*m[2]*m[5];
-	inv[3]  = -m[1]*m[6]*m[11]  + m[1]*m[7]*m[10]  + m[5]*m[2]*m[11] - m[5]*m[3]*m[10] - m[9]*m[2]*m[7]   + m[9]*m[3]*m[6];
-	inv[7]  =  m[0]*m[6]*m[11]  - m[0]*m[7]*m[10]  - m[4]*m[2]*m[11] + m[4]*m[3]*m[10] + m[8]*m[2]*m[7]   - m[8]*m[3]*m[6];
-	inv[11] = -m[0]*m[5]*m[11]  + m[0]*m[7]*m[9]   + m[4]*m[1]*m[11] - m[4]*m[3]*m[9]  - m[8]*m[1]*m[7]   + m[8]*m[3]*m[5];
-	inv[15] =  m[0]*m[5]*m[10]  - m[0]*m[6]*m[9]   - m[4]*m[1]*m[10] + m[4]*m[2]*m[9]  + m[8]*m[1]*m[6]   - m[8]*m[2]*m[5];
-
-	float det = m[0]*inv[0] + m[1]*inv[4] + m[2]*inv[8] + m[3]*inv[12];
-	if (std::fabs(det) < 1e-20f)
-		return false;
-	det = 1.0f / det;
-	for (int i = 0; i < 16; i++)
-		inv[i] *= det;
-	return true;
-}
-
-// out = M * v  (M col-major 4x4).
-void matVec4(const float M[16], const float v[4], float out[4])
-{
-	for (int r = 0; r < 4; r++)
-		out[r] = M[r]*v[0] + M[r+4]*v[1] + M[r+8]*v[2] + M[r+12]*v[3];
-}
 
 // Intersection rayon (o + t*d) / AABB [mn,mx] (slab). Renvoie true et t d'entrée
 // (>= 0 ; 0 si l'origine est dans la boîte) si intersection devant l'origine.
@@ -633,54 +866,44 @@ bool rayAabb(const float o[3], const float d[3], const float mn[3], const float 
 
 } // namespace
 
-bool MyGLCanvas::ScreenToRay(int x, int y, float orig[3], float dir[3])
+// Rayon monde du pixel (x, y), construit depuis OrbitCamera et le viewport --
+// et NON par inversion des matrices lues dans GL.
+//
+// Deux etats GL sont perimes au moment ou le survol arrive :
+//   - ResetProjectionMode remet GL_MODELVIEW a l'IDENTITE et reecrit
+//     GL_PROJECTION ; il s'execute sur OnSize, donc un survol qui tombe entre
+//     un redimensionnement et la peinture suivante desprojetait avec
+//     l'identite ;
+//   - les commandes de camera appellent Refresh(false), qui PLANIFIE une
+//     peinture sans l'executer : un picking scripte lisait les matrices de
+//     l'image precedente.
+//
+// Meme source que ProjectPoint, dont cette fonction est l'inverse : le meme
+// convertisseur de repere, puis la camera pour le reste.
+bool MyGLCanvas::ScreenToRay(float x, float y, float orig[3], float dir[3])
 {
-	SetCurrent(*m_context);
-
-	float mv[16], pr[16];
-	GLint vp[4];
-	glGetFloatv(GL_MODELVIEW_MATRIX, mv);
-	glGetFloatv(GL_PROJECTION_MATRIX, pr);
-	glGetIntegerv(GL_VIEWPORT, vp);
-	if (vp[2] <= 0 || vp[3] <= 0)
+	if (!m_pTrackball)
 		return false;
 
-	// combiné = PR * MV, puis son inverse (clip -> monde).
-	float pm[16], inv[16];
-	for (int c = 0; c < 4; c++)
-		for (int r = 0; r < 4; r++)
-			pm[c*4 + r] = pr[0*4+r]*mv[c*4+0] + pr[1*4+r]*mv[c*4+1] + pr[2*4+r]*mv[c*4+2] + pr[3*4+r]*mv[c*4+3];
-	if (!invert4x4(pm, inv))
+	int w = 0, h = 0;
+	GetClientSize(&w, &h);
+	if (w <= 0 || h <= 0)
 		return false;
 
-	// NDC : y écran (haut=0) -> y GL (bas=0).
-	const float nx = 2.0f * (float)(x - vp[0]) / (float)vp[2] - 1.0f;
-	const float ny = 2.0f * (float)((vp[3] - y) - vp[1]) / (float)vp[3] - 1.0f;
-
-	float pNear[4], pFar[4];
-	const float cNear[4] = { nx, ny, -1.0f, 1.0f };
-	const float cFar[4]  = { nx, ny,  1.0f, 1.0f };
-	matVec4(inv, cNear, pNear);
-	matVec4(inv, cFar,  pFar);
-	if (std::fabs(pNear[3]) < 1e-20f || std::fabs(pFar[3]) < 1e-20f)
-		return false;
-	for (int i = 0; i < 3; i++) { pNear[i] /= pNear[3]; pFar[i] /= pFar[3]; }
-
-	orig[0] = pNear[0]; orig[1] = pNear[1]; orig[2] = pNear[2];
-	float dx = pFar[0]-pNear[0], dy = pFar[1]-pNear[1], dz = pFar[2]-pNear[2];
-	const float len = std::sqrt(dx*dx + dy*dy + dz*dz);
-	if (len < 1e-12f) return false;
-	dir[0] = dx/len; dir[1] = dy/len; dir[2] = dz/len;
+	float ndcX = 0.f, ndcY = 0.f;
+	NdcFromPixel(x, y, w, h, &ndcX, &ndcY);
+	m_pTrackball->get_pick_ray(ndcX, ndcY, orig, dir);
 	return true;
 }
 
-Model* MyGLCanvas::PickModel(int x, int y)
+MyGLCanvas::PickHit MyGLCanvas::PickModel(float x, float y)
 {
+	PickHit hit;
 	if (!m_pVModels)
-		return nullptr;
+		return hit;
 	float o[3], d[3];
 	if (!ScreenToRay(x, y, o, d))
-		return nullptr;
+		return hit;
 
 	Model* best = nullptr;
 	float  bestT = 1e30f;
@@ -718,7 +941,74 @@ Model* MyGLCanvas::PickModel(int x, int y)
 			best = mdl.get();
 		}
 	}
-	return best;
+
+	if (!best)
+		return hit;
+
+	// La direction rendue par ScreenToRay est normalisee (OrbitCamera::RayFromNdc
+	// divise par sa norme), donc bestT est une distance monde le long du rayon et
+	// non un parametre d'echelle arbitraire.
+	hit.model = best;
+	hit.t     = bestT;
+	for (int i = 0; i < 3; ++i)
+		hit.point[i] = o[i] + bestT * d[i];
+	return hit;
+}
+
+// POSER LE PIVOT SUR LA SURFACE SOUS UN PIXEL. Point d'entree unique du geste
+// Alt + clic gauche et de `camera pivot pick` : les deux exercent la meme loi,
+// et non deux copies qui derivent.
+//
+// La distance oeil-pivot n'est pas touchee -- choisir autour de quoi on tourne
+// n'est pas choisir de combien on recule. Et un rayon qui ne touche rien laisse
+// le pivot EN PLACE : un clic manque ne doit pas faire sauter la vue.
+MyGLCanvas::PivotPick MyGLCanvas::SetPivotFromPixel (float pixelX, float pixelY)
+{
+	PivotPick out;
+	if (!m_pTrackball)
+		return out;                       // NoView
+
+	GetClientSize (&out.viewportWidth, &out.viewportHeight);
+	if (out.viewportWidth <= 0 || out.viewportHeight <= 0)
+		return out;                       // NoView
+
+	// Bornes INCLUSIVES : NdcFromPixel envoie 0 sur -1 et w sur +1, donc le bord
+	// droit du viewport est le bord du frustum et reste un pixel legitime.
+	if (pixelX < 0.f || pixelX > (float)out.viewportWidth ||
+	    pixelY < 0.f || pixelY > (float)out.viewportHeight)
+	{
+		out.status = PivotPickStatus::OutOfViewport;
+		return out;                       // pivot INCHANGE
+	}
+
+	const PickHit hit = PickModel (pixelX, pixelY);
+	if (!hit.model)
+	{
+		out.status = PivotPickStatus::NoHit;
+		return out;                       // pivot INCHANGE
+	}
+
+	if (!SetCameraPivot (hit.point[0], hit.point[1], hit.point[2]))
+		return out;                       // NoView
+
+	out.status = PivotPickStatus::Ok;
+	out.model  = hit.model;
+	out.t      = hit.t;
+	for (int i = 0; i < 3; ++i)
+		out.point[i] = hit.point[i];
+	return out;
+}
+
+// Instrument de l'aller-retour : meme rayon que le survol, rendu au script.
+MyGLCanvas::PickedRay MyGLCanvas::UnprojectPixel (float pixelX, float pixelY)
+{
+	PickedRay out;
+	GetClientSize (&out.viewportWidth, &out.viewportHeight);
+	if (!ScreenToRay (pixelX, pixelY, out.origin, out.direction))
+		return out;                       // valid reste false
+	out.valid = true;
+	out.model = PickModel (pixelX, pixelY).model;
+	return out;
 }
 
 //
@@ -832,10 +1122,7 @@ Model* MyGLCanvas::AppendModel(const wxString& filename)
 	// se superposent correctement (comparaison de reconstructions). On recadre juste
 	// la caméra sur la bbox agrégée de la scène visible.
 	m_pTrackball->ResetTransformations();
-	BoundingBox bb = m_pVModels->AggregateBBox(true);
-	bb.AddPoint( 2.f,  2.f,  1.f);
-	bb.AddPoint(-2.f, -2.f, -1.f);
-	FrameCamera(bb);
+	FrameVisibleScene();
 
 	// Nuage de points pur (sommets mais aucune face, ex. fused.ply) : le mode « fill »
 	// ne dessine rien -> bascule en affichage points pour qu'il soit visible. On ne le
@@ -910,10 +1197,7 @@ bool MyGLCanvas::ReloadModel(Model* mdl)
 	if (sole)
 	{
 		m_pTrackball->ResetTransformations();
-		BoundingBox bb = m_pVModels->AggregateBBox(true);
-		bb.AddPoint( 2.f,  2.f,  1.f);
-		bb.AddPoint(-2.f, -2.f, -1.f);
-		FrameCamera(bb);
+		FrameVisibleScene();
 	}
 
 	UpdateTopologicIssues();
@@ -981,7 +1265,14 @@ void MyGLCanvas::DrawGL()
 	if (prop.display_repere)
 		repere_draw ();
 	if (prop.display_grid)
-		draw_grid();
+	{
+		// Derivee du cadrage courant et du pivot VIVANT : `camera pivot` deplace
+		// la grille sans recadrer. Cout O(1) -- aucun parcours de la scene, donc
+		// aucun AggregateBBox par image.
+		const TVector3<float>& pivot = m_pTrackball->camera ().GetPivot ();
+		const GridLayout g = grid_layout (m_framingRadius, pivot.x, pivot.y);
+		draw_grid (g.size, g.steps, g.centerX, g.centerY);
+	}
 	// AVANT les modeles : le tapis est un fond. Le premier appel lit l'asset,
 	// d'ou l'appel ici et non au chargement d'un modele -- le televersement des
 	// textures exige un contexte GL courant, ce qui n'est garanti qu'a la peinture.
@@ -1280,13 +1571,58 @@ void MyGLCanvas::OnMouse(wxMouseEvent& event)
 		}
 	}
 
+	if (event.GetEventType() == wxEVT_MOUSEWHEEL)
+	{
+		// EVT_MOUSE_EVENTS capte aussi la molette : sans branche dediee
+		// l'evenement serait consomme et perdu.
+		const int delta = event.GetWheelDelta();
+		if (m_pTrackball && delta != 0 && event.GetWheelAxis() == wxMOUSE_WHEEL_VERTICAL)
+		{
+			// Une molette haute resolution envoie des fractions d'encoche, et un
+			// pilote exotique peut en envoyer beaucoup d'un coup : on borne le
+			// nombre d'encoches par evenement.
+			float notches = (float)event.GetWheelRotation() / (float)delta;
+			if (notches >  5.f) notches =  5.f;
+			if (notches < -5.f) notches = -5.f;
+			m_pTrackball->zoom_step(notches);
+			Refresh(false);
+		}
+		return;
+	}
+
 	if (event.LeftDown())
 	{
+		// ALT + CLIC GAUCHE : poser le pivot sur le point de surface sous le
+		// curseur (convention de Blender et de Fusion), sans toucher a la
+		// distance.
+		//
+		// Le trackball n'est PAS engage. Appeler mouse_press ici amorcerait une
+		// rotation : le moindre tremblement entre l'enfoncement et le
+		// relachement ferait tourner la vue au moment meme ou l'utilisateur
+		// vise. Le drapeau tient jusqu'au relachement, pour que ni le glisser ni
+		// le LeftUp ne retombent dans les branches de rotation et de selection.
+		if (event.AltDown())
+		{
+			m_altPivotGesture = true;
+			const PivotPick r = SetPivotFromPixel((float)event.GetX(), (float)event.GetY());
+			if (r.status == PivotPickStatus::NoHit && m_CtrlLog)
+				*m_CtrlLog << _T("Alt+clic : aucune surface sous le curseur, pivot inchange.\n");
+			return;
+		}
+
 		m_pressX = event.GetX(); m_pressY = event.GetY();   // pour distinguer clic / glisser
 		m_pTrackball->mouse_press (LEFT_BUTTON, PRESSED, event.GetX(), event.GetY());
 	}
 	else if (event.LeftUp())
 	{
+		// Fin d'un Alt + clic : le trackball n'a jamais ete engage, et le geste
+		// ne selectionne pas non plus -- il ne change que le pivot.
+		if (m_altPivotGesture)
+		{
+			m_altPivotGesture = false;
+			return;
+		}
+
 		m_pTrackball->mouse_press (LEFT_BUTTON, RELEASED, event.GetX(), event.GetY());
 
 		// Clic (déplacement négligeable depuis l'enfoncement) sur un modèle -> le
@@ -1294,7 +1630,7 @@ void MyGLCanvas::OnMouse(wxMouseEvent& event)
 		const int dx = event.GetX() - m_pressX, dy = event.GetY() - m_pressY;
 		if (dx*dx + dy*dy <= 9)   // seuil 3 px
 		{
-			Model* hit = PickModel(event.GetX(), event.GetY());
+			Model* hit = PickModel(event.GetX(), event.GetY()).model;
 			if (hit && hit != m_selectedModel)
 			{
 				m_selectedModel = hit;
@@ -1321,6 +1657,9 @@ void MyGLCanvas::OnMouse(wxMouseEvent& event)
 	}
 	else if (event.Dragging())
 	{
+		if (m_altPivotGesture)
+			return;   // Alt + clic gauche vise, il ne fait pas tourner la vue
+
 		wxSize sz(GetClientSize());
 		m_pTrackball->mouse_move (event.GetX(), event.GetY());
 
@@ -1329,7 +1668,7 @@ void MyGLCanvas::OnMouse(wxMouseEvent& event)
 	}
 	else if (event.Moving())   // déplacement SANS bouton -> survol (picking fichier)
 	{
-		Model* hit = PickModel(event.GetX(), event.GetY());
+		Model* hit = PickModel(event.GetX(), event.GetY()).model;
 		if (hit != m_hoveredModel)
 		{
 			m_hoveredModel = hit;
@@ -1371,6 +1710,22 @@ void MyGLCanvas::OnKeyDown(wxKeyEvent& event)
 		Refresh(false);
 		Update();
 		break;
+
+	// F comme « frame » : recentrer sur le modele SELECTIONNE. Sans selection on
+	// ne cadre PAS la scene entiere -- ce serait rendre la touche inoffensive au
+	// lieu de dire qu'il n'y a rien a viser, et l'utilisateur croirait avoir vise
+	// un modele.
+	//
+	// wx rend les codes de lettre en MAJUSCULE dans un evenement KEY_DOWN, quel
+	// que soit l'etat de la touche majuscule : un case 'f' ne se declencherait
+	// jamais.
+	case 'F':
+		if (!FrameSelectedModel())
+		{
+			if (m_CtrlLog) *m_CtrlLog << _T("Aucun modele selectionne : rien a recentrer.\n");
+		}
+		break;
+
 	default:
 		event.Skip();
 		break;
@@ -1483,7 +1838,10 @@ void MyGLCanvas::ResetProjectionMode()
 		//Matrix4f mat;
 		//mat.SetPerspective(m_fFovy, m_fWindowWidth / m_fWindowHeight, m_fNear, m_fFar);
 		//glMultMatrixf((GLfloat*)mat.m_Mat);
-        gluPerspective(m_fFovy, m_fWindowWidth/m_fWindowHeight, m_fNear, m_fFar);
+        // Une fenetre reduite rapporte une hauteur nulle : sans garde, le ratio
+        // vaut NaN et empoisonne la matrice de projection.
+        const float aspect = (m_fWindowHeight > 0.f)? m_fWindowWidth/m_fWindowHeight : 1.f;
+        gluPerspective(m_fFovy, aspect, m_fNear, m_fFar);
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
 
@@ -1624,7 +1982,7 @@ float MyGLCanvas::MoveModelToZeroLevel(Model* mdl)
 void MyGLCanvas::ChangeCuttingMat(void)
 {
 	prop.display_cutting_mat = !prop.display_cutting_mat;
-	UpdateSceneRadius();   // le tapis entre ou sort de la plage de profondeur
+	UpdateSceneSpheres();   // le tapis entre ou sort de la plage de profondeur
 	Refresh(false);
 }
 

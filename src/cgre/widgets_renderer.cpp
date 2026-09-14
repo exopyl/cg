@@ -2,6 +2,8 @@
 
 #include "widgets_renderer.h"
 
+#include <cmath>
+
 //
 // Repere des axes : trois segments colores avec une pointe de fleche.
 //
@@ -51,32 +53,71 @@ void repere_draw (void)
   glPopAttrib ();
 }
 
-//
-// Grille du plan Z = 0.
-//
-// Reste en O(nStep^2) : chaque ligne verticale ne depend que de i et chaque
-// horizontale que de j, donc chacune est emise nStep+1 fois -- 484 glVertex3f
-// au lieu de 88 pour nStep = 10. Ce n'est pas du code mort, c'est un defaut
-// algorithmique, laisse tel quel ici pour ne pas melanger nettoyage et
-// optimisation (cf. debt_cgre.md, tableau priorise).
-//
-void draw_grid (float size, int nStep)
+namespace {
+
+// Gardes de la disposition : la loi ci-dessous produit deja un nombre de
+// mailles dans [4, 32] (le rapport maille/rayon est borne par la decade), donc
+// ces bornes ne mordent jamais sur une entree saine. Elles protegent contre un
+// rayon NaN ou denormalise.
+constexpr int   kGridMinSteps  = 4;
+constexpr int   kGridMaxSteps  = 40;
+constexpr float kGridMinRadius = 1e-6f;
+
+} // namespace
+
+GridLayout grid_layout (float radius, float pivotX, float pivotY)
 {
+  GridLayout g;
+  if (!(radius > kGridMinRadius))   // la negation attrape aussi NaN
+    return g;
+
+  // Maille : decade la plus proche du dixieme du diametre, soit 0,2 x rayon.
+  // L'arrondi de l'exposant garde la maille a moins d'un facteur sqrt(10) de
+  // cette cible, donc la grille compte toujours entre 4 et 32 mailles.
+  const float cell = std::pow (10.f, std::floor (std::log10 (0.2f * radius) + 0.5f));
+  if (!(cell > 0.f))
+    return g;
+
+  // Nombre PAIR de mailles : le centre tombe alors sur une ligne de la grille.
+  int steps = 2 * (int)std::ceil (radius / cell);
+  if (steps < kGridMinSteps) steps = kGridMinSteps;
+  if (steps > kGridMaxSteps) steps = kGridMaxSteps;
+
+  g.steps = steps;
+  g.size  = steps * cell;
+  // Accrochage du centre sur la maille. Sans lui les lignes tomberaient a des
+  // cotes quelconques, et la grille perdrait ce qui en fait une reference.
+  g.centerX = std::floor (pivotX / cell + 0.5f) * cell;
+  g.centerY = std::floor (pivotY / cell + 0.5f) * cell;
+  return g;
+}
+
+//
+// Grille du plan Z = 0, centree sur (centerX, centerY).
+//
+// Les deux familles de lignes sont emises SEPAREMENT. La forme d'origine les
+// emettait depuis une double boucle, donc chaque ligne nStep+1 fois -- 484
+// glVertex3f pour nStep = 10, et 6724 pour le nStep = 40 que la grille
+// adaptative rend desormais atteignable. Le trace est identique : les lignes
+// surnumeraires etaient superposees a l'identique, sans fusion.
+//
+void draw_grid (float size, int nStep, float centerX, float centerY)
+{
+  if (nStep < 1)
+    return;
+
   glPushAttrib (GL_ALL_ATTRIB_BITS);
   glColor3f (0.f, 0.f, 0.f);
   glBegin (GL_LINES);
   const float hSize = .5f * size;
-  float x, y;
-  for (int j=0; j<= nStep; j++)
-    for (int i=0; i<= nStep; i++)
-      {
-		x = i * size / nStep;
-		y = j * size / nStep;
-		glVertex3f ((GLfloat)(x - hSize), -(GLfloat)(hSize), 0.f);
-		glVertex3f ((GLfloat)(x - hSize), (GLfloat)(hSize), 0.f);
-		glVertex3f (-(GLfloat)(hSize), (GLfloat)(y - hSize), 0.f);
-		glVertex3f ((GLfloat)(hSize), (GLfloat)(y - hSize), 0.f);
-      }
+  for (int i=0; i<= nStep; i++)
+    {
+      const float t = i * size / nStep - hSize;
+      glVertex3f ((GLfloat)(centerX + t), (GLfloat)(centerY - hSize), 0.f);
+      glVertex3f ((GLfloat)(centerX + t), (GLfloat)(centerY + hSize), 0.f);
+      glVertex3f ((GLfloat)(centerX - hSize), (GLfloat)(centerY + t), 0.f);
+      glVertex3f ((GLfloat)(centerX + hSize), (GLfloat)(centerY + t), 0.f);
+    }
   glEnd ();
   glPopAttrib ();
 }
