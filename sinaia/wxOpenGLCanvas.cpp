@@ -1691,7 +1691,20 @@ void MyGLCanvas::OnMouse(wxMouseEvent& event)
 
 void MyGLCanvas::OnKeyDown(wxKeyEvent& event)
 {
-	float step = 0.05f;
+	// Le pas du plan de coupe se cale sur l'ECHELLE DU SUJET CADRE : clipping_plane_z
+	// part dans l'equation d'un GL_CLIP_PLANE en unites MONDE, donc un pas fixe est
+	// soit imperceptible, soit traversant, selon la taille du modele charge.
+	//
+	// Ratio : 1/(10*racine(3)). Un appui vaut 1/20 de la plus grande dimension d'un
+	// sujet cubique -- pour lequel le rayon de cadrage, demi-diagonale, vaut
+	// racine(3)/2 fois cette dimension. Soit une vingtaine d'appuis pour traverser
+	// le sujet, quelle que soit son echelle.
+	//
+	// Le repli couvre le cas ou aucun cadrage n'a encore ete fait : sans rayon de
+	// cadrage, il n'y a aucune echelle a lire, et un pas nul bloquerait la touche.
+	constexpr float kClipStepRatio = 0.0577350f;
+	const float step = (m_framingRadius > 0.f) ? m_framingRadius * kClipStepRatio : 0.05f;
+
 	switch (event.GetKeyCode())
 	{
 	case WXK_UP:
