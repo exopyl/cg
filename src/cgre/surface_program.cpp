@@ -79,6 +79,7 @@ uniform sampler2D uReflection;   // unite 1
 uniform bool  uUseTexture;
 uniform bool  uUseReflection;
 uniform bool  uUseVertexColors;
+uniform bool  uLighting;
 uniform float uReflAmount;
 
 varying vec3 vNormalEye;
@@ -143,6 +144,16 @@ void main ()
         base = vColor;
     if (uUseTexture)
         base *= texture2D (uAlbedo, gl_TexCoord[0].st);
+
+    // ECLAIRAGE DESACTIVE. glDisable(GL_LIGHTING) ne decide plus rien sous
+    // programme lie : l'etat doit arriver par uniforme, comme uUseVertexColors.
+    // Le pipeline fixe rendait alors la couleur courante modulee par la texture,
+    // sans ambiante globale ni emission : c'est exactement `base`.
+    if (!uLighting)
+    {
+        gl_FragColor = base;
+        return;
+    }
 
     vec3 color = vec3 (gl_LightModel.ambient) * vec3 (gl_FrontMaterial.ambient)
                + vec3 (gl_FrontMaterial.emission);

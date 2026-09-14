@@ -71,8 +71,12 @@ public:
 	// `useVertexColors` : mode d'ombrage « couleurs par sommet ». Le pipeline fixe
 	// l'obtenait par glEnable(GL_COLOR_MATERIAL), qui n'a plus d'effet sous
 	// programme lie -- le shader doit donc se le faire dire.
+	// `lighting` : meme raison. glEnable/glDisable(GL_LIGHTING), pose par l'hote
+	// a chaque image, est ignore des qu'un programme est lie ; sans ce parametre
+	// la bascule « lighting » ne touche plus les surfaces.
 	void DrawMaterialGroups (int id, const std::vector<int>& rendererIds, bool flat = false,
-	                         bool useMeshMaterials = true, bool useVertexColors = false);
+	                         bool useMeshMaterials = true, bool useVertexColors = false,
+	                         bool lighting = true);
 
 private:
 	void uploadMesh(Mesh* mesh, vboInfo& info, bool flat);

@@ -642,7 +642,8 @@ void MeshRenderer::Draw (int id)
 			// multi-material meshes); activates each material in turn.
 			m_vboManager->DrawMaterialGroups (el.id, GetMaterialRendererIds(id), !el.properties.smooth,
 			                                  el.properties.shading == CG_shading_mode::Materials,
-			                                  el.properties.shading == CG_shading_mode::VertexColors);
+			                                  el.properties.shading == CG_shading_mode::VertexColors,
+			                                  el.properties.light != 0);
 		}
 
 		// Overlays (wireframe, points, vertex normals, warnings) still go

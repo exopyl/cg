@@ -226,7 +226,8 @@ void VBOManager::Draw (int id)
 }
 
 void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds, bool flat,
-                                    bool useMeshMaterials, bool useVertexColors)
+                                    bool useMeshMaterials, bool useVertexColors,
+                                    bool lighting)
 {
 	auto it = m_mapVBO.find(id);
 	if (it == m_mapVBO.end())
@@ -302,6 +303,7 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 		prog->SetInt ("uReflection", 1);
 		// Le mode « couleurs par sommet » n'a de sens que si le maillage en porte.
 		prog->SetInt ("uUseVertexColors", (useVertexColors && info.hasColors) ? 1 : 0);
+		prog->SetInt ("uLighting", lighting ? 1 : 0);
 		// Etat par defaut, valable pour le materiau neutre comme pour celui par
 		// defaut : ni texture ni reflet. Chaque plage qui en a le corrige.
 		prog->SetInt   ("uUseTexture", 0);
