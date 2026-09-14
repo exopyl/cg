@@ -225,9 +225,8 @@ void VBOManager::Draw (int id)
 	glDisableClientState(GL_VERTEX_ARRAY);
 }
 
-void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds, bool flat,
-                                    bool useMeshMaterials, bool useVertexColors,
-                                    bool lighting)
+void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds,
+                                     const SurfaceDrawState& state)
 {
 	auto it = m_mapVBO.find(id);
 	if (it == m_mapVBO.end())
@@ -237,8 +236,8 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 	// Re-upload if the geometry changed (revision) OR the shading mode changed
 	// (flat vs smooth uses a different vertex/normal layout). Done first so the
 	// material-less fallback below also sees the up-to-date buffers.
-	if (info.pMesh && (info.pMesh->GetRevision() != info.revision || info.flat != flat))
-		uploadMesh(info.pMesh, info, flat);
+	if (info.pMesh && (info.pMesh->GetRevision() != info.revision || info.flat != state.flat))
+		uploadMesh(info.pMesh, info, state.flat);
 
 	// No per-material grouping available: fall back to a single draw (the
 	// caller is expected to have activated the material already).
@@ -282,7 +281,7 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 
 	// Hors du mode « materiaux », un seul materiau pour tout le maillage : il est
 	// lie UNE FOIS, avant la boucle, et les plages ne le changent plus.
-	if (useMeshMaterials)
+	if (state.useMeshMaterials)
 		MaterialRenderer::ActivateDefaultMaterial ();
 	else
 		MaterialRenderer::ActivateNeutralMaterial ();
@@ -302,8 +301,8 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 		prog->SetInt ("uAlbedo", 0);
 		prog->SetInt ("uReflection", 1);
 		// Le mode « couleurs par sommet » n'a de sens que si le maillage en porte.
-		prog->SetInt ("uUseVertexColors", (useVertexColors && info.hasColors) ? 1 : 0);
-		prog->SetInt ("uLighting", lighting ? 1 : 0);
+		prog->SetInt ("uUseVertexColors", (state.useVertexColors && info.hasColors) ? 1 : 0);
+		prog->SetInt ("uLighting", state.lighting ? 1 : 0);
 		// Etat par defaut, valable pour le materiau neutre comme pour celui par
 		// defaut : ni texture ni reflet. Chaque plage qui en a le corrige.
 		prog->SetInt   ("uUseTexture", 0);
@@ -315,7 +314,7 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 
 	for (const Mesh::MaterialRange& r : info.materialRanges)
 	{
-		if (useMeshMaterials &&
+		if (state.useMeshMaterials &&
 		    r.materialId != MATERIAL_NONE &&
 		    r.materialId < rendererIds.size() &&
 		    rendererIds[r.materialId] != -1)

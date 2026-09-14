@@ -27,6 +27,35 @@ typedef struct vboInfo
 	std::vector<Mesh::MaterialRange> materialRanges;
 } vboInfo;
 
+// ETAT DE SURFACE demande au dessin. Sous programme lie, ni GL_LIGHTING, ni
+// GL_COLOR_MATERIAL, ni GL_TEXTURE_2D ne decident plus rien : ce que le
+// fragment doit savoir lui arrive par ici, puis par un uniforme.
+//
+// Une structure plutot que quatre booleens consecutifs : a l'appel, quatre
+// `bool` de suite s'echangent sans que le compilateur dise un mot.
+struct SurfaceDrawState
+{
+	//! Normales par face plutot que par sommet.
+	bool flat = false;
+
+	//! A FAUX : le materiau neutre est lie une fois, et les materiaux du
+	//! maillage -- donc leurs textures -- sont ignores quel que soit le contenu
+	//! du maillage. Sans lui, ce chemin, celui du remplissage par defaut,
+	//! activerait les textures quel que soit le mode d'ombrage demande, et le
+	//! mode « neutre » ne changerait rien a l'ecran.
+	bool useMeshMaterials = true;
+
+	//! Mode d'ombrage « couleurs par sommet ». Le pipeline fixe l'obtenait par
+	//! glEnable(GL_COLOR_MATERIAL), qui n'a plus d'effet sous programme lie --
+	//! le shader doit donc se le faire dire.
+	bool useVertexColors = false;
+
+	//! Meme raison. glEnable/glDisable(GL_LIGHTING), pose par l'hote a chaque
+	//! image, est ignore des qu'un programme est lie ; sans lui la bascule
+	//! « lighting » ne toucherait plus les surfaces.
+	bool lighting = true;
+};
+
 class VBOManager
 {
 public:
@@ -63,20 +92,9 @@ public:
 	// activating the matching renderer material in between. rendererIds maps a
 	// mesh material index to a MaterialRenderer id (see
 	// MeshRenderer::GetMaterialRendererIds).
-	// `useMeshMaterials` a FAUX : le materiau neutre est lie une fois, et les
-	// materiaux du maillage sont ignores. Sans ce parametre, ce chemin -- celui
-	// du remplissage par defaut -- continuait d'activer les textures quel que
-	// soit le mode d'ombrage demande, et le mode « neutre » ne changeait rien a
-	// l'ecran.
-	// `useVertexColors` : mode d'ombrage « couleurs par sommet ». Le pipeline fixe
-	// l'obtenait par glEnable(GL_COLOR_MATERIAL), qui n'a plus d'effet sous
-	// programme lie -- le shader doit donc se le faire dire.
-	// `lighting` : meme raison. glEnable/glDisable(GL_LIGHTING), pose par l'hote
-	// a chaque image, est ignore des qu'un programme est lie ; sans ce parametre
-	// la bascule « lighting » ne touche plus les surfaces.
-	void DrawMaterialGroups (int id, const std::vector<int>& rendererIds, bool flat = false,
-	                         bool useMeshMaterials = true, bool useVertexColors = false,
-	                         bool lighting = true);
+	// Les quatre volets de l'etat de surface sont documentes sur SurfaceDrawState.
+	void DrawMaterialGroups (int id, const std::vector<int>& rendererIds,
+	                         const SurfaceDrawState& state = {});
 
 private:
 	void uploadMesh(Mesh* mesh, vboInfo& info, bool flat);
