@@ -2,8 +2,10 @@
 
 #include "../src/cgre/gl_wrapper.h"
 #include "wx/glcanvas.h"
+#include <wx/arrstr.h>
 #include <wx/dataobj.h>
 #include <chrono>
+#include <cstddef>
 #include <list>
 #include "../src/cgre/cgre.h"
 #include "../src/cgmesh/vmodels.h"
@@ -14,10 +16,11 @@
 class Mesh;
 class BoundingBox;
 
-// Format de glisser-déposer INTERNE : un chemin de modèle issu du panneau des
-// fichiers de sinaia. Le canvas n'accepte QUE ce format — les dépôts de fichiers
-// venus de l'OS (explorateur) sont donc ignorés, si bien que l'ajout d'un modèle
-// à la vue courante ne se produit QUE via un glisser depuis ce panneau.
+// Format de glisser-déposer INTERNE : une LISTE de chemins de modèles issus du
+// panneau des fichiers de sinaia, séparés par '\n' (un seul chemin = liste à un
+// élément, sans séparateur). Format privé à l'application : producteur
+// (MyFrame::OnFilesCtrlBeginDrag) et consommateur (ModelDropTarget) sont les
+// seuls à le connaître et doivent rester cohérents.
 wxDataFormat SinaiaModelPathFormat();
 
 //
@@ -61,6 +64,19 @@ public:
 	// renormaliser (repère monde conservé) ; recadre sur la scène. nullptr si échec.
 	Model* AppendModel(const wxString& filename);
 
+	// Ajout d'un LOT de fichiers. Le recadrage est fait UNE seule fois, après le
+	// dernier ajout : N appels à AppendModel feraient sauter la vue N fois. Tout
+	// chemin d'ajout multiple (menu File > Add, dépôt de plusieurs fichiers) passe
+	// par ici. Chaque fichier accepté ou refusé produit sa ligne de journal.
+	// Renvoie le nombre de fichiers effectivement ajoutés (0 = aucun, la vue n'a
+	// alors pas bougé).
+	//
+	// wxArrayString et non std::vector<wxString> : wxWidgets instancie explicitement
+	// std::vector<wxString> en dllimport, ce qui rend inutilisables les membres que
+	// la DLL n'exporte pas (construction par intervalle, assign...). wxArrayString
+	// est la seule forme de liste de chaînes que ce projet peut manipuler librement.
+	std::size_t AppendModels(const wxArrayString& filenames);
+
 	// Recharge un Model depuis son fichier d'origine (Model::m_path), en place.
 	// Détache les anciens maillages du renderer, relit le fichier, recalcule
 	// normales / BVH / bbox. Recadre la caméra UNIQUEMENT si ce Model est le seul
@@ -85,9 +101,19 @@ public:
 	// quand la scène change.
 	Model* GetSelectedModel(void) const { return m_selectedModel; }
 	void   SetSelectedModel(Model* m) { m_selectedModel = m; }
-	// Compat : renvoie le VMeshes du fichier ACTIF (le premier Model) — la plupart
-	// des traitements historiques opèrent encore sur « le » VMeshes de la vue.
-	VMeshes* GetVMeshes(void);
+	// CIBLE des traitements et des commandes qui opèrent sur UN fichier.
+	//
+	// Règle : un seul Model dans la scène -> c'est lui, sans exiger de sélection ;
+	// plusieurs Model -> le Model sélectionné, et nullptr si aucun ne l'est. Aucun
+	// repli sur le Model 0 : dans une scène multi-fichiers sans sélection la cible
+	// est ambiguë, et l'appelant doit refuser l'opération au lieu d'en désigner une.
+	Model*   GetTargetModel(void) const;
+	// Maillages de GetTargetModel(), nullptr s'il n'y a pas de cible.
+	VMeshes* GetTargetMeshes(void);
+	// Vrai quand GetTargetModel() rend nullptr PARCE QUE la scène compte plusieurs
+	// Model sans sélection. Distingue ce cas de la scène vide, pour que l'appelant
+	// journalise la raison qui dit quoi faire.
+	bool     IsTargetAmbiguous(void) const;
 	// normalize: when true (default), the meshes are centered and scaled so their
 	// largest bbox dimension becomes VMeshes::kNormalizedSize (100 mm = 10 cm, ten
 	// squares of the cutting mat). File import passes the user's "Normalisation" import
@@ -379,6 +405,13 @@ protected:
 
 private:
 	void InitGL();
+
+	// Les deux moitiés d'un ajout, séparées pour qu'un lot ne recadre qu'une fois.
+	// AppendOneModel charge le fichier et l'insère dans la scène sans TOUCHER à la
+	// caméra ni redessiner ; FinishAppendBatch clôt le lot (recadrage, mode
+	// d'affichage, rafraîchissement). Un ajout isolé enchaîne les deux.
+	Model* AppendOneModel(const wxString& filename);
+	void   FinishAppendBatch();
 
 	// Position the camera (pivot, eye distance and clip planes) so the given
 	// bounding box fits in view, whatever its native scale/position.

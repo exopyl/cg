@@ -56,11 +56,30 @@ std::string trim(const std::string& s)
 
 // ----- handler helpers ------------------------------------------------------
 
-VMeshes* getActiveVMeshes(MyFrame* frame)
+// CIBLE des commandes qui inspectent ou modifient UN fichier.
+//
+// Regle (MyGLCanvas::GetTargetModel) : un seul modele dans la vue -> c'est lui,
+// sans selection prealable ; plusieurs -> le modele selectionne. Plusieurs sans
+// selection est un REFUS explicite, et non un repli sur le modele 0 : une
+// commande mal ciblee doit se voir, pas rendre des compteurs plausibles.
+struct TargetMeshes
 {
-    if (!frame) return nullptr;
+    VMeshes*    meshes = nullptr;
+    const char* err    = nullptr;
+    explicit operator bool() const { return meshes != nullptr; }
+};
+
+TargetMeshes getTargetVMeshes(MyFrame* frame)
+{
+    if (!frame) return { nullptr, "ERR frame unavailable\n" };
     MyGLCanvas* canvas = frame->GetActiveCanvas();
-    return canvas ? canvas->GetVMeshes() : nullptr;
+    if (!canvas) return { nullptr, "ERR no active view\n" };
+    if (VMeshes* vm = canvas->GetTargetMeshes())
+        return { vm, nullptr };
+    if (canvas->IsTargetAmbiguous())
+        return { nullptr, "ERR several models loaded and none selected"
+                          " -- use 'select N' to choose the target\n" };
+    return { nullptr, "ERR no model loaded\n" };
 }
 
 std::string bboxLine(const BoundingBox& bb)
@@ -78,8 +97,9 @@ std::string bboxLine(const BoundingBox& bb)
 
 std::string cmdInfo(MyFrame* frame)
 {
-    VMeshes* vm = getActiveVMeshes(frame);
-    if (!vm) return "ERR no model loaded\n";
+    const TargetMeshes target = getTargetVMeshes(frame);
+    if (!target) return target.err;
+    VMeshes* vm = target.meshes;
 
     BoundingBox total;
     for (auto* m : vm->GetMeshes())
@@ -96,8 +116,9 @@ std::string cmdInfo(MyFrame* frame)
 
 std::string cmdMesh(MyFrame* frame, int n)
 {
-    VMeshes* vm = getActiveVMeshes(frame);
-    if (!vm) return "ERR no model loaded\n";
+    const TargetMeshes target = getTargetVMeshes(frame);
+    if (!target) return target.err;
+    VMeshes* vm = target.meshes;
     auto& meshes = vm->GetMeshes();
     if (n < 0 || (size_t)n >= meshes.size())
         return "ERR mesh index out of range\n";
@@ -116,8 +137,9 @@ std::string cmdMesh(MyFrame* frame, int n)
 
 std::string cmdFace(MyFrame* frame, int n, int f)
 {
-    VMeshes* vm = getActiveVMeshes(frame);
-    if (!vm) return "ERR no model loaded\n";
+    const TargetMeshes target = getTargetVMeshes(frame);
+    if (!target) return target.err;
+    VMeshes* vm = target.meshes;
     auto& meshes = vm->GetMeshes();
     if (n < 0 || (size_t)n >= meshes.size())
         return "ERR mesh index out of range\n";
@@ -158,8 +180,9 @@ std::string cmdFace(MyFrame* frame, int n, int f)
 
 std::string cmdVertex(MyFrame* frame, int n, int v)
 {
-    VMeshes* vm = getActiveVMeshes(frame);
-    if (!vm) return "ERR no model loaded\n";
+    const TargetMeshes target = getTargetVMeshes(frame);
+    if (!target) return target.err;
+    VMeshes* vm = target.meshes;
     auto& meshes = vm->GetMeshes();
     if (n < 0 || (size_t)n >= meshes.size())
         return "ERR mesh index out of range\n";
@@ -190,8 +213,9 @@ std::string cmdVertex(MyFrame* frame, int n, int v)
 
 std::string cmdMaterial(MyFrame* frame, int n, int matId)
 {
-    VMeshes* vm = getActiveVMeshes(frame);
-    if (!vm) return "ERR no model loaded\n";
+    const TargetMeshes target = getTargetVMeshes(frame);
+    if (!target) return target.err;
+    VMeshes* vm = target.meshes;
     auto& meshes = vm->GetMeshes();
     if (n < 0 || (size_t)n >= meshes.size())
         return "ERR mesh index out of range\n";
@@ -302,13 +326,15 @@ std::string cmdFlip(MyFrame* frame, int n)
 {
     if (!frame) return "ERR frame unavailable\n";
 
-    int result = callOnMain([frame, n]() -> int {
-        VMeshes* vm = getActiveVMeshes(frame);
-        if (!vm) return -1;
-        auto& meshes = vm->GetMeshes();
-        if (n < 0 || (size_t)n >= meshes.size()) return -2;
+    struct Res { int faces; const char* err; };
+
+    const Res result = callOnMain([frame, n]() -> Res {
+        const TargetMeshes target = getTargetVMeshes(frame);
+        if (!target) return { 0, target.err };
+        auto& meshes = target.meshes->GetMeshes();
+        if (n < 0 || (size_t)n >= meshes.size()) return { 0, "ERR mesh index out of range\n" };
         Mesh* m = meshes[n];
-        if (!m) return -2;
+        if (!m) return { 0, "ERR mesh index out of range\n" };
 
         for (unsigned int i = 0; i < m->GetNFaces (); ++i)
         {
@@ -325,14 +351,13 @@ std::string cmdFlip(MyFrame* frame, int n)
         if (MyGLCanvas* c = frame->GetActiveCanvas())
             c->Refresh(false);
 
-        return static_cast<int>(m->GetNFaces ());
+        return Res{ static_cast<int>(m->GetNFaces ()), nullptr };
     });
 
-    if (result == -1) return "ERR no model loaded\n";
-    if (result == -2) return "ERR mesh index out of range\n";
+    if (result.err) return result.err;
 
     std::ostringstream os;
-    os << "flipped " << result << " faces of mesh " << n << "\n";
+    os << "flipped " << result.faces << " faces of mesh " << n << "\n";
     os << "OK\n";
     return os.str();
 }
@@ -407,15 +432,107 @@ std::string cmdNormalize(MyFrame* frame)
 {
     if (!frame) return "ERR frame unavailable\n";
 
+    // Normalize porte sur la VUE ENTIERE et non sur un fichier (voir
+    // MyGLCanvas::ApplyNormalization) : la garde est donc celle de la scene, et
+    // cette commande n'a pas de cible a designer.
     const bool ok = callOnMain([frame]() -> bool {
         MyGLCanvas* c = frame->GetActiveCanvas();
-        if (!c || !c->GetVMeshes()) return false;
+        if (!c || !c->GetVModels() || c->GetVModels()->GetNModels() == 0) return false;
         frame->NormalizeActiveModel();
         return true;
     });
 
     if (!ok) return "ERR no model loaded\n";
     return "normalized\nOK\n";
+}
+
+// SELECTION : designe le modele que les commandes « un fichier » adressent --
+// info, mesh, face, vertex, material, flip, et les traitements du menu. Sans
+// argument, rend la selection courante. C'est l'equivalent scripte du clic dans
+// le panneau « Models », et le seul moyen de lever l'ambiguite d'une vue
+// multi-fichiers sans souris.
+//
+// Passe par MyFrame::SelectModelByIndex plutot que par MyGLCanvas::SetSelectedModel :
+// la fenetre remet a jour « Models » (ligne en gras) et « Model information », que
+// le canvas seul laisserait sur l'ancienne selection.
+std::string cmdSelect(MyFrame* frame, const std::string& arg)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    struct Res { int code; long index; std::size_t count; std::string name; };
+
+    if (arg.empty())
+    {
+        const Res r = callOnMain([frame]() -> Res {
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            if (!c || !c->GetVModels()) return { -1, -1, 0, std::string() };
+            VModels* scene = c->GetVModels();
+            const Model* target = c->GetTargetModel();
+            long idx = -1;
+            for (std::size_t i = 0; i < scene->GetNModels(); ++i)
+                if (scene->GetModel(i) == target) { idx = (long)i; break; }
+            return { 0, idx, scene->GetNModels(),
+                     target ? target->m_name : std::string() };
+        });
+
+        if (r.code == -1) return "ERR no active view\n";
+
+        std::ostringstream os;
+        os << "models " << r.count << "\n";
+        if (r.index < 0)
+            os << "selected none"
+               << (r.count > 1 ? "  (several models loaded -- use 'select N')" : "")
+               << "\n";
+        else
+            os << "selected " << r.index << " \"" << r.name << "\"\n";
+        os << "OK\n";
+        return os.str();
+    }
+
+    // VIDER la selection. C'est le seul moyen, sans souris, de placer la vue dans
+    // le cas AMBIGU -- plusieurs fichiers, aucun selectionne -- et donc de verifier
+    // que les commandes « un fichier » refusent au lieu de designer le modele 0.
+    if (arg == "none")
+    {
+        const bool ok = callOnMain([frame]() -> bool {
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            if (!c) return false;
+            c->SetSelectedModel(nullptr);
+            frame->RefreshModelSelection();   // « Models » et « Model information » suivent
+            return true;
+        });
+        if (!ok) return "ERR no active view\n";
+        return "selected none\nOK\n";
+    }
+
+    char* end = nullptr;
+    const long n = std::strtol(arg.c_str(), &end, 10);
+    if (!end || *end != '\0')
+        return "ERR usage: select [N|none]   (N = model index, as in 'drop N')\n";
+
+    const Res r = callOnMain([frame, n]() -> Res {
+        MyGLCanvas* c = frame->GetActiveCanvas();
+        if (!c || !c->GetVModels()) return { -1, n, 0, std::string() };
+        const std::size_t count = c->GetVModels()->GetNModels();
+        if (n < 0 || !frame->SelectModelByIndex((std::size_t)n))
+            return { -2, n, count, std::string() };
+        const Model* sel = c->GetSelectedModel();
+        return { 0, n, count, sel ? sel->m_name : std::string() };
+    });
+
+    if (r.code == -1) return "ERR no model loaded\n";
+    if (r.code == -2)
+    {
+        std::ostringstream os;
+        os << "ERR model index " << n << " out of range (scene has " << r.count
+           << (r.count == 1 ? " model" : " models") << ", valid 0.."
+           << (r.count ? r.count - 1 : 0) << ")\n";
+        return os.str();
+    }
+
+    std::ostringstream os;
+    os << "selected " << r.index << " \"" << r.name << "\"\nmodels " << r.count << "\nOK\n";
+    return os.str();
 }
 
 std::string cmdOpen(MyFrame* frame, const std::string& path)
@@ -1024,8 +1141,16 @@ std::string cmdHelp()
 {
     return
         "Commands:\n"
-        "  info                       global stats of the active VMeshes\n"
-        "  mesh N                     mesh N: name, counts, bbox\n"
+        "  select [N|none]            choose the model the per-file commands act on\n"
+        "                             (info/mesh/face/vertex/material/flip, and the\n"
+        "                             Treatments menu). N is the index of the 'Models'\n"
+        "                             panel, as in 'drop N'. No argument: report the\n"
+        "                             current target. A view holding a SINGLE model\n"
+        "                             needs no selection; with several models and none\n"
+        "                             selected, those commands refuse rather than pick\n"
+        "                             the first one. 'select none' clears it.\n"
+        "  info                       global stats of the TARGET model\n"
+        "  mesh N                     mesh N of the target model: name, counts, bbox\n"
         "  face N F                   face F of mesh N: vertex indices,\n"
         "                             positions, normal, material id\n"
         "  vertex N V                 vertex V of mesh N: pos, normal, uv\n"
@@ -1095,6 +1220,12 @@ cgnet::Reply dispatch(const std::string& rawLine, MyFrame* frame)
     iss >> cmd;
 
     if (cmd == "info")   return { cmdInfo(frame), false };
+    if (cmd == "select")
+    {
+        std::string arg;
+        std::getline(iss, arg);
+        return { cmdSelect(frame, trim(arg)), false };
+    }
     if (cmd == "help")   return { cmdHelp(), false };
     if (cmd == "quit")   return { "bye\nOK\n", true };
 

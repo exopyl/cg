@@ -14,16 +14,20 @@
 #include <wx/image.h>
 #include <wx/dnd.h>
 #include <wx/filename.h>
+#include <wx/arrstr.h>
 #include <cstring>
 #include <cmath>
 #include <algorithm>
 
-// Cible de glisser-déposer du canvas, deux formats :
-//  - format INTERNE SinaiaModelPathFormat (glisser depuis le panneau des fichiers)
-//    -> AJOUT à la vue courante (AppendModel) ;
-//  - format FICHIER de l'OS (glisser depuis l'explorateur Windows)
-//    -> OUVERTURE dans une NOUVELLE vue (onglet), via MyFrame::LoadModelFile.
+// Cible de glisser-déposer du canvas. Deux formats sont acceptés :
+//  - format INTERNE SinaiaModelPathFormat (glisser depuis le panneau des fichiers),
+//    qui transporte une liste de chemins séparés par '\n' ;
+//  - format FICHIER de l'OS (glisser depuis l'explorateur Windows).
 // GetReceivedFormat() indique lequel a été déposé.
+//
+// La SOURCE ne décide pas du sort du dépôt : les deux formats se réduisent à une
+// liste de chemins remise à MyFrame::DropModelFiles, qui porte la règle unique
+// (nouvel onglet, ou ajout à la vue courante avec Shift).
 namespace {
 class ModelDropTarget : public wxDropTarget
 {
@@ -45,25 +49,30 @@ public:
 			return wxDragNone;
 
 		MyFrame* frame = dynamic_cast<MyFrame*>(wxGetTopLevelParent(m_canvas));
+		if (!frame)
+			return wxDragNone;
 
+		wxArrayString paths;
 		if (m_composite->GetReceivedFormat() == SinaiaModelPathFormat())
 		{
-			// Glisser interne (panneau des fichiers) -> ajout à la vue courante.
-			const wxString path = wxString::FromUTF8(
+			const wxString blob = wxString::FromUTF8(
 				static_cast<const char*>(m_internal->GetData()), m_internal->GetSize());
-			if (path.empty() || !m_canvas->AppendModel(path))
-				return wxDragNone;
-			if (frame)
-				frame->OnSceneChanged();
-			return def;
+			// Échappement DÉSACTIVÉ ('\0') : wxSplit traite sinon '\\' comme un
+			// caractère d'échappement et mangerait les séparateurs des chemins Windows.
+			const wxArrayString parts = wxSplit(blob, wxT('\n'), wxT('\0'));
+			for (size_t i = 0; i < parts.GetCount(); ++i)
+				if (!parts[i].empty())
+					paths.Add(parts[i]);
+		}
+		else
+		{
+			paths = m_files->GetFilenames();
 		}
 
-		// Dépôt de fichiers de l'OS -> chaque fichier ouvert dans une nouvelle vue.
-		const wxArrayString files = m_files->GetFilenames();
-		if (!frame || files.empty())
+		if (paths.IsEmpty())
 			return wxDragNone;
-		for (const auto& f : files)
-			frame->LoadModelFile(f);
+
+		frame->DropModelFiles(paths);
 		return def;
 	}
 
@@ -213,13 +222,37 @@ void MyGLCanvas::SetMesh(Mesh *pMesh)
 };
 
 
-VMeshes* MyGLCanvas::GetVMeshes(void)
+// CIBLE des traitements : le Model sur lequel porte une opération « un fichier ».
+//
+// Un seul Model dans la scène : c'est lui, même sans sélection -- il n'y a aucune
+// ambiguïté à lever, et le flux mono-fichier ne doit pas réclamer un clic.
+// Plusieurs Model : la sélection, et nullptr si elle est vide. Le repli sur le
+// Model 0 est proscrit : il ferait porter les traitements sur le premier fichier
+// chargé sans que rien ne le signale.
+Model* MyGLCanvas::GetTargetModel(void) const
 {
-	// Fichier actif = premier Model de la scène (comportement mono-fichier conservé).
-	if (m_pVModels && m_pVModels->GetNModels() > 0)
-		return &m_pVModels->GetModels()[0]->m_meshes;
-	return nullptr;
-};
+	if (!m_pVModels)
+		return nullptr;
+
+	const std::size_t n = m_pVModels->GetNModels();
+	if (n == 0)
+		return nullptr;
+	if (n == 1)
+		return m_pVModels->GetModel(0);
+
+	return m_selectedModel;
+}
+
+VMeshes* MyGLCanvas::GetTargetMeshes(void)
+{
+	Model* mdl = GetTargetModel();
+	return mdl ? &mdl->m_meshes : nullptr;
+}
+
+bool MyGLCanvas::IsTargetAmbiguous(void) const
+{
+	return m_pVModels && m_pVModels->GetNModels() > 1 && !m_selectedModel;
+}
 
 void MyGLCanvas::SetVMeshes(VMeshes* pObject, bool normalize)
 {
@@ -236,8 +269,16 @@ void MyGLCanvas::UpdateGeometryKeepingView(VMeshes* pObject)
 {
 	AdoptScene(pObject);
 
-	VMeshes* vm = GetVMeshes();
-	if (!vm) return;
+	if (!m_pVModels) return;
+
+	// TOUTE LA SCENE, comme ApplyNormalization : la transformation retenue au
+	// chargement porte sur l ensemble des maillages, pas sur un fichier.
+	std::vector<Mesh*> allMeshes;
+	for (const auto& mdl : m_pVModels->GetModels())
+		for (auto* mesh : mdl->m_meshes.GetMeshes())
+			if (mesh) allMeshes.push_back(mesh);
+
+	if (allMeshes.empty()) return;
 
 	// La geometrie regeneree arrive dans les unites du generateur, alors que la
 	// scene affichee est celle du chargement, normalisee. On lui applique donc la
@@ -245,15 +286,14 @@ void MyGLCanvas::UpdateGeometryKeepingView(VMeshes* pObject)
 	// a son echelle brute, hors du cadrage etabli.
 	if (m_hasNormalization)
 	{
-		for (const auto& mesh : vm->GetMeshes())
+		for (auto* mesh : allMeshes)
 		{
-			if (!mesh) continue;
 			mesh->translate(-m_normCenter[0], -m_normCenter[1], -m_normCenter[2]);
 			mesh->scale(m_normScale);
 		}
 	}
 
-	for (const auto& mesh : vm->GetMeshes())
+	for (auto* mesh : allMeshes)
 	{
 		mesh->ComputeNormals();
 		mesh->computebbox();
@@ -293,14 +333,10 @@ void MyGLCanvas::ApplyNormalization(bool normalize)
 {
 	if (!m_pVModels) return;
 
-	// TOUTE LA SCENE, pas le premier fichier.
+	// TOUTE LA SCENE, pas le modele cible : Treatments > Normalize est la seule
+	// operation qui porte sur la vue entiere, et non sur un fichier.
 	//
-	// Cette fonction passait par GetVMeshes(), qui ne rend que le Model n° 0
-	// (« comportement mono-fichier conservé », wxOpenGLCanvas.cpp:219). Depuis que
-	// la vue accepte plusieurs fichiers, Treatments > Normalize ne touchait donc
-	// que le premier : les suivants gardaient leur echelle d'origine.
-	//
-	// Et la transformation est COMMUNE a tous les maillages -- un seul centre, un
+	// La transformation est COMMUNE a tous les maillages -- un seul centre, un
 	// seul facteur, derives de la boite englobante agregee. Normaliser chaque
 	// Model separement, en appelant VMeshes::Normalize par modele, les ramenerait
 	// tous a la meme taille et les empilerait a l'origine : la comparaison de
@@ -370,15 +406,18 @@ void MyGLCanvas::ApplyNormalization(bool normalize)
 // et le rafraîchissement. Partagé avec UpdateGeometryKeepingView.
 void MyGLCanvas::RefreshGeometryState()
 {
-	VMeshes* vm = GetVMeshes();
-	if (!vm) return;
+	if (!m_pVModels) return;
 
 	UpdateTopologicIssues();
 
+	// Le mode d'affichage est une propriété de la VUE : il se décide donc sur la
+	// scène agrégée et non sur un fichier -- une vue dont un seul des fichiers
+	// porte des faces doit rester en remplissage.
+	//
 	// A face-less model (point cloud: .ply/.pset/.pts/.asc with only vertices)
 	// has no surface to fill, so the default fill/VBO path draws nothing — the
 	// model loads invisible. Switch to point display so it is visible on import.
-	if (vm->GetNVertices() > 0 && vm->GetNFaces() == 0)
+	if (m_pVModels->GetNVertices() > 0 && m_pVModels->GetNFaces() == 0)
 	{
 		// If the model carries explicit line ('l') / point ('p') primitives,
 		// they draw themselves (with their configurable line/point colours). The
@@ -386,8 +425,9 @@ void MyGLCanvas::RefreshGeometryState()
 		// winning the equal-depth test, mask the point colour — so only enable it
 		// for a genuine vertex-only cloud.
 		bool hasPrimitives = false;
-		for (auto* m : vm->GetMeshes())
-			if (m && (m->GetNLines() > 0 || m->GetNPoints() > 0)) { hasPrimitives = true; break; }
+		for (const auto& mdl : m_pVModels->GetModels())
+			for (auto* m : mdl->m_meshes.GetMeshes())
+				if (m && (m->GetNLines() > 0 || m->GetNPoints() > 0)) { hasPrimitives = true; break; }
 		prop.display_points = !hasPrimitives;
 		prop.display_fill   = false;
 	}
@@ -1044,17 +1084,20 @@ void MyGLCanvas::LoadModel(const wxString& filename, const ImportSettings& setti
 	// scale rather than a no-op on raw (large) coordinates.
 	SetVMeshes(meshes, settings.normalize);   // adopte les maillages de `meshes` et le détruit
 
-	// Nomme le Model actif d'après le fichier (affiché dans l'arbre d'info).
-	if (VModels* scene = GetVModels())
-		if (scene->GetNModels() > 0)
-		{
-			scene->GetModels()[0]->m_name = std::string(wxFileName(filename).GetFullName().ToUTF8().data());
-			scene->GetModels()[0]->m_path = std::string(filename.ToUTF8().data());
-		}
+	// SetVMeshes a remplacé la scène par un Model unique : c'est le fichier qu'on
+	// vient de lire, et les options d'import ne portent que sur lui.
+	Model* loaded = GetVModels() ? GetVModels()->GetModel(0) : nullptr;
 
-	if (settings.triangulate || settings.mergeVertices)
+	// Nomme le Model actif d'après le fichier (affiché dans l'arbre d'info).
+	if (loaded)
 	{
-		for (auto& pMesh : GetVMeshes()->GetMeshes())   // `meshes` a été consommé -> fichier actif
+		loaded->m_name = std::string(wxFileName(filename).GetFullName().ToUTF8().data());
+		loaded->m_path = std::string(filename.ToUTF8().data());
+	}
+
+	if (loaded && (settings.triangulate || settings.mergeVertices))
+	{
+		for (auto& pMesh : loaded->m_meshes.GetMeshes())
 		{
 			if (settings.triangulate)
 			{
@@ -1094,7 +1137,10 @@ void MyGLCanvas::LoadModel(const wxString& filename, const ImportSettings& setti
 */
 }
 
-Model* MyGLCanvas::AppendModel(const wxString& filename)
+// Moitié « chargement » d'un ajout : le fichier entre dans la scène, mais NI la
+// caméra NI l'affichage ne bougent. C'est ce découpage qui permet à un lot de ne
+// recadrer qu'une fois ; FinishAppendBatch clôt le geste.
+Model* MyGLCanvas::AppendOneModel(const wxString& filename)
 {
 	if (!m_pVModels)
 		m_pVModels = new VModels();
@@ -1118,11 +1164,26 @@ Model* MyGLCanvas::AppendModel(const wxString& filename)
 	if (!m_selectedModel)   // 1er contenu d'un canvas vide -> sélection par défaut
 		m_selectedModel = mdl;
 
+	if (m_CtrlLog)
+		*m_CtrlLog << wxString::Format(_T("Ajoute: %s (%zu maillages)\n"),
+		                               filename, mdl->m_meshes.GetNMeshes());
+	return mdl;
+}
+
+// Moitié « vue » d'un ajout, exécutée UNE fois par lot.
+void MyGLCanvas::FinishAppendBatch()
+{
+	if (!m_pVModels)
+		return;
+
 	// PAS de normalisation : on garde le repère monde pour que les fichiers ajoutés
 	// se superposent correctement (comparaison de reconstructions). On recadre juste
 	// la caméra sur la bbox agrégée de la scène visible.
-	m_pTrackball->ResetTransformations();
+	if (m_pTrackball)
+		m_pTrackball->ResetTransformations();
 	FrameVisibleScene();
+	if (m_CtrlLog)
+		*m_CtrlLog << _T("Recadrage de la vue sur la scene\n");
 
 	// Nuage de points pur (sommets mais aucune face, ex. fused.ply) : le mode « fill »
 	// ne dessine rien -> bascule en affichage points pour qu'il soit visible. On ne le
@@ -1146,11 +1207,28 @@ Model* MyGLCanvas::AppendModel(const wxString& filename)
 
 	UpdateTopologicIssues();
 	Refresh(false);
+}
 
-	if (m_CtrlLog)
-		*m_CtrlLog << wxString::Format(_T("Ajoute: %s (%zu maillages)\n"),
-		                               filename, mdl->m_meshes.GetNMeshes());
+Model* MyGLCanvas::AppendModel(const wxString& filename)
+{
+	Model* mdl = AppendOneModel(filename);
+	if (mdl)
+		FinishAppendBatch();
 	return mdl;
+}
+
+std::size_t MyGLCanvas::AppendModels(const wxArrayString& filenames)
+{
+	std::size_t added = 0;
+	for (size_t i = 0; i < filenames.GetCount(); ++i)
+		if (AppendOneModel(filenames[i]))
+			++added;
+
+	// Un seul recadrage pour tout le lot ; aucun si rien n'est entré dans la scène
+	// (la vue ne doit pas sauter sur un lot intégralement refusé).
+	if (added > 0)
+		FinishAppendBatch();
+	return added;
 }
 
 bool MyGLCanvas::ReloadModel(Model* mdl)
@@ -1220,8 +1298,19 @@ void MyGLCanvas::SaveModel(const wxString& filename)
 	//cout << ((filename).mb_str(wxConvUTF8)) << endl;
 	//printf ("%s\n", (char*) ((filename).mb_str(wxConvUTF8)).data());
 
-	if (VMeshes* vm = GetVMeshes())
-		VMeshesIO::save(*vm, (char*)((filename).mb_str(wxConvUTF8)).data());
+	VMeshes* vm = GetTargetMeshes();
+	if (!vm)
+	{
+		if (m_CtrlLog)
+			*m_CtrlLog << (IsTargetAmbiguous()
+				? _T("Save As : plusieurs fichiers dans cette vue et aucun n'est ")
+				  _T("selectionne -- choisissez le modele a enregistrer dans le ")
+				  _T("panneau Models, ou en cliquant dessus dans la vue 3D.\n")
+				: _T("Save As : aucun modele a enregistrer.\n"));
+		return;
+	}
+
+	VMeshesIO::save(*vm, (char*)((filename).mb_str(wxConvUTF8)).data());
 }
 
 //

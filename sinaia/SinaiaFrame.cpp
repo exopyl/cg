@@ -18,6 +18,7 @@
 #include <wx/listbox.h>     // wxListBox : Manage-favorites dialog
 #include <wx/graphics.h>    // wxGraphicsContext : star overlay on the favorites icon
 #include <wx/dcgraph.h>     // wxGCDC
+#include <wx/utils.h>       // wxGetKeyState : etat de Shift au moment d'un depot
 #include <vector>
 #include <chrono>
 #include <cstddef>
@@ -183,6 +184,8 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_NotebookAlignBottom, MyFrame::OnTabAlignment)
     EVT_MENU(ID_CustomizeToolbar, MyFrame::OnCustomizeToolbar)
     EVT_MENU(wxID_OPEN, MyFrame::OnOpen)
+    EVT_MENU(ID_FILE_ADD, MyFrame::OnAddToView)
+    EVT_UPDATE_UI(ID_FILE_ADD, MyFrame::OnUpdateUIAddToView)
     EVT_MENU(wxID_SAVE, MyFrame::OnSave)
     EVT_MENU(wxID_SAVEAS, MyFrame::OnSaveAs)
     EVT_MENU(ID_FILE_EXPORT_IMAGE, MyFrame::OnExportImage)
@@ -327,22 +330,21 @@ int PropertiesSortFunction(wxPropertyGrid* propGrid, wxPGProperty* p1, wxPGPrope
 //
 // drag & drop management
 //
+// Dépôt de fichiers de l'OS sur la FENÊTRE (hors canvas). Même règle que sur le
+// canvas — la touche Shift ne change pas de sens selon la zone visée.
 void MyFrame::OnDropFiles(wxDropFilesEvent& event)
 {
-    if (event.GetNumberOfFiles() > 0) {
+    const wxString* dropped = event.GetFiles();
+    if (!dropped)
+        return;
 
-        wxString* dropped = event.GetFiles();
-        if (dropped)
-        {
-            for (int i = 0; i < event.GetNumberOfFiles(); i++)
-            {
-                wxString name = dropped[i];
+    wxArrayString paths;
+    for (int i = 0; i < event.GetNumberOfFiles(); i++)
+        if (wxFileExists(dropped[i]))
+            paths.Add(dropped[i]);
 
-                if (wxFileExists(name))
-                    OpenDocument(name);
-            }
-        }
-    }
+    if (!paths.IsEmpty())
+        DropModelFiles(paths);
 }
 
 
@@ -378,6 +380,7 @@ MyFrame::MyFrame(wxWindow* parent,
 
     wxMenu* file_menu = new wxMenu;
     file_menu->Append(wxID_OPEN, _T("&Open\tCtrl+O"), _T("Open a file"));
+    file_menu->Append(ID_FILE_ADD, _T("&Add...\tCtrl+Shift+O"), _T("Add files to the current view"));
     file_menu->Append(wxID_SAVE, _T("&Save\tCtrl+S"), _T("Save a file"));
     file_menu->Append(wxID_SAVEAS, _T("&Save As...\tF12"), _T("Save to a new file"));
     file_menu->AppendSeparator();
@@ -867,7 +870,10 @@ MyFrame::MyFrame(wxWindow* parent,
         CloseButton(true).MaximizeButton(true));
  */
 
-    m_filesCtrl = new wxListCtrl(this, ID_FILESCTRL, wxDefaultPosition, wxDefaultSize, wxLC_SINGLE_SEL | wxLC_LIST);
+    // Multi-sélection (pas de wxLC_SINGLE_SEL) : ouvrir ou glisser plusieurs
+    // fichiers d'un coup est un geste courant, l'activation comme le glisser
+    // parcourent la sélection entière.
+    m_filesCtrl = new wxListCtrl(this, ID_FILESCTRL, wxDefaultPosition, wxDefaultSize, wxLC_LIST);
 
     wxIcon iconObj(format_obj);
     wxIcon iconStl(format_stl);
@@ -1585,21 +1591,42 @@ void MyFrame::OnFilesCtrlListItemActivated(wxListEvent& WXUNUSED(event))
 
 void MyFrame::OnFilesCtrlBeginDrag(wxListEvent& event)
 {
-    const long item = event.GetIndex();
-    if (item < 0)
-        return;
-
-    wxListItem info;
-    info.SetId(item);
-    info.SetMask(wxLIST_MASK_TEXT);
-    if (!m_filesCtrl->GetItem(info))
-        return;
-
     // Chemin complet = dossier de l'Explorer + nom du fichier (même reconstruction
     // que le double-clic). On glisse au format INTERNE SinaiaModelPathFormat (et NON
-    // wxFileDataObject) : seul le canvas reconnaît ce format et appelle AppendModel.
-    const wxString path = m_dcDirectory->GetPath() + wxT("\\") + info.m_text;
-    const wxScopedCharBuffer utf8 = path.ToUTF8();
+    // wxFileDataObject) : ce format transporte TOUTE la sélection, un chemin par
+    // ligne, et seul le canvas de sinaia sait le lire.
+    auto pathOf = [this](long item) {
+        wxListItem info;
+        info.SetId(item);
+        info.SetMask(wxLIST_MASK_TEXT);
+        if (!m_filesCtrl->GetItem(info))
+            return wxString();
+        return m_dcDirectory->GetPath() + wxT("\\") + info.m_text;
+    };
+
+    wxString payload;
+    long item = -1;
+    for (;;)
+    {
+        item = m_filesCtrl->GetNextItem(item, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+        if (item == -1)
+            break;
+        const wxString path = pathOf(item);
+        if (path.empty())
+            continue;
+        if (!payload.empty())
+            payload += wxT('\n');
+        payload += path;
+    }
+
+    // Repli sur l'élément qui a déclenché le glisser : un glisser peut démarrer sur
+    // un élément que le contrôle n'a pas encore porté dans la sélection.
+    if (payload.empty() && event.GetIndex() >= 0)
+        payload = pathOf(event.GetIndex());
+    if (payload.empty())
+        return;
+
+    const wxScopedCharBuffer utf8 = payload.ToUTF8();
     wxCustomDataObject data(SinaiaModelPathFormat());
     data.SetData(utf8.length(), utf8.data());
     wxDropSource source(data, m_filesCtrl);
@@ -1664,8 +1691,7 @@ void MyFrame::OnNotebookPageChanged(wxAuiNotebookEvent& event)
         // Le mode d'ombrage appartient a la VUE : le selecteur doit annoncer
         // celui de l'onglet qui prend la main, sinon il affiche encore le mode
         // du precedent et le prochain clic part d'une valeur fausse.
-        if (m_pShadingChoice)
-            m_pShadingChoice->SetSelection((int)pGLCanvas->GetShadingMode());
+        SyncShadingChoice(pGLCanvas);
 
         m_pToolBar2->Refresh();
 
@@ -1734,6 +1760,74 @@ void MyFrame::OnOpen(wxCommandEvent& WXUNUSED(event))
 	    wxString strFilename = fd.GetPath();
         OpenDocument(strFilename);
     }
+}
+
+// File > Add... : l'ajout à la vue courante est un geste ordinaire, pas un
+// accident du glisser-déposer. Sélection multiple, et un seul recadrage pour le
+// lot entier (MyGLCanvas::AppendModels).
+void MyFrame::OnAddToView(wxCommandEvent& WXUNUSED(event))
+{
+    // Garde-fou : l'entrée est grisée sans onglet courant (OnUpdateUIAddToView),
+    // mais un accélérateur peut atteindre le gestionnaire avant la mise à jour.
+    if (!GetActiveCanvas())
+        return;
+
+    // Mêmes formats que File > Open : le catalogue central en est la seule source.
+    const wxString wildcard = sinaia::BuildOpenWildcard();
+
+    wxFileDialog fd(this, wxT("Add 3D Models to Current View"), LoadLastDir(), wxEmptyString,
+                    wildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
+
+    if (fd.ShowModal() != wxID_OK)
+        return;
+
+    wxArrayString selected;
+    fd.GetPaths(selected);
+    AddFilesToCurrentView(selected);
+}
+
+void MyFrame::OnUpdateUIAddToView(wxUpdateUIEvent& event)
+{
+    // Ajouter suppose une vue où ajouter : sans onglet courant, l'entrée est grisée
+    // plutôt que de se comporter comme un second Open.
+    event.Enable(GetActiveCanvas() != nullptr);
+}
+
+bool MyFrame::AddFilesToCurrentView(const wxArrayString& paths)
+{
+    MyGLCanvas* canvas = GetActiveCanvas();
+    if (!canvas || paths.IsEmpty())
+        return false;
+
+    wxBusyCursor busyCursor;
+
+    *m_pWndLogging << wxString::Format(_T("Ajout de %zu fichier(s) a la vue courante\n"),
+                                       paths.GetCount());
+    canvas->AppendModels(paths);   // journalise chaque succès et chaque échec, par fichier
+
+    SaveLastDir(wxFileName(paths.Last()).GetPath());
+    OnSceneChanged();
+    return true;
+}
+
+void MyFrame::DropModelFiles(const wxArrayString& paths)
+{
+    // RÈGLE UNIQUE du dépôt, identique pour les deux sources (panneau "Files" et
+    // explorateur de l'OS) et pour les deux zones de dépôt (canvas et fenêtre) :
+    // sans modificateur, un onglet par fichier ; Shift enfoncé, ajout à la vue
+    // courante. Sans onglet courant, Shift n'a rien à quoi ajouter et le dépôt
+    // retombe sur l'ouverture.
+    //
+    // Le modificateur est lu par wxGetKeyState et NON par le wxDragResult proposé
+    // à la cible : ce dernier code une intention copier/déplacer que chaque
+    // plateforme dérive à sa façon des modificateurs, il n'observe pas Shift.
+    const bool addToCurrentView = wxGetKeyState(WXK_SHIFT);
+
+    if (addToCurrentView && AddFilesToCurrentView(paths))
+        return;
+
+    for (size_t i = 0; i < paths.GetCount(); ++i)
+        OpenDocument(paths[i]);
 }
 
 void MyFrame::OpenDocument(const wxString& strFilename)
@@ -1951,15 +2045,22 @@ void MyFrame::HighlightModelRow(int index)
 
 void MyFrame::SelectModelRow(int index)
 {
-    MyGLCanvas* canvas = (MyGLCanvas*)m_pCtrl->GetPage(m_pCtrl->GetSelection());
+    // Un indice négatif tombe dans le test de bornes de GetModel après conversion.
+    (void)SelectModelByIndex((size_t)index);
+}
+
+bool MyFrame::SelectModelByIndex(std::size_t index)
+{
+    MyGLCanvas* canvas = GetActiveCanvas();
     if (!canvas || !canvas->GetVModels())
-        return;
-    Model* mdl = canvas->GetVModels()->GetModel((size_t)index);
+        return false;
+    Model* mdl = canvas->GetVModels()->GetModel(index);
     if (!mdl)
-        return;
+        return false;
     canvas->SetSelectedModel(mdl);
     UpdateModelsList();       // restyle (gras sur la ligne sélectionnée)
     UpdatePropertiesGrid();   // Model information suit la sélection
+    return true;
 }
 
 void MyFrame::ToggleModelVisibility(int index)
@@ -2342,6 +2443,31 @@ void MyFrame::UpdatePropertiesGrid()
 void MyFrame::Log(const wxString& text) const
 {
     *m_pWndLogging << text << _T("\n");
+}
+
+// Cible d'un traitement, ou REFUS journalisé.
+//
+// Un traitement qui ne sait pas sur quel fichier il porte ne doit pas en choisir
+// un : opérer sur le premier chargé serait indiscernable d'un succès, et c'est
+// cette indiscernabilité qui rend la faute invisible. Le message nomme donc
+// l'opération et le geste qui la débloque.
+VMeshes* MyFrame::TargetMeshesOrLog(MyGLCanvas* canvas, const wxString& operation)
+{
+    if (!canvas)
+        return nullptr;
+
+    if (VMeshes* pVMeshes = canvas->GetTargetMeshes())
+        return pVMeshes;
+
+    if (canvas->IsTargetAmbiguous())
+        *m_pWndLogging << operation
+                       << _T(" : plusieurs fichiers dans cet onglet et aucun n'est selectionne")
+                          _T(" -- choisissez la cible dans le panneau Models, ou cliquez le")
+                          _T(" modele dans la vue 3D.\n");
+    else
+        *m_pWndLogging << operation << _T(" : aucun modele dans cet onglet.\n");
+
+    return nullptr;
 }
 
 void MyFrame::OnSave(wxCommandEvent& WXUNUSED(event))
@@ -2736,10 +2862,18 @@ void MyFrame::OnParameterChanged()
 	// The mesh was rebuilt: any curvature colouring is gone and its tensors no
 	// longer apply. Drop the curvature state and reset the panel for this tab
 	// (it is the active one).
-	if (m_curvatureByCanvas.erase(pCanvas) > 0 && m_pCurvaturePanel)
+	auto itCurvature = m_curvatureByCanvas.find(pCanvas);
+	if (itCurvature != m_curvatureByCanvas.end())
 	{
-		m_pCurvaturePanel->SetSelection(TENSOR_TAUBIN, CurvatureType::Mean);
-		m_pCurvaturePanel->SetEnabled(false);
+		// The visualization goes off with the state, so hand the view back the
+		// shading mode it had before it, under the same rule as the checkbox.
+		RestoreShadingAfterCurvature(pCanvas, itCurvature->second);
+		m_curvatureByCanvas.erase(itCurvature);
+		if (m_pCurvaturePanel)
+		{
+			m_pCurvaturePanel->SetSelection(TENSOR_TAUBIN, CurvatureType::Mean);
+			m_pCurvaturePanel->SetEnabled(false);
+		}
 	}
 
 	Log(wxString::Format(_T("%s regenerated in %.1f ms (%u faces, %u vertices)"),
@@ -2895,6 +3029,16 @@ void MyFrame::SetCuttingMat(bool on)
 	if (wxMenuBar *mb = GetMenuBar ())
 		if (wxMenuItem *mi = mb->FindItem(ID_3D_CUTTING_MAT))
 			mi->Check (on);
+}
+
+// Le selecteur de la barre d'outils annonce le mode de la VUE designee. Tout
+// code qui pose un mode d'ombrage passe par ici : sans cela la barre affiche un
+// mode pendant que la vue en rend un autre, et le prochain clic part d'une
+// valeur fausse.
+void MyFrame::SyncShadingChoice(MyGLCanvas* pCanvas)
+{
+	if (m_pShadingChoice && pCanvas)
+		m_pShadingChoice->SetSelection ((int)pCanvas->GetShadingMode ());
 }
 
 //
@@ -3507,7 +3651,16 @@ void MyFrame::OnUpdateUITreatmentMakeTriangles(wxUpdateUIEvent& event)
 		event.Enable(false);
 		return;
 	}
-	VMeshes* pVMeshes = pGLCanvas->GetVMeshes();
+	// Cible ambigue (plusieurs fichiers, aucun selectionne) : l'entree reste ACTIVE
+	// pour que le clic produise le message qui dit quoi faire -- une entree grisee
+	// n'expliquerait rien.
+	if (pGLCanvas->IsTargetAmbiguous())
+	{
+		event.Enable(true);
+		return;
+	}
+
+	VMeshes* pVMeshes = pGLCanvas->GetTargetMeshes();
 	if (!pVMeshes || pVMeshes->GetNMeshes() == 0)
 	{
 		event.Enable(false);
@@ -3523,7 +3676,7 @@ void MyFrame::OnTreatmentMakeTriangles(wxCommandEvent& WXUNUSED(event))
 	if (!pGLCanvas)
 		return;
 
-	VMeshes * pVMeshes = pGLCanvas->GetVMeshes();
+	VMeshes* pVMeshes = TargetMeshesOrLog(pGLCanvas, _T("Make triangles"));
 	if (!pVMeshes)
 		return;
 
@@ -3548,7 +3701,7 @@ void MyFrame::OnTreatmentMergeVertices(wxCommandEvent& WXUNUSED(event))
 	if (!pGLCanvas)
 		return;
 
-    VMeshes * pVMeshes = pGLCanvas->GetVMeshes();
+	VMeshes* pVMeshes = TargetMeshesOrLog(pGLCanvas, _T("Merge vertices"));
 	if (!pVMeshes)
 		return;
 
@@ -3579,8 +3732,12 @@ void MyFrame::NormalizeActiveModel()
 	if (!pGLCanvas)
 		return;
 
-	VMeshes *pVMeshes = pGLCanvas->GetVMeshes();
-	if (!pVMeshes)
+	// Normalize porte sur la VUE ENTIERE, pas sur un fichier : une seule
+	// transformation pour tous les maillages (voir ApplyNormalization), sinon les
+	// fichiers seraient ramenes a la meme taille et empiles a l'origine. La garde
+	// est donc celle de la scene, et non celle d'une cible.
+	VModels* scene = pGLCanvas->GetVModels();
+	if (!scene || scene->GetNModels() == 0)
 		return;
 
 	pGLCanvas->ApplyNormalization(true);
@@ -3596,7 +3753,7 @@ void MyFrame::OnTreatmentSmoothingTaubin(wxCommandEvent& WXUNUSED(event))
 	if (!pGLCanvas)
 		return;
 
-	VMeshes *pVMeshes = pGLCanvas->GetVMeshes();
+	VMeshes* pVMeshes = TargetMeshesOrLog(pGLCanvas, _T("Smoothing Taubin"));
 	if (!pVMeshes)
 		return;
 
@@ -3627,7 +3784,7 @@ void MyFrame::OnTreatmentSmoothingLaplacian(wxCommandEvent& WXUNUSED(event))
 	if (!pGLCanvas)
 		return;
 
-    VMeshes* pVMeshes = pGLCanvas->GetVMeshes();
+	VMeshes* pVMeshes = TargetMeshesOrLog(pGLCanvas, _T("Smoothing Laplacian"));
 	if (!pVMeshes)
 		return;
 
@@ -3693,7 +3850,7 @@ void MyFrame::OnTreatmentSubdivisionLoop(wxCommandEvent& WXUNUSED(event))
 	if (!pGLCanvas)
 		return;
 
-	VMeshes* pVMeshes = pGLCanvas->GetVMeshes();
+	VMeshes* pVMeshes = TargetMeshesOrLog(pGLCanvas, _T("Subdivision Loop"));
 	if (!pVMeshes)
 		return;
 
@@ -3716,7 +3873,7 @@ void MyFrame::OnTreatmentSubdivisionKarbacher(wxCommandEvent& WXUNUSED(event))
 	if (!pGLCanvas)
 		return;
 
-	VMeshes* pVMeshes = pGLCanvas->GetVMeshes();
+	VMeshes* pVMeshes = TargetMeshesOrLog(pGLCanvas, _T("Subdivision Karbacher"));
 	if (!pVMeshes)
 		return;
 
@@ -3743,7 +3900,7 @@ void MyFrame::OnTreatmentSubdivisionSqrt3(wxCommandEvent& WXUNUSED(event))
 	if (!pGLCanvas)
 		return;
 
-	VMeshes* pVMeshes = pGLCanvas->GetVMeshes();
+	VMeshes* pVMeshes = TargetMeshesOrLog(pGLCanvas, _T("Subdivision sqrt(3)"));
 	if (!pVMeshes)
 		return;
 
@@ -3791,7 +3948,7 @@ void MyFrame::OnTreatmentApplyNormals(wxCommandEvent& WXUNUSED(event))
 		*m_pWndLogging << _T("Normals: no active model\n");
 		return;
 	}
-	VMeshes* pVMeshes = pGLCanvas->GetVMeshes();
+	VMeshes* pVMeshes = TargetMeshesOrLog(pGLCanvas, _T("Normals"));
 	if (!pVMeshes)
 		return;
 
@@ -3852,7 +4009,7 @@ void MyFrame::ApplyDecimation(void)
 		return;
 	}
 
-	VMeshes* pVMeshes = pGLCanvas->GetVMeshes();
+	VMeshes* pVMeshes = TargetMeshesOrLog(pGLCanvas, _T("Decimation"));
 	if (!pVMeshes)
 		return;
 
@@ -3984,7 +4141,7 @@ void MyFrame::ApplyCurvature(MyGLCanvas* pCanvas, TensorMethodId method, Curvatu
 	if (!pCanvas)
 		return;
 
-	VMeshes* pVMeshes = pCanvas->GetVMeshes();
+	VMeshes* pVMeshes = TargetMeshesOrLog(pCanvas, _T("Curvature"));
 	if (!pVMeshes)
 		return;
 
@@ -4046,12 +4203,34 @@ void MyFrame::RecolorCurvature(MyGLCanvas* pCanvas, CurvatureType type)
 
 	it->second.type = type;
 
-	VMeshes* pVMeshes = pCanvas->GetVMeshes();
+	// Silencieux, contrairement aux traitements : ce n'est pas une commande de
+	// l'utilisateur mais la reprise du type courant, rejouee a chaque changement
+	// de combo -- journaliser un refus ici noierait le journal.
+	VMeshes* pVMeshes = pCanvas->GetTargetMeshes();
 	if (!pVMeshes || !it->second.enabled)
 		return;  // off: keep the new type but leave the mesh as-is
 
 	colorizeCurvatureMeshes(pVMeshes, type);
 	pCanvas->Refresh();
+}
+
+//
+// Give the view back the shading mode held by `state`, if any. The restore is
+// skipped when the view no longer sits in VertexColors: the mode was then
+// changed by hand while the map was on, and an explicit user choice outranks
+// the mode the visualization had saved. Either way the hold is released.
+//
+void MyFrame::RestoreShadingAfterCurvature(MyGLCanvas* pCanvas, CurvatureState& state)
+{
+	if (!pCanvas || !state.savedShadingValid)
+		return;
+
+	if (pCanvas->GetShadingMode() == CG_shading_mode::VertexColors)
+	{
+		pCanvas->SetShadingMode(state.savedShading);
+		SyncShadingChoice(pCanvas);
+	}
+	state.savedShadingValid = false;
 }
 
 //
@@ -4064,7 +4243,7 @@ void MyFrame::SetCurvatureEnabled(MyGLCanvas* pCanvas, bool enabled)
 	if (!pCanvas)
 		return;
 
-	VMeshes* pVMeshes = pCanvas->GetVMeshes();
+	VMeshes* pVMeshes = TargetMeshesOrLog(pCanvas, _T("Curvature"));
 	if (!pVMeshes)
 		return;
 
@@ -4072,6 +4251,19 @@ void MyFrame::SetCurvatureEnabled(MyGLCanvas* pCanvas, bool enabled)
 
 	if (enabled)
 	{
+		// The curvature map is written into the per-vertex colours, so the view
+		// only shows it in VertexColors mode. Capture the mode being replaced on
+		// this edge alone: a method change re-enters ApplyCurvature with the
+		// visualization already on, and capturing there would save VertexColors
+		// over the mode to restore.
+		if (!state.savedShadingValid)
+		{
+			state.savedShading = pCanvas->GetShadingMode();
+			state.savedShadingValid = true;
+		}
+		pCanvas->SetShadingMode(CG_shading_mode::VertexColors);
+		SyncShadingChoice(pCanvas);
+
 		// Compute the tensor field (if not already) and colour the mesh for
 		// the stored method/type. ApplyCurvature flips state.enabled to true.
 		ApplyCurvature(pCanvas, state.method, state.type);
@@ -4081,5 +4273,6 @@ void MyFrame::SetCurvatureEnabled(MyGLCanvas* pCanvas, bool enabled)
 	state.enabled = false;
 	if (state.savedValid)
 		restoreCurvatureColors(pVMeshes, state.savedColors);
+	RestoreShadingAfterCurvature(pCanvas, state);
 	pCanvas->Refresh();
 }

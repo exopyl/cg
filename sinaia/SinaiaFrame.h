@@ -100,6 +100,7 @@ class MyFrame : public wxFrame
 	ID_FILESCTRL,
 	ID_OPENFILESLIST,          // panneau "Models" (wxScrolledWindow)
 
+    ID_FILE_ADD,               // File > Add... : ajoute des fichiers à la vue courante
     ID_FILE_EXPORT_IMAGE,
     ID_FILE_FAV_TOOLBAR,       // dropdown button (toolbar, between Open and Save)
     ID_FILE_FAV_ADD_CURRENT,
@@ -200,6 +201,17 @@ public:
     // Load a model file into a new tab. Used by the remote console ('open').
     void LoadModelFile(const wxString& filename) { OpenDocument(filename); }
 
+    // Ajoute un LOT de fichiers à la vue de l'onglet courant (un seul recadrage).
+    // false si aucun onglet n'est ouvert ou si la liste est vide : RIEN n'est alors
+    // ajouté, et l'appelant reste libre de choisir un autre sort pour ces fichiers.
+    bool AddFilesToCurrentView(const wxArrayString& paths);
+
+    // Sort d'un lot de fichiers DÉPOSÉS, quelle que soit la source (panneau "Files"
+    // ou explorateur de l'OS) et quelle que soit la zone visée (canvas ou fenêtre) :
+    // sans modificateur, un onglet par fichier ; Shift enfoncé, ajout à la vue
+    // courante. Publique parce que la cible de dépôt du canvas passe par ici.
+    void DropModelFiles(const wxArrayString& paths);
+
     // BASE DE COUPE de la vue ACTIVE : pose l'etat et remet a jour les DEUX
     // commandes qui l'exposent (bouton de la barre d'outils, case du menu).
     // Publique parce que la console distante doit passer par ici : basculer le
@@ -223,6 +235,13 @@ public:
     // Rafraîchit "Models" (restyle la sélection) + "Model information", après que le
     // canvas a changé le Model sélectionné (clic sur un modèle dans la vue 3D).
     void RefreshModelSelection() { UpdatePropertiesGrid(); }
+
+    // SÉLECTIONNE le Model d'indice `index` dans la vue active (même indice que le
+    // panneau « Models », que `drop N` et que `camera pivot model N`). Publique pour
+    // la console distante, qui doit passer par ici : poser MyGLCanvas::SetSelectedModel
+    // directement laisserait « Models » et « Model information » sur l'ancienne
+    // sélection. false si aucune vue n'est ouverte ou si l'indice est hors bornes.
+    bool SelectModelByIndex(std::size_t index);
 
 private:
     wxTextCtrl* CreateTextCtrl(const wxString& text = wxEmptyString);
@@ -251,6 +270,9 @@ private:
     void OnAllowNotebookDnD(wxAuiNotebookEvent& evt);
     void OnNotebookPageClose(wxAuiNotebookEvent& evt);
     void OnOpen(wxCommandEvent& evt);
+    // File > Add... : sélection multiple, ajoutée à la vue de l'onglet courant.
+    void OnAddToView(wxCommandEvent& evt);
+    void OnUpdateUIAddToView(wxUpdateUIEvent& evt);
     void OnSave(wxCommandEvent& evt);
     void OnSaveAs(wxCommandEvent& evt);
     void OnExportImage(wxCommandEvent& evt);
@@ -274,8 +296,8 @@ private:
 
     void OnDirCtrlSelectionChanged(wxTreeEvent& evt);
     void OnFilesCtrlListItemActivated(wxListEvent& evt);
-    // Démarre un glisser du fichier sélectionné dans le panneau des fichiers ; le
-    // canvas (ModelDropTarget) l'ajoute alors à la scène courante via AppendModel.
+    // Démarre un glisser de TOUTE la sélection du panneau des fichiers, au format
+    // interne SinaiaModelPathFormat (liste de chemins séparés par '\n').
     void OnFilesCtrlBeginDrag(wxListEvent& evt);
 
     void OnNotebookPageChanged(wxAuiNotebookEvent& event);
@@ -359,6 +381,11 @@ private:
     // a tab is created, loaded, closed or its visualization changes.
     void UpdateContextualPanes();
 
+    // Make the toolbar shading selector announce the mode of the given view.
+    // Any code that changes a canvas shading mode calls this, otherwise the
+    // toolbar shows one mode while the view renders another.
+    void SyncShadingChoice(MyGLCanvas* pCanvas);
+
     // Curvature visualization. ApplyCurvature() (re)computes the tensor field
     // for the active canvas with the given method, stores the per-canvas
     // selection, colours the mesh and reveals the Curvature pane.
@@ -367,11 +394,17 @@ private:
     void ApplyCurvature(MyGLCanvas* pCanvas, TensorMethodId method, CurvatureType type);
     void RecolorCurvature(MyGLCanvas* pCanvas, CurvatureType type);
     // Turn the curvature colour map on/off for the canvas (the "Apply
-    // visualization" checkbox): re-colours from the stored tensors when on,
-    // restores the captured original colours when off.
+    // visualization" checkbox): re-colours from the stored tensors and puts the
+    // view in CG_shading_mode::VertexColors when on, restores the captured
+    // original colours and shading mode when off.
     void SetCurvatureEnabled(MyGLCanvas* pCanvas, bool enabled);
 
     void Log(const wxString& text) const;
+
+    // Maillages du modèle CIBLE de `canvas` (règle : MyGLCanvas::GetTargetModel), ou
+    // nullptr APRÈS avoir journalisé la raison du refus. `operation` nomme la commande
+    // qui refuse, pour que la ligne de journal dise à la fois quoi et quoi faire.
+    VMeshes* TargetMeshesOrLog(MyGLCanvas* canvas, const wxString& operation);
 
 	int m_nRadioGeometries;
 	wxRadioButton **m_pRadioGeometries;
@@ -435,11 +468,22 @@ private:
         CurvatureType  type    = CurvatureType::Mean;
         bool           enabled = false;  // "Apply visualization" checkbox
         bool           savedValid = false;  // savedColors captured?
+        // Shading mode the view had before the map was applied. The map lives
+        // in the per-vertex colours, so switching it on forces
+        // CG_shading_mode::VertexColors; savedShadingValid tells that a mode
+        // is held for restore and guards against capturing VertexColors itself.
+        CG_shading_mode savedShading = CG_shading_mode::Materials;
+        bool            savedShadingValid = false;
         // Per-mesh vertex colours captured before the curvature map was first
         // applied, restored when the visualization is turned off (parallel to
         // VMeshes::GetMeshes() order at apply time).
         std::vector<std::vector<float>> savedColors;
     };
+    // Give the view back the shading mode held by `state` when the curvature
+    // visualization goes off, unless another mode has since been picked by hand.
+    // Declared here because it takes a CurvatureState.
+    void RestoreShadingAfterCurvature(MyGLCanvas* pCanvas, CurvatureState& state);
+
     CurvaturePanel* m_pCurvaturePanel = nullptr;
     DecimationPanel* m_pDecimationPanel = nullptr;
     std::unordered_map<MyGLCanvas*, CurvatureState> m_curvatureByCanvas;
