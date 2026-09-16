@@ -35,6 +35,17 @@ namespace cgpbr {
 //   specular  = base * metallic + 0.04 * (1 - metallic)     [F0 de Schlick]
 //   ambient   = 0.2 * base
 //
+// ou `metallic` et `roughness` sont les facteurs EFFECTIFS : le facteur du
+// materiau, multiplie par la moyenne de la carte metallic-roughness quand elle
+// est presente (canal B pour le metallique, canal G pour la rugosite, comme
+// dans le format). Un fichier qui omet les deux facteurs les laisse a 1 et
+// confie tout a la carte -- le facteur seul y donnerait une diffuse NULLE. En
+// l'absence de carte, les facteurs traversent inchanges.
+//
+// La moyenne porte sur TOUS les texels de la carte et se recalcule A CHAQUE
+// APPEL. Un appelant qui projette souvent doit mettre le resultat en cache ;
+// cette fonction n'en garde aucun.
+//
 // puis chacun est converti en sRGB par linearToSrgb. L'ALPHA et la brillance ne
 // sont pas des signaux lumineux : ils traversent sans conversion.
 //
@@ -48,12 +59,13 @@ namespace cgpbr {
 //
 // TYPE RENDU : MaterialTexture si la carte base_color est presente, sinon
 // MaterialColorExt. Rendre inconditionnellement un MaterialColorExt PERDRAIT
-// l'image -- un Duck.glb importe sortirait sans sa texture chez les cinq
+// l'image -- un Duck.glb importe sortirait sans sa texture chez les quatre
 // consommateurs de la projection. L'image est PARTAGEE, pas dupliquee.
 //
 // CE QUE LA PROJECTION JETTE, dans les deux cas, faute de champ ou l'ecrire :
 //
-//   - les cartes normal, metallic_roughness, occlusion et emissive ;
+//   - les cartes normal, occlusion et emissive, et la carte metallic_roughness
+//     en tant qu'IMAGE -- seule sa moyenne survit, dans les scalaires ;
 //   - alphaMode, alphaCutoff, doubleSided ;
 //   - normalScale, occlusionStrength ;
 //   - le jeu d'UV (uvSet) de la carte de couleur de base ;
@@ -68,6 +80,13 @@ std::unique_ptr<Material> toPhong (const MaterialPbr& src);
 // permettent (base depuis la diffuse, rugosite depuis la brillance), approche
 // par la luminance pour le facteur metallique -- exact aux deux extremites
 // (dielectrique pur, metal pur), approche entre les deux.
+//
+// CETTE EXACTITUDE SUPPOSE UN MATERIAU SANS CARTE metallic-roughness. Quand la
+// carte est la, toPhong projette les scalaires EFFECTIFS -- facteur multiplie
+// par la moyenne de la carte -- et cette fonction les reconstruit tels quels :
+// elle rend le scalaire effectif, PAS le facteur du fichier, et la carte
+// elle-meme est perdue. Un aller-retour sur un tel materiau ne redonne donc
+// pas la source.
 //
 // IDEMPOTENTE sur un MaterialPbr : la source en est alors une COPIE. Sans cette
 // garde, un MaterialPbr ne serait reconnu par aucune des trois branches de

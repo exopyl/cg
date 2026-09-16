@@ -304,6 +304,21 @@ void MyGLCanvas::UpdateGeometryKeepingView(VMeshes* pObject)
 // Adopte `pObject` comme scène courante, l'ancienne étant détachée du renderer et
 // détruite. Ne touche ni à la caméra ni à la géométrie : c'est aux appelants de
 // décider ce qu'ils en font.
+// R23. Suspendre le survol PURGE l'état courant : sans cela, le modèle sous le
+// curseur au moment de la bascule garderait ses arêtes jaunes pour toute la
+// durée de la capture, ce qui est exactement le défaut à fermer.
+void MyGLCanvas::SetHoverHighlight(bool enabled)
+{
+	m_hoverHighlight = enabled;
+	if (!enabled && m_hoveredModel)
+	{
+		m_hoveredModel = nullptr;
+		if (auto* frame = dynamic_cast<MyFrame*>(wxGetTopLevelParent(this)))
+			frame->HighlightModelRow(-1);
+	}
+	Refresh(false);
+}
+
 void MyGLCanvas::AdoptScene(VMeshes* pObject)
 {
 	// Détache l'ancienne scène du renderer puis la détruit.
@@ -1758,6 +1773,12 @@ void MyGLCanvas::OnMouse(wxMouseEvent& event)
 	}
 	else if (event.Moving())   // déplacement SANS bouton -> survol (picking fichier)
 	{
+		// R23 : survol suspendu. Le picking lui-même est sauté, pas seulement son
+		// dessin -- sinon la ligne en surbrillance du panneau continuerait de
+		// suivre le curseur pendant une capture.
+		if (!m_hoverHighlight)
+			return;
+
 		Model* hit = PickModel(event.GetX(), event.GetY()).model;
 		if (hit != m_hoveredModel)
 		{

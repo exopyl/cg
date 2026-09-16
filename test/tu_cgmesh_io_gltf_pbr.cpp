@@ -33,6 +33,7 @@
 //
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -64,6 +65,17 @@ const char* kPbrSphere = "./test/data/pbr_sphere.glb";
 // Duck.glb (Khronos) : une baseColorTexture, metallicFactor 0, AUCUN
 // roughnessFactor -- donc la valeur par defaut du format, 1. Aucune extension.
 const char* kDuck = "./test/data/Duck.glb";
+
+// shared_maps_three_primitives.glb : UN materiau, QUATRE images, TROIS
+// primitives. Fabrique pour ce depot, parce qu'aucun GLB de Khronos deja
+// verse ne fait servir un materiau a plusieurs primitives -- Duck et Fox n'ont
+// chacun qu'un seul noeud porteur de maillage.
+//
+// C'est la topologie de Lantern.glb en miniature, et c'est elle qui fait
+// travailler le cache d'images : materialFromGltf est appelee PAR PRIMITIVE,
+// donc trois fois, et rend trois materiaux qui doivent partager leurs quatre
+// images -- douze emplacements pour quatre Img.
+const char* kSharedMaps = "./test/data/shared_maps_three_primitives.glb";
 
 // Fox.glb : une baseColorTexture, metallicFactor 0, roughnessFactor 0,58.
 // Aucune extension. C'est la source de l'oracle « le facteur lu est celui du
@@ -691,4 +703,402 @@ TEST(TEST_cgmesh_io_gltf_pbr, a_pbr_material_gets_its_newmtl_block)
 		<< "usemtl pendant : le .mtl ne definit pas le materiau cite";
 	// La projection d'un dielectrique de rugosite 0,5 : Ns = 0,25 x 128 = 32.
 	EXPECT_NE(mtl.find ("Ns 32."), std::string::npos) << mtl;
+}
+
+// ---------------------------------------------------------------------------
+//  8. La carte metallic-roughness entre dans la projection par sa MOYENNE
+// ---------------------------------------------------------------------------
+// Un glTF qui OMET metallicFactor et roughnessFactor les laisse a 1 -- le defaut
+// du format -- et confie toute l'information a sa metallicRoughnessTexture.
+// C'est la configuration de Lantern.glb. Le facteur seul donnerait alors
+// diffuse = base x (1 - 1) = 0 : modele achromatique, texture de base
+// multipliee par zero.
+//
+// La projection prend donc les scalaires EFFECTIFS :
+//
+//   metallic_eff  = metallicFactor  x moyenne(canal B de la carte)
+//   roughness_eff = roughnessFactor x moyenne(canal G de la carte)
+//
+// Les modeles ci-dessous sont construits EN MEMOIRE, comme la monture entrelacee
+// de la section 4 : la carte fait 2 x 2 texels aux canaux connus, ce qui rend sa
+// moyenne calculable a la main dans l'oracle.
+
+namespace {
+
+// Un modele glTF portant un seul materiau, dont la seule carte est une
+// metallicRoughnessTexture de 2 x 2 texels.
+//
+// Les deux facteurs valent 1 par defaut, ce qui est EXACTEMENT ce que tinygltf
+// pose quand le JSON les omet -- la configuration de Lantern.glb. Les passer
+// explicitement sert aux cas ou le produit facteur x moyenne doit se distinguer
+// de chacun de ses deux termes.
+//
+// baseColorFactor est pose pour que l'oracle de la diffuse ait une couleur a
+// suivre, et AUCUNE carte de couleur de base n'est posee -- la projection rend
+// donc un MaterialColorExt, dont les canaux se lisent directement.
+tinygltf::Model MrMapModel (const unsigned char texels[4][3],
+                            const double baseColor[4],
+                            double metallicFactor  = 1.0,
+                            double roughnessFactor = 1.0)
+{
+	tinygltf::Model model;
+	model.asset.version = "2.0";
+
+	tinygltf::Image image;
+	image.width      = 2;
+	image.height     = 2;
+	image.component  = 4;
+	image.bits       = 8;
+	image.pixel_type = TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE;
+	image.image.resize (16);
+	for (int k = 0; k < 4; ++k)
+	{
+		image.image[4 * k + 0] = texels[k][0];
+		image.image[4 * k + 1] = texels[k][1];
+		image.image[4 * k + 2] = texels[k][2];
+		image.image[4 * k + 3] = 255;
+	}
+	model.images.push_back (image);
+
+	tinygltf::Texture texture;
+	texture.source = 0;
+	model.textures.push_back (texture);
+
+	tinygltf::Material mat;
+	mat.name = "mr_mapped";
+	mat.pbrMetallicRoughness.baseColorFactor.assign (baseColor, baseColor + 4);
+	mat.pbrMetallicRoughness.metallicFactor  = metallicFactor;
+	mat.pbrMetallicRoughness.roughnessFactor = roughnessFactor;
+	mat.pbrMetallicRoughness.metallicRoughnessTexture.index = 0;
+	model.materials.push_back (mat);
+
+	return model;
+}
+
+// La moyenne d'un canal des quatre texels, sur [0,1]. Oracle RE-CALCULE ici et
+// non emprunte au code teste.
+float TexelMean (const unsigned char texels[4][3], int channel)
+{
+	double sum = 0.0;
+	for (int k = 0; k < 4; ++k)
+		sum += (double) texels[k][channel];
+	return (float) (sum / (4.0 * 255.0));
+}
+
+} // namespace
+
+TEST(TEST_cgmesh_io_gltf_pbr, a_metallic_roughness_map_scales_the_metallic_factor)
+{
+	// Canal B (metallique) NON UNIFORME : c'est une moyenne qui est en jeu, pas
+	// une constante. Canal G (rugosite) tenu a 0 : la diffuse n'en depend pas.
+	const unsigned char texels[4][3] = {
+		{ 0, 0,   0 },
+		{ 0, 0,  64 },
+		{ 0, 0, 128 },
+		{ 0, 0, 255 }
+	};
+	const double baseColor[4] = { 0.80, 0.60, 0.40, 1.0 };
+
+	tinygltf::Model model = MrMapModel (texels, baseColor);
+	const std::unique_ptr<MaterialPbr> mat = cgpbr::materialFromGltf (model, 0);
+	ASSERT_NE(mat, nullptr);
+	ASSERT_TRUE(mat->HasMap (cgpbr::MapSlot::metallic_roughness));
+
+	// Le FACTEUR reste celui du format : le conteneur ne combine rien.
+	EXPECT_NEAR(mat->GetFactors().metallic, 1.f, 1e-6f);
+
+	const std::unique_ptr<Material> phong = cgpbr::toPhong (*mat);
+	const MaterialColorExt* out = dynamic_cast<const MaterialColorExt*> (phong.get());
+	ASSERT_NE(out, nullptr) << "aucune carte de couleur de base : un MaterialColorExt";
+
+	const float metallicEff = 1.f * TexelMean (texels, 2);
+	ASSERT_GT(metallicEff, 0.f);
+	ASSERT_LT(metallicEff, 1.f);
+
+	for (int i = 0; i < 3; ++i)
+	{
+		EXPECT_NEAR(out->GetDiffuse()[i],
+		            (float) linearToSrgbRef (baseColor[i] * (1.0 - metallicEff)),
+		            1e-4f) << "canal " << i;
+	}
+
+	// Une carte de moyenne B strictement inferieure a 1 laisse une diffuse
+	// strictement positive, donc une texture de base non annulee.
+	EXPECT_GT(out->GetDiffuse()[0], 0.f);
+}
+
+TEST(TEST_cgmesh_io_gltf_pbr, a_metallic_roughness_map_scales_the_roughness_factor)
+{
+	// Canal G (rugosite) non uniforme, canal B (metallique) tenu a 0 : la
+	// brillance ne depend que du G.
+	const unsigned char texels[4][3] = {
+		{ 0,  32, 0 },
+		{ 0,  96, 0 },
+		{ 0, 160, 0 },
+		{ 0, 224, 0 }
+	};
+	const double baseColor[4] = { 1.0, 1.0, 1.0, 1.0 };
+
+	tinygltf::Model model = MrMapModel (texels, baseColor);
+	const std::unique_ptr<MaterialPbr> mat = cgpbr::materialFromGltf (model, 0);
+	ASSERT_NE(mat, nullptr);
+	EXPECT_NEAR(mat->GetFactors().roughness, 1.f, 1e-6f);
+
+	const std::unique_ptr<Material> phong = cgpbr::toPhong (*mat);
+	const MaterialColorExt* out = dynamic_cast<const MaterialColorExt*> (phong.get());
+	ASSERT_NE(out, nullptr);
+
+	const float roughnessEff = 1.f * TexelMean (texels, 1);
+	EXPECT_NEAR(out->GetShininess(), (1.f - roughnessEff) * (1.f - roughnessEff), 1e-5f);
+
+	// Une carte de moyenne G strictement inferieure a 1 laisse une brillance
+	// strictement positive.
+	EXPECT_GT(out->GetShininess(), 0.f);
+}
+
+// LE CANAL R N'ENTRE PAS DANS LA PROJECTION.
+//
+// Le coeur du format ne lui donne aucun sens dans une metallicRoughnessTexture ;
+// seule la convention ORM y range une occlusion. Deux cartes qui ne different
+// que par lui doivent donner la MEME projection.
+TEST(TEST_cgmesh_io_gltf_pbr, the_red_channel_of_a_metallic_roughness_map_is_ignored)
+{
+	const unsigned char withoutRed[4][3] = {
+		{ 0, 100,  40 },
+		{ 0, 140,  80 },
+		{ 0, 180, 120 },
+		{ 0, 220, 160 }
+	};
+	unsigned char withRed[4][3];
+	for (int k = 0; k < 4; ++k)
+	{
+		withRed[k][0] = 255;                  // seule difference
+		withRed[k][1] = withoutRed[k][1];
+		withRed[k][2] = withoutRed[k][2];
+	}
+	const double baseColor[4] = { 0.9, 0.5, 0.3, 1.0 };
+
+	tinygltf::Model a = MrMapModel (withoutRed, baseColor);
+	tinygltf::Model b = MrMapModel (withRed, baseColor);
+
+	const std::unique_ptr<MaterialPbr> matA = cgpbr::materialFromGltf (a, 0);
+	const std::unique_ptr<MaterialPbr> matB = cgpbr::materialFromGltf (b, 0);
+	ASSERT_NE(matA, nullptr);
+	ASSERT_NE(matB, nullptr);
+
+	// VALIDATION DE LA MONTURE : les deux images sont bien DIFFERENTES, sinon le
+	// test passerait pour la mauvaise raison.
+	const Img* imgA = matA->GetMap (cgpbr::MapSlot::metallic_roughness).image.get();
+	const Img* imgB = matB->GetMap (cgpbr::MapSlot::metallic_roughness).image.get();
+	ASSERT_NE(imgA, nullptr);
+	ASSERT_NE(imgB, nullptr);
+	ASSERT_EQ(imgA->width() * imgA->height(), imgB->width() * imgB->height());
+	const size_t bytes = 4u * (size_t) imgA->width() * (size_t) imgA->height();
+	ASSERT_NE(std::memcmp (imgA->data(), imgB->data(), bytes), 0);
+
+	const std::unique_ptr<Material> phongA = cgpbr::toPhong (*matA);
+	const std::unique_ptr<Material> phongB = cgpbr::toPhong (*matB);
+	const MaterialColorExt* outA = dynamic_cast<const MaterialColorExt*> (phongA.get());
+	const MaterialColorExt* outB = dynamic_cast<const MaterialColorExt*> (phongB.get());
+	ASSERT_NE(outA, nullptr);
+	ASSERT_NE(outB, nullptr);
+
+	for (int i = 0; i < 4; ++i)
+	{
+		EXPECT_FLOAT_EQ(outA->GetDiffuse()[i],  outB->GetDiffuse()[i])  << "diffuse "  << i;
+		EXPECT_FLOAT_EQ(outA->GetSpecular()[i], outB->GetSpecular()[i]) << "specular " << i;
+	}
+	EXPECT_FLOAT_EQ(outA->GetShininess(), outB->GetShininess());
+}
+
+// LE FACTEUR ET LA CARTE SE MULTIPLIENT, ils ne se remplacent pas.
+//
+// Les trois cas ci-dessus posent tous les deux facteurs a 1 : ils ne separent
+// donc PAS `f.metallic *= moy(B)` de `f.metallic = moy(B)`. Celui-ci le fait.
+// Les trois valeurs -- facteur seul, moyenne seule, produit -- sont choisies
+// distinctes, et le test exige que la projection suive le PRODUIT tout en
+// s'ecartant franchement des deux autres.
+//
+//   metallic  : facteur 0,5   x  moyenne(B) 0,4  =  0,20
+//   roughness : facteur 0,25  x  moyenne(G) 0,8  =  0,20
+TEST(TEST_cgmesh_io_gltf_pbr, the_factor_multiplies_the_map_average_and_does_not_replace_it)
+{
+	// Canal B : 0 + 68 + 136 + 204 = 408, soit 408 / (4 x 255) = 0,4 exactement.
+	// Canal G : 153 + 187 + 221 + 255 = 816, soit 0,8 exactement.
+	const unsigned char texels[4][3] = {
+		{ 0, 153,   0 },
+		{ 0, 187,  68 },
+		{ 0, 221, 136 },
+		{ 0, 255, 204 }
+	};
+	const double baseColor[4]    = { 0.80, 0.60, 0.40, 1.0 };
+	const double metallicFactor  = 0.50;
+	const double roughnessFactor = 0.25;
+
+	tinygltf::Model model = MrMapModel (texels, baseColor, metallicFactor, roughnessFactor);
+	const std::unique_ptr<MaterialPbr> mat = cgpbr::materialFromGltf (model, 0);
+	ASSERT_NE(mat, nullptr);
+	ASSERT_TRUE(mat->HasMap (cgpbr::MapSlot::metallic_roughness));
+
+	// Le conteneur porte les facteurs du fichier, sans rien combiner.
+	EXPECT_NEAR(mat->GetFactors().metallic,  (float) metallicFactor,  1e-6f);
+	EXPECT_NEAR(mat->GetFactors().roughness, (float) roughnessFactor, 1e-6f);
+
+	const float meanMetallic  = TexelMean (texels, 2);
+	const float meanRoughness = TexelMean (texels, 1);
+	const float metallicEff   = (float) metallicFactor  * meanMetallic;
+	const float roughnessEff  = (float) roughnessFactor * meanRoughness;
+
+	// VALIDATION DE LA MONTURE : sans cet ecart, le test ne distinguerait rien.
+	ASSERT_GT(std::fabs (metallicEff  - (float) metallicFactor),  0.1f);
+	ASSERT_GT(std::fabs (metallicEff  - meanMetallic),            0.1f);
+	ASSERT_GT(std::fabs (roughnessEff - (float) roughnessFactor), 0.04f);
+	ASSERT_GT(std::fabs (roughnessEff - meanRoughness),           0.1f);
+
+	const std::unique_ptr<Material> phong = cgpbr::toPhong (*mat);
+	const MaterialColorExt* out = dynamic_cast<const MaterialColorExt*> (phong.get());
+	ASSERT_NE(out, nullptr);
+
+	// La diffuse suit le PRODUIT...
+	for (int i = 0; i < 3; ++i)
+	{
+		EXPECT_NEAR(out->GetDiffuse()[i],
+		            (float) linearToSrgbRef (baseColor[i] * (1.0 - metallicEff)),
+		            1e-4f) << "canal " << i;
+	}
+	// ... et ni le facteur seul, ni la moyenne seule.
+	EXPECT_GT(std::fabs (out->GetDiffuse()[0]
+	                     - (float) linearToSrgbRef (baseColor[0] * (1.0 - metallicFactor))), 1e-2f)
+		<< "la projection suit le facteur seul";
+	EXPECT_GT(std::fabs (out->GetDiffuse()[0]
+	                     - (float) linearToSrgbRef (baseColor[0] * (1.0 - meanMetallic))), 1e-2f)
+		<< "la projection suit la moyenne seule";
+
+	// Meme propriete sur la brillance.
+	EXPECT_NEAR(out->GetShininess(), (1.f - roughnessEff) * (1.f - roughnessEff), 1e-5f);
+	EXPECT_GT(std::fabs (out->GetShininess()
+	                     - (1.f - (float) roughnessFactor) * (1.f - (float) roughnessFactor)), 1e-3f)
+		<< "la brillance suit le facteur seul";
+	EXPECT_GT(std::fabs (out->GetShininess()
+	                     - (1.f - meanRoughness) * (1.f - meanRoughness)), 1e-3f)
+		<< "la brillance suit la moyenne seule";
+}
+
+// ORACLE DE NON-REGRESSION : sans carte metallic-roughness, la projection est
+// celle des facteurs seuls.
+TEST(TEST_cgmesh_io_gltf_pbr, without_a_metallic_roughness_map_the_factors_pass_through)
+{
+	tinygltf::Model model;
+	model.asset.version = "2.0";
+
+	const double baseColor[4] = { 0.80, 0.60, 0.40, 1.0 };
+	tinygltf::Material mat;
+	mat.name = "no_mr_map";
+	mat.pbrMetallicRoughness.baseColorFactor.assign (baseColor, baseColor + 4);
+	mat.pbrMetallicRoughness.metallicFactor  = 0.25;
+	mat.pbrMetallicRoughness.roughnessFactor = 0.50;
+	model.materials.push_back (mat);
+
+	const std::unique_ptr<MaterialPbr> pbr = cgpbr::materialFromGltf (model, 0);
+	ASSERT_NE(pbr, nullptr);
+	ASSERT_FALSE(pbr->HasMap (cgpbr::MapSlot::metallic_roughness));
+
+	const std::unique_ptr<Material> phong = cgpbr::toPhong (*pbr);
+	const MaterialColorExt* out = dynamic_cast<const MaterialColorExt*> (phong.get());
+	ASSERT_NE(out, nullptr);
+
+	// Les facteurs du fichier, sans aucune ponderation.
+	for (int i = 0; i < 3; ++i)
+	{
+		EXPECT_NEAR(out->GetDiffuse()[i],
+		            (float) linearToSrgbRef (baseColor[i] * 0.75), 1e-4f) << "diffuse " << i;
+		EXPECT_NEAR(out->GetSpecular()[i],
+		            (float) linearToSrgbRef (baseColor[i] * 0.25 + 0.04 * 0.75), 1e-4f)
+			<< "specular " << i;
+	}
+	EXPECT_NEAR(out->GetShininess(), 0.25f, 1e-6f);
+}
+
+// ===========================================================================
+//  Mutualisation des images d'une meme lecture
+// ===========================================================================
+
+// L'ORACLE DE E5, cote memoire centrale : douze emplacements de carte, quatre
+// Img. Sans cache, chacun des trois appels a materialFromGltf redecoderait les
+// quatre images, et le compte serait de douze.
+//
+// Le detecteur a ete valide par mutation : construit contre la lecture SANS
+// cache, il lit 12 adresses distinctes et echoue.
+TEST(TEST_cgmesh_io_gltf_pbr, a_material_serving_several_primitives_shares_its_images)
+{
+	VMeshes vm;
+	ASSERT_TRUE(VMeshesIO::load (vm, kSharedMaps));
+	ASSERT_EQ(vm.GetMeshes().size(), 3u);
+
+	std::vector<const Img*> used;
+	for (const Mesh* pMesh : vm.GetMeshes())
+	{
+		ASSERT_NE(pMesh, nullptr);
+		const MaterialPbr* pbr = dynamic_cast<const MaterialPbr*> (pMesh->GetMaterial (0));
+		ASSERT_NE(pbr, nullptr);
+		for (int i = 0; i < (int) cgpbr::MapSlot::count; ++i)
+		{
+			const cgpbr::MapSlot slot = (cgpbr::MapSlot) i;
+			if (pbr->HasMap (slot))
+				used.push_back (pbr->GetMap (slot).image.get());
+		}
+	}
+
+	std::vector<const Img*> distinct = used;
+	std::sort (distinct.begin(), distinct.end());
+	distinct.erase (std::unique (distinct.begin(), distinct.end()), distinct.end());
+
+	EXPECT_EQ(used.size(), 12u)     << "trois primitives x quatre cartes";
+	EXPECT_EQ(distinct.size(), 4u)  << "quatre images distinctes dans le fichier";
+	for (const Img* p : distinct)
+		EXPECT_NE(p, nullptr);
+}
+
+// CE QUE CE TEST MONTRE, ET RIEN DE PLUS : sur UN SEUL modele, un cache partage
+// entre deux appels rend les memes pixels, et la surcharge SANS cache en rend
+// deux copies.
+//
+// Il ne franchit jamais la frontiere entre deux modeles, et ne pourrait pas :
+// passer un meme cache a deux modeles serait le mesusage que la portee interdit,
+// pas un comportement a verifier. C'est l'ISOLATION DE LA SURCHARGE A DEUX
+// ARGUMENTS qui est l'oracle -- elle cree son cache a chaque appel, et c'est ce
+// qui empeche un appelant de confondre deux fichiers. La contrainte vient de
+// the_map_name_is_not_a_cache_key : l'indice d'image est local au fichier.
+TEST(TEST_cgmesh_io_gltf_pbr, the_cacheless_overload_shares_nothing_between_calls)
+{
+	tinygltf::Model model;
+	ASSERT_TRUE(LoadGlb (model, kDuck));
+
+	cgpbr::GltfImageCache shared;
+	const std::unique_ptr<MaterialPbr> a = cgpbr::materialFromGltf (model, 0, shared);
+	const std::unique_ptr<MaterialPbr> b = cgpbr::materialFromGltf (model, 0, shared);
+	ASSERT_NE(a, nullptr);
+	ASSERT_NE(b, nullptr);
+	ASSERT_TRUE(a->HasMap (cgpbr::MapSlot::base_color));
+	ASSERT_TRUE(b->HasMap (cgpbr::MapSlot::base_color));
+	EXPECT_EQ(a->GetMap (cgpbr::MapSlot::base_color).image.get(),
+	          b->GetMap (cgpbr::MapSlot::base_color).image.get());
+
+	const std::unique_ptr<MaterialPbr> c = cgpbr::materialFromGltf (model, 0);
+	const std::unique_ptr<MaterialPbr> d = cgpbr::materialFromGltf (model, 0);
+	ASSERT_NE(c, nullptr);
+	ASSERT_NE(d, nullptr);
+	EXPECT_NE(c->GetMap (cgpbr::MapSlot::base_color).image.get(),
+	          d->GetMap (cgpbr::MapSlot::base_color).image.get());
+
+	// Les pixels sont les MEMES, seule l'allocation differe : le partage doit
+	// etre une economie, pas un changement de donnee.
+	const Img* x = a->GetMap (cgpbr::MapSlot::base_color).image.get();
+	const Img* y = c->GetMap (cgpbr::MapSlot::base_color).image.get();
+	ASSERT_NE(x, nullptr);
+	ASSERT_NE(y, nullptr);
+	ASSERT_EQ(x->width(),  y->width());
+	ASSERT_EQ(x->height(), y->height());
+	EXPECT_EQ(std::memcmp (x->data(), y->data(),
+	                       4u * (size_t) x->width() * (size_t) x->height()), 0);
 }

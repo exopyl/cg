@@ -2674,23 +2674,41 @@ void MyFrame::OnNewParameterizedSvg(wxCommandEvent& WXUNUSED(event))
 	if (dlg.ShowModal() != wxID_OK)
 		return;
 
-	const std::string path = std::string(dlg.GetPath().mb_str(wxConvUTF8));
-	auto pParam = std::make_unique<ParameterizedSvgExtrusion>(path);
-
-	Mesh* pMesh = pParam->TakeMesh();
-	if (!pMesh)
+	if (!AddSvgExtrusionTab(dlg.GetPath()))
 	{
 		wxMessageBox(_("Failed to import SVG (file unreadable or no fillable shapes)."),
 		             _("SVG import error"), wxOK | wxICON_ERROR, this);
-		return;
 	}
+}
+
+//
+// Le corps de l'extrusion SVG, sans dialogue : le menu le fait preceder d'un
+// wxFileDialog, la console distante l'appelle directement. Hauteur et tolerance
+// d'aplatissement ne sont pas passees ici -- ParameterizedSvgExtrusion porte ses
+// propres defauts, identiques pour les deux appelants.
+//
+// `perShapeMaterials` est le SEUL ecart entre eux, et il ne porte pas que sur la
+// couleur : il fait passer l'extrusion d'une tessellation monolithique a un
+// Append par groupe, donc il change aussi les comptes de sommets et de faces
+// (cf. SvgExtrudeOptions::perShapeMaterials). Le menu le laisse a faux et son
+// maillage est inchange ; son panneau de proprietes, lui, montre desormais la
+// case correspondante, decochee.
+//
+bool MyFrame::AddSvgExtrusionTab(const wxString& path, bool perShapeMaterials)
+{
+	auto pParam = std::make_unique<ParameterizedSvgExtrusion>(
+	                  std::string(path.mb_str(wxConvUTF8)), perShapeMaterials);
+
+	Mesh* pMesh = pParam->TakeMesh();
+	if (!pMesh)
+		return false;
 
 	MyGLCanvas* pCanvas = new MyGLCanvas(m_pCtrl, m_pWndLogging,
 	                                     (int*)MyGLCanvas::GetDefaultAttributes());
 	auto* pVMeshes = new VMeshes();
 	pVMeshes->AddMesh(pMesh);
 	pCanvas->SetVMeshes(pVMeshes);
-	m_pCtrl->AddPage(pCanvas, dlg.GetFilename(), true);
+	m_pCtrl->AddPage(pCanvas, wxFileName(path).GetFullName(), true);
 
 	IParameterized* pRaw = pParam.get();
 	m_paramByCanvas[pCanvas] = std::move(pParam);
@@ -2698,6 +2716,7 @@ void MyFrame::OnNewParameterizedSvg(wxCommandEvent& WXUNUSED(event))
 
 	UpdatePropertiesGrid();
 	UpdateContextualPanes();
+	return true;
 }
 
 //

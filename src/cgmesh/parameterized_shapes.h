@@ -335,7 +335,8 @@ private:
 class ParameterizedSvgExtrusion : public ParameterizedMesh
 {
 public:
-	explicit ParameterizedSvgExtrusion(const std::string& filename);
+	explicit ParameterizedSvgExtrusion(const std::string& filename,
+	                                   bool perShapeMaterials = false);
 	std::vector<Parameter> GetParameters() override;
 	void Regenerate() override;
 	std::string GetName() const override { return "SVG extrusion"; }
@@ -350,6 +351,11 @@ private:
 	// que valait l'ancien 0.5 sur un canevas de 100 -- soit les fichiers d'essai du
 	// depot -- de sorte que le rendu habituel ne change pas.
 	float       m_flattenTol = 0.005f;
+	// Un MaterialColor par couleur de remplissage, au lieu d'un maillage sans
+	// aucun materiau. Faux par defaut : le rendu habituel d'une plaque gravee
+	// n'a pas de couleur propre, et l'activer scinde la tessellation en un
+	// Append par groupe (cf. SvgExtrudeOptions::perShapeMaterials).
+	bool        m_perShapeMaterials = false;
 };
 
 // ---------------------------------------------------------------------------

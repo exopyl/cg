@@ -15,12 +15,19 @@ typedef struct vboInfo
 	GLuint    vboNormals;   // 0 if absent
 	GLuint    vboColors;    // 0 if absent (vec3)
 	GLuint    vboTexCoords; // 0 if absent (vec2)
+	// TANGENTES, vec4 : xyz la tangente, w la POIGNEE, dont la bitangente se
+	// deduit par cross(N, T) * w. Televersees sous DEUX conditions reunies --
+	// des tangentes valides ET au moins un materiau portant une carte de
+	// normales -- parce qu'un attribut televerse et jamais lu est de la bande
+	// passante pure : 16 octets par sommet de rendu, pour rien.
+	GLuint    vboTangents;  // 0 if absent (vec4)
 	GLuint    iboIndices;   // GL_ELEMENT_ARRAY_BUFFER
 
 	int       count;        // 3 * m_nFaces — index count for glDrawElements
 	bool      hasNormals;
 	bool      hasColors;
 	bool      hasTexCoords;
+	bool      hasTangents;
 
 	// One run of the index buffer per material (see Mesh::MaterialRange).
 	// Empty meshes / single-material meshes still draw via 'count'.
@@ -64,8 +71,8 @@ public:
 
 	int addMesh (Mesh *mesh);
 
-	// RETRAIT D'UN MAILLAGE : libere ses cinq objets GL (positions, normales,
-	// couleurs, UV, indices) et rend l'entree.
+	// RETRAIT D'UN MAILLAGE : libere ses six objets GL (positions, normales,
+	// couleurs, UV, tangentes, indices) et rend l'entree.
 	//
 	// Il n'existait pas. releaseBuffers etait PRIVEE et n'etait appelee que par
 	// ~VBOManager -- lequel appartient au singleton MeshRenderer, cree par un

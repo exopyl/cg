@@ -21,7 +21,7 @@ namespace {
 // image non decodee (le lecteur n'avait pas de rappel d'image), ou disposition
 // autre que RGBA 8 bits -- la seule que le tampon d'Img sache porter.
 std::shared_ptr<Img> ImageFromGltfTexture (const tinygltf::Model& model, int textureIndex,
-                                           std::string& name)
+                                           std::string& name, cgpbr::GltfImageCache& cache)
 {
 	if (textureIndex < 0 || textureIndex >= (int) model.textures.size())
 		return nullptr;
@@ -34,6 +34,25 @@ std::shared_ptr<Img> ImageFromGltfTexture (const tinygltf::Model& model, int tex
 	if (image.width <= 0 || image.height <= 0 || image.component != 4 || image.bits != 8)
 		return nullptr;
 
+	// Nom INDICATIF (cf. TextureRef::name). Ni `image.name`, que la
+	// specification n'oblige a rien, ni le repli sur l'indice, qui est LOCAL AU
+	// MODELE, ne sont uniques : deux fichiers rendent tous deux
+	// « gltf_image_0 ». Ce champ ne peut donc pas servir de cle de cache -- il
+	// nomme, il n'identifie pas.
+	//
+	// Il est RECALCULE a chaque appel, y compris quand les pixels viennent du
+	// cache : il ne depend que du modele, et le deduire de l'entree partagee
+	// ferait du nom une propriete de l'image plutot que de l'emplacement.
+	name = image.name.empty() ? ("gltf_image_" + std::to_string (texture.source))
+	                          : image.name;
+
+	// LA CLE EST L'INDICE D'IMAGE, et non l'indice de texture : deux textures
+	// peuvent designer la meme image par des echantillonneurs differents, et
+	// c'est bien la source qui porte les pixels.
+	const auto hit = cache.find (texture.source);
+	if (hit != cache.end())
+		return hit->second;
+
 	const size_t bytes = 4u * (size_t) image.width * (size_t) image.height;
 	if (image.image.size() < bytes)
 		return nullptr;
@@ -44,23 +63,21 @@ std::shared_ptr<Img> ImageFromGltfTexture (const tinygltf::Model& model, int tex
 		return nullptr;
 	memcpy (out->data(), image.image.data(), bytes);
 
-	// Nom INDICATIF (cf. TextureRef::name). Ni `image.name`, que la
-	// specification n'oblige a rien, ni le repli sur l'indice, qui est LOCAL AU
-	// MODELE, ne sont uniques : deux fichiers rendent tous deux
-	// « gltf_image_0 ». Ce champ ne peut donc pas servir de cle de cache -- il
-	// nomme, il n'identifie pas.
-	name = image.name.empty() ? ("gltf_image_" + std::to_string (texture.source))
-	                          : image.name;
+	// SEULS LES SUCCES SONT MEMORISES. Memoriser un echec economiserait des
+	// tests qui ne coutent rien -- tous les refus ci-dessus precedent la
+	// moindre allocation -- et ferait porter au cache une seconde signification.
+	cache[texture.source] = out;
 	return out;
 }
 
 // Un *TextureInfo de glTF -> un emplacement de MaterialPbr. Ne pose rien quand
 // l'image n'est pas exploitable : l'emplacement reste vide.
 void AttachMap (MaterialPbr& dst, cgpbr::MapSlot slot, const tinygltf::Model& model,
-                int textureIndex, int texCoord, cgpbr::ColorSpace space)
+                int textureIndex, int texCoord, cgpbr::ColorSpace space,
+                cgpbr::GltfImageCache& cache)
 {
 	std::string name;
-	std::shared_ptr<Img> image = ImageFromGltfTexture (model, textureIndex, name);
+	std::shared_ptr<Img> image = ImageFromGltfTexture (model, textureIndex, name, cache);
 	if (!image)
 		return;
 
@@ -89,6 +106,15 @@ cgpbr::AlphaMode AlphaModeFromGltf (const std::string& mode)
 namespace cgpbr {
 
 std::unique_ptr<MaterialPbr> materialFromGltf (const tinygltf::Model& model, int materialIndex)
+{
+	// Cache LOCAL A CET APPEL : les images qu'il produit n'appartiennent qu'a
+	// lui, ce qui est le contrat de cette surcharge.
+	GltfImageCache images;
+	return materialFromGltf (model, materialIndex, images);
+}
+
+std::unique_ptr<MaterialPbr> materialFromGltf (const tinygltf::Model& model, int materialIndex,
+                                               GltfImageCache& images)
 {
 	if (materialIndex < 0 || materialIndex >= (int) model.materials.size())
 		return nullptr;
@@ -129,19 +155,19 @@ std::unique_ptr<MaterialPbr> materialFromGltf (const tinygltf::Model& model, int
 	// sans qu'aucune erreur ne soit levee.
 	AttachMap (*out, MapSlot::base_color, model,
 	           pbr.baseColorTexture.index,         pbr.baseColorTexture.texCoord,
-	           ColorSpace::srgb);
+	           ColorSpace::srgb, images);
 	AttachMap (*out, MapSlot::metallic_roughness, model,
 	           pbr.metallicRoughnessTexture.index, pbr.metallicRoughnessTexture.texCoord,
-	           ColorSpace::linear);
+	           ColorSpace::linear, images);
 	AttachMap (*out, MapSlot::normal, model,
 	           src.normalTexture.index,            src.normalTexture.texCoord,
-	           ColorSpace::linear);
+	           ColorSpace::linear, images);
 	AttachMap (*out, MapSlot::occlusion, model,
 	           src.occlusionTexture.index,         src.occlusionTexture.texCoord,
-	           ColorSpace::linear);
+	           ColorSpace::linear, images);
 	AttachMap (*out, MapSlot::emissive, model,
 	           src.emissiveTexture.index,          src.emissiveTexture.texCoord,
-	           ColorSpace::srgb);
+	           ColorSpace::srgb, images);
 
 	return out;
 }

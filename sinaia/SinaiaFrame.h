@@ -201,6 +201,17 @@ public:
     // Load a model file into a new tab. Used by the remote console ('open').
     void LoadModelFile(const wxString& filename) { OpenDocument(filename); }
 
+    // Extrude un SVG dans un NOUVEL onglet et branche la geometrie parametree au
+    // panneau de proprietes. Point d'entree unique du menu « From SVG » et de la
+    // commande `svgextrude` de la console : le dialogue de fichier reste chez
+    // l'appelant, de sorte que les deux empruntent exactement le meme chemin.
+    // false quand le fichier est illisible ou ne porte aucune forme remplissable.
+    //
+    // `perShapeMaterials` : un MaterialColor par couleur de remplissage. Faux
+    // pour le menu, qui produit une plaque gravee sans couleur propre ; vrai
+    // pour `svgextrude`, dont c'est la raison d'etre.
+    bool AddSvgExtrusionTab(const wxString& path, bool perShapeMaterials = false);
+
     // Ajoute un LOT de fichiers à la vue de l'onglet courant (un seul recadrage).
     // false si aucun onglet n'est ouvert ou si la liste est vide : RIEN n'est alors
     // ajouté, et l'appelant reste libre de choisir un autre sort pour ces fichiers.

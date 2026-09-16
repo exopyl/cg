@@ -96,6 +96,20 @@ public:
 	Model* GetHoveredModel(void) const { return m_hoveredModel; }
 	void   ClearHoveredModel(void) { m_hoveredModel = nullptr; }
 
+	// SURBRILLANCE DE SURVOL, desactivable -- reserve R23.
+	//
+	// Une capture doit etre invariante a la position du curseur. Elle ne l'etait
+	// pas : les aretes jaunes de l'AABB survolee ont fait echouer l'appariement
+	// R10 sur 6 images de 24 d'une serie de shader-captures, sans que rien
+	// n'indique la cause -- l'ecart est une difference d'image comme une autre.
+	//
+	// C'est le SURVOL LUI-MEME qui est suspendu, et non son seul dessin : le
+	// survol synchronise aussi la ligne en surbrillance du panneau des modeles,
+	// et un etat d'interface qui continuerait de bouger pendant une capture
+	// resterait une variable non controlee.
+	bool GetHoverHighlight(void) const { return m_hoverHighlight; }
+	void SetHoverHighlight(bool enabled);
+
 	// Sélection : Model dont les propriétés sont affichées dans "Model information"
 	// (piloté par un clic dans le panneau "Models"). Pointeur stable ; réinitialisé
 	// quand la scène change.
@@ -538,6 +552,7 @@ private:
 	//Mesh_half_edge *m_pMesh = nullptr;
 	VModels *m_pVModels = nullptr;   // scène = liste de Model (un par fichier)
 	Model   *m_hoveredModel = nullptr;    // Model survolé (surbrillance bbox)
+	bool     m_hoverHighlight = true;     // R23 : survol suspendu pendant une capture
 	Model   *m_selectedModel = nullptr;   // Model sélectionné (-> Model information)
 	int      m_pressX = 0, m_pressY = 0;  // position du clic gauche (clic vs glisser)
 

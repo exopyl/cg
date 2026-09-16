@@ -8,6 +8,13 @@
 #include "../src/cgmesh/material_pbr.h"
 #include "../src/cgmesh/vmeshes.h"
 
+// gl_wrapper.h AVANT tout en-tete wx : il tire <windows.h> et glad/wgl.h, dont
+// l'ordre est impose.
+#include "../src/cgre/gl_wrapper.h"
+#include "../src/cgre/capabilities_manager.h"
+#include "../src/cgre/material_renderer.h"
+#include "../src/cgre/surface_program.h"
+
 #include <wx/app.h>
 #include <wx/string.h>
 
@@ -612,6 +619,350 @@ std::string cmdScreenshot(MyFrame* frame, const std::string& path)
     return os.str();
 }
 
+// CANAL D'INSPECTION DU PROGRAMME PBR -- reserve R28.
+//
+// Le chemin PBR n'etait garde par AUCUN harnais : les quatre existants passent
+// tous par le chemin non-PBR, et E3b comme E4 ont ete mesures a la main. Cette
+// commande est ce qui rend le cinquieme harnais possible.
+//
+// CE QU'ELLE PRODUIT EST UN MASQUE, pas une image. `metallic` ecrit le canal B
+// de la carte MR, multiplie par son facteur : la MEME grandeur que le fragment
+// consomme pour choisir entre reflectance et diffuse. La segmentation qui en
+// sort est donc celle du materiau, et elle ne bouge pas avec les lumieres.
+//
+// Elle remplace un seuil de chroma dont le SIGNE du resultat etait fonction du
+// reglage -- ecart bois - ferrures de -0,1204 a 0,10 et +0,0849 a 0,30 sur la
+// meme image.
+std::string cmdPbrChannel(MyFrame* frame, const std::string& arg)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    cgre::PbrChannel want = cgre::PbrChannel::off;
+    if      (arg == "off"       || arg.empty()) want = cgre::PbrChannel::off;
+    else if (arg == "metallic")  want = cgre::PbrChannel::metallic;
+    else if (arg == "roughness") want = cgre::PbrChannel::roughness;
+    else if (arg == "normal")    want = cgre::PbrChannel::normal;
+    else if (arg == "base")      want = cgre::PbrChannel::base;
+    else if (arg == "emissive")  want = cgre::PbrChannel::emissive;
+    else return "ERR usage: pbrchannel [metallic|roughness|normal|base|emissive|off]\n";
+
+    // LE REDESSIN EST INDISPENSABLE : l'uniforme n'est pose qu'au dessin de la
+    // plage suivante, et une capture prise sans lui rendrait l'image d'avant.
+    const bool ok = callOnMain([frame, want]() -> bool {
+        cgre::SetPbrChannel(want);
+        MyGLCanvas* c = frame->GetActiveCanvas();
+        if (!c) return false;
+        c->Refresh(false);
+        c->Update();
+        return true;
+    });
+
+    if (!ok) return "ERR no active view\n";
+    return "pbrchannel " + (arg.empty() ? std::string("off") : arg) + "\nOK\n";
+}
+
+// ENVIRONNEMENT ANALYTIQUE DU PROGRAMME PBR.
+//
+// `env off` n'attenue pas le degrade : il fait SAUTER le bloc dans le fragment.
+// C'est ce qui rend la bascule utilisable comme detecteur -- l'image doit alors
+// etre celle d'avant E7 au bit pres, et toute difference est un defaut ailleurs.
+//
+// `env <ciel> <sol>` prend deux radiances. Elles ne sont pas bornees a 1 : rien
+// n'interdit un ciel plus lumineux qu'un blanc diffus, et c'est l'ecretage final
+// du fragment qui decide. Le refus porte sur le NEGATIF, qui n'a pas de sens.
+std::string cmdEnv(MyFrame* frame, const std::string& arg)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    cgre::PbrEnvironment env = cgre::GetPbrEnvironment();
+
+    if (arg == "off")      { env.enabled = false; }
+    else if (arg == "on")  { env.enabled = true; }
+    else if (arg.empty())  { /* releve seul */ }
+    else
+    {
+        std::istringstream in(arg);
+        double sky = 0.0, ground = 0.0;
+        if (!(in >> sky >> ground))
+            return "ERR usage: env [on|off|<sky> <ground>]\n";
+        if (sky < 0.0 || ground < 0.0)
+            return "ERR radiance must not be negative\n";
+        env.sky     = (float) sky;
+        env.ground  = (float) ground;
+        env.enabled = true;
+    }
+
+    const bool ok = callOnMain([frame, env]() -> bool {
+        cgre::SetPbrEnvironment(env);
+        MyGLCanvas* c = frame->GetActiveCanvas();
+        if (!c) return false;
+        c->Refresh(false);
+        c->Update();
+        return true;
+    });
+
+    if (!ok) return "ERR no active view\n";
+
+    std::ostringstream os;
+    os << "env " << (env.enabled ? "on" : "off")
+       << " sky " << env.sky << " ground " << env.ground << "\nOK" << "\n";
+    return os.str();
+}
+
+// SURBRILLANCE DE SURVOL -- reserve R23.
+//
+// Les aretes jaunes de l'AABB du modele sous le curseur entrent dans la capture
+// comme n'importe quel autre pixel. Un passage de shader-captures.ps1 a rendu
+// 18 appariements sur 24 pour cette seule raison, et l'appariement R10 echoue
+// alors SANS INDIQUER POURQUOI -- il constate une difference d'image.
+//
+// Une commande plutot qu'un deplacement de curseur : parquer le pointeur depend
+// de la geometrie de l'ecran, de la taille de la fenetre et de ce que fait
+// l'environnement pendant la serie. Ceci ne depend de rien.
+std::string cmdHover(MyFrame* frame, const std::string& arg)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    int want = -1;                      // -1 : bascule
+    if      (arg == "on")  want = 1;
+    else if (arg == "off") want = 0;
+    else if (!arg.empty()) return "ERR usage: hover [on|off]\n";
+
+    struct Res { int code; int on; };
+    const Res r = callOnMain([frame, want]() -> Res {
+        MyGLCanvas* c = frame->GetActiveCanvas();
+        if (!c) return { -1, 0 };
+        c->SetHoverHighlight(want < 0 ? !c->GetHoverHighlight() : (want != 0));
+        return { 0, c->GetHoverHighlight() ? 1 : 0 };
+    });
+
+    if (r.code < 0) return "ERR no active view\n";
+    return std::string("hover ") + (r.on ? "on" : "off") + "\nOK\n";
+}
+
+// ---------------------------------------------------------------------------
+//  RELEVE DES CAPACITES GL
+// ---------------------------------------------------------------------------
+// Une decision de conception qui repose sur une limite du materiel -- combien
+// d'unites de texture, combien d'attributs generiques, combien de memoire -- ne
+// vaut que si la limite a ete RELEVEE.
+//
+// LE CONTEXTE GL DOIT ETRE COURANT. Un glGetIntegerv sans contexte ne rend pas
+// d'erreur : il rend n'importe quoi, en silence. Le fil de la console n'est pas
+// le fil de rendu, d'ou le callOnMain ET le SetCurrent -- l'un ne remplace pas
+// l'autre, comme le fait deja SaveScreenshot. Le retour de SetCurrent est teste :
+// sans lui, un echec d'activation rendrait des limites a zero, c'est-a-dire
+// exactement le chiffre qui se lit comme une mesure.
+//
+// CE QUE LE RELEVE N'INVENTE PAS. Quand une grandeur depend d'une extension de
+// pilote absente, ou d'une version de GL qui ne la definit pas, la ligne le DIT.
+// Rendre un zero, ou une valeur par defaut plausible, serait pire que se taire.
+std::string cmdCaps(MyFrame* frame)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    struct Caps
+    {
+        bool        ok = false;
+        std::string version, glsl, vendor, renderer, memory;
+        GLint texImageUnits = 0, combinedTexImageUnits = 0;
+        int   pbrTangentLoc = -1;
+        MaterialRenderer::TextureStats textures;
+        GLint maxTextureSize = 0, maxVertexAttribs = 0;
+        std::string profile;
+        int         pendingErrors = 0;
+        std::string pendingCodes;
+    };
+
+    const Caps c = callOnMain([frame]() -> Caps {
+        Caps out;
+        MyGLCanvas* canvas = frame->GetActiveCanvas();
+        if (!canvas || !canvas->m_context) return out;
+        if (!canvas->SetCurrent(*canvas->m_context)) return out;
+
+        // VIDER LA FILE D'ABORD : ce qui s'y trouve a ete produit par le rendu,
+        // pas par ce releve. C'est le compteur que `glcheck` envoie dans la
+        // fenetre de journalisation, que la console ne restitue pas.
+        //
+        // BORNE, la meme que CheckGlErrors : sans contexte courant, certains
+        // pilotes rendent GL_INVALID_OPERATION a chaque appel sans jamais vider
+        // la file. Ici la boucle s'execute sur le fil principal pendant que le
+        // fil de la console attend son resultat -- une boucle infinie gelerait
+        // l'interface ET le socket, et aucun `quit` ne passerait plus.
+        const int kMaxErrors = 16;
+        std::ostringstream codes;
+        for (int i = 0; i < kMaxErrors; ++i)
+        {
+            const GLenum e = glGetError();
+            if (e == GL_NO_ERROR) break;
+            if (out.pendingErrors++) codes << " ";
+            codes << "0x" << std::hex << (unsigned)e << std::dec;
+        }
+        out.pendingCodes = codes.str();
+
+        auto str = [](GLenum name) -> std::string {
+            const GLubyte* s = glGetString(name);
+            return s ? std::string((const char*)s) : std::string("(null)");
+        };
+        out.version  = str(GL_VERSION);
+        out.glsl     = str(GL_SHADING_LANGUAGE_VERSION);
+        out.vendor   = str(GL_VENDOR);
+        out.renderer = str(GL_RENDERER);
+
+        glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS,          &out.texImageUnits);
+        glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &out.combinedTexImageUnits);
+        glGetIntegerv(GL_MAX_TEXTURE_SIZE,                 &out.maxTextureSize);
+        glGetIntegerv(GL_MAX_VERTEX_ATTRIBS,               &out.maxVertexAttribs);
+
+        // GL_CONTEXT_PROFILE_MASK n'existe qu'a partir de GL 3.2. Le seuil se lit
+        // sur la chaine DEJA relevee ci-dessus, et non par un second appel a
+        // glGetString au travers d'un atof sans garde nulle.
+        //
+        // En deca de 3.2 la notion de profil n'existe pas : la ligne rend `n/a`
+        // et non `compatibility`, qui serait une affirmation et non un releve.
+        const double glVersion = out.version.empty() ? 0.0 : std::atof(out.version.c_str());
+        if (glVersion >= 3.2)
+        {
+            GLint mask = 0;
+            glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &mask);
+            if (glGetError() != GL_NO_ERROR)          out.profile = "unknown (query refused)";
+            else if (mask & GL_CONTEXT_COMPATIBILITY_PROFILE_BIT) out.profile = "compatibility";
+            else if (mask & GL_CONTEXT_CORE_PROFILE_BIT)          out.profile = "core";
+            else                                                  out.profile = "unknown (empty mask)";
+        }
+        else
+        {
+            out.profile = "n/a (GL < 3.2)";
+        }
+
+        // Location de l'attribut generique de tangente du programme PBR. Elle
+        // vaut -1 tant qu'aucun materiau PBR n'a ete dessine : le programme est
+        // construit paresseusement, et cette commande ne le force pas -- le
+        // releve dirait alors autre chose que ce que la session rend.
+        out.pbrTangentLoc = cgre::PbrTangentAttribLocation ();
+
+        // OBJETS DE TEXTURE VIVANTS. Releve et non deduit : le nombre de
+        // materiaux multiplie par le nombre de cartes ne vaut que sans partage,
+        // et c'est justement ce que la mutualisation change.
+        out.textures = MaterialRenderer::getInstance()->GetTextureStats ();
+
+        CapabilitiesManager::getInstance()->GetMemoryInfo(out.memory);
+        out.ok = true;
+        return out;
+    });
+
+    if (!c.ok) return "ERR no active view, no GL context, or context activation failed\n";
+
+    std::ostringstream os;
+    os << "gl_version "   << c.version  << "\n";
+    os << "glsl_version " << c.glsl     << "\n";
+    os << "vendor "       << c.vendor   << "\n";
+    os << "renderer "     << c.renderer << "\n";
+    os << "profile "      << c.profile  << "\n";
+    os << "max_texture_image_units "          << c.texImageUnits         << "\n";
+    os << "max_combined_texture_image_units " << c.combinedTexImageUnits << "\n";
+    os << "max_texture_size "                 << c.maxTextureSize        << "\n";
+    os << "max_vertex_attribs "               << c.maxVertexAttribs      << "\n";
+
+    // La reserve R2 se clot ici plutot que dans la fenetre de journalisation,
+    // que cette console ne restitue pas : en profil de compatibilite, la
+    // location 0 est aliasee sur gl_Vertex et detruirait la geometrie.
+    os << "pbr_tangent_attrib_location " << c.pbrTangentLoc;
+    if (c.pbrTangentLoc < 0) os << "  (PBR program not built yet)";
+    os << "\n";
+
+    // `uses` est le nombre d'objets qu'il aurait fallu sans partage : l'ecart
+    // avec `objects` EST le gain. `bytes` borne la demande de VRAM -- quatre
+    // octets par texel et le tiers des mipmaps -- et ne mesure pas l'occupation,
+    // que le pilote pade et compresse a sa guise.
+    os << "texture_objects " << c.textures.objects << "\n";
+    os << "texture_uses "    << c.textures.uses    << "\n";
+    os << "texture_vram_theoretical_mib "
+       << std::fixed << std::setprecision(1)
+       << (double)c.textures.bytes / (1024.0 * 1024.0) << std::defaultfloat << "\n";
+
+    if (c.memory.empty())
+    {
+        // GetMemoryInfo ne sait lire que NVX_gpu_memory_info : une chaine vide
+        // signifie extension absente, et non memoire nulle.
+        os << "memory unavailable (driver extension NVX_gpu_memory_info absent)\n";
+    }
+    else
+    {
+        std::istringstream lines(c.memory);
+        std::string line;
+        while (std::getline(lines, line))
+            if (!line.empty()) os << "memory " << line << "\n";
+    }
+
+    os << "gl_errors_pending " << c.pendingErrors;
+    if (!c.pendingCodes.empty()) os << " " << c.pendingCodes;
+    os << "\n";
+    os << "OK\n";
+    return os.str();
+}
+
+// EXTRUSION SVG, la forme scriptee du menu « Geometry > From SVG ». Elle emprunte
+// le meme code -- MyFrame::AddSvgExtrusionTab -- et les memes valeurs
+// d'extrusion, hauteur et tolerance d'aplatissement comprises.
+//
+// ELLE NE REND PAS LE MEME MAILLAGE POUR AUTANT, et c'est le sens du mode.
+// `colored` active SvgExtrudeOptions::perShapeMaterials, qui ne gouverne pas que
+// la couleur : il fait passer l'extrusion d'une tessellation MONOLITHIQUE a un
+// Append PAR GROUPE (import_svg.cpp, perGroupAppend). Les comptes de sommets et
+// de faces different donc des deux cotes. `plain` reproduit exactement le
+// maillage du menu -- c'est le seul moyen scripte de l'observer.
+//
+// Le defaut est `colored` : la commande existe pour atteindre le MaterialColor,
+// seule classe de materiau qu'aucun format de fichier n'apporte. Tout
+// importateur de maillage produit un MaterialColorExt ou un MaterialTexture.
+std::string cmdSvgExtrude(MyFrame* frame, const std::string& args)
+{
+    if (!frame) return "ERR frame unavailable\n";
+
+    std::istringstream iss(args);
+    std::string path, mode;
+    iss >> path >> mode;
+    if (path.empty()) return "ERR usage: svgextrude PATH [plain|colored]\n";
+    if (mode.empty()) mode = "colored";
+    if (mode != "plain" && mode != "colored")
+        return "ERR usage: svgextrude PATH [plain|colored]\n";
+
+    const bool perShapeMaterials = (mode == "colored");
+
+    struct Res { int code; std::size_t meshes; unsigned int materials; };
+
+    const Res r = callOnMain([frame, &path, perShapeMaterials]() -> Res {
+        const wxString wxPath = wxString::FromUTF8(path.c_str());
+        // Meme garde que `open` : un chemin absent se refuse avant tout travail.
+        if (!wxFileExists(wxPath)) return { -1, 0, 0 };
+        if (!frame->AddSvgExtrusionTab(wxPath, perShapeMaterials))
+            return { -2, 0, 0 };
+
+        MyGLCanvas* c = frame->GetActiveCanvas();
+        // Une commande mal ciblee doit se VOIR : un onglet cree mais introuvable
+        // rendrait ici des compteurs a zero, parfaitement plausibles et faux.
+        if (!c || !c->GetVModels()) return { -3, 0, 0 };
+
+        std::size_t  meshes = 0;
+        unsigned int materials = 0;
+        for (const auto& mdl : c->GetVModels()->GetModels())
+            for (auto* mesh : mdl->m_meshes.GetMeshes())
+                if (mesh) { ++meshes; materials += mesh->GetNMaterials(); }
+        return { 0, meshes, materials };
+    });
+
+    if (r.code == -1) return "ERR svgextrude failed (file not found): " + path + "\n";
+    if (r.code == -2)
+        return "ERR svgextrude failed (unreadable, or no fillable shape): " + path + "\n";
+    if (r.code == -3) return "ERR svgextrude: tab created but no active view\n";
+
+    std::ostringstream os;
+    os << "extruded " << path << "\nmode " << mode << "\nmeshes " << r.meshes
+       << "\nmaterials " << r.materials << "\nOK\n";
+    return os.str();
+}
+
 // ---------------------------------------------------------------------------
 //  HARNAIS DE CAPTURES : camera deterministe, bascules d'affichage, controle GL
 // ---------------------------------------------------------------------------
@@ -1157,6 +1508,43 @@ std::string cmdHelp()
         "  material N M               material M of mesh N: type, colors\n"
         "  flip N                     flip winding of every face of mesh N\n"
         "  open PATH                  load a model file into a new tab\n"
+        "  svgextrude PATH [plain|colored]\n"
+        "                             extrude an SVG into a new tab, through the\n"
+        "                             same code as Geometry > From SVG and with the\n"
+        "                             same extrusion values.\n"
+        "                             colored (default): one MaterialColor per fill\n"
+        "                             colour -- no file format can carry that class.\n"
+        "                             It also splits the tessellation per shape, so\n"
+        "                             vertex and face counts DIFFER from plain.\n"
+        "                             plain: exactly what the menu produces, which\n"
+        "                             carries no material at all.\n"
+        "  caps                       GL limits of the CURRENT context, one per\n"
+        "                             line: version, GLSL, vendor, renderer,\n"
+        "                             profile, texture image units (plain and\n"
+        "                             combined), max texture size, vertex attribs,\n"
+        "                             memory, and the pending GL error count.\n"
+        "                             A value that needs a missing driver extension\n"
+        "                             says so instead of reporting zero.\n"
+        "                             DRAINS the GL error queue.\n"
+        "  pbrchannel [metallic|roughness|normal|base|emissive|off]\n"
+        "                             make the PBR fragment write a RAW channel\n"
+        "                             instead of the lit colour. off is the default\n"
+        "                             and renders the nominal image bit for bit.\n"
+        "                             metallic is the segmentation mask that\n"
+        "                             pbr-captures.ps1 uses: it comes from the\n"
+        "                             material, not from a threshold, so it does\n"
+        "                             not move with the lights.\n"
+        "  env [on|off|<sky> <ground>]\n"
+        "                             analytic sky/ground gradient for the PBR path,\n"
+        "                             evaluated in EYE space -- the two lights are\n"
+        "                             posted with an identity modelview, so they are\n"
+        "                             already camera-attached. off SKIPS the block and\n"
+        "                             renders the pre-E7 image bit for bit. Radiances\n"
+        "                             are not capped at 1; negative is refused.\n"
+        "  hover [on|off]             hover highlight -- the yellow AABB edges of\n"
+        "                             the model under the cursor (no arg: toggle).\n"
+        "                             OFF BEFORE ANY CAPTURE: they enter the image\n"
+        "                             and break the R10 pairing without saying why.\n"
         "  append PATH                add a model file to the CURRENT view, world\n"
         "                             coordinates kept (no normalisation) -- the\n"
         "                             scripted form of the drag & drop\n"
@@ -1319,6 +1707,32 @@ cgnet::Reply dispatch(const std::string& rawLine, MyFrame* frame)
         if (path.empty()) return { "ERR usage: open PATH\n", false };
         return { cmdOpen(frame, path), false };
     }
+    if (cmd == "svgextrude")
+    {
+        std::string path;
+        std::getline(iss, path);
+        return { cmdSvgExtrude(frame, trim(path)), false };
+    }
+    if (cmd == "env")
+    {
+        std::string arg;
+        std::getline(iss, arg);
+        return { cmdEnv(frame, trim(arg)), false };
+    }
+    if (cmd == "pbrchannel")
+    {
+        std::string arg;
+        std::getline(iss, arg);
+        return { cmdPbrChannel(frame, trim(arg)), false };
+    }
+    if (cmd == "hover")
+    {
+        std::string arg;
+        std::getline(iss, arg);
+        return { cmdHover(frame, trim(arg)), false };
+    }
+    if (cmd == "caps")
+        return { cmdCaps(frame), false };
     if (cmd == "append")
     {
         std::string path;

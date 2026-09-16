@@ -263,6 +263,16 @@ public:
 	// maillage. Meme surface que GetReflectionImage ().
 	const Img* GetImage () const { return m_pImage.get(); }
 
+	// LA PART DE PROPRIETE, et non la seule adresse.
+	//
+	// Un consommateur qui INDEXE par l'adresse de l'image -- le registre de
+	// textures de cgre le fait -- doit pouvoir empecher qu'elle soit reattribuee
+	// a une autre Img tant qu'il s'en sert. Avec un Img* nu, cette garantie ne
+	// serait qu'une convention entre modules ; avec la part, elle est une
+	// propriete du code.
+	std::shared_ptr<const Img> ShareImage () const { return m_pImage; }
+	std::shared_ptr<const Img> ShareReflectionImage () const { return m_pReflImage; }
+
 	// Carte de REFLEXION, facultative, en plus de la texture diffuse.
 	//
 	// Un materiau peut la declarer par `MAT_REFLMAP` en 3DS ou `refl` en MTL. Le

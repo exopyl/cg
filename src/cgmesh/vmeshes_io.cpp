@@ -1491,6 +1491,16 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
     // composee -- conversion glTF -> depot comprise. Cf. GltfSceneInstances.
     const std::vector<GltfInstance> instances = GltfSceneInstances(model);
 
+    // LES PIXELS SONT PARTAGES PAR TOUTE CETTE LECTURE. materialFromGltf est
+    // appelee PAR PRIMITIVE : un materiau utilise par plusieurs primitives est
+    // relu autant de fois, et sans ce cache chaque lecture redecodait ses
+    // cartes. Sur Lantern.glb, un seul materiau sert trois primitives, soit
+    // douze Img pour quatre images -- 192 Mio au lieu de 64.
+    //
+    // Sa portee est celle de `model`, et pas davantage : l'indice d'image est
+    // local au modele (cf. cgpbr::GltfImageCache).
+    cgpbr::GltfImageCache imageCache;
+
     for (const GltfInstance& instance : instances) {
         const tinygltf::Mesh& gltfMesh = model.meshes[instance.mesh];
 
@@ -1629,7 +1639,7 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
             // frontiere entre les deux modeles est franchie.
             if (primitive.material >= 0 && primitive.material < (int)model.materials.size()) {
                 std::unique_ptr<MaterialPbr> pMaterial =
-                    cgpbr::materialFromGltf(model, primitive.material);
+                    cgpbr::materialFromGltf(model, primitive.material, imageCache);
                 if (pMaterial)
                 {
                     // Le jeu d'UV a lire est celui que designe la carte de
@@ -1942,6 +1952,18 @@ bool VMeshesIO::import_gltf(VMeshes& vm, const char* filename)
                 const unsigned int normalUvSet =
                     (pbrOnMesh != nullptr && pbrOnMesh->HasMap(cgpbr::MapSlot::normal))
                         ? pbrOnMesh->GetMap(cgpbr::MapSlot::normal).uvSet : 0u;
+                // ⚠ LE MOTEUR N'HONORE PAS CE JEU D'UV. La base tangente est
+                // batie sur `normalUvSet`, mais le fragment echantillonne la
+                // carte de normales avec le jeu 0 -- VertexBufferManager ne
+                // televerse que celui-la. Quand les deux different, la base est
+                // valide, unitaire, et FAUSSE : rien dans l'image ne le dit, et
+                // le defaut serait impute aux normales. D'ou cette trace.
+                if (normalUvSet != 0)
+                    fprintf (stderr,
+                             "import_gltf: maillage \"%s\" : carte de normales sur le jeu d'UV %u, "
+                             "que le rendu n'echantillonne pas -- base tangente incoherente.\n",
+                             gltfMesh.name.c_str(), normalUvSet);
+
                 // Le refus est SILENCIEUX cote generateTangents -- il rend un
                 // booleen. Sans cette trace, un maillage a carte de normales et
                 // sans UV repartirait sans base tangente et sans rien qui le

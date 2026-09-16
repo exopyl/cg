@@ -1,5 +1,7 @@
 #include "material_convert.h"
 
+#include "../cgimg/image.h"
+
 #include <cmath>
 
 namespace {
@@ -105,6 +107,83 @@ struct PhongProjection
 	float shininess;
 };
 
+// Les deux scalaires qu'une carte metallic-roughness porte, moyennes sur toute
+// l'image et ramenes dans [0,1].
+//
+// Convention glTF : B = metallique, G = rugosite. LE CANAL R N'EST PAS LU. Le
+// coeur du format ne lui donne AUCUN sens dans une metallicRoughnessTexture --
+// seule la convention ORM, qui est une extension d'outillage, y range une
+// occlusion. Y lire une occlusion est donc arbitraire, et destructeur quand ce
+// canal vaut zero : le modele s'eteindrait entierement.
+struct MapAverages
+{
+	float metallic  { 1.f };
+	float roughness { 1.f };
+};
+
+// Rend false quand l'image ne porte aucun texel exploitable ; le facteur seul
+// fait alors foi.
+//
+// PASSE COMPLETE, sur tous les texels : un sous-echantillonnage biaiserait une
+// carte structuree, ou les moyennes en cause departagent des zones et non du
+// bruit. Le cout est donc celui de l'image entiere, A CHAQUE APPEL -- c'est a
+// l'appelant de mettre la projection en cache s'il la reclame souvent.
+bool AverageMetallicRoughness (const Img& img, MapAverages& out)
+{
+	const unsigned int w = img.width();
+	const unsigned int h = img.height();
+	if (w == 0 || h == 0 || img.data() == nullptr)
+		return false;
+
+	double sumMetallic = 0.0, sumRoughness = 0.0;
+	for (unsigned int j = 0; j < h; ++j)
+	{
+		for (unsigned int i = 0; i < w; ++i)
+		{
+			// get_pixel TRAVERSE LA PALETTE, contrairement a get_g / get_b qui
+			// lisent le tampon comme s'il etait toujours RGBA8 entrelace.
+			unsigned char r, g, b, a;
+			if (!img.get_pixel (i, j, &r, &g, &b, &a))
+				return false;
+			sumRoughness += (double) g;
+			sumMetallic  += (double) b;
+		}
+	}
+
+	const double count = (double) w * (double) h;
+	out.metallic  = (float) (sumMetallic  / (255.0 * count));
+	out.roughness = (float) (sumRoughness / (255.0 * count));
+	return true;
+}
+
+// Les facteurs EFFECTIFS d'un materiau PBR, ceux que la projection de Phong
+// doit voir.
+//
+// Dans glTF, metallicFactor et roughnessFactor MULTIPLIENT la carte
+// metallic-roughness quand elle est presente. Un fichier qui omet les deux les
+// laisse a 1 -- le defaut du format -- et confie toute l'information a la
+// carte ; projeter le facteur seul rend alors le materiau integralement
+// metallique, donc `diffuse = base * (1 - 1) = 0`, et sa texture invisible.
+//
+// Le modele de Phong du depot n'ayant pas de carte de ce type, la carte se
+// resume a sa MOYENNE. C'est une approximation assumee : elle restitue le
+// NIVEAU, pas la variation spatiale.
+//
+// SANS CARTE, les facteurs traversent INCHANGES, bit pour bit.
+cgpbr::Factors EffectiveFactors (const MaterialPbr& src)
+{
+	cgpbr::Factors f = src.GetFactors();
+
+	const cgpbr::TextureRef& mr = src.GetMap (cgpbr::MapSlot::metallic_roughness);
+	MapAverages avg;
+	if (mr.image && AverageMetallicRoughness (*mr.image, avg))
+	{
+		f.metallic  *= avg.metallic;
+		f.roughness *= avg.roughness;
+	}
+	return f;
+}
+
 PhongProjection Project (const cgpbr::Factors& f)
 {
 	const float metallic    = Clamp01 (f.metallic);
@@ -135,7 +214,7 @@ namespace cgpbr {
 
 std::unique_ptr<Material> toPhong (const MaterialPbr& src)
 {
-	const PhongProjection p = Project (src.GetFactors());
+	const PhongProjection p = Project (EffectiveFactors (src));
 	const TextureRef& base  = src.GetMap (MapSlot::base_color);
 
 	if (base.image)

@@ -473,8 +473,9 @@ void ParameterizedMengerSponge::Regenerate()
 // ===========================================================================
 
 // --- SVG extrusion ---------------------------------------------------------
-ParameterizedSvgExtrusion::ParameterizedSvgExtrusion(const std::string& filename)
-	: m_filename(filename)
+ParameterizedSvgExtrusion::ParameterizedSvgExtrusion(const std::string& filename,
+                                                     bool perShapeMaterials)
+	: m_filename(filename), m_perShapeMaterials(perShapeMaterials)
 {
 	Regenerate();
 }
@@ -495,6 +496,7 @@ std::vector<Parameter> ParameterizedSvgExtrusion::GetParameters()
 		// fichier importe, la meme course de curseur allait de « toujours trop
 		// fin » a « 42 % d'ecart des le milieu ».
 		Parameter::MakeFloat("Flatten Tol",    &m_flattenTol, 0.001f, 0.1f),
+		Parameter::MakeBool ("Per-shape materials", &m_perShapeMaterials),
 	};
 }
 void ParameterizedSvgExtrusion::Regenerate()
@@ -505,6 +507,7 @@ void ParameterizedSvgExtrusion::Regenerate()
 	opt.flattenTol   = m_flattenTol;
 	opt.centerAndFit = true;
 	opt.invertY      = true;
+	opt.perShapeMaterials = m_perShapeMaterials;
 	m_pMesh = import_svg_extruded(m_filename, opt);
 	if (m_pMesh)
 		m_pMesh->ComputeNormals();

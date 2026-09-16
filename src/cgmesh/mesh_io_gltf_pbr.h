@@ -11,12 +11,30 @@
 //
 
 #include <memory>
+#include <unordered_map>
 
+class Img;
 class MaterialPbr;
 
 namespace tinygltf { class Model; }
 
 namespace cgpbr {
+
+// Les pixels deja decodes d'UNE lecture, partages entre tous les materiaux
+// qu'elle produit. Cle : l'INDICE D'IMAGE du modele, celui que designe
+// `texture.source`.
+//
+// LA CLE N'EST PAS LE NOM, et le depot s'en protege par un test
+// (the_map_name_is_not_a_cache_key) : `TextureRef::name` retombe sur
+// « gltf_image_<indice> » quand le fichier ne nomme pas son image, et cet
+// indice est LOCAL AU MODELE -- deux fichiers distincts rendent le meme nom
+// pour deux images differentes.
+//
+// Par consequent un cache ne vaut QUE POUR UN tinygltf::Model : l'appelant le
+// declare a cote de son modele et les deux meurent ensemble. Un cache de
+// portee plus large confondrait deux fichiers, ce que la surcharge sans cache
+// ci-dessous garantit de ne jamais faire -- elle en cree un neuf par appel.
+using GltfImageCache = std::unordered_map<int, std::shared_ptr<Img>>;
 
 // Un materiau glTF -> un MaterialPbr. Rend nullptr si l'indice est hors bornes.
 //
@@ -44,5 +62,17 @@ namespace cgpbr {
 // en silence par tinygltf comme par cette fonction -- un fichier qui en porte
 // est lu, mais rendu sans eux.
 std::unique_ptr<MaterialPbr> materialFromGltf (const tinygltf::Model& model, int materialIndex);
+
+// Meme lecture, mais les images sont PRISES DANS `images` quand elles s'y
+// trouvent deja, et y sont deposees sinon.
+//
+// La surcharge existe parce que la signature a deux arguments a des appelants :
+// elle reste le contrat par defaut -- un appel isole, ses propres pixels -- et
+// c'est la lecture d'un fichier entier, qui appelle materialFromGltf par
+// primitive, qui a interet a partager. Sur Lantern.glb, un seul materiau sert
+// trois primitives : sans cache, ses quatre cartes de 2048 carres sont
+// decodees trois fois, soit 192 Mio au lieu de 64.
+std::unique_ptr<MaterialPbr> materialFromGltf (const tinygltf::Model& model, int materialIndex,
+                                               GltfImageCache& images);
 
 } // namespace cgpbr
