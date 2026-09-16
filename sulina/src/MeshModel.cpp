@@ -2,6 +2,7 @@
 
 #include "mesh.h"
 #include "vmeshes.h"
+#include "vmeshes_io.h"
 
 #include <QElapsedTimer>
 #include <QFileInfo>
@@ -25,7 +26,7 @@ bool MeshModel::load(const QString &filename)
     auto fresh = std::make_unique<VMeshes>();
     const QByteArray local = filename.toLocal8Bit();
 
-    if (!fresh->load(local.constData()) || fresh->GetNVertices() == 0)
+    if (!VMeshesIO::load(*fresh, local.constData()) || fresh->GetNVertices() == 0)
     {
         m_lastError  = QStringLiteral("Failed to load '%1' (no vertices read)").arg(filename);
         m_source     = filename;

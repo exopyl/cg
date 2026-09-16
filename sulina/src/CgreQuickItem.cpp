@@ -60,6 +60,58 @@ void writeMatrix(const QMatrix4x4 &m, float out[16])
     std::memcpy(out, m.constData(), 16 * sizeof(float));
 }
 
+// PLANS DE CLIPPING, derives de la camera et non constants.
+//
+// L'ancienne formule — near 0.01, far diag*100 — donnait un rapport far/near de
+// l'ordre de 10^6 : la plage de profondeur etait presque entierement consommee
+// devant la camera, et il ne restait a la distance du modele qu'une poignee de
+// valeurs distinctes. Sur un maillage FIN (Fox.glb : pattes plaquees au corps)
+// les faces avant et arriere tombaient dans le meme godet, celle qui l'emporte
+// changeant a chaque angle -- des triangles apparaissaient et disparaissaient
+// pendant la rotation.
+//
+// Ici near et far encadrent la sphere englobante vue depuis la camera, ce qui
+// borne le rapport et rend la precision independante de la taille du modele.
+// Le plancher a far/1000 couvre le cas ou le zoom amene la camera A L'INTERIEUR
+// du modele (m_zoomFactor descend a 0.05, soit 0.09*diag du centre : bien en
+// deca du rayon) — sans lui, near deviendrait nul ou negatif.
+//
+// Le far suit la camera : le fixer a diag*100 le faisait passer DEVANT le
+// modele des que m_zoomFactor depassait ~55 (le clamp monte a 100), ce qui
+// escamotait la scene entiere.
+void clipPlanesFor(float camDist, float diag, float &zNear, float &zFar)
+{
+    const float radius = 0.75f * diag;          // demi-diagonale + marge
+    zFar  = camDist + radius;
+    zNear = std::max(camDist - radius, zFar * 1e-3f);
+}
+
+// CORRECTION D'ESPACE DE CLIP OpenGL -> Vulkan.
+//
+// QMatrix4x4::perspective() produit une projection de convention OPENGL : z_ndc
+// va de -1 au near a +1 au far. Vulkan attend z_ndc dans [0, 1] et ELIMINE tout
+// fragment a z_ndc < 0, c'est-a-dire la MOITIE AVANT du frustum. Le
+// `scale(1, -1, 1)` qui tenait ce role ne corrigeait que le Y.
+//
+// Le defaut est reste invisible tant que near valait 0.01 : la profondeur a
+// laquelle z_ndc s'annule vaut 2*f*n/(f+n), soit 0.02 unite dans l'ancienne
+// configuration — devant toute geometrie, donc sans effet. Des que near prend
+// une valeur saine (cf. clipPlanesFor), ce seuil remonte ENTRE la camera et le
+// modele et tranche le coin le plus proche : sur cube.obj, un trou triangulaire
+// au sommet le plus proche, par lequel on voit le fond (les faces internes
+// derriere sont eliminees par le back-face culling).
+//
+// La matrice applique le flip Y ET le remappage z [-1,1] -> [0,1]. Elle double
+// au passage la precision de profondeur utile : la plage entiere est desormais
+// exploitee, la moitie negative n'etant plus gaspillee.
+QMatrix4x4 vulkanClipCorrection()
+{
+    return QMatrix4x4(1.0f, 0.0f, 0.0f, 0.0f,
+                      0.0f, -1.0f, 0.0f, 0.0f,
+                      0.0f, 0.0f, 0.5f, 0.5f,
+                      0.0f, 0.0f, 0.0f, 1.0f);
+}
+
 // Curvature drop-down label → cgmesh curvature id. Defaults to mean.
 CurvatureType curvatureIdFromLabel(const QString &type)
 {
@@ -253,9 +305,10 @@ void CgreQuickItem::cameraMatrices(QMatrix4x4 &proj, QMatrix4x4 &view, QMatrix4x
     view.lookAt(center + camOffset, center, QVector3D(0, 1, 0));
 
     const float aspect = height() > 0.0 ? float(width()) / float(height()) : 1.0f;
-    proj.setToIdentity();
-    proj.perspective(45.0f, aspect, 0.01f, diag * 100.0f);
-    proj.scale(1.0f, -1.0f, 1.0f);   // Vulkan Y flip (as in the renderer)
+    float zNear = 0.0f, zFar = 0.0f;
+    clipPlanesFor(camOffset.length(), diag, zNear, zFar);
+    proj = vulkanClipCorrection();   // flip Y + z [-1,1] -> [0,1], as in the renderer
+    proj.perspective(45.0f, aspect, zNear, zFar);
 
     QMatrix4x4 tb(m_trackball.getTransform());
     tb = tb.transposed();
@@ -347,8 +400,11 @@ void CgreQuickItem::updatePick(const QPointF &posItem)
     const float ndcX = 2.0f * float(posItem.x()) / w - 1.0f;
     const float ndcY = 2.0f * float(posItem.y()) / h - 1.0f;
 
-    const QVector4D nearH = invVP * QVector4D(ndcX, ndcY, -1.0f, 1.0f);
-    const QVector4D farH  = invVP * QVector4D(ndcX, ndcY,  1.0f, 1.0f);
+    // Depth NDC is Vulkan's [0,1] (vulkanClipCorrection), not OpenGL's [-1,1]:
+    // the near plane is z=0. Passing -1 here would unproject a point BEHIND the
+    // camera and tilt every pick ray.
+    const QVector4D nearH = invVP * QVector4D(ndcX, ndcY, 0.0f, 1.0f);
+    const QVector4D farH  = invVP * QVector4D(ndcX, ndcY, 1.0f, 1.0f);
     if (qFuzzyIsNull(nearH.w()) || qFuzzyIsNull(farH.w())) { invalidate(); return; }
 
     const QVector3D nearW = nearH.toVector3DAffine();
@@ -1158,11 +1214,13 @@ void CgreQuickItem::onBeforeRenderPassRecording()
     view.lookAt(center + camOffset, center, QVector3D(0, 1, 0));
 
     const float aspect = vp.height > 0.f ? vp.width / vp.height : 1.f;
-    QMatrix4x4 proj;
-    proj.perspective(45.0f, aspect, 0.01f, diag * 100.0f);
-    // Qt's Vulkan render pass uses a top-left origin and Y flipped relative
-    // to standard Vulkan. Flip Y in projection so our mesh is right-side-up.
-    proj.scale(1.0f, -1.0f, 1.0f);
+    float zNear = 0.0f, zFar = 0.0f;
+    clipPlanesFor(camOffset.length(), diag, zNear, zFar);
+    // Qt's Vulkan render pass uses a top-left origin and Y flipped relative to
+    // standard Vulkan, and Vulkan's depth range is [0,1] where QMatrix4x4
+    // projects to OpenGL's [-1,1]. Both corrections live in this matrix.
+    QMatrix4x4 proj = vulkanClipCorrection();
+    proj.perspective(45.0f, aspect, zNear, zFar);
 
     // Trackball rotation as model-space rotation around the mesh's bbox
     // center. Trackball stores 4x4 column-major; QMatrix4x4(const float[16])
