@@ -164,7 +164,10 @@ public:
 	//
 	// Convention de ce harnais : azimut = rotation autour de Y (lacet),
 	// elevation = rotation autour de X appliquee ENSUITE (tangage), en degres.
-	// (0, 0) laisse l'orientation neutre.
+	// C'est une convention Y-up, posee sur un monde Z-up : (0, 0) rend
+	// l'IDENTITE, c'est-a-dire une vue a la verticale depuis +Z. Elle ne
+	// coincide donc PAS avec l'orientation par defaut de ResetCamera, qui est
+	// la vue trois-quarts de Ctrackball::ResetTransformations.
 	void  SetCameraOrientation (float azimuthDeg, float elevationDeg);
 	void  SetCameraZoom (float zoom);
 	float GetCameraZoom () const;

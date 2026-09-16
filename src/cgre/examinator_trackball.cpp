@@ -13,11 +13,34 @@ static const float kWheelDollyRate = 0.1f;
 static const float kFallbackMinDistance = 0.01f;
 static const float kFallbackMaxDistance = 1000.f;
 
-static const GLfloat kIdentity4x4[16] = {
-	1.f, 0.f, 0.f, 0.f,
-	0.f, 1.f, 0.f, 0.f,
-	0.f, 0.f, 1.f, 0.f,
-	0.f, 0.f, 0.f, 1.f
+// ORIENTATION PAR DEFAUT : vue trois-quarts, azimut -30 deg, elevation 20 deg.
+//
+// Le monde est Z-up. L'azimut est mesure dans le plan XY depuis +X vers +Y,
+// l'elevation au-dessus de ce plan : l'oeil se place donc sur la direction
+//
+//     r3 = ( cos(el).cos(az) , cos(el).sin(az) , sin(el) )
+//
+// vue depuis le quadrant x>0 y<0, legerement en surplomb. La verticale du monde
+// +Z reste vers le haut de l'image : la deuxieme ligne de R est +Z projete
+// orthogonalement a r3 puis normalise, et la premiere ligne ferme le triedre
+// direct. R est la rotation monde -> oeil, donc ces vecteurs en sont les
+// LIGNES ; le tableau ci-dessous est COLONNE-MAJEUR, m[4.colonne + ligne].
+//
+//     ligne 0 (droite ecran) = ( -sin(az)         ,  cos(az)         , 0       )
+//     ligne 1 (haut ecran)   = ( -sin(el).cos(az) , -sin(el).sin(az) , cos(el) )
+//     ligne 2 (vers l'oeil)  = (  cos(el).cos(az) ,  cos(el).sin(az) , sin(el) )
+//
+// L'ELEVATION DOIT RESTER FRANCHEMENT A L'ECART DE 90 DEG. A la verticale, la
+// direction de vue devient colineaire a +Z : la deuxieme ligne s'annule et
+// l'orientation cesse d'etre definie -- c'est la degenerescence signalee dans
+// orbit_camera.h. Les 20 deg retenus laissent 70 deg de marge ; une retouche
+// qui s'approche de la verticale doit d'abord choisir une autre reference de
+// haut d'ecran.
+static const GLfloat kDefaultViewRotation[16] = {
+	 0.5f,          -0.2961981f,     0.8137977f,     0.f,   // colonne 0
+	 0.8660254f,     0.1710101f,    -0.4698463f,     0.f,   // colonne 1
+	 0.f,            0.9396926f,     0.3420201f,     0.f,   // colonne 2
+	 0.f,            0.f,            0.f,            1.f    // colonne 3
 };
 
 Ctrackball::Ctrackball ()
@@ -329,7 +352,7 @@ Ctrackball::pan_screen (float dx, float dy)
 
 void Ctrackball::ResetTransformations()
 {
-    m_orbit.SetRotation (kIdentity4x4);
+    m_orbit.SetRotation (kDefaultViewRotation);
 }
 
 void

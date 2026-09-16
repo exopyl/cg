@@ -395,7 +395,7 @@ void MyGLCanvas::ApplyNormalization(bool normalize)
 	}
 
 	// Frame the camera on the resulting model.
-	m_pTrackball->ResetTransformations(); // orientation neutre ; le cadrage suit
+	m_pTrackball->ResetTransformations(); // orientation par defaut ; le cadrage suit
 	FrameCamera(aggregateBbox);
 
 	RefreshGeometryState();
@@ -601,9 +601,10 @@ MyGLCanvas::ProjectedPoint MyGLCanvas::ProjectPoint (const float world[3]) const
 	return out;
 }
 
-// Remet l'orientation a zero, puis recadre sur la scene visible -- ce qui
-// repose pivot et distance. C'est le point de depart de toute capture de
-// reference.
+// Repose l'orientation par defaut -- la vue trois-quarts de
+// Ctrackball::ResetTransformations, azimut 30 deg / elevation 20 deg -- puis
+// recadre sur la scene visible, ce qui repose pivot et distance. C'est le
+// point de depart de toute capture de reference.
 void MyGLCanvas::ResetCamera ()
 {
 	if (!m_pTrackball) return;

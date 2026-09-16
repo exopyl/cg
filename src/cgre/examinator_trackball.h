@@ -61,9 +61,13 @@ public:
 	// meme raison que le min(w,h) de tbPointToVector.
 	void pan_screen (float dx, float dy);
 
-	// Remet l'orientation a zero. Ni le pivot ni la distance n'en font partie :
-	// ce sont des etats de cadrage, que l'appelant repose par set_pivot et
-	// set_zoom.
+	// Repose l'orientation par defaut : une vue trois-quarts, azimut 30 deg et
+	// elevation 20 deg dans le monde Z-up, +Z vers le haut de l'image. Ce n'est
+	// PAS l'identite -- l'identite regarde la scene a la verticale, depuis +Z.
+	// La valeur et sa justification sont dans examinator_trackball.cpp.
+	//
+	// Ni le pivot ni la distance n'en font partie : ce sont des etats de
+	// cadrage, que l'appelant repose par set_pivot et set_zoom.
 	void ResetTransformations();
 
 	// Centre d'orbite, en coordonnees monde. La camera tourne autour de lui et
