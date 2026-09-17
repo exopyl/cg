@@ -368,8 +368,37 @@ MyFrame::MyFrame(wxWindow* parent,
     m_mgr.SetManagedWindow(this);
     m_mgr.SetFlags(m_mgr.GetFlags() | wxAUI_MGR_LIVE_RESIZE);
 
-    // set frame icon
-    SetIcon(wxIcon(sinaia_xpm));
+    // Icone de la FENETRE : barre des taches pendant l'execution, Alt+Tab,
+    // coin du titre. Distincte de l'icone de l'executable (sinaia.rc), qui sert
+    // elle a l'Explorateur et aux raccourcis epingles.
+    //
+    // SetIconS au pluriel, et depuis la RESSOURCE plutot que depuis le XPM :
+    // wxIconBundle lit d'un coup les neuf tailles du groupe d'icones, et Windows
+    // choisit la bonne selon le DPI et le contexte. Un SetIcon simple ne lui en
+    // donnait qu'une -- 32x32, en 8 couleurs -- qu'il reechantillonnait partout
+    // ailleurs. Lire la meme ressource que le .rc garantit en prime que les deux
+    // icones ne peuvent pas diverger.
+    //
+    // GetModuleHandle(nullptr) designe l'executable lui-meme, ou la ressource est
+    // compilee ; wxGetInstance() ferait la meme chose mais vit dans
+    // wx/msw/private.h, un en-tete prive de wxWidgets.
+    // Le nom "#1" est la forme Win32 pour designer une ressource d'IDENTIFIANT
+    // NUMERIQUE -- IDI_APPICON vaut 1 dans sinaia.rc, et il vaut 1 parce que
+    // l'Explorateur retient l'icone de plus petit identifiant.
+    //
+    // Le resultat est TESTE plutot que suppose : si la ressource manquait (rc non
+    // compile, identifiant renumerote), un SetIcons sur un bundle vide laisserait
+    // la fenetre SANS icone du tout -- une regression plus laide que le XPM qu'on
+    // remplace. Le repli garde l'ancien comportement.
+#ifdef __WINDOWS__
+    wxIconBundle appIcons(wxT("#1"), ::GetModuleHandle(nullptr));
+    if (appIcons.IsEmpty())
+        SetIcon(wxIcon(sinaia_xpm));
+    else
+        SetIcons(appIcons);
+#else
+    SetIcon(wxIcon(sinaia_xpm));   // repli : pas de ressources Windows ailleurs
+#endif
 
     // set up default notebook style
     m_notebook_style = wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_TAB_EXTERNAL_MOVE | wxNO_BORDER;

@@ -117,6 +117,15 @@ if (WIN32 AND TARGET Qt6::windeployqt)
     add_custom_command(TARGET sulina POST_BUILD
         COMMAND Qt6::windeployqt
                 --no-translations
+                # sulina force Vulkan comme backend RHI de QtQuick
+                # (main.cpp : setGraphicsApi(Vulkan), et QtDeviceAdapter LEVE si
+                # l'API n'est pas Vulkan). Les deux replis que windeployqt copie
+                # d'office ne sont donc jamais empruntes :
+                #   opengl32sw.dll     19,7 Mo -- OpenGL logiciel
+                #   d3dcompiler_47.dll  4,0 Mo -- compilation de shaders D3D
+                # Une machine sans Vulkan ne demarre pas sulina de toute facon.
+                --no-opengl-sw
+                --no-system-d3d-compiler
                 $<IF:$<CONFIG:Debug>,--debug,--release>
                 --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml"
                 "$<TARGET_FILE:sulina>"

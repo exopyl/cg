@@ -35,6 +35,18 @@ public:
 
     Q_INVOKABLE bool load(const QString &filename);
     Q_INVOKABLE bool loadUrl(const QUrl &url);
+
+    // Ouvre un selecteur de fichier NATIF, puis charge le maillage choisi.
+    //
+    // Remplace le `FileDialog` de QtQuick.Dialogs, dont le seul usage dans
+    // toute l'interface etait ce menu Fichier > Ouvrir. Ce module tirait
+    // Qt6QuickDialogs2 + QuickImpl + Utils (2,9 Mo) et son arbre QML (533 Ko)
+    // pour une boite de dialogue que le systeme fournit deja -- et fournit
+    // mieux : places recentes, recherche, chemins reseau.
+    //
+    // Rend false si l'utilisateur annule OU si le chargement echoue ; l'appelant
+    // distingue les deux par `lastError`, vide en cas d'annulation.
+    Q_INVOKABLE bool loadFromFileDialog(const QString &startDir = QString());
     Q_INVOKABLE void clear();
 
     QString name() const;

@@ -24,6 +24,30 @@ Cmodel3d_half_edge_sliced::Cmodel3d_half_edge_sliced (Mesh_half_edge *_mesh, int
 
 Cmodel3d_half_edge_sliced::~Cmodel3d_half_edge_sliced ()
 {
+	// Le destructeur etait VIDE alors que la construction alloue, par tranche, un
+	// tableau de contours et un Polygon2 par contour -- plus les deux tableaux de
+	// tete. Tout cela fuyait a la destruction : sur un maillage de taille courante
+	// decoupe au dixieme de millimetre, quelques milliers de Polygon2 par slicer.
+	//
+	// Le maillage, lui, n'est PAS possede : il est fourni par l'appelant (le
+	// constructeur ne fait que retenir le pointeur) et lui survit.
+	if (slices)
+	{
+		for (int k=0; k<n_slices; k++)
+		{
+			if (slices[k] == nullptr)
+				continue;   // tranche vide : n_contours[k] vaut 0
+			for (int i=0; i<n_contours[k]; i++)
+				delete slices[k][i];
+			free (slices[k]);
+		}
+		free (slices);
+	}
+	free (n_contours);
+
+	slices     = nullptr;
+	n_contours = nullptr;
+	n_slices   = 0;
 }
 
 void
@@ -47,7 +71,31 @@ Cmodel3d_half_edge_sliced::scan_model_along_Oz (void)
 	//printf ("z_min : %f\nz_max : %f\n", z_min, z_max);
 	
 	/* alloc memory */
+	// ⚠ LA TROISIEME CAPACITE NON VERIFIEE, et la plus couteuse : le nombre de
+	// tranches etait obtenu par TRONCATURE, tandis que la boucle ci-dessous etait
+	// bornee par une comparaison sur un flottant ACCUMULE. Les deux ne s'accordent
+	// pas. Hauteur 2, pas 0,05 : 2.f/0.05f vaut 39,999996 en simple precision, donc
+	// 39 tranches allouees -- et la boucle en parcourait 40. Les deux tableaux
+	// etaient ecrits un cran trop loin.
+	//
+	// Le defaut ne s'est jamais VU parce que le destructeur, vide, ne rendait
+	// jamais ces blocs : le tas ne verifiait donc jamais leurs octets de garde.
+	// Corriger la fuite l'a fait apparaitre immediatement (CRT debug heap).
+	//
+	// La boucle est desormais pilotee par l'INDICE, seule facon de garantir
+	// l'accord ; le plan s'en deduit, ce qui supprime au passage la derive
+	// d'arrondi accumulee sur des centaines de tranches.
+	if (step_slice <= 0.f)
+		step_slice = 1.f;   // un pas nul ou negatif ne decoupe rien : boucle sans fin
 	n_slices = (int)((z_max-z_min)/step_slice);
+	if (n_slices <= 0)
+	{
+		// Modele plus mince qu'une tranche : zero tranche, et rien d'alloue.
+		n_slices   = 0;
+		slices     = nullptr;
+		n_contours = nullptr;
+		return;
+	}
 	//printf ("number of slices : %d\n", n_slices);
 	slices = (Polygon2***)malloc(n_slices*sizeof(Polygon2**));
 	assert (slices);
@@ -59,18 +107,18 @@ Cmodel3d_half_edge_sliced::scan_model_along_Oz (void)
 	// instanciee a chaque construction du slicer (cpp:S3584, slicer.cpp:99).
 	std::unique_ptr<Cmodel3d_half_edge_clipper> clipper
 		(new Cmodel3d_half_edge_clipper (model));
-	float z_walk= z_min;
-	k=0;
-	while (z_walk < z_max) /* for each slice */
+	for (k=0; k<n_slices; k++) /* for each slice */
     {
 		/* results */ 
 		float **intersections;
 		int n_intersections;
-		int *n_vertices;
-		Vector3d pt (0.0, 0.0, z_walk);
+		// `contour_nv`, et non `n_vertices` : ce nom MASQUAIT le compte de
+		// sommets du maillage, declare en tete de fonction.
+		int *contour_nv;
+		Vector3d pt (0.0, 0.0, z_min + k * step_slice);
 		Vector3d n (0.0, 0.0, 1.0);
 		clipper->set_plane (pt, n);
-		clipper->get_intersections (&n_intersections, &n_vertices, &intersections);
+		clipper->get_intersections (&n_intersections, &contour_nv, &intersections);
 		
 		if (n_intersections)
 		{
@@ -81,15 +129,15 @@ Cmodel3d_half_edge_sliced::scan_model_along_Oz (void)
 			n_contours[k] = n_intersections;
 			for (i=0; i<n_intersections; i++) /* for each contour in the current slice */
 			{
-				std::vector<float> xx(n_vertices[i]);
-				std::vector<float> yy(n_vertices[i]);
-				for (j=0; j<n_vertices[i]; j++)
+				std::vector<float> xx(contour_nv[i]);
+				std::vector<float> yy(contour_nv[i]);
+				for (j=0; j<contour_nv[i]; j++)
 				{
 					xx[j] = intersections[i][3*j];
 					yy[j] = intersections[i][3*j+1];
 				}
 				slices[k][i] = new Polygon2 ();
-				slices[k][i]->input (xx.data(), yy.data(), n_vertices[i]);
+				slices[k][i]->input (xx.data(), yy.data(), contour_nv[i]);
 			}
 		}
 		else
@@ -97,9 +145,16 @@ Cmodel3d_half_edge_sliced::scan_model_along_Oz (void)
 			n_contours[k] = 0;
 			slices[k] = nullptr;
 		}
-		
-		z_walk += step_slice; /* step */
-		k++;
+
+		// Les contours rendus par le clipper sont RECOPIES ci-dessus dans des
+		// Polygon2 ; ses tampons a lui n'etaient jamais liberes, soit une fuite
+		// par tranche en plus de celle du destructeur. Contrat du clipper :
+		// zero intersection <=> pointeurs nuls, rien a liberer.
+		for (i=0; i<n_intersections; i++)
+			free (intersections[i]);
+		free (intersections);
+		free (contour_nv);
+
     }
 }
 
@@ -124,7 +179,31 @@ Cmodel3d_half_edge_sliced::scan_model_along_Ox (void)
 	printf ("x_min : %f\nx_max : %f\n", x_min, x_max);
 	
 	/* alloc memory */
+	// ⚠ LA TROISIEME CAPACITE NON VERIFIEE, et la plus couteuse : le nombre de
+	// tranches etait obtenu par TRONCATURE, tandis que la boucle ci-dessous etait
+	// bornee par une comparaison sur un flottant ACCUMULE. Les deux ne s'accordent
+	// pas. Hauteur 2, pas 0,05 : 2.f/0.05f vaut 39,999996 en simple precision, donc
+	// 39 tranches allouees -- et la boucle en parcourait 40. Les deux tableaux
+	// etaient ecrits un cran trop loin.
+	//
+	// Le defaut ne s'est jamais VU parce que le destructeur, vide, ne rendait
+	// jamais ces blocs : le tas ne verifiait donc jamais leurs octets de garde.
+	// Corriger la fuite l'a fait apparaitre immediatement (CRT debug heap).
+	//
+	// La boucle est desormais pilotee par l'INDICE, seule facon de garantir
+	// l'accord ; le plan s'en deduit, ce qui supprime au passage la derive
+	// d'arrondi accumulee sur des centaines de tranches.
+	if (step_slice <= 0.f)
+		step_slice = 1.f;   // un pas nul ou negatif ne decoupe rien : boucle sans fin
 	n_slices = (int)((x_max-x_min)/step_slice);
+	if (n_slices <= 0)
+	{
+		// Modele plus mince qu'une tranche : zero tranche, et rien d'alloue.
+		n_slices   = 0;
+		slices     = nullptr;
+		n_contours = nullptr;
+		return;
+	}
 	printf ("number of slices : %d\n", n_slices);
 	slices = (Polygon2***)malloc(n_slices*sizeof(Polygon2**));
 	assert (slices);
@@ -135,18 +214,16 @@ Cmodel3d_half_edge_sliced::scan_model_along_Ox (void)
 	// Meme fuite que dans la variante Oz (cpp:S3584, slicer.cpp:172).
 	std::unique_ptr<Cmodel3d_half_edge_clipper> clipper
 		(new Cmodel3d_half_edge_clipper (model));
-	float x_walk= x_min;
-	k=0;
-	while (x_walk < x_max) /* for each slice */
+	for (k=0; k<n_slices; k++) /* for each slice */
     {
 		/* results */ 
 		int n_intersections;
-		int *n_vertices;
+		int *contour_nv;   // idem : ne masque plus le compte de sommets du maillage
 		float **intersections;
-		Vector3d pt (x_walk, 0.0, 0.0);
+		Vector3d pt (x_min + k * step_slice, 0.0, 0.0);
 		Vector3d n (1.0, 0.0, 0.0);
 		clipper->set_plane (pt, n);
-		clipper->get_intersections (&n_intersections, &n_vertices, &intersections);
+		clipper->get_intersections (&n_intersections, &contour_nv, &intersections);
 		
 		if (n_intersections)
 		{
@@ -157,15 +234,15 @@ Cmodel3d_half_edge_sliced::scan_model_along_Ox (void)
 			n_contours[k] = n_intersections;
 			for (i=0; i<n_intersections; i++) /* for each contour in the current slice */
 			{
-				std::vector<float> yy(n_vertices[i]);
-				std::vector<float> zz(n_vertices[i]);
-				for (j=0; j<n_vertices[i]; j++)
+				std::vector<float> yy(contour_nv[i]);
+				std::vector<float> zz(contour_nv[i]);
+				for (j=0; j<contour_nv[i]; j++)
 				{
 					yy[j] = intersections[i][3*j+1];
 					zz[j] = intersections[i][3*j+2];
 				}
 				slices[k][i] = new Polygon2 ();
-				slices[k][i]->input (yy.data(), zz.data(), n_vertices[i]);
+				slices[k][i]->input (yy.data(), zz.data(), contour_nv[i]);
 			}
 		}
 		else
@@ -173,9 +250,13 @@ Cmodel3d_half_edge_sliced::scan_model_along_Ox (void)
 			n_contours[k] = 0;
 			slices[k] = nullptr;
 		}
-		
-		x_walk += step_slice; /* step */
-		k++;
+
+		// Meme fuite que dans la variante Oz.
+		for (i=0; i<n_intersections; i++)
+			free (intersections[i]);
+		free (intersections);
+		free (contour_nv);
+
     }
 }
 
@@ -199,6 +280,17 @@ void
 Cmodel3d_half_edge_sliced::get_areas (float **areas, int *size)
 {
 	int i,j;
+
+	// Zero tranche est un resultat possible -- modele plus mince que le pas --,
+	// et malloc(0) n'a pas de valeur de retour garantie : l'assert pouvait sauter
+	// sur une allocation parfaitement legitime.
+	if (n_slices <= 0)
+	{
+		*areas = nullptr;
+		*size  = 0;
+		return;
+	}
+
 	float *a = (float*)malloc(n_slices*sizeof(float));
 	assert (a);
 	

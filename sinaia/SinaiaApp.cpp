@@ -4,7 +4,6 @@
 #include "SinaiaApp.h"
 #include "SinaiaFrame.h"
 #include "RemoteConsole.h"
-#include "sinaia.xpm"
 
 
 bool MyApp::OnInit()
@@ -22,9 +21,10 @@ bool MyApp::OnInit()
                                  wxDefaultPosition,
                                  wxSize(800, 600));
     SetTopWindow(frame);
-    wxIcon icon;
-    icon.CopyFromBitmap(wxBitmap((const char**)sinaia_xpm));
-    frame->SetIcon(icon);
+    // L'icone de la fenetre est posee par MyFrame lui-meme (SinaiaFrame.cpp),
+    // depuis la ressource du .rc et en toutes ses tailles. Le SetIcon qui se
+    // trouvait ici la REMPLACAIT par le seul XPM 32x32 -- il defaisait le travail
+    // de la frame, et deux endroits se disputaient la meme decision.
 
     frame->Show();
 

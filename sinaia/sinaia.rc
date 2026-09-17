@@ -1,0 +1,20 @@
+// Ressources Windows de sinaia.
+//
+// ⚠ L'ORDRE DES IDENTIFIANTS COMPTE. L'Explorateur et le shell prennent, pour
+// representer un .exe, l'icone de PLUS PETIT identifiant du binaire -- pas la
+// premiere declaree, ni celle qui porte un nom evocateur. `IDI_APPICON` vaut 1
+// pour cette raison : si d'autres icones s'ajoutent un jour (types de fichiers,
+// barre d'outils), elles doivent prendre des valeurs SUPERIEURES, faute de quoi
+// l'une d'elles deviendrait silencieusement l'icone de l'application.
+//
+// Cette meme ressource est relue a l'execution par SinaiaFrame (SetIcons), de
+// sorte que l'icone de l'executable et celle de la fenetre ne peuvent pas
+// diverger. Sans cela on maintient deux visuels qui finissent par ne plus se
+// ressembler.
+//
+// sinaia.ico est un ARTEFACT : il se regenere depuis sinaia.xpm par
+//     python sinaia/tools/make_icon.py
+
+#define IDI_APPICON 1
+
+IDI_APPICON ICON "sinaia.ico"

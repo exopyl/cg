@@ -24,6 +24,7 @@
 #include "tangents.h"
 #include "mesh_io_rply.h"
 #include "mesh_io_3ds.h"
+#include "io_path_guard.h"   // io_guard::forLog
 
 bool VMeshesIO::save(VMeshes& vm, const char *filename)
 {
@@ -453,6 +454,23 @@ bool VMeshesIO::import_obj(VMeshes& vm, const char* filename)
 //
 namespace
 {
+	// Nettoie un nom destine a etre ECRIT DANS UN FICHIER GENERE.
+	//
+	// Le nom vient du chemin de sortie, donc de l'utilisateur. Ecrit tel quel dans
+	// un STL ASCII, un caractere de controle casse la STRUCTURE du fichier : un
+	// saut de ligne dans `solid <nom>` cloture le solide et en ouvre un autre, ce
+	// qui permet de fabriquer un STL a plusieurs solides depuis un simple nom de
+	// fichier. Les sequences d'echappement (0x1B) posent le meme probleme des que
+	// le fichier est relu dans un terminal.
+	//
+	// On ne remplace QUE les caracteres de controle (< 0x20 et 0x7F). Les accents
+	// (donc les octets >= 0x80 d'un nom UTF-8) et les espaces sont conserves : les
+	// ecraser regresserait les noms de fichiers francais parfaitement legitimes,
+	// et ni l'un ni l'autre ne casse la structure.
+	//
+	// ⚠ Sous Windows, Win32 refuse deja les caracteres de controle dans un nom de
+	// fichier : le defaut n'y est pas atteignable par ce chemin. Sous Linux, tout
+	// octet sauf '/' et NUL est permis dans un nom -- il l'est.
 	std::string stemFromPath(const char *filename)
 	{
 		std::string s(filename ? filename : "");
@@ -461,7 +479,7 @@ namespace
 		size_t dot = s.find_last_of('.');
 		if (dot != std::string::npos) s = s.substr(0, dot);
 		if (s.empty()) s = "vmeshes";
-		return s;
+		return io_guard::forLog (s);   // cf. la note ci-dessus
 	}
 
 	struct Tri

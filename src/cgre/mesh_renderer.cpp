@@ -29,7 +29,11 @@ void rendering_properties_init (rendering_properties_s &prop)
 	prop.display_face_normals = 0;
 	prop.display_wireframe = 0;
 	prop.display_fill = 1;
-	prop.display_repere = 1;
+	// Repere ETEINT au demarrage, comme la grille et la base de coupe juste
+	// dessous : ce sont trois surcouches d'aide, et la vue par defaut doit
+	// montrer le MODELE, pas l'outillage autour. Le bouton de la barre d'outils
+	// reste le meme, et RemoteConsole `toggle repere on` le rallume.
+	prop.display_repere = 0;
 	prop.display_grid = 0;
 	prop.display_cutting_mat = 0;
 	prop.normalized = 0;
@@ -103,7 +107,21 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 	}
 
 	// points
-	if (prop.display_points)
+	//
+	// UN NUAGE NU SE DESSINE TOUJOURS. Des sommets, aucune face et aucune
+	// primitive explicite : la surcouche ci-dessous est le SEUL chemin capable
+	// de l'emettre, exactement comme le bloc des elements 'l'/'p' plus bas est
+	// le seul a emettre ceux-la. Le subordonner a display_points, drapeau global
+	// au canvas que l'hote deduit de la scene entiere, rendait le nuage
+	// INVISIBLE des qu'un autre modele de la vue portait des lignes ou des
+	// points -- un .ply de sommets ajoute a cote d'un .obj de segments ne
+	// s'affichait plus. La geometrie d'un modele ne depend pas de ce que
+	// contiennent ses voisins.
+	const bool bareVertexCloud = mesh->GetNVertices () > 0
+	                          && mesh->GetNFaces () == 0
+	                          && mesh->GetLines ().empty ()
+	                          && mesh->GetPoints ().empty ();
+	if (prop.display_points || bareVertexCloud)
 	{
 		glPushAttrib (GL_ALL_ATTRIB_BITS);
 		glDisable (GL_LIGHTING);

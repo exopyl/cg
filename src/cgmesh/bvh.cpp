@@ -55,10 +55,17 @@ void BVH::build (Mesh &mesh)
 {
 	m_verts = mesh.GetVertices ().data ();
 	m_nv    = mesh.GetNVertices ();
-	const unsigned int nf = mesh.GetNFaces ();
 
-	std::vector<unsigned int> t = mesh.GetTriangles ();   // 3*nf indices
+	std::vector<unsigned int> t = mesh.GetTriangles ();
 	m_tri.assign (t.begin (), t.end ());
+
+	// Le compte se lit sur la TRIANGULATION, jamais sur mesh.GetNFaces (). Sur un
+	// maillage polygonal les deux different : GetTriangles () developpe un quad en
+	// DEUX triangles, un n-gone en N-2. Dimensionner sur le nombre de faces
+	// n'indexait alors que la premiere moitie des triangles, et les faces laissees
+	// dehors cessaient silencieusement de repondre -- le cube par defaut de sinaia
+	// (six quads) perdait trois de ses six cotes au picking.
+	const unsigned int nf = (unsigned int)(m_tri.size () / 3u);
 
 	m_cmid.resize (3u * nf); m_tmin.resize (3u * nf); m_tmax.resize (3u * nf);
 	m_order.resize (nf);

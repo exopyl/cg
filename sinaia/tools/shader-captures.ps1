@@ -20,6 +20,19 @@
     noire -- qui se voient a un pourcentage de pixels differents anormalement
     eleve, ou concentre sur une seule combinaison.
 
+    UN TEMOIN EST TOUJOURS AJOUTE a la serie : test/data/obj/cube-tex-spec.obj,
+    seul OBJ TEXTURE du depot dont la couleur eclairee depasse 1,0. Il couvre le
+    regime de sur-eclairement, ou le pipeline fixe ecrete AVANT l'etage de
+    texturage et ou un shader qui ne le ferait pas teinterait le depassement au
+    lieu de le perdre. Il n'est capture qu'en mode `materials` : les deux autres
+    modes passent par ActivateNeutralMaterial, qui ne pose ni texture ni
+    speculaire, et n'exerceraient donc rien.
+
+    CE TEMOIN EST BISTABLE (reserve R10) : son rendu en PIPELINE FIXE change d'une
+    session a l'autre, normales plates ou moyennees. Toute serie l'embarquant exige
+    donc l'appariement des captures -- ne comparer deux series que si leurs images
+    `_fixe` sont identiques au bit pres.
+
 .EXAMPLE
     # sinaia doit tourner. Produit les paires puis les compare.
     .\shader-captures.ps1
@@ -45,6 +58,18 @@ param(
     # dessus, ou les normales retournees (gl_FrontFacing) se voient le mieux.
     [int[][]] $Views = @( @(0, 0), @(35, 20), @(120, 55) ),
     [string[]] $Modes = @('materials', 'neutral', 'vertexcolors'),
+    # ECLAIRAGE ETEINT AUTANT QU'ALLUME, par defaut et non sur demande.
+    #
+    # C'est le regime ou le pipeline fixe LIT le tableau de couleurs par sommet :
+    # sous eclairage il l'ignore, GL_COLOR_MATERIAL etant desactive. Une serie
+    # limitee a `on` ne mesure donc jamais ce que la liaison du tableau decide --
+    # et Mesh::InitVertices donne un tableau a TOUT maillage, gris 0,5.
+    #
+    # NOMMAGE ASYMETRIQUE, et c'est delibere : `on` garde les noms de fichiers
+    # historiques, `off` recoit le suffixe `_nolight`. Renommer les premiers
+    # aurait rendu incomparable un corpus de captures que la reserve R10 rend
+    # couteux a reconstituer -- plusieurs sessions par serie appariee.
+    [string[]] $Lighting = @('on', 'off'),
     [int]      $Port = 7777,
     [switch]   $CompareOnly
 )
@@ -64,6 +89,38 @@ if ([string]::IsNullOrWhiteSpace($OutDir)) {
 $OutDir = [System.IO.Path]::GetFullPath($OutDir)
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
+# TEMOIN DE SUR-ECLAIREMENT, ajoute a TOUTE serie -- y compris a une serie
+# passee par -Models, et c'est voulu. Dans un materiau texture, import_mtl force
+# Ka et Kd a blanc et ne reporte du MTL que Ks : cube-tex-spec.obj est le seul
+# OBJ TEXTURE du depot dont la couleur eclairee depasse 1,0, donc le seul ou une
+# divergence sur l'ECRETAGE AVANT TEXTURAGE se voie sur ce chemin. Sans lui, la
+# serie rend « aucun ecart » sur un regime qu'elle n'a pas visite.
+#
+# Les chemins sont NORMALISES avant comparaison : sans cela, un appelant qui
+# nomme le temoin par un chemin relatif ou non canonique le ferait capturer deux
+# fois.
+$witness     = [System.IO.Path]::GetFullPath(
+                   (Join-Path $scriptDir '..\..\test\data\obj\cube-tex-spec.obj'))
+$witnessAuto = $false
+$Models = @(@($Models) | ForEach-Object {
+    try { [System.IO.Path]::GetFullPath($_) } catch { $_ }
+})
+if (Test-Path $witness) {
+    if ($Models -notcontains $witness) {
+        $Models      = @($Models) + $witness
+        $witnessAuto = $true
+    }
+}
+elseif (-not $CompareOnly) {
+    # Un temoin qui disparait en silence est EXACTEMENT le defaut qu'il existe
+    # pour empecher : la serie rendrait « aucun ecart » sur un regime qu'elle
+    # n'a pas visite. Avertissement et non erreur -- le reste de la serie garde
+    # sa valeur, c'est sa COUVERTURE qui est amputee.
+    Write-Warning ("Temoin introuvable : $witness")
+    Write-Warning ("La serie NE COUVRE PAS le regime de couleur eclairee > 1,0 : " +
+                   "un ecretage manquant avant texturage n'y sera pas detecte.")
+}
+
 # ---------------------------------------------------------------------------
 # 1. Capture
 # ---------------------------------------------------------------------------
@@ -74,6 +131,14 @@ function Invoke-Capture {
     # est mal pose ou une texture invalide, la fenetre de log le dira au lieu de
     # nous laisser interpreter une image bizarre.
     $commands.Add('glcheck on')
+
+    # R23 : SURBRILLANCE DE SURVOL COUPEE AVANT TOUTE CAPTURE. Les aretes
+    # jaunes de l'AABB du modele sous le curseur entrent dans l'image comme
+    # n'importe quel pixel : une serie en a rendu 18 appariables sur 24 pour
+    # cette seule raison, et l'appariement R10 echoue alors sans rien dire.
+    # Une commande, et non un deplacement de curseur, qui dependrait de la
+    # geometrie de l'ecran.
+    $commands.Add('hover off')
 
     foreach ($model in $Models) {
         if (-not (Test-Path $model)) { Write-Warning "Modele absent, ignore : $model"; continue }
@@ -91,22 +156,39 @@ function Invoke-Capture {
             $commands.Add("toggle $o off")
         }
 
+        # Le temoin ajoute d'office ne se capture qu'en `materials` : les deux
+        # autres modes passent par ActivateNeutralMaterial, qui ne pose ni
+        # texture ni speculaire, donc n'exercent pas le regime pour lequel il
+        # existe. `materials` s'impose meme si -Modes ne le demande pas, sinon
+        # le temoin ne couvrirait rien. Un temoin nomme explicitement par
+        # l'appelant garde, lui, les modes demandes.
+        $modesForModel = if ($witnessAuto -and $model -eq $witness) { @('materials') }
+                         else { $Modes }
+
         foreach ($view in $Views) {
             $az, $el = $view[0], $view[1]
             $commands.Add('camera reset')
             $commands.Add("camera azel $az $el")
 
-            foreach ($mode in $Modes) {
+            foreach ($mode in $modesForModel) {
                 $commands.Add("shading $mode")
-                $stem = "{0}_az{1}_el{2}_{3}" -f $name, $az, $el, $mode
 
-                # L'ordre compte : off puis on, sans rien changer d'autre entre
-                # les deux. C'est ce qui fait de la paire une comparaison et non
-                # deux images sans rapport.
-                $commands.Add('shader off')
-                $commands.Add("screenshot $(Join-Path $OutDir ($stem + '_fixe.png'))")
-                $commands.Add('shader on')
-                $commands.Add("screenshot $(Join-Path $OutDir ($stem + '_shader.png'))")
+                foreach ($light in $Lighting) {
+                    $commands.Add("toggle lighting $light")
+                    $suffixe = if ($light -eq 'off') { '_nolight' } else { '' }
+                    $stem = "{0}_az{1}_el{2}_{3}{4}" -f $name, $az, $el, $mode, $suffixe
+
+                    # L'ordre compte : off puis on, sans rien changer d'autre
+                    # entre les deux. C'est ce qui fait de la paire une
+                    # comparaison et non deux images sans rapport.
+                    $commands.Add('shader off')
+                    $commands.Add("screenshot $(Join-Path $OutDir ($stem + '_fixe.png'))")
+                    $commands.Add('shader on')
+                    $commands.Add("screenshot $(Join-Path $OutDir ($stem + '_shader.png'))")
+                }
+                # L'eclairage est une bascule de VUE, pas de modele : le laisser
+                # eteint contaminerait la combinaison suivante.
+                $commands.Add('toggle lighting on')
             }
         }
         $commands.Add('shader off')

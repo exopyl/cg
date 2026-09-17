@@ -8,6 +8,7 @@
 
 #pragma once
 #include <vector>
+#include <string>
 using namespace std;
 
 typedef bool BOOL3DS;
@@ -342,7 +343,18 @@ typedef struct _t3DSModel_
 	vector<t3DSAnimation>		pAnimations;	// list of animations
 	vector<t3DSKfNode>			pKfNodes;		// keyframer node hierarchy (static pose)
 
-	char strPathToModel[255];					// path to the model
+	// ⚠ C'ETAIT UN char[255] REMPLI PAR strcpy. Le chemin vient de l'appelant et
+	// n'est borne par rien en amont : au-dela de 254 caracteres -- PATH_MAX vaut
+	// 4096 sous Linux, et Windows accepte les chemins longs -- l'ecriture debordait
+	// sur `numOfUnknownChunks` PUIS sur les trois pointeurs internes du vector qui
+	// suit, soit une corruption du tas depuis un fichier .3ds parfaitement valide.
+	//
+	// Un std::string plutot qu'un snprintf : borner le tampon aurait tronque le
+	// chemin en silence, et Write3DSFile s'en sert comme chemin de SORTIE par
+	// defaut (mesh_io_3ds.cpp) -- une troncature y ecrirait ailleurs que prevu.
+	// La structure porte deja six std::vector et n'est jamais memset/memcpy :
+	// le type non trivial n'y change rien.
+	std::string strPathToModel;					// path to the model
 
 	INT32	numOfUnknownChunks;							// The number of unknown chunks
 	vector<t3DSUnknownChunk>	pUnknownChunks;			// Unknown chunks

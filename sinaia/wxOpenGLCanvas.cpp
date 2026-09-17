@@ -145,9 +145,20 @@ MyGLCanvas::MyGLCanvas(wxWindow *parent, wxTextCtrl* pCtrlLog, int *args)
 
 	m_bInitialized = false;
 
-	m_fBackgroundColor[0] = 1.;
-	m_fBackgroundColor[1] = 1.;
-	m_fBackgroundColor[2] = 1.;
+	// Fond de la vue 3D : #9DBCE4, la couleur du triangle de l'icone de
+	// l'application (sinaia.xpm). C'est sa teinte DOMINANTE -- 263 pixels sur les
+	// 464 opaques, le corps du triangle ; le reste n'est que le lisere marine et
+	// la bande d'ombre.
+	//
+	// Remplace un blanc pur, sur lequel une piece claire ou une facette speculaire
+	// n'avait plus de contour. Un bleu clair desature laisse le modele se detacher
+	// sans tirer l'oeil, et accorde la vue a l'identite de l'application.
+	//
+	// Valeurs ecrites telles quelles plutot que 157/255.f : ce sont des constantes
+	// de compilation, et la forme decimale se relit sans calcul.
+	m_fBackgroundColor[0] = 0.615686f;   // 0x9D
+	m_fBackgroundColor[1] = 0.737255f;   // 0xBC
+	m_fBackgroundColor[2] = 0.894118f;   // 0xE4
 
 	rendering_properties_init (prop);
 	m_bBoundingBox = false;
@@ -430,8 +441,11 @@ void MyGLCanvas::RefreshGeometryState()
 	// porte des faces doit rester en remplissage.
 	//
 	// A face-less model (point cloud: .ply/.pset/.pts/.asc with only vertices)
-	// has no surface to fill, so the default fill/VBO path draws nothing — the
-	// model loads invisible. Switch to point display so it is visible on import.
+	// has no surface to fill, so the default fill/VBO path draws nothing.
+	// Sa VISIBILITE ne depend plus de ce reglage : cgre dessine un nuage nu
+	// inconditionnellement (voir mesh_draw). Ce qui se decide ici est le mode
+	// affiche par la VUE -- cases "Points" / "Fill" du menu -- pour qu'il
+	// corresponde a ce qu'on voit quand la scene entiere est un nuage.
 	if (m_pVModels->GetNVertices() > 0 && m_pVModels->GetNFaces() == 0)
 	{
 		// If the model carries explicit line ('l') / point ('p') primitives,
@@ -1202,9 +1216,10 @@ void MyGLCanvas::FinishAppendBatch()
 		*m_CtrlLog << _T("Recadrage de la vue sur la scene\n");
 
 	// Nuage de points pur (sommets mais aucune face, ex. fused.ply) : le mode « fill »
-	// ne dessine rien -> bascule en affichage points pour qu'il soit visible. On ne le
-	// fait que si TOUTE la scène est sans faces (prop est global au canvas ; ne pas
-	// forcer le mode points quand un maillage est déjà affiché).
+	// ne dessine rien. La VISIBILITE du nuage est acquise sans ce bloc -- cgre dessine
+	// un nuage nu inconditionnellement (voir mesh_draw) --, on ne regle ici que le mode
+	// affiche par la VUE, et seulement si TOUTE la scene est sans faces (prop est global
+	// au canvas ; ne pas forcer le mode points quand un maillage est deja affiche).
 	if (m_pVModels->GetNVertices() > 0 && m_pVModels->GetNFaces() == 0)
 	{
 		// Explicit line/point primitives render themselves (with their own
@@ -1368,7 +1383,22 @@ void MyGLCanvas::DrawGL()
 	prop.smooth = m_bSmooth;
 
 	if (prop.display_repere)
-		repere_draw ();
+	{
+		// ⚠ LA SCENE VISIBLE, et NON m_framingRadius. La difference n'est pas
+		// cosmetique : m_framingRadius est le rayon de la CIBLE DU DERNIER
+		// CADRAGE (cf. UpdateSceneSpheres). Charger un petit modele puis un
+		// grand sans recadrer laissait le repere a l'echelle du premier, et
+		// cadrer sur une sous-partie le faisait retrecir d'autant. Ce que le
+		// repere doit suivre, c'est l'emprise des modeles PRESENTS.
+		//
+		// Cout O(1) : m_sceneBounds est deja en cache, recalcule au cadrage et
+		// aux evenements de profondeur. Aucun AggregateBBox par image -- c'est
+		// la frontiere que pose le commentaire de FrameCamera.
+		const float sceneRadius = m_hasSceneBounds
+		    ? BoundingSphereOfBox (m_sceneBoundsMin, m_sceneBoundsMax).radius
+		    : 0.f;
+		repere_draw (repere_length (sceneRadius));
+	}
 	if (prop.display_grid)
 	{
 		// Derivee du cadrage courant et du pivot VIVANT : `camera pivot` deplace

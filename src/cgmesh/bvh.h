@@ -20,8 +20,9 @@ class BVH
 public:
 	// Build over the mesh's CURRENT geometry. Vertex positions are referenced
 	// (mesh.GetVertices () must outlive the BVH and stay un-reallocated); the
-	// triangle vertex indices are copied. Triangle meshes only (faces use
-	// vertices 0..2).
+	// triangle vertex indices are copied. Polygonal meshes are accepted: the
+	// faces go through Mesh::GetTriangles (), so a quad contributes two
+	// triangles and an n-gon N-2 -- all of them indexed, none dropped.
 	void build (Mesh &mesh);
 
 	// Nearest opposite-face distance along the ray (orig, dir); -1 if the ray

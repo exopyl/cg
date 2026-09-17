@@ -137,3 +137,35 @@ TEST(TEST_cgmesh_bvh, EmptyMeshReturnsMinusOne)
 	EXPECT_LT(bvh.nearest(o, d, 1e-4f), 0.0f);
 	delete m;
 }
+
+// MAILLAGE POLYGONAL (quads), et non triangulaire comme tous les cas ci-dessus.
+// C'est le cube par defaut de sinaia : CreateCube() sans argument rend SIX
+// QUADS, que GetTriangles() developpe en DOUZE triangles. Le BVH doit indexer
+// les douze -- une taille deduite du nombre de FACES au lieu du nombre de
+// TRIANGLES n'en enregistre que la moitie, et les faces absentes cessent
+// silencieusement de repondre au picking (bbox de survol qui n'apparait pas).
+//
+// Un rayon par face, vise au centre depuis l'exterieur : les six doivent
+// rendre la meme distance d'entree (1 depuis un point a 2 du plan).
+TEST(TEST_cgmesh_bvh, QuadCubeAllSixFacesHit)
+{
+	Mesh *m = CreateCube();          // quads (bTri = false), arete de 2, centre a l'origine
+	ASSERT_EQ(m->GetNFaces(), 6u);   // le maillage est bien polygonal
+
+	BVH bvh; bvh.build(*m);
+
+	const float dirs[6][3] = {
+		{ 1.f, 0.f, 0.f }, { -1.f, 0.f, 0.f },
+		{ 0.f, 1.f, 0.f }, { 0.f, -1.f, 0.f },
+		{ 0.f, 0.f, 1.f }, { 0.f, 0.f, -1.f }
+	};
+	for (int k = 0; k < 6; ++k)
+	{
+		// Origine a 2 unites du centre sur la normale de la face, rayon rentrant.
+		Vector3f o( -2.f * dirs[k][0], -2.f * dirs[k][1], -2.f * dirs[k][2] );
+		Vector3f d(  dirs[k][0],  dirs[k][1],  dirs[k][2] );
+		EXPECT_NEAR(bvh.nearest(o, d, 1e-4f), 1.0f, 1e-4f)
+			<< "face " << k << " absente du BVH";
+	}
+	delete m;
+}

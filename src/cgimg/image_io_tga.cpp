@@ -92,9 +92,35 @@ int ImgIO::import_tga (Img& img, const char *filename)
 	}
 
 	// image data
-	img.resize_memory (width, height);
-	w = width;
-	h = height;
+	//
+	// LE RETOUR EST TESTE, et les dimensions sont ensuite reprises de l'IMAGE,
+	// pas de l'en-tete. Les deux points comptent :
+	//
+	//  - resize_memory laisse, en cas d'echec, une image VIDE et coherente
+	//    (m_pPixels nul, dimensions a zero) -- c'est ecrit dans son corps. En
+	//    reprenant `width`/`height` de l'en-tete, le decodeur se fabriquait une
+	//    image qui SE DECLARE de W x H sur un tampon inexistant, et les boucles
+	//    RLE ci-dessous ecrivaient a l'adresse nulle. Un en-tete de 18 octets
+	//    annoncant 65535 x 65535 suffit : 17 Go demandes, malloc echoue.
+	//
+	//  - `w * h` en `int` deborde a partir de 65535 x 65535 (4 294 836 225 >
+	//    INT_MAX), soit un comportement indefini AVANT meme la conversion en
+	//    unsigned. Le compte de pixels est donc calcule une fois, en unsigned
+	//    int, ou il tient exactement.
+	//
+	// `w` et `h` restent des int : plusieurs boucles de ce fichier descendent
+	// jusqu'a zero (`for (i=w-1; i>=0; i--)`) et tourneraient sans fin en non
+	// signe.
+	if (img.resize_memory (width, height) != 0)
+	{
+		fprintf (stderr, "import_tga: %u x %u : allocation refusee\n",
+		         (unsigned) width, (unsigned) height);
+		fclose (ptr);
+		return -1;
+	}
+	w = (int) img.width ();
+	h = (int) img.height ();
+	const unsigned int total_pixels = img.width () * img.height ();
 	if (color_map_type)
 	{
 		switch (color_map_entry_size)
@@ -367,20 +393,32 @@ int ImgIO::import_tga (Img& img, const char *filename)
 	  {
 	    int current_line = height-1;
 	    unsigned short pixels_on_line = 0;
-	    while (pixels_read < w*h && current_line >= 0)
+	    // ALIGNE SUR `case 2` : tout retour de fread est teste.
+	    //
+	    // Sans cela, un fichier tronque laissait r/g/b/a a leur valeur du tour
+	    // precedent et la boucle continuait : la fin de l'image se remplissait
+	    // de la derniere couleur lue, EN SILENCE. C'est le defaut que `case 2`
+	    // documente avoir corrige chez lui ; cette branche-ci ne l'avait jamais
+	    // recu.
+	    //
+	    // Les ecritures passent par set_pixel, deja bornee par `current_line >= 0`
+	    // et par le repli de `pixels_on_line` : il n'y a pas de debordement a
+	    // corriger ici, seulement un resultat faux a cesser de rendre.
+	    while (pixels_read < total_pixels && current_line >= 0)
 	      {
 			// read a packet
-			fread (&repetition_block, sizeof(unsigned char), 1, ptr);
+			if (fread (&repetition_block, sizeof(unsigned char), 1, ptr) != 1)
+				break;   // fichier tronque : on garde ce qui a ete decode
 			if ((repetition_block&0x80) == 0x80)
 			{
 				// run-length packet
 				pixel_count = repetition_block - 0x80 + 1;
-				fread (&b, sizeof(unsigned char), 1, ptr);
-				fread (&g, sizeof(unsigned char), 1, ptr);
-				fread (&r, sizeof(unsigned char), 1, ptr);
+				if (fread (&b, sizeof(unsigned char), 1, ptr) != 1) break;
+				if (fread (&g, sizeof(unsigned char), 1, ptr) != 1) break;
+				if (fread (&r, sizeof(unsigned char), 1, ptr) != 1) break;
 				a = 255;
-				if (pixel_depth == 32)
-					fread (&a, sizeof(unsigned char), 1, ptr);
+				if (pixel_depth == 32 && fread (&a, sizeof(unsigned char), 1, ptr) != 1)
+					break;
 				for (i=0; i<pixel_count && current_line >= 0; i++)
 				{
 					img.set_pixel (pixels_on_line, current_line, r, g, b, a);
@@ -396,14 +434,15 @@ int ImgIO::import_tga (Img& img, const char *filename)
 			{
 				// non-run-length packet
 				pixel_count = repetition_block + 1;
+				bool truncated = false;
 				for (i=0; i<pixel_count; i++)
 				{
-					fread (&b, sizeof(unsigned char), 1, ptr);
-					fread (&g, sizeof(unsigned char), 1, ptr);
-					fread (&r, sizeof(unsigned char), 1, ptr);
+					if (fread (&b, sizeof(unsigned char), 1, ptr) != 1) { truncated = true; break; }
+					if (fread (&g, sizeof(unsigned char), 1, ptr) != 1) { truncated = true; break; }
+					if (fread (&r, sizeof(unsigned char), 1, ptr) != 1) { truncated = true; break; }
 					a = 255;
-					if (pixel_depth == 32)
-						fread (&a, sizeof(unsigned char), 1, ptr);
+					if (pixel_depth == 32 && fread (&a, sizeof(unsigned char), 1, ptr) != 1)
+						{ truncated = true; break; }
 					if (current_line >= 0)
 					{
 						img.set_pixel (pixels_on_line, current_line, r, g, b, a);
@@ -415,6 +454,7 @@ int ImgIO::import_tga (Img& img, const char *filename)
 						}
 					}
 				}
+				if (truncated) break;
 			}
 			pixels_read += pixel_count;
 	      }
@@ -440,7 +480,7 @@ int ImgIO::import_tga (Img& img, const char *filename)
 	  //
 	  // Le retour de fread est teste : sans cela un fichier tronque remplissait
 	  // la fin de l'image avec la derniere valeur lue, en silence.
-	  const unsigned int total = (unsigned int) (w * h);
+	  const unsigned int total = total_pixels;   // calcule une fois, sans debordement
 	  while (pixels_read < total)
 	    {
 	      if (fread (&repetition_block, sizeof(unsigned char), 1, ptr) != 1)

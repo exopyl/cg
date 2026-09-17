@@ -41,6 +41,17 @@ set(srcs
 
 add_executable(${APP_TARGET} WIN32 ${srcs})
 
+# Icone de l'executable. Le .rc est compile par MSVC sans regle a ecrire ;
+# il suffit qu'il figure parmi les sources de la cible.
+#
+# C'est ce qui donne son icone au fichier dans l'Explorateur ET au raccourci
+# EPINGLE dans la barre des taches -- deux contextes ou la fenetre n'existe
+# pas, donc ou le SetIcon de l'execution ne peut rien. Sans cette ressource,
+# Windows y affiche l'icone generique des executables.
+if (WIN32)
+    target_sources(${APP_TARGET} PRIVATE sinaia.rc)
+endif()
+
 if (ENABLE_SINAIA_TREATMENTS)
     target_compile_definitions(${APP_TARGET} PRIVATE CG_SINAIA_TREATMENTS)
 endif()

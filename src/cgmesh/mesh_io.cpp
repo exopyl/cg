@@ -13,6 +13,7 @@
 #include "mesh.h"
 #include "mesh_io.h"
 #include "mesh_io_3ds.h"
+#include "io_path_guard.h"   // io_guard::forLog
 #include <cgmath/cgmath.h>
 #include "endianness.h"
 
@@ -414,9 +415,31 @@ int MeshIO::export_cpp (const Mesh& mesh, const char *filename)
       fclose (ptr);
       return -1;
     }
-  const char *modelname = stem.c_str();
+  // Le stem sert d'IDENTIFIANT C++ dans le fichier genere. Deux raisons de ne
+  // pas l'ecrire tel quel :
+  //
+  //  1. CORRECTION -- un stem contenant un espace, un tiret ou un accent produit
+  //     un identifiant invalide, donc un .cpp genere qui ne compile pas. Rien ne
+  //     le signalait : l'export « reussissait ».
+  //  2. INJECTION -- le chemin partait aussi dans un commentaire /* ... */. Un
+  //     composant de repertoire contenant « * » suffit a le CLORE : sur
+  //     `a*/piece.cpp`, le commentaire se ferme sur `a*/` et le reste de la
+  //     ligne devient du code dans un fichier destine a etre compile. Windows
+  //     interdit « * » dans un nom, Linux non.
+  //
+  // D'ou : identifiant restreint a [A-Za-z0-9_] et ne commencant pas par un
+  // chiffre, et commentaire de LIGNE -- que « */ » ne peut plus fermer, et dont
+  // forLog neutralise le seul caractere qui le romprait, le saut de ligne.
+  std::string ident = stem;
+  for (char &c : ident)
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+          (c >= '0' && c <= '9') || c == '_'))
+      c = '_';
+  if (ident[0] >= '0' && ident[0] <= '9')
+    ident.insert (ident.begin (), '_');
+  const char *modelname = ident.c_str();
 
-  fprintf (ptr, "/* model coming from %s */\n\n", filename);
+  fprintf (ptr, "// model coming from %s\n\n", io_guard::forLog (filename).c_str());
 
   /* n_vertices & n_faces */
   int n_vertices = mesh.GetNVertices ();
@@ -1151,6 +1174,23 @@ int MeshIO::export_stl (const Mesh& mesh, const char *filename)
 {
 	if (!filename) return -1;
 
+	// Nettoie un nom destine a etre ECRIT DANS UN FICHIER GENERE.
+	//
+	// Le nom vient du chemin de sortie, donc de l'utilisateur. Ecrit tel quel dans
+	// un STL ASCII, un caractere de controle casse la STRUCTURE du fichier : un
+	// saut de ligne dans `solid <nom>` cloture le solide et en ouvre un autre, ce
+	// qui permet de fabriquer un STL a plusieurs solides depuis un simple nom de
+	// fichier. Les sequences d'echappement (0x1B) posent le meme probleme des que
+	// le fichier est relu dans un terminal.
+	//
+	// On ne remplace QUE les caracteres de controle (< 0x20 et 0x7F). Les accents
+	// (donc les octets >= 0x80 d'un nom UTF-8) et les espaces sont conserves : les
+	// ecraser regresserait les noms de fichiers francais parfaitement legitimes,
+	// et ni l'un ni l'autre ne casse la structure.
+	//
+	// ⚠ Sous Windows, Win32 refuse deja les caracteres de controle dans un nom de
+	// fichier : le defaut n'y est pas atteignable par ce chemin. Sous Linux, tout
+	// octet sauf '/' et NUL est permis dans un nom -- il l'est.
 	// Derive a solid name from the filename stem (strip directories and extension).
 	std::string solidName(filename);
 	size_t slash = solidName.find_last_of("/\\");
@@ -1158,6 +1198,7 @@ int MeshIO::export_stl (const Mesh& mesh, const char *filename)
 	size_t dot = solidName.find_last_of('.');
 	if (dot != std::string::npos) solidName = solidName.substr(0, dot);
 	if (solidName.empty()) solidName = "mesh";
+	solidName = io_guard::forLog (solidName);   // cf. la note ci-dessus
 
 	FILE *fp = fopen(filename, "w");
 	if (!fp) return -1;

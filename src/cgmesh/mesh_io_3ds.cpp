@@ -221,7 +221,7 @@ t3DSChunk currentChunk;
 
 	if (szFile == nullptr)
 	{
-		printf("no file!", szFile);
+		printf("3DS: no file given!\n");   // le format ne portait aucun %s
 		return nullptr;
 	}
 
@@ -247,7 +247,12 @@ t3DSChunk currentChunk;
 	// Make sure this is a 3DS file
 	if (currentChunk.ID != CHK3DS_4_M3DMAGIC)
 	{
-		printf("Unable to load PRIMARY chuck from file: %s!", szFile);
+		printf("Unable to load PRIMARY chuck from file: %s!\n", szFile);
+		// CleanUp_3DS est le SEUL endroit qui ferme g_File3DSPointer. Sans cet
+		// appel, ce retour laissait le descripteur ouvert ET le pointeur global non
+		// nul : importer un dossier de fichiers tronques ou mal nommes fuyait un
+		// descripteur par fichier, jusqu'a epuisement de la limite du processus.
+		CleanUp_3DS();
 		return nullptr;
 	}
 
@@ -256,7 +261,10 @@ t3DSChunk currentChunk;
 	//Create a 3D Model object
 	t3DSModel *pModel = Allocate3DSModel();
 	if (pModel == nullptr)
+	{
+		CleanUp_3DS();   // meme fuite que ci-dessus
 		return nullptr;
+	}
 
 	// Begin loading objects, by calling this recursive function
 	ProcessNextChunk_3DS(pModel, &currentChunk);
@@ -265,8 +273,10 @@ t3DSChunk currentChunk;
 	// Clean up after everything
 	CleanUp_3DS();
 
-	//Copy the path
-	strcpy(pModel->strPathToModel,szFile);
+	//Copy the path -- affectation de std::string : plus de tampon fixe, donc plus
+	// de debordement ni de troncature (cf. la note sur le champ, dans
+	// mesh_io_3ds_structures.h).
+	pModel->strPathToModel = szFile;
 
 	//Don't forget to Create a new GR3D Object, fill it and return
 
@@ -2063,7 +2073,7 @@ int Write3DSFile (t3DSModel *pModel, const char *szFile, void *ExtraParameters )
 	// we consider the path stored in the 3DS structure
 	if (szFile == nullptr)
 	{
-		szFile = pModel->strPathToModel;
+		szFile = pModel->strPathToModel.c_str();
 	}
 
 	// Open the 3DS file

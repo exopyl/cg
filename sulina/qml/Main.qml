@@ -1,7 +1,10 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Window
-import QtQuick.Dialogs
+// Style EPINGLE : `import QtQuick.Controls` laisse windeployqt deployer les
+// SEPT styles (Basic, Fusion, Imagine, Material, Universal, FluentWinUI3,
+// Windows) et leurs StyleImpl, faute de pouvoir deviner lequel sert.
+// Nommer le style le rend deductible.
+import QtQuick.Controls.Basic
 import Qt.labs.folderlistmodel
 import QtQml.Models
 import Sulina
@@ -125,16 +128,13 @@ ApplicationWindow {
     Shortcut { sequences: ["S"]; onActivated: root.toggleTool("section") }
     Shortcut { sequences: ["Escape"]; onActivated: root.activeTool = "spec" }
 
-    FileDialog {
-        id: fileDialog
-        title: "Open a mesh file"
-        nameFilters: [
-            "Mesh files (*.obj *.ply *.stl *.off *.3ds *.glb)",
-            "All files (*)"
-        ]
-        currentFolder: "file:///" + dataDir
-        onAccepted: meshModel.loadUrl(selectedFile)
+    // Le `FileDialog` de QtQuick.Dialogs a ete remplace par un selecteur NATIF
+    // (MeshModel::loadFromFileDialog). Ce module tirait trois DLL et son arbre
+    // QML pour une boite que le systeme fournit deja, en mieux.
+    function openMeshFile() {
+        meshModel.loadFromFileDialog(dataDir)
     }
+
 
     // Map mesh extension → swatch color for the bottom-strip tile badges.
     function colorForExt(ext) {
@@ -233,7 +233,7 @@ ApplicationWindow {
                     Action {
                         text: qsTr("Open…")
                         shortcut: StandardKey.Open
-                        onTriggered: fileDialog.open()
+                        onTriggered: root.openMeshFile()
                     }
                     MenuSeparator {}
                     Action {
