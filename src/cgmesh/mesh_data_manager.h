@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <map>
 #include <memory>
 #include <vector>
@@ -128,6 +129,23 @@ public:
         cached.revision = currentRevision;
         m_triangles[pMesh] = std::move(cached);
         return m_triangles[pMesh].triangles;
+    }
+
+    // Number of LIVE entries across the three caches.
+    //
+    // WARNING: nothing but Invalidate ever purges these caches. They are keyed
+    // by Mesh*, and this class never learns that a mesh has died. A host that
+    // destroys and reloads geometry must therefore call Invalidate: otherwise
+    // the half-edges, the triangulation and the topologic counters of the dead
+    // mesh stay in memory -- and a reused address inherits the topology of its
+    // predecessor.
+    //
+    // This counter exists so that such growth is MEASURABLE instead of being
+    // assumed: it yields an exact integer, where a process memory footprint
+    // only yields a noisy trend.
+    std::size_t CachedEntryCount() const
+    {
+        return m_halfEdges.size() + m_topologicIssues.size() + m_triangles.size();
     }
 
     // Invalidate all cached data for a specific mesh

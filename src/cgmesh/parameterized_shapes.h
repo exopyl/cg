@@ -674,3 +674,32 @@ private:
 	float           m_isoDistance = 0.05f;
 	bool            m_simplify    = false; // use the tandem extractor (decimated output)
 };
+
+// ---------------------------------------------------------------------------
+// Extrusion (epaississement) d'une forme quelconque
+// ---------------------------------------------------------------------------
+
+// Decorateur : enveloppe une forme parametrique et lui ajoute deux parametres,
+// « Extrude » et « Extrude distance », qui epaississent sa surface (SolidifyMesh,
+// epaisseur CENTREE). Les parametres de la forme enveloppee restent exposes tels
+// quels, en tete ; le nom est le sien -- c'est la cle du catalogue.
+//
+// Regenerate() ne rejoue la forme enveloppee que si l'un de SES parametres a
+// change : bouger la distance sur une eponge de Menger ou un L-systeme vegetal ne
+// reconstruit pas le generateur, seulement l'epaississement.
+class ParameterizedExtruded : public ParameterizedMesh
+{
+public:
+	explicit ParameterizedExtruded(std::unique_ptr<IParameterized> inner);
+	std::vector<Parameter> GetParameters() override;
+	void Regenerate() override;
+	std::string GetName() const override { return m_inner ? m_inner->GetName() : std::string(); }
+private:
+	std::vector<std::string> InnerSnapshot();
+
+	std::unique_ptr<IParameterized> m_inner;
+	std::vector<std::string> m_lastInner; // valeurs au dernier Regenerate du generateur
+	bool  m_innerBuilt = false;
+	bool  m_enabled  = false;
+	float m_distance = 0.1f;
+};

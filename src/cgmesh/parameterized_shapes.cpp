@@ -13,6 +13,7 @@
 #include "extrude_contours.h"
 #include "stroke_contours.h"
 #include "text_extrude.h"
+#include "mesh_solidify.h"
 #include <cgmath/font.h>
 #include <nlohmann/json.hpp>
 #include <cmath>
@@ -1580,4 +1581,64 @@ std::string ParameterizedGothicWindow::ExportJson() const
 	j["extrusion"]["zHeight"] = R(m_zHeight);
 
 	return j.dump(2);
+}
+
+// --- Extrusion (decorateur) ------------------------------------------------
+ParameterizedExtruded::ParameterizedExtruded(std::unique_ptr<IParameterized> inner)
+	: m_inner(std::move(inner))
+{
+	Regenerate();
+}
+
+std::vector<Parameter> ParameterizedExtruded::GetParameters()
+{
+	std::vector<Parameter> params = m_inner ? m_inner->GetParameters() : std::vector<Parameter>();
+	params.push_back(Parameter::MakeBool("Extrude", &m_enabled));
+	params.push_back(Parameter::MakeFloat("Extrude distance", &m_distance, 0.001f, 5.f));
+	return params;
+}
+
+// Valeurs courantes des parametres du generateur, en texte : un seul type pour
+// les cinq genres de Parameter, et une egalite exacte (pas de tolerance -- une
+// valeur ecrite par l'UI puis relue est bit a bit la meme).
+std::vector<std::string> ParameterizedExtruded::InnerSnapshot()
+{
+	std::vector<std::string> values;
+	if (!m_inner) return values;
+	for (const Parameter &p : m_inner->GetParameters())
+	{
+		switch (p.GetType())
+		{
+		case Parameter::INT:
+		case Parameter::ENUM:   values.push_back(std::to_string(p.GetInt())); break;
+		case Parameter::FLOAT:  values.push_back(std::to_string(p.GetFloat())); break;
+		case Parameter::BOOL:   values.push_back(p.GetBool() ? "1" : "0"); break;
+		case Parameter::STRING: values.push_back(p.GetString()); break;
+		}
+	}
+	return values;
+}
+
+void ParameterizedExtruded::Regenerate()
+{
+	delete m_pMesh;
+	m_pMesh = nullptr;
+	ParameterizedMesh *inner = dynamic_cast<ParameterizedMesh*>(m_inner.get());
+	if (!inner) return;
+
+	// Le constructeur de chaque forme a deja appele Regenerate() : au premier
+	// passage, le maillage du generateur est a jour tel quel.
+	std::vector<std::string> snapshot = InnerSnapshot();
+	if (m_innerBuilt && snapshot != m_lastInner)
+		inner->Regenerate();
+	m_lastInner = std::move(snapshot);
+	m_innerBuilt = true;
+
+	const Mesh *src = inner->GetMesh();
+	if (!src) return;
+	m_pMesh = new Mesh();
+	if (m_enabled)
+		SolidifyMesh(*src, m_distance, *m_pMesh);   // recopie src s'il echoue
+	else
+		*m_pMesh = *src;
 }

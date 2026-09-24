@@ -151,8 +151,15 @@ const std::vector<CatalogEntry>& catalog()
         for (const Row& r : rows) {
             const std::string name = r.name;
             if (!FindParametricShape(name)) continue;   // nom inconnu de cgmesh
-            out.push_back(CatalogEntry{name, r.category, r.group,
-                                       [name] { return MakeParametricShape(name); }});
+            // Les formes de la page parametrique recoivent l'option Extrude
+            // (epaississement) ; les formes gothiques ont deja leur propre
+            // extrusion (zHeight, profils).
+            const bool extrudable = (r.category == P);
+            out.push_back(CatalogEntry{name, r.category, r.group, [name, extrudable] {
+                std::unique_ptr<IParameterized> shape = MakeParametricShape(name);
+                if (!extrudable) return shape;
+                return std::unique_ptr<IParameterized>(new ParameterizedExtruded(std::move(shape)));
+            }});
         }
         return out;
     }();

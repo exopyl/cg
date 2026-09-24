@@ -128,6 +128,7 @@ if (EMSCRIPTEN)
         ${PROJECT_SOURCE_DIR}/parameterized.cpp
         ${PROJECT_SOURCE_DIR}/parameterized_shapes.cpp
         ${PROJECT_SOURCE_DIR}/parametric_catalog.cpp
+        ${PROJECT_SOURCE_DIR}/mesh_solidify.cpp      # option Extrude des formes parametriques
     )
 else()
     file(GLOB SRC_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/*.cpp)
