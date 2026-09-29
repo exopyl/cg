@@ -52,6 +52,12 @@ struct SurfaceDrawState
 	//! mode « neutre » ne changerait rien a l'ecran.
 	bool useMeshMaterials = true;
 
+	//! Le programme PBR peut-il servir ? A FAUX -- mode « Materiaux sans PBR » --
+	//! un materiau PBR est rendu par sa projection de Phong, via la variante
+	//! enrichie du programme de surface (cgre::PhongExtrasProgram). Sans effet
+	//! quand useMeshMaterials est faux : aucun materiau n'est alors active.
+	bool allowPbr = true;
+
 	//! Mode d'ombrage « couleurs par sommet ». Le pipeline fixe l'obtenait par
 	//! glEnable(GL_COLOR_MATERIAL), qui n'a plus d'effet sous programme lie --
 	//! le shader doit donc se le faire dire.

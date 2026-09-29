@@ -19,6 +19,25 @@ static_assert (std::is_trivially_copyable<rendering_properties_s>::value,
                "rendering_properties_s doit rester trivialement copiable : elle est "
                "copiee par maillage et par image. Voir le commentaire de sa definition.");
 
+// SURCOUCHES NON TEXTUREES. Le chemin VBO appelle mesh_draw avec
+// `surfaceAlreadyDrawn`, ce qui saute le bloc de remplissage et donc
+// l'ActivateDefaultMaterial qui y defait l'etat de texture : apres un materiau
+// texture, GL_TEXTURE_2D reste actif sur l'unite 0 (albedo) et, pour une carte de
+// reflexion, sur l'unite 1. Sans eclairage, la couleur d'une surcouche est alors
+// MODULEE par un texel quelconque -- sans effet sur un trait noir, visible sur
+// toute autre couleur.
+//
+// A appeler APRES un glPushAttrib (GL_ALL_ATTRIB_BITS) : GL_ENABLE_BIT sauve
+// l'activation de chaque unite, GL_TEXTURE_BIT l'unite active, et le glPopAttrib
+// du bloc restitue donc l'etat exact -- rien n'est change pour ce qui suit.
+static void DisableOverlayTexturing ()
+{
+	glActiveTexture (GL_TEXTURE1);
+	glDisable (GL_TEXTURE_2D);
+	glActiveTexture (GL_TEXTURE0);
+	glDisable (GL_TEXTURE_2D);
+}
+
 void rendering_properties_init (rendering_properties_s &prop)
 {
 	prop.shading = CG_shading_mode::Materials;
@@ -125,15 +144,28 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 	{
 		glPushAttrib (GL_ALL_ATTRIB_BITS);
 		glDisable (GL_LIGHTING);
-		glColor3f (1., 0., 0.);
+		DisableOverlayTexturing ();
+		// LA COULEUR DU REGLAGE « Point color », et non plus un rouge en dur :
+		// prop.point_color ne servait qu'aux elements 'p' du fichier.
+		glColor3f (prop.point_color[0], prop.point_color[1], prop.point_color[2]);
 		glPointSize (prop.pointsize);
+
+		// LES COULEURS PAR SOMMET PRIMENT, mais seulement quand elles ont un
+		// sens : sur un NUAGE NU (.ply/.pset/.pts colores, le cas que ce bloc
+		// protege) ou quand la vue est en mode « couleurs par sommet ».
+		// `hasVColors` seul ne distingue rien -- Mesh::InitVertices remplit le
+		// tableau d'un gris 0,5 pour tout maillage qu'elle cree (cf. le chemin
+		// VBO, qui fait le meme constat) -- et laisser primer ce remplissage
+		// rendait les points gris quel que soit le reglage.
+		const bool pointVertexColors =
+			hasVColors && (bareVertexCloud || prop.shading == CG_shading_mode::VertexColors);
 		glBegin (GL_POINTS);
 		for (unsigned int i=0; i<mesh->GetNVertices (); i++)
 		{
 			// Lighting is disabled for this pass (above), so per-vertex colours
 			// from a coloured cloud (.ply/.pset/.pts) must be applied whenever
 			// present — gating on !prop.light left coloured clouds all red.
-			if (hasVColors)
+			if (pointVertexColors)
 				glColor3f (mesh->GetVertexColors ()[3*i],
 					   mesh->GetVertexColors ()[3*i+1],
 					   mesh->GetVertexColors ()[3*i+2]);
@@ -180,12 +212,17 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 
 		// LE MODE D'OMBRAGE DECIDE, une fois pour tout le maillage.
 		//
-		// Hors du mode Materials, aucun materiau du maillage n'est active : la
+		// Hors des modes a materiaux (Materials, MaterialsNoPbr), aucun materiau
+		// du maillage n'est active : la
 		// couleur vient du materiau NEUTRE, ou des couleurs par sommet. Poser
 		// l'etat ici plutot que par face evite de le reposer a chaque triangle,
 		// et garde `i_current_material` a -1, ce dont la lecture des couleurs par
 		// sommet plus bas se sert deja comme condition.
-		const bool useMeshMaterials = (prop.shading == CG_shading_mode::Materials);
+		//
+		// Le mode sans PBR active les memes materiaux : ce chemin, en fixe-
+		// fonction, ne connait de toute facon que leur projection de Phong, et
+		// n'a pas le programme de surface pour en exploiter davantage.
+		const bool useMeshMaterials = ShadingUsesMeshMaterials (prop.shading);
 		const bool useVertexColors  = (prop.shading == CG_shading_mode::VertexColors)
 		                              && !mesh->GetVertexColors ().empty ();
 		if (useMeshMaterials)
@@ -372,7 +409,12 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 	{
 		glPushAttrib (GL_ALL_ATTRIB_BITS);
 		glDisable (GL_LIGHTING);
-		glColor3f (0., 0., 0.);
+		// Le noir en dur rendait la texture inoffensive ; une couleur ne l'est
+		// plus -- d'ou la desactivation, qui la protege de toute modulation.
+		DisableOverlayTexturing ();
+		// LA COULEUR DU REGLAGE « Line color ». Elle ne servait qu'aux elements
+		// 'l' du fichier : le fil de fer restait noir quoi qu'on regle.
+		glColor3f (prop.line_color[0], prop.line_color[1], prop.line_color[2]);
 
 		glEnable (GL_LINE_SMOOTH);
 		glLineWidth (prop.linesize);
@@ -404,6 +446,7 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 	{
 		glPushAttrib (GL_ALL_ATTRIB_BITS);
 		glDisable (GL_LIGHTING);
+		DisableOverlayTexturing ();
 
 		if (!mesh->GetLines ().empty())
 		{
@@ -598,11 +641,11 @@ void MeshRenderer::Draw (int id)
 	// because cgmesh's ApplyMaterial paints all faces of a mesh with one
 	// material id (true for our 3dm import path and most current importers).
 	auto activateMeshMaterial = [&]() {
-		// Hors du mode Materials, et aussi quand le maillage n'en porte AUCUN :
+		// Hors des modes a materiaux, et aussi quand le maillage n'en porte AUCUN :
 		// le neutre est lie explicitement. Sans cela, l'etat GL herite du
 		// maillage precedent s'appliquait -- l'apparence d'un maillage sans
 		// materiau dependait de l'ordre de la scene.
-		if (el.properties.shading != CG_shading_mode::Materials)
+		if (!ShadingUsesMeshMaterials (el.properties.shading))
 		{
 			MaterialRenderer::ActivateNeutralMaterial ();
 			return;
@@ -636,7 +679,7 @@ void MeshRenderer::Draw (int id)
 	// through the immediate-mode mesh_draw which switches material per face.
 	// ... et seulement quand les materiaux du maillage servent : en Neutre, il
 	// n'y en a plus qu'un, donc les chemins rapides redeviennent utilisables.
-	if (el.properties.shading == CG_shading_mode::Materials &&
+	if (ShadingUsesMeshMaterials (el.properties.shading) &&
 	    el.pMesh->GetNMaterials() > 1 &&
 	    el.method != CG_RENDERING_DEFAULT &&
 	    el.method != CG_RENDERING_VBO)
@@ -660,7 +703,8 @@ void MeshRenderer::Draw (int id)
 			// multi-material meshes); activates each material in turn.
 			SurfaceDrawState state;
 			state.flat             = !el.properties.smooth;
-			state.useMeshMaterials = el.properties.shading == CG_shading_mode::Materials;
+			state.useMeshMaterials = ShadingUsesMeshMaterials (el.properties.shading);
+			state.allowPbr         = ShadingAllowsPbr (el.properties.shading);
 			state.useVertexColors  = el.properties.shading == CG_shading_mode::VertexColors;
 			state.lighting         = el.properties.light != 0;
 			m_vboManager->DrawMaterialGroups (el.id, GetMaterialRendererIds(id), state);

@@ -219,3 +219,64 @@ std::vector<ExtrudeContour> intersectionContours (const std::vector<ExtrudeConto
 	return toContours (Clipper2Lib::Intersect (subject, clip,
 	                                           Clipper2Lib::FillRule::NonZero, 6));
 }
+
+namespace
+{
+
+// Ajoute a `out` la region portee par un noeud EXTERIEUR du PolyTree, puis,
+// recursivement, celles des ilots poses dans ses trous.
+void collectRegions (const Clipper2Lib::PolyPathD& outer,
+                     std::vector<std::vector<ExtrudeContour>>& out)
+{
+	std::vector<ExtrudeContour> region;
+	ExtrudeContour hull;
+	for (const Clipper2Lib::PointD& q : outer.Polygon())
+		hull.pts.push_back (Vector2f ((float)q.x, (float)q.y));
+	if (contourSignedArea (hull.pts) < 0.f)
+		std::reverse (hull.pts.begin(), hull.pts.end());
+	hull.isHole = false;
+	region.push_back (std::move (hull));
+
+	for (size_t i = 0; i < outer.Count(); ++i)
+	{
+		const Clipper2Lib::PolyPathD* hole = outer.Child (i);
+		ExtrudeContour h;
+		for (const Clipper2Lib::PointD& q : hole->Polygon())
+			h.pts.push_back (Vector2f ((float)q.x, (float)q.y));
+		if (contourSignedArea (h.pts) > 0.f)
+			std::reverse (h.pts.begin(), h.pts.end());
+		h.isHole = true;
+		region.push_back (std::move (h));
+	}
+	out.push_back (std::move (region));
+
+	for (size_t i = 0; i < outer.Count(); ++i)
+	{
+		const Clipper2Lib::PolyPathD* hole = outer.Child (i);
+		for (size_t k = 0; k < hole->Count(); ++k)
+			collectRegions (*hole->Child (k), out);
+	}
+}
+
+} // namespace
+
+std::vector<std::vector<ExtrudeContour>> contourRegions (const std::vector<ExtrudeContour>& in,
+                                                         bool evenOdd)
+{
+	const Clipper2Lib::PathsD subject = toPaths (in);
+	if (subject.empty()) return {};
+
+	// precision 6, comme partout ici : a l'echelle du millimetre, le nanometre.
+	Clipper2Lib::ClipperD clipper (6);
+	clipper.AddSubject (subject);
+	Clipper2Lib::PolyTreeD tree;
+	if (!clipper.Execute (Clipper2Lib::ClipType::Union,
+	                      evenOdd ? Clipper2Lib::FillRule::EvenOdd : Clipper2Lib::FillRule::NonZero,
+	                      tree))
+		return {};
+
+	std::vector<std::vector<ExtrudeContour>> regions;
+	for (size_t i = 0; i < tree.Count(); ++i)
+		collectRegions (*tree.Child (i), regions);
+	return regions;
+}

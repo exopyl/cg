@@ -103,6 +103,16 @@ public:
 		GLuint mapTex[static_cast<std::size_t> (cgpbr::MapSlot::count)] = {};
 		bool   hasMap[static_cast<std::size_t> (cgpbr::MapSlot::count)] = {};
 		cgpbr::Factors factors {};
+
+		// Jeu d'UV DEMANDE par chaque carte (cf. cgpbr::TextureRef::uvSet). Le
+		// chemin PBR l'ignore -- dette connue, tout est echantillonne au jeu 0 ;
+		// le repli de Phong enrichi, lui, refuse une carte qui ne vise pas le
+		// jeu 0 plutot que de l'appliquer avec la mauvaise parametrisation.
+		std::uint8_t uvSet[static_cast<std::size_t> (cgpbr::MapSlot::count)] = {};
+
+		// Mode d'alpha du materiau source. Le chemin PBR ne l'exploite pas ; le
+		// repli de Phong enrichi en tire la decoupe (`mask`).
+		cgpbr::AlphaMode alphaMode = cgpbr::AlphaMode::opaque;
 	};
 	MaterialPbrInfo GetPbrInfo (unsigned int id) const;
 

@@ -83,6 +83,29 @@ const GlProgram* SurfaceProgram ();
 // echoue, auquel cas l'appelant retombe sur la projection de Phong.
 const GlProgram* PbrProgram ();
 
+//
+// LE PROGRAMME DE PHONG ENRICHI -- celui du mode « Materiaux sans PBR ».
+//
+// LA SOURCE DU PROGRAMME DE SURFACE, compilee une seconde fois avec
+// `#define CG_PHONG_EXTRAS`. Les blocs qui en dependent sont retires par le
+// preprocesseur du programme ordinaire : la suite de lexemes que celui-ci
+// compile est celle d'avant leur ajout, et c'est ce qui le garde identique au
+// bit pres pour tout materiau et dans tous les modes existants -- la garantie
+// de SurfaceProgram n'est pas negociee contre une branche sur uniforme.
+//
+// N'EST LIE QUE POUR UN MATERIAU PBR, dans ce mode seulement. Un materiau non PBR
+// n'a rien de plus a lui donner : il reste sur SurfaceProgram, donc rendu
+// exactement comme en mode Materiaux. Ce que la variante ajoute, et pourquoi le
+// reste n'y est pas, est decrit a cgre::PhongExtras (phong_extras.h).
+//
+// ⚠ gl_FrontMaterial.emission N'Y EST PAS LUE : l'emission arrive par uniforme
+// (sinon la projection non texturee, qui en porte deja une, compterait double).
+// C'est aussi pourquoi la variante n'est pas faite pour un materiau non PBR.
+//
+// Construit paresseusement au premier materiau PBR rendu dans ce mode ; nullptr
+// si la construction echoue, et l'appelant retombe sur SurfaceProgram.
+const GlProgram* PhongExtrasProgram ();
+
 // Location de l'attribut generique `aTangent` dans le programme PBR, ou -1 si
 // le programme n'existe pas, si le compilateur l'a elimine, ou s'il l'a place a
 // la location 0.

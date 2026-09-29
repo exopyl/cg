@@ -10,6 +10,7 @@ set(sources
     examinator_trackball.cpp
     gl_program.cpp
     surface_program.cpp
+    phong_extras.cpp
     material_renderer.cpp
     mesh_renderer.cpp
     vertex_buffer_manager.cpp
@@ -24,6 +25,7 @@ set(headers
     examinator_trackball.h
     gl_program.h
     surface_program.h
+    phong_extras.h
     material_renderer.h
     mesh_renderer.h
     vertex_buffer_manager.h

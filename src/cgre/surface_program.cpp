@@ -4,6 +4,7 @@
 #include "gl_program.h"
 
 #include <map>
+#include <string>
 
 namespace cgre
 {
@@ -24,6 +25,9 @@ namespace
 	bool      g_pbrBuildAttempted = false;
 	GlProgram g_pbrProgram;
 	int       g_pbrTangentLoc = -1;
+
+	bool      g_extrasBuildAttempted = false;
+	GlProgram g_extrasProgram;
 
 	// Canal d'inspection : `off` hors mesure, et c'est ce qui garantit que le
 	// rendu nominal est celui d'avant. Aucune persistance, aucun reglage : une
@@ -95,6 +99,34 @@ uniform bool  uUseVertexColors;
 uniform bool  uLighting;
 uniform float uReflAmount;
 
+// VARIANTE « EXTRAS » : tout ce qui suit un #ifdef CG_PHONG_EXTRAS n'existe que
+// dans le programme PhongExtrasProgram, construit a partir de CETTE source avec
+// la definition injectee apres #version. Le programme de surface ordinaire ne la
+// definit pas : le preprocesseur retire ces blocs AVANT l'analyse, donc la suite
+// de lexemes qu'il compile est celle d'avant leur ajout -- c'est ce qui le garde
+// identique pour tout materiau, et non un argument sur des uniformes a zero.
+#ifdef CG_PHONG_EXTRAS
+// Unites : celles du chemin PBR (cgre::PbrTextureUnit), posees par l'hote. Les
+// cartes y sont deja televersees par MaterialRenderer::UploadPbrMaps, dans le
+// format de leur emplacement : sRGB pour l'emissive, lineaire pour les autres.
+uniform sampler2D uEmissiveMap;
+uniform sampler2D uOcclusionMap;
+uniform sampler2D uNormalMap;
+
+uniform vec3  uEmissiveFactor;      // LINEAIRE, comme dans glTF
+uniform bool  uUseEmissiveMap;
+uniform bool  uUseOcclusionMap;
+uniform float uOcclusionStrength;
+uniform bool  uUseNormalMap;
+uniform float uNormalScale;
+uniform float uAlphaCutoff;         // negatif : pas de decoupe
+
+// Occlusion du fragment, lue par lightContribution sur ses seuls termes
+// AMBIANTS. Une globale plutot qu'un parametre : la signature de la fonction
+// reste celle du programme ordinaire.
+float gOcclusion = 1.0;
+#endif
+
 varying vec3 vNormalEye;
 varying vec3 vPosEye;
 varying vec4 vColor;
@@ -111,6 +143,9 @@ vec3 lightContribution (int i, vec3 N, vec3 V, vec3 diffuseColor)
     float nDotH = max (dot (N, H), 0.0);
 
     vec3 ambient = vec3 (gl_LightSource[i].ambient) * vec3 (gl_FrontMaterial.ambient);
+#ifdef CG_PHONG_EXTRAS
+    ambient *= gOcclusion;
+#endif
     vec3 diffuse = vec3 (gl_LightSource[i].diffuse) * diffuseColor * nDotL;
 
     // Le speculaire ne s'ajoute que sur une face effectivement eclairee : sinon
@@ -135,6 +170,48 @@ vec2 sphereMapCoord (vec3 N, vec3 posEye)
     return vec2 (r.x / m + 0.5, r.y / m + 0.5);
 }
 
+#ifdef CG_PHONG_EXTRAS
+// CARTE DE NORMALES SANS ATTRIBUT TANGENTE : la base est tiree des DERIVEES
+// ECRAN de la position et des UV (« cotangent frame », Schueler ; meme forme que
+// getTangentFrame de three.js). Le programme de surface n'a pas d'attribut
+// generique, et en ajouter un rouvrirait le piege de la location 0, aliasee sur
+// gl_Vertex en profil de compatibilite.
+//
+// `N` est la normale DEJA retournee pour les faces vues de dos, et `faceDir`
+// vaut -1 pour elles : le retournement de N inverse aussi T et B, que faceDir
+// remet dans le sens des UV.
+//
+// LA COMPOSANTE VERTE EST INVERSEE. Une base tiree des derivees suit v croissant,
+// alors que la convention de glTF -- dont les UV ne sont pas retournees a
+// l'import -- oriente la bitangente a l'oppose : c'est la correction que fait
+// three.js (normalScale.y = -normalScale.y) quand il n'a pas de tangentes.
+vec3 perturbNormal (vec3 N, float faceDir)
+{
+    vec3 q0  = dFdx (vPosEye);
+    vec3 q1  = dFdy (vPosEye);
+    vec2 st0 = dFdx (gl_TexCoord[0].st);
+    vec2 st1 = dFdy (gl_TexCoord[0].st);
+
+    vec3 q1perp = cross (q1, N);
+    vec3 q0perp = cross (N, q0);
+    vec3 T = q1perp * st0.x + q0perp * st1.x;
+    vec3 B = q1perp * st0.y + q0perp * st1.y;
+
+    // UV degenerees (derivees nulles) : la base s'effondre et la normale
+    // geometrique est conservee, plutot qu'un normalize de zero -- NaN.
+    float det = max (dot (T, T), dot (B, B));
+    if (det <= 0.0)
+        return N;
+    float scale = faceDir * inversesqrt (det);
+
+    vec3 t = texture2D (uNormalMap, gl_TexCoord[0].st).xyz * 2.0 - 1.0;
+    t.xy *= uNormalScale;
+    t.y   = -t.y;
+    vec3 n = mat3 (T * scale, B * scale, N) * t;
+    return (dot (n, n) > 0.0) ? normalize (n) : N;
+}
+#endif
+
 void main ()
 {
     vec3 N = normalize (vNormalEye);
@@ -146,6 +223,16 @@ void main ()
     // de l'application, pas un cas limite.
     if (!gl_FrontFacing)
         N = -N;
+
+#ifdef CG_PHONG_EXTRAS
+    // APRES le retournement, comme au programme PBR -- mais la base, elle, est
+    // recalculee ici a partir de N retourne, d'ou le signe de face transmis.
+    if (uUseNormalMap)
+        N = perturbNormal (N, gl_FrontFacing ? 1.0 : -1.0);
+    if (uUseOcclusionMap)
+        gOcclusion = mix (1.0, texture2D (uOcclusionMap, gl_TexCoord[0].st).r,
+                          uOcclusionStrength);
+#endif
 
     vec3 V = normalize (-vPosEye);   // l'oeil est a l'origine en espace oeil
 
@@ -178,14 +265,40 @@ void main ()
     // specification ; glMaterialfv, lui, ne les ecrete pas, et un Kd de MTL
     // traverse l'import sans borne. Un materiau a Kd = 2 rendrait donc
     // 2 x texel ici contre 1 x texel en fixe.
+#ifdef CG_PHONG_EXTRAS
+    // DECOUPE ALPHA (mode `mask`), sur l'alpha que ce programme ecrit. Seuil
+    // negatif hors `mask` : rien n'est jamais ecarte.
+    if (base.a * texel.a < uAlphaCutoff)
+        discard;
+
+    // EMISSION glTF : facteur x carte, en LINEAIRE -- la carte est televersee en
+    // sRGB, le materiel la rend donc deja lineaire. Encodee comme la sortie du
+    // programme PBR, puis AJOUTEE apres le texturage : une emission n'est pas
+    // teinte par la couleur de base, contrairement a ce que ferait GL_MODULATE.
+    vec3 emission = uEmissiveFactor;
+    if (uUseEmissiveMap)
+        emission *= texture2D (uEmissiveMap, gl_TexCoord[0].st).rgb;
+    emission = pow (clamp (emission, 0.0, 1.0), vec3 (1.0 / 2.2));
+#endif
+
     if (!uLighting)
     {
         gl_FragColor = clamp (base, 0.0, 1.0) * texel;
+#ifdef CG_PHONG_EXTRAS
+        gl_FragColor.rgb = min (gl_FragColor.rgb + emission, 1.0);
+#endif
         return;
     }
 
+#ifdef CG_PHONG_EXTRAS
+    // gl_FrontMaterial.emission N'EST PAS LUE : pour un materiau PBR elle porte
+    // la projection du MEME facteur emissif (cas non texture), qui compterait
+    // alors deux fois. L'emission vient de l'uniforme, dans les deux cas.
+    vec3 color = vec3 (gl_LightModel.ambient) * vec3 (gl_FrontMaterial.ambient) * gOcclusion;
+#else
     vec3 color = vec3 (gl_LightModel.ambient) * vec3 (gl_FrontMaterial.ambient)
                + vec3 (gl_FrontMaterial.emission);
+#endif
     color += lightContribution (0, N, V, base.rgb);
     color += lightContribution (1, N, V, base.rgb);
 
@@ -213,6 +326,10 @@ void main ()
         vec3 refl = texture2D (uReflection, sphereMapCoord (N, vPosEye)).rgb;
         color = mix (color, refl, clamp (uReflAmount, 0.0, 1.0));
     }
+
+#ifdef CG_PHONG_EXTRAS
+    color = min (color + emission, 1.0);
+#endif
 
     gl_FragColor = vec4 (color, base.a * texel.a);
 }
@@ -675,6 +792,55 @@ const GlProgram* PbrProgram ()
 int PbrTangentAttribLocation ()
 {
 	return g_pbrTangentLoc;
+}
+
+const GlProgram* PhongExtrasProgram ()
+{
+	if (g_extrasBuildAttempted)
+		return g_extrasProgram.IsValid () ? &g_extrasProgram : nullptr;
+
+	// Une seule tentative par processus, meme regle que les deux autres.
+	g_extrasBuildAttempted = true;
+
+	// Memes unites que le chemin PBR, donc meme verification : au-dela du
+	// maximum, glActiveTexture echoue sans changer l'unite, et la carte suivante
+	// serait liee a la place de la precedente.
+	GLint maxUnits = 0;
+	glGetIntegerv (GL_MAX_TEXTURE_IMAGE_UNITS, &maxUnits);
+	if (maxUnits < kPbrUnitEmissive + 1)
+	{
+		Logf ("Programme de Phong enrichi indisponible : %d unites de texture fragment, "
+		      "%d requises. On garde le programme de surface.",
+		      (int)maxUnits, (int)kPbrUnitEmissive + 1);
+		return nullptr;
+	}
+
+	// LA MEME SOURCE que le programme de surface, avec la definition injectee
+	// JUSTE APRES la ligne #version -- qui doit rester la premiere directive.
+	// Une copie de la source aurait diverge au premier correctif.
+	std::string fragment = kFragmentSource;
+	const std::string::size_type version = fragment.find ("#version");
+	const std::string::size_type eol =
+		(version == std::string::npos) ? std::string::npos : fragment.find ('\n', version);
+	if (eol == std::string::npos)
+	{
+		Log ("Programme de Phong enrichi : directive #version introuvable.");
+		return nullptr;
+	}
+	fragment.insert (eol + 1, "#define CG_PHONG_EXTRAS 1\n");
+
+	std::map<GLenum, std::string> sources;
+	sources[GL_VERTEX_SHADER]   = kVertexSource;
+	sources[GL_FRAGMENT_SHADER] = fragment;
+
+	if (!g_extrasProgram.Build (sources, "phong-extras"))
+	{
+		Log ("Programme de Phong enrichi indisponible : on garde le programme de surface.");
+		return nullptr;
+	}
+
+	Log ("Programme de Phong enrichi compile et lie.");
+	return &g_extrasProgram;
 }
 
 void SetPbrChannel (PbrChannel channel)

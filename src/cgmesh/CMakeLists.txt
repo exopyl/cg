@@ -98,6 +98,11 @@ if (EMSCRIPTEN)
         # emprise d'un maillage dans une tranche : requise par mesh.mounts, qui
         # mesure la matiere A LA HAUTEUR de la fixation et non sur toute la piece.
         ${PROJECT_SOURCE_DIR}/mesh_slab.cpp
+        # slicing multi-maillages (cf. docs/mesh_slicing.md) : chainage des
+        # segments + couches a trous. Voie sequentielle forcee sous EMSCRIPTEN (std::thread leve sans
+        # -pthread). Requiert contour_ops.cpp (mode Nesting::Winding).
+        ${PROJECT_SOURCE_DIR}/slice_linker.cpp
+        ${PROJECT_SOURCE_DIR}/mesh_slicing.cpp
         ${PROJECT_SOURCE_DIR}/stroke_contours.cpp   # epaississement des traces, requis par import_svg
         # texte -> solide extrude. SEUL fichier du chantier « texte 3D » a
         # declarer ici : font.cpp, text_layout.cpp et bezier_flatten.cpp vivent

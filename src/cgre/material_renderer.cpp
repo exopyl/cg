@@ -504,11 +504,13 @@ MaterialRenderer::MaterialPbrInfo MaterialRenderer::GetPbrInfo (unsigned int id)
 	if (entry.pMaterial == nullptr || entry.type != MATERIAL_PBR)
 		return info;                     // emplacement libere, ou materiau non PBR
 
-	info.isPbr   = true;
-	info.factors = entry.pbrFactors;
+	info.isPbr     = true;
+	info.factors   = entry.pbrFactors;
+	info.alphaMode = entry.alphaMode;
 	for (std::size_t i = 0; i < entry.mapTex.size (); ++i)
 	{
 		info.mapTex[i] = entry.mapTex[i];
+		info.uvSet[i]  = entry.mapUvSet[i];
 		// Le MASQUE fait foi, pas l'identifiant : un televersement echoue laisse
 		// l'emplacement a zero, et un zero est le nom de la texture par defaut.
 		info.hasMap[i] = (entry.mapMask & (1u << i)) != 0;

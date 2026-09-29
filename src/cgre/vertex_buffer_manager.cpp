@@ -5,6 +5,7 @@
 #include "diagnostics.h"
 #include "gl_program.h"
 #include "material_renderer.h"
+#include "phong_extras.h"
 #include "surface_program.h"
 #include "../cgmesh/mesh_data_manager.h"
 // Obtenus aujourd'hui par transitivite via material_renderer.h : les nommer ici
@@ -369,6 +370,54 @@ static void BindPbrMaps (const cgre::GlProgram* pbr,
 	pbr->SetFloat ("uNormalScale",     f.normalScale);
 }
 
+// ---------------------------------------------------------------------------
+//  Programme de Phong enrichi (mode « Materiaux sans PBR »)
+// ---------------------------------------------------------------------------
+// LES DEUX REGLES DE BindPbrMaps VALENT ICI, et pour la meme raison : les cartes
+// sont liees aux unites du chemin PBR -- ou UploadPbrMaps les a deja televersees
+// -- sans jamais activer GL_TEXTURE_2D, et l'unite courante est rendue a 0.
+//
+// Les uniformes COMMUNS au programme de surface (unites 0 et 1, couleurs par
+// sommet, eclairage) sont reposes ici : ils sont un etat du PROGRAMME, et ceux
+// que DrawMaterialGroups pose avant sa boucle ne touchent que SurfaceProgram.
+static void BindPhongExtras (const cgre::GlProgram* p,
+                             const MaterialRenderer::MaterialPbrInfo& pbrInfo,
+                             const cgre::PhongExtras& x,
+                             bool useColorArray, bool lighting)
+{
+	p->SetInt ("uAlbedo", 0);
+	p->SetInt ("uReflection", 1);
+	p->SetInt ("uUseVertexColors", useColorArray ? 1 : 0);
+	p->SetInt ("uLighting", lighting ? 1 : 0);
+
+	struct Binding { cgpbr::MapSlot slot; int unit; const char* sampler; bool use; };
+	const Binding kBindings[] = {
+		{ cgpbr::MapSlot::emissive,  cgre::kPbrUnitEmissive,  "uEmissiveMap",  x.useEmissiveMap  },
+		{ cgpbr::MapSlot::occlusion, cgre::kPbrUnitOcclusion, "uOcclusionMap", x.useOcclusionMap },
+		{ cgpbr::MapSlot::normal,    cgre::kPbrUnitNormal,    "uNormalMap",    x.useNormalMap    },
+	};
+	for (const Binding& b : kBindings)
+	{
+		// L'unite est posee meme quand la carte ne sert pas : deux
+		// echantillonneurs laisses a l'unite 0 par defaut y designeraient
+		// l'albedo, ce qui est inerte mais trompeur a l'inspection.
+		p->SetInt (b.sampler, b.unit);
+		if (!b.use)
+			continue;
+		glActiveTexture (GL_TEXTURE0 + b.unit);
+		glBindTexture (GL_TEXTURE_2D, pbrInfo.mapTex[static_cast<std::size_t> (b.slot)]);
+	}
+	glActiveTexture (GL_TEXTURE0);
+
+	p->SetVec3  ("uEmissiveFactor",    x.emissive);
+	p->SetInt   ("uUseEmissiveMap",    x.useEmissiveMap  ? 1 : 0);
+	p->SetInt   ("uUseOcclusionMap",   x.useOcclusionMap ? 1 : 0);
+	p->SetFloat ("uOcclusionStrength", x.occlusionStrength);
+	p->SetInt   ("uUseNormalMap",      x.useNormalMap    ? 1 : 0);
+	p->SetFloat ("uNormalScale",       x.normalScale);
+	p->SetFloat ("uAlphaCutoff",       x.alphaCutoff);
+}
+
 void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds,
                                      const SurfaceDrawState& state)
 {
@@ -520,8 +569,14 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 			// donc son rendu ne peut pas dependre de lui.
 			const MaterialRenderer::MaterialPbrInfo pbrInfo =
 				MaterialRenderer::getInstance()->GetPbrInfo (rendererIds[r.materialId]);
+			//
+			// `allowPbr` faux -- mode « Materiaux sans PBR » -- et le programme
+			// PBR n'est ni pris ni meme construit : le materiau suit la branche
+			// de Phong ci-dessous, enrichie de ce que sa projection a jete.
 			const cgre::GlProgram* pbr =
-				(prog && pbrInfo.isPbr) ? cgre::PbrProgram () : nullptr;
+				(prog && pbrInfo.isPbr && state.allowPbr) ? cgre::PbrProgram () : nullptr;
+			const cgre::GlProgram* extras =
+				(prog && pbrInfo.isPbr && !state.allowPbr) ? cgre::PhongExtrasProgram () : nullptr;
 
 			if (pbr)
 			{
@@ -559,19 +614,29 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 			}
 			else if (prog)
 			{
-				// Le programme PBR ne s'est pas construit, ou le materiau n'en
-				// est pas un : la projection de Phong reste le chemin, et c'est
-				// elle que ActivateMaterial vient d'installer.
-				if (current != prog) { disableTangentArray (); prog->Use (); current = prog; }
+				// Le programme PBR ne s'est pas construit, n'est pas autorise, ou
+				// le materiau n'en est pas un : la projection de Phong reste le
+				// chemin, et c'est elle que ActivateMaterial vient d'installer.
+				//
+				// Materiau PBR hors PBR : la VARIANTE enrichie du programme de
+				// surface quand elle se construit. Tout autre cas garde
+				// SurfaceProgram, donc exactement le rendu d'avant.
+				const cgre::GlProgram* phong = extras ? extras : prog;
+				if (current != phong) { disableTangentArray (); phong->Use (); current = phong; }
+
+				if (extras)
+					BindPhongExtras (extras, pbrInfo,
+					                 cgre::MakePhongExtras (pbrInfo, info.hasTexCoords),
+					                 useColorArray, state.lighting);
 
 				// Sous programme lie, glEnable(GL_TEXTURE_2D) ne decide plus
 				// rien : c'est l'uniforme qui dit au fragment s'il doit
 				// echantillonner.
 				const MaterialRenderer::MaterialGlInfo mi =
 					MaterialRenderer::getInstance()->GetGlInfo (rendererIds[r.materialId]);
-				prog->SetInt   ("uUseTexture", (mi.hasTexture && info.hasTexCoords) ? 1 : 0);
-				prog->SetInt   ("uUseReflection", mi.hasReflection ? 1 : 0);
-				prog->SetFloat ("uReflAmount", mi.reflAmount);
+				phong->SetInt   ("uUseTexture", (mi.hasTexture && info.hasTexCoords) ? 1 : 0);
+				phong->SetInt   ("uUseReflection", mi.hasReflection ? 1 : 0);
+				phong->SetFloat ("uReflAmount", mi.reflAmount);
 			}
 		}
 		else if (state.useMeshMaterials)

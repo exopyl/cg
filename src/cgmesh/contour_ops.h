@@ -122,3 +122,22 @@ std::vector<ExtrudeContour> differenceContours (const std::vector<ExtrudeContour
 // formes se touchent-elles ? », question qu'un porte-clef pose de lui-meme.
 std::vector<ExtrudeContour> intersectionContours (const std::vector<ExtrudeContour>& a,
                                                   const std::vector<ExtrudeContour>& b);
+
+// --- REGIONS (imbrication par enroulement) -----------------------------------
+//
+// Decoupe un jeu de contours en REGIONS, chacune etant une enveloppe suivie de
+// ses trous : region[0] est l'enveloppe (isHole = false, sens positif), les
+// suivants ses trous (isHole = true, sens negatif). C'est la convention que
+// lisent ExtrudedMeshBuilder et le reste de ce fichier.
+//
+// L'imbrication est celle d'une UNION Clipper2 (PolyTree) sous la regle
+// `evenOdd` ? EvenOdd : NonZero. En NonZero, c'est l'ENROULEMENT qui decide :
+// un solide imbrique dans un autre de meme sens reste plein (il n'est pas pris
+// pour un trou), et deux contours qui se recouvrent fondent. Un ilot pose dans
+// un trou redevient une region a part entiere : la sortie n'a jamais plus de
+// deux niveaux.
+//
+// Premier consommateur : le mode Nesting::Winding du slicing (mesh_slicing.h).
+// Rend un jeu vide quand l'entree ne delimite rien.
+std::vector<std::vector<ExtrudeContour>> contourRegions (const std::vector<ExtrudeContour>& in,
+                                                         bool evenOdd = false);

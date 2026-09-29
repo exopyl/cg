@@ -32,12 +32,40 @@ enum CG_rendering_method {	CG_RENDERING_DEFAULT = 0,
 //
 // Materials est la valeur ZERO, donc le defaut de toute structure remise a
 // zero, et le comportement d'avant l'introduction du mode.
+//
+// LES VALEURS SONT DES INDICES PUBLICS, ne jamais les renumeroter : le selecteur
+// de sinaia prend la selection pour l'indice, et un mode ajoute va donc EN FIN.
 enum class CG_shading_mode
 {
 	Materials = 0,   //!< les materiaux du maillage, textures comprises
 	Neutral,         //!< un materiau unique, celui des maillages sans materiau
-	VertexColors     //!< les couleurs par sommet, quand le maillage en porte
+	VertexColors,    //!< les couleurs par sommet, quand le maillage en porte
+
+	//! Les materiaux du maillage, mais LE PROGRAMME PBR N'EST JAMAIS PRIS : un
+	//! materiau PBR est rendu par sa projection de Phong, enrichie de ce que le
+	//! programme de surface sait en exploiter (emission, cartes emissive,
+	//! d'occlusion et de normales, decoupe alpha -- cf. surface_program.h). Un
+	//! materiau non PBR y est rendu exactement comme en Materials.
+	MaterialsNoPbr
 };
+
+//! Nombre de modes : borne des indices acceptes par les selecteurs.
+constexpr int kShadingModeCount = (int)CG_shading_mode::MaterialsNoPbr + 1;
+
+//! Les materiaux du maillage -- donc leurs textures -- servent-ils dans ce mode ?
+//! LE test a employer partout ou l'on comparait a Materials : ecrire l'egalite
+//! a la main oublierait le mode sans PBR, qui les utilise aussi.
+constexpr bool ShadingUsesMeshMaterials (CG_shading_mode m)
+{
+	return m == CG_shading_mode::Materials || m == CG_shading_mode::MaterialsNoPbr;
+}
+
+//! Le programme PBR peut-il etre pris dans ce mode ? Seul Materials l'autorise ;
+//! Neutral et VertexColors n'activent de toute facon aucun materiau.
+constexpr bool ShadingAllowsPbr (CG_shading_mode m)
+{
+	return m == CG_shading_mode::Materials;
+}
 
 typedef struct rendering_properties
 {

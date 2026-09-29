@@ -28,6 +28,9 @@
 #include <gtest/gtest.h>
 
 #include "../src/cgre/material_renderer.h"
+#include "../src/cgre/mesh_renderer.h"
+#include "../src/cgre/phong_extras.h"
+#include "../src/cgmesh/material_pbr.h"
 
 #include <memory>
 #include <set>
@@ -163,6 +166,157 @@ TEST_F (CgreMaterialRenderer, PlusDeLimiteA256)
 	}
 
 	EXPECT_EQ ((size_t)kCount, ids.size ()) << "les identifiants doivent etre distincts";
+}
+
+// ---------------------------------------------------------------------------
+//  Mode « Materiaux sans PBR »
+// ---------------------------------------------------------------------------
+
+// LES INDICES SONT PUBLICS : le selecteur de sinaia prend la selection pour
+// l'indice. Un mode insere au milieu decalerait silencieusement les autres.
+TEST (CgreShadingMode, IndicesStables)
+{
+	EXPECT_EQ (0, (int)CG_shading_mode::Materials);
+	EXPECT_EQ (1, (int)CG_shading_mode::Neutral);
+	EXPECT_EQ (2, (int)CG_shading_mode::VertexColors);
+	EXPECT_EQ (3, (int)CG_shading_mode::MaterialsNoPbr);
+	EXPECT_EQ (4, kShadingModeCount);
+}
+
+TEST (CgreShadingMode, SeulMaterialsAutoriseLePbr)
+{
+	EXPECT_TRUE  (ShadingUsesMeshMaterials (CG_shading_mode::Materials));
+	EXPECT_TRUE  (ShadingUsesMeshMaterials (CG_shading_mode::MaterialsNoPbr));
+	EXPECT_FALSE (ShadingUsesMeshMaterials (CG_shading_mode::Neutral));
+	EXPECT_FALSE (ShadingUsesMeshMaterials (CG_shading_mode::VertexColors));
+
+	EXPECT_TRUE  (ShadingAllowsPbr (CG_shading_mode::Materials));
+	EXPECT_FALSE (ShadingAllowsPbr (CG_shading_mode::MaterialsNoPbr));
+	EXPECT_FALSE (ShadingAllowsPbr (CG_shading_mode::Neutral));
+	EXPECT_FALSE (ShadingAllowsPbr (CG_shading_mode::VertexColors));
+}
+
+namespace
+{
+	// Un MaterialPbrInfo « televerse » sans contexte GL : les noms de texture
+	// sont fictifs, MakePhongExtras ne fait que les tester.
+	MaterialRenderer::MaterialPbrInfo PbrInfoWithMaps ()
+	{
+		MaterialRenderer::MaterialPbrInfo info;
+		info.isPbr = true;
+		for (std::size_t i = 0; i < static_cast<std::size_t> (cgpbr::MapSlot::count); ++i)
+		{
+			info.mapTex[i] = (GLuint)(10 + i);
+			info.hasMap[i] = true;
+		}
+		info.factors.emissive[0] = 1.f;
+		info.factors.emissive[1] = 0.5f;
+		info.factors.emissive[2] = 0.f;
+		return info;
+	}
+}
+
+TEST (CgrePhongExtras, UnMateriauNonPbrNObtientRien)
+{
+	MaterialRenderer::MaterialPbrInfo info = PbrInfoWithMaps ();
+	info.isPbr = false;
+	const cgre::PhongExtras x = cgre::MakePhongExtras (info, true);
+	EXPECT_FALSE (x.useEmissiveMap);
+	EXPECT_FALSE (x.useOcclusionMap);
+	EXPECT_FALSE (x.useNormalMap);
+	EXPECT_FLOAT_EQ (0.f, x.emissive[0]);
+	EXPECT_LT (x.alphaCutoff, 0.f);
+}
+
+// LA PERTE QUE CE MODE CORRIGE : la projection texturee (MaterialTexture) n'a
+// pas de canal d'emission. Le facteur doit arriver quand meme, carte comprise.
+TEST (CgrePhongExtras, EmissionConserveeAvecSaCarte)
+{
+	const cgre::PhongExtras x = cgre::MakePhongExtras (PbrInfoWithMaps (), true);
+	EXPECT_FLOAT_EQ (1.f,  x.emissive[0]);
+	EXPECT_FLOAT_EQ (0.5f, x.emissive[1]);
+	EXPECT_FLOAT_EQ (0.f,  x.emissive[2]);
+	EXPECT_TRUE (x.useEmissiveMap);
+	EXPECT_TRUE (x.useOcclusionMap);
+	EXPECT_FLOAT_EQ (1.f, x.occlusionStrength);
+	EXPECT_TRUE (x.useNormalMap);
+	EXPECT_LT (x.alphaCutoff, 0.f) << "opaque : aucune decoupe";
+}
+
+TEST (CgrePhongExtras, UnFacteurEmissifNulAnnuleLaCarte)
+{
+	MaterialRenderer::MaterialPbrInfo info = PbrInfoWithMaps ();
+	info.factors.emissive[0] = info.factors.emissive[1] = info.factors.emissive[2] = 0.f;
+	EXPECT_FALSE (cgre::MakePhongExtras (info, true).useEmissiveMap);
+}
+
+TEST (CgrePhongExtras, SansUvAucuneCarte)
+{
+	const cgre::PhongExtras x = cgre::MakePhongExtras (PbrInfoWithMaps (), false);
+	EXPECT_FALSE (x.useEmissiveMap);
+	EXPECT_FALSE (x.useOcclusionMap);
+	EXPECT_FALSE (x.useNormalMap);
+	// Le FACTEUR, lui, ne depend d'aucune UV.
+	EXPECT_FLOAT_EQ (1.f, x.emissive[0]);
+}
+
+// Une carte du jeu 1 serait echantillonnee avec les UV du jeu 0 : refusee.
+TEST (CgrePhongExtras, UneCarteDuSecondJeuEstRefusee)
+{
+	MaterialRenderer::MaterialPbrInfo info = PbrInfoWithMaps ();
+	info.uvSet[static_cast<std::size_t> (cgpbr::MapSlot::occlusion)] = 1;
+	const cgre::PhongExtras x = cgre::MakePhongExtras (info, true);
+	EXPECT_FALSE (x.useOcclusionMap);
+	EXPECT_FLOAT_EQ (0.f, x.occlusionStrength);
+	EXPECT_TRUE (x.useEmissiveMap) << "les autres cartes ne sont pas concernees";
+}
+
+TEST (CgrePhongExtras, ForceEtEchelleNullesEteignentLeursCartes)
+{
+	MaterialRenderer::MaterialPbrInfo info = PbrInfoWithMaps ();
+	info.factors.occlusionStrength = 0.f;
+	info.factors.normalScale       = 0.f;
+	const cgre::PhongExtras x = cgre::MakePhongExtras (info, true);
+	EXPECT_FALSE (x.useOcclusionMap);
+	EXPECT_FALSE (x.useNormalMap);
+}
+
+TEST (CgrePhongExtras, SeulLeModeMaskDecoupe)
+{
+	MaterialRenderer::MaterialPbrInfo info = PbrInfoWithMaps ();
+	info.factors.alphaCutoff = 0.3f;
+
+	info.alphaMode = cgpbr::AlphaMode::mask;
+	EXPECT_FLOAT_EQ (0.3f, cgre::MakePhongExtras (info, true).alphaCutoff);
+
+	info.alphaMode = cgpbr::AlphaMode::blend;
+	EXPECT_LT (cgre::MakePhongExtras (info, true).alphaCutoff, 0.f);
+}
+
+// DE BOUT EN BOUT, par le registre : GetPbrInfo doit transmettre ce que la
+// projection de Phong jette -- emission et mode d'alpha. Sans carte, AddMaterial
+// n'appelle aucune fonction GL (la projection est un MaterialColorExt).
+TEST_F (CgreMaterialRenderer, GetPbrInfoTransmetEmissionEtAlpha)
+{
+	auto* pbr = new MaterialPbr ();
+	pbr->SetName ("lanterne");
+	pbr->EditFactors ().emissive[0] = 0.8f;
+	pbr->EditFactors ().alphaCutoff = 0.25f;
+	pbr->SetAlphaMode (cgpbr::AlphaMode::mask);
+	m_owned.emplace_back (pbr);
+
+	const int id = MaterialRenderer::getInstance ()->AddMaterial (pbr);
+	ASSERT_GE (id, 0);
+
+	const MaterialRenderer::MaterialPbrInfo info =
+		MaterialRenderer::getInstance ()->GetPbrInfo ((unsigned int)id);
+	ASSERT_TRUE (info.isPbr);
+	EXPECT_EQ (cgpbr::AlphaMode::mask, info.alphaMode);
+
+	const cgre::PhongExtras x = cgre::MakePhongExtras (info, true);
+	EXPECT_FLOAT_EQ (0.8f,  x.emissive[0]);
+	EXPECT_FALSE (x.useEmissiveMap) << "aucune carte televersee";
+	EXPECT_FLOAT_EQ (0.25f, x.alphaCutoff);
 }
 
 } // namespace
