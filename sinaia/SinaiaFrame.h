@@ -456,8 +456,8 @@ private:
 
     // 3D view appearance edited via the "3D Panel" tab of the Settings dialog,
     // applied to every open canvas and to tabs created afterwards.
-    float m_lineWidth = 1.0f;   // wireframe/edge line width (pixels)
-    float m_pointSize = 1.0f;   // point size (pixels)
+    float m_lineWidth = 2.0f;   // wireframe/edge line width (pixels)
+    float m_pointSize = 3.0f;   // point size (pixels)
     wxColour m_lineColor  = wxColour(38, 115, 217);  // line ('l') primitive colour
     wxColour m_pointColor = wxColour(230, 51, 51);   // point ('p') primitive colour
 

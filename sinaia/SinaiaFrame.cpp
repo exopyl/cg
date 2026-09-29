@@ -594,6 +594,9 @@ MyFrame::MyFrame(wxWindow* parent,
     m_pShadingChoice->Append(_("Materiaux"));
     m_pShadingChoice->Append(_("Neutre"));
     m_pShadingChoice->Append(_("Couleurs par sommet"));
+    // Les materiaux du maillage, programme PBR ecarte : un materiau PBR y est
+    // rendu en Phong, avec ce que ce modele sait exploiter de ses cartes.
+    m_pShadingChoice->Append(_("Materiaux sans PBR"));
     m_pShadingChoice->SetSelection(0);
     m_pShadingChoice->SetToolTip(_("Source de la couleur des faces"));
     m_pToolBar2->AddControl(m_pShadingChoice);
@@ -3106,7 +3109,7 @@ void MyFrame::On3DShading(wxCommandEvent& event)
 		return;
 
 	const int index = event.GetSelection ();
-	if (index < 0 || index > (int)CG_shading_mode::VertexColors)
+	if (index < 0 || index >= kShadingModeCount)
 		return;
 
 	pGLCanvas->SetShadingMode ((CG_shading_mode)index);

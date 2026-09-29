@@ -21,8 +21,8 @@ struct PanelSettings
 {
     long  notebookStyle = 0;      // wxAUI_NB_* flags applied to all notebooks
     int   notebookTheme = 0;      // 0 = glossy (default), 1 = simple
-    float lineWidth     = 1.0f;   // 3D view wireframe/edge line width (pixels)
-    float pointSize     = 1.0f;   // 3D view point size (pixels)
+    float lineWidth     = 2.0f;   // 3D view wireframe/edge line width (pixels)
+    float pointSize     = 3.0f;   // 3D view point size (pixels)
     // Colours of the mesh's line ('l') and point ('p') primitives. Defaults are
     // the steel blue / red the renderer used before they became configurable.
     wxColour lineColor  = wxColour(38, 115, 217);

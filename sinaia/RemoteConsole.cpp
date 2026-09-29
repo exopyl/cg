@@ -1379,8 +1379,10 @@ std::string cmdShading(MyFrame* frame, const std::string& arg)
     if      (arg == "materials")    want = (int)CG_shading_mode::Materials;
     else if (arg == "neutral")      want = (int)CG_shading_mode::Neutral;
     else if (arg == "vertexcolors") want = (int)CG_shading_mode::VertexColors;
+    else if (arg == "materialsnopbr" || arg == "nopbr")
+                                    want = (int)CG_shading_mode::MaterialsNoPbr;
     else if (!arg.empty())
-        return "ERR usage: shading [materials|neutral|vertexcolors]\n";
+        return "ERR usage: shading [materials|neutral|vertexcolors|materialsnopbr]\n";
 
     const int mode = callOnMain([frame, want]() -> int {
         MyGLCanvas* c = frame->GetActiveCanvas();
@@ -1391,9 +1393,10 @@ std::string cmdShading(MyFrame* frame, const std::string& arg)
 
     if (mode < 0) return "ERR no active view\n";
 
-    const char* name = (mode == (int)CG_shading_mode::Neutral)      ? "neutral"
-                     : (mode == (int)CG_shading_mode::VertexColors) ? "vertexcolors"
-                                                                    : "materials";
+    const char* name = (mode == (int)CG_shading_mode::Neutral)        ? "neutral"
+                     : (mode == (int)CG_shading_mode::VertexColors)   ? "vertexcolors"
+                     : (mode == (int)CG_shading_mode::MaterialsNoPbr) ? "materialsnopbr"
+                                                                      : "materials";
     return std::string("shading ") + name + "\nOK\n";
 }
 
@@ -1584,8 +1587,12 @@ std::string cmdHelp()
         "                             unproject PX PY: the INVERSE -- viewport pixel\n"
         "                             -> world ray (origin + direction) and the Model\n"
         "                             it hits, same convention, same camera source.\n"
-        "  shading [materials|neutral|vertexcolors]\n"
-        "                             shading mode (no arg: report current)\n"
+        "  shading [materials|neutral|vertexcolors|materialsnopbr]\n"
+        "                             shading mode (no arg: report current).\n"
+        "                             materialsnopbr (alias nopbr): mesh materials,\n"
+        "                             PBR program bypassed -- Phong projection plus\n"
+        "                             emission, emissive/occlusion/normal maps and\n"
+        "                             alpha mask.\n"
         "  toggle WHAT [on|off]       fill|wireframe|points|warning|repere|grid|lighting\n"
         "                             (no on/off: flip it)\n"
         "  glcheck [on|off]           cgre OpenGL error checking -> Logging Window\n"
