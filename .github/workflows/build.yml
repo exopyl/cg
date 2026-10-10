@@ -201,3 +201,114 @@ jobs:
           exe=build/ci-linux-boilerplate/cggraph-boilerplate/cggraph-boilerplate
           test -x "$exe"
           ls -l "$exe"
+
+  peles:
+    name: ci-linux-peles
+    runs-on: ubuntu-latest
+
+    # Ce que ce job prouve, et que RIEN d'autre ne prouve : les quatre
+    # bibliotheques du pare-feu d'inclusion, peles et peles_probe BATISSENT ET
+    # LIENT sous GCC, et les deux modes qui n'ouvrent aucun contexte GL --
+    # --dump-tree et --dump-files -- rendent la MEME sortie que sur Windows.
+    # C'est la seule chose qui rende l'oracle portable au lieu d'etre celui
+    # d'une machine.
+    #
+    # ⚠ CE QU'IL NE PROUVE PAS, ET IL FAUT LE LIRE AVANT DE S'Y FIER :
+    #   -- AUCUN RENDU. Un runner GitHub n'a pas de contexte OpenGL, donc ni
+    #      --dump-layout, ni --readpixel, ni --state-audit, ni la concordance
+    #      GL_VIEWPORT n'y tournent. peles_probe y est BATI, pas execute.
+    #   -- tu_supported_formats N'Y TOURNE PAS. Il exige ENABLE_SINAIA=ON, donc
+    #      wxWidgets, absent de ce runner. A ce jour AUCUNE configuration de CI
+    #      n'execute ce test ; la seule chose qui le fasse est une construction
+    #      locale sous ENABLE_SINAIA=ON ET ENABLE_PELES=ON.
+    #
+    # ⚠ ENABLE_PELES=ON ROMPT LA PROPRIETE « CONFIGURATION HORS LIGNE » (R-P8) :
+    # RmlUi et FreeType sont tires du RESEAU a la configuration. C'est la raison
+    # pour laquelle ci-linux ne l'active pas, et pour laquelle ce job est
+    # separe : sa panne la plus probable est une panne de reseau, pas une
+    # regression de code.
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download cg_binaries archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .deps/cg_binaries
+          cd .deps
+          gh release download "$CG_BINARIES_VERSION" \
+            --repo "${{ github.repository_owner }}/cg_binaries" \
+            --pattern 'cgbinaries-*-linux-x86_64.zip'
+          unzip -q cgbinaries-*-linux-x86_64.zip
+          mv cgbinaries-*-linux-x86_64/* cg_binaries/
+          rm -rf cgbinaries-*-linux-x86_64 cgbinaries-*-linux-x86_64.zip
+
+      - name: Install Ninja + GTest + OCCT
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build \
+            zlib1g-dev \
+            libgtest-dev libgmock-dev \
+            libocct-foundation-dev \
+            libocct-modeling-data-dev \
+            libocct-modeling-algorithms-dev \
+            libocct-data-exchange-dev \
+            libtbb-dev
+
+      - name: Install GLFW and FreeType build dependencies
+        # GLFW est versionne sous extern/, mais il se COMPILE contre les en-tetes
+        # X11 et OpenGL de la machine. FreeType, lui, est tire par FetchContent
+        # et compile depuis ses sources : il ne demande rien de plus.
+        run: |
+          sudo apt-get install -y \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev
+
+      - name: Configure
+        run: cmake --preset ci-linux-peles
+
+      - name: Build peles and peles_probe
+        run: cmake --build --preset ci-linux-peles
+
+      - name: Assert the executables exist
+        # `cmake --build` peut rendre 0 sans avoir produit la cible attendue si
+        # celle-ci n'a pas ete ajoutee -- une option mal orthographiee suffit.
+        # C'est le fichier qui fait foi, pas le code de sortie.
+        run: |
+          set -euo pipefail
+          test -x build/ci-linux-peles/peles/peles
+          test -x build/ci-linux-peles/peles/peles_probe
+          ls -l build/ci-linux-peles/peles/peles build/ci-linux-peles/peles/peles_probe
+
+      - name: Compare the two dumps to their versioned oracles
+        # ⚠ LES DEUX SEULS MODES EXECUTABLES ICI. Ils n'appellent que peles_core :
+        # pas de contexte GL, pas d'asset lu, pas de fenetre. `cmp` et non `diff` :
+        # la propriete verifiee est l'egalite OCTET POUR OCTET, fins de ligne
+        # comprises -- les oracles sont marques `-text` dans
+        # test/data/peles/.gitattributes pour cette raison.
+        run: |
+          set -euo pipefail
+          exe=build/ci-linux-peles/peles/peles
+          "$exe" --dump-tree  test/data/peles/fixture > /tmp/dump_tree.txt
+          "$exe" --dump-files test/data/peles/fixture > /tmp/dump_files.txt
+          cmp /tmp/dump_tree.txt  test/data/peles/expected_dump_tree.txt
+          cmp /tmp/dump_files.txt test/data/peles/expected_dump_files.txt
+          # ⚠ --dump-info EST LANCE DEPUIS LA RACINE DU DEPOT AVEC UN CHEMIN
+          # RELATIF, et ce n'est pas un raccourci : sa quatorzieme ligne, « Path »,
+          # rend le chemin TEL QU'IL A ETE DONNE -- elle remplace l'infobulle de
+          # l'hote historique, RmlUi n'ayant pas d'infobulle. Un chemin absolu y
+          # ferait un oracle propre a une machine.
+          "$exe" --dump-info test/data/peles/info/panels.obj > /tmp/dump_info.txt
+          cmp /tmp/dump_info.txt test/data/peles/expected_dump_info.txt
+          # SANS FICHIER : les quatorze lignes sortent quand meme, valeurs vides.
+          # C'est l'invariant qui empeche le panneau de se reduire a chaque
+          # deselection, et rien d'autre ne le verifie.
+          "$exe" --dump-info | grep -c '^[A-Z]' > /tmp/dump_info_empty_lines.txt
+          test "$(cat /tmp/dump_info_empty_lines.txt)" = "14"

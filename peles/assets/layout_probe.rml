@@ -1,0 +1,76 @@
+<rml>
+<head>
+	<title>peles -- mise en page d'epreuve</title>
+	<style>
+		/*
+			MISE EN PAGE D'EPREUVE, ET SA SEULE RAISON D'ETRE EST LE TERME Y.
+
+			⚠ DANS LE DOCUMENT DU PRODUIT, LA VUE EST COLLEE AU BORD HAUT :
+			`rect.y` vaut 0, donc neutraliser le terme Y de `ui::WindowToView`
+			ne change AUCUN resultat et les six criteres restent verts. Le
+			detecteur du critere 1 n'eprouve en realite que le terme X.
+
+			Ici la vue est precedee d'une barre de 140 px ET d'un panneau
+			gauche de 240 px : les DEUX termes de la conversion sont non nuls,
+			et neutraliser l'un ou l'autre fait rougir --dump-pick.
+
+			⚠ AUCUN ATTRIBUT `data-` : ce document ne lie rien, donc il ne peut
+			pas deriver du modele de donnees du produit. Ce qu'il fixe est une
+			GEOMETRIE, et rien d'autre.
+		*/
+		body
+		{
+			width: 100%;
+			height: 100%;
+			margin: 0;
+			background: #1e1e22;
+			font-family: LatoLatin;
+			color: #d0d0d4;
+			display: flex;
+			flex-direction: column;
+		}
+
+		#top-bar
+		{
+			width: 100%;
+			height: 140px;
+			flex: 0 0 auto;
+			background: #2a2a31;
+		}
+
+		#row
+		{
+			width: 100%;
+			flex: 1 1 auto;
+			display: flex;
+			flex-direction: row;
+		}
+
+		#panel-left
+		{
+			width: 240px;
+			flex: 0 0 auto;
+			background: #26262c;
+		}
+
+		/*
+			⚠ AUCUNE HAUTEUR EXPLICITE. `height: 100%` se resoudrait contre le
+			bloc conteneur -- le corps -- et non contre la rangee : la vue
+			deborderait du cadre de la hauteur de la barre, et le rectangle lu
+			cesserait d'etre celui qu'on voit. L'etirement flex donne la
+			hauteur de la rangee.
+		*/
+		#viewport
+		{
+			flex: 1 1 auto;
+		}
+	</style>
+</head>
+<body>
+	<div id="top-bar">Mise en page d'epreuve : la vue n'est PAS collee au bord haut.</div>
+	<div id="row">
+		<div id="panel-left">Panneau gauche</div>
+		<div id="viewport"/>
+	</div>
+</body>
+</rml>

@@ -4,6 +4,13 @@ project (cg)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# Modules CMake du depot. cmake/CgVendoredGlfw.cmake y definit
+# cg_add_vendored_glfw(), le point d'ajout UNIQUE et idempotent de GLFW : deux
+# options independantes tirent la meme fenetre, et elles doivent etre
+# combinables dans n'importe quel ordre.
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(CgVendoredGlfw)
+
 # REPLI DE TYPE DE BUILD. Sans lui, une configuration hors preset sur un
 # generateur mono-config (Ninja, Makefiles) compile SANS AUCUN -O : cgmath et
 # cgimg, dont les primitives sont appelees en boucle chaude par cgmesh, y
@@ -72,6 +79,9 @@ if (EMSCRIPTEN)
     set(ENABLE_SINAIA    Off)
     set(ENABLE_SULINA    Off)
     set(ENABLE_CGRE      Off)
+    # peles est un hote NATIF : il ouvre une fenetre glfw et lit des pixels dans
+    # le tampon arriere. Rien de cela n'a de sens dans la cible WebAssembly.
+    set(ENABLE_PELES     Off)
 
     # -fexceptions sur TOUTE la cible WASM (cgmath, cgimg, cgmesh, maker).
     # Sans cela, un `throw` dans cgmath (ex. buildFoilRing sur des parametres
@@ -160,6 +170,18 @@ set(ENABLE_SINAIA Off CACHE BOOL "Enable sinaia.")
 set(ENABLE_CGRE Off CACHE BOOL "Build the cgre OpenGL render library.")
 # sinaia s'appuie sur cgre : l'activer l'implique.
 if (ENABLE_SINAIA)
+    set(ENABLE_CGRE On)
+endif ()
+# peles : hote natif glfw. Deux executables -- la sonde de contexte peles_probe,
+# qui ne lie aucune interface, et l'application peles, qui lie RmlUi.
+#
+# ⚠ LA CHAINE D'AIDE EST CE QUE `cmake -LH` ET cmake-gui AFFICHENT : c'est la
+# ou l'avertissement de configuration hors ligne doit vivre, pas seulement dans
+# peles/CMakeLists.txt.
+set(ENABLE_PELES Off CACHE BOOL "Build the peles targets (glfw host: peles_probe + peles/RmlUi). WARNING: breaks offline configuration -- RmlUi and FreeType are fetched from the network AT CONFIGURE TIME.")
+# peles s'appuie sur cgre, exactement comme sinaia : l'activer l'implique. La
+# ligne doit rester AVANT le `if (ENABLE_CGRE) add_subdirectory(src/cgre)`.
+if (ENABLE_PELES)
     set(ENABLE_CGRE On)
 endif ()
 set(ENABLE_MAKER Off CACHE BOOL "Build the maker WebAssembly module (Emscripten only).")
@@ -264,6 +286,12 @@ endif ()
 
 if ( ENABLE_SINAIA )
 	add_subdirectory(sinaia)
+endif ()
+
+# peles : hote natif glfw. POSITION CONTRAINTE -- apres src/cgre, dont la cible
+# est liee par peles_probe.
+if ( ENABLE_PELES )
+	add_subdirectory(peles)
 endif ()
 
 # maker : module WASM (Emscripten) — cf. maker/CMakeLists.txt et maker/ANALYSE.md.

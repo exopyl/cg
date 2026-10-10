@@ -195,6 +195,86 @@ if ( TARGET cgre )
     target_link_libraries(${PROJECT_NAME} cgre)
     target_compile_definitions(${PROJECT_NAME} PRIVATE CG_HAS_CGRE)
 endif ()
+
+# ---------------------------------------------------------------------------
+# tu_peles_core.cpp : les fonctions pures de peles_core
+# ---------------------------------------------------------------------------
+#
+# ⚠ CONDITION DISTINCTE DE CELLE DE tu_supported_formats CI-DESSOUS, ET C'EST
+# LE POINT : ce fichier n'inclut RIEN de sinaia, donc il n'a besoin ni de
+# wxWidgets ni de ses DLL. Il tourne sous ENABLE_PELES seul -- c'est-a-dire dans
+# une configuration qu'une CI Linux peut reunir, ce que ENABLE_SINAIA=ON ne
+# permet pas.
+#
+# ⚠ MEME REMARQUE QUE CI-DESSOUS SUR LA CONDITION : elle porte sur l'OPTION et
+# non sur `TARGET peles_core`, parce que ce repertoire est ajoute AVANT peles/
+# par le CMakeLists racine. Lier la cible est legitime -- CMake resout les
+# cibles a la GENERATION -- mais l'interroger ne l'est pas.
+if ( ENABLE_PELES )
+    target_link_libraries(${PROJECT_NAME} peles_core)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CG_HAS_PELES_CORE)
+endif ()
+
+# ---------------------------------------------------------------------------
+# tu_supported_formats.cpp : le catalogue de formats, des deux cotes
+# ---------------------------------------------------------------------------
+#
+# Il compare le catalogue DETYPE de peles (peles/core/file_catalog.h) a celui
+# de sinaia (sinaia/SupportedFormats.h). Il exige donc les DEUX : peles_core
+# pour le premier, et les en-tetes de wxWidgets pour que le second soit
+# incluable. Hors de cette configuration, CG_PELES_SINAIA_FORMATS n'est pas
+# defini et le fichier ne compile a rien -- meme modele que CG_HAS_CGRE
+# ci-dessus, le file(GLOB) le ramassant quelle que soit la plateforme.
+#
+# ⚠ wxWidgets EST LIE, ET SES DEUX DLL SONT DEPOSEES A COTE DE TU.exe. Le test
+# n'appelle pourtant aucune fonction de wxWidgets -- il lit la DONNEE du
+# catalogue, dont les extensions sont des `const wxChar*`. MESURE : les en-tetes
+# seuls ne suffisent pas, `#include <wx/string.h>` fait reference au destructeur
+# de wxString (LNK2019 __imp_??1wxString@@QEAA@XZ) sans qu'aucune ligne du test
+# ne nomme ce type. La dependance est donc reelle, et la taire ferait echouer
+# l'edition de liens de la cible ENTIERE.
+#
+# ⚠ SANS LA COPIE DES DLL, AUCUN TEST NE DEMARRERAIT -- pas seulement celui-ci.
+# C'est le meme mecanisme que les copies d'OpenNURBS, lib3mf et OCCT ci-dessus,
+# et il est soumis a la meme condition qu'elles : il n'existe que dans la
+# configuration qui le rend necessaire.
+#
+# find_package est refait ici : les variables posees par sinaia/CMakeLists.txt
+# ont la portee de SON repertoire et ne sont pas visibles depuis celui-ci.
+# ⚠ LA CONDITION PORTE SUR LES OPTIONS, PAS SUR `TARGET peles_core` : ce
+# repertoire est ajoute AVANT peles/ par le CMakeLists racine, donc la cible
+# n'existe pas encore ici. La lier quand meme est legitime -- CMake resout les
+# cibles a la GENERATION, pas a la configuration -- mais l'interroger ne l'est
+# pas : le test se compilerait a rien sans un mot.
+if ( ENABLE_SINAIA AND ENABLE_PELES )
+    set(wxWidgets_ROOT_DIR ${EXTERN_WXWIDGETS})
+    find_package(wxWidgets REQUIRED COMPONENTS core base)
+    # peles_core est deja lie par le bloc ENABLE_PELES ci-dessus : le nommer une
+    # seconde fois ferait diverger les deux listes a la premiere evolution.
+    target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES})
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        ${CMAKE_SOURCE_DIR}/sinaia
+        ${wxWidgets_INCLUDE_DIRS})
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+        CG_PELES_SINAIA_FORMATS
+        ${wxWidgets_DEFINITIONS})
+
+    if (WIN32)
+        # Memes noms que sinaia/CMakeLists.txt, et seulement les deux composants
+        # demandes ci-dessus.
+        set(TU_WX_DLL_NAMES
+            wxmsw332u$<IF:$<CONFIG:Debug>,d,>_core_vc14x_x64
+            wxbase332u$<IF:$<CONFIG:Debug>,d,>_vc14x_x64)
+        foreach(_tu_wx_dll ${TU_WX_DLL_NAMES})
+            add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${wxWidgets_LIB_DIR}/${_tu_wx_dll}.dll"
+                    "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+                COMMENT "Copying ${_tu_wx_dll}.dll to $<TARGET_FILE_DIR:${PROJECT_NAME}>")
+        endforeach()
+    endif ()
+endif ()
+
 if ( ENABLE_COVERAGE )
     if ( UNIX )
         target_link_libraries(${PROJECT_NAME} pthread gcov)

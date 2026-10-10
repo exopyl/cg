@@ -6,27 +6,14 @@ project(cggraph-boilerplate)
 # lui-meme : la fenetre est le seul morceau propre a un hote, et c'est aussi le
 # seul qui tire GLFW.
 #
-# GLFW est versionne sous extern/glfw-<version>, licence zlib/libpng. N'en sont
-# embarques que le projet CMake, include/ et src/ : ni exemples, ni tests, ni
-# documentation. Meme version que celle deja retenue par vecna dans ce depot --
-# deux versions de GLFW dans un meme arbre seraient une source de confusion sans
-# contrepartie.
-if (NOT EXISTS "${GLFW_DIR}")
-    message(FATAL_ERROR "GLFW_DIR introuvable : ${GLFW_DIR}")
-endif()
-
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
-
-# Le CMakeLists amont de GLFW 3.3.10 declare `cmake_minimum_required(3.0...3.20)`
-# et CMake 4 refuse une borne basse anterieure a 3.5. La borne est relevee ICI,
-# pour ce sous-arbre seulement : editer le fichier amont ferait de la copie
-# versionnee un fork a re-appliquer a chaque montee de version.
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
-add_subdirectory(${GLFW_DIR} ${CMAKE_CURRENT_BINARY_DIR}/glfw EXCLUDE_FROM_ALL)
-unset(CMAKE_POLICY_VERSION_MINIMUM)
+# GLFW passe par cg_add_vendored_glfw(), definie dans cmake/CgVendoredGlfw.cmake
+# et incluse par le CMakeLists racine. Elle porte l'arbre versionne, l'extinction
+# des quatre extras d'amont et le relevement de borne de politique qu'exige
+# CMake 4 -- avec leurs raisons.
+#
+# Elle est IDEMPOTENTE : ENABLE_CGGRAPH_BOILERPLATE et ENABLE_PELES tirent la
+# meme fenetre et se combinent dans n'importe quel ordre.
+cg_add_vendored_glfw()
 
 # Les backends d'ImGui sont a l'HOTE, jamais au canvas : c'est le seul endroit
 # ou le choix de la fenetre et celui de l'API graphique sont faits. Les sources

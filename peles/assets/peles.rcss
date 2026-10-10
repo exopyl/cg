@@ -1,0 +1,638 @@
+/*
+	peles -- feuille de style de l'hote.
+
+	⚠ AUCUNE UNITE `dp` DANS CE FICHIER. Le lot 1 n'emploie que `px`, `%` et
+	flex, et Rml::Context::SetDimensions recoit la taille du TAMPON DE DESSIN.
+	Consequence assumee : pas de HiDPI dans le lot 1. Une seule declaration en
+	`dp` suffirait a rompre la correspondance entre la geometrie lue et le
+	rectangle GL, et rien ne le signalerait.
+
+	⚠ LES TROIS LARGEURS SONT EN PIXELS, ET C'EST CE QUI REND LE RECTANGLE DE LA
+	VUE CALCULABLE A LA MAIN :
+
+	    viewport.largeur = cadre.largeur - 240 - 280
+	    viewport.hauteur = cadre.hauteur - 180
+	    viewport.x       = 240
+	    viewport.y       = 0
+
+	Aucune marge, aucun remplissage, aucune bordure sur le chemin qui mene a la
+	vue : un seul de ces trois termes rendrait la valeur attendue dependante du
+	modele de boite.
+
+	⚠ CES TROIS VALEURS SONT LES TAILLES PAR DEFAUT, ET ELLES NE VIVENT QU'ICI.
+	Un separateur tire a la souris pose un `flex-basis` EN LIGNE sur son panneau,
+	qui l'emporte sur la regle ; un double-clic le retire. Les formules ci-dessus
+	valent donc pour un document dont aucun separateur n'a ete tire -- celui que
+	lisent --dump-layout et les instruments de geometrie.
+
+	RmlUi n'embarque aucune feuille de style par defaut : le `display` de chaque
+	element est a declarer ici, sans quoi tout est `inline`.
+*/
+
+body
+{
+	font-family: LatoLatin;
+	font-size: 14px;
+	color: #d8d8d8;
+
+	width: 100%;
+	height: 100%;
+	margin: 0px;
+	padding: 0px;
+
+	display: flex;
+	flex-direction: column;
+}
+
+#row
+{
+	display: flex;
+	flex-direction: row;
+	/* Prend toute la hauteur restante une fois la zone basse posee. */
+	flex: 1 1 0px;
+	margin: 0px;
+	padding: 0px;
+
+	/*
+		⚠ `min-height: 0px` N'EST PAS UNE PRECAUTION : SANS ELLE, LE CONTENU DES
+		ZONES FIXE LA HAUTEUR DE CETTE LIGNE, DONC CELLE DE LA VUE 3D. Le
+		minimum AUTOMATIQUE d'un element flex vaut la taille minimale de son
+		contenu : mille lignes dans la zone gauche donnent a cette ligne
+		plusieurs milliers de pixels de haut, la vue suit, et GL borne le
+		viewport a GL_MAX_VIEWPORT_DIMS. `overflow: hidden` sur les zones ne
+		suffit PAS -- il coupe l'affichage, il ne contraint pas la taille.
+
+		⚠ ET `flex-basis: 0px` PLUTOT QUE `auto`, pour la meme raison : une base
+		automatique part du contenu.
+	*/
+	min-height: 0px;
+}
+
+/*
+	⚠ DEUX REGLES DISTINCTES SUR LES TROIS ZONES, ET ELLES NE SE REMPLACENT PAS.
+
+	`min-width` / `min-height` a zero EMPECHE LE CONTENU DE FIXER LA TAILLE :
+	c'est la seule des deux qui protege la geometrie de la vue 3D.
+	`overflow-y` decide de ce qui arrive a ce qui depasse, une fois la taille
+	fixee. Sans la premiere, une liste de mille entrees deplace le rectangle de
+	la vue ; sans la seconde, elle deborde par-dessus ses voisines.
+
+	⚠ `overflow-y: auto` REMPLACE `overflow: hidden`, ET CE N'EST PAS UN CHOIX
+	D'APPARENCE : c'est une FONCTION QUI MANQUAIT. Les trois zones remplacent
+	des controles qui defilaient -- deux wxTreeCtrl et une wxListCtrl -- et
+	`hidden` les rendait partiellement inatteignables. MESURE sur un fichier a
+	60 materiaux : l'arbre des materiaux occupe 4008 px dans une zone de 720,
+	soit 82 % de son contenu hors de portee, sans aucun moyen d'y acceder.
+
+	⚠ `overflow-x` RESTE `hidden`, ET C'EST DELIBERE. Les lignes portent
+	`white-space: nowrap` : un nom de repertoire long deborderait en largeur et
+	`auto` ferait apparaitre une barre horizontale, laquelle mangerait de la
+	hauteur et deplacerait le contenu vertical a chaque changement de
+	repertoire.
+
+	⚠ CE QUE CES REGLES NE CHANGENT PAS : la LARGEUR de la zone. La barre de
+	defilement est posee a l'interieur de la boite de l'element, dont la base
+	flex reste fixe -- 240, 280 et 180 px. Le rectangle de la vue 3D est donc
+	inchange, et le detecteur permanent de concordance GL_VIEWPORT le verifie a
+	chaque image.
+*/
+
+#panel-left
+{
+	display: block;
+	/* 0 0 <base> : ni croissance ni retrait, la base EST la largeur finale. */
+	flex: 0 0 240px;
+	margin: 0px;
+	padding: 0px;
+	background: #262628;
+	overflow-x: hidden;
+	overflow-y: auto;
+	/* Meme raison que pour #row : le minimum automatique d'un element
+	   flex vaut la taille de son contenu. */
+	min-width: 0px;
+	min-height: 0px;
+}
+
+#panel-right
+{
+	display: block;
+	flex: 0 0 280px;
+	margin: 0px;
+	padding: 0px;
+	background: #262628;
+	overflow-x: hidden;
+	overflow-y: auto;
+	/* Meme raison que pour #row : le minimum automatique d'un element
+	   flex vaut la taille de son contenu. */
+	min-width: 0px;
+	min-height: 0px;
+}
+
+#panel-bottom
+{
+	display: block;
+	flex: 0 0 180px;
+	margin: 0px;
+	padding: 0px;
+	background: #262628;
+	overflow-x: hidden;
+	overflow-y: auto;
+	/* Meme raison que pour #row : le minimum automatique d'un element
+	   flex vaut la taille de son contenu. */
+	min-width: 0px;
+	min-height: 0px;
+}
+
+/* --------------------------------------------------------------------------
+	LES SEPARATEURS
+   --------------------------------------------------------------------------
+
+	⚠ UN SEPARATEUR N'OCCUPE AUCUNE PLACE : sa base flex vaut 6 px et UNE de ses
+	marges -6 px, donc sa boite de marge est nulle. La vue 3D garde exactement
+	le rectangle des formules d'en-tete ; la zone de saisie recouvre 6 px d'UN
+	SEUL de ses deux voisins.
+
+	⚠ LE VOISIN RECOUVERT EST CHOISI POUR NE MASQUER AUCUNE BARRE DE DEFILEMENT.
+	Les separateurs gauche et droit debordent sur la VUE, jamais sur leur
+	panneau : la barre de #panel-left est a son bord droit, contre le
+	separateur. Le separateur bas deborde sur le TITRE de #panel-bottom, qui est
+	inerte -- deborder vers le haut recouvrirait le bas des barres des panneaux
+	gauche et droit. La barre de #panel-bottom est donc decalee de 6 px vers le
+	bas (voir la barre de defilement, plus loin).
+	Consequence assumee : une bande de 6 px de la vue, contre chaque separateur
+	vertical, ne fait plus tourner la camera.
+
+	⚠ `position: relative` ET `z-index` NE SONT PAS DECORATIFS. Sans eux, la
+	vue -- qui suit le separateur gauche dans le document -- serait peinte et
+	testee PAR-DESSUS lui, et la zone de saisie irait a la vue : le separateur
+	serait insaisissable.
+
+	⚠ `drag: drag` EST CE QUI FAIT EMETTRE LES EVENEMENTS DE GLISSER. Sans lui,
+	RmlUi ne demarre aucun glisser sur l'element et le separateur est inerte --
+	curseur compris, rien ne le signale.
+
+	`cursor` est remis a l'hote par SystemInterface::SetMouseCursor ; pendant un
+	glisser, RmlUi garde celui de l'element TIRE, meme au-dessus de la vue.
+
+	Le fond est transparent au repos : le separateur est dessine PAR-DESSUS la
+	vue 3D (phase 7), et un trait permanent y masquerait six colonnes de
+	pixels.
+*/
+.splitter-v, .splitter-h
+{
+	display: block;
+	position: relative;
+	z-index: 1;
+	drag: drag;
+	padding: 0px;
+	border: 0px;
+	background: transparent;
+	flex: 0 0 6px;
+}
+
+.splitter-v { cursor: ew-resize; }
+.splitter-h { cursor: ns-resize; }
+
+/* Chaque marge negative designe le voisin recouvert : la vue pour les deux
+   separateurs verticaux, le titre du panneau bas pour l'horizontal. */
+#split-left   { margin: 0px -6px 0px 0px; }
+#split-right  { margin: 0px 0px 0px -6px; }
+#split-bottom { margin: 0px 0px -6px 0px; }
+
+.splitter-v:hover, .splitter-h:hover   { background: #3a5a7a; }
+.splitter-v:active, .splitter-h:active { background: #4a6a8a; }
+
+/* --------------------------------------------------------------------------
+	LA BARRE DE DEFILEMENT, EN ENTIER
+   --------------------------------------------------------------------------
+
+	⚠ RmlUi N'EMBARQUE AUCUNE FEUILLE DE STYLE PAR DEFAUT. `overflow-y: auto`
+	cree bien les elements de la barre, mais sans ces regles ils ont une largeur
+	nulle et un fond transparent : la barre existerait, serait fonctionnelle, et
+	resterait INVISIBLE -- c'est-a-dire le pire des trois etats possibles.
+
+	Les noms d'element sont ceux de RmlUi et ne sont pas negociables :
+	`scrollbarvertical`, `slidertrack`, `sliderbar`.
+
+	⚠ AUCUN `sliderarrowdec` / `sliderarrowinc` N'EST STYLE, donc aucune fleche
+	n'occupe de place aux extremites. Les styler ajouterait deux boutons dont la
+	molette et le glisser rendent l'usage marginal.
+*/
+
+scrollbarvertical
+{
+	width: 10px;
+}
+
+scrollbarvertical slidertrack
+{
+	background: #202022;
+}
+
+scrollbarvertical sliderbar
+{
+	background: #4a4a4e;
+	/* Une poignee plus courte que ce seuil cesse d'etre saisissable a la souris
+	   des que le contenu est tres long -- 4008 px dans 720 la reduiraient a
+	   moins de 20 px. */
+	min-height: 24px;
+}
+
+/* LA BARRE DU PANNEAU BAS COMMENCE SOUS LA ZONE DE SAISIE DU SEPARATEUR BAS,
+   qui recouvre les 6 premiers pixels du panneau. `margin-top` decale la barre
+   (ElementScroll::FormatScrollbars l'ajoute a sa position) et `scrollbar-margin`
+   la raccourcit d'autant : sans lui, elle deborderait de 6 px sous le panneau. */
+#panel-bottom scrollbarvertical
+{
+	margin-top: 6px;
+	scrollbar-margin: 6px;
+}
+
+scrollbarvertical sliderbar:hover  { background: #5e5e64; }
+scrollbarvertical sliderbar:active { background: #6f6f76; }
+
+/* --------------------------------------------------------------------------
+	Contenu des zones
+   --------------------------------------------------------------------------
+
+	⚠ LE STYLE COMMUN D'UNE LIGNE VIENT DU SELECTEUR DE SON PARENT, pas d'une
+	classe posee sur elle. Les lignes portent un `data-attr-class`, qui ECRASE
+	leur attribut `class` a chaque mise a jour du modele : une classe statique
+	y serait perdue des le premier Toggle.
+*/
+
+.zone-title
+{
+	display: block;
+	padding: 4px 8px;
+	font-size: 12px;
+	color: #9a9a9e;
+	background: #202022;
+}
+
+.zone-path
+{
+	display: block;
+	padding: 2px 8px;
+	font-size: 11px;
+	color: #7a7a7e;
+	white-space: nowrap;
+}
+
+.status
+{
+	display: block;
+	padding: 4px 8px;
+	font-size: 12px;
+	color: #e08a6a;
+}
+
+#dir-tree
+{
+	display: block;
+	padding: 2px 0px;
+}
+
+/*
+	LE DIV EXTERIEUR D'UNE LIGNE ENGENDREE N'A AUCUN STYLE, ET C'EST STRUCTUREL.
+
+	⚠ Chaque liste liee est faite de DEUX divs imbriques : l'exterieur porte
+	`data-for` et les `data-event-*`, l'interieur porte `data-attr-class`. La
+	raison est ecrite dans peles.rml : une vue `data-*` a la MEME profondeur que
+	le `data-for` fait lire le vecteur hors bornes au retrecissement, de facon
+	NON DETERMINISTE. Le style vit donc sur l'interieur, et l'exterieur n'est
+	qu'un porteur -- sans marge, sans remplissage, sans bordure.
+
+	⚠ LA REGLE PORTE SUR TOUTE VUE `data-*`, PAS SEULEMENT SUR `data-attr-*` ET
+	`data-style-*` : `data-class-*`, `data-if`, `data-visible`, `data-rml`,
+	`data-attrif-*` et `data-alias-*` ont le MEME biais de tri (zero), donc la
+	meme egalite. Seuls les `data-event-*` echappent a la regle, parce qu'ils
+	sont des CONTROLEURS et non des vues. La mesure est dans peles.rml.
+
+	⛔ NE PAS DEPLACER UN STYLE VERS L'EXTERIEUR « pour simplifier le
+	selecteur » : ce qui coute une regle CSS de plus ici coute une sortie en 3
+	une fois sur deux la-bas.
+*/
+#dir-tree > div
+{
+	display: block;
+}
+
+/*
+	LE CHEVRON ET L'ICONE SONT DEUX DECORATEURS DE LA LIGNE, PAS DEUX ELEMENTS.
+
+	⚠ JAMAIS D'ELEMENT DE PLUS PAR LIGNE : le cout de l'arbre est lineaire dans
+	le nombre d'elements lies, et un element de plus par ligne fait depasser le
+	budget de 16,6 ms qui fixe kMaxVisibleRows (mesure :
+	peles_implementation.md §10.1).
+
+	⚠ LE REMPLISSAGE GAUCHE RESERVE LES DEUX EMPLACEMENTS SUR TOUTES LES LIGNES :
+	2 px de marge, 12 px de chevron, 16 px d'icone, 5 px d'espace = 35 px. Une
+	ligne sans chevron, en erreur ou de debordement aligne ainsi son libelle sur
+	celui de ses voisines du meme niveau. Les decorateurs sont places a 2 px et
+	a 14 px du bord de la boite de remplissage : changer l'un de ces chiffres
+	oblige a changer les autres.
+
+	⚠ LA LARGEUR DU CHEVRON EGALE LE PAS D'INDENTATION (12 px) : le chevron d'un
+	enfant tombe sous l'icone de son parent.
+
+	⚠ `line-height` EST FIXE : les lignes de debordement sont en 12 px, les
+	autres en 14 px, et les icones de 16 px sont centrees dans une ligne de
+	hauteur connue (18 + 2 px de remplissage).
+*/
+#dir-tree > div > div
+{
+	display: block;
+	padding: 1px 6px 1px 35px;
+	line-height: 18px;
+	white-space: nowrap;
+}
+
+/*
+	⚠ LES IMAGES SONT DES TGA NON COMPRESSES 32 BITS, PAS DES PNG : c'est le seul
+	format que decode le rendu GL2 de RmlUi (RenderInterface_GL2::LoadTexture).
+	Un PNG serait refuse avec un message que l'hote compte. Elles sont
+	engendrees par peles/tools/make_tree_icons.py et affichees a leur taille
+	native (`scale-none`). Chemins relatifs a CETTE feuille de style.
+
+	⚠ UNE REGLE PAR COMBINAISON, ET LA LISTE DE DECORATEURS Y EST COMPLETE :
+	`decorator` est UNE propriete, une regle plus specifique la remplace en
+	entier.
+
+	⚠ TOUTE LIGNE SATISFAIT UNE REGLE DE SPECIFICITE MAXIMALE UNIQUE, et c'est
+	ce qui empeche l'ordre d'apparition de decider. Une ligne peut satisfaire
+	deux regles de meme specificite -- `d0 closed expandable drive` satisfait
+	`.expandable.closed` ET `.drive.closed` (id + 2 classes) --, mais alors une
+	troisieme la couvre au-dessus : `.drive.expandable.closed` (id + 3 classes)
+	departage ce cas, comme `.drive.expandable.open` departage son symetrique.
+	Ajouter une classe d'image oblige a verifier que chaque paire nouvelle a son
+	arbitre.
+
+	⚠ LE DOSSIER OUVERT EST RESERVE AUX LIGNES `expandable`. Une ligne sans
+	chevron garde le dossier ferme dans ses deux etats : un repertoire enumere
+	vide bascule `open` / `closed` a chaque clic (le clic ouvre puis
+	selectionne), et l'icone ne doit pas promettre un contenu qu'il n'a pas.
+
+	`error` et `overflow` ne sont ni `open` ni `closed` : ces lignes n'ont ni
+	chevron ni icone.
+*/
+#dir-tree .closed,
+#dir-tree .open { decorator: image(icons/tree-folder-closed.tga scale-none 14px center); }
+
+#dir-tree .expandable.closed
+{
+	decorator: image(icons/tree-chevron-closed.tga scale-none 2px center),
+	           image(icons/tree-folder-closed.tga scale-none 14px center);
+}
+#dir-tree .expandable.open
+{
+	decorator: image(icons/tree-chevron-open.tga scale-none 2px center),
+	           image(icons/tree-folder-open.tga scale-none 14px center);
+}
+
+#dir-tree .drive.closed,
+#dir-tree .drive.open { decorator: image(icons/tree-drive.tga scale-none 14px center); }
+
+#dir-tree .drive.expandable.closed
+{
+	decorator: image(icons/tree-chevron-closed.tga scale-none 2px center),
+	           image(icons/tree-drive.tga scale-none 14px center);
+}
+#dir-tree .drive.expandable.open
+{
+	decorator: image(icons/tree-chevron-open.tga scale-none 2px center),
+	           image(icons/tree-drive.tga scale-none 14px center);
+}
+
+/*
+	INDENTATION PAR CLASSE DE PROFONDEUR. La liste est FINIE et son dernier
+	terme est celui que DirectoryTree cesse de depasser : une ligne plus
+	profonde reprend la derniere classe, elle n'en perd pas.
+*/
+#dir-tree .d0 { margin-left: 0px; }
+#dir-tree .d1 { margin-left: 12px; }
+#dir-tree .d2 { margin-left: 24px; }
+#dir-tree .d3 { margin-left: 36px; }
+#dir-tree .d4 { margin-left: 48px; }
+#dir-tree .d5 { margin-left: 60px; }
+#dir-tree .d6 { margin-left: 72px; }
+#dir-tree .d7 { margin-left: 84px; }
+#dir-tree .d8 { margin-left: 96px; }
+#dir-tree .d9 { margin-left: 108px; }
+
+/* LE SURVOL COMPLETE LE CHEVRON : un repertoire enumere vide n'a plus de
+   chevron mais reste cliquable -- il se selectionne -- et seul le survol le
+   distingue alors d'un libelle inerte. */
+#dir-tree div:hover { background: #32323a; }
+
+#dir-tree .open     { color: #ffffff; }
+#dir-tree .closed   { color: #d8d8d8; }
+/* `.selected:hover` (id + 2 classes) : sans lui, `div:hover` (id + tag +
+   pseudo-classe) l'emporte sur `.selected` (id + classe) et le survol masque
+   la selection. */
+#dir-tree .selected,
+#dir-tree .selected:hover { background: #3a5a7a; }
+
+/* UN NOEUD INACCESSIBLE EST VISIBLE ET INERTE : le masquer ferait lire
+   « repertoire vide » la ou l'acces a ete refuse. */
+#dir-tree .error    { color: #b06a5a; }
+#dir-tree .overflow { color: #7a7a7e; font-size: 12px; }
+
+#file-list
+{
+	display: block;
+	padding: 2px 0px;
+}
+
+/*
+	L'ICONE EST UNE REGLE DE FEUILLE DE STYLE, PLUS UN INDEX DANS UNE LISTE
+	D'IMAGES.
+	⚠ C'est ce qui fait disparaitre les trois bitmaps, le wxImageList et leur
+	mise a l'echelle de l'hote historique : la famille de format arrive dans la
+	ligne sous forme de classe, et ce fichier decide seule de son apparence.
+	La marque est ici une couleur ; la remplacer par `decorator: image(...)` est
+	une edition de cette feuille, pas une recompilation.
+*/
+#file-list > div
+{
+	display: block;
+}
+
+#file-list > div > div, #file-list > .overflow
+{
+	display: block;
+	padding: 1px 6px 1px 10px;
+	white-space: nowrap;
+	border-left: 4px #3a3a3e;
+}
+
+#file-list div:hover     { background: #32323a; }
+#file-list .selected,
+#file-list .selected:hover { background: #3a5a7a; }
+#file-list .kind-obj     { border-left-color: #6aa06a; }
+#file-list .kind-stl     { border-left-color: #6a8ac0; }
+#file-list .kind-generic { border-left-color: #8a8a8e; }
+#file-list .overflow     { border-left-color: #262628; color: #7a7a7e; font-size: 12px; }
+
+/* --------------------------------------------------------------------------
+	La zone de droite : table de proprietes et deux arbres aplatis
+   --------------------------------------------------------------------------
+
+	⚠ AUCUNE DECLARATION `table-layout` ICI, ET CE N'EST PAS UN OUBLI. RmlUi ne
+	connait pas cette propriete : sa mise en page de table se comporte toujours
+	comme la variante FIXE de CSS, les largeurs venant des cellules de la
+	premiere ligne. L'ecrire produirait « Syntax error parsing property
+	declaration » en LT_WARNING, et l'hote compte ces messages -- la creation
+	echouerait en code 3.
+
+	⚠ LES QUATORZE LIGNES DE LA TABLE EXISTENT MEME SANS MODELE. La hauteur du
+	panneau ne depend donc pas de ce qui est selectionne, et la disposition ne
+	saute pas a chaque deselection.
+*/
+
+.propgrid
+{
+	display: table;
+	width: 100%;
+	margin: 0px;
+	padding: 2px 0px;
+}
+
+.prow
+{
+	display: table-row;
+}
+
+.pkey
+{
+	display: table-cell;
+	width: 110px;
+	padding: 1px 6px;
+	font-size: 12px;
+	color: #9a9a9e;
+	white-space: nowrap;
+}
+
+.pval
+{
+	display: table-cell;
+	padding: 1px 6px;
+	font-size: 12px;
+	color: #e0e0e2;
+	white-space: nowrap;
+}
+
+/*
+	LA LIGNE « Path » EST UN CONTROLE DE SAISIE, ET C'EST LA SEULE.
+
+	⚠ RmlUi N'A PAS D'INFOBULLE : le chemin complet, porte par un SetHelpString
+	dans l'hote historique, devient une ligne. Un texte de ligne ordinaire n'y
+	est ni selectionnable ni copiable ; un controle de saisie l'est.
+
+	⚠ ET POURTANT LA LIGNE N'EST PAS MODIFIABLE -- MAIS CE N'EST PAS `readonly`
+	QUI LA TIENT. RmlUi 6.3 n'implemente pas cet attribut ; `disabled` existe
+	seul, et il retire le focus, donc la selection avec lui. Ce qui tient la
+	ligne est ailleurs : `ui/input_event.h` n'enumere que DIX touches routees --
+	A, C, les quatre fleches, Debut, Fin, PagePrec, PageSuiv -- et aucune
+	n'ecrit. Ni effacement, ni coupe, ni collage, ni saisie de caractere :
+	`Context::ProcessTextInput` n'est appele nulle part.
+
+	⛔ CHANGER CE QUI SUIT NE CHANGE RIEN A CETTE GARANTIE, ET LA ROMPRE NE SE
+	FAIT PAS ICI. Elle se rompt en ajoutant une entree a `ui::Key`.
+*/
+.pcopy
+{
+	display: block;
+	width: 100%;
+	margin: 0px;
+	padding: 0px;
+	font-size: 12px;
+	color: #e0e0e2;
+	background: #202022;
+	border: 0px;
+}
+
+#mesh-tree, #material-tree
+{
+	display: block;
+	padding: 2px 0px;
+}
+
+#mesh-tree > div, #material-tree > div
+{
+	display: block;
+}
+
+#mesh-tree > div > div, #material-tree > div > div
+{
+	display: block;
+	padding: 1px 6px;
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+#mesh-tree .d0, #material-tree .d0 { margin-left: 0px;  color: #9a9a9e; }
+#mesh-tree .d1, #material-tree .d1 { margin-left: 10px; color: #ffffff; }
+#mesh-tree .d2, #material-tree .d2 { margin-left: 20px; color: #d8d8d8; }
+#mesh-tree .d3, #material-tree .d3 { margin-left: 30px; color: #b8b8ba; }
+#mesh-tree .d4, #material-tree .d4 { margin-left: 40px; color: #a8a8aa; }
+
+#material-tree .overflow { color: #7a7a7e; }
+
+/*
+	LA PASTILLE DE COULEUR, EN ENTIER.
+
+	⚠ C'EST LE REMPLACEMENT DE MakeColorSwatch -- 25 lignes de GDI -- ET DE LA
+	wxImageList QUI RECEVAIT UNE IMAGE PAR MATERIAU. Zero ligne de dessin, zero
+	liste d'images, et rien a purger entre deux reconstructions.
+
+	Le liseré n'est pas decoratif : sans lui, un materiau blanc ou tres clair se
+	confondrait avec le fond et la pastille disparaitrait. Il n'est pose que sur
+	les lignes qui portent reellement une couleur -- classe `sw` -- pour que les
+	autres gardent la meme gouttiere sans afficher un carre vide.
+*/
+#material-tree .swatch
+{
+	display: inline-block;
+	width: 9px;
+	height: 9px;
+	margin-right: 6px;
+}
+
+#material-tree .sw .swatch
+{
+	border: 1px #808080;
+}
+
+#viewport
+{
+	display: block;
+
+	/*
+		⚠ `0px` ET NON `auto` POUR LA BASE FLEX, MEME REGLE QUE #row A :59-60 :
+		une base automatique part du CONTENU, donc le contenu fixerait la taille
+		de la vue 3D -- exactement ce que les cinq `min-*: 0px` existent pour
+		empecher. L'element est vide aujourd'hui ; §1.9 y met une image de
+		transition et §1.7 en fait la cible de survol.
+	*/
+	flex: 1 1 0px;
+	margin: 0px;
+	padding: 0px;
+
+	/*
+		⚠ CETTE LIGNE N'EST PAS COSMETIQUE. La phase 7 dessine l'interface
+		PAR-DESSUS la vue 3D deja rendue : un fond opaque ici effacerait la 3D
+		a chaque image.
+	*/
+	background: transparent;
+
+	/*
+		L'element RESTE SENSIBLE AU POINTEUR. C'est lui qui sert de cible de
+		survol a l'arbitrage souris : `pointer-events: none` y rendrait
+		Context::GetHoverElement() aveugle a la vue.
+	*/
+	/* Meme raison que pour #row : le minimum automatique d'un element
+	   flex vaut la taille de son contenu. */
+	min-width: 0px;
+	min-height: 0px;
+}

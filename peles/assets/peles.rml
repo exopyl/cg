@@ -1,0 +1,172 @@
+<rml>
+<head>
+	<title>peles</title>
+	<link type="text/rcss" href="peles.rcss"/>
+</head>
+<body data-model="peles">
+	<!--
+		LES QUATRE ZONES. Leur geometrie seule fixe le rectangle de la vue 3D :
+		#viewport n'occupe PAS tout le cadre, donc un repli sur le plein cadre
+		cesse d'etre indiscernable du succes.
+
+		#viewport est la surface de la vue 3D. Le C++ LIT sa geometrie resolue
+		apres Context::Update() ; il ne la calcule pas.
+
+		⚠ TOUS LES ATTRIBUTS `data-` SONT ICI, DANS LE DOCUMENT. RmlUi ignore un
+		attribut `data-` ajoute APRES l'attachement de l'element : un attribut
+		pose depuis le C++ serait sans effet, et sans diagnostic.
+
+		⚠ `data-attr-class` ECRASE L'ATTRIBUT `class`. Les elements qui en
+		portent un ne peuvent donc pas porter aussi une classe statique : leur
+		style commun vient du selecteur de leur PARENT, et la classe liee ne
+		porte que ce qui varie -- profondeur, etat, famille de format.
+
+		⚠ REGLE NON NEGOCIABLE : AUCUNE VUE `data-*`, QUELLE QU'ELLE SOIT, SUR
+		L'ELEMENT QUI PORTE `data-for`. Elle doit vivre sur un element FILS, d'ou
+		le div interieur de chacune des quatre listes.
+
+		⚠ LA REGLE NE SE LIMITE PAS A `data-attr-*` ET `data-style-*`. Mesure sur
+		les sources de RmlUi 6.3 : `DataView::DataView` calcule son `sort_order`
+		comme `biais + 1000 + 2000 x profondeur` (Source/Core/DataView.cpp:27),
+		et le biais vaut ZERO pour `DataViewFor` comme pour `DataViewAttribute`,
+		`DataViewStyle`, `DataViewClass` (`data-class-*`), `DataViewIf`
+		(`data-if`), `DataViewVisible`, `DataViewRml`, `DataViewAttributeIf` et
+		`DataViewAlias` -- le parametre `sort_offset` de `DataViewCommon` vaut 0
+		par defaut (Source/Core/DataViewDefault.h:16). Toutes sont donc a EGALITE
+		avec `data-for` sur le meme element. Un
+		`<div data-for="row : rows" data-if="row.visible">` rouvre EXACTEMENT le
+		meme defaut qu'un `data-attr-class`.
+
+		⚠ LES `data-event-*` SONT LA SEULE EXCEPTION, et pour une raison de
+		nature : ce sont des CONTROLEURS, pas des vues (Factory.cpp:252 les
+		enregistre par `RegisterDataControllerInstancer`). Ils vivent dans
+		`DataControllers`, qui n'est pas la liste triee.
+
+		Le `{{ ... }}` n'est pas concerne non plus : `DataViewText` s'attache au
+		NOEUD DE TEXTE (Source/Core/DataViewDefault.cpp:274, `rmlui_dynamic_cast
+		<ElementText*>`), donc un niveau plus bas.
+
+		RmlUi trie ses vues par PROFONDEUR avant de les mettre a jour, pour que
+		la vue `data-for` retire ses elements en trop AVANT que les vues de ces
+		elements ne lisent le vecteur. Une vue posee sur l'element `data-for` est
+		a la MEME profondeur que lui : le tri est alors a egalite, `std::sort`
+		n'est pas stable, et l'ordre depend des adresses des vues -- donc du tas.
+		Une ligne engendree lit alors `rows[i]` avec i >= size et RmlUi
+		journalise « Data array index out of bounds » en LT_WARNING, ce que
+		l'hote compte et qui fait sortir en 3.
+
+		⚠ ET LE PATRON RECOPIE TOUS SES ATTRIBUTS. `DataViewFor::Initialize`
+		(Source/Core/DataViewDefault.cpp:477-491) copie CHAQUE attribut de
+		l'element sauf `data-for` et `rmlui-inner-rml` : ce qui est pose la est
+		repose sur chacune des lignes engendrees, sans exception a filtrer.
+
+		MESURE : avec les `data-attr-class` a la meme profondeur, `--reopen`
+		sortait en 3 sur 5 executions sur 10 et `--open-second` sur 5 sur 10 ;
+		descendus d'un niveau, 0 sur 30. Le defaut ne se declenche qu'au
+		RETRECISSEMENT d'un vecteur lie.
+	-->
+	<div id="row">
+		<div id="panel-left">
+			<div class="zone-title">Explorer</div>
+			<div class="status" data-if="treeStatus != ''">{{ treeStatus }}</div>
+			<!--
+				⚠ `data-event-click` PORTE UNE INTENTION, PAS UNE ACTION. Le
+				rappel lie s'execute a l'interieur de la distribution
+				d'evenements de RmlUi : il enregistre l'identifiant de ligne, et
+				l'hote agit APRES. Charger un fichier depuis le rappel
+				reconstruirait les elements engendres par `data-for` pendant que
+				RmlUi parcourt son arbre.
+
+				⚠ L'ARGUMENT EST `row.id`, ET NON `row.path`. Le chemin porte par
+				la ligne est une chaine d'affichage en UTF-8 ; l'identite du
+				repertoire vit dans DirectoryTree.
+
+				LE CHEVRON ET L'ICONE NE SONT PAS DES ELEMENTS : ce sont deux
+				decorateurs de la ligne, choisis par ses classes (peles.rcss). Un
+				element de plus par ligne se paie sur chacune des lignes liees.
+			-->
+			<div id="dir-tree">
+				<div data-for="row : treeRows" data-event-click="onTreeRow(row.id)"><div data-attr-class="row.styleClass">{{ row.label }}</div></div>
+			</div>
+		</div>
+		<!--
+			LES TROIS SEPARATEURS. Chacun regle l'etendue du panneau qu'il
+			borde ; le C++ les retrouve par leur identifiant
+			(ui/panel_splitters.cpp) et ecoute les evenements de glisser que
+			RmlUi emet sur eux -- `drag: drag` dans peles.rcss.
+
+			⚠ ILS N'OCCUPENT AUCUNE PLACE DANS LA MISE EN PAGE : leurs marges
+			negatives compensent leur largeur (peles.rcss). Les retirer, ou leur
+			rendre une marge nulle, deplacerait la vue 3D de leur epaisseur.
+
+			⚠ AUCUN ATTRIBUT `data-` : un separateur n'est pas lie au modele.
+		-->
+		<div id="split-left" class="splitter-v"/>
+		<div id="viewport"/>
+		<div id="split-right" class="splitter-v"/>
+		<!--
+			LA ZONE DE DROITE : la table de proprietes et les deux arbres
+			APLATIS. Ils remplacent un wxPropertyGrid et deux wxTreeCtrl.
+
+			⚠ LA PASTILLE DE COULEUR EST UN `data-style-background-color`, ET
+			RIEN D'AUTRE. Ni bitmap dessine a la main, ni liste d'images a
+			purger a chaque reconstruction : la couleur arrive dans la ligne
+			sous forme de chaine "#rrggbb" et la feuille de style decide de sa
+			forme.
+
+			⚠ LE CHAMP `swatch` N'EST JAMAIS VIDE -- il vaut "transparent"
+			quand la ligne n'en porte pas. Element::SetProperty journalise en
+			LT_WARNING toute valeur qu'il ne sait pas analyser, et l'hote
+			compte ces messages : une chaine vide ferait echouer la creation.
+		-->
+		<div id="panel-right">
+			<div class="zone-title">Model information</div>
+			<div id="propgrid" class="propgrid">
+				<div class="prow" data-for="info : infoRows">
+					<div class="pkey">{{ info.label }}</div>
+					<div class="pval"><span data-if="!info.copyable">{{ info.value }}</span><textarea class="pcopy" data-if="info.copyable" data-attr-value="info.value" rows="1" wrap="nowrap"/></div>
+				</div>
+			</div>
+			<div id="mesh-tree">
+				<div data-for="row : meshRows"><div data-attr-class="row.styleClass">{{ row.label }}</div></div>
+			</div>
+			<div id="material-tree">
+				<div data-for="row : materialRows"><div data-attr-class="row.styleClass"><span class="swatch" data-style-background-color="row.swatch"/><span>{{ row.label }}</span></div></div>
+			</div>
+		</div>
+	</div>
+	<!--
+		⚠ UN CLIC DESIGNE, UN DOUBLE-CLIC OUVRE. C'est la distinction de l'hote
+		historique -- EVT_LIST_ITEM_ACTIVATED y ouvre le document, la selection
+		ne fait que designer -- et elle n'est pas decorative : un simple clic qui
+		chargerait rendrait toute traversee de la liste au clavier ou a la souris
+		aussi couteuse que le plus lourd des fichiers qu'elle traverse.
+
+		⚠ LA LIGNE DE STATUT EST ICI PARCE QUE LA ZONE BASSE A UNE HAUTEUR PAR
+		DEFAUT FIXE. Une barre de statut ajoutee sous les quatre zones changerait
+		la hauteur de la vue 3D, donc le rectangle que `--dump-layout` mesure
+		pour un cadre donne. Le separateur ci-dessous change cette hauteur a la
+		demande de l'utilisateur, pas a celle du document.
+	-->
+	<div id="split-bottom" class="splitter-h"/>
+	<div id="panel-bottom">
+		<div class="zone-title">Files</div>
+		<div class="zone-path">{{ currentDirectory }}</div>
+		<div class="status" data-if="status != ''">{{ status }}</div>
+		<div class="status" data-if="filesStatus != ''">{{ filesStatus }}</div>
+		<div id="file-list">
+			<div data-for="file : fileRows" data-event-click="onFileRow(file.id)"
+			     data-event-dblclick="onFileOpen(file.id)"><div data-attr-class="file.kind">{{ file.label }}</div></div>
+			<!--
+				⚠ LA LIGNE DE PLAFOND DE LA LISTE EST LA SEULE DES QUATRE A VIVRE
+				DANS LE DOCUMENT, les trois autres etant des lignes des vecteurs
+				lies. Elle porte donc un identifiant : sans lui, rien ne
+				distingue « le plafond n'a pas ete atteint » de « la ligne a ete
+				oubliee », `--dump-layout --layout-element` etant le seul
+				instrument capable de constater qu'un element est mis en page.
+			-->
+			<div id="files-overflow" class="overflow" data-if="filesHidden > 0">... {{ filesHidden }} entree(s) non affichee(s)</div>
+		</div>
+	</div>
+</body>
+</rml>

@@ -83,6 +83,20 @@
       }
     },
     {
+      "name": "ci-linux-peles",
+      "displayName": "CI Linux -- peles (hote RmlUi) et ses modes hors ecran",
+      "description": "Meme configuration que ci-linux, ENABLE_PELES en plus. CE QU'IL PROUVE : peles, peles_probe et les quatre bibliotheques du pare-feu BATISSENT ET LIENT sous GCC, et les deux modes qui n'ouvrent aucun contexte GL -- --dump-tree et --dump-files -- s'EXECUTENT et rendent la meme sortie que sur Windows (ils n'appellent que peles_core). CE QU'IL NE PROUVE PAS : aucun rendu. Un runner GitHub n'a pas de contexte OpenGL, donc ni --dump-layout, ni --readpixel, ni --state-audit, ni la concordance GL_VIEWPORT n'y tournent -- et peles_probe y est bati, pas execute. IL N'EXECUTE PAS NON PLUS tu_supported_formats : ce test exige ENABLE_SINAIA=ON, donc wxWidgets, qui n'est pas installe sur ce runner ; a ce jour AUCUNE configuration de CI ne l'execute. ⚠ ENABLE_PELES=ON ROMPT LA CONFIGURATION HORS LIGNE (R-P8) : RmlUi et FreeType sont tires du reseau A LA CONFIGURATION, ce qui est precisement la raison pour laquelle ci-linux ne l'active pas et pour laquelle ce preset est separe. Restreint a Linux par condition : EXTERN_OPENNURBS et EXTERN_LIB3MF pointent sous .deps/cg_binaries/, que seule l'etape de telechargement du workflow cree.",
+      "inherits": "ci-linux",
+      "cacheVariables": {
+        "ENABLE_PELES": "ON"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
       "name": "maker-wasm",
       "displayName": "maker (WebAssembly, Emscripten)",
       "description": "Module WASM maker : cgmesh via Emscripten. Generateur NMake (nmake fourni par Visual Studio). Necessite EMSDK dans l'environnement, et cmake + nmake sur le PATH. Configurer avec `cmake --preset maker-wasm` (ou `emcmake cmake --preset maker-wasm`).",
@@ -127,6 +141,19 @@
       "configurePreset": "ci-linux-boilerplate",
       "targets": [
         "cggraph-boilerplate"
+      ],
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "ci-linux-peles",
+      "configurePreset": "ci-linux-peles",
+      "targets": [
+        "peles",
+        "peles_probe"
       ],
       "condition": {
         "type": "equals",
