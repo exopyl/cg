@@ -16,17 +16,16 @@
 // unique. C'est le seul choix qui rende cette page équivalente à celle qu'elle
 // remplace.
 //
-// LIMITE À CONNAÎTRE : graphExportObj rend un OBJ MINIMAL, sans mtllib — même
-// contrainte que regenerate() pour les formes, o3dv chercherait un .mtl absent
-// de sa FileList. Les matériaux ne traversent donc pas. Sans conséquence pour un
-// solide à matériau unique (le texte) ; rédhibitoire pour un relief coloré, dont
-// les couleurs SONT le résultat. Une page gabarit sur img.relief demandera
-// d'abord un chemin qui les porte.
+// DEUX SÉRIALISATIONS OBJ, deux usages : l'AMORÇAGE du viseur consomme la chaîne
+// `graphExportObj` UNE fois, à la première évaluation ; le TÉLÉCHARGEMENT passe
+// par `graphExportObjZip`, sous le bouton. Un pas de curseur ne sérialise donc
+// rien — il ne produit que la charge utile de rendu (graphMeshData).
 // ===========================================================================
 
 import { loadModule } from "./wasm.js";
 import { createViewer } from "./viewer.js";
-import { saveBlob, safeName, downloadStlFromGraph, meshExtent } from "./exporters.js";
+import { saveBlob, safeName, downloadObjFromGraph, downloadGlbFromGraph,
+         downloadStlFromGraph, meshExtent } from "./exporters.js";
 
 const el = (id) => document.getElementById(id);
 
@@ -338,8 +337,8 @@ export async function runTemplate(name) {
     },
     // o3dv importe l'OBJ en SOUDANT les sommets coïncidents, ce qui lisse les
     // normales à travers les arêtes vives. On rebascule aussitôt sur la géométrie
-    // non soudée de graphMeshData — qui porte aussi les couleurs, absentes de
-    // l'OBJ minimal servi à l'amorçage.
+    // non soudée de graphMeshData — qui porte aussi les matériaux, que l'OBJ
+    // d'amorçage référence sans les livrer (son .mtl ne l'accompagne pas).
     onModelReady: () => {
       if (Module) viewer.updateInPlace(() => Module.graphMeshData(0), 0, true);
     },
@@ -361,7 +360,9 @@ export async function runTemplate(name) {
   // restait alors indéfiniment sur « chargement… », et rien ne repartait au
   // retour au premier plan.
   let queued = false;
-  let lastObj = "";
+  // Amorçage du viseur : demandé une seule fois, et marqué AVANT que le
+  // chargement asynchrone n'aboutisse.
+  let booted = false;
   // Recadrage de la caméra : au premier rendu, et après un changement de SOURCE
   // (une autre police, une autre image) — le saut d'échelle y est arbitraire.
   // Pas sur un déplacement de curseur, où la vue doit rester où l'utilisateur l'a
@@ -394,27 +395,40 @@ export async function runTemplate(name) {
         }
         return;
       }
-      lastObj = Module.graphExportObj(0);
-      if (!lastObj) { setStatus("le nœud de sortie n'a pas rendu de maillage"); return; }
-
       // AMORÇAGE UNE SEULE FOIS, puis mise à jour EN PLACE — c'est la discipline
       // de shell.js, et elle n'est pas cosmétique : bootstrap() est un rechargement
       // de fichier o3dv complet (scène vidée, canvas caché, caméra recadrée), donc
       // un scintillement à chaque déplacement de curseur.
       //
-      // Et la mise à jour en place apporte ce que l'OBJ ne peut pas : les COULEURS
-      // PAR SOMMET. graphExportObj rend un OBJ minimal sans mtllib ; graphMeshData
-      // rend en plus l'attribut `color`, vide sur un maillage mono-matériau — le
-      // sélecteur de couleur reprend alors la main, comme pour une forme.
+      // Et la mise à jour en place apporte ce que l'OBJ d'amorçage n'a pas : ses
+      // MATÉRIAUX, que le .mtl porte et qui ne l'accompagne pas ici. graphMeshData
+      // rend les groupes et leurs couleurs — vides sur un maillage mono-matériau,
+      // le sélecteur de couleur reprenant alors la main, comme pour une forme.
+      //
       // UN SEUL appel a graphMeshData, consomme deux fois : les cotes le lisent,
       // le viewer le recoit. La charge utile est une VUE TYPEE sur le tas WASM,
       // valide jusqu'au prochain appel au Module -- d'ou l'ordre strict ici, et
       // le `() => payload` passe au viewer plutot qu'un second appel.
       const payload = Module.graphMeshData(0);
+      if (!payload.nf) { setStatus("le nœud de sortie n'a pas rendu de maillage"); return; }
       const extent = meshExtent(payload.positions);
 
-      if (!viewer.isReady()) viewer.bootstrap(lastObj);
-      else viewer.updateInPlace(() => payload, 0, refit);
+      // LA SÉRIALISATION OBJ N'EST PAS SUR LE CHEMIN D'ÉVALUATION : elle ne sert
+      // qu'à l'amorçage, UNE fois par page. ⚠ Elle INVALIDE `payload`, vue typée
+      // sur le tas WASM : c'est pourquoi les cotes sont lues juste au-dessus.
+      //
+      // Le drapeau est posé AVANT le chargement, et non déduit de `isReady()` :
+      // bootstrap() est asynchrone (o3dv relit un fichier), donc `isReady()`
+      // reste faux pendant tout ce temps et chaque évaluation qui tombe dans
+      // cette fenêtre re-sérialiserait.
+      if (!booted) {
+        booted = true;
+        viewer.bootstrap(Module.graphExportObj(0));
+      } else if (viewer.isReady()) {
+        // Sous le `isReady()` : tant que l'amorçage est en cours, il n'y a rien à
+        // faire — onModelReady relit graphMeshData à son terme.
+        viewer.updateInPlace(() => payload, 0, refit);
+      }
       refit = false;
 
       setStatus(`${result.nv} sommets · ${result.nf} triangles · ${result.ms} ms`);
@@ -735,11 +749,25 @@ export async function runTemplate(name) {
   }
 
   // ---- export ------------------------------------------------------------
+  //
+  // L'ARCHIVE, et non un .obj nu : un OBJ ne peut pas embarquer ses matériaux, il
+  // les référence par `mtllib`. Les livrer zippés ramène l'export coloré à un
+  // seul téléchargement.
   el("downloadObjBtn").addEventListener("click", () => {
-    if (!lastObj) return;
-    saveBlob(new Blob([lastObj], { type: "text/plain" }),
-             safeName(el("filename").value || name, ".obj"));
+    if (!downloadObjFromGraph(Module, 0, el("filename").value || name))
+      setStatus("rien a exporter — le nœud de sortie n'a pas rendu de maillage");
   });
+
+  // GLB : les MEMES materiaux, mais en UN seul fichier -- un glTF binaire les
+  // embarque au lieu de les referencer. Optionnel dans le gabarit comme le STL :
+  // le bouton n'existe que la ou la page le declare.
+  const glbBtn = el("downloadGlbBtn");
+  if (glbBtn) {
+    glbBtn.addEventListener("click", () => {
+      if (!downloadGlbFromGraph(Module, 0, el("filename").value || name))
+        setStatus("rien a exporter — le nœud de sortie n'a pas rendu de maillage");
+    });
+  }
 
   // STL BINAIRE -- le format de l'impression 3D, et la raison d'etre de cette
   // page. Optionnel dans le gabarit : un relief colore n'a rien a faire d'un

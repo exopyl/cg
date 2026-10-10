@@ -1,9 +1,9 @@
 // ===========================================================================
-//  Export du maillage courant : OBJ (produit par le WASM) et STL (binaire, JS).
+//  Export du maillage courant : OBJ et GLB (produits par le WASM), STL (JS).
 // ===========================================================================
-//  L'OBJ est serialise cote C++ : la serialisation d'un maillage appartient a
-//  au moteur natif, pas a la couche navigateur. Ce module ne garde que ce qui est
-//  reellement une preoccupation navigateur -- nommer le fichier et declencher le
+//  L'OBJ et le GLB sont serialises cote C++ : la serialisation d'un maillage --
+//  materiaux compris -- appartient au moteur natif. Ce module ne garde que ce qui
+//  est une preoccupation navigateur : nommer le fichier et declencher le
 //  telechargement.
 //
 //  Le STL reste assemble ici, faute d'un point d'entree WASM ; c'est un candidat
@@ -19,7 +19,7 @@
 // Nom de fichier : base saisie par l'utilisateur (nettoyee) + extension.
 export function safeName(base, ext) {
   let b = (base || "maker").replace(/[\\/:*?"<>|]+/g, "_").trim();
-  b = b.replace(/\.(obj|mtl|stl)$/i, ""); // evite Torus.obj.obj
+  b = b.replace(/\.(obj|mtl|stl|glb)$/i, ""); // evite Torus.obj.obj
   return (b || "maker") + ext;
 }
 
@@ -44,6 +44,41 @@ export function downloadObj(Module, id, base) {
   const bytes = new Uint8Array(res.bytes);   // copie hors du tas WASM
   if (!bytes.length) return;
   saveBlob(new Blob([bytes], { type: "application/zip" }), res.name + ".zip");
+}
+
+// Meme archive, source nodale : `port` est un port de sortie du graphe, pas un
+// identifiant d'objet. Rend false quand le port ne porte pas de maillage --
+// l'appelant a alors quelque chose a dire a l'utilisateur, ce qu'un export muet
+// ne permettrait pas.
+export function downloadObjFromGraph(Module, port, base) {
+  const res = Module.graphExportObjZip(port, base || "model");
+  const bytes = new Uint8Array(res.bytes);   // copie hors du tas WASM
+  if (!bytes.length) return false;
+  saveBlob(new Blob([bytes], { type: "application/zip" }), res.name + ".zip");
+  return true;
+}
+
+// GLB (glTF binaire) : UN SEUL fichier, materiaux compris, la ou l'OBJ reference
+// son .mtl et impose une archive. Il porte aussi sa conversion d'unite et
+// d'orientation, sur son noeud de scene.
+//
+// Meme regle de copie que l'OBJ : la vue typee rendue par le WASM n'est valide
+// que jusqu'au prochain appel.
+export function downloadGlb(Module, id, base) {
+  const res = Module.exportGlb(id, base || "model");
+  const bytes = new Uint8Array(res.bytes);   // copie hors du tas WASM
+  if (!bytes.length) return;
+  saveBlob(new Blob([bytes], { type: "model/gltf-binary" }), res.name + ".glb");
+}
+
+// Meme fichier, source nodale : `port` est un port de sortie du graphe, pas un
+// identifiant d'objet. Rend false quand le port ne porte pas de maillage.
+export function downloadGlbFromGraph(Module, port, base) {
+  const res = Module.graphExportGlb(port, base || "model");
+  const bytes = new Uint8Array(res.bytes);   // copie hors du tas WASM
+  if (!bytes.length) return false;
+  saveBlob(new Blob([bytes], { type: "model/gltf-binary" }), res.name + ".glb");
+  return true;
 }
 
 export function downloadStl(Module, id, base) {
