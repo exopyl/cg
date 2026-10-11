@@ -9,6 +9,15 @@
 #define INTERPOLATION_LINEAR 0
 #define INTERPOLATION_COSINE 1
 
+// Regle d'enroulement de la tessellation (GLU_TESS_WINDING_*) : un point est
+// dans la region si la somme des enroulements des contours autour de lui est
+// impaire (Odd), non nulle (NonZero), strictement positive (Positive),
+// strictement negative (Negative), ou de valeur absolue au moins 2 (AbsGeqTwo).
+// Positive retire d'une region les contours inverses (sens horaire) sans les
+// ajouter la ou ils debordent : c'est la difference A - B de deux contours
+// directs A et B quand B est donne a l'envers.
+enum class WindingRule { Odd, NonZero, Positive, Negative, AbsGeqTwo };
+
 //
 // Contour 2D
 //
@@ -97,8 +106,21 @@ public:
 	int clean (Polygon2* polygon);
 
 	// tesselation
+	// Sommets : les points des contours dans l'ordre, puis ceux que glutess cree
+	// (croisements, et une copie par fusion de deux points confondus) ; z = 0.
+	// Triangles en sens trigonometrique. Tampons alloues par malloc, a liberer
+	// par l'appelant. La regle par defaut est NonZero.
 	int tesselate (float **pVertices, unsigned int *nVertices,
-		       unsigned int **pFaces, unsigned int *nFaces) const;
+		       unsigned int **pFaces, unsigned int *nFaces,
+		       WindingRule rule = WindingRule::NonZero) const;
+
+	// Bord de la region que `rule` retient (GLU_TESS_BOUNDARY_ONLY) : un contour
+	// par boucle du bord, region a gauche (enveloppes en sens trigonometrique,
+	// trous en sens horaire). Les sommets sont ceux des contours d'entree qui
+	// restent sur le bord et les croisements que glutess cree. `out` est
+	// remplace. Rend le nombre de contours, ou -1 si glutess signale une
+	// erreur (`out` reste vide).
+	int boundary (WindingRule rule, Polygon2 &out) const;
 
 	void thicken (Polygon2* polygon, float ithickness, float othickness, int bOpen=1);
 	void dilate (Polygon2* polygon, float d);
@@ -114,3 +136,35 @@ public:
 	// interleaved x,y array the public float* API exposes.
 	std::vector<std::vector<Vector2f>> m_contours;
 };
+
+// Triangles plats d'une tessellation (sommets en x, y, z, triangles en indices) :
+// un triangle A-B-C dont B est aligne entre A et C est remplace, avec son voisin
+// A-C-D le long de AC, par A-B-D et B-C-D, quand ces deux triangles sont non plats
+// et du sens de A-C-D. Seul le tableau de faces change. Rend le nombre de
+// bascules. Polygon2::tesselate l'applique a sa sortie.
+unsigned int flipFlatTriangles (const float *vertices, unsigned int *faces, unsigned int nFaces);
+
+// Bascules de Lawson vers la triangulation de Delaunay contrainte (x, y) : une
+// arete interieure (exactement deux demi-aretes de sens opposes, portees par
+// deux triangles de meme sens) est basculee quand le sommet oppose de l'un est
+// strictement dans le cercle circonscrit de l'autre, au-dela d'un seuil
+// relatif, que les deux anciens triangles sont non plats et de meme sens, et
+// que les deux nouveaux le sont aussi, du meme sens. Les aretes de bord (une
+// seule demi-arete) et les aretes portees par plus de deux triangles ne bougent
+// jamais. Seul le tableau de faces change ; chaque triangle garde son sens.
+//
+// Le seuil relatif rend les configurations cocirculaires (rectangles, grilles)
+// stables : sans lui, l'arrondi, qui depend du compilateur (contraction FMA),
+// deciderait de leurs bascules, et le maillage changerait d'une plateforme a
+// l'autre.
+//
+// Ordre attendu : Polygon2::tesselate (qui applique deja flipFlatTriangles),
+// puis delaunayFlips. Un triangle plat n'est jamais bascule.
+//
+// Cout : Lawson part de la tessellation et peut demander un nombre quadratique
+// de bascules (anneau mince a milliers de sommets). Le travail est borne a 64
+// visites de pile par demi-arete ; la borne atteinte, la triangulation rendue
+// est valide mais pas forcement de Delaunay, et *complete (s'il est fourni)
+// vaut false. Rend le nombre de bascules.
+unsigned int delaunayFlips (const float *vertices, unsigned int *faces, unsigned int nFaces,
+                            bool *complete = nullptr);

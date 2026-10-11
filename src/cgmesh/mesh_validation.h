@@ -32,11 +32,11 @@ class Mesh;
 //   - paire non coplanaire : signalee si une arete de l'un a ses extremites de
 //     part et d'autre du plan de l'autre a plus de t et le perce a plus de t de
 //     ses cotes, OU si chacun a des sommets a plus de t des deux cotes du plan
-//     de l'autre et que leurs segments d'intersection se recouvrent sur plus de
-//     t le long de la droite commune aux deux plans. Une paire a arete commune
-//     n'est jamais signalee ; une paire a sommet commun seulement si elle se
-//     traverse au-dela de ce sommet. Un contact sans traversee n'est pas
-//     signale ;
+//     de l'autre et que leurs segments d'intersection exacts (sans tolerance)
+//     se recouvrent sur plus de t le long de la droite commune aux deux plans.
+//     Une paire a arete commune n'est jamais signalee ; une paire a sommet
+//     commun seulement si elle se traverse au-dela de ce sommet. Un contact
+//     sans traversee n'est pas signale ;
 //   - zone grise : une paire presque coplanaire dont un sommet est entre t et
 //     environ 2t du plan de l'autre n'est pas signalee.
 // Le test est borne par maxSelfIntersectionPairs paires examinees ; au-dela il

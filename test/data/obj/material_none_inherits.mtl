@@ -1,0 +1,12 @@
+# material_none_inherits.mtl
+#
+# Un seul materiau, texture. Le quad sans materiau du .obj n'en reference aucun :
+# c'est le propos du temoin.
+
+newmtl textured
+Ka 0.0 0.0 0.0
+Kd 0.5 0.5 0.5
+Ks 0.0 0.0 0.0
+Ns 10.0
+illum 2
+map_Kd texture.png

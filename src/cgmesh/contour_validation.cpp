@@ -550,8 +550,8 @@ namespace
 		// --- imbrication : rayon horizontal vers +x depuis le milieu de la plus
 		// longue arete SANS contact du contour (a defaut, de la plus longue).
 		// Phase sautee si les paires ont ete tronquees : les contacts, donc le
-		// choix du point, sont incomplets.
-		if (!report.truncated)
+		// choix du point, sont incomplets ; et quand l'appelant ne la demande pas.
+		if (!report.truncated && options.checkNesting)
 		{
 			const StripIndex strips (edges, tol);
 			const SparseBuckets &bands = strips.Buckets ();

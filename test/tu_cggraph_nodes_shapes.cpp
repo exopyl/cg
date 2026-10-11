@@ -3,9 +3,12 @@
 #include <algorithm>
 #include <cstdio>
 #include <cmath>
+#include <map>
+#include <limits>
 #include <memory>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../src/cggraph/core/evaluator.h"
@@ -19,6 +22,7 @@
 #include "../src/cggraph/nodes/value_types.h"
 #include "../src/cgmesh/extrude_contours.h"
 #include "../src/cgmesh/mesh.h"
+#include "../src/cgmesh/parameterized_gothic.h"
 #include "../src/cgmesh/parameterized_shapes.h"
 #include "../src/cgmesh/parametric_catalog.h"
 #include "../src/cgmesh/profile2d.h"
@@ -469,6 +473,72 @@ TEST (TEST_cggraph_nodes_shapes, a_bar_profile_port_reproduces_its_menu_position
 		reference->GetVertex (v, b);
 		for (int k = 0; k < 3; ++k)
 			EXPECT_FLOAT_EQ (a[k], b[k]) << "sommet " << v;
+	}
+}
+
+// Une construction en erreur rend le triangle de repli cote forme ; le noeud,
+// lui, echoue : un triangle n'est pas une fenetre que l'aval doive recevoir.
+// Erreur deterministe : un profil de barre a rayon non fini, branche sur le
+// port de barre, donne des points non finis, refuses par la forme
+// (invalid_parameter « Bar profile »).
+TEST (TEST_cggraph_nodes_shapes, a_failed_gothic_construction_fails_the_node)
+{
+	const float nan = std::numeric_limits<float>::quiet_NaN ();
+
+	// Precondition : la forme seule, avec le meme profil, porte l'erreur.
+	ParameterizedGothicWindow shape;
+	const Profile2D bar = rollBarProfile (nan);
+	shape.SetBarProfile (&bar);
+	shape.Regenerate ();
+	ASSERT_EQ (shape.LastBuildReport ().Count (GothicBuildError::InvalidParameter), 1u)
+		<< "precondition : le profil non fini n'est plus refuse, le cas ne teste plus le noeud";
+
+	Graph graph;
+	std::unique_ptr<Node> profileNode = MakeNode ("profile.bar.roll");
+	ASSERT_NE (profileNode, nullptr);
+	profileNode->GetParams ().SetFloat ("radius", nan);
+	const NodeId profile = graph.AddNode (std::move (profileNode));
+	const NodeId window = graph.AddNode (MakeNode ("shape.gothic.window"));
+	ASSERT_EQ (graph.Connect (profile, 0, window, 1), ConnectStatus::Ok);
+	Evaluator evaluator (graph);
+	EvalContext ctx;
+	ValueList outputs;
+	const EvalResult result = evaluator.Evaluate (window, outputs, ctx);
+	EXPECT_EQ (result.status, EvalStatus::ComputeFailed);
+	EXPECT_EQ (result.node, window) << "l'echec ne vient pas du noeud gothique";
+}
+
+// Les avertissements de construction sont publies, un compteur par categorie,
+// sous « gothic.<nom> » : a Recursion = 2, les quatre sous-lancettes de la
+// fenetre par defaut se replient.
+TEST (TEST_cggraph_nodes_shapes, the_gothic_node_publishes_its_build_warnings)
+{
+	for (const int depth : { 0, 2 })
+	{
+		SCOPED_TRACE ("Recursion = " + std::to_string (depth));
+		std::unique_ptr<Node> node = MakeNode ("shape.gothic.window");
+		ASSERT_NE (node, nullptr);
+		node->GetParams ().SetInt ("Recursion", depth);
+		Graph graph;
+		const NodeId id = graph.AddNode (std::move (node));
+		Evaluator evaluator (graph);
+		EvalContext ctx;
+		ValueList outputs;
+		ASSERT_TRUE (evaluator.Evaluate (id, outputs, ctx).IsOk ());
+		const std::map<NodeId, std::vector<NodeStat>> stats = evaluator.TakeRunStats ();
+		const auto it = stats.find (id);
+		ASSERT_NE (it, stats.end ());
+		double fallbacks = -1.0;
+		std::size_t published = 0;
+		for (const NodeStat &s : it->second)
+		{
+			if (s.name.rfind ("gothic.", 0) == 0)
+				++published;
+			if (s.name == "gothic.depth_fallback")
+				fallbacks = s.value;
+		}
+		EXPECT_EQ (published, kGothicBuildWarningCount);
+		EXPECT_EQ (fallbacks, depth == 2 ? 4.0 : 0.0);
 	}
 }
 

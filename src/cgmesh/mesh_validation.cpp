@@ -120,11 +120,13 @@ namespace
 	//         l'autre, chacune a plus de t, et le point de traversee est a
 	//         l'interieur de l'autre triangle a plus de t de ses cotes ;
 	//      b) chaque triangle a des sommets a plus de t des deux cotes du plan de
-	//         l'autre, et les segments d'intersection de chacun avec le plan de
-	//         l'autre, projetes sur la droite D = nA x nB, se recouvrent sur plus
-	//         de t. Ce test couvre la traversee franche dont les deux extremites
-	//         tombent sur des cotes des triangles (croix, lames a sommet commun),
-	//         que a) manque.
+	//         l'autre, et les segments d'intersection exacts de chacun avec le
+	//         plan de l'autre (extremites aux changements de signe de d, sans
+	//         tolerance), projetes sur la droite D = nA x nB, se recouvrent sur
+	//         plus de t. Ce test couvre la traversee franche dont les deux
+	//         extremites tombent sur des cotes des triangles (croix, lames a
+	//         sommet commun), que a) manque. La tolerance n'entre que dans les
+	//         seuils, jamais dans la position des extremites.
 	//    Un sommet partage est dans le plan de l'autre triangle. Une paire a
 	//    arete commune n'est donc jamais signalee ; une paire a sommet commun ne
 	//    l'est que si elle se traverse au-dela de ce sommet. Un simple contact
@@ -258,10 +260,15 @@ namespace
 		return std::max ({d[0], d[1], d[2]}) > tol && std::min ({d[0], d[1], d[2]}) < -tol;
 	}
 
-	// Intervalle, sur la droite unitaire D, de l'intersection du triangle T avec
-	// le plan de l'autre triangle ; d = distances signees des sommets de T a ce plan.
+	// Intervalle, sur la droite unitaire D, de l'intersection exacte du triangle T
+	// avec le plan de l'autre triangle ; d = distances signees des sommets de T a
+	// ce plan. Extremites : les points d'arete ou d change de signe, et les
+	// sommets de distance nulle. Un sommet a moins de t du plan n'en est pas une :
+	// il est a d / sin(diedre) de la droite commune aux deux plans ; le prendre
+	// pour extremite deplace celle-ci d'autant, sans borne quand les plans sont
+	// presque paralleles.
 	std::pair<double, double> intervalOnLine (const std::array<Vec3, 3> &T, const std::array<double, 3> &d,
-	                                          const Vec3 &D, double tol)
+	                                          const Vec3 &D)
 	{
 		double lo = std::numeric_limits<double>::max ();
 		double hi = -lo;
@@ -273,9 +280,9 @@ namespace
 		for (int i = 0; i < 3; ++i)
 		{
 			const int j = (i + 1) % 3;
-			if (std::fabs (d[i]) <= tol)
+			if (d[i] == 0.0)
 				take (T[i]);
-			if ((d[i] > tol && d[j] < -tol) || (d[i] < -tol && d[j] > tol))
+			if ((d[i] > 0.0 && d[j] < 0.0) || (d[i] < 0.0 && d[j] > 0.0))
 				take (add (T[i], scale (sub (T[j], T[i]), d[i] / (d[i] - d[j]))));
 		}
 		return {lo, hi};
@@ -311,8 +318,8 @@ namespace
 		if (dn <= 0.0)
 			return false;
 		D = scale (D, 1.0 / dn);
-		const auto [la, ha] = intervalOnLine (A, dA, D, tol);
-		const auto [lb, hb] = intervalOnLine (B, dB, D, tol);
+		const auto [la, ha] = intervalOnLine (A, dA, D);
+		const auto [lb, hb] = intervalOnLine (B, dB, D);
 		return std::min (ha, hb) - std::max (la, lb) > tol;
 	}
 

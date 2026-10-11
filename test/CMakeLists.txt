@@ -178,6 +178,28 @@ gtest_discover_tests(${PROJECT_NAME}
     DISCOVERY_TIMEOUT 60
 )
 
+# ---------------------------------------------------------------------------
+# TU_faults : tests d'injection de defauts
+# ---------------------------------------------------------------------------
+# Les sources de test/faults/ remplacent l'operator new GLOBAL de leur programme
+# (echec d'allocation arme par thread) : elles ne peuvent pas vivre dans TU, ou
+# le remplacement s'appliquerait aux 2 000 tests. Le GLOB de TU n'est pas
+# recursif, il ne les ramasse donc pas.
+#
+# Pas de TU_faults sous CG_ENABLE_SANITIZERS : un operator new remplace par
+# malloc / free retire a ASan ses controles alloc-dealloc-mismatch et
+# new-delete-type-mismatch, et l'echec d'allocation injecte n'est pas ce que ce
+# job cherche. La garde d'export est verifiee par les configurations sans
+# sanitizers (job ci-linux, builds locaux).
+if (NOT CG_ENABLE_SANITIZERS)
+    file(GLOB FAULT_SRC_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/faults/*.cpp)
+    add_executable(TU_faults ${FAULT_SRC_FILES})
+    # GTest::gtest et non gtest_main : le fichier porte son main (cgmesh en
+    # embarque un, celui de la demo glutess).
+    target_link_libraries(TU_faults cgmath cgimg cgmesh GTest::gtest)
+    gtest_discover_tests(TU_faults DISCOVERY_TIMEOUT 60)
+endif ()
+
 target_link_libraries(${PROJECT_NAME} cgmath cgimg cgmesh cggraph cggraph_nodes cggraph_ui)
 if ( WIN32 )
     target_link_libraries(${PROJECT_NAME} cgnet)

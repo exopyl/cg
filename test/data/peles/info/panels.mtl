@@ -1,0 +1,15 @@
+# panels.mtl -- les trois materiaux de panels.obj.
+#
+# Kd SEUL, donc MATERIAL_COLOR_ADV a la lecture : c'est ce que l'importateur OBJ
+# produit pour une couleur diffuse nue. Les trois couleurs sont primaires et
+# saturees pour que la pastille attendue soit lisible dans l'oracle
+# (#ff0000, #00ff00, #0000ff) sans arrondi a verifier.
+
+newmtl rouge
+Kd 1.0 0.0 0.0
+
+newmtl vert
+Kd 0.0 1.0 0.0
+
+newmtl bleu
+Kd 0.0 0.0 1.0

@@ -1,0 +1,48 @@
+# panels.obj -- la fixture des panneaux d'informations.
+#
+# TROIS OBJETS, ET AUCUN N'EST DECORATIF : chacun fixe une valeur que la table
+# de proprietes affiche et qu'aucun des deux autres ne produirait.
+#
+#   closed      tetraedre ferme      -> 0 bord, 0 arete non manifold
+#   open        triangle isole       -> 3 bords
+#   nonmanifold trois triangles sur
+#               la meme arete        -> 1 arete non manifold, et des bords
+#
+# Sans l'objet `nonmanifold`, la ligne "Non manifold edges" vaudrait zero quelle
+# que soit l'implementation du compteur : elle serait affichee sans etre
+# verifiee.
+#
+# ASCII PUR, fins de ligne LF. L'oracle est compare OCTET POUR OCTET entre
+# Windows et Linux ; un seul caractere hors ASCII y ferait dependre la sortie de
+# la page de codes de la machine.
+
+mtllib panels.mtl
+
+o closed
+usemtl rouge
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.0 1.0 0.0
+v 0.0 0.0 1.0
+f 1 3 2
+f 1 2 4
+f 2 3 4
+f 3 1 4
+
+o open
+usemtl vert
+v 2.0 0.0 0.0
+v 3.0 0.0 0.0
+v 2.0 1.0 0.0
+f 5 6 7
+
+o nonmanifold
+usemtl bleu
+v 4.0 0.0 0.0
+v 5.0 0.0 0.0
+v 4.0 1.0 0.0
+v 4.0 0.0 1.0
+v 4.0 -1.0 0.0
+f 8 9 10
+f 8 9 11
+f 8 9 12

@@ -20,6 +20,37 @@
         <p class="hint-sm">Schéma <code>gothic-window-v2</code>. Le bouton d'export en bas
           de panneau produit le même schéma depuis les valeurs courantes.</p>
       </section>
+
+      <section class="group" id="printGroup">
+        <div class="lbl">Impression résine</div>
+        <div class="ctrlrow"><label for="printedWidth">Largeur imprimée (mm)</label>
+          <input type="number" id="printedWidth" min="0" step="any" placeholder="non fixée"></div>
+        <p class="hint-sm">Vide : échelle non fixée, impression non vérifiée. L'échelle suit la largeur
+          imprimée : changer <code>Width</code> garde la largeur et change l'échelle. Le fichier reste à
+          1 mm par unité ; le facteur à appliquer dans le slicer est donné au contrôle.</p>
+        <div class="lbl">Imprimante</div>
+        <div class="ctrlrow"><label for="pcMinWall">Paroi min. (mm)</label>
+          <input type="number" id="pcMinWall" class="pc" data-field="minWallMm" min="0" step="any"></div>
+        <div class="ctrlrow"><label for="pcMinHole">Ouverture min. (mm)</label>
+          <input type="number" id="pcMinHole" class="pc" data-field="minHoleMm" min="0" step="any"></div>
+        <div class="ctrlrow"><label for="pcMaxTip">Pointe mince max. (mm)</label>
+          <input type="number" id="pcMaxTip" class="pc" data-field="maxTipLengthMm" min="0" step="any"></div>
+        <div class="ctrlrow"><span>Volume utile x · y · z (mm)</span>
+          <span class="triple">
+            <input type="number" class="pcEnv" min="0" step="any" placeholder="x" aria-label="volume utile x">
+            <input type="number" class="pcEnv" min="0" step="any" placeholder="y" aria-label="volume utile y">
+            <input type="number" class="pcEnv" min="0" step="any" placeholder="z" aria-label="volume utile z">
+          </span></div>
+        <p class="hint-sm">Document <code>print-constraints/v1</code>, gardé par le navigateur. Seuil vide : sa
+          valeur par défaut ; volume vide : non contrôlé.</p>
+        <label class="lbl" for="printConstraintsInput">Import imprimante (JSON)</label>
+        <input type="file" id="printConstraintsInput" accept=".json,application/json">
+        <div class="btnrow">
+          <button id="printConstraintsExportBtn">Export imprimante</button>
+          <button id="printCheckBtn" disabled>Contrôler l'impression</button>
+        </div>
+        <div id="printDetails" class="hint-sm"></div>
+      </section>
     </div>
   </aside>
 

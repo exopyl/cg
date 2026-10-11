@@ -1,0 +1,33 @@
+# Variante SPECULAIRE de cube.mtl, meme texture.
+#
+# Raison d'etre : dans un materiau texture, import_mtl force Ka et Kd a BLANC
+# (mesh_io_obj.cpp, branche map_Kd) et ne reporte du MTL que Ks et Ns. Le seul
+# levier qui fasse depasser 1,0 la couleur eclairee d'un modele texture est donc
+# Ks -- faire varier Ka ou Kd ne changerait rien.
+#
+# Avec Ks = 0, le budget lumineux de sinaia plafonne a 0,99704 : ambiante
+# globale 0,12 plus |0,75 x L0 + 0,30 x L1| = 0,87704. Le canal DIMENSIONNANT
+# est le BLEU, seul canal ou la lumiere de remplissage vaut 0,30 et non 0,28
+# (wxOpenGLCanvas.cpp) ; les canaux rouge et vert plafonnent a 0,98593. La marge
+# sous le seuil est donc de 0,3 % -- lire 1,4 %, la marge des canaux R et V,
+# fait croire a une reserve cinq fois plus large qu elle n est.
+#
+# Ks = 1 porte le sommet du lobe bien au-dela de 1. C'est ce regime qui
+# distingue un ecretage avant texturage d'une absence d'ecretage.
+#
+# Ns 8 : l'exposant traverse tel quel jusqu'a GL_SHININESS (import_mtl divise
+# par 128, ActivateMaterial remultiplie). Un lobe large couvre assez de pixels
+# pour etre mesurable ; un Ns eleve le reduirait a quelques pixels.
+#
+# ORDRE IMPOSE : Ks et Ns doivent PRECEDER map_Kd. Leur recopie vers le
+# MaterialTexture n'a lieu que dans la branche map_Kd de import_mtl, qui lit le
+# materiau courant au moment ou elle s'execute. Les placer apres ramenerait
+# silencieusement le speculaire et l'exposant a leur defaut, sans aucune erreur.
+
+newmtl texture_spec
+Ka 0.0 0.0 0.0
+Kd 0.5 0.5 0.5
+Ks 1.0 1.0 1.0
+Ns 8.0
+illum 2
+map_Kd texture.png

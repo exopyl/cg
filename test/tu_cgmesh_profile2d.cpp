@@ -3,9 +3,12 @@
 #include "../src/cgmesh/profile2d.h"
 
 #include "../src/cgmesh/mesh.h"
+#include "../src/cgmesh/mesh_validation.h"
 #include "../src/cgmesh/polygon2.h"
 
 #include <cmath>
+#include <string>
+#include <utility>
 #include <vector>
 
 // ===========================================================================
@@ -367,4 +370,163 @@ TEST (TEST_cgmesh_profile2d, a_cusped_or_tiny_contour_falls_back_to_a_vertical_w
 		EXPECT_FALSE (sameGeometry (profiled, vertical))
 			<< "une grande ouverture convexe doit garder sa moulure";
 	}
+}
+
+// ---------------------------------------------------------------------------
+//  Anneau final : reduit la ou il n'est pas valide
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Cadre 400 x 200 perce de deux trous carres de 100, separes par une barre de
+// pierre de largeur `bar` (negative : les trous se recouvrent). Les trous sont
+// assez grands pour garder le profil. `reversed` inverse le sens des trois
+// contours (enveloppe CW, trous CCW).
+Polygon2 makeTwoHolesPolygon (float bar, bool reversed = false)
+{
+	const float h = 0.5f * bar;
+	std::vector<std::vector<float>> contours = {
+		{ -200.f, -100.f, 200.f, -100.f, 200.f, 100.f, -200.f, 100.f },
+		{ -100.f - h, -50.f, -100.f - h, 50.f, -h, 50.f, -h, -50.f },
+		{ h, -50.f, h, 50.f, 100.f + h, 50.f, 100.f + h, -50.f } };
+	Polygon2 poly;
+	poly.alloc_contours (3);
+	for (unsigned int c = 0; c < 3; ++c)
+	{
+		std::vector<float> &p = contours[c];
+		if (reversed)
+			for (std::size_t i = 0, j = p.size () - 2; i < j; i += 2, j -= 2)
+			{
+				std::swap (p[i], p[j]);
+				std::swap (p[i + 1], p[j + 1]);
+			}
+		poly.add_contour (c, 4, p.data ());
+	}
+	return poly;
+}
+
+// Triangle isocele d'angle au sommet 20 degres environ, cotes echantillonnes au
+// pas de 2 : l'anneau decale vers la pierre se replie a l'apex.
+Polygon2 makeAcuteApexPolygon ()
+{
+	std::vector<float> pts;
+	const float apexX = 0.f, apexY = 280.f, half = 50.f;
+	const int steps = 140;
+	pts.insert (pts.end (), { -half, 0.f, half, 0.f });
+	for (int k = 1; k < steps; ++k)
+	{
+		const float t = (float)k / (float)steps;
+		pts.insert (pts.end (), { half + t * (apexX - half), t * apexY });
+	}
+	pts.insert (pts.end (), { apexX, apexY });
+	for (int k = 1; k < steps; ++k)
+	{
+		const float t = (float)k / (float)steps;
+		pts.insert (pts.end (), { apexX + t * (-half - apexX), apexY - t * apexY });
+	}
+	Polygon2 poly;
+	poly.alloc_contours (1);
+	poly.add_contour (0, (unsigned int)(pts.size () / 2), pts.data ());
+	return poly;
+}
+
+// Une composante, fermee, manifold, orientee, sans auto-intersection ni face
+// degeneree.
+void expectStrictShell (const Mesh &mesh)
+{
+	MeshValidationOptions options;
+	options.expectedComponents = 1u;
+	const MeshValidationReport r = ValidateMesh (mesh, options);
+	EXPECT_EQ (r.components, 1u);
+	EXPECT_FALSE (r.selfIntersectionTruncated);
+	for (std::size_t k = 0; k < kMeshDefectCount; ++k)
+		EXPECT_EQ (r.counts[k], 0u) << MeshDefectName (static_cast<MeshDefect> (k));
+}
+
+std::vector<unsigned int> reducedContours (const std::vector<ProfileReduction> &reductions)
+{
+	std::vector<unsigned int> out;
+	for (const ProfileReduction &r : reductions)
+		out.push_back (r.contour);
+	return out;
+}
+
+}  // namespace
+
+// Deux trous separes par une barre plus mince que deux largeurs de profil :
+// leurs anneaux decales se touchent. Les deux trous sont reduits, le cadre ne
+// l'est pas ; la piece est une coque stricte. Controle : une barre plus large
+// que deux largeurs ne reduit rien.
+TEST (TEST_cgmesh_profile2d, rings_of_two_holes_closer_than_two_widths_are_reduced)
+{
+	// Largeur 6 : les anneaux des trous avancent de 6 f vers la barre. f est
+	// divise par deux tant que 12 f >= barre, et tombe a 0 sous 5 % ; la barre
+	// 0,5 l'y conduit (f = 0,0625 touche encore, 0,03125 < 5 %).
+	const Profile2D chamfer = chamferSplayProfile (6.0, 10.0);
+	struct Case { float bar; double factor; };
+	for (const Case &c : { Case{ 8.f, 0.5 }, Case{ 1.f, 0.0625 }, Case{ 0.5f, 0.0 }, Case{ 30.f, 1.0 } })
+	{
+		SCOPED_TRACE ("barre " + std::to_string (c.bar));
+		const Polygon2 poly = makeTwoHolesPolygon (c.bar);
+		Mesh mesh;
+		std::vector<ProfileReduction> reductions;
+		ASSERT_NO_THROW (extrudeProfiledToMesh (poly, chamfer, mesh, 0.0, 20.0, &reductions));
+		expectStrictShell (mesh);
+		if (c.factor == 1.0)
+		{
+			EXPECT_TRUE (reductions.empty ());
+			continue;
+		}
+		EXPECT_EQ (reducedContours (reductions), (std::vector<unsigned int>{ 1u, 2u }));
+		for (const ProfileReduction &r : reductions)
+			EXPECT_EQ (r.widthFactor, c.factor);
+	}
+}
+
+// Un defaut deja present a v = 0 -- trous qui se touchent ou se recouvrent,
+// contour qui se recouvre lui-meme, orientation inverse de la convention --
+// n'est pas impute au profil : aucun contour n'est reduit.
+TEST (TEST_cgmesh_profile2d, input_defects_do_not_reduce_the_profile)
+{
+	// Cercle de rayon 150 parcouru sur 2 pi + 0,5 : l'arc de 0 a 0,5 est
+	// parcouru deux fois. Tous les virages sont a gauche, le contour garde
+	// donc son profil.
+	Polygon2 loop;
+	{
+		std::vector<float> pts;
+		const double step = 2.0 * 3.14159265358979 / 64.0;
+		for (double a = 0.0; a <= 2.0 * 3.14159265358979 + 0.5; a += step)
+			pts.insert (pts.end (), { (float)(150.0 * std::cos (a)), (float)(150.0 * std::sin (a)) });
+		loop.alloc_contours (1);
+		loop.add_contour (0, (unsigned int)(pts.size () / 2), pts.data ());
+	}
+	const Profile2D chamfer = chamferSplayProfile (6.0, 10.0);
+	struct Case { const char *name; Polygon2 poly; };
+	const std::vector<Case> cases = {
+		{ "trous qui se touchent", makeTwoHolesPolygon (0.f) },
+		{ "trous qui se recouvrent", makeTwoHolesPolygon (-4.f) },
+		{ "contour qui se recouvre", loop },
+		{ "orientation inverse", makeTwoHolesPolygon (40.f, true) },
+	};
+	for (const Case &c : cases)
+	{
+		SCOPED_TRACE (c.name);
+		Mesh mesh;
+		std::vector<ProfileReduction> reductions;
+		ASSERT_NO_THROW (extrudeProfiledToMesh (c.poly, chamfer, mesh, 0.0, 20.0, &reductions));
+		EXPECT_TRUE (reductions.empty ());
+	}
+}
+
+// Apex convexe aigu : decale sans onglet, l'anneau s'y replie. Le contour est
+// reduit ; la piece est une coque stricte.
+TEST (TEST_cgmesh_profile2d, ring_folded_at_an_acute_apex_is_reduced)
+{
+	const Polygon2 poly = makeAcuteApexPolygon ();
+	Mesh mesh;
+	std::vector<ProfileReduction> reductions;
+	ASSERT_NO_THROW (extrudeProfiledToMesh (poly, chamferSplayProfile (6.0, 10.0), mesh, 0.0, 20.0,
+	                                        &reductions));
+	expectStrictShell (mesh);
+	EXPECT_EQ (reducedContours (reductions), (std::vector<unsigned int>{ 0u }));
 }

@@ -275,6 +275,28 @@ TEST(TEST_cgmesh_contour_validation, orientation_convention_is_selectable)
     EXPECT_TRUE(ValidateContours({outer(reversed(rect(0, 0, 1, 1)))}, o).IsValid());
 }
 
+// Sans imbrication : niveaux -1, ni WrongOrientation ni BadNesting ; les
+// defauts d'aretes restent comptes.
+TEST(TEST_cgmesh_contour_validation, nesting_can_be_skipped)
+{
+    const std::vector<ExtrudeContour> cs = {outer(reversed(rect(0, 0, 10, 10))),   // CW au niveau 0
+                                            hole(rect(20, 20, 21, 21)),            // trou hors de toute enveloppe
+                                            outer(rect(10, 0, 15, 5))};            // touche le premier en x = 10
+    ContourValidationOptions o;
+    o.tolerance = kTol;
+    const auto full = ValidateContours(cs, o);
+    EXPECT_GT(full.Count(ContourDefect::WrongOrientation), 0u);
+    EXPECT_GT(full.Count(ContourDefect::BadNesting), 0u);
+    EXPECT_GT(full.Count(ContourDefect::ContourContact), 0u);
+
+    o.checkNesting = false;
+    const auto edgesOnly = ValidateContours(cs, o);
+    EXPECT_EQ(edgesOnly.Count(ContourDefect::WrongOrientation), 0u);
+    EXPECT_EQ(edgesOnly.Count(ContourDefect::BadNesting), 0u);
+    EXPECT_EQ(edgesOnly.Count(ContourDefect::ContourContact), full.Count(ContourDefect::ContourContact));
+    EXPECT_EQ(edgesOnly.nestingLevel, (std::vector<int>{-1, -1, -1}));
+}
+
 // --- BadNesting --------------------------------------------------------------
 
 TEST(TEST_cgmesh_contour_validation, hole_outside_every_outer)

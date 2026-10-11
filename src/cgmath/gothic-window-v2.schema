@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gothic-tracery/schema/v2/window.schema.json",
   "title": "Gothic Window (v2 — Fig 5.30 + Style)",
-  "description": "Description paramétrique d'une fenêtre gothique, structurée sur le jeu de paramètres de la thèse Havemann (Generative Mesh Modeling, TU Braunschweig 2005, Fig 5.30) plus le paramètre Style (dict de 4 fonctions de champ, Fig 5.31-5.33). Alimente WindowInstance + GothicMeshParams côté engine. Chaque `$comment` note la cible engine et le statut : 🟢 consommé, 🟡 mappé/dérivé, 🔵 requiert le système de styles, ⚪ extension hors-thèse.",
+  "description": "Description paramétrique d'une fenêtre gothique, structurée sur le jeu de paramètres de la thèse Havemann (Generative Mesh Modeling, TU Braunschweig 2005, Fig 5.30) plus le paramètre Style (dict de 4 fonctions de champ, Fig 5.31-5.33). Alimente WindowInstance + GothicMeshParams côté engine. Chaque `$comment` note la cible engine et le statut : 🟢 consommé, 🟡 mappé/dérivé, 🔵 requiert le système de styles, ⚪ extension hors-thèse. Au chargement, un champ absent garde la valeur courante de la fenêtre : les `default` décrivent une fenêtre neuve, ils ne sont pas appliqués.",
   "type": "object",
   "required": ["geometry"],
   "additionalProperties": false,
@@ -57,8 +57,9 @@
       "required": ["type"],
       "properties": {
         "type": { "type": "string", "enum": ["vesica", "teardrop", "soufflet"], "default": "soufflet" },
-        "size": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.85,
-                  "description": "Taille de la forme relativement au champ (1 = remplit le champ)." }
+        "size": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.92,
+                  "description": "Taille de la forme relativement au champ (1 = remplit le champ).",
+                  "$comment": "fixe à 0.92 dans le générateur, valeur exportée ; une autre valeur est lue et signalée field_ignored." }
       }
     }
   },
@@ -108,7 +109,7 @@
         },
         "heightBott": {
           "type": "number",
-          "description": "Fig 5.30 heightBott — niveau Y du bas horizontal de la baie (absolu ; springline à y=0). Absent → baie = arc nu.",
+          "description": "Fig 5.30 heightBott — niveau Y du bas horizontal de la baie (absolu ; springline à y=0). Absent : le corps garde sa valeur. Positif (au-dessus de la naissance) : corps 0, avertissement parameter_clamped.",
           "$comment": "cible: GothicMeshParams.bodyHeight = springlineY - heightBott. 🟡"
         },
         "wallSetback": {
@@ -143,15 +144,15 @@
               "$comment": "cible: subwindowParams.excess. 🟢"
             },
             "layout": {
-              "type": "string", "enum": ["prototype", "uniform"], "default": "prototype",
-              "description": "prototype = pieds extérieurs sur l'arc inset de bdOuter + meneaux intérieurs de bdInner (Fig 5.39, seul layout de la thèse). uniform = count+1 meneaux égaux (extension hors-thèse ; utilise `gap`).",
+              "type": "string", "enum": ["prototype", "uniform"],
+              "description": "prototype = pieds extérieurs sur l'arc inset de bdOuter + meneaux intérieurs de bdInner (Fig 5.39, seul layout de la thèse). uniform = count+1 meneaux égaux (extension hors-thèse ; utilise `gap`). Absent : la disposition garde sa valeur.",
               "$comment": "cible: SubwindowParams::Layout. 🟢 prototype / ⚪ uniform"
             },
             "gap": {
               "title": "Meneaux (layout uniform uniquement)",
               "type": "object",
               "additionalProperties": false,
-              "description": "Ignoré si layout=prototype.",
+              "description": "En layout prototype, gapFraction ne règle pas les meneaux mais borne encore l'offset intérieur.",
               "$comment": "cible: subwindowParams.gap. ⚪",
               "properties": {
                 "mode":          { "type": "string", "enum": ["fraction", "absolute"], "default": "fraction" },
@@ -223,9 +224,9 @@
           "additionalProperties": false,
           "properties": {
             "fill": {
-              "type": "string", "enum": ["plain", "mouchette"], "default": "plain",
-              "description": "plain = champ ajouré simple ; mouchette = forme flamboyante inscrite.",
-              "$comment": "cible: GothicMeshParams.mouchettes (+ fillets requis). 🟢"
+              "type": "string", "enum": ["plain", "mouchette", "none"], "default": "plain",
+              "description": "plain = champ ajouré simple ; mouchette = forme flamboyante inscrite ; none = écoinçons pleins, non ajourés.",
+              "$comment": "cible: GothicMeshParams.fillets + mouchettes. 🟢 ; none ⚪"
             },
             "mouchette": { "$ref": "#/$defs/mouchette" }
           }
@@ -261,6 +262,29 @@
           "type": "number", "minimum": 0, "default": 260,
           "$comment": "cible: GothicMeshParams.zHeight. ⚪"
         }
+      }
+    },
+
+    "thresholds": {
+      "title": "Seuils d'éléments (extension hors-thèse)",
+      "description": "Longueurs en UNITÉS MONDE sous lesquelles le générateur supprime un élément ou plancher une dimension. Elles ne suivent pas la largeur de la baie : pour une baie réduite d'un facteur k à l'identique, les réduire aussi. Toujours exporté ; un champ absent garde sa valeur.",
+      "$comment": "cible: GothicFeatureThresholds (SetFeatureThresholds). ⚪",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "minRosetteRadius":     { "type": "number", "minimum": 0, "default": 1.0, "description": "Rosace gardée seulement si sa jante et son rayon intérieur le dépassent." },
+        "minRingWidth":         { "type": "number", "minimum": 0, "default": 3.0, "description": "Plancher de la largeur d'anneau de la rosace (sinon 0,10 × rayon)." },
+        "minEyeletInset":       { "type": "number", "minimum": 0, "default": 1.5, "description": "Plancher du retrait des écoinçons de l'œil (sinon 0,28 × largeur d'anneau)." },
+        "minSubRosetteRadius":  { "type": "number", "minimum": 0, "default": 3.0, "description": "Sous-rosace de récursion gardée seulement si son rayon le dépasse." },
+        "minMouchetteRadius":   { "type": "number", "minimum": 0, "default": 1.5, "description": "Un champ d'écoinçon plus petit garde un vide simple." },
+        "minFilletInnerOffset": { "type": "number", "minimum": 0, "default": 1.0, "description": "Plancher du retrait des écoinçons : retrait = max(bdInner, ceci)." },
+        "fallbackFilletInset":  { "type": "number", "minimum": 0, "description": "Sans effet (retrait = max(bdInner, minFilletInnerOffset)) : lu pour les documents antérieurs, signalé field_ignored, jamais exporté." },
+        "maxMouchetteInset":    { "type": "number", "minimum": 0, "default": 4.0, "description": "Retrait maximal des écoinçons qui portent des mouchettes." },
+        "chamferWidthAdd":      { "type": "number", "minimum": 0, "default": 2.0, "description": "Largeur de chanfrein = min(0,6 × retrait, 0,45 × bdInner + ceci)." },
+        "minChamferWidth":      { "type": "number", "minimum": 0, "default": 0.5, "description": "Plancher de la largeur de chanfrein." },
+        "barRadiusAdd":         { "type": "number", "minimum": 0, "default": 1.5, "description": "Rayon de barre = min(0,5 × retrait, 0,45 × bdInner + ceci)." },
+        "minBarRadius":         { "type": "number", "minimum": 0, "default": 0.8, "description": "Plancher du rayon de barre." },
+        "minBand":              { "type": "number", "minimum": 0, "default": 0.5, "description": "Plancher de bdOuter et, en disposition Prototype, du meneau (bdInner) ; un réglage relevé donne parameter_clamped." }
       }
     }
   }

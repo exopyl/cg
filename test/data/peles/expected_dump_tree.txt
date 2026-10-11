@@ -1,0 +1,11 @@
+--- arbre de repertoires ---
+racine             : fixture
+profondeur ouverte : 3
+lignes             : 7
+d0 [-] fixture
+d1 [-] _under
+d1 [-] alpha
+d2 [-] inner
+d3 [+] deeper
+d1 [-] Beta
+d1 [-] gamma

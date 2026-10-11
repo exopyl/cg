@@ -71,7 +71,7 @@ seulement, combinés par **intersection / offset / extrusion**.
 
 Deux schémas JSON distincts : **v1** `gothic-tracery.schema` alimente la chaîne SVG
 (`loadInstanceFromJson`) ; **v2** `gothic-window-v2.schema` alimente le maker via
-`ParameterizedGothicWindow::LoadFromJson` (§4.6). Côté mesh, **trefoil** et **foils de
+`ParameterizedGothicWindow::LoadFromJson` (§4.6), qui lit aussi le v1 en le convertissant en v2. Côté mesh, **trefoil** et **foils de
 lancette** ne sont pas rendus (SVG uniquement).
 
 ### 2.2 Intégration maker (pattern `IParameterized`)

@@ -35,7 +35,9 @@
 // repetition d'un sous-graphe.
 //
 #include <memory>
+#include <mutex>
 #include <string>
+#include <vector>
 
 #include "../../core/node.h"
 
@@ -48,8 +50,18 @@ public:
 	GothicWindowNode ();
 
 	const cggraph::NodeDesc &GetDesc () const override;
+	// Echoue (ComputeFailed) quand le rapport de construction porte une erreur :
+	// la forme rend alors un triangle de repli, que l'aval ne doit pas recevoir.
 	bool Compute (cggraph::EvalContext &ctx, const cggraph::ValueList &in,
 	              cggraph::ValueList &out) override;
+
+	// Un compteur par categorie d'avertissement de construction (GothicBuildWarning),
+	// zero compris, sous « gothic.<nom> » (depth_fallback, feature_dropped...).
+	void PublishStats (std::vector<cggraph::NodeStat> &out) const override;
+
+private:
+	mutable std::mutex m_statsMutex;
+	std::vector<cggraph::NodeStat> m_stats;
 };
 
 } // namespace cggraph_nodes

@@ -3,8 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <limits>
+#include <set>
 #include <stdexcept>
+#include <utility>
 
+#include "contour_validation.h"
 #include "mesh.h"
 #include "polygon2.h"
 
@@ -140,8 +144,10 @@ Profile2D translatedInU (const Profile2D &profile, double du)
 // ---------------------------------------------------------------------------
 
 void extrudeProfiledToMesh (const Polygon2 &polygon, const Profile2D &profile, Mesh &out,
-                            double zBottom, double zTop)
+                            double zBottom, double zTop,
+                            std::vector<ProfileReduction> *reductions)
 {
+	if (reductions) reductions->clear();
 	const int nc = polygon.get_n_contours();
 	if (nc <= 0) throw std::runtime_error("extrudeProfiledToMesh: empty polygon");
 
@@ -234,6 +240,93 @@ void extrudeProfiledToMesh (const Polygon2 &polygon, const Profile2D &profile, M
 		// Paroi verticale = profil d'echelle NULLE en largeur : l'anneau decale
 		// retombe sur l'anneau de base, exactement comme l'ancien `off = base`.
 		widthScale[ci] = skip ? 0.0 : ((profW > 0.0) ? (profW_c / profW) : 0.0);
+	}
+
+	// Anneau final, celui du capot arriere, en float comme le tessellateur le
+	// recoit.
+	auto finalRing = [&]()
+	{
+		Polygon2 ring;
+		ring.alloc_contours(nc);
+		std::vector<std::vector<float>> packed(nc);
+		for (int ci = 0; ci < nc; ++ci)
+		{
+			const double vEnd = widthScale[ci] * pp.back().y;
+			packed[ci].resize(2 * base[ci].size());
+			for (size_t i = 0; i < base[ci].size(); ++i)
+			{
+				packed[ci][2*i]   = (float)(base[ci][i].x + vEnd * nrm[ci][i].x);
+				packed[ci][2*i+1] = (float)(base[ci][i].y + vEnd * nrm[ci][i].y);
+			}
+			ring.add_contour(ci, (unsigned int)base[ci].size(), packed[ci].data());
+		}
+		return ring;
+	};
+
+	// Un anneau final qui se replie (apex convexe) ou qui touche un autre anneau
+	// donnerait un capot arriere qui se recouvre. Seuls comptent ces defauts
+	// d'aretes, SelfIntersection et ContourContact, que le decalage peut creer ;
+	// l'imbrication et l'orientation ne sont pas evaluees. Un contour deja
+	// auto-secant, ou une paire deja en contact, sur l'anneau de base (v = 0,
+	// le polygone d'entree) n'est pas impute au profil. Les contours profiles
+	// mis en cause voient leur largeur divisee par deux ; sous 5 % de la largeur
+	// du profil, elle tombe a 0. La boucle s'arrete quand aucun defaut restant
+	// ne cite un contour encore profile.
+	{
+		ContourValidationOptions options;
+		options.orientation       = ContourOrientation::Unchecked;
+		options.checkNesting      = false;
+		options.maxRecordsPerKind = std::numeric_limits<std::size_t>::max();
+		bool baseKnown = false;
+		std::set<unsigned int> baseSelf;
+		std::set<std::pair<unsigned int, unsigned int>> baseContact;
+		const std::vector<double> initialScale = widthScale;
+		for (;;)
+		{
+			const ContourValidationReport report = ValidateContours(finalRing(), options);
+			if (report.Count(ContourDefect::SelfIntersection) == 0
+			    && report.Count(ContourDefect::ContourContact) == 0) break;
+			if (!baseKnown)
+			{
+				const ContourValidationReport base = ValidateContours(polygon, options);
+				for (const ContourDefectRecord &rec : base.records)
+				{
+					if (rec.kind == ContourDefect::SelfIntersection)
+						baseSelf.insert(rec.contours[0]);
+					else if (rec.kind == ContourDefect::ContourContact)
+						baseContact.insert(std::make_pair(rec.contours[0], rec.contours[1]));
+				}
+				baseKnown = true;
+			}
+			std::vector<char> blamed(nc, 0);
+			bool any = false;
+			auto blame = [&](unsigned int c)
+			{
+				if (c < (unsigned int)nc && widthScale[c] > 0.0) { blamed[c] = 1; any = true; }
+			};
+			for (const ContourDefectRecord &rec : report.records)
+			{
+				if (rec.kind == ContourDefect::SelfIntersection && !baseSelf.count(rec.contours[0]))
+					blame(rec.contours[0]);
+				else if (rec.kind == ContourDefect::ContourContact
+				         && !baseContact.count(std::make_pair(rec.contours[0], rec.contours[1])))
+				{
+					blame(rec.contours[0]);
+					blame(rec.contours[1]);
+				}
+			}
+			if (!any) break;
+			for (int ci = 0; ci < nc; ++ci)
+			{
+				if (!blamed[ci]) continue;
+				widthScale[ci] *= 0.5;
+				if (widthScale[ci] < 0.05) widthScale[ci] = 0.0;
+			}
+		}
+		if (reductions)
+			for (int ci = 0; ci < nc; ++ci)
+				if (widthScale[ci] != initialScale[ci])
+					reductions->push_back({ (unsigned int)ci, widthScale[ci] / initialScale[ci] });
 	}
 
 	std::vector<float>        V;

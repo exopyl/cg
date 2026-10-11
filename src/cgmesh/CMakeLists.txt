@@ -68,6 +68,11 @@ if (EMSCRIPTEN)
         # Validateur de maillage : sans dependance hors mesh.h, disponible pour
         # controler un maillage avant export.
         ${PROJECT_SOURCE_DIR}/mesh_validation.cpp
+        ${PROJECT_SOURCE_DIR}/contour_validation.cpp   # validateur de contours 2D, meme role avant extrusion
+        # Validateur de fabrication (impression resine) : region 2D + echelle.
+        # Requiert contour_ops.cpp, declare plus bas.
+        ${PROJECT_SOURCE_DIR}/print_validation.cpp
+        ${PROJECT_SOURCE_DIR}/print_validation_json.cpp   # print-constraints/v1, print-report/v1 (nlohmann)
         # Conteneur ZIP generique (entrees non compressees) : livre l'OBJ et son
         # .mtl en un seul fichier, et servira au 3MF. Aucune dependance -- zlib
         # n'est pas requis pour du "stored".
@@ -127,6 +132,9 @@ if (EMSCRIPTEN)
         ${PROJECT_SOURCE_DIR}/profile2d.cpp
         # architecture gothique (remplage parametrique + primitives)
         ${PROJECT_SOURCE_DIR}/architecture_gothic.cpp
+        ${PROJECT_SOURCE_DIR}/architecture_gothic_region.cpp   # region de pierre, appelee par architecture_gothic.cpp
+        ${PROJECT_SOURCE_DIR}/bar_fusion.cpp   # niveaux 2D de la fusion des barres de moulure (Clipper2)
+        ${PROJECT_SOURCE_DIR}/bar_fusion_parallel.cpp   # fils de la fusion (natif ; sequentiel sous Emscripten)
         ${PROJECT_SOURCE_DIR}/surface_architecture.cpp
         # L-systemes
         ${PROJECT_SOURCE_DIR}/lsystem.cpp
@@ -135,6 +143,8 @@ if (EMSCRIPTEN)
         # interface de parametrage + catalogue de formes
         ${PROJECT_SOURCE_DIR}/parameterized.cpp
         ${PROJECT_SOURCE_DIR}/parameterized_shapes.cpp
+        ${PROJECT_SOURCE_DIR}/parameterized_gothic.cpp
+        ${PROJECT_SOURCE_DIR}/parameterized_gothic_json.cpp   # LoadFromJson / ExportJson de la fenetre gothique
         ${PROJECT_SOURCE_DIR}/parametric_catalog.cpp
         ${PROJECT_SOURCE_DIR}/mesh_solidify.cpp      # option Extrude des formes parametriques
     )
@@ -214,7 +224,7 @@ target_compile_definitions(cgmesh PUBLIC
     TINYGLTF_NO_STB_IMAGE_WRITE
     TINYGLTF_NO_INCLUDE_JSON)
 
-# std::thread (thickness parallelisation) needs pthread on Linux; Threads::Threads
+# std::thread (thickness, slicing and bar fusion parallelisation) needs pthread on Linux; Threads::Threads
 # is a no-op on MSVC. Plain signature (matching the cgimg link above) propagates
 # transitively, so consumers like the test exe link it too.
 find_package(Threads REQUIRED)

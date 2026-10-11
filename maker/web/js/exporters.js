@@ -7,7 +7,9 @@
 //  telechargement.
 //
 //  Le STL reste assemble ici, faute d'un point d'entree WASM ; c'est un candidat
-//  au meme traitement que l'OBJ (MeshIO::export_stl_binary existe deja).
+//  au meme traitement que l'OBJ (MeshIO::export_stl_binary existe deja). Il
+//  passe par la MEME garde qu'OBJ et GLB (gothicPrintReport) : refus sur erreur
+//  de construction, avertissement d'impression.
 //
 //  DEUX CHEMINS le consomment, et ils ne designent pas le maillage de la meme
 //  facon : les pages de FORMES tiennent un objet natif identifie (meshData(id)),
@@ -15,6 +17,8 @@
 //  D'ou deux points d'entree pour un seul encodeur -- c'est la difference que
 //  shell.js et template.js portent partout ailleurs.
 // ===========================================================================
+
+import { guardVerdict, describePrint } from "./print.js";
 
 // Nom de fichier : base saisie par l'utilisateur (nettoyee) + extension.
 export function safeName(base, ext) {
@@ -39,11 +43,64 @@ export function saveBlob(blob, name) {
 //
 // Les octets arrivent en vue typee sur le tas WASM, valide seulement jusqu'au
 // prochain appel : la copie est obligatoire, pas une precaution.
+//
+// Rend le verdict de la garde d'export d'une fenetre gothique (exportVerdict).
+// Un binding en exception n'a rien produit : refus, motif rendu (exportFailed).
 export function downloadObj(Module, id, base) {
-  const res = Module.exportObj(id, base || "model");
+  let res;
+  try {
+    res = Module.exportObj(id, base || "model");
+  } catch (e) {
+    return exportFailed(e);
+  }
   const bytes = new Uint8Array(res.bytes);   // copie hors du tas WASM
-  if (!bytes.length) return;
-  saveBlob(new Blob([bytes], { type: "application/zip" }), res.name + ".zip");
+  if (bytes.length)
+    saveBlob(new Blob([bytes], { type: "application/zip" }), res.name + ".zip");
+  return exportVerdict(res);
+}
+
+// Verdict de la garde d'export d'une Gothic Window (gothicExportGuard, cote
+// WASM) : { refused } quand le rapport de construction porte une erreur (rien
+// n'est telecharge), { warning } quand le maillage exporte n'est pas strict,
+// { print } le rapport d'impression (print-report/v1), { printFailure } quand
+// il n'a pas pu etre produit ou lu ; null pour toute autre forme.
+export function exportVerdict(res) {
+  return guardVerdict(res);
+}
+
+// Binding d'export ou de garde en exception : rien n'est telecharge, comme pour
+// un refus. Le motif reste neutre : l'exception peut venir de la garde comme de
+// l'ecriture des octets, et de toute forme ; une geometrie non jugee par la
+// garde arrive, elle, en refus nomme du WASM (guardVerdict).
+function exportFailed(e) {
+  console.error(e);
+  return { refused: `export impossible (${(e && e.message) || e})` };
+}
+
+// Affiche un verdict d'export : refus, maillage non strict, defaut d'impression,
+// portee partielle ou erreur en banniere (createBanner, ui.js) ; sinon la
+// banniere est effacee -- sauf un avertissement d'environnement scelle (seal),
+// que clear() preserve -- et l'etat de l'impression (echelle non fixee, piece
+// imprimable) va dans la ligne d'etat.
+export function reportExportVerdict(banner, verdict, setStatus) {
+  if (verdict && verdict.refused !== undefined) {
+    banner.report(`Export refusé — ${verdict.refused}`);
+    return;
+  }
+  const alerts = [], notes = [];
+  if (verdict && verdict.warning !== undefined) alerts.push(`maillage non strict — ${verdict.warning}`);
+  if (verdict && verdict.printFailure !== undefined)
+    alerts.push(`contrôle d'impression indisponible — ${verdict.printFailure}`);
+  else if (verdict && verdict.print) {
+    const d = describePrint(verdict.print);
+    (d.alert ? alerts : notes).push(d.text);
+  }
+  if (alerts.length) {
+    banner.report(`Export effectué, ${alerts.join(" ; ")}`);
+    return;
+  }
+  banner.clear();
+  if (notes.length && setStatus) setStatus(`Export effectué · ${notes.join(" · ")}`);
 }
 
 // Meme archive, source nodale : `port` est un port de sortie du graphe, pas un
@@ -63,12 +120,18 @@ export function downloadObjFromGraph(Module, port, base) {
 // d'orientation, sur son noeud de scene.
 //
 // Meme regle de copie que l'OBJ : la vue typee rendue par le WASM n'est valide
-// que jusqu'au prochain appel.
+// que jusqu'au prochain appel. Meme verdict rendu.
 export function downloadGlb(Module, id, base) {
-  const res = Module.exportGlb(id, base || "model");
+  let res;
+  try {
+    res = Module.exportGlb(id, base || "model");
+  } catch (e) {
+    return exportFailed(e);
+  }
   const bytes = new Uint8Array(res.bytes);   // copie hors du tas WASM
-  if (!bytes.length) return;
-  saveBlob(new Blob([bytes], { type: "model/gltf-binary" }), res.name + ".glb");
+  if (bytes.length)
+    saveBlob(new Blob([bytes], { type: "model/gltf-binary" }), res.name + ".glb");
+  return exportVerdict(res);
 }
 
 // Meme fichier, source nodale : `port` est un port de sortie du graphe, pas un
@@ -81,12 +144,24 @@ export function downloadGlbFromGraph(Module, port, base) {
   return true;
 }
 
+// Garde d'abord (gothicPrintReport : Regenerate puis verdict, sans octets),
+// comme OBJ et GLB : un refus ne telecharge rien, une garde en exception non
+// plus (exportFailed). L'echec du seul controle d'impression arrive en
+// printFailure et laisse partir le STL. Rend le verdict (exportVerdict).
 export function downloadStl(Module, id, base) {
+  let verdict;
+  try {
+    verdict = guardVerdict(Module.gothicPrintReport(id));
+  } catch (e) {
+    return exportFailed(e);
+  }
+  if (verdict && verdict.refused !== undefined) return verdict;
   const d = Module.meshData(id);
   const positions = new Float32Array(d.positions); // copie hors du tas WASM
   const indices = new Uint32Array(d.indices);
   saveBlob(new Blob([buildStl(positions, indices)], { type: "model/stl" }),
            safeName(base, ".stl"));
+  return verdict;
 }
 
 // Meme encodeur, source nodale : `port` est un port de sortie du graphe, pas un

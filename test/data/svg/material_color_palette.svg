@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  TEMOIN DES MaterialColor : six formes, six couleurs de remplissage franchement
+  distinctes, chacune assez large pour couvrir des milliers de pixels a l'ecran.
+
+  RAISON D'ETRE. import_svg cree un MaterialColor par couleur de remplissage
+  (import_svg.cpp, makeColorMaterial), et c'est la SEULE facon d'obtenir cette
+  classe de materiau : tout importateur de maillage du depot produit un
+  MaterialColorExt ou un MaterialTexture. Sans ce fichier, la branche
+  MATERIAL_COLOR de MaterialRenderer::ActivateMaterial n'est atteinte par aucune
+  mesure.
+
+  CE QUI EST MESURE AVEC. Un MaterialColor ne porte sa couleur que par glColor et
+  GL_COLOR_MATERIAL, qui n'existent plus sous programme lie. Le releve est donc la
+  comparaison `shader off` / `shader on` : les six teintes doivent survivre au
+  passage du pipeline fixe au programme de surface. Instrument :
+  sinaia/tools/shader-captures.ps1, ou ce fichier est un temoin automatique.
+
+  POURQUOI PAS Ghostscript_Tiger.svg, qui porte pourtant 38 remplissages : ses
+  formes sont fines, nombreuses et de teintes voisines. Un ecart y serait dilue
+  dans l'antialiasing des contours au lieu de se lire sur des aplats. Un detecteur
+  se construit sur des aplats larges et satures.
+
+  LES SIX COULEURS sont choisies aux sommets et aretes du cube RVB : deux
+  quelconques d'entre elles different d'au moins 255 sur un canal, donc aucune
+  confusion n'est possible a la lecture des pixels.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"
+     viewBox="0 0 300 200">
+  <rect x="10"  y="10"  width="80" height="80" fill="#ff0000"/>
+  <rect x="110" y="10"  width="80" height="80" fill="#00ff00"/>
+  <rect x="210" y="10"  width="80" height="80" fill="#0000ff"/>
+  <rect x="10"  y="110" width="80" height="80" fill="#ffff00"/>
+  <rect x="110" y="110" width="80" height="80" fill="#ff00ff"/>
+  <rect x="210" y="110" width="80" height="80" fill="#00ffff"/>
+</svg>

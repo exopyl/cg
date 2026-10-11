@@ -1,11 +1,15 @@
 #include "gothic_window.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <mutex>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "../../../cgmesh/mesh.h"
 #include "../../../cgmesh/parameterized.h"
-#include "../../../cgmesh/parameterized_shapes.h"
+#include "../../../cgmesh/parameterized_gothic.h"
 #include "../node_support.h"
 #include "../value_types.h"
 
@@ -129,6 +133,18 @@ bool GothicWindowNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueL
 
 	shape.Regenerate ();
 
+	const GothicBuildReport &report = shape.LastBuildReport ();
+	{
+		std::vector<cggraph::NodeStat> stats;
+		for (std::size_t k = 0; k < kGothicBuildWarningCount; ++k)
+			stats.push_back ({ std::string ("gothic.") + GothicBuildWarningName (static_cast<GothicBuildWarning> (k)),
+			                   static_cast<double> (report.counts[k]) });
+		const std::lock_guard<std::mutex> held (m_statsMutex);
+		m_stats = std::move (stats);
+	}
+	if (report.HasErrors ())
+		return false;
+
 	// CESSION : le maillage de travail est cede, jamais recopie.
 	std::shared_ptr<Mesh> mesh (shape.TakeMesh ());
 	if (mesh == nullptr)
@@ -136,6 +152,12 @@ bool GothicWindowNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueL
 
 	out[0] = cggraph::Value::Make (Types ().mesh, std::move (mesh));
 	return true;
+}
+
+void GothicWindowNode::PublishStats (std::vector<cggraph::NodeStat> &out) const
+{
+	const std::lock_guard<std::mutex> held (m_statsMutex);
+	out.insert (out.end (), m_stats.begin (), m_stats.end ());
 }
 
 } // namespace cggraph_nodes
