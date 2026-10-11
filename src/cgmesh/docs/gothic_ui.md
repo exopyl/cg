@@ -99,7 +99,7 @@ Produisent directement un `Mesh` ou un `Polygon2`, peu de paramètres :
   l'interactif (le JSON reste utile pour charger des presets).
 
 ### 2.2 Le pattern IParameterized
-Un `ParameterizedGothicWindow : ParameterizedMesh` (dans `parameterized_shapes.{h,cpp}`) :
+Un `ParameterizedGothicWindow : ParameterizedMesh` (dans `parameterized_gothic.{h,cpp}`) :
 - membres = les paramètres exposés (float/int/bool/enum) ;
 - `GetParameters()` renvoie la liste typée ;
 - `Regenerate()` : remplit un `WindowInstance` depuis les membres →

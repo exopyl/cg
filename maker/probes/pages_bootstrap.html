@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Sonde : les pages affichent-elles leur modele au chargement ?</title>
+  <style>
+    body { margin: 0; font: 13px/1.5 ui-monospace, monospace; }
+    iframe { width: 900px; height: 560px; border: 0; display: block; }
+    #out { white-space: pre-wrap; padding: 8px; }
+  </style>
+</head>
+<body>
+  <!-- Les deux familles de page : une page de FORMES (shell.js, regenerate) et
+       une page GABARIT (template.js, graphExportObj). Les deux amorcent leur
+       viseur avec la chaine OBJ du moteur natif, qui porte desormais `mtllib`. -->
+  <iframe id="shapes" src="../web/shapes.html"></iframe>
+  <iframe id="svg" src="../web/svg.html"></iframe>
+  <div id="out"></div>
+  <script type="module" src="./pages_bootstrap.js"></script>
+</body>
+</html>

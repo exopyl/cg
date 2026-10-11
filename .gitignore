@@ -64,3 +64,8 @@ AGENTS.md
 
 # Chemins des dependances externes, propres a chaque machine (cf. T3 du plan cgmesh).
 CMakeUserPresets.json
+
+# maker: copies made by the maker build from test/data
+maker/web/data/templates/
+maker/web/data/fonts/
+maker/web/data/svg/

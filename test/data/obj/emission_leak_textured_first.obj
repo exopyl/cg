@@ -1,0 +1,58 @@
+# emission_leak_textured_first.obj
+#
+# PAIRE DE FUITE D'ETAT : ces deux fichiers ne different QUE par l'ordre de
+# dessin, et c'est tout leur interet. Meme geometrie, memes deux materiaux,
+# memes affectations. Sans fuite d'etat, ils rendent la MEME IMAGE ; toute
+# difference est un canal de materiau qu'une branche d'ActivateMaterial n'a pas
+# pose, et qui a donc ete herite du materiau precedent.
+#
+# DEUX FAITS SANS LESQUELS CETTE PAIRE NE MESURE RIEN -- ne pas la « simplifier »
+# sans les avoir relus :
+#
+#   1. La fuite n'existe qu'entre deux plages d'un MEME MAILLAGE.
+#      VBOManager::DrawMaterialGroups rappelle ActivateDefaultMaterial() au
+#      debut de chaque maillage, ce qui repose GL_EMISSION. Repartir les deux
+#      materiaux sur deux fichiers, ou sur deux objets charges par `open` puis
+#      `append`, ne montrerait rien.
+#
+#   2. L'ordre de dessin est celui des blocs newmtl, PAS celui des faces.
+#      Mesh::BuildRenderData regroupe les faces dans un std::map indexe par
+#      identifiant de materiau (mesh.cpp:826) puis aplatit par iteration : les
+#      plages sortent triees par identifiant, c'est-a-dire dans l'ordre de
+#      declaration du MTL. Reordonner les usemtl ou les faces ne changerait pas
+#      l'ordre de dessin.
+#
+# Le levier est donc l'ordre des deux blocs newmtl du .mtl, et lui seul.
+# Instrument : sinaia/tools/draw-order-captures.ps1
+#
+# Geometrie et affectations IDENTIQUES dans les deux variantes de la paire.
+# Seul le fichier nomme par mtllib change, donc seul l'ordre de dessin change.
+
+mtllib emission_leak_textured_first.mtl
+
+g emission_leak
+
+v -1.2 0.0 0.0
+v -0.2 0.0 0.0
+v -0.2 1.0 0.0
+v -1.2 1.0 0.0
+v  0.2 0.0 0.0
+v  1.2 0.0 0.0
+v  1.2 1.0 0.0
+v  0.2 1.0 0.0
+
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+vt 0.0 1.0
+
+# Quad de gauche : le materiau emissif. Il sort blanc et se confond avec le
+# fond ; il n'est la que pour poser GL_EMISSION, pas pour etre regarde.
+usemtl emissive
+f 1 2 3
+f 1 3 4
+
+# Quad de droite : la plage texturee, celle que l'on MESURE.
+usemtl textured
+f 5/1 6/2 7/3
+f 5/1 7/3 8/4

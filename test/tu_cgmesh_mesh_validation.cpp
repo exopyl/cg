@@ -9,6 +9,7 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../src/cgmesh/mesh.h"
@@ -685,6 +686,276 @@ TEST(TEST_cgmesh_mesh_validation, coplanar_overlap_matches_exact_reference_at_fi
     EXPECT_GT(coplanar.disjoint, 3000);
     EXPECT_EQ(coplanar.missed, 0);
     EXPECT_EQ(coplanar.falsePositive, 0);
+}
+
+// Deux facettes disjointes presque paralleles (diedre 3,8 degres, 0,0098 l'une
+// de l'autre, soit 6,7 t) : un sommet a moins de t du plan de l'autre triangle
+// n'est pas une extremite du segment d'intersection. Temoin : la meme paire,
+// B translate le long de la droite commune aux deux plans (distances aux plans
+// inchangees) jusqu'a recouvrir A, est signalee.
+TEST(TEST_cgmesh_mesh_validation, nearly_parallel_disjoint_triangles_do_not_intersect)
+{
+    const std::vector<float> v = {113.7200f, 263.3420f, 14.963f, 117.2282f, 267.3741f, 14.963f,
+                                  113.3555f, 263.6837f, 15.563f, 111.2369f, 261.9752f, 16.163f,
+                                  113.3327f, 263.6609f, 15.563f, 114.7679f, 265.9162f, 16.163f};
+    const Mesh pair = makeMesh(v, {0, 1, 2, 3, 4, 5});
+    for (const double tol : {5e-4, 1.4582e-3, 3e-3})
+        EXPECT_EQ(count(validate(pair, tol), MeshDefect::SelfIntersection), 0u) << "t = " << tol;
+
+    auto at = [&v](int k) { return P3 {v[3 * k], v[3 * k + 1], v[3 * k + 2]}; };
+    P3 line = cross3(cross3(sub3(at(1), at(0)), sub3(at(2), at(0))), cross3(sub3(at(4), at(3)), sub3(at(5), at(3))));
+    const double len = std::sqrt(dot3(line, line));
+    std::vector<float> shifted = v;
+    for (int k = 3; k < 6; ++k)
+        for (int c = 0; c < 3; ++c)
+            shifted[3 * k + c] = static_cast<float>(v[3 * k + c] + 2.5 * line[c] / len);
+    const Mesh crossing = makeMesh(shifted, {0, 1, 2, 3, 4, 5});
+    EXPECT_EQ(count(validate(crossing, 5e-4), MeshDefect::SelfIntersection), 1u) << "temoin : paire translatee";
+}
+
+namespace
+{
+    double uniform(SplitMix64 &rng) { return static_cast<double>(rng.next() >> 11) * 0x1p-53; }
+    double snap(double x, double step) { return std::round(x / step) * step; }
+
+    enum class NearParallelMode { General, VertexNearPlane, Contact };
+
+    // Paire presque parallele : A de pente <= 0,25, B incline de 1 a 10 degres
+    // sur A. Coordonnees dyadiques de module < 12 (A au 1/512, B au 1/1024,
+    // point de contact au 1/2048) : les distances non normalisees aux plans
+    // sont exactes en double, leurs signes aussi.
+    //  - General : B coupe le plan de A le long d'une droite passant par un
+    //    point de A ;
+    //  - VertexNearPlane : un sommet de B a moins de 2t du plan de A, au-dessus
+    //    ou au-dessous d'un point de A ;
+    //  - Contact : un sommet de B est un point de A (sommet, milieu d'arete ou
+    //    point interieur), les deux autres du meme cote du plan de A.
+    std::array<P3, 6> nearParallelPair(SplitMix64 &rng, NearParallelMode mode, double tol)
+    {
+        const double pi = std::acos(-1.0);
+        auto point = [&rng](double step) { return P3 {snap(8 * uniform(rng), step), snap(8 * uniform(rng), step), 0.0}; };
+
+        std::array<P3, 6> q;
+        const double a0 = uniform(rng), ax = 0.5 * uniform(rng) - 0.25, ay = 0.5 * uniform(rng) - 0.25;
+        for (int k = 0; k < 3; ++k)
+        {
+            q[k] = point(1.0 / 512);
+            q[k][2] = snap(a0 + ax * q[k][0] + ay * q[k][1], 1.0 / 512);
+        }
+        const P3 nA = cross3(sub3(q[1], q[0]), sub3(q[2], q[0]));
+        auto planeA = [&](double x, double y) {
+            return nA[2] == 0 ? 0.0 : q[0][2] - (nA[0] * (x - q[0][0]) + nA[1] * (y - q[0][1])) / nA[2];
+        };
+
+        const double theta = (1.0 + 9.0 * uniform(rng)) * pi / 180.0;
+        const double phi   = 2.0 * pi * uniform(rng);
+        const double gx = std::tan(theta) * std::cos(phi), gy = std::tan(theta) * std::sin(phi);
+
+        auto pointOfA = [&]() {
+            const double u = uniform(rng), w = uniform(rng);
+            const double a = std::min(u, w), b = std::max(u, w) - a, c = 1.0 - a - b;
+            P3 p;
+            for (int i = 0; i < 2; ++i)
+                p[i] = snap(a * q[0][i] + b * q[1][i] + c * q[2][i], 1.0 / 1024);
+            p[2] = planeA(p[0], p[1]);
+            return p;
+        };
+
+        P3 pivot {};
+        switch (mode)
+        {
+        case NearParallelMode::Contact:
+            switch (rng.next() % 3)
+            {
+            case 0: pivot = q[0]; break;
+            case 1: pivot = {(q[0][0] + q[1][0]) / 2, (q[0][1] + q[1][1]) / 2, (q[0][2] + q[1][2]) / 2}; break;
+            default:
+                pivot = {(q[0][0] + q[1][0] + 2 * q[2][0]) / 4, (q[0][1] + q[1][1] + 2 * q[2][1]) / 4,
+                         (q[0][2] + q[1][2] + 2 * q[2][2]) / 4};
+                break;
+            }
+            break;
+        case NearParallelMode::VertexNearPlane:
+            pivot = pointOfA();
+            pivot[2] = snap(pivot[2] + (4.0 * uniform(rng) - 2.0) * tol, 1.0 / 1024);
+            break;
+        case NearParallelMode::General:
+            pivot = pointOfA();
+            break;
+        }
+        const double lift = pivot[2] - planeA(pivot[0], pivot[1]);
+        for (int k = 3; k < 6; ++k)
+        {
+            if (k == 3 && mode != NearParallelMode::General)
+            {
+                q[k] = pivot;
+                continue;
+            }
+            q[k] = point(1.0 / 1024);
+            double h = gx * (q[k][0] - pivot[0]) + gy * (q[k][1] - pivot[1]);
+            if (mode == NearParallelMode::Contact)
+                h = std::fabs(h);
+            q[k][2] = snap(planeA(q[k][0], q[k][1]) + lift + h, 1.0 / 1024);
+        }
+        return q;
+    }
+
+    struct NearParallelTruth
+    {
+        bool   undecided = true;
+        bool   crossing  = false;
+        double sinDihedral = 0.0;
+        double maxPlaneDistance = 0.0;   // max des |distances| aux plans, deux sens
+        // Chacun a des sommets a plus de t des deux cotes du plan de l'autre, et
+        // un sommet est a au plus t du plan de l'autre : la regle b) du
+        // validateur compare alors des intervalles dont une extremite est voisine
+        // de ce sommet.
+        bool   straddlesWithVertexNearPlane = false;
+    };
+
+    // Reference : signes exacts des distances aux plans, puis intervalles
+    // exacts sur D = nA x nB aux changements de signe. Traversee : chacun a des
+    // sommets a plus de 3t des deux cotes du plan de l'autre et les segments se
+    // recouvrent sur plus de 3t. Sans traversee : l'un reste d'un seul cote
+    // (ferme) du plan de l'autre, ou les segments ne se recouvrent pas.
+    NearParallelTruth nearParallelTruth(const std::array<P3, 6> &q, double tol)
+    {
+        NearParallelTruth r;
+        const P3 nA = cross3(sub3(q[1], q[0]), sub3(q[2], q[0]));
+        const P3 nB = cross3(sub3(q[4], q[3]), sub3(q[5], q[3]));
+        const P3 D  = cross3(nA, nB);
+        if (dot3(nA, nA) == 0 || dot3(nB, nB) == 0 || dot3(D, D) == 0)
+            return r;
+        const double lA = std::sqrt(dot3(nA, nA)), lB = std::sqrt(dot3(nB, nB)), lD = std::sqrt(dot3(D, D));
+        r.sinDihedral = lD / (lA * lB);
+        std::array<double, 3> dA {}, dB {};
+        bool vertexNearPlane = false;
+        for (int k = 0; k < 3; ++k)
+        {
+            dA[k] = dot3(sub3(q[k], q[3]), nB);
+            dB[k] = dot3(sub3(q[3 + k], q[0]), nA);
+            r.maxPlaneDistance = std::max({r.maxPlaneDistance, std::fabs(dA[k]) / lB, std::fabs(dB[k]) / lA});
+            vertexNearPlane = vertexNearPlane || std::fabs(dA[k]) <= tol * lB || std::fabs(dB[k]) <= tol * lA;
+        }
+        if (r.maxPlaneDistance <= 3 * tol)
+            return r;
+        auto straddles = [](const std::array<double, 3> &d, double m) {
+            return *std::max_element(d.begin(), d.end()) > m && *std::min_element(d.begin(), d.end()) < -m;
+        };
+        r.undecided = false;
+        r.straddlesWithVertexNearPlane = vertexNearPlane && straddles(dA, tol * lB) && straddles(dB, tol * lA);
+        if (!straddles(dA, 0.0) || !straddles(dB, 0.0))
+            return r;
+        auto interval = [&](int o, const std::array<double, 3> &d) {
+            double lo = 1e300, hi = -1e300;
+            auto take = [&](const P3 &x) {
+                lo = std::min(lo, dot3(x, D) / lD);
+                hi = std::max(hi, dot3(x, D) / lD);
+            };
+            for (int i = 0; i < 3; ++i)
+            {
+                const int j = (i + 1) % 3;
+                const P3 &a = q[o + i], &b = q[o + j];
+                if (d[i] == 0)
+                    take(a);
+                if ((d[i] > 0 && d[j] < 0) || (d[i] < 0 && d[j] > 0))
+                {
+                    const double s = d[i] / (d[i] - d[j]);
+                    take({a[0] + s * (b[0] - a[0]), a[1] + s * (b[1] - a[1]), a[2] + s * (b[2] - a[2])});
+                }
+            }
+            return std::make_pair(lo, hi);
+        };
+        const auto [la, ha] = interval(0, dA);
+        const auto [lb, hb] = interval(3, dB);
+        const double overlap = std::min(ha, hb) - std::max(la, lb);
+        if (overlap > 3 * tol && straddles(dA, 3 * tol * lB) && straddles(dB, 3 * tol * lA))
+            r.crossing = true;
+        else if (overlap > 1e-9)
+            r.undecided = true;
+        return r;
+    }
+
+    struct NearParallelTally
+    {
+        int crossing = 0, missed = 0, disjoint = 0, contact = 0, falsePositive = 0;
+        int nearPlaneDisjoint = 0;   // sans traversee, straddlesWithVertexNearPlane
+        int monotonicityChecked = 0, nonMonotonic = 0;
+    };
+
+    NearParallelTally fuzzNearParallel(std::uint64_t seed, int pairs, double tol, const std::vector<double> &ladder)
+    {
+        const double sin1 = std::sin(std::acos(-1.0) / 180.0), sin10 = std::sin(std::acos(-1.0) / 18.0);
+        SplitMix64 rng {seed};
+        NearParallelTally t;
+        for (int it = 0; it < pairs; ++it)
+        {
+            const auto mode = static_cast<NearParallelMode>(it % 3);
+            const std::array<P3, 6> q = nearParallelPair(rng, mode, tol);
+            const bool bounded = std::all_of(q.begin(), q.end(), [](const P3 &p) {
+                return std::fabs(p[0]) < 12 && std::fabs(p[1]) < 12 && std::fabs(p[2]) < 12;
+            });
+            const NearParallelTruth truth = nearParallelTruth(q, tol);
+            if (!bounded || truth.sinDihedral < sin1 || truth.sinDihedral > sin10)
+                continue;
+
+            if (truth.maxPlaneDistance > 2 * ladder.back())
+            {
+                ++t.monotonicityChecked;
+                bool previous = true;
+                for (double s : ladder)
+                {
+                    const bool reported = selfIntersections(q, s) > 0;
+                    if (reported && !previous)
+                    {
+                        ++t.nonMonotonic;
+                        break;
+                    }
+                    previous = reported;
+                }
+            }
+
+            if (truth.undecided)
+                continue;
+            const bool reported = selfIntersections(q, tol) > 0;
+            if (truth.crossing)
+            {
+                ++t.crossing;
+                t.missed += reported ? 0 : 1;
+                continue;
+            }
+            ++t.disjoint;
+            t.contact += mode == NearParallelMode::Contact ? 1 : 0;
+            t.nearPlaneDisjoint += truth.straddlesWithVertexNearPlane ? 1 : 0;
+            t.falsePositive += reported ? 1 : 0;
+        }
+        return t;
+    }
+}
+
+// Paires presque paralleles (diedre de 1 a 10 degres), comparees a une
+// reference exacte : aucune traversee manquee, aucune paire disjointe ou en
+// simple contact signalee, et un signalement monotone en tolerance (hors
+// branche coplanaire, une paire signalee a t l'est a toute tolerance plus fine). Seuils de non-vacuite : la
+// moitie environ des comptes mesures (MSVC : 808 traversees, 4 080 sans
+// traversee dont 1 745 contacts et 178 a sommet voisin d'un plan, 5 706 paires
+// suivies en tolerance).
+TEST(TEST_cgmesh_mesh_validation, self_intersection_matches_exact_reference_on_nearly_parallel_pairs)
+{
+    const NearParallelTally t = fuzzNearParallel(0x9A7A11E1u, 6000, 1e-2, {2.5e-3, 5e-3, 1e-2, 2e-2});
+    EXPECT_GT(t.crossing, 400);
+    EXPECT_GT(t.disjoint, 2000);
+    EXPECT_GT(t.contact, 850);
+    EXPECT_GT(t.nearPlaneDisjoint, 80);
+    EXPECT_EQ(t.missed, 0);
+    EXPECT_EQ(t.falsePositive, 0);
+    EXPECT_GT(t.monotonicityChecked, 2800);
+    EXPECT_EQ(t.nonMonotonic, 0);
+    RecordProperty("crossing_cases", t.crossing);
+    RecordProperty("non_crossing_cases", t.disjoint);
+    RecordProperty("contact_cases", t.contact);
+    RecordProperty("near_plane_non_crossing_cases", t.nearPlaneDisjoint);
+    RecordProperty("monotonicity_checked", t.monotonicityChecked);
 }
 
 TEST(TEST_cgmesh_mesh_validation, separated_and_adjacent_triangles_do_not_intersect)

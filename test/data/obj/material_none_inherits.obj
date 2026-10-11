@@ -1,0 +1,51 @@
+# material_none_inherits.obj
+#
+# TEMOIN DE LA PLAGE SANS MATERIAU. Le quad de GAUCHE est declare AVANT tout
+# `usemtl` : ses faces gardent donc l'identifiant MATERIAL_NONE, que
+# Mesh::InitFaces pose a l'initialisation et que import_obj n'ecrase que
+# lorsqu'un `usemtl` a ete vu (mesh_io_obj.cpp, garde `usemtl != -1`). Le quad de
+# DROITE porte un materiau texture.
+#
+# CE QUE CELA EXERCE. MATERIAL_NONE vaut (unsigned)-1, donc la plus GRANDE clef
+# du tri par identifiant de Mesh::BuildPolygonRenderData : la plage sans materiau est
+# toujours dessinee EN DERNIER, apres toutes les autres. Si la boucle de dessin
+# ne repose pas d'etat pour elle, elle herite de la texture liee, des uniformes
+# et des canaux de materiau de la plage precedente -- systematiquement, et non
+# par hasard d'ordonnancement.
+#
+# L'ORACLE. Le quad de gauche ne doit porter AUCUN motif de la texture. Avant
+# correction il affiche les pastilles du de ; apres, il est uniforme, eclaire par
+# le materiau par defaut. Mesure : l'ecart-type de luminance a l'interieur du
+# quad, qui separe un aplat d'un motif sans dependre de la couleur du materiau
+# par defaut.
+#
+# Les deux quads portent des UV : sans elles, `info.hasTexCoords` serait faux et
+# l'heritage ne se verrait pas.
+
+mtllib material_none_inherits.mtl
+
+g material_none_inherits
+
+v -1.2 0.0 0.0
+v -0.2 0.0 0.0
+v -0.2 1.0 0.0
+v -1.2 1.0 0.0
+v  0.2 0.0 0.0
+v  1.2 0.0 0.0
+v  1.2 1.0 0.0
+v  0.2 1.0 0.0
+
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+vt 0.0 1.0
+
+# Quad de GAUCHE, AVANT tout usemtl : faces a MATERIAL_NONE. C'est lui qu'on
+# mesure. Ne PAS deplacer ces deux lignes apres le usemtl ci-dessous.
+f 1/1 2/2 3/3
+f 1/1 3/3 4/4
+
+# Quad de DROITE : la plage texturee dont la precedente heritait.
+usemtl textured
+f 5/1 6/2 7/3
+f 5/1 7/3 8/4

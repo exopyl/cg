@@ -127,7 +127,7 @@ body {
 }
 .preview figcaption { font-size: 11px; color: var(--muted); }
 
-select, input[type=file], input[type=text], button {
+select, input[type=file], input[type=text], input[type=number], button {
   font: inherit;
   color: var(--fg);
   background: var(--panel2);
@@ -136,7 +136,11 @@ select, input[type=file], input[type=text], button {
   padding: 8px;
 }
 select, input[type=text] { width: 100%; }
-input[type=text]:focus { outline: none; border-color: var(--accent); }
+input[type=text]:focus, input[type=number]:focus { outline: none; border-color: var(--accent); }
+/* Champ numerique d'une ligne de controle (impression) : largeur fixe, a droite. */
+.ctrlrow input[type=number] { width: 6.5em; padding: 4px 6px; }
+.ctrlrow .triple { display: flex; gap: 4px; }
+.ctrlrow .triple input[type=number] { width: 4.2em; }
 input[type=file] { font-size: 12px; }
 
 button {

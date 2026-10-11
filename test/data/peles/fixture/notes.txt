@@ -1,0 +1,1 @@
+fixture de peles : ce fichier ne doit PAS apparaitre dans --dump-files.

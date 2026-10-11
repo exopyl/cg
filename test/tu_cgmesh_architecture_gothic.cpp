@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../src/cgmesh/architecture_gothic.h"
+#include "../src/cgmesh/contour_validation.h"
 
 namespace
 {
@@ -67,11 +68,28 @@ namespace
 // Polygon construction
 //
 
+// With a body, the lancets stop a sill band (the outer offset) above the frame
+// bottom : each is a hole.
 TEST(TEST_cgmesh_architecture_gothic, BuildBayPolygonHasOneOuterPlusLancetHoles)
 {
     WindowGeometry g = buildTypicalGeom();
-    Polygon2 poly = buildBayStonePolygon(g);
+    GothicMeshParams params;
+    params.bodyHeight = 50.0;
+    Polygon2 poly = buildBayStonePolygon(g, params);
     EXPECT_EQ(poly.get_n_contours(), 1 + (int) g.subwindows.lancets.size());
+}
+
+// Without a body, the lancet feet lie on the frame chord : the direct assembly
+// has contour contacts, the region is repaired by the boolean and each lancet
+// becomes a notch of the single outer contour.
+TEST(TEST_cgmesh_architecture_gothic, BuildBayPolygonWithoutBodyRepairsLancetsOnTheFrameChord)
+{
+    WindowGeometry g = buildTypicalGeom();
+    GothicBuildReport report;
+    Polygon2 poly = buildBayStonePolygon(g, GothicMeshParams(), &report);
+    EXPECT_EQ(report.Count(GothicBuildWarning::RegionRepaired), 1u);
+    EXPECT_EQ(poly.get_n_contours(), 1);
+    EXPECT_TRUE(ValidateContours(poly).IsValid());
 }
 
 TEST(TEST_cgmesh_architecture_gothic, BuildBayPolygonOuterContourIsCcw)
@@ -256,9 +274,12 @@ TEST(TEST_cgmesh_architecture_gothic, BuildBayPolygonRichHasExpectedContourCount
 {
     // Outer + 2 plain lancets + rosette flower + 6 rosette spandrel fillets = 10.
     // (The rosette foil ring is cut as ONE connected flower void plus one eyelet
-    //  fillet per foil, between the foils and the ring.)
+    //  fillet per foil, between the foils and the ring.) A body keeps the
+    // lancets off the frame chord.
     WindowGeometry g = buildRichGeom();
-    Polygon2 poly = buildBayStonePolygon(g);
+    GothicMeshParams params;
+    params.bodyHeight = 50.0;
+    Polygon2 poly = buildBayStonePolygon(g, params);
     EXPECT_EQ(poly.get_n_contours(), 1 + 2 + 1 + 6);
 }
 
@@ -465,8 +486,11 @@ namespace
 TEST(TEST_cgmesh_architecture_gothic, BuildBayPolygonWithPointedFoilsHasExpectedContourCount)
 {
     // Outer + 2 plain lancets + rosette flower + 6 rosette spandrel fillets = 10.
+    // A body keeps the lancets off the frame chord.
     WindowGeometry g = buildGeomWithPointedFoils();
-    Polygon2 poly = buildBayStonePolygon(g);
+    GothicMeshParams params;
+    params.bodyHeight = 50.0;
+    Polygon2 poly = buildBayStonePolygon(g, params);
     EXPECT_EQ(poly.get_n_contours(), 1 + 2 + 1 + 6);
 }
 
@@ -906,6 +930,39 @@ TEST(TEST_cgmesh_architecture_gothic, BuildBayMouldingFollowsMoreBordersOnRicher
 
     ASSERT_GT(plainMesh.GetNVertices(), 0u);
     EXPECT_GT(richMesh.GetNVertices(), plainMesh.GetNVertices());
+}
+
+// La moulure d'un oculus sans lobes suit le bord de son vide, en retrait de la
+// jante de la largeur d'anneau du motif lobe : max(3, 0,1 x 20) = 3, soit le
+// rayon 17. L'oculus est pose loin du remplage pour isoler sa moulure ; le
+// profil carre unite s'ecarte de 0 a 1 vers l'exterieur du cercle parcouru.
+TEST(TEST_cgmesh_architecture_gothic, BuildBayMouldingFollowsThePlainOculusVoidEdge)
+{
+    WindowGeometry g = buildTypicalGeom();
+    const Vector2d c(0.0, -1000.0);
+    g.hasRosette      = true;
+    g.hasRosetteFoils = false;
+    g.rosette.circle  = Circle(c, 20.0);
+    GothicMeshParams params;
+
+    Mesh mesh;
+    ASSERT_NO_THROW(buildBayMoulding(g, params, rectangularProfile(), mesh));
+    double dMin = 1e30, dMax = 0.0;
+    std::size_t n = 0;
+    for (unsigned int i = 0; i < mesh.GetNVertices(); ++i)
+    {
+        float v[3];
+        mesh.GetVertex(i, v);
+        const double d = std::hypot(v[0] - c.x, v[1] - c.y);
+        if (d > 40.0)
+            continue;
+        ++n;
+        dMin = std::min(dMin, d);
+        dMax = std::max(dMax, d);
+    }
+    ASSERT_GT(n, 0u);
+    EXPECT_NEAR(dMin, 17.0, 1e-3);
+    EXPECT_NEAR(dMax, 18.0, 1e-3);
 }
 
 // Un profil de moins de 3 points n'est pas une section fermee. Contrairement a

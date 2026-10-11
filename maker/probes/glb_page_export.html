@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Sonde : le GLB de la page svg.html, relu par un lecteur tiers</title>
+  <style>
+    body { margin: 0; font: 13px/1.5 ui-monospace, monospace; }
+    #page { width: 1000px; height: 620px; border: 0; display: block; }
+    .stage { width: 420px; height: 320px; border: 1px solid #ccc; display: inline-block; }
+    #out { white-space: pre-wrap; padding: 8px; }
+  </style>
+</head>
+<body>
+  <!-- LA PAGE REELLE, en iframe : ce sont ses BOUTONS qui produisent les deux
+       fichiers compares. Un montage qui rappellerait le pont WASM a cote
+       eprouverait l'ecrivain, pas le cablage -- qui est la moitie du sujet. -->
+  <iframe id="page" src="../web/svg.html"></iframe>
+
+  <!-- Un conteneur PAR FICHIER : LoadModelFromFileList vide la scene et
+       recharge, donc deux modeles sur un meme viseur se recouvriraient. -->
+  <div class="stage" id="stageObj"></div>
+  <div class="stage" id="stageGlb"></div>
+  <div id="out"></div>
+  <script type="module" src="./glb_page_export.js"></script>
+</body>
+</html>

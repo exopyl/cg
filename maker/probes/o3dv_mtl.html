@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Sonde o3dv : mtllib, .mtl compagnon, materiaux</title>
+  <style>
+    body { margin: 0; font: 13px/1.4 system-ui, sans-serif; }
+    .stage { width: 320px; height: 240px; border: 1px solid #ccc; display: inline-block; }
+    #out { white-space: pre-wrap; padding: 8px; }
+  </style>
+</head>
+<body>
+  <!-- Un conteneur PAR CAS : EmbeddedViewer.LoadModelFromFileList vide la scene
+       et recharge, donc deux cas sur un meme viewer se recouvriraient et la
+       mesure du second dependrait du premier. -->
+  <div class="stage" id="stagePair"></div>
+  <div class="stage" id="stageOrphan"></div>
+  <div class="stage" id="stageBare"></div>
+  <div id="out"></div>
+  <script type="module" src="./o3dv_mtl.js"></script>
+</body>
+</html>

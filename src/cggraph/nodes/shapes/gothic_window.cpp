@@ -1,11 +1,18 @@
 #include "gothic_window.h"
 
 #include <algorithm>
+#include <array>
+#include <cstddef>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "../../../cgmesh/mesh.h"
 #include "../../../cgmesh/parameterized.h"
-#include "../../../cgmesh/parameterized_shapes.h"
+#include "../../../cgmesh/parameterized_gothic.h"
+#include "../../../cgmesh/print_validation.h"
 #include "../node_support.h"
 #include "../value_types.h"
 
@@ -36,6 +43,110 @@ const cggraph::NodeDesc &Desc ()
 // le verifie ne puissent pas diverger.
 const char *const kMenuParam = "Profile";
 
+// Controle d'impression : noms stables, comme ceux des stats.
+//
+// « Non fixee » se dit par un booleen, et non par une valeur sentinelle : la
+// largeur fixee part telle quelle dans la garde, qui nomme une valeur hors
+// domaine (0 comprise) dans printError, comme pour le maker (setPrintedWidthMm) ;
+// l'enveloppe, triplet, a le meme booleen. Largeur et cotes valent 0 par
+// defaut : fixees sans valeur, elles donnent une erreur nommee, jamais une
+// taille supposee.
+//
+// Seuils : float du ParamSet, convertis en double. L'ecart a la valeur decimale
+// (0,4f = 0,4 + 6e-9 mm) est sous le pas de Clipper2 (1e-6 mm). noiseDepthRatio
+// et minDetailMm gardent leur defaut, comme dans le maker.
+const char *const kPrintCheck       = "Print check";
+const char *const kPrintWidthSet    = "Print width set";
+const char *const kPrintedWidthMm   = "Printed width mm";
+const char *const kPrintMinWallMm   = "Print min wall mm";
+const char *const kPrintMinHoleMm   = "Print min hole mm";
+const char *const kPrintMaxTipMm    = "Print max tip mm";
+const char *const kPrintEnvelopeSet = "Print envelope set";
+const char *const kPrintEnvelopeMm[3] = { "Print envelope x mm", "Print envelope y mm", "Print envelope z mm" };
+
+void DeclarePrintParams (cggraph::ParamSet &params)
+{
+	params.SetBool (kPrintCheck, false);
+	params.SetBool (kPrintWidthSet, false);
+	params.SetFloat (kPrintedWidthMm, 0.0f);
+	params.SetFloat (kPrintMinWallMm, static_cast<float> (kDefaultMinWallMm));
+	params.SetFloat (kPrintMinHoleMm, static_cast<float> (kDefaultMinHoleMm));
+	params.SetFloat (kPrintMaxTipMm, static_cast<float> (kDefaultMaxTipLengthMm));
+	params.SetBool (kPrintEnvelopeSet, false);
+	for (const char *side : kPrintEnvelopeMm)
+		params.SetFloat (side, 0.0f);
+}
+
+PrintConstraints PrinterFrom (const cggraph::ParamSet &params)
+{
+	PrintConstraints printer;
+	printer.minWallMm =
+		static_cast<double> (GetFloat (params, kPrintMinWallMm, static_cast<float> (kDefaultMinWallMm)));
+	printer.minHoleMm =
+		static_cast<double> (GetFloat (params, kPrintMinHoleMm, static_cast<float> (kDefaultMinHoleMm)));
+	printer.maxTipLengthMm =
+		static_cast<double> (GetFloat (params, kPrintMaxTipMm, static_cast<float> (kDefaultMaxTipLengthMm)));
+	if (GetBool (params, kPrintEnvelopeSet, false))
+	{
+		std::array<double, 3> envelope {};
+		for (std::size_t k = 0; k < envelope.size (); ++k)
+			envelope[k] = static_cast<double> (GetFloat (params, kPrintEnvelopeMm[k], 0.0f));
+		printer.envelopeMm = envelope;
+	}
+	return printer;
+}
+
+std::optional<double> PrintedWidthFrom (const cggraph::ParamSet &params)
+{
+	if (!GetBool (params, kPrintWidthSet, false))
+		return std::nullopt;
+	return static_cast<double> (GetFloat (params, kPrintedWidthMm, 0.0f));
+}
+
+double ScopeCode (GothicPrintScope scope)
+{
+	switch (scope)
+	{
+	case GothicPrintScope::NotRun:            return 0.0;
+	case GothicPrintScope::Complete:          return 1.0;
+	case GothicPrintScope::ProfileNotChecked: return 2.0;
+	}
+	return 0.0;
+}
+
+// Garde d'export sur `mesh`, maillage du dernier Regenerate de `shape`, et ses
+// stats print.*. Toute exception de la garde (verdict geometrique compris)
+// donne print.error 1, portee 0, comptes nuls.
+void AppendPrintStats (const ParameterizedGothicWindow &shape, const Mesh &mesh, const cggraph::ParamSet &params,
+                       std::vector<cggraph::NodeStat> &stats)
+{
+	std::array<std::size_t, kPrintDefectCount> shown {};
+	double scope = 0.0, printable = 0.0, evaluated = 0.0, error = 1.0;
+	try
+	{
+		const GothicPrintVerdict verdict =
+			CheckGothicExportAndPrintAtWidth (shape, mesh, PrinterFrom (params), PrintedWidthFrom (params));
+		shown = PrintDisplayCounts (verdict.check.print);
+		scope = ScopeCode (verdict.check.scope);
+		printable = verdict.IsPrintable () ? 1.0 : 0.0;
+		evaluated = verdict.check.print.evaluated ? 1.0 : 0.0;
+		error = verdict.printError.empty () ? 0.0 : 1.0;
+	}
+	catch (...)
+	{
+		shown = {};
+		scope = printable = evaluated = 0.0;
+		error = 1.0;
+	}
+	for (std::size_t k = 0; k < kPrintDefectCount; ++k)
+		stats.push_back ({ std::string ("print.") + PrintDefectName (static_cast<PrintDefect> (k)),
+		                   static_cast<double> (shown[k]) });
+	stats.push_back ({ "print.scope", scope });
+	stats.push_back ({ "print.printable", printable });
+	stats.push_back ({ "print.evaluated", evaluated });
+	stats.push_back ({ "print.error", error });
+}
+
 } // namespace
 
 GothicWindowNode::GothicWindowNode ()
@@ -63,6 +174,7 @@ GothicWindowNode::GothicWindowNode ()
 			break;
 		}
 	}
+	DeclarePrintParams (GetParams ());
 }
 
 const cggraph::NodeDesc &GothicWindowNode::GetDesc () const
@@ -129,6 +241,22 @@ bool GothicWindowNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueL
 
 	shape.Regenerate ();
 
+	const GothicBuildReport &report = shape.LastBuildReport ();
+	{
+		std::vector<cggraph::NodeStat> stats;
+		for (std::size_t k = 0; k < kGothicBuildWarningCount; ++k)
+			stats.push_back ({ std::string ("gothic.") + GothicBuildWarningName (static_cast<GothicBuildWarning> (k)),
+			                   static_cast<double> (report.counts[k]) });
+		// Avant la cession : la garde juge la baie et son maillage ensemble.
+		const Mesh *built = shape.GetMesh ();
+		if (!report.HasErrors () && built != nullptr && GetBool (GetParams (), kPrintCheck, false))
+			AppendPrintStats (shape, *built, GetParams (), stats);
+		const std::lock_guard<std::mutex> held (m_statsMutex);
+		m_stats = std::move (stats);
+	}
+	if (report.HasErrors ())
+		return false;
+
 	// CESSION : le maillage de travail est cede, jamais recopie.
 	std::shared_ptr<Mesh> mesh (shape.TakeMesh ());
 	if (mesh == nullptr)
@@ -136,6 +264,12 @@ bool GothicWindowNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueL
 
 	out[0] = cggraph::Value::Make (Types ().mesh, std::move (mesh));
 	return true;
+}
+
+void GothicWindowNode::PublishStats (std::vector<cggraph::NodeStat> &out) const
+{
+	const std::lock_guard<std::mutex> held (m_statsMutex);
+	out.insert (out.end (), m_stats.begin (), m_stats.end ());
 }
 
 } // namespace cggraph_nodes

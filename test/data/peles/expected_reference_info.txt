@@ -1,0 +1,125 @@
+--- informations du modele ---
+proprietes        : 14
+lignes maillages  : 4
+lignes materiaux  : 9
+materiaux         : 1
+--- proprietes ---
+File               : cube-tex.obj
+Vertices           : 8
+Faces              : 12
+Meshes             : 1
+Triangle mesh      : True
+Borders            : 0
+Non manifold edges : 0
+Bounding box X     : [ 0 , 1 ]
+Bounding box Y     : [ 0 , 1 ]
+Bounding box Z     : [ 0 , 1 ]
+Size X             : 1
+Size Y             : 1
+Size Z             : 1
+Path               : test/data/obj/cube-tex.obj
+--- maillages ---
+d0 -       Meshes
+d1 -       cube
+d2 -       8 vertices
+d2 -       12 faces
+--- materiaux ---
+d0 -       Materials
+d1 -       cube
+d2 -       texture
+d3 -       Texture: texture.png
+d4 -       Size: 320 x 320
+d4 #ffffff Diffuse: RGB(1.00, 1.00, 1.00)
+d4 #ffffff Ambient: RGB(1.00, 1.00, 1.00)
+d4 #000000 Specular: RGB(0.00, 0.00, 0.00)
+d4 -       Shininess: 0.078  (GL 10)
+--- informations du modele ---
+proprietes        : 14
+lignes maillages  : 10
+lignes materiaux  : 28
+materiaux         : 3
+--- proprietes ---
+File               : Lantern.glb
+Vertices           : 4145
+Faces              : 5394
+Meshes             : 3
+Triangle mesh      : True
+Borders            : 2598
+Non manifold edges : 0
+Bounding box X     : [ -3922 , 1.157e+04 ]
+Bounding box Y     : [ -2316 , 2316 ]
+Bounding box Z     : [ 183.9 , 2.585e+04 ]
+Size X             : 1.549e+04
+Size Y             : 4631
+Size Z             : 2.566e+04
+Path               : Lantern.glb
+--- maillages ---
+d0 -       Meshes
+d1 -       LanternPole_Body
+d2 -       926 vertices
+d2 -       872 faces
+d1 -       LanternPole_Chain
+d2 -       756 vertices
+d2 -       1248 faces
+d1 -       LanternPole_Lantern
+d2 -       2463 vertices
+d2 -       3274 faces
+--- materiaux ---
+d0 -       Materials
+d1 -       LanternPole_Body
+d2 -       LanternPost_Mat
+d3 -       Type: PBR (metallic-roughness)
+d4 #ffffff Base color: RGBA(1.00, 1.00, 1.00, 1.00)
+d4 -       Metallic: 1.000   Roughness: 1.000
+d4 -       Base color map: gltf_image_0  (UV0)
+d4 -       Normal map: gltf_image_2  (UV0)
+d4 -       Metallic-roughness map: gltf_image_1  (UV0)
+d4 -       Emissive map: gltf_image_3  (UV0)
+d1 -       LanternPole_Chain
+d2 -       LanternPost_Mat
+d3 -       Type: PBR (metallic-roughness)
+d4 #ffffff Base color: RGBA(1.00, 1.00, 1.00, 1.00)
+d4 -       Metallic: 1.000   Roughness: 1.000
+d4 -       Base color map: gltf_image_0  (UV0)
+d4 -       Normal map: gltf_image_2  (UV0)
+d4 -       Metallic-roughness map: gltf_image_1  (UV0)
+d4 -       Emissive map: gltf_image_3  (UV0)
+d1 -       LanternPole_Lantern
+d2 -       LanternPost_Mat
+d3 -       Type: PBR (metallic-roughness)
+d4 #ffffff Base color: RGBA(1.00, 1.00, 1.00, 1.00)
+d4 -       Metallic: 1.000   Roughness: 1.000
+d4 -       Base color map: gltf_image_0  (UV0)
+d4 -       Normal map: gltf_image_2  (UV0)
+d4 -       Metallic-roughness map: gltf_image_1  (UV0)
+d4 -       Emissive map: gltf_image_3  (UV0)
+--- informations du modele ---
+proprietes        : 14
+lignes maillages  : 7
+lignes materiaux  : 1
+materiaux         : 0
+--- proprietes ---
+File               : multi_objects.obj
+Vertices           : 6
+Faces              : 2
+Meshes             : 2
+Triangle mesh      : True
+Borders            : 6
+Non manifold edges : 0
+Bounding box X     : [ 0 , 3 ]
+Bounding box Y     : [ 0 , 1 ]
+Bounding box Z     : [ 0 , 0 ]
+Size X             : 3
+Size Y             : 1
+Size Z             : 0
+Path               : test/data/obj/multi_objects.obj
+--- maillages ---
+d0 -       Meshes
+d1 -       triangle_A
+d2 -       3 vertices
+d2 -       1 faces
+d1 -       triangle_B
+d2 -       3 vertices
+d2 -       1 faces
+--- materiaux ---
+d0 -       Materials

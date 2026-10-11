@@ -1,6 +1,7 @@
 #include "parametric_catalog.h"
 
 #include "parameterized_shapes.h"
+#include "parameterized_gothic.h"
 
 namespace
 {

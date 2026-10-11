@@ -13,7 +13,7 @@ import { loadModule } from "./wasm.js";
 import { createBanner, createFileInputs } from "./ui.js";
 import { createViewer } from "./viewer.js";
 import { buildPanel } from "./panel.js";
-import { downloadObj, downloadGlb, downloadStl } from "./exporters.js";
+import { downloadObj, downloadGlb, downloadStl, reportExportVerdict } from "./exporters.js";
 
 const el = (id) => document.getElementById(id);
 
@@ -178,10 +178,16 @@ export async function createShell({ title, subtitle }) {
   wireframeInput.addEventListener("change", viewer.applyWireframe);
   el("resetView").addEventListener("click", viewer.resetView);
 
-  const withShape = (fn) => () => { if (currentId >= 0) fn(Module, currentId, filenameInput.value); };
-  el("downloadObjBtn").addEventListener("click", withShape(downloadObj));
-  el("downloadGlbBtn").addEventListener("click", withShape(downloadGlb));
-  el("downloadStlBtn").addEventListener("click", withShape(downloadStl));
+  // Verdict de la garde d'export (OBJ, GLB, STL) : banniere sur refus, maillage
+  // non strict ou defaut d'impression ; sinon banniere effacee et etat de
+  // l'impression dans la ligne d'etat (reportExportVerdict).
+  const withVerdict = (fn) => () => {
+    if (currentId < 0) return;
+    reportExportVerdict(bnr, fn(Module, currentId, filenameInput.value), setStatus);
+  };
+  el("downloadObjBtn").addEventListener("click", withVerdict(downloadObj));
+  el("downloadGlbBtn").addEventListener("click", withVerdict(downloadGlb));
+  el("downloadStlBtn").addEventListener("click", withVerdict(downloadStl));
 
   // Deep-link des parametres : toute cle de la query string dont le nom correspond
   // a un parametre de la forme est appliquee via setParam (ex.

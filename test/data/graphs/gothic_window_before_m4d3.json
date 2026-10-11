@@ -1,0 +1,690 @@
+{
+	"format": "cggraph",
+	"formatVersion": 1,
+	"links": [
+		{
+			"from": 1,
+			"fromPort": 0,
+			"to": 4,
+			"toPort": 0
+		},
+		{
+			"from": 2,
+			"fromPort": 0,
+			"to": 5,
+			"toPort": 1
+		}
+	],
+	"nodes": [
+		{
+			"id": 1,
+			"params": [
+				{
+					"kind": "literal",
+					"name": "width",
+					"role": "semantic",
+					"type": "float",
+					"value": 6.0
+				},
+				{
+					"kind": "literal",
+					"name": "depth",
+					"role": "semantic",
+					"type": "float",
+					"value": 10.0
+				}
+			],
+			"type": "profile.chamfer",
+			"version": 1,
+			"x": 20.0,
+			"y": 40.0
+		},
+		{
+			"id": 2,
+			"params": [
+				{
+					"kind": "literal",
+					"name": "radius",
+					"role": "semantic",
+					"type": "float",
+					"value": 5.0
+				},
+				{
+					"kind": "literal",
+					"name": "segments",
+					"role": "semantic",
+					"type": "int",
+					"value": 12
+				}
+			],
+			"type": "profile.bar.roll",
+			"version": 1,
+			"x": 20.0,
+			"y": 200.0
+		},
+		{
+			"id": 3,
+			"params": [
+				{
+					"kind": "literal",
+					"name": "Excess (arch)",
+					"role": "semantic",
+					"type": "float",
+					"value": 1.0
+				},
+				{
+					"kind": "literal",
+					"name": "Width",
+					"role": "semantic",
+					"type": "float",
+					"value": 200.0
+				},
+				{
+					"kind": "literal",
+					"name": "Body height",
+					"role": "semantic",
+					"type": "float",
+					"value": 260.0
+				},
+				{
+					"kind": "literal",
+					"name": "Offset outer",
+					"role": "semantic",
+					"type": "float",
+					"value": 16.0
+				},
+				{
+					"kind": "literal",
+					"name": "Offset inner",
+					"role": "semantic",
+					"type": "float",
+					"value": 10.0
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet head",
+					"role": "semantic",
+					"type": "int",
+					"value": 1
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet head foils",
+					"role": "semantic",
+					"type": "int",
+					"value": 4
+				},
+				{
+					"kind": "literal",
+					"name": "Recursion",
+					"role": "semantic",
+					"type": "int",
+					"value": 0
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet drop",
+					"role": "semantic",
+					"type": "float",
+					"value": 0.0
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet excess",
+					"role": "semantic",
+					"type": "float",
+					"value": 1.0
+				},
+				{
+					"kind": "literal",
+					"name": "Gap fraction",
+					"role": "semantic",
+					"type": "float",
+					"value": 0.10999999940395355
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet layout",
+					"role": "semantic",
+					"type": "int",
+					"value": 0
+				},
+				{
+					"kind": "literal",
+					"name": "Fillets",
+					"role": "semantic",
+					"type": "bool",
+					"value": true
+				},
+				{
+					"kind": "literal",
+					"name": "Mouchettes",
+					"role": "semantic",
+					"type": "bool",
+					"value": false
+				},
+				{
+					"kind": "literal",
+					"name": "Mouchette type",
+					"role": "semantic",
+					"type": "int",
+					"value": 0
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette",
+					"role": "semantic",
+					"type": "bool",
+					"value": true
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette foils",
+					"role": "semantic",
+					"type": "bool",
+					"value": true
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette foil count",
+					"role": "semantic",
+					"type": "int",
+					"value": 6
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette foil type",
+					"role": "semantic",
+					"type": "int",
+					"value": 1
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette pointedness",
+					"role": "semantic",
+					"type": "float",
+					"value": 0.5
+				},
+				{
+					"kind": "literal",
+					"name": "Extrusion (zHeight)",
+					"role": "semantic",
+					"type": "float",
+					"value": 20.0
+				}
+			],
+			"type": "shape.gothic.window",
+			"version": 1,
+			"x": 300.0,
+			"y": 0.0
+		},
+		{
+			"id": 4,
+			"params": [
+				{
+					"kind": "literal",
+					"name": "Excess (arch)",
+					"role": "semantic",
+					"type": "float",
+					"value": 1.0
+				},
+				{
+					"kind": "literal",
+					"name": "Width",
+					"role": "semantic",
+					"type": "float",
+					"value": 200.0
+				},
+				{
+					"kind": "literal",
+					"name": "Body height",
+					"role": "semantic",
+					"type": "float",
+					"value": 260.0
+				},
+				{
+					"kind": "literal",
+					"name": "Offset outer",
+					"role": "semantic",
+					"type": "float",
+					"value": 16.0
+				},
+				{
+					"kind": "literal",
+					"name": "Offset inner",
+					"role": "semantic",
+					"type": "float",
+					"value": 10.0
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet head",
+					"role": "semantic",
+					"type": "int",
+					"value": 1
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet head foils",
+					"role": "semantic",
+					"type": "int",
+					"value": 4
+				},
+				{
+					"kind": "literal",
+					"name": "Recursion",
+					"role": "semantic",
+					"type": "int",
+					"value": 0
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet drop",
+					"role": "semantic",
+					"type": "float",
+					"value": 0.0
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet excess",
+					"role": "semantic",
+					"type": "float",
+					"value": 1.0
+				},
+				{
+					"kind": "literal",
+					"name": "Gap fraction",
+					"role": "semantic",
+					"type": "float",
+					"value": 0.10999999940395355
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet layout",
+					"role": "semantic",
+					"type": "int",
+					"value": 0
+				},
+				{
+					"kind": "literal",
+					"name": "Fillets",
+					"role": "semantic",
+					"type": "bool",
+					"value": true
+				},
+				{
+					"kind": "literal",
+					"name": "Mouchettes",
+					"role": "semantic",
+					"type": "bool",
+					"value": false
+				},
+				{
+					"kind": "literal",
+					"name": "Mouchette type",
+					"role": "semantic",
+					"type": "int",
+					"value": 0
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette",
+					"role": "semantic",
+					"type": "bool",
+					"value": true
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette foils",
+					"role": "semantic",
+					"type": "bool",
+					"value": true
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette foil count",
+					"role": "semantic",
+					"type": "int",
+					"value": 6
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette foil type",
+					"role": "semantic",
+					"type": "int",
+					"value": 1
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette pointedness",
+					"role": "semantic",
+					"type": "float",
+					"value": 0.5
+				},
+				{
+					"kind": "literal",
+					"name": "Extrusion (zHeight)",
+					"role": "semantic",
+					"type": "float",
+					"value": 20.0
+				}
+			],
+			"type": "shape.gothic.window",
+			"version": 1,
+			"x": 300.0,
+			"y": 120.0
+		},
+		{
+			"id": 5,
+			"params": [
+				{
+					"kind": "literal",
+					"name": "Excess (arch)",
+					"role": "semantic",
+					"type": "float",
+					"value": 1.0
+				},
+				{
+					"kind": "literal",
+					"name": "Width",
+					"role": "semantic",
+					"type": "float",
+					"value": 200.0
+				},
+				{
+					"kind": "literal",
+					"name": "Body height",
+					"role": "semantic",
+					"type": "float",
+					"value": 260.0
+				},
+				{
+					"kind": "literal",
+					"name": "Offset outer",
+					"role": "semantic",
+					"type": "float",
+					"value": 16.0
+				},
+				{
+					"kind": "literal",
+					"name": "Offset inner",
+					"role": "semantic",
+					"type": "float",
+					"value": 10.0
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet head",
+					"role": "semantic",
+					"type": "int",
+					"value": 1
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet head foils",
+					"role": "semantic",
+					"type": "int",
+					"value": 4
+				},
+				{
+					"kind": "literal",
+					"name": "Recursion",
+					"role": "semantic",
+					"type": "int",
+					"value": 0
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet drop",
+					"role": "semantic",
+					"type": "float",
+					"value": 0.0
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet excess",
+					"role": "semantic",
+					"type": "float",
+					"value": 1.0
+				},
+				{
+					"kind": "literal",
+					"name": "Gap fraction",
+					"role": "semantic",
+					"type": "float",
+					"value": 0.10999999940395355
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet layout",
+					"role": "semantic",
+					"type": "int",
+					"value": 0
+				},
+				{
+					"kind": "literal",
+					"name": "Fillets",
+					"role": "semantic",
+					"type": "bool",
+					"value": true
+				},
+				{
+					"kind": "literal",
+					"name": "Mouchettes",
+					"role": "semantic",
+					"type": "bool",
+					"value": false
+				},
+				{
+					"kind": "literal",
+					"name": "Mouchette type",
+					"role": "semantic",
+					"type": "int",
+					"value": 0
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette",
+					"role": "semantic",
+					"type": "bool",
+					"value": true
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette foils",
+					"role": "semantic",
+					"type": "bool",
+					"value": true
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette foil count",
+					"role": "semantic",
+					"type": "int",
+					"value": 6
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette foil type",
+					"role": "semantic",
+					"type": "int",
+					"value": 1
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette pointedness",
+					"role": "semantic",
+					"type": "float",
+					"value": 0.5
+				},
+				{
+					"kind": "literal",
+					"name": "Extrusion (zHeight)",
+					"role": "semantic",
+					"type": "float",
+					"value": 20.0
+				}
+			],
+			"type": "shape.gothic.window",
+			"version": 1,
+			"x": 300.0,
+			"y": 240.0
+		},
+		{
+			"id": 6,
+			"params": [
+				{
+					"kind": "literal",
+					"name": "Excess (arch)",
+					"role": "semantic",
+					"type": "float",
+					"value": 1.0
+				},
+				{
+					"kind": "literal",
+					"name": "Width",
+					"role": "semantic",
+					"type": "float",
+					"value": 200.0
+				},
+				{
+					"kind": "literal",
+					"name": "Body height",
+					"role": "semantic",
+					"type": "float",
+					"value": 260.0
+				},
+				{
+					"kind": "literal",
+					"name": "Offset outer",
+					"role": "semantic",
+					"type": "float",
+					"value": 16.0
+				},
+				{
+					"kind": "literal",
+					"name": "Offset inner",
+					"role": "semantic",
+					"type": "float",
+					"value": 10.0
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet head",
+					"role": "semantic",
+					"type": "int",
+					"value": 1
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet head foils",
+					"role": "semantic",
+					"type": "int",
+					"value": 4
+				},
+				{
+					"kind": "literal",
+					"name": "Recursion",
+					"role": "semantic",
+					"type": "int",
+					"value": 2
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet drop",
+					"role": "semantic",
+					"type": "float",
+					"value": 0.0
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet excess",
+					"role": "semantic",
+					"type": "float",
+					"value": 1.0
+				},
+				{
+					"kind": "literal",
+					"name": "Gap fraction",
+					"role": "semantic",
+					"type": "float",
+					"value": 0.10999999940395355
+				},
+				{
+					"kind": "literal",
+					"name": "Lancet layout",
+					"role": "semantic",
+					"type": "int",
+					"value": 0
+				},
+				{
+					"kind": "literal",
+					"name": "Fillets",
+					"role": "semantic",
+					"type": "bool",
+					"value": true
+				},
+				{
+					"kind": "literal",
+					"name": "Mouchettes",
+					"role": "semantic",
+					"type": "bool",
+					"value": false
+				},
+				{
+					"kind": "literal",
+					"name": "Mouchette type",
+					"role": "semantic",
+					"type": "int",
+					"value": 0
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette",
+					"role": "semantic",
+					"type": "bool",
+					"value": true
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette foils",
+					"role": "semantic",
+					"type": "bool",
+					"value": true
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette foil count",
+					"role": "semantic",
+					"type": "int",
+					"value": 6
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette foil type",
+					"role": "semantic",
+					"type": "int",
+					"value": 1
+				},
+				{
+					"kind": "literal",
+					"name": "Rosette pointedness",
+					"role": "semantic",
+					"type": "float",
+					"value": 0.5
+				},
+				{
+					"kind": "literal",
+					"name": "Extrusion (zHeight)",
+					"role": "semantic",
+					"type": "float",
+					"value": 20.0
+				}
+			],
+			"type": "shape.gothic.window",
+			"version": 1,
+			"x": 300.0,
+			"y": 360.0
+		}
+	]
+}

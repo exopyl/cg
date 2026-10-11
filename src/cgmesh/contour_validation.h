@@ -161,6 +161,12 @@ struct ContourValidationOptions
 
 	ContourOrientation orientation = ContourOrientation::OuterCcwHoleCw;
 
+	// Faux : le niveau d'imbrication n'est pas calcule (niveaux -1), donc ni
+	// WrongOrientation ni BadNesting ne sont evalues. Pour un appelant qui ne
+	// lit que les defauts d'aretes (ShortEdge, SelfIntersection,
+	// ContourContact) : la phase d'imbrication lui est epargnee.
+	bool checkNesting = true;
+
 	// Niveau d'imbrication maximal admis (0 : enveloppes seules ; 1 : enveloppes
 	// et trous). Absent : non borne.
 	std::optional<unsigned> maxNestingLevel;

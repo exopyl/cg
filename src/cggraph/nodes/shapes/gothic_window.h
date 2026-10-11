@@ -35,7 +35,9 @@
 // repetition d'un sous-graphe.
 //
 #include <memory>
+#include <mutex>
 #include <string>
+#include <vector>
 
 #include "../../core/node.h"
 
@@ -48,8 +50,32 @@ public:
 	GothicWindowNode ();
 
 	const cggraph::NodeDesc &GetDesc () const override;
+	// Echoue (ComputeFailed) quand le rapport de construction porte une erreur :
+	// la forme rend alors un triangle de repli, que l'aval ne doit pas recevoir.
+	//
+	// Controle d'impression, derriere le booleen « Print check » (faux par
+	// defaut : rien n'est calcule, aucune stat print.*) : la garde d'export
+	// CheckGothicExportAndPrintAtWidth, sur la baie du noeud, avant la cession
+	// du maillage. Largeur imprimee (« Print width set », « Printed width mm »),
+	// trois seuils et enveloppe (« Print envelope set » et ses trois cotes) sont
+	// des parametres plats ; une largeur non fixee donne scale_unset, sans echelle
+	// supposee. Le controle ne fait jamais echouer le noeud : une entree hors
+	// domaine ou une exception de la garde se lit dans print.error. Booleen vrai,
+	// le controle suit chaque calcul du noeud (ecart assume a D6).
 	bool Compute (cggraph::EvalContext &ctx, const cggraph::ValueList &in,
 	              cggraph::ValueList &out) override;
+
+	// Un compteur par categorie d'avertissement de construction (GothicBuildWarning),
+	// zero compris, sous « gothic.<nom> » (depth_fallback, feature_dropped...).
+	// Controle d'impression actif, en plus : « print.<categorie> » pour les
+	// kPrintDefectCount categories, zero compris (PrintDisplayCounts : maximum par
+	// tranche) ; print.scope (0 not_run, 1 complete, 2 profile_not_checked) ;
+	// print.printable, print.evaluated, print.error (0 ou 1).
+	void PublishStats (std::vector<cggraph::NodeStat> &out) const override;
+
+private:
+	mutable std::mutex m_statsMutex;
+	std::vector<cggraph::NodeStat> m_stats;
 };
 
 } // namespace cggraph_nodes

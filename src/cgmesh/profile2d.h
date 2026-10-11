@@ -77,6 +77,13 @@ Profile2D translatedInU (const Profile2D &profile, double du);
 
 // --- extrusion profilee ------------------------------------------------------
 
+// Contour dont la largeur de profil a ete reduite (voir ANNEAU FINAL).
+struct ProfileReduction
+{
+	unsigned int contour = 0;       // indice du contour dans le polygone
+	double       widthFactor = 0.0; // largeur rendue / largeur avant reduction ; 0 = paroi verticale
+};
+
 // Extrude `polygon` entre zBottom et zTop en balayant `profile` le long de
 // CHAQUE bord de champ, au lieu d'une paroi verticale : la face avant reste
 // plate a zTop, chaque arete d'ouverture s'enfonce dans la pierre en suivant le
@@ -95,11 +102,23 @@ Profile2D translatedInU (const Profile2D &profile, double du);
 // alors sur une paroi verticale -- un rayon caracteristique trop petit, ou une
 // courbure concave cumulee trop forte.
 //
+// ANNEAU FINAL : l'anneau decale du dernier point du profil borde le capot
+// arriere. Un contour qui s'y replie (apex convexe aigu decale sans onglet) ou
+// qui touche un autre anneau (barre de pierre plus mince que deux largeurs)
+// ferait un capot qui se recouvre. Ces deux defauts d'aretes sont cherches
+// (ValidateContours : SelfIntersection, ContourContact) ; ceux deja presents
+// sur le polygone d'entree ne sont pas imputes au profil. Chaque contour mis en
+// cause voit sa largeur de profil divisee par deux, jusqu'a ce qu'aucun defaut
+// nouveau ne reste ; sous 5 % de la largeur du profil, elle tombe a 0 (paroi
+// verticale). Un anneau sans defaut nouveau laisse le resultat inchange.
+// `reductions`, quand il est fourni, recoit les contours reduits.
+//
 // ⚠ Le polygone est pris en `const` : sa surface de lecture a ete corrigee pour
 // cela (Polygon2::get_points / tesselate / get_n_*). C'est ce qui permet a un
 // consommateur tenant une valeur immuable de l'appeler.
 void extrudeProfiledToMesh (const Polygon2 &polygon, const Profile2D &profile, Mesh &out,
-                            double zBottom, double zTop);
+                            double zBottom, double zTop,
+                            std::vector<ProfileReduction> *reductions = nullptr);
 
 // Forme heritee : un chanfrein droit decrit par sa largeur et sa profondeur.
 // Elle delegue a la precedente sur chamferSplayProfile (width, depth) -- c'est

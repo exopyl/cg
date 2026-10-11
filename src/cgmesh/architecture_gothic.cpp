@@ -1,12 +1,19 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "architecture_gothic.h"
+#include "architecture_gothic_region.h"
+#include "contour_validation.h"
 
 #include "clipper2/clipper.h"   // 2D polygon boolean (vendored, extern/clipper2)
 
@@ -522,6 +529,65 @@ namespace
 	// trefoil arch via cuspedArchOutline — the thesis approach — so the old
 	// "inscribe a separate foiled disc in the head" construction was removed.)
 
+	void record (GothicBuildReport *report, GothicBuildWarning kind)
+	{
+		if (report) report->Record(kind);
+	}
+
+	void record (GothicBuildReport *report, GothicBuildWarning kind, const std::string &message)
+	{
+		if (report) report->Record(kind, std::string(), message);
+	}
+
+	// Text of the exception being handled, prefixed by `where`. Call from a
+	// catch block only.
+	std::string currentExceptionText (const char *where)
+	{
+		try { throw; }
+		catch (const std::exception &e) { return std::string(where) + ": " + e.what(); }
+		catch (...) { return std::string(where) + ": unknown exception"; }
+	}
+
+	// Why a crowning rosette (main or sub) that rests on two lancets is not built.
+	std::string rosetteDropReason (const Circle &rc, double minRadius, const Vector2d &apex)
+	{
+		std::ostringstream os;
+		if (rc.radius <= 0.0)
+			os << "no circle tangent to the arch through the lancet apexes";
+		else if (rc.radius <= minRadius)
+			os << "radius " << rc.radius << " <= threshold " << minRadius;
+		else
+			os << "centre " << rc.center.y << " not above the lancet apexes " << apex.y;
+		return os.str();
+	}
+
+	// Offsets of a sub-lancet one level down : the unit's own offsets, capped at
+	// 0.30 x the sub-arch radius so that the mullions thin out with depth.
+	ArchOffsetParams childOffset (const ArchOffsetParams &off, const ArchGeom &childArch)
+	{
+		ArchOffsetParams lo = off;
+		const double r = childArch.circleL.radius;
+		lo.inner = std::min(off.inner, 0.30 * r);
+		lo.outer = std::min(off.outer, 0.30 * r);
+		return lo;
+	}
+
+	// Inner apex of a sub-lancet opening, computed with the offsets the sub-lancet
+	// is actually cut with (childOffset), so that the crowning sub-rosette rests on
+	// the drawn apexes. Falls back to the apex of `lancet.offset` (unit offsets)
+	// when the child offset cannot be built, recorded as
+	// GothicBuildWarning::DepthFallback.
+	Vector2d childInnerApex (const LancetGeom &lancet, const ArchOffsetParams &off,
+	                         GothicBuildReport *report)
+	{
+		try { return buildArchOffset(lancet.arch, childOffset(off, lancet.arch)).inner.apex; }
+		catch (...)
+		{
+			record(report, GothicBuildWarning::DepthFallback, currentExceptionText("sub-rosette apex"));
+			return lancet.offset.inner.apex;
+		}
+	}
+
 	// Fillet openings = region − solids, inset by `inset` (bdInner).
 	PathsD filletPaths (const PathD &region, const PathsD &solids, double inset)
 	{
@@ -530,21 +596,47 @@ namespace
 		return f;
 	}
 
+	// Width of the stone ring between a rosette rim (radius Rr) and its voids,
+	// shared by the lobed motif and the plain oculus.
+	double rosetteRingWidth (double Rr, const GothicFeatureThresholds &thr)
+	{
+		return std::max(thr.minRingWidth, 0.10 * Rr);
+	}
+
+	// Void of a plain (unlobed) oculus : the rim shrunk by the ring width of the
+	// lobed motif, so that the void keeps off the lancet apexes the rim passes
+	// through (Havemann's contiguous border plane). Radius -1 when the ring leaves
+	// no void, by the same rule as the lobed motif.
+	Circle plainOculusVoid (const Circle &rim, const GothicFeatureThresholds &thr)
+	{
+		const double Rin  = rim.radius - rosetteRingWidth(rim.radius, thr);
+		const bool   kept = rim.radius > thr.minRosetteRadius && Rin > thr.minRosetteRadius;
+		return Circle(rim.center, kept ? Rin : -1.0);
+	}
+
 	// The ONE canonical rosette motif, shared by the main rosette and the recursion
 	// sub-rosettes : a single CONNECTED multifoil flower (pointed or round) with an
 	// open centre, plus one eyelet fillet per foil between the foils and the ring.
 	// Returns the void contours (CCW). Cr = centre, Rr = outer/ring radius, n = foil
 	// count, foilType (1 = pointed, 0 = round), pointedness for the pointed variant.
+	// A rosette whose rim or inner radius is within thr.minRosetteRadius has no
+	// void, recorded as GothicBuildWarning::FeatureDropped.
 	std::vector<std::vector<Vector2d>> rosetteVoidContours (Vector2d Cr, double Rr, int n,
 	                                                        int foilType, double pointedness,
-	                                                        double maxAngleRad)
+	                                                        double maxAngleRad,
+	                                                        const GothicFeatureThresholds &thr,
+	                                                        GothicBuildReport *report)
 	{
 		const double PI = 3.14159265358979323846;
 		std::vector<std::vector<Vector2d>> out;
-		if (n < 2 || Rr <= 1.0) return out;
-		const double ringW = std::max(3.0, 0.10 * Rr);
+		if (n < 2) return out;
+		const double ringW = rosetteRingWidth(Rr, thr);
 		const double Rin   = Rr - ringW;
-		if (Rin <= 1.0) return out;
+		if (Rr <= thr.minRosetteRadius || Rin <= thr.minRosetteRadius)
+		{
+			record(report, GothicBuildWarning::FeatureDropped, "rosette motif: ring leaves no void");
+			return out;
+		}
 		const double Rp    = Rin;                       // foil tips reach the ring
 
 		std::vector<Vector2d> flower;
@@ -560,7 +652,7 @@ namespace
 
 		PathD flowerPath = toPathD(flower);
 		out.push_back(std::move(flower));               // the multifoil void
-		const double rinset = std::max(1.5, 0.28 * ringW);
+		const double rinset = std::max(thr.minEyeletInset, 0.28 * ringW);
 		for (auto &f : filletPaths(circlePathD(Cr, Rin, maxAngleRad), PathsD{ flowerPath }, rinset))
 			if (f.size() >= 3) out.push_back(fromPathD(f));   // one eyelet fillet per foil
 		return out;
@@ -569,25 +661,35 @@ namespace
 	// Forward decl (defined below, near buildBayStonePolygon) : shape a spandrel field
 	// as an inscribed mouchette clipped to it. Same anonymous namespace ⇒ same entity.
 	PathsD mouchetteInField (const PathD &field, int mType, double sizeFactor,
-	                         Vector2d focus, double maxAngleRad);
+	                         Vector2d focus, double maxAngleRad, double minRadius,
+	                         GothicBuildReport *report);
 
 	// Recursively collect every GLASS void contour of a window unit (base arch
 	// `arch`). A unit is built like the whole window : sub-lancets (leaves get a
 	// foiled head, or recurse), a crowning daisy rosette, and corner fillets.
 	// The caller Differences these from the unit opening to get the stone.
-	// Degenerate sub-geometry is skipped (the buildXxx may throw on tiny arches).
-	// When `mouchettes`, the unit's corner fillets are shaped as inscribed
-	// mouchettes/soufflets (flamboyant), like the top-level ones.
+	// A unit whose offset cannot be built (the buildXxx may throw on tiny arches)
+	// has no void, recorded as GothicBuildWarning::FeatureDropped, like a
+	// sub-rosette that is not built. When `mouchettes`, the unit's corner
+	// fillets are shaped as inscribed mouchettes/soufflets (flamboyant), like
+	// the top-level ones.
+	// A unit that cannot subdivide falls back to its whole opening as one void,
+	// recorded as GothicBuildWarning::DepthFallback.
 	void collectUnitVoids (const ArchGeom &arch, const ArchOffsetParams &off,
 	                       const SubwindowParams &sub, double sillY,
 	                       int remaining, int foilN, int foilType, double pointedness,
 	                       bool headFoiled, int headFoils, double filletInset,
 	                       bool mouchettes, int mouchetteType, double mouchetteSize,
-	                       double maxAngleRad, std::vector<PathD> &out)
+	                       double maxAngleRad, const GothicFeatureThresholds &thr,
+	                       GothicBuildReport *report, std::vector<PathD> &out)
 	{
 		ArchOffsetGeom o;
 		try { o = buildArchOffset(arch, off); }
-		catch (...) { return; }
+		catch (...)
+		{
+			record(report, GothicBuildWarning::FeatureDropped, currentExceptionText("recursive unit offset"));
+			return;
+		}
 
 		std::vector<Vector2d> openingV = archWithBody(archOutlineCcw(o.inner, maxAngleRad), sillY);
 		Vector2d filletFocus = o.inner.apex;   // mouchette apex points here (updated to the sub-oculus below)
@@ -609,19 +711,20 @@ namespace
 
 		SubwindowsGeom subs;
 		try { subs = buildSubwindows(arch, off, sub); }
-		catch (...) { out.push_back(toPathD(openingV)); return; }
+		catch (...)
+		{
+			record(report, GothicBuildWarning::DepthFallback, currentExceptionText("recursive unit subdivision"));
+			out.push_back(toPathD(openingV));
+			return;
+		}
 
 		PathsD solids;   // rosette disk + sub-arch base arches, for this unit's fillets
 		for (const auto &l : subs.lancets)
 		{
-			ArchOffsetParams lo = off;                       // thinner mullions deeper down
-			const double r = l.arch.circleL.radius;
-			lo.inner = std::min(off.inner, 0.30 * r);
-			lo.outer = std::min(off.outer, 0.30 * r);
 			solids.push_back(toPathD(archWithBody(archOutlineCcw(l.arch, maxAngleRad), sillY)));
-			collectUnitVoids(l.arch, lo, sub, sillY, remaining - 1, foilN, foilType, pointedness,
-			                 headFoiled, headFoils, filletInset * 0.7,
-			                 mouchettes, mouchetteType, mouchetteSize, maxAngleRad, out);
+			collectUnitVoids(l.arch, childOffset(off, l.arch), sub, sillY, remaining - 1,
+			                 foilN, foilType, pointedness, headFoiled, headFoils, filletInset * 0.7,
+			                 mouchettes, mouchetteType, mouchetteSize, maxAngleRad, thr, report, out);
 		}
 
 		// Crowning sub-rosette : passes through the two sub-lancet apexes and is
@@ -632,14 +735,17 @@ namespace
 		if (subs.lancets.size() == 2)
 		{
 			const double axisX = 0.5*(o.inner.circleL.center.x + o.inner.circleR.center.x);
-			const Vector2d subApex = subs.lancets.back().offset.inner.apex;
+			const Vector2d subApex = childInnerApex(subs.lancets.back(), off, report);
 			Circle rc = rosetteTangentToLancets(o.inner, axisX, subApex);
-			if (rc.radius > 3.0 && rc.center.y > subApex.y)
+			if (!(rc.radius > thr.minSubRosetteRadius && rc.center.y > subApex.y))
+				record(report, GothicBuildWarning::FeatureDropped,
+				       "sub-rosette: " + rosetteDropReason(rc, thr.minSubRosetteRadius, subApex));
+			else
 			{
 				filletFocus = rc.center;                                            // mouchettes point at the sub-oculus
 				solids.push_back(circlePathD(rc.center, rc.radius, maxAngleRad));   // for corner fillets
-				for (auto &v : rosetteVoidContours(rc.center, rc.radius, foilN,
-				                                   foilType, pointedness, maxAngleRad))
+				for (auto &v : rosetteVoidContours(rc.center, rc.radius, foilN, foilType, pointedness,
+				                                   maxAngleRad, thr, report))
 					out.push_back(toPathD(v));
 			}
 		}
@@ -652,7 +758,8 @@ namespace
 				if (f.size() < 3) continue;
 				if (mouchettes)
 				{
-					for (auto &s : mouchetteInField(f, mouchetteType, mouchetteSize, filletFocus, maxAngleRad))
+					for (auto &s : mouchetteInField(f, mouchetteType, mouchetteSize, filletFocus, maxAngleRad,
+					                                thr.minMouchetteRadius, report))
 						if (s.size() >= 3) out.push_back(std::move(s));
 				}
 				else
@@ -693,12 +800,59 @@ Circle rosetteTangentToLancets (const ArchGeom &mainInner, double axisX,
 
 namespace
 {
+	// Closed outline through the arcs of a mouchette, joined end to end. The arcs
+	// of a cgmath mouchette need not follow one another : the teardrop is base
+	// T1 -> T2, side T1 -> apex, side apex -> T2. Starting from the first arc, the
+	// next one is the unused arc with an endpoint nearest to the current end,
+	// reversed when that endpoint is its end ; its first point (the shared
+	// endpoint) is dropped.
+	std::vector<Vector2d> chainArcs (const std::vector<Arc> &arcs, double maxAngleRad)
+	{
+		std::vector<std::vector<Vector2d>> pieces;
+		pieces.reserve(arcs.size());
+		for (const Arc &a : arcs)
+		{
+			std::vector<Vector2d> pts = a.tessellateAdaptive(maxAngleRad);
+			if (!pts.empty()) pieces.push_back(std::move(pts));
+		}
+		if (pieces.empty()) return {};
+
+		auto dist2 = [](const Vector2d &p, const Vector2d &q) {
+			return (p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y);
+		};
+		std::vector<Vector2d> contour = pieces[0];
+		std::vector<bool> used(pieces.size(), false);
+		used[0] = true;
+		for (size_t step = 1; step < pieces.size(); ++step)
+		{
+			size_t best = 0;
+			bool   reversed = false;
+			double bestD = std::numeric_limits<double>::infinity();
+			for (size_t k = 0; k < pieces.size(); ++k)
+			{
+				if (used[k]) continue;
+				const double dStart = dist2(contour.back(), pieces[k].front());
+				const double dEnd   = dist2(contour.back(), pieces[k].back());
+				if (dStart < bestD) { bestD = dStart; best = k; reversed = false; }
+				if (dEnd   < bestD) { bestD = dEnd;   best = k; reversed = true; }
+			}
+			used[best] = true;
+			std::vector<Vector2d> &next = pieces[best];
+			if (reversed) std::reverse(next.begin(), next.end());
+			contour.insert(contour.end(), next.begin() + 1, next.end());
+		}
+		return contour;
+	}
+
 	// Inscribe a flamboyant mouchette into a spandrel FIELD polygon, clipped to the
 	// field so the resulting void never breaks the surrounding stone frame. Returns
-	// the plain field when it is too small to carry a shape. `focus` is the point the
-	// teardrop apex points at (the oculus centre).
+	// the plain field when it cannot carry a shape (inscribed radius below
+	// minRadius, mouchette that throws, degenerate or clipped away), recorded as
+	// GothicBuildWarning::FeatureDropped. `focus` is the point the teardrop apex
+	// points at (the oculus centre).
 	PathsD mouchetteInField (const PathD &field, int mType, double sizeFactor,
-	                         Vector2d focus, double maxAngleRad)
+	                         Vector2d focus, double maxAngleRad, double minRadius,
+	                         GothicBuildReport *report)
 	{
 		std::vector<Vector2d> poly = fromPathD(field);
 		const int n = static_cast<int>(poly.size());
@@ -707,7 +861,11 @@ namespace
 		const double PI = 3.14159265358979323846;
 		const double charR = std::sqrt(area / PI);
 		const double rm = sizeFactor * 0.9 * charR;
-		if (rm < 1.5) return PathsD{ field };                 // field too small to shape
+		if (rm < minRadius)                                   // field too small to shape
+		{
+			record(report, GothicBuildWarning::FeatureDropped, "mouchette: field too small");
+			return PathsD{ field };
+		}
 
 		Vector2d C(0.0, 0.0);
 		for (const auto &p : poly) { C.x += p.x; C.y += p.y; }
@@ -718,24 +876,152 @@ namespace
 		                 : (mType == 2) ? MouchetteType::Soufflet
 		                                : MouchetteType::Teardrop;
 		MouchetteGeom mg;
-		try { mg = buildMouchette(mt, C, rm, rot); } catch (...) { return PathsD{ field }; }
-
-		std::vector<Vector2d> contour;
-		for (const Arc &a : mg.contour)
+		try { mg = buildMouchette(mt, C, rm, rot); }
+		catch (...)
 		{
-			std::vector<Vector2d> pts = a.tessellateAdaptive(maxAngleRad);
-			for (size_t i = (contour.empty() ? 0 : 1); i < pts.size(); ++i)
-				contour.push_back(pts[i]);
+			record(report, GothicBuildWarning::FeatureDropped, currentExceptionText("mouchette"));
+			return PathsD{ field };
 		}
-		if (contour.size() < 3) return PathsD{ field };
+
+		std::vector<Vector2d> contour = chainArcs(mg.contour, maxAngleRad);
+		if (contour.size() < 3)
+		{
+			record(report, GothicBuildWarning::FeatureDropped, "mouchette: outline has fewer than 3 points");
+			return PathsD{ field };
+		}
 
 		PathsD clipped = Intersect(PathsD{ toPathD(contour) }, PathsD{ field }, FillRule::NonZero);
-		if (clipped.empty()) return PathsD{ field };
+		if (clipped.empty())
+		{
+			record(report, GothicBuildWarning::FeatureDropped, "mouchette: empty once clipped to its field");
+			return PathsD{ field };
+		}
 		return clipped;
 	}
 }
 
-Polygon2 buildBayStonePolygon (const WindowGeometry &geom, const GothicMeshParams &params)
+GothicFeatureThresholds GothicFeatureThresholds::Scaled (double k) const
+{
+	GothicFeatureThresholds t = *this;
+	t.minRosetteRadius     *= k;
+	t.minRingWidth         *= k;
+	t.minEyeletInset       *= k;
+	t.minSubRosetteRadius  *= k;
+	t.minMouchetteRadius   *= k;
+	t.minFilletInnerOffset *= k;
+	t.maxMouchetteInset    *= k;
+	t.chamferWidthAdd      *= k;
+	t.minChamferWidth      *= k;
+	t.barRadiusAdd         *= k;
+	t.minBarRadius         *= k;
+	t.minBand              *= k;
+	return t;
+}
+
+const char *GothicBuildWarningName (GothicBuildWarning kind)
+{
+	switch (kind)
+	{
+		case GothicBuildWarning::DepthFallback:        return "depth_fallback";
+		case GothicBuildWarning::FeatureDropped:       return "feature_dropped";
+		case GothicBuildWarning::MorphologicalGuard:   return "morphological_guard";
+		case GothicBuildWarning::GuardClosingFallback: return "guard_closing_fallback";
+		case GothicBuildWarning::GuardInsufficient:    return "guard_insufficient";
+		case GothicBuildWarning::ParameterClamped:     return "parameter_clamped";
+		case GothicBuildWarning::RegionInvalid:        return "region_invalid";
+		case GothicBuildWarning::ProfileFallback:      return "profile_fallback";
+		case GothicBuildWarning::MouldingDropped:      return "moulding_dropped";
+		case GothicBuildWarning::FieldIgnored:         return "field_ignored";
+		case GothicBuildWarning::FieldConverted:       return "field_converted";
+		case GothicBuildWarning::ProfileReduced:       return "profile_reduced";
+		case GothicBuildWarning::RegionRepaired:       return "region_repaired";
+		case GothicBuildWarning::MultipleShells:       return "multiple_shells";
+		case GothicBuildWarning::MouldingNotFused:     return "moulding_not_fused";
+		case GothicBuildWarning::MouldingSimplified:   return "moulding_simplified";
+	}
+	return "unknown";
+}
+
+const char *GothicBuildErrorName (GothicBuildError kind)
+{
+	switch (kind)
+	{
+		case GothicBuildError::InvalidParameter:   return "invalid_parameter";
+		case GothicBuildError::ConstructionFailed: return "construction_failed";
+		case GothicBuildError::JsonParse:          return "json_parse";
+		case GothicBuildError::JsonSchema:         return "json_schema";
+		case GothicBuildError::JsonType:           return "json_type";
+		case GothicBuildError::JsonValue:          return "json_value";
+		case GothicBuildError::JsonMissing:        return "json_missing";
+		case GothicBuildError::MeshNotStrict:      return "mesh_not_strict";
+	}
+	return "unknown";
+}
+
+namespace
+{
+	void appendEntry (std::vector<GothicDiagnostic> &entries, GothicDiagnostic d)
+	{
+		if (entries.size() < kGothicBuildReportMaxEntries)
+			entries.push_back(std::move(d));
+	}
+}
+
+void GothicBuildReport::Record (GothicBuildWarning kind, std::string parameter, std::string message)
+{
+	++counts[static_cast<std::size_t>(kind)];
+	appendEntry(entries, GothicDiagnostic{ false, static_cast<int>(kind), std::move(parameter), std::move(message) });
+}
+
+void GothicBuildReport::Record (GothicBuildError kind, std::string parameter, std::string message)
+{
+	++errorCounts[static_cast<std::size_t>(kind)];
+	appendEntry(entries, GothicDiagnostic{ true, static_cast<int>(kind), std::move(parameter), std::move(message) });
+}
+
+bool GothicBuildReport::HasErrors () const
+{
+	return std::any_of(errorCounts.begin(), errorCounts.end(), [](std::size_t n) { return n > 0; });
+}
+
+bool GothicBuildReport::HasWarnings () const
+{
+	return std::any_of(counts.begin(), counts.end(), [](std::size_t n) { return n > 0; });
+}
+
+void GothicBuildReport::Merge (const GothicBuildReport &other)
+{
+	for (std::size_t k = 0; k < counts.size(); ++k)      counts[k]      += other.counts[k];
+	for (std::size_t k = 0; k < errorCounts.size(); ++k) errorCounts[k] += other.errorCounts[k];
+	for (const GothicDiagnostic &d : other.entries)
+		appendEntry(entries, d);
+}
+
+std::string GothicBuildReportToJson (const GothicBuildReport &report)
+{
+	using nlohmann::json;
+	json j;
+	json &errors = j["errors"];
+	for (std::size_t k = 0; k < kGothicBuildErrorCount; ++k)
+		errors[GothicBuildErrorName(static_cast<GothicBuildError>(k))] = report.errorCounts[k];
+	json &warnings = j["warnings"];
+	for (std::size_t k = 0; k < kGothicBuildWarningCount; ++k)
+		warnings[GothicBuildWarningName(static_cast<GothicBuildWarning>(k))] = report.counts[k];
+	json entries = json::array();
+	for (const GothicDiagnostic &d : report.entries)
+		entries.push_back(json{
+			{"severity",  d.error ? "error" : "warning"},
+			{"code",      d.error ? GothicBuildErrorName(static_cast<GothicBuildError>(d.code))
+			                      : GothicBuildWarningName(static_cast<GothicBuildWarning>(d.code))},
+			{"parameter", d.parameter},
+			{"message",   d.message} });
+	j["entries"] = std::move(entries);
+	// Exception texts are not guaranteed to be UTF-8 : invalid bytes are replaced.
+	return j.dump(-1, ' ', false, json::error_handler_t::replace);
+}
+
+Polygon2 buildBayStonePolygon (const WindowGeometry &geom, const GothicMeshParams &params,
+                               GothicBuildReport *report)
 {
 	// Main inner-offset outline (CCW) : the INNER edge of the frame. It bounds
 	// the tracery infill and is the region in which the spandrel fillets are cut.
@@ -810,10 +1096,12 @@ Polygon2 buildBayStonePolygon (const WindowGeometry &geom, const GothicMeshParam
 	};
 
 	// Lancets. Depth 0 : a plain tall pointed-arch void. Depth >= 1 : each lancet
-	// opening becomes a mini-window — cut the opening as a void, then add back the
-	// stone tracery (mullions + sub-frames + sub-rosette) computed as
-	// Difference(opening, all-recursed-sub-voids) via Clipper2. The mullions stay
-	// connected to the frame at the sill and the arch, so nothing floats.
+	// opening becomes a mini-window whose VOIDS are its recursed sub-voids, kept
+	// only inside the opening. The opening itself is never cut : the stone is
+	// computed once, as frame minus the union of all voids (see the end of this
+	// function), so the sub-tracery is part of the frame stone instead of islands
+	// sharing the opening's edges.
+	std::vector<GothicClippedVoids> recursedOpenings;
 	for (const auto &l : geom.subwindows.lancets)
 	{
 		// Foiled head (thesis approach) : refend the lancet's own arch into a cusped
@@ -833,13 +1121,14 @@ Polygon2 buildBayStonePolygon (const WindowGeometry &geom, const GothicMeshParam
 			                 params.rosetteFoilType, params.rosettePointedness,
 			                 params.lancetHeadFoiled, params.lancetHeadFoils, params.filletInset,
 			                 params.mouchettes, params.mouchetteType, params.mouchetteSize,
-			                 params.maxAngleRad, subVoids);
+			                 params.maxAngleRad, params.thresholds, report, subVoids);
 			if (!subVoids.empty())
 			{
-				PathsD allVoid = Union(PathsD(subVoids.begin(), subVoids.end()), FillRule::NonZero);
-				PathsD stone   = Difference(PathsD{ toPathD(opening) }, allVoid, FillRule::NonZero);
-				pushAsHole(holes, opening);                        // opening = void
-				for (auto &p : stone) holes.push_back(fromPathD(p)); // mullions/frames/sub-rosette stone
+				GothicClippedVoids group;
+				group.window = std::move(opening);
+				group.voids.reserve(subVoids.size());
+				for (const PathD &v : subVoids) group.voids.push_back(fromPathD(v));
+				recursedOpenings.push_back(std::move(group));
 				continue;
 			}
 		}
@@ -862,11 +1151,18 @@ Polygon2 buildBayStonePolygon (const WindowGeometry &geom, const GothicMeshParam
 			// shared verbatim with the recursion sub-rosettes.
 			for (auto &v : rosetteVoidContours(ring.outerCircle.center, ring.outerCircle.radius,
 			                                   (int)ring.foils.size(), params.rosetteFoilType,
-			                                   params.rosettePointedness, params.maxAngleRad))
+			                                   params.rosettePointedness, params.maxAngleRad,
+			                                   params.thresholds, report))
 				pushAsHoleAnyOrientation(holes, std::move(v));
 		}
 		else
-			pushAsHole(holes, circleOutlineCcw(geom.rosette.circle, params.maxAngleRad));
+		{
+			const Circle oculus = plainOculusVoid(geom.rosette.circle, params.thresholds);
+			if (oculus.radius > 0.0)
+				pushAsHole(holes, circleOutlineCcw(oculus, params.maxAngleRad));
+			else
+				record(report, GothicBuildWarning::FeatureDropped, "oculus: ring leaves no void");
+		}
 	}
 
 	// Fillets : the corner FIELDS = region − rosette − sub-arches, inset by
@@ -896,7 +1192,8 @@ Polygon2 buildBayStonePolygon (const WindowGeometry &geom, const GothicMeshParam
 				// Flamboyant : void the field as an inscribed mouchette/soufflet
 				// (clipped to the field) instead of a plain fillet.
 				PathsD shaped = mouchetteInField(f, params.mouchetteType, params.mouchetteSize,
-				                                 geom.rosette.circle.center, params.maxAngleRad);
+				                                 geom.rosette.circle.center, params.maxAngleRad,
+				                                 params.thresholds.minMouchetteRadius, report);
 				for (auto &s : shaped)
 					if (s.size() >= 3) pushAsHoleAnyOrientation(holes, fromPathD(s));
 			}
@@ -905,12 +1202,45 @@ Polygon2 buildBayStonePolygon (const WindowGeometry &geom, const GothicMeshParam
 		}
 	}
 
+	// A bay with recursed openings is one 2D boolean : stone = frame minus the
+	// union of every void, the level-0 holes included. A bay without them keeps
+	// the direct assembly (frame + holes), off the Clipper2 grid, unless it has a
+	// contour defect (buildLevel0StoneRegion).
+	if (!recursedOpenings.empty())
+	{
+		GothicStoneInput input;
+		input.frame        = std::move(frameOuter);
+		input.voids        = std::move(holes);
+		input.clippedVoids = std::move(recursedOpenings);
+		bool guardApplied = false;
+		GothicGuardOutcome outcome = GothicGuardOutcome::NotNeeded;
+		const std::vector<GothicRing> region =
+			buildGothicStoneRegion(input, kGothicClipperPrecision, kGothicGuardGridSteps,
+			                       &guardApplied, &outcome);
+		if (guardApplied)
+			record(report, GothicBuildWarning::MorphologicalGuard);
+		if (outcome == GothicGuardOutcome::ClosingFallback)
+			record(report, GothicBuildWarning::GuardClosingFallback,
+			       "guard: opening + closing left a contour defect, closing alone kept");
+		else if (outcome == GothicGuardOutcome::Insufficient)
+			record(report, GothicBuildWarning::GuardInsufficient,
+			       "guard: the stone region keeps a contour defect");
+		return gothicRegionToPolygon2(region);
+	}
+
+	return buildLevel0StoneRegion(frameOuter, holes, report);
+}
+
+Polygon2 buildLevel0StoneRegion (const std::vector<Vector2d> &frame,
+                                 const std::vector<std::vector<Vector2d>> &holes,
+                                 GothicBuildReport *report)
+{
 	// Pack contours into Polygon2.
 	Polygon2 poly;
 	poly.alloc_contours(1 + static_cast<int>(holes.size()));
 
-	std::vector<float> outerPacked = packContour(frameOuter);
-	poly.add_contour(0, static_cast<unsigned int>(frameOuter.size()), outerPacked.data());
+	std::vector<float> outerPacked = packContour(frame);
+	poly.add_contour(0, static_cast<unsigned int>(frame.size()), outerPacked.data());
 
 	for (size_t i = 0; i < holes.size(); ++i)
 	{
@@ -920,7 +1250,47 @@ Polygon2 buildBayStonePolygon (const WindowGeometry &geom, const GothicMeshParam
 		                 holePacked.data());
 	}
 
-	return poly;
+	auto defects = [](const ContourValidationReport &check) {
+		std::ostringstream os;
+		for (std::size_t k = 0; k < kContourDefectCount; ++k)
+			if (check.counts[k])
+				os << ' ' << ContourDefectName(static_cast<ContourDefect>(k)) << '=' << check.counts[k];
+		if (check.truncated)
+			os << " (validation truncated)";
+		return os.str();
+	};
+
+	const ContourValidationReport direct = ValidateContours(poly);
+	if (direct.IsValid())
+		return poly;
+
+	GothicStoneInput input;
+	input.frame = frame;
+	input.voids = holes;
+	bool guardApplied = false;
+	GothicGuardOutcome outcome = GothicGuardOutcome::NotNeeded;
+	const std::vector<GothicRing> region =
+		buildGothicStoneRegion(input, kGothicClipperPrecision, kGothicGuardGridSteps,
+		                       &guardApplied, &outcome);
+	if (region.empty())
+	{
+		record(report, GothicBuildWarning::RegionInvalid,
+		       "level-0 stone region: the boolean left no stone, direct assembly kept:" + defects(direct));
+		return poly;
+	}
+	Polygon2 repaired = gothicRegionToPolygon2(region);
+	const ContourValidationReport check = ValidateContours(repaired);
+	if (guardApplied)
+		record(report, GothicBuildWarning::MorphologicalGuard);
+	if (outcome == GothicGuardOutcome::ClosingFallback)
+		record(report, GothicBuildWarning::GuardClosingFallback,
+		       "guard: opening + closing left a contour defect, closing alone kept");
+	if (check.IsValid())
+		record(report, GothicBuildWarning::RegionRepaired, "level-0 assembly:" + defects(direct));
+	else
+		record(report, GothicBuildWarning::RegionInvalid,
+		       "level-0 stone region, after the boolean and the guard:" + defects(check));
+	return repaired;
 }
 
 void tessellateToMesh (Polygon2 &polygon, Mesh &out, double z)
@@ -1220,26 +1590,41 @@ namespace
 	// moulding : every sub-lancet frame (cusped/foiled head at the leaves) and each
 	// crowning sub-rosette rim, at every recursion level. Mirrors the structural
 	// part of collectUnitVoids so the beads track the sub-tracery exactly.
-	// Decorative voids (foils, fillets, rosette flower) are NOT moulded.
+	// Decorative voids (foils, fillets, rosette flower) are NOT moulded. An outline
+	// that cannot be built is skipped, recorded as GothicBuildWarning::MouldingDropped.
 	void collectMouldingOutlines (const ArchGeom &arch, const ArchOffsetParams &off,
 	                              const SubwindowParams &sub, double sillY, int remaining,
 	                              bool headFoiled, int headFoils, double maxAngleRad,
+	                              const GothicFeatureThresholds &thr,
+	                              GothicBuildReport *report,
 	                              std::vector<std::vector<Vector2d>> &out)
 	{
 		if (remaining <= 0) return;
 		ArchOffsetGeom o;
-		try { o = buildArchOffset(arch, off); } catch (...) { return; }
+		try { o = buildArchOffset(arch, off); }
+		catch (...)
+		{
+			record(report, GothicBuildWarning::MouldingDropped, currentExceptionText("moulding unit offset"));
+			return;
+		}
 		SubwindowsGeom subs;
-		try { subs = buildSubwindows(arch, off, sub); } catch (...) { return; }
+		try { subs = buildSubwindows(arch, off, sub); }
+		catch (...)
+		{
+			record(report, GothicBuildWarning::MouldingDropped, currentExceptionText("moulding unit subdivision"));
+			return;
+		}
 
 		for (const auto &l : subs.lancets)
 		{
-			ArchOffsetParams lo = off;
-			const double r = l.arch.circleL.radius;
-			lo.inner = std::min(off.inner, 0.30 * r);
-			lo.outer = std::min(off.outer, 0.30 * r);
+			const ArchOffsetParams lo = childOffset(off, l.arch);
 			ArchOffsetGeom lOff;
-			try { lOff = buildArchOffset(l.arch, lo); } catch (...) { continue; }
+			try { lOff = buildArchOffset(l.arch, lo); }
+			catch (...)
+			{
+				record(report, GothicBuildWarning::MouldingDropped, currentExceptionText("moulding sub-lancet offset"));
+				continue;
+			}
 			const bool subLeaf = (remaining - 1 <= 0);
 			std::vector<Vector2d> opening =
 				(headFoiled && subLeaf)
@@ -1248,24 +1633,72 @@ namespace
 			opening = archWithBody(opening, sillY);
 			out.push_back(std::move(opening));
 			collectMouldingOutlines(l.arch, lo, sub, sillY, remaining - 1,
-			                        headFoiled, headFoils, maxAngleRad, out);
+			                        headFoiled, headFoils, maxAngleRad, thr, report, out);
 		}
 
 		if (subs.lancets.size() == 2)
 		{
 			const double axisX = 0.5 * (o.inner.circleL.center.x + o.inner.circleR.center.x);
-			const Vector2d subApex = subs.lancets.back().offset.inner.apex;
+			const Vector2d subApex = childInnerApex(subs.lancets.back(), off, nullptr);
 			Circle rc = rosetteTangentToLancets(o.inner, axisX, subApex);
-			if (rc.radius > 3.0 && rc.center.y > subApex.y)
+			if (rc.radius > thr.minSubRosetteRadius && rc.center.y > subApex.y)
 				out.push_back(circleOutlineCcw(rc, maxAngleRad));
 		}
 	}
+
+	// Distance from (x, y) to the closed ring `ring` when the point is outside
+	// it, 0 inside.
+	double distanceOutside (const std::vector<Vector2d> &ring, double x, double y)
+	{
+		const std::size_t n = ring.size();
+		bool inside = false;
+		double d = std::numeric_limits<double>::infinity();
+		for (std::size_t i = 0, j = n - 1; i < n; j = i++)
+		{
+			const Vector2d &a = ring[i], &b = ring[j];
+			if (((a.y > y) != (b.y > y)) && (x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x))
+				inside = !inside;
+			const double dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+			const double t = l2 > 0.0 ? std::min(1.0, std::max(0.0, ((x - a.x) * dx + (y - a.y) * dy) / l2)) : 0.0;
+			d = std::min(d, std::hypot(a.x + t * dx - x, a.y + t * dy - y));
+		}
+		return inside ? 0.0 : d;
+	}
+
+	// A recursive moulding outline bounded by the window of its unit, as the
+	// stone bounds the sub-voids (buildGothicStoneRegion, clippedVoids) : the
+	// outline as is when every vertex lies in the window (to 1e-7 x the window
+	// extent), otherwise its intersection with the window, on the Clipper2 grid.
+	std::vector<std::vector<Vector2d>> boundedByWindow (const std::vector<Vector2d> &outline,
+	                                                    const std::vector<Vector2d> &window)
+	{
+		if (window.size() < 3)
+			return { outline };
+		double xMin = window[0].x, xMax = xMin, yMin = window[0].y, yMax = yMin;
+		for (const Vector2d &v : window)
+		{
+			xMin = std::min(xMin, v.x); xMax = std::max(xMax, v.x);
+			yMin = std::min(yMin, v.y); yMax = std::max(yMax, v.y);
+		}
+		const double tol = 1e-7 * std::hypot(xMax - xMin, yMax - yMin);
+		if (std::all_of(outline.begin(), outline.end(),
+		                [&](const Vector2d &v) { return distanceOutside(window, v.x, v.y) <= tol; }))
+			return { outline };
+		std::vector<std::vector<Vector2d>> pieces;
+		for (const PathD &p : Intersect(PathsD{ toPathD(outline) }, PathsD{ toPathD(window) },
+		                                FillRule::NonZero, kGothicClipperPrecision))
+			if (p.size() >= 3)
+				pieces.push_back(fromPathD(p));
+		return pieces;
+	}
 }
 
-void buildBayMoulding (const WindowGeometry &geom, const GothicMeshParams &params,
-                       const std::vector<Vector2d> &profile, Mesh &out)
+std::vector<FusedBar> collectBayMouldingOutlines (const WindowGeometry &geom, const GothicMeshParams &params,
+                                                  const std::vector<Vector2d> &profile,
+                                                  GothicBuildReport *report)
 {
-	if (profile.size() < 3) return;
+	std::vector<FusedBar> bars;
+	if (profile.size() < 3) return bars;
 
 	// Sill levels : recomputed identically to buildBayStonePolygon so the moulding
 	// tracks the EXACT opening outlines (incl. foiled heads and straight jambs).
@@ -1277,15 +1710,12 @@ void buildBayMoulding (const WindowGeometry &geom, const GothicMeshParams &param
 	const double bdOuter    = geom.mainOffset.outer.circleL.radius - geom.mainArch.circleL.radius;
 	const double sillLancet = sillMain + std::max(0.0, bdOuter);
 
-	std::vector<float>        V;
-	std::vector<unsigned int> F;
-
-	// Profile extent : base plane z and half-width, used to rescale per outline.
+	// Profile half-width, used to rescale per outline.
 	const double PI = 3.14159265358979323846;
-	double zBase = profile[0].x, halfW = 0.0;
-	for (const auto &p : profile) { zBase = std::min(zBase, p.x); halfW = std::max(halfW, std::fabs(p.y)); }
+	double halfW = 0.0;
+	for (const auto &p : profile) halfW = std::max(halfW, std::fabs(p.y));
 
-	// Emit one moulded bar along `outline`, with a pragmatic "stable extrusion"
+	// One moulded bar along `outline`, with a pragmatic "stable extrusion"
 	// guard : the bar half-width may not exceed ~0.6 x the outline's characteristic
 	// radius, otherwise the swept section self-intersects on tight curvature (small
 	// recursion sub-tracery, tiny sub-rosettes). Below a fifth of that the feature
@@ -1296,12 +1726,7 @@ void buildBayMoulding (const WindowGeometry &geom, const GothicMeshParams &param
 		const double charR = std::sqrt(std::fabs(signedAreaShoelace(outline)) / PI);
 		const double f = 0.6 * charR / halfW;
 		if (f < 0.2) return;                     // feature too small to mould
-		if (f >= 0.999) { sweepPolylineBuffers(outline, true, profile, 1.0, 1.0, V, F); return; }
-		std::vector<Vector2d> scaled;
-		scaled.reserve(profile.size());
-		for (const auto &q : profile)
-			scaled.push_back(Vector2d(zBase + (q.x - zBase) * f, q.y * f));
-		sweepPolylineBuffers(outline, true, scaled, 1.0, 1.0, V, F);
+		bars.push_back({ outline, f >= 0.999 ? 1.0 : f });
 	};
 
 	// Main frame inner edge (whole silhouette when a body is present).
@@ -1325,18 +1750,81 @@ void buildBayMoulding (const WindowGeometry &geom, const GothicMeshParams &param
 			collectMouldingOutlines(l.arch, params.recursionOffset, params.recursionSub,
 			                        sillLancet, params.recursionDepth,
 			                        params.lancetHeadFoiled, params.lancetHeadFoils,
-			                        params.maxAngleRad, subOutlines);
-			for (const auto &so : subOutlines) emit(so);
+			                        params.maxAngleRad, params.thresholds, report, subOutlines);
+			for (const auto &so : subOutlines)
+			{
+				const std::vector<std::vector<Vector2d>> pieces = boundedByWindow(so, opening);
+				if (pieces.empty())
+					record(report, GothicBuildWarning::MouldingDropped, "moulding outline: outside its window");
+				for (const auto &piece : pieces)
+					emit(piece);
+			}
 		}
 	}
 
-	// Rosette rim ring.
+	// Rosette : the rim of the lobed motif, the void edge of a plain oculus.
 	if (geom.hasRosette)
-		emit(circleOutlineCcw(geom.rosette.circle, params.maxAngleRad));
+	{
+		if (geom.hasRosetteFoils && geom.rosetteFoils.foils.size() >= 2)
+			emit(circleOutlineCcw(geom.rosette.circle, params.maxAngleRad));
+		else
+		{
+			const Circle oculus = plainOculusVoid(geom.rosette.circle, params.thresholds);
+			if (oculus.radius > 0.0)
+				emit(circleOutlineCcw(oculus, params.maxAngleRad));
+		}
+	}
+	return bars;
+}
+
+void buildBayMoulding (const WindowGeometry &geom, const GothicMeshParams &params,
+                       const std::vector<Vector2d> &profile, Mesh &out,
+                       GothicBuildReport *report)
+{
+	if (profile.size() < 3) return;
+	sweepBayMoulding(collectBayMouldingOutlines(geom, params, profile, report), profile, out, report);
+}
+
+void recordFusedBarsOutcome (const FusedBarsResult &result, GothicBuildReport *report)
+{
+	if (report == nullptr)
+		return;
+	if (result.failed)
+		report->Record(GothicBuildWarning::MouldingNotFused, "Profile",
+		               std::string("bars laid on the plate instead: ")
+		               + (result.failure ? result.failure : "fusion failed"));
+	else if (result.skippedLevels > 0)
+		report->Record(GothicBuildWarning::MouldingSimplified, "Profile",
+		               std::to_string(result.skippedLevels) + " level step(s) skipped by the ring guard");
+}
+
+void sweepBayMoulding (const std::vector<FusedBar> &bars, const std::vector<Vector2d> &profile, Mesh &out,
+                       GothicBuildReport *report)
+{
+	if (profile.size() < 3) return;
+
+	// Base plane of the profile : a scaled bar keeps its foot on it.
+	double zBase = profile[0].x;
+	for (const auto &p : profile) zBase = std::min(zBase, p.x);
+
+	std::vector<float>        V;
+	std::vector<unsigned int> F;
+	for (const FusedBar &bar : bars)
+	{
+		if (bar.scale == 1.0) { sweepPolylineBuffers(bar.outline, true, profile, 1.0, 1.0, V, F); continue; }
+		std::vector<Vector2d> scaled;
+		scaled.reserve(profile.size());
+		for (const auto &q : profile)
+			scaled.push_back(Vector2d(zBase + (q.x - zBase) * bar.scale, q.y * bar.scale));
+		sweepPolylineBuffers(bar.outline, true, scaled, 1.0, 1.0, V, F);
+	}
 
 	if (V.empty() || F.empty()) return;
 	out.SetVertices(static_cast<unsigned int>(V.size() / 3), V.data());
 	out.SetFaces   (static_cast<unsigned int>(F.size() / 3), 3, F.data());
+	if (report)
+		report->Record(GothicBuildWarning::MultipleShells, "Profile",
+		               std::to_string(bars.size()) + " moulding bar(s), each a closed shell laid on the plate, not fused to it");
 }
 
 void extrudeToMesh (Polygon2 &polygon, Mesh &out, double zBottom, double zTop)

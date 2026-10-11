@@ -1,0 +1,11 @@
+--- liste de fichiers ---
+repertoire    : fixture
+fichiers      : 7
+non affiches  : 0
+kind-obj     _first.obj
+kind-obj     cloud.ply
+kind-obj     cube.obj
+kind-obj     MODEL.OBJ
+kind-stl     part.stl
+kind-generic scene.glb
+kind-generic tri.off

@@ -16,6 +16,13 @@
 //   regenerate(id)             -> string OBJ : Regenerate() puis export du maillage
 //   destroyShape(id)           -> libere l'objet
 //
+// Garde d'impression d'une Gothic Window (gothic_implementation.md, M4-d2) :
+//   setPrintConstraints(json)  -> JSON : lecture d'un document print-constraints/v1
+//                                 (l'imprimante), etat garde cote WASM
+//   printConstraints()         -> JSON : document de l'imprimante en vigueur
+//   setPrintedWidthMm(id, mm)  -> bool : largeur imprimee de la piece `id`
+//   gothicPrintReport(id)      -> { refused?, warning?, print?, printFailure? }
+//
 // UN SEUL ECRIVAIN OBJ, celui du moteur natif, sur les deux usages :
 //   regenerate(id) -> MeshIO::export_obj_bytes, pour l'AMORCAGE du viseur ;
 //   exportObj(id)  -> MeshIO::export_obj_zip_bytes, l'archive OBJ+MTL, donc les
@@ -38,16 +45,21 @@
 //
 // ===========================================================================
 
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <iterator>
 #include <functional>
+#include <limits>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "parameterized_shapes.h"   // IParameterized + formes a ressource
+#include "parameterized_gothic.h"   // ParameterizedGothicWindow (createGothicFromJson, exportGothicJson)
+#include "print_validation_json.h"  // print-constraints/v1, print-report/v1 (garde d'impression)
 #include "parametric_catalog.h"     // fabriques des formes sans ressource
 #include "image_pixel_blocks.h"      // image_to_pixel_blocks_per_component
 #include "material.h"                // Material::GetName (nommage des groupes OBJ)
@@ -76,6 +88,14 @@ int g_nextId = 1;
 // l'objet. Sans ce registre, chaque import laissait sa copie dans le heap WASM
 // pour la duree de la page (verifie : /tmp accumulait maker_img_0/1/2...).
 std::map<int, std::string> g_tempFiles;
+
+// Imprimante : seuils et enveloppe, poses par setPrintConstraints. Jamais
+// d'echelle : elle vient de la largeur imprimee de chaque piece.
+PrintConstraints g_printer;
+
+// Largeur imprimee (mm) par objet : elle appartient a la piece, pas a
+// l'imprimante. Absente : echelle non fixee. Liberee par destroyShape().
+std::map<int, double> g_printedWidthMm;
 
 void removeTempFile(int id)
 {
@@ -180,6 +200,9 @@ int registerObject(std::unique_ptr<IParameterized> obj)
 }
 
 // --- serialisation JSON minimale (echappement des chaines) -----------------
+// Tout octet < 0x20 est echappe (RFC 8259) : recopie tel quel, un caractere de
+// controle rendrait le document illisible par JSON.parse. Les octets >= 0x80
+// passent tels quels (UTF-8).
 std::string jsonEscape(const std::string& s)
 {
     std::string o;
@@ -191,7 +214,16 @@ std::string jsonEscape(const std::string& s)
             case '\n': o += "\\n";  break;
             case '\r': o += "\\r";  break;
             case '\t': o += "\\t";  break;
-            default:   o += c;      break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20) {
+                    static const char hex[] = "0123456789abcdef";
+                    o += "\\u00";
+                    o += hex[(static_cast<unsigned char>(c) >> 4) & 0xF];
+                    o += hex[static_cast<unsigned char>(c) & 0xF];
+                } else {
+                    o += c;
+                }
+                break;
         }
     }
     return o;
@@ -455,6 +487,82 @@ emscripten::val exportPixelBlocks(int id, const std::string& base)
     return out;
 }
 
+// Garde d'export d'une Gothic Window : un rapport de construction qui porte
+// une erreur refuse l'export -- octets vides, motif dans `refused` ; un maillage
+// non strict est exporte, ses defauts dans `warning`. Le controle d'impression
+// (CheckGothicExportAndPrintAtWidth : imprimante g_printer, largeur imprimee de
+// `id`) AVERTIT seulement : rapport print-report/v1 dans `print`. Une exception
+// du controle ou de son ecriture JSON ne change pas le verdict : motif dans
+// `printFailure`, et le verdict geometrique est recalcule seul s'il manque.
+// Une exception de CheckGothicExport lui-meme laisse la geometrie NON JUGEE :
+// refus, motif « geometry not judged: ... » dans `refused`, comme pour une
+// erreur de construction. Sans effet sur les autres formes. Rend false sur
+// refus.
+bool gothicExportGuard(int id, IParameterized* obj, const Mesh& m, emscripten::val& out)
+{
+    const auto* gw = dynamic_cast<const ParameterizedGothicWindow*>(obj);
+    if (!gw) return true;
+    std::optional<GothicExportCheck> geometry;
+    try
+    {
+        const auto width = g_printedWidthMm.find(id);
+        const std::optional<double> printedWidthMm =
+            (width == g_printedWidthMm.end()) ? std::nullopt : std::optional<double>(width->second);
+        const GothicPrintVerdict verdict = CheckGothicExportAndPrintAtWidth(*gw, m, g_printer, printedWidthMm);
+        geometry = verdict.check.geometry;
+        out.set("print", GothicPrintVerdictToJson(verdict));
+    }
+    catch (const std::exception& e)
+    {
+        out.set("printFailure", emscripten::val(e.what()));
+    }
+    catch (...)
+    {
+        out.set("printFailure", emscripten::val("unknown exception"));
+    }
+    if (!geometry)
+    {
+        try
+        {
+            geometry = CheckGothicExport(*gw, m);
+        }
+        catch (const std::exception& e)
+        {
+            out.set("refused", emscripten::val(std::string("geometry not judged: ") + e.what()));
+            return false;
+        }
+        catch (...)
+        {
+            out.set("refused", emscripten::val("geometry not judged: unknown exception"));
+            return false;
+        }
+    }
+    const GothicExportCheck check = *geometry;
+    if (!check.allowed)
+    {
+        out.set("refused", check.message);
+        return false;
+    }
+    if (!check.strict)
+        out.set("warning", check.message);
+    return true;
+}
+
+// Verdict de la garde d'export de `id`, sans octets : Regenerate, puis
+// gothicExportGuard. Sert au controle a la demande et a la garde du STL, dont
+// l'encodeur est en JS. Objet vide pour une forme qui n'est pas une Gothic
+// Window, ou un id inconnu.
+emscripten::val gothicPrintReport(int id)
+{
+    emscripten::val out = emscripten::val::object();
+    IParameterized* obj = find(id);
+    if (!obj || !dynamic_cast<ParameterizedGothicWindow*>(obj)) return out;
+    obj->Regenerate();
+    Mesh* m = meshOf(obj);
+    if (m) gothicExportGuard(id, obj, *m, out);
+    return out;
+}
+
 // Export OBJ de la forme courante, materiaux compris : delegue a
 // MeshIO::export_obj_zip_bytes, qui ecrit aussi le .mtl compagnon et met les
 // deux dans une archive.
@@ -467,6 +575,8 @@ emscripten::val exportPixelBlocks(int id, const std::string& base)
 //
 // Passe par MEMFS parce que MeshIO ecrit par NOM DE FICHIER -- donc exactement
 // le meme code qu'en natif, couvert par les memes tests d'E/S.
+//
+// Une Gothic Window passe par gothicExportGuard : `refused` ou `warning`.
 emscripten::val exportObj(int id, const std::string& base)
 {
     using namespace emscripten;
@@ -479,7 +589,7 @@ emscripten::val exportObj(int id, const std::string& base)
     {
         obj->Regenerate();
         Mesh* m = meshOf(obj);
-        if (m)
+        if (m && gothicExportGuard(id, obj, *m, out))
         {
             // `base` nomme les entrees INTERNES a l'archive, donc aussi la ligne
             // mtllib que le moteur natif derive du chemin de sortie : on ne garde que des
@@ -502,7 +612,8 @@ emscripten::val exportObj(int id, const std::string& base)
 }
 
 // Export GLB de la forme courante. UN SEUL fichier, la ou l'OBJ en demande deux :
-// le glTF binaire embarque ses materiaux, il n'y a pas d'archive a batir.
+// le glTF binaire embarque ses materiaux, il n'y a pas d'archive a batir. Meme
+// garde que l'OBJ (gothicExportGuard).
 emscripten::val exportGlb(int id, const std::string& base)
 {
     using namespace emscripten;
@@ -515,7 +626,7 @@ emscripten::val exportGlb(int id, const std::string& base)
     {
         obj->Regenerate();
         Mesh* m = meshOf(obj);
-        if (m)
+        if (m && gothicExportGuard(id, obj, *m, out))
         {
             // `base` ne nomme ici que le FICHIER telecharge : un GLB ne
             // reference aucun compagnon. Meme filtrage tout de meme, le nom
@@ -538,15 +649,87 @@ emscripten::val exportGlb(int id, const std::string& base)
 }
 #endif
 
+// Rapport JSON (GothicBuildReportToJson) du dernier createGothicFromJson,
+// accepte ou refuse : sur un refus, l'objet n'existe plus pour le porter.
+namespace { std::string g_lastGothicLoadReport; }
+
 // Cree une Gothic Window a partir d'un fichier de description JSON (schema
-// gothic-window-v2). Parse cote natif (ParameterizedGothicWindow::LoadFromJson),
-// puis la geometrie est generee par l'engine via Regenerate() (regenerate/meshData).
-// Renvoie l'id, ou -1 si le JSON est illisible.
+// gothic-window-v2, ou v1 converti). Parse cote natif
+// (ParameterizedGothicWindow::LoadFromJson), puis la geometrie est generee par
+// l'engine via Regenerate() (regenerate/meshData). Renvoie l'id, ou -1 si le
+// JSON est refuse ; le motif est dans lastGothicLoadReport().
 int createGothicFromJson(const std::string& jsonText)
 {
     auto obj = std::unique_ptr<ParameterizedGothicWindow>(new ParameterizedGothicWindow());
-    if (!obj->LoadFromJson(jsonText)) return -1;
+    const bool loaded = obj->LoadFromJson(jsonText);
+    g_lastGothicLoadReport = GothicBuildReportToJson(obj->LastLoadReport());
+    if (!loaded) return -1;
     return registerObject(std::move(obj));
+}
+
+std::string lastGothicLoadReport()
+{
+    return g_lastGothicLoadReport;
+}
+
+// Rapports de la Gothic Window `id` : {"load": chargement JSON, "build": dernier
+// Regenerate}, chacun au format GothicBuildReportToJson. "" si l'objet n'est pas
+// une Gothic Window.
+std::string gothicReport(int id)
+{
+    const ParameterizedGothicWindow* gw = dynamic_cast<ParameterizedGothicWindow*>(find(id));
+    if (!gw) return std::string();
+    return "{\"load\":" + GothicBuildReportToJson(gw->LastLoadReport())
+         + ",\"build\":" + GothicBuildReportToJson(gw->LastBuildReport()) + "}";
+}
+
+// Pose l'imprimante : document print-constraints/v1, lecture stricte
+// (PrintConstraintsFromJson). Refus : imprimante en vigueur inchangee. Un
+// mmPerUnit du document est IGNORE (l'echelle vient de la largeur imprimee de
+// chaque piece) et nomme dans `ignored`. Rend
+//   {"accepted": bool, "errors": [{"path", "message"}], "ignored": [...],
+//    "constraints": document de l'imprimante en vigueur apres l'appel}.
+std::string setPrintConstraints(const std::string& jsonText)
+{
+    PrintConstraints read = g_printer;
+    const std::vector<PrintJsonError> errors = PrintConstraintsFromJson(jsonText, read);
+    const bool ignoredScale = errors.empty() && read.mmPerUnit.has_value();
+    if (errors.empty())
+    {
+        read.mmPerUnit.reset();
+        g_printer = read;
+    }
+    std::string j = "{\"accepted\":";
+    j += errors.empty() ? "true" : "false";
+    j += ",\"errors\":[";
+    for (std::size_t i = 0; i < errors.size(); ++i)
+    {
+        if (i) j += ',';
+        j += "{\"path\":\"" + jsonEscape(errors[i].path) + "\",\"message\":\"" + jsonEscape(errors[i].message) + "\"}";
+    }
+    j += "],\"ignored\":[";
+    if (ignoredScale) j += "\"mmPerUnit\"";
+    j += "],\"constraints\":" + PrintConstraintsToJson(g_printer) + "}";
+    return j;
+}
+
+// Document print-constraints/v1 de l'imprimante en vigueur, sans mmPerUnit.
+std::string printConstraints()
+{
+    return PrintConstraintsToJson(g_printer);
+}
+
+// Largeur imprimee (mm) de la piece `id`, d'ou la garde derive l'echelle a
+// chaque controle (GothicMmPerUnitForPrintedWidth). NaN l'efface (echelle non
+// fixee) ; toute autre valeur est gardee telle quelle : une valeur hors domaine
+// est rendue par la garde dans le rapport, sans bloquer l'export. Rend false
+// pour un id inconnu.
+bool setPrintedWidthMm(int id, double mm)
+{
+    if (!find(id)) return false;
+    if (std::isnan(mm)) g_printedWidthMm.erase(id);
+    else g_printedWidthMm[id] = mm;
+    return true;
 }
 
 // Exporte la Gothic Window `id` en JSON de description (schema gothic-window-v2),
@@ -612,11 +795,14 @@ std::string getParams(int id)
     return j;
 }
 
-// Ecrit une valeur de parametre par nom (aucun pointeur cru cote JS).
+// Ecrit une valeur de parametre par nom (aucun pointeur cru cote JS). Refuse une
+// valeur non finie (NaN, infinie), y compris une fois convertie en float (1e39) :
+// aucun parametre n'en admet.
 bool setParam(int id, const std::string& name, double value)
 {
     IParameterized* obj = find(id);
     if (!obj) return false;
+    if (!std::isfinite(value) || std::fabs(value) > std::numeric_limits<float>::max()) return false;
 
     std::vector<Parameter> params = obj->GetParameters();
     for (Parameter& p : params) {
@@ -677,6 +863,7 @@ void destroyShape(int id)
 {
     g_objects.erase(id);      // d'abord l'objet : plus personne ne relira le chemin
     removeTempFile(id);
+    g_printedWidthMm.erase(id);
 }
 
 #ifdef __EMSCRIPTEN__
@@ -889,6 +1076,12 @@ EMSCRIPTEN_BINDINGS(maker)
     emscripten::function("exportPixelBlocks",      &exportPixelBlocks);
     emscripten::function("createGothicFromJson",&createGothicFromJson);
     emscripten::function("exportGothicJson",  &exportGothicJson);
+    emscripten::function("gothicReport",      &gothicReport);
+    emscripten::function("lastGothicLoadReport", &lastGothicLoadReport);
+    emscripten::function("setPrintConstraints", &setPrintConstraints);
+    emscripten::function("printConstraints",  &printConstraints);
+    emscripten::function("setPrintedWidthMm", &setPrintedWidthMm);
+    emscripten::function("gothicPrintReport", &gothicPrintReport);
     emscripten::function("getParams",         &getParams);
     emscripten::function("setParam",          &setParam);
     emscripten::function("setParamString",    &setParamString);

@@ -1,0 +1,48 @@
+--- informations du modele ---
+proprietes        : 14
+lignes maillages  : 10
+lignes materiaux  : 16
+materiaux         : 3
+--- proprietes ---
+File               : panels.obj
+Vertices           : 12
+Faces              : 8
+Meshes             : 3
+Triangle mesh      : True
+Borders            : 9
+Non manifold edges : 1
+Bounding box X     : [ 0 , 5 ]
+Bounding box Y     : [ -1 , 1 ]
+Bounding box Z     : [ 0 , 1 ]
+Size X             : 5
+Size Y             : 2
+Size Z             : 1
+Path               : test/data/peles/info/panels.obj
+--- maillages ---
+d0 -       Meshes
+d1 -       closed
+d2 -       4 vertices
+d2 -       4 faces
+d1 -       open
+d2 -       3 vertices
+d2 -       1 faces
+d1 -       nonmanifold
+d2 -       5 vertices
+d2 -       3 faces
+--- materiaux ---
+d0 -       Materials
+d1 -       closed
+d2 -       rouge
+d3 -       Type: Advanced Color
+d4 #ff0000 Diffuse: RGB(1.00, 0.00, 0.00)
+d4 #000000 Ambient: RGB(0.00, 0.00, 0.00)
+d1 -       open
+d2 -       vert
+d3 -       Type: Advanced Color
+d4 #00ff00 Diffuse: RGB(0.00, 1.00, 0.00)
+d4 #000000 Ambient: RGB(0.00, 0.00, 0.00)
+d1 -       nonmanifold
+d2 -       bleu
+d3 -       Type: Advanced Color
+d4 #0000ff Diffuse: RGB(0.00, 0.00, 1.00)
+d4 #000000 Ambient: RGB(0.00, 0.00, 0.00)

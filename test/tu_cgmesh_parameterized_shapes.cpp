@@ -12,6 +12,7 @@
 
 #include "../src/cgmesh/mesh.h"
 #include "../src/cgmesh/parameterized.h"
+#include "../src/cgmesh/parameterized_gothic.h"
 #include "../src/cgmesh/parameterized_shapes.h"
 #include "../src/cgmesh/lsysteminit.h"   // les valeurs d'enum LSYSTEM_*
 

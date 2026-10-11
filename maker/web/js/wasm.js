@@ -15,6 +15,8 @@ import createMakerModule from "../maker.js";
 const REQUIRED_BINDINGS = [
   "listShapes", "createShape", "createSvgExtrusion", "createImageRelief",
   "createGothicFromJson", "exportGothicJson", "getParams", "setParam",
+  "gothicReport", "lastGothicLoadReport",
+  "setPrintConstraints", "printConstraints", "setPrintedWidthMm", "gothicPrintReport",
   "regenerate", "exportObj", "exportGlb", "meshData", "destroyShape",
   "createImagePixelBlocks", "exportPixelBlocks",
   // Pages GABARIT (template.html) : elles pilotent un graphe sur CETTE instance

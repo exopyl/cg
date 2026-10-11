@@ -1,0 +1,20 @@
+# Les fichiers attendus sont des ORACLES : ils sont compares OCTET POUR OCTET a
+# la sortie de `peles --dump-tree`, `peles --dump-files` et `peles --dump-info`,
+# qui ecrivent en LF sur les deux plateformes (stdout est bascule en mode
+# binaire).
+#
+# `-text` interdit a git toute conversion de fin de ligne. Le depot a
+# core.autocrlf=true : sans cette ligne, ces fichiers seraient extraits en CRLF
+# sous Windows et la comparaison echouerait sur tout clone -- pour une raison
+# sans le moindre rapport avec ce qu'elle mesure.
+expected_dump_tree.txt -text
+expected_dump_files.txt -text
+expected_dump_info.txt -text
+expected_reference_info.txt -text
+
+# LES FIXTURES DE panels ET many_materials SONT LUES PAR peles, PAS COMPAREES.
+# Elles sont tout de meme protegees : l'importateur OBJ lit les fins de ligne,
+# et une fixture reecrite en CRLF sur un clone Windows ferait diverger les
+# nombres de l'oracle sans que rien ne nomme la cause.
+info/*.obj -text
+info/*.mtl -text

@@ -148,6 +148,10 @@ if (CG_ENABLE_SANITIZERS)
                             -fno-omit-frame-pointer -g)
         add_link_options(-fsanitize=address,undefined)
     endif ()
+    # Les bornes de temps des tests ne valent pas sous sanitizer, ou NDEBUG
+    # reste pose en Release : cette macro les ecarte, quel que soit le
+    # compilateur (Clang ne pose pas __SANITIZE_ADDRESS__).
+    add_compile_definitions(CG_SANITIZERS_ENABLED)
     message(STATUS "Sanitizers ACTIFS (CG_ENABLE_SANITIZERS=ON)")
 endif ()
 
