@@ -65,6 +65,9 @@ if (EMSCRIPTEN)
         ${PROJECT_SOURCE_DIR}/smoothing_laplacian.cpp
         ${PROJECT_SOURCE_DIR}/simplification.cpp
         ${PROJECT_SOURCE_DIR}/bvh.cpp
+        # Validateur de maillage : sans dependance hors mesh.h, disponible pour
+        # controler un maillage avant export.
+        ${PROJECT_SOURCE_DIR}/mesh_validation.cpp
         # Conteneur ZIP generique (entrees non compressees) : livre l'OBJ et son
         # .mtl en un seul fichier, et servira au 3MF. Aucune dependance -- zlib
         # n'est pas requis pour du "stored".
