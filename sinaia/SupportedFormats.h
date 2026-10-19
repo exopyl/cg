@@ -118,4 +118,16 @@ inline int IconForExtension(const wxString& ext)
     return -1;
 }
 
+// Libellé lisible de la famille d'une extension (ex. "STEP"), insensible à la
+// casse, ou chaîne vide si l'extension n'est pas importable.
+inline wxString LabelForExtension(const wxString& ext)
+{
+    const wxString lower = ext.Lower();
+    for (const Format3D& f : SupportedFormats())
+        for (const wxChar* e : f.exts)
+            if (lower == e)
+                return f.label;
+    return wxString();
+}
+
 } // namespace sinaia

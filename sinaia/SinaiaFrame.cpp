@@ -246,6 +246,10 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_DIRCTRL_SELECTIONCHANGED(ID_DIRCTRL, MyFrame::OnDirCtrlSelectionChanged)
     EVT_LIST_ITEM_ACTIVATED(ID_FILESCTRL, MyFrame::OnFilesCtrlListItemActivated)
     EVT_LIST_BEGIN_DRAG(ID_FILESCTRL, MyFrame::OnFilesCtrlBeginDrag)
+    EVT_LIST_ITEM_RIGHT_CLICK(ID_FILESCTRL, MyFrame::OnFilesCtrlRightClick)
+    EVT_MENU(ID_FILES_CTX_OPEN, MyFrame::OnFilesCtxOpen)
+    EVT_MENU(ID_FILES_CTX_ADD, MyFrame::OnFilesCtxAdd)
+    EVT_MENU(ID_FILES_CTX_PROPERTIES, MyFrame::OnFilesCtxProperties)
 
     EVT_AUINOTEBOOK_PAGE_CHANGED(ID_NOTEBOOK_MAIN, MyFrame::OnNotebookPageChanged)
 
@@ -1663,6 +1667,99 @@ void MyFrame::OnFilesCtrlBeginDrag(wxListEvent& event)
     data.SetData(utf8.length(), utf8.data());
     wxDropSource source(data, m_filesCtrl);
     source.DoDragDrop(wxDrag_CopyOnly);
+}
+
+wxString MyFrame::FilePathAt(long item) const
+{
+    wxListItem info;
+    info.SetId(item);
+    info.SetMask(wxLIST_MASK_TEXT);
+    if (item < 0 || !m_filesCtrl->GetItem(info))
+        return wxString();
+    return m_dcDirectory->GetPath() + wxT("\\") + info.m_text;
+}
+
+wxArrayString MyFrame::SelectedFilePaths() const
+{
+    wxArrayString paths;
+    long item = -1;
+    for (;;)
+    {
+        item = m_filesCtrl->GetNextItem(item, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+        if (item == -1)
+            break;
+        const wxString path = FilePathAt(item);
+        if (!path.empty())
+            paths.Add(path);
+    }
+    return paths;
+}
+
+void MyFrame::OnFilesCtrlRightClick(wxListEvent& event)
+{
+    m_filesCtxItem = event.GetIndex();
+    if (m_filesCtxItem < 0)
+        return;
+
+    // Comme l'Explorateur Windows : un clic droit hors de la sélection la remplace
+    // par l'élément cliqué ; dans la sélection, il la conserve (actions groupées).
+    if (!(m_filesCtrl->GetItemState(m_filesCtxItem, wxLIST_STATE_SELECTED) & wxLIST_STATE_SELECTED))
+    {
+        long item = -1;
+        while ((item = m_filesCtrl->GetNextItem(item, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED)) != -1)
+            m_filesCtrl->SetItemState(item, 0, wxLIST_STATE_SELECTED);
+        m_filesCtrl->SetItemState(m_filesCtxItem, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED,
+                                  wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
+    }
+
+    wxMenu menu;
+    menu.Append(ID_FILES_CTX_OPEN, _T("&Open"), _T("Open each file in a new tab"));
+    menu.Append(ID_FILES_CTX_ADD, _T("&Add to current view"), _T("Add the files to the current view"));
+    menu.AppendSeparator();
+    menu.Append(ID_FILES_CTX_PROPERTIES, _T("&Properties..."));
+    // Même règle que File > Add : sans onglet courant, rien où ajouter.
+    menu.Enable(ID_FILES_CTX_ADD, GetActiveCanvas() != nullptr);
+
+    PopupMenu(&menu);   // position par défaut = sous la souris
+}
+
+void MyFrame::OnFilesCtxOpen(wxCommandEvent& WXUNUSED(event))
+{
+    const wxArrayString paths = SelectedFilePaths();
+    for (size_t i = 0; i < paths.GetCount(); ++i)
+        OpenDocument(paths[i]);
+}
+
+void MyFrame::OnFilesCtxAdd(wxCommandEvent& WXUNUSED(event))
+{
+    AddFilesToCurrentView(SelectedFilePaths());
+}
+
+void MyFrame::OnFilesCtxProperties(wxCommandEvent& WXUNUSED(event))
+{
+    const wxString path = FilePathAt(m_filesCtxItem);
+    if (path.empty())
+        return;
+
+    const wxFileName fn(path);
+    wxString format = sinaia::LabelForExtension(fn.GetExt());
+    if (format.empty())
+        format = fn.GetExt().Upper();
+
+    const wxULongLong bytes = fn.GetSize();
+    wxString size = wxT("?");
+    if (bytes != wxInvalidSize)
+        size = wxString::Format(wxT("%s (%s bytes)"),
+                                wxFileName::GetHumanReadableSize(bytes),
+                                bytes.ToString());
+
+    const wxDateTime modified = fn.GetModificationTime();
+    const wxString date = modified.IsValid() ? modified.Format(wxT("%Y-%m-%d %H:%M:%S")) : wxString(wxT("?"));
+
+    const wxString text = wxString::Format(
+        wxT("Name:\t\t%s\nFolder:\t\t%s\nFormat:\t\t%s\nSize:\t\t%s\nModified:\t%s"),
+        fn.GetFullName(), fn.GetPath(), format, size, date);
+    wxMessageBox(text, wxT("Properties - ") + fn.GetFullName(), wxOK | wxICON_INFORMATION, this);
 }
 
 void MyFrame::OnNotebookPageChanged(wxAuiNotebookEvent& event)

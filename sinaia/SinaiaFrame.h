@@ -99,6 +99,9 @@ class MyFrame : public wxFrame
     ID_DIRCTRL,
 	ID_FILESCTRL,
 	ID_OPENFILESLIST,          // panneau "Models" (wxScrolledWindow)
+    ID_FILES_CTX_OPEN,         // menu contextuel du panneau "Files" : un onglet par fichier
+    ID_FILES_CTX_ADD,          //   ... ajout à la vue courante
+    ID_FILES_CTX_PROPERTIES,   //   ... propriétés du fichier cliqué
 
     ID_FILE_ADD,               // File > Add... : ajoute des fichiers à la vue courante
     ID_FILE_EXPORT_IMAGE,
@@ -310,6 +313,16 @@ private:
     // Démarre un glisser de TOUTE la sélection du panneau des fichiers, au format
     // interne SinaiaModelPathFormat (liste de chemins séparés par '\n').
     void OnFilesCtrlBeginDrag(wxListEvent& evt);
+    // Menu contextuel du panneau des fichiers : Open / Add to current view agissent
+    // sur toute la sélection, Properties sur l'élément cliqué.
+    void OnFilesCtrlRightClick(wxListEvent& evt);
+    void OnFilesCtxOpen(wxCommandEvent& evt);
+    void OnFilesCtxAdd(wxCommandEvent& evt);
+    void OnFilesCtxProperties(wxCommandEvent& evt);
+    // Chemins complets des éléments sélectionnés du panneau des fichiers.
+    wxArrayString SelectedFilePaths() const;
+    // Chemin complet de l'élément `item` du panneau des fichiers (vide si invalide).
+    wxString FilePathAt(long item) const;
 
     void OnNotebookPageChanged(wxAuiNotebookEvent& event);
 
@@ -503,6 +516,7 @@ private:
     wxPropertyGrid* m_propertiesGrid = nullptr;
     wxGenericDirCtrl* m_dcDirectory = nullptr;
     wxListCtrl* m_filesCtrl = nullptr;
+    long m_filesCtxItem = -1;      // élément sous le clic droit (cible de Properties)
 
     // Favorite directories: ordered list mirrored to wxConfig; the toolbar
     // dropdown menu is built on demand from it.
