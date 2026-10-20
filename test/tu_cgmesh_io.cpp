@@ -353,17 +353,28 @@ TEST(TEST_cgmesh_io, off)
     // context
     Mesh_half_edge* mesh = new Mesh_half_edge();
 
-    // action
-    mesh->m_pMesh->load("./test/data/cube.off");
+    // action : le code de retour compte, pas seulement les tailles -- un
+    // lecteur en echec peut laisser des tableaux alloues.
+    ASSERT_EQ(mesh->m_pMesh->load("./test/data/cube.off"), 0);
 
     // expectations
     EXPECT_EQ(mesh->m_pMesh->GetNVertices(), 8);
     EXPECT_EQ(mesh->m_pMesh->GetNFaces(), 12);
+    EXPECT_EQ(mesh->m_pMesh->FaceAt(11)->GetVertex(1), 4);
 
     // action
     auto exported = mesh->m_pMesh->save("./exported_cube.off");
 
     EXPECT_EQ(exported, 0);
+
+    // L'export se relit a l'identique.
+    Mesh reread;
+    ASSERT_EQ(reread.load("./exported_cube.off"), 0);
+    EXPECT_EQ(reread.GetNVertices(), 8u);
+    ASSERT_EQ(reread.GetNFaces(), 12u);
+    for (unsigned int f = 0; f < 12; ++f)
+        for (int k = 0; k < 3; ++k)
+            EXPECT_EQ(reread.FaceAt(f)->GetVertex(k), mesh->m_pMesh->FaceAt(f)->GetVertex(k));
 }
 
 TEST(TEST_cgmesh_io, stl)

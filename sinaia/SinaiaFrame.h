@@ -201,8 +201,9 @@ public:
     // model is open. Used by the remote console.
     MyGLCanvas* GetActiveCanvas();
 
-    // Load a model file into a new tab. Used by the remote console ('open').
-    void LoadModelFile(const wxString& filename) { OpenDocument(filename); }
+    // Load a model file into a new tab. Used by the remote console ('open'):
+    // a failure is logged, never shown in a modal box that would stall a script.
+    sinaia::ModelLoadResult LoadModelFile(const wxString& filename) { return OpenDocument(filename, false); }
 
     // Extrude un SVG dans un NOUVEL onglet et branche la geometrie parametree au
     // panneau de proprietes. Point d'entree unique du menu « From SVG » et de la
@@ -382,7 +383,11 @@ private:
     void OnShowWindow(wxCommandEvent& evt);
 
 private:
-    void OpenDocument(const wxString& filename);
+    // interactive : un echec porteur d'un diagnostic (.scad) s'affiche aussi
+    // dans une boite de dialogue, en plus du journal.
+    // Un .scad en echec n'ouvre pas d'onglet ; les autres formats en ouvrent un
+    // meme en echec. Le resultat porte le diagnostic.
+    sinaia::ModelLoadResult OpenDocument(const wxString& filename, bool interactive = true);
 
     // Favorite directories + last-used directory (persisted via wxConfig).
     void BuildFavoritesMenu(wxMenu& menu);           // fill a menu: favorites + Add current/Manage

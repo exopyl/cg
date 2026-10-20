@@ -216,6 +216,18 @@ if (ENABLE_OPENNURBS)
     endif()
 endif()
 
+# OpenSCAD : executable EXTERNE, lance a l'execution pour ouvrir les .scad
+# (src/cgmesh/import_scad.h) ; rien n'est lie et rien n'est copie. Ce chemin --
+# l'executable ou son repertoire, par exemple cg_binaries/openscad-2021.01 --
+# ne sert qu'a la suite de tests (dernier recours de leur recherche, apres
+# CG_OPENSCAD et le PATH), qui saute ses cas OpenSCAD sans lui. sinaia ne s'en
+# sert pas : sa seule source est le repertoire regle dans File > Settings.
+set(EXTERN_OPENSCAD "" CACHE PATH "OpenSCAD executable or its directory, used by the test suite only.")
+if (NOT EXTERN_OPENSCAD AND DEFINED ENV{EXTERN_OPENSCAD})
+    set(EXTERN_OPENSCAD "$ENV{EXTERN_OPENSCAD}")
+endif()
+file(TO_CMAKE_PATH "${EXTERN_OPENSCAD}" EXTERN_OPENSCAD_CMAKE_PATH)
+
 set(ENABLE_OCCT Off CACHE BOOL "Enable OCCT support.")
 set(EXTERN_OCCT "" CACHE PATH "Path to OCCT directory.")
 

@@ -13,6 +13,12 @@ file(GLOB HEADER_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/*.h)
 
 add_executable(${PROJECT_NAME} ${HEADER_FILES} ${SRC_FILES})
 
+# Emplacement d'OpenSCAD connu de la configuration : dernier recours de
+# tu_cgmesh_import_scad.cpp, dont les cas OpenSCAD sont sautes s'il manque.
+if (EXTERN_OPENSCAD_CMAKE_PATH)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CG_TEST_OPENSCAD_HINT="${EXTERN_OPENSCAD_CMAKE_PATH}")
+endif ()
+
 # zlib pour le SEUL test qui inclut nbt.h en direct.
 #
 # ${ZLIB_DIR} est PRIVATE sur la cible cgmesh : nbt.h inclut zlib.h, et l'exposer

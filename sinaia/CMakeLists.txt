@@ -30,6 +30,7 @@ set(srcs
         DecimationPanel.cpp
         DrawingArea.cpp
         Managers.cpp
+        ModelFileLoader.cpp
         PropertyPanel.cpp
         RemoteConsole.cpp
         SettingsPanel.cpp
