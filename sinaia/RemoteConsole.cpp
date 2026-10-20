@@ -546,16 +546,27 @@ std::string cmdOpen(MyFrame* frame, const std::string& path)
 {
     if (!frame) return "ERR frame unavailable\n";
 
-    bool ok = callOnMain([frame, &path]() -> bool {
+    // Un .scad refuse ou en echec n'ouvre aucun onglet : la reponse le dit, avec
+    // le motif sur une ligne. Les autres formats ouvrent un onglet meme en echec
+    // de lecture, et repondent encore « opened » (dette debt_sinaia.md §6).
+    struct Res { bool exists; bool scadFailed; std::string why; };
+    const Res r = callOnMain([frame, &path]() -> Res {
         const wxString wxPath = wxString::FromUTF8(path.c_str());
         if (!wxFileExists(wxPath))
-            return false;
-        frame->LoadModelFile(wxPath);
-        return true;
+            return { false, false, std::string() };
+        const sinaia::ModelLoadResult loaded = frame->LoadModelFile(wxPath);
+        if (loaded.ok || !sinaia::IsScadFile(wxPath))
+            return { true, false, std::string() };
+        wxString why = loaded.cancelled ? wxString(wxT("cancelled")) : loaded.error;
+        why.Replace(wxT("\r"), wxT(""));
+        why.Replace(wxT("\n"), wxT(" | "));
+        return { true, true, std::string(why.utf8_string()) };
     });
 
-    if (!ok)
+    if (!r.exists)
         return "ERR open failed (file not found?): " + path + "\n";
+    if (r.scadFailed)
+        return "ERR open failed: " + path + " -- " + r.why + "\n";
     return "opened " + path + "\nOK\n";
 }
 

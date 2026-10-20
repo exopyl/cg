@@ -2,16 +2,23 @@
 
 #include <wx/dialog.h>
 #include <wx/notebook.h>
+#include <wx/panel.h>
 #include <wx/checkbox.h>
 #include <wx/radiobox.h>
 #include <wx/slider.h>
 #include <wx/stattext.h>
 #include <wx/sizer.h>
 #include <wx/clrpicker.h>
+#include <wx/filepicker.h>
+#include <wx/statbox.h>
+#include <wx/textctrl.h>
+#include <wx/timer.h>
 #include <wx/aui/auibook.h>
 
+#include <filesystem>
 #include <functional>
 
+#include "FormatCatalog.h"
 #include "ImportSettings.h"
 #include "PanelSettings.h"
 
@@ -19,8 +26,9 @@
 // SettingsDialog: tabbed application settings.
 //
 // The "Import" tab exposes the operations applied to a 3D model when it is
-// loaded (see ImportSettings); these are read back with GetImportSettings()
-// only after a wxID_OK result.
+// loaded (see ImportSettings), and the DIRECTORY that contains the OpenSCAD
+// executable, sole source used to open .scad files; these are read back with
+// GetImportSettings() and GetOpenScadDirectory() only after a wxID_OK result.
 //
 // The "2D Panel" tab exposes the notebook appearance options that used to live
 // in the "Options > 3D Panel" menu (see PanelSettings). These are applied
@@ -35,9 +43,14 @@ public:
     SettingsDialog(wxWindow* parent,
                    const ImportSettings& settings,
                    const PanelSettings& panel,
-                   std::function<void(const PanelSettings&)> onPanelChanged = {})
+                   std::function<void(const PanelSettings&)> onPanelChanged = {},
+                   const wxString& openScadDirectory = wxString(),
+                   const wxString& openScadNote = wxString())
         : wxDialog(parent, wxID_ANY, _("Settings"),
                    wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE)
+        , m_initialOpenScadDirectory(openScadDirectory)
+        , m_openScadNote(openScadNote)
+        , m_openScadTimer(this)
         , m_origStyle(panel.notebookStyle)
         , m_initialPanel(panel)
         , m_onPanelChanged(std::move(onPanelChanged))
@@ -59,6 +72,29 @@ public:
         pageSizer->Add(m_normalize,     0, wxALL, 8);
         pageSizer->Add(m_triangulate,   0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
         pageSizer->Add(m_mergeVertices, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
+
+        // OpenSCAD : le répertoire qui contient l'exécutable est la seule source
+        // de l'import .scad. Son état est vérifié à chaque saisie, sans lancer
+        // OpenSCAD (cgmesh::scad::CheckOpenScadDirectory).
+        wxStaticBoxSizer* tools = new wxStaticBoxSizer(wxVERTICAL, importPage,
+            wxString::Format(_("OpenSCAD directory (contains %s)"), cgmesh::scad::kDirectoryExecutableName));
+        m_openScadDirectory = new wxDirPickerCtrl(tools->GetStaticBox(), wxID_ANY, openScadDirectory,
+                                                  _("Select the directory that contains OpenSCAD"),
+                                                  wxDefaultPosition, wxSize(360, -1),
+                                                  wxDIRP_USE_TEXTCTRL);
+        m_openScadStatus = new wxStaticText(tools->GetStaticBox(), wxID_ANY, wxEmptyString);
+        tools->Add(m_openScadDirectory, 0, wxEXPAND | wxALL, 4);
+        tools->Add(m_openScadStatus, 0, wxLEFT | wxRIGHT | wxBOTTOM, 4);
+        pageSizer->Add(tools, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
+        // La vérification touche le disque (un chemin réseau injoignable peut la
+        // bloquer) : elle est différée de 300 ms après la dernière frappe au
+        // lieu de suivre chaque caractère.
+        m_openScadDirectory->Bind(wxEVT_DIRPICKER_CHANGED, [this](wxFileDirPickerEvent& e) { ScheduleOpenScadStatus(); e.Skip(); });
+        if (wxTextCtrl* text = m_openScadDirectory->GetTextCtrl())
+            text->Bind(wxEVT_TEXT, [this](wxCommandEvent& e) { ScheduleOpenScadStatus(); e.Skip(); });
+        Bind(wxEVT_TIMER, [this](wxTimerEvent&) { UpdateOpenScadStatus(); }, m_openScadTimer.GetId());
+        UpdateOpenScadStatus();
+
         importPage->SetSizer(pageSizer);
 
         notebook->AddPage(importPage, _("Import"), true);
@@ -90,6 +126,19 @@ public:
         s.triangulate   = m_triangulate->GetValue();
         s.mergeVertices = m_mergeVertices->GetValue();
         return s;
+    }
+
+    // Vrai si l'utilisateur a changé le champ (comparaison au texte initial).
+    bool IsOpenScadDirectoryModified() const
+    {
+        return GetOpenScadDirectory() != m_initialOpenScadDirectory.Strip(wxString::both);
+    }
+
+    wxString GetOpenScadDirectory() const
+    {
+        wxString text = m_openScadDirectory->GetTextCtrl() ? m_openScadDirectory->GetTextCtrl()->GetValue()
+                                                          : m_openScadDirectory->GetPath();
+        return text.Strip(wxString::both);
     }
 
     PanelSettings GetPanelSettings() const
@@ -138,6 +187,31 @@ public:
     }
 
 private:
+    // Valide / invalide / vide, avec la raison ; couleur pour le repérer d'un coup d'œil.
+    void ScheduleOpenScadStatus()
+    {
+        m_openScadTimer.StartOnce(300);
+    }
+
+    void UpdateOpenScadStatus()
+    {
+        using cgmesh::scad::DirectoryState;
+        const DirectoryState state = cgmesh::scad::CheckOpenScadDirectory(
+            std::filesystem::u8path(GetOpenScadDirectory().utf8_string()));
+        wxString label = wxString::FromUTF8(sinaia::OpenScadDirectoryStatusText(state));
+        // Ancien réglage non converti : la trace reste visible tant que le
+        // champ n'a pas été modifié.
+        if (!m_openScadNote.empty() && !IsOpenScadDirectoryModified())
+            label << wxT("\n") << m_openScadNote << wxT(" -- kept until a valid directory is saved.");
+        m_openScadStatus->SetLabel(label);
+        m_openScadStatus->SetForegroundColour(state == DirectoryState::Valid ? wxColour(0, 128, 0)
+                                            : state == DirectoryState::Empty ? wxColour(96, 96, 96)
+                                                                             : wxColour(192, 0, 0));
+        m_openScadStatus->Refresh();
+        if (GetSizer())
+            Layout();
+    }
+
     static void SetFlag(long& style, long flag, bool on)
     {
         if (on) style |= flag; else style &= ~flag;
@@ -323,6 +397,11 @@ private:
     wxCheckBox* m_normalize;
     wxCheckBox* m_triangulate;
     wxCheckBox* m_mergeVertices;
+    wxDirPickerCtrl*  m_openScadDirectory;
+    wxStaticText*     m_openScadStatus;
+    wxString          m_initialOpenScadDirectory;
+    wxString          m_openScadNote;
+    wxTimer           m_openScadTimer;
 
     // 2D Panel tab.
     long                m_origStyle;

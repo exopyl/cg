@@ -47,6 +47,14 @@ jobs:
             libocct-modeling-algorithms-dev \
             libocct-data-exchange-dev \
             libtbb-dev
+          # OpenSCAD : EXECUTABLE lance par les tests de l'import .scad
+          # (test/tu_cgmesh_import_scad.cpp), sans quoi ils sont sautes. Ligne a
+          # part pour borner --no-install-recommends a ce seul paquet : la
+          # recommandation (openscad-mcad, bibliotheque de modules) ne sert a
+          # aucun test, et la retirer fait passer l'installation de 245 a 138
+          # paquets sur ubuntu:24.04 (593 -> 331 Mo, mesure sur une image nue).
+          sudo apt-get install -y --no-install-recommends openscad
+          openscad --version
 
       - name: Configure
         run: cmake --preset ci-linux
@@ -60,6 +68,12 @@ jobs:
         # GitHub-hosted a deja change (2 -> 4 sur les depots publics) et peut encore
         # changer. `nproc` donne la valeur du runner du jour ; l'echo la trace dans
         # le log, seule facon de savoir de quoi on disposait reellement.
+        #
+        # CG_REQUIRE_OPENSCAD : OpenSCAD est installe ci-dessus, donc un OpenSCAD
+        # introuvable est une regression de l'environnement -- les tests .scad
+        # ECHOUENT au lieu de sauter en silence (test/scad_test_support.h).
+        env:
+          CG_REQUIRE_OPENSCAD: "1"
         run: |
           echo "nproc = $(nproc)"
           ctest --preset ci-linux -j "$(nproc)"
@@ -124,6 +138,14 @@ jobs:
             libocct-modeling-algorithms-dev \
             libocct-data-exchange-dev \
             libtbb-dev
+          # OpenSCAD : EXECUTABLE lance par les tests de l'import .scad
+          # (test/tu_cgmesh_import_scad.cpp), sans quoi ils sont sautes. Ligne a
+          # part pour borner --no-install-recommends a ce seul paquet : la
+          # recommandation (openscad-mcad, bibliotheque de modules) ne sert a
+          # aucun test, et la retirer fait passer l'installation de 245 a 138
+          # paquets sur ubuntu:24.04 (593 -> 331 Mo, mesure sur une image nue).
+          sudo apt-get install -y --no-install-recommends openscad
+          openscad --version
 
       - name: Configure
         run: cmake --preset ci-linux-asan
@@ -140,9 +162,14 @@ jobs:
         #
         # abort_on_error=1 + print_stacktrace=1 : on veut la pile au premier
         # incident, et un code de sortie non nul.
+        #
+        # CG_REQUIRE_OPENSCAD : meme regle que le job ci-linux -- sous ASan, le
+        # lanceur de processus et le lecteur OFF des .scad sont exerces pour de
+        # bon, pas sautes.
         env:
           ASAN_OPTIONS: abort_on_error=1:detect_leaks=0:print_stacktrace=1
           UBSAN_OPTIONS: print_stacktrace=1
+          CG_REQUIRE_OPENSCAD: "1"
         run: |
           echo "nproc = $(nproc)"
           ctest --preset ci-linux-asan -j "$(nproc)"

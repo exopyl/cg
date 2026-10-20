@@ -11,6 +11,7 @@
 #include "../src/cgmesh/vmodels.h"
 #include "CuttingMat.h"
 #include "ImportSettings.h"
+#include "ModelFileLoader.h"
 
 
 class Mesh;
@@ -59,7 +60,9 @@ public:
 	MyGLCanvas(wxWindow *parent, wxTextCtrl* pCtrlLog, int *args = 0);
 	~MyGLCanvas() override;
 	
-	void LoadModel(const wxString& filename, const ImportSettings& settings = ImportSettings());
+	// Remplace la scene par le fichier. L'echec est journalise ; le resultat
+	// porte le diagnostic (sortie d'OpenSCAD pour un .scad).
+	sinaia::ModelLoadResult LoadModel(const wxString& filename, const ImportSettings& settings = ImportSettings());
 	// Ajoute un fichier à la scène COURANTE (nouveau Model) sans remplacer la vue ni
 	// renormaliser (repère monde conservé) ; recadre sur la scène. nullptr si échec.
 	Model* AppendModel(const wxString& filename);

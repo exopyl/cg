@@ -1,0 +1,3 @@
+// Cote reglable par -D size=...
+size = 5;
+cube(size);

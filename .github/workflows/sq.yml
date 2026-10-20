@@ -28,6 +28,11 @@ jobs:
             libocct-modeling-algorithms-dev \
             libocct-data-exchange-dev \
             libtbb-dev
+          # OpenSCAD : sans lui, les tests de l'import .scad sont sautes et leur
+          # code n'est pas couvert. Ligne a part pour borner
+          # --no-install-recommends a ce seul paquet (cf. build.yml).
+          sudo apt-get install -y --no-install-recommends openscad
+          openscad --version
       - name: Versions
         run: |
           echo && cmake --version
@@ -54,8 +59,15 @@ jobs:
 
       - name: Run coverage
         working-directory: ${{github.workspace}}
+        # CG_REQUIRE_OPENSCAD : OpenSCAD est installe ci-dessus ; introuvable, les
+        # tests .scad ECHOUENT au lieu de sauter (test/scad_test_support.h). Le job,
+        # lui, n'echoue pas : coverage.sh ignore le code de sortie de TU ; un tel
+        # echec se voit a la baisse de couverture.
+        # coverage.sh lance TU depuis build_coverage/test/test-run : OpenSCAD y est
+        # trouve par le PATH.
         env:
           EXTERN_OPENNURBS: ${{ github.workspace }}/.deps/cg_binaries/opennurbs-v8.27.26019.16021
+          CG_REQUIRE_OPENSCAD: "1"
         run: |
           sh coverage.sh
          

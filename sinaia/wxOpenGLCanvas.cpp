@@ -1084,7 +1084,23 @@ MyGLCanvas::PickedRay MyGLCanvas::UnprojectPixel (float pixelX, float pixelY)
 //
 //
 //
-void MyGLCanvas::LoadModel(const wxString& filename, const ImportSettings& settings)
+// Sortie d'un outil externe (OpenSCAD) puis issue du chargement, dans le
+// journal : une ligne par echec, prefixee par `failure` (chargement ou
+// rafraichissement) ; une annulation n'est pas un echec.
+static void LogModelLoad(wxTextCtrl* log, const wxString& filename, const sinaia::ModelLoadResult& r,
+                         const wxString& failure = _T("Echec de chargement"))
+{
+	if (!log)
+		return;
+	if (!r.log.empty())
+		*log << _T("OpenSCAD:\n") << r.log << (r.log.EndsWith(_T("\n")) ? _T("") : _T("\n"));
+	if (r.cancelled)
+		*log << wxString::Format(_T("Chargement annule: %s\n"), filename);
+	else if (!r.ok)
+		*log << wxString::Format(_T("%s: %s\n  %s\n"), failure, filename, r.error);
+}
+
+sinaia::ModelLoadResult MyGLCanvas::LoadModel(const wxString& filename, const ImportSettings& settings)
 {
 #ifdef LINUX
 	locale_t loc;
@@ -1092,11 +1108,9 @@ void MyGLCanvas::LoadModel(const wxString& filename, const ImportSettings& setti
 	uselocale(loc);
 #endif // LINUX
 
-	//cout << ((filename).mb_str(wxConvUTF8)) << endl;
-	//printf ("%s\n", (char*) ((filename).mb_str(wxConvUTF8)).data());
 	auto meshes = new VMeshes();
-	std::string loaded_filename = filename.ToUTF8().data();
-	VMeshesIO::load(*meshes, const_cast<char*>(loaded_filename.c_str()));
+	const sinaia::ModelLoadResult result = sinaia::LoadModelFile(*meshes, filename, wxGetTopLevelParent(this));
+	LogModelLoad(m_CtrlLog, filename, result);
 
 	wxString msg = wxString::Format(wxT("%zu meshes imported"), meshes->GetNMeshes());
 	*m_CtrlLog << msg << _T("\n");
@@ -1165,6 +1179,7 @@ void MyGLCanvas::LoadModel(const wxString& filename, const ImportSettings& setti
 		m_listId.push_back (m_nId);
 	}
 */
+	return result;
 }
 
 // Moitié « chargement » d'un ajout : le fichier entre dans la scène, mais NI la
@@ -1180,10 +1195,16 @@ Model* MyGLCanvas::AppendOneModel(const wxString& filename)
 
 	Model* mdl = m_pVModels->Add(base);
 	mdl->m_path = path;
-	if (!VMeshesIO::load(mdl->m_meshes, path.c_str()) || mdl->m_meshes.GetNMeshes() == 0)
+	sinaia::ModelLoadResult loaded = sinaia::LoadModelFile(mdl->m_meshes, filename, wxGetTopLevelParent(this));
+	if (loaded.ok && mdl->m_meshes.GetNMeshes() == 0)
+	{
+		loaded.ok    = false;
+		loaded.error = _T("no mesh in file");
+	}
+	LogModelLoad(m_CtrlLog, filename, loaded);
+	if (!loaded.ok)
 	{
 		m_pVModels->Remove(m_pVModels->GetNModels() - 1);   // retire le Model vide
-		if (m_CtrlLog) *m_CtrlLog << wxString::Format(_T("Echec de chargement: %s\n"), filename);
 		return nullptr;
 	}
 
@@ -1275,6 +1296,16 @@ bool MyGLCanvas::ReloadModel(Model* mdl)
 		return false;
 	}
 
+	// Un .scad sans répertoire OpenSCAD valide n'est pas relu : refuser AVANT de
+	// détacher les maillages du renderer garde l'affichage courant intact.
+	if (sinaia::IsScadFile(path) && !sinaia::IsScadImportAvailable())
+	{
+		if (m_CtrlLog)
+			*m_CtrlLog << wxString::Format(_T("Echec du rafraichissement: %s\n  %s\n"),
+			                               path, sinaia::ScadUnavailableMessage());
+		return false;
+	}
+
 	// Détache les anciens maillages du renderer AVANT de les détruire (le
 	// MeshRenderer indexe par Mesh* : un pointeur détruit resté indexé
 	// provoquerait un accès invalide au prochain rendu).
@@ -1291,12 +1322,15 @@ bool MyGLCanvas::ReloadModel(Model* mdl)
 
 	// Recharge en place depuis le fichier d'origine.
 	mdl->m_meshes.clean();
-	if (!VMeshesIO::load(mdl->m_meshes, mdl->m_path.c_str()) || mdl->m_meshes.GetNMeshes() == 0)
+	sinaia::ModelLoadResult loaded = sinaia::LoadModelFile(mdl->m_meshes, path, wxGetTopLevelParent(this));
+	if (loaded.ok && mdl->m_meshes.GetNMeshes() == 0)
 	{
-		if (m_CtrlLog)
-			*m_CtrlLog << wxString::Format(_T("Echec du rafraichissement: %s\n"), path);
-		return false;   // le Model est désormais vide
+		loaded.ok    = false;
+		loaded.error = _T("no mesh in file");
 	}
+	LogModelLoad(m_CtrlLog, path, loaded, _T("Echec du rafraichissement"));
+	if (!loaded.ok)
+		return false;   // le Model est désormais vide
 
 	for (auto* mesh : mdl->m_meshes.GetMeshes())
 		if (mesh) mesh->ComputeNormals();

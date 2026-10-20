@@ -12,6 +12,8 @@
 #include "wx/mimetype.h"
 #include <wx/propgrid/propgrid.h>
 #include <wx/busyinfo.h>
+#include <memory>
+#include <filesystem>
 #include <wx/config.h>      // wxConfig : favorites + last-dir persistence
 #include <wx/dirdlg.h>      // wxDirDialog : pick a folder to favorite
 #include <wx/filename.h>    // wxFileName : derive a directory from a file path
@@ -37,6 +39,7 @@
 
 #include "SinaiaFrame.h"
 #include "wxOpenGLCanvas.h"
+#include "ModelFileLoader.h"
 //#include "DrawingArea.h"
 #include "SettingsPanel.h"
 #include "SettingsDialog.h"
@@ -1879,7 +1882,7 @@ void MyFrame::OnTabAlignment(wxCommandEvent &evt)
 void MyFrame::OnOpen(wxCommandEvent& WXUNUSED(event))
 {
     // Dérivé du catalogue central (SupportedFormats.h), partagé avec le panneau "Files".
-    const wxString wildcard = sinaia::BuildOpenWildcard();
+    const wxString wildcard = sinaia::BuildOpenWildcard(sinaia::IsScadImportAvailable());
 
     // Start in the last directory a model was opened from (remembered across runs).
     wxFileDialog fd(this, wxT("Open 3D Model"), LoadLastDir(), wxEmptyString, wildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
@@ -1902,7 +1905,7 @@ void MyFrame::OnAddToView(wxCommandEvent& WXUNUSED(event))
         return;
 
     // Mêmes formats que File > Open : le catalogue central en est la seule source.
-    const wxString wildcard = sinaia::BuildOpenWildcard();
+    const wxString wildcard = sinaia::BuildOpenWildcard(sinaia::IsScadImportAvailable());
 
     wxFileDialog fd(this, wxT("Add 3D Models to Current View"), LoadLastDir(), wxEmptyString,
                     wildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
@@ -1934,6 +1937,14 @@ bool MyFrame::AddFilesToCurrentView(const wxArrayString& paths)
                                        paths.GetCount());
     canvas->AppendModels(paths);   // journalise chaque succès et chaque échec, par fichier
 
+    // Un .scad refusé faute de répertoire OpenSCAD valide : la marche à suivre
+    // s'affiche une fois pour le lot, les autres fichiers sont ajoutés.
+    bool scadRefused = false;
+    for (size_t i = 0; i < paths.GetCount() && !scadRefused; ++i)
+        scadRefused = sinaia::IsScadFile(paths[i]);
+    if (scadRefused && !sinaia::IsScadImportAvailable())
+        wxMessageBox(sinaia::ScadUnavailableMessage(), _("Add - OpenSCAD"), wxOK | wxICON_WARNING, this);
+
     SaveLastDir(wxFileName(paths.Last()).GetPath());
     OnSceneChanged();
     return true;
@@ -1959,11 +1970,16 @@ void MyFrame::DropModelFiles(const wxArrayString& paths)
         OpenDocument(paths[i]);
 }
 
-void MyFrame::OpenDocument(const wxString& strFilename)
+sinaia::ModelLoadResult MyFrame::OpenDocument(const wxString& strFilename, bool interactive)
 {
+    // Un .scad a son propre dialogue de progression, annulable : le wxBusyInfo,
+    // fenetre toujours au premier plan centree comme lui, pourrait le couvrir.
+    const bool scad = sinaia::IsScadFile(strFilename);
     wxBusyCursor busyCursor;
     wxWindowDisabler disabler;
-    wxBusyInfo busyInfo(_("Loading file, wait please..."));
+    std::unique_ptr<wxBusyInfo> busyInfo;
+    if (!scad)
+        busyInfo = std::make_unique<wxBusyInfo>(_("Loading file, wait please..."));
 
 
     *m_pWndLogging << _T("Opening ") << strFilename << _T("\n");
@@ -1973,7 +1989,23 @@ void MyFrame::OpenDocument(const wxString& strFilename)
     SaveLastDir(wxFileName(strFilename).GetPath());
 
     MyGLCanvas* pGLCanvas = new MyGLCanvas(m_pCtrl, m_pWndLogging, (int*)MyGLCanvas::GetDefaultAttributes());
-    pGLCanvas->LoadModel(strFilename, m_importSettings);
+    const sinaia::ModelLoadResult loaded = pGLCanvas->LoadModel(strFilename, m_importSettings);
+    // Un .scad qui n'a rien produit n'ouvre pas d'onglet vide ; le journal dit
+    // pourquoi. Les autres formats gardent leur comportement.
+    if (scad && !loaded.ok)
+    {
+        pGLCanvas->Destroy();
+        // Differe : la boite s'ouvre apres la levee du wxWindowDisabler de
+        // cette fonction. Une annulation n'est pas une erreur.
+        if (interactive && !loaded.cancelled)
+        {
+            const wxString title = wxT("Open - ") + wxFileName(strFilename).GetFullName();
+            const wxString error = loaded.error;
+            const long icon = loaded.unavailable ? wxICON_WARNING : wxICON_ERROR;   // réglage à faire vs échec
+            CallAfter([this, title, error, icon]() { wxMessageBox(error, title, wxOK | icon, this); });
+        }
+        return loaded;
+    }
 
     wxArrayString aString = wxSplit(strFilename, '\\');
     wxString title = aString.back();
@@ -2020,6 +2052,7 @@ void MyFrame::OpenDocument(const wxString& strFilename)
     m_pToolBar2->Refresh();
 
     UpdateContextualPanes();
+    return loaded;
 }
 
 void MyFrame::OnSceneChanged()
@@ -2259,6 +2292,15 @@ void MyFrame::RefreshModelAt(int index)
     Model* mdl = canvas->GetVModels()->GetModel((size_t)index);
     if (!mdl)
         return;
+
+    // Sans répertoire OpenSCAD valide, un .scad n'est pas relu : le modèle
+    // affiché est conservé, et la marche à suivre s'affiche.
+    if (sinaia::IsScadFile(wxString::FromUTF8(mdl->m_path.c_str())) && !sinaia::IsScadImportAvailable())
+    {
+        *m_pWndLogging << sinaia::ScadUnavailableMessage() << _T("\n");
+        wxMessageBox(sinaia::ScadUnavailableMessage(), _("Refresh - OpenSCAD"), wxOK | wxICON_WARNING, this);
+        return;
+    }
 
     // ReloadModel détache les anciens Mesh* du renderer, relit le fichier en
     // place (le Model* et donc la sélection restent valides) et recadre la
@@ -3048,11 +3090,18 @@ void MyFrame::OnSettings(wxCommandEvent& WXUNUSED(event))
 	// The 2D Panel options are applied live as the user edits them; the dialog
 	// calls back into ApplyPanelSettings on every change and restores this
 	// initial state itself if the user cancels.
+	const sinaia::OpenScadSetting openScad = sinaia::LoadOpenScadSetting();
 	SettingsDialog dlg(this, m_importSettings, panel,
-	                   [this](const PanelSettings& p) { ApplyPanelSettings(p); });
+	                   [this](const PanelSettings& p) { ApplyPanelSettings(p); },
+	                   openScad.directory, openScad.note);
 	if (dlg.ShowModal() == wxID_OK)
 	{
 		m_importSettings = dlg.GetImportSettings();
+		const wxString directory = dlg.GetOpenScadDirectory();
+		const bool valid = cgmesh::scad::CheckOpenScadDirectory(
+			std::filesystem::u8path(directory.utf8_string())) == cgmesh::scad::DirectoryState::Valid;
+		sinaia::SaveOpenScadDirectory(directory,
+			sinaia::ShouldDeleteLegacyOpenScadSetting(valid, dlg.IsOpenScadDirectoryModified()));
 		ApplyPanelSettings(dlg.GetPanelSettings());
 	}
 }

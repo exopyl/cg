@@ -2,12 +2,15 @@
 #include <string.h>
 #include <ctype.h>
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include "mesh.h"
@@ -539,73 +542,89 @@ int MeshIO::export_gts (const Mesh& mesh, const char *filename)
 // OFF
 //
 /**
+* Read a mesh from an 'off' file.
 *
-* Read a mesh from a 'off' file.
-* The format is as follows :
 * header :
-* OFF
-* nv nf ne
-
+*   OFF
+*   nv nf ne          (sur la ligne de OFF ou la suivante ; ne est ignore)
 * body :
-* x1 y1 z1
-* ...
-* xm ym zm
-* f1 f2 f3
-* ...
-* f3n f3n+1 f3n+2
+*   x y z             nv lignes
+*   n i1 ... in [...] nf lignes : polygone de n >= 3 sommets ; le reste de la
+*                     ligne (couleur de face) est ignore
+*
+* Les faces sont des polygones quelconques : OpenSCAD, entre autres, ecrit des
+* quadrilateres et des n-gones pour les objets qui ne passent pas par CGAL.
+* Toute lecture est verifiee ; en cas d'echec, le maillage est rendu vide.
 */
 int MeshIO::import_off (Mesh& mesh, const char *filename)
 {
-  char id[4];
-  int i, nSegments;
+  std::unique_ptr<FILE, int (*)(FILE*)> file (fopen (filename, "r"), &fclose);
+  if (!file)
+    return -1;
+  FILE* ptr = file.get ();
 
-  FILE* ptr = fopen (filename,"r");
-  if (!ptr)
-	  return -1;
-  
-  // Get header information
-  fgets (id, 4, ptr);
-  DASSERT (id[0]=='O' && id[1]=='F' && id[2]=='F');
-  unsigned int nv = 0, nf = 0;
-  fscanf (ptr, "%d %d %d", &nv, &nf, &nSegments);
+  auto fail = [&mesh] () { mesh.Init (0, 0); return -1; };
+  // Saute la fin de la ligne courante ; faux si le fichier s'arrete avant.
+  auto skipLine = [ptr] () {
+    int ch = 0;
+    while ((ch = fgetc (ptr)) != EOF && ch != '\n') {}
+    return ch != EOF;
+  };
 
-  // memory allocation
-  mesh.Init (nv, nf);
- 
-  // Get the vertices
-  for (i=0; i<mesh.GetNVertices (); i++)
+  // file_size et non ftell : ftell rend un long, 32 bits sous MSVC.
+  std::error_code sizeError;
+  const std::uintmax_t size = std::filesystem::file_size (std::filesystem::path (filename), sizeError);
+  if (sizeError)
+    return fail ();
+  const long long fileSize = static_cast<long long> (std::min<std::uintmax_t> (size, static_cast<std::uintmax_t> (LLONG_MAX)));
+
+  char id[4] = { 0, 0, 0, 0 };
+  if (!fgets (id, 4, ptr) || strncmp (id, "OFF", 3) != 0)
+    return fail ();
+
+  long long nv = 0, nf = 0;
+  if (fscanf (ptr, "%lld %lld", &nv, &nf) != 2 || nv < 0 || nf < 0)
+    return fail ();
+  if (!skipLine () && nv > 0)   // nombre d'aretes, ignore
+    return fail ();
+
+  // Un sommet occupe au moins 6 octets ("0 0 0\n"), une face au moins 8
+  // ("3 0 1 2\n") : un en-tete qui annonce davantage que le fichier ne peut
+  // contenir est faux, et l'allocation qu'il reclamerait n'a pas lieu.
+  if (fileSize < 0 || nv > fileSize / 6 || nf > fileSize / 8)
+    return fail ();
+
+  mesh.Init ((unsigned int) nv, (unsigned int) nf);
+
+  for (long long i = 0; i < nv; i++)
+  {
+    // fscanf est variadique : pas d'adresse sur la vue const.
+    float px = 0.f, py = 0.f, pz = 0.f;
+    if (fscanf (ptr, "%f %f %f", &px, &py, &pz) != 3)
+      return fail ();
+    mesh.SetVertex ((unsigned int) i, px, py, pz);
+  }
+
+  for (long long i = 0; i < nf; i++)
+  {
+    long long n = 0;
+    if (fscanf (ptr, "%lld", &n) != 1 || n < 3 || n > nv)
+      return fail ();
+
+    // write into the face already allocated by mesh.Init() (do NOT leak a new one)
+    auto pFace = mesh.FaceAt ((unsigned int) i);
+    pFace->SetNVertices ((unsigned int) n);
+    for (long long k = 0; k < n; k++)
     {
-      // fscanf est variadique : pas d'adresse sur la vue const.
-      float px, py, pz;
-      fscanf (ptr, "%f %f %f", &px, &py, &pz);
-      mesh.SetVertex (i, px, py, pz);
-    }
-
-  // Get the faces
-  for (i=0; i<mesh.GetNFaces (); i++)
-    {
-      //float r_tmp, g_tmp, b_tmp;
-      int n_vertices_in_face;
-
-      fscanf (ptr, "%d", &n_vertices_in_face);
-      if (n_vertices_in_face != 3)
-	{
-	  printf ("illegal file\n");
-	  fclose (ptr);
-	  return -1;
-	}
-
-      // write into the face already allocated by mesh.Init() (do NOT leak a new one)
-      auto pFace = mesh.FaceAt (i);
       // fscanf est variadique : pas d'adresse sur un accesseur.
-      unsigned int a=0, b=0, c=0;
-      fscanf (ptr, "%d %d %d", &a, &b, &c);
-      pFace->SetVertex (0, a);
-      pFace->SetVertex (1, b);
-      pFace->SetVertex (2, c);
-
+      long long index = -1;
+      if (fscanf (ptr, "%lld", &index) != 1 || index < 0 || index >= nv)
+        return fail ();
+      pFace->SetVertex ((unsigned int) k, (unsigned int) index);
     }
-  fclose (ptr);
+    if (!skipLine () && i + 1 < nf)   // couleur de face eventuelle
+      return fail ();
+  }
 
   return 0;
 }
@@ -615,33 +634,35 @@ int MeshIO::import_off (Mesh& mesh, const char *filename)
 */
 int MeshIO::export_off (const Mesh& mesh, const char *filename)
 {
-  FILE *ptr;
-  int i;
+  std::unique_ptr<FILE, int (*)(FILE*)> file (fopen (filename, "w"), &fclose);
+  if (!file)
+    return -1;
+  FILE* ptr = file.get ();
 
-  ptr = fopen (filename,"w");
-  if (!ptr) return false;
+  // Les trous laisses par Mesh::RemoveFace ne sont pas des faces.
+  unsigned int nFaces = 0;
+  for (unsigned int i = 0; i < mesh.GetNFaces (); i++)
+    if (mesh.FaceAt (i).IsValid ())
+      nFaces++;
 
-  // header
   fprintf (ptr, "OFF\n");
-  fprintf (ptr, "%ud %ud %d\n", mesh.GetNVertices (), mesh.GetNFaces (), 0);
+  fprintf (ptr, "%u %u 0\n", mesh.GetNVertices (), nFaces);
 
-  // vertices
-  for (i=0; i<mesh.GetNVertices (); i++)
+  for (unsigned int i = 0; i < mesh.GetNVertices (); i++)
     fprintf (ptr, "%f %f %f\n", mesh.GetVertices ()[3*i], mesh.GetVertices ()[3*i+1], mesh.GetVertices ()[3*i+2]);
 
-  // faces
-  //for (i=0; i<n_faces; i++)
-  //  fprintf (ptr, "3 %d %d %d 0.5 0.5 0.5\n",
-  //	     f[3*i], f[3*i+1], f[3*i+2]);
-  for (i=0; i<mesh.GetNFaces (); i++)
+  for (unsigned int i = 0; i < mesh.GetNFaces (); i++)
   {
-	  fprintf (ptr, "%d %d %d\n",
-		   mesh.FaceAt (i)->GetVertex (0), mesh.FaceAt (i)->GetVertex (1), mesh.FaceAt (i)->GetVertex (2));
+    const auto face = mesh.FaceAt (i);
+    if (!face.IsValid ())
+      continue;
+    fprintf (ptr, "%d", face->GetNVertices ());
+    for (int k = 0; k < face->GetNVertices (); k++)
+      fprintf (ptr, " %d", face->GetVertex (k));
+    fprintf (ptr, "\n");
   }
 
-  fclose (ptr);
-
-  return 0;
+  return ferror (ptr) ? -1 : 0;
 }
 
 //
