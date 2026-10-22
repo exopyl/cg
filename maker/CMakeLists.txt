@@ -77,7 +77,7 @@ set_source_files_properties(
 # de D27 : l'artefact etant unique, les six pages qui n'ouvrent jamais le graphe
 # portent le poids du canvas. Le chiffre est mesure avant/apres sur le meme etat
 # de l'arbre, jamais estime.
-target_link_libraries(maker PRIVATE cggraph_canvas cggraph_ui cggraph_nodes cgmesh)
+target_link_libraries(maker PRIVATE cggraph_canvas cggraph_ui cggraph_nodes cgarchi cgmesh)
 
 # Sortie : maker.js + maker.wasm dans maker/web/, ou la page index.html les
 # reference en ./maker.js.

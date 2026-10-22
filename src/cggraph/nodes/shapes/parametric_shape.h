@@ -20,7 +20,7 @@
 //  2. les formes a SOUS-OBJETS GEOMETRIQUES -- la fenetre gothique. L'adaptateur
 //     APLATIT ce qu'il recoit : un profil de moulure y resterait une enumeration
 //     a cinq positions, alors que c'est une courbe. Elle a son propre
-//     descripteur, qui promeut ses profils en ports (voir gothic_window.h).
+//     descripteur, qui promeut ses profils en ports (voir archi/gothic_window.h).
 //
 // CE QUE L'ADAPTATEUR PORTE, parce que le corps emballe ne sait pas le tenir :
 //
@@ -50,14 +50,15 @@
 namespace cggraph_nodes
 {
 
-// Liaison entre un type de noeud et une forme du catalogue de cgmesh.
+// Liaison entre un type de noeud et une forme de la reunion CatalogShapes ()
+// (shape_catalog.h).
 struct ShapeBinding
 {
 	// Identifiant SERIALISE du type de noeud. Il est ecrit ici, et non derive du
 	// nom d'affichage : un libelle se retouche, un identifiant de document non.
 	const char *typeName = nullptr;
 
-	// Cle dans ParametricShapes() -- c'est-a-dire GetName() de la forme.
+	// Cle dans CatalogShapes() (shape_catalog.h) -- c'est-a-dire GetName() de la forme.
 	const char *shapeName = nullptr;
 
 	const char *label = nullptr;

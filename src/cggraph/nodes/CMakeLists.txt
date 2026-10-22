@@ -13,6 +13,7 @@ project(libcggraph_nodes)
 # rangement impose ; ce qui est commun aux domaines vit a la RACINE.
 file(GLOB SRC_FILES CONFIGURE_DEPENDS
 	${PROJECT_SOURCE_DIR}/*.cpp
+	${PROJECT_SOURCE_DIR}/archi/*.cpp
 	${PROJECT_SOURCE_DIR}/flow/*.cpp
 	${PROJECT_SOURCE_DIR}/img/*.cpp
 	${PROJECT_SOURCE_DIR}/io/*.cpp
@@ -22,6 +23,7 @@ file(GLOB SRC_FILES CONFIGURE_DEPENDS
 	${PROJECT_SOURCE_DIR}/text/*.cpp)
 file(GLOB HEADER_FILES CONFIGURE_DEPENDS
 	${PROJECT_SOURCE_DIR}/*.h
+	${PROJECT_SOURCE_DIR}/archi/*.h
 	${PROJECT_SOURCE_DIR}/flow/*.h
 	${PROJECT_SOURCE_DIR}/img/*.h
 	${PROJECT_SOURCE_DIR}/io/*.h
@@ -74,6 +76,6 @@ endif()
 
 add_library(cggraph_nodes STATIC ${HEADER_FILES} ${SRC_FILES})
 
-target_link_libraries(cggraph_nodes cggraph cgmesh)
+target_link_libraries(cggraph_nodes cggraph cgmesh cgarchi)
 
 install(TARGETS cggraph_nodes DESTINATION .)

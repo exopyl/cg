@@ -10,7 +10,7 @@
 #include "../../src/cggraph/nodes/catalog.h"
 #include "../../src/cggraph/nodes/value_types.h"
 #include "../../src/cgmesh/mesh.h"
-#include "../../src/cgmesh/parameterized_gothic.h"
+#include <cgarchi/parameterized_gothic.h>
 #include "thread_allocations.h"
 
 // ===========================================================================
@@ -60,16 +60,16 @@ std::unique_ptr<Node> Window (bool printCheck)
 
 long AllocationsOfCheckGothicExport ()
 {
-    ParameterizedGothicWindow shape;
+    cgarchi::ParameterizedGothicWindow shape;
     shape.Regenerate ();
     const Mesh &mesh = *shape.GetMesh ();
-    return CountThreadAllocations ([&] { CheckGothicExport (shape, mesh); });
+    return CountThreadAllocations ([&] { cgarchi::CheckGothicExport (shape, mesh); });
 }
 
 long AllocationsOfTheShapeAlone ()
 {
     return CountThreadAllocations ([] {
-        ParameterizedGothicWindow shape;
+        cgarchi::ParameterizedGothicWindow shape;
         shape.Regenerate ();
         std::unique_ptr<Mesh> mesh (shape.TakeMesh ());
     });

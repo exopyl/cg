@@ -125,17 +125,14 @@ if (EMSCRIPTEN)
         ${PROJECT_SOURCE_DIR}/clipper.cpp
         ${PROJECT_SOURCE_DIR}/polygon2.cpp
         ${PROJECT_SOURCE_DIR}/polygon2_tesselation.cpp
-        # profils de moulure partages (Profile2D) + extrusion profilee : sortis
-        # d'architecture_gothic.cpp, donc a declarer ICI sans quoi le lien de
-        # maker echoue sur extrudeProfiledToMesh -- « compile » et « lie » sont
-        # deux affirmations distinctes.
+        # profils de moulure partages (Profile2D) + extrusion profilee, et
+        # primitives polygone -> maillage / balayage de profil : appelees par
+        # cgarchi, que maker lie. Les omettre ici casse le lien de maker
+        # (extrudeProfiledToMesh, extrudeToMesh...) -- « compile » et « lie »
+        # sont deux affirmations distinctes.
         ${PROJECT_SOURCE_DIR}/profile2d.cpp
-        # architecture gothique (remplage parametrique + primitives)
-        ${PROJECT_SOURCE_DIR}/architecture_gothic.cpp
-        ${PROJECT_SOURCE_DIR}/architecture_gothic_region.cpp   # region de pierre, appelee par architecture_gothic.cpp
-        ${PROJECT_SOURCE_DIR}/bar_fusion.cpp   # niveaux 2D de la fusion des barres de moulure (Clipper2)
-        ${PROJECT_SOURCE_DIR}/bar_fusion_parallel.cpp   # fils de la fusion (natif ; sequentiel sous Emscripten)
-        ${PROJECT_SOURCE_DIR}/surface_architecture.cpp
+        ${PROJECT_SOURCE_DIR}/polygon_extrude.cpp
+        ${PROJECT_SOURCE_DIR}/profile_sweep.cpp
         # L-systemes
         ${PROJECT_SOURCE_DIR}/lsystem.cpp
         ${PROJECT_SOURCE_DIR}/lsysteminit.cpp
@@ -143,8 +140,6 @@ if (EMSCRIPTEN)
         # interface de parametrage + catalogue de formes
         ${PROJECT_SOURCE_DIR}/parameterized.cpp
         ${PROJECT_SOURCE_DIR}/parameterized_shapes.cpp
-        ${PROJECT_SOURCE_DIR}/parameterized_gothic.cpp
-        ${PROJECT_SOURCE_DIR}/parameterized_gothic_json.cpp   # LoadFromJson / ExportJson de la fenetre gothique
         ${PROJECT_SOURCE_DIR}/parametric_catalog.cpp
         ${PROJECT_SOURCE_DIR}/mesh_solidify.cpp      # option Extrude des formes parametriques
     )
@@ -157,12 +152,14 @@ file(GLOB GLUTESS_SRC_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../../
 file(GLOB GLUTESS_HEADER_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/glutess/*.h)
 
 # Clipper2 (Boost licence, vendored in extern/clipper2) : robust 2D polygon
-# boolean ops (Union/Difference/Intersect) used for the gothic tracery. Headers
-# are included as "clipper2/clipper.h" (extern/ is on the include path below).
+# boolean ops (Union/Difference/Intersect) and offsets, used by cgmesh's contour
+# operations (contour_ops, stroke_contours, import_svg, text_extrude, image
+# relief) and by its consumers (cgarchi). Headers are included as
+# "clipper2/clipper.h" (extern/ is on the include path below).
 # Compiled straight into cgmesh (native + WASM) ; the SSE path is MSVC-x64-only
 # so emcc skips it. -fexceptions (WASM) already set at the repo root.
-# Boolean engine (Union/Difference) + offset (InflatePaths, for the tracery field
-# insets / bar widths, Phase 1). rectclip/triangulation stay out of build.
+# Boolean engine (Union/Difference) + offset (InflatePaths). rectclip and
+# triangulation stay out of the build.
 set(CLIPPER2_SRC_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/clipper2/clipper.engine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/clipper2/clipper.offset.cpp)

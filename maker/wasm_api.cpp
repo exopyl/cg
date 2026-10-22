@@ -50,6 +50,7 @@
 #include <fstream>
 #include <iterator>
 #include <functional>
+#include <iostream>
 #include <limits>
 #include <map>
 #include <memory>
@@ -58,15 +59,16 @@
 #include <vector>
 
 #include "parameterized_shapes.h"   // IParameterized + formes a ressource
-#include "parameterized_gothic.h"   // ParameterizedGothicWindow (createGothicFromJson, exportGothicJson)
-#include "print_validation_json.h"  // print-constraints/v1, print-report/v1 (garde d'impression)
-#include "parametric_catalog.h"     // fabriques des formes sans ressource
+#include <cgarchi/parameterized_gothic.h>   // ParameterizedGothicWindow (createGothicFromJson, exportGothicJson)
+#include "print_validation_json.h"  // print-constraints/v1
+#include <cgarchi/gothic_print_json.h>      // GothicPrintVerdictToJson : print-report/v1 de la garde d'impression
 #include "image_pixel_blocks.h"      // image_to_pixel_blocks_per_component
 #include "material.h"                // Material::GetName (nommage des groupes OBJ)
 #include "mesh.h"                    // GetNVertices / GetVertex / GetTriangles
 #include "mesh_io.h"                 // MeshIO::export_obj (serialisation OBJ+MTL)
 #include "mesh_payload.h"
 #include "graph_host.h"              // maker_graph::host () -- resultat du graphe (graphExportObj)
+#include "../src/cggraph/nodes/shapes/shape_catalog.h"   // fabriques des formes sans ressource (cgmesh + gothique)
 #include "../src/cggraph/nodes/value_types.h"
 
 #ifdef __EMSCRIPTEN__
@@ -117,13 +119,14 @@ struct CatalogEntry {
 };
 
 // Catalogue de PRESENTATION : nom, categorie de page, groupe de liste. La
-// FABRIQUE n'est plus ici -- elle vit dans cgmesh (parametric_catalog.h), d'ou
-// la couche nodale la lit aussi. Deux listes de fabriques auraient diverge au
-// premier ajout ; celle-ci ne porte plus que ce qui est propre a maker, et le
-// nom sert de cle entre les deux.
+// FABRIQUE n'est pas ici -- elle vit dans le catalogue reuni de la couche
+// nodale (cggraph_nodes::CatalogShapes : formes de cgmesh, puis formes
+// gothiques), que l'adaptateur generique lit aussi. Celle-ci ne porte que ce qui
+// est propre a maker, et le nom sert de cle entre les deux.
 //
 // Une entree dont le nom ne se resout pas est ECARTEE, et la forme disparait de
-// la page -- l'ecart se voit donc, au lieu de produire une fabrique nulle.
+// la page ; l'ecart est signale sur std::cerr (la console sous Emscripten), au
+// lieu de produire une fabrique nulle.
 const std::vector<CatalogEntry>& catalog()
 {
     static const std::string P = "parametric";
@@ -170,13 +173,17 @@ const std::vector<CatalogEntry>& catalog()
         out.reserve(rows.size());
         for (const Row& r : rows) {
             const std::string name = r.name;
-            if (!FindParametricShape(name)) continue;   // nom inconnu de cgmesh
+            if (!cggraph_nodes::FindCatalogShape(name)) {
+                std::cerr << "maker: catalog entry \"" << name << "\" (" << r.category
+                          << ") is unknown to the shape catalogue; dropped from the page\n";
+                continue;
+            }
             // Les formes de la page parametrique recoivent l'option Extrude
             // (epaississement) ; les formes gothiques ont deja leur propre
             // extrusion (zHeight, profils).
             const bool extrudable = (r.category == P);
             out.push_back(CatalogEntry{name, r.category, r.group, [name, extrudable] {
-                std::unique_ptr<IParameterized> shape = MakeParametricShape(name);
+                std::unique_ptr<IParameterized> shape = cggraph_nodes::MakeCatalogShape(name);
                 if (!extrudable) return shape;
                 return std::unique_ptr<IParameterized>(new ParameterizedExtruded(std::move(shape)));
             }});
@@ -500,17 +507,17 @@ emscripten::val exportPixelBlocks(int id, const std::string& base)
 // refus.
 bool gothicExportGuard(int id, IParameterized* obj, const Mesh& m, emscripten::val& out)
 {
-    const auto* gw = dynamic_cast<const ParameterizedGothicWindow*>(obj);
+    const auto* gw = dynamic_cast<const cgarchi::ParameterizedGothicWindow*>(obj);
     if (!gw) return true;
-    std::optional<GothicExportCheck> geometry;
+    std::optional<cgarchi::GothicExportCheck> geometry;
     try
     {
         const auto width = g_printedWidthMm.find(id);
         const std::optional<double> printedWidthMm =
             (width == g_printedWidthMm.end()) ? std::nullopt : std::optional<double>(width->second);
-        const GothicPrintVerdict verdict = CheckGothicExportAndPrintAtWidth(*gw, m, g_printer, printedWidthMm);
+        const cgarchi::GothicPrintVerdict verdict = cgarchi::CheckGothicExportAndPrintAtWidth(*gw, m, g_printer, printedWidthMm);
         geometry = verdict.check.geometry;
-        out.set("print", GothicPrintVerdictToJson(verdict));
+        out.set("print", cgarchi::GothicPrintVerdictToJson(verdict));
     }
     catch (const std::exception& e)
     {
@@ -524,7 +531,7 @@ bool gothicExportGuard(int id, IParameterized* obj, const Mesh& m, emscripten::v
     {
         try
         {
-            geometry = CheckGothicExport(*gw, m);
+            geometry = cgarchi::CheckGothicExport(*gw, m);
         }
         catch (const std::exception& e)
         {
@@ -537,7 +544,7 @@ bool gothicExportGuard(int id, IParameterized* obj, const Mesh& m, emscripten::v
             return false;
         }
     }
-    const GothicExportCheck check = *geometry;
+    const cgarchi::GothicExportCheck check = *geometry;
     if (!check.allowed)
     {
         out.set("refused", check.message);
@@ -556,7 +563,7 @@ emscripten::val gothicPrintReport(int id)
 {
     emscripten::val out = emscripten::val::object();
     IParameterized* obj = find(id);
-    if (!obj || !dynamic_cast<ParameterizedGothicWindow*>(obj)) return out;
+    if (!obj || !dynamic_cast<cgarchi::ParameterizedGothicWindow*>(obj)) return out;
     obj->Regenerate();
     Mesh* m = meshOf(obj);
     if (m) gothicExportGuard(id, obj, *m, out);
@@ -660,9 +667,9 @@ namespace { std::string g_lastGothicLoadReport; }
 // JSON est refuse ; le motif est dans lastGothicLoadReport().
 int createGothicFromJson(const std::string& jsonText)
 {
-    auto obj = std::unique_ptr<ParameterizedGothicWindow>(new ParameterizedGothicWindow());
+    auto obj = std::unique_ptr<cgarchi::ParameterizedGothicWindow>(new cgarchi::ParameterizedGothicWindow());
     const bool loaded = obj->LoadFromJson(jsonText);
-    g_lastGothicLoadReport = GothicBuildReportToJson(obj->LastLoadReport());
+    g_lastGothicLoadReport = cgarchi::GothicBuildReportToJson(obj->LastLoadReport());
     if (!loaded) return -1;
     return registerObject(std::move(obj));
 }
@@ -677,10 +684,10 @@ std::string lastGothicLoadReport()
 // une Gothic Window.
 std::string gothicReport(int id)
 {
-    const ParameterizedGothicWindow* gw = dynamic_cast<ParameterizedGothicWindow*>(find(id));
+    const cgarchi::ParameterizedGothicWindow* gw = dynamic_cast<cgarchi::ParameterizedGothicWindow*>(find(id));
     if (!gw) return std::string();
-    return "{\"load\":" + GothicBuildReportToJson(gw->LastLoadReport())
-         + ",\"build\":" + GothicBuildReportToJson(gw->LastBuildReport()) + "}";
+    return "{\"load\":" + cgarchi::GothicBuildReportToJson(gw->LastLoadReport())
+         + ",\"build\":" + cgarchi::GothicBuildReportToJson(gw->LastBuildReport()) + "}";
 }
 
 // Pose l'imprimante : document print-constraints/v1, lecture stricte
@@ -738,7 +745,7 @@ bool setPrintedWidthMm(int id, double mm)
 std::string exportGothicJson(int id)
 {
     IParameterized* obj = find(id);
-    ParameterizedGothicWindow* gw = dynamic_cast<ParameterizedGothicWindow*>(obj);
+    cgarchi::ParameterizedGothicWindow* gw = dynamic_cast<cgarchi::ParameterizedGothicWindow*>(obj);
     return gw ? gw->ExportJson() : std::string();
 }
 

@@ -1,7 +1,6 @@
 #include "parametric_catalog.h"
 
 #include "parameterized_shapes.h"
-#include "parameterized_gothic.h"
 
 namespace
 {
@@ -41,9 +40,7 @@ const std::vector<ParametricShapeEntry> &ParametricShapes ()
 		{ "Radial Wave", &Make<ParameterizedRadialWave> },
 		{ "Guimard", &Make<ParameterizedGuimard> },
 		{ "Menger Sponge", &Make<ParameterizedMengerSponge> },
-		{ "L-system", &Make<ParameterizedLSystem> },
-		{ "Gothic Window", &Make<ParameterizedGothicWindow> },
-		{ "Gothic Block", &Make<ParameterizedGothicBlock> }
+		{ "L-system", &Make<ParameterizedLSystem> }
 	};
 	return entries;
 }

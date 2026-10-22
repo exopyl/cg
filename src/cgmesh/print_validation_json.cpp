@@ -15,8 +15,6 @@
 #include <utility>
 #include <vector>
 
-#include "parameterized_gothic.h"   // GothicPrintVerdict, GothicPrintScopeName
-
 namespace
 {
 	using nlohmann::json;
@@ -282,24 +280,22 @@ std::string PrintConstraintsToJson (const PrintConstraints &constraints)
 	return j.dump(2);
 }
 
-std::string GothicPrintVerdictToJson (const GothicPrintVerdict &verdict)
+std::string PrintReportToJson (const PrintReportEnvelope &envelope, const PrintabilityReport &print)
 {
-	const GothicPrintCheck &check = verdict.check;
-	const PrintabilityReport &print = check.print;
 	json j;
 	j["schema"] = kPrintReportSchema;
-	j["scope"] = GothicPrintScopeName(check.scope);
-	j["reason"] = check.reason;
-	j["printable"] = verdict.IsPrintable();
-	j["exportAllowed"] = verdict.ExportAllowed();
+	j["scope"] = envelope.scope;
+	j["reason"] = envelope.reason;
+	j["printable"] = envelope.printable;
+	j["exportAllowed"] = envelope.exportAllowed;
 	j["geometry"] = json{
-		{"allowed", check.geometry.allowed},
-		{"strict",  check.geometry.strict},
-		{"message", check.geometry.message}};
+		{"allowed", envelope.geometry.allowed},
+		{"strict",  envelope.geometry.strict},
+		{"message", envelope.geometry.message}};
 	j["evaluated"] = print.evaluated;
 	j["mmPerUnit"] = print.mmPerUnit > 0.0 ? json(print.mmPerUnit) : json(nullptr);
-	j["printedSizeMm"] = verdict.printedSizeMm
-		? json::array({(*verdict.printedSizeMm)[0], (*verdict.printedSizeMm)[1], (*verdict.printedSizeMm)[2]})
+	j["printedSizeMm"] = envelope.printedSizeMm
+		? json::array({(*envelope.printedSizeMm)[0], (*envelope.printedSizeMm)[1], (*envelope.printedSizeMm)[2]})
 		: json(nullptr);
 	j["counts"] = countsObject(print.counts);
 	j["displayCounts"] = countsObject(PrintDisplayCounts(print));
@@ -311,8 +307,8 @@ std::string GothicPrintVerdictToJson (const GothicPrintVerdict &verdict)
 	for (const PrintSliceSummary &s : print.slices)
 		slices.push_back(sliceObject(s));
 	j["slices"] = std::move(slices);
-	j["error"] = verdict.printError.empty() ? json(nullptr) : json(verdict.printError);
-	j["constraints"] = verdict.constraints ? constraintsObject(*verdict.constraints) : json(nullptr);
+	j["error"] = envelope.error.empty() ? json(nullptr) : json(envelope.error);
+	j["constraints"] = envelope.constraints ? constraintsObject(*envelope.constraints) : json(nullptr);
 	// Les messages d'exception ne sont pas garantis UTF-8 : octets invalides remplaces.
 	return j.dump(-1, ' ', false, json::error_handler_t::replace);
 }

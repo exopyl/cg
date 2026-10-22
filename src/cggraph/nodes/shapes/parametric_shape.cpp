@@ -6,9 +6,9 @@
 
 #include "../../../cgmesh/mesh.h"
 #include "../../../cgmesh/parameterized.h"
-#include "../../../cgmesh/parametric_catalog.h"
 #include "../node_support.h"
 #include "../value_types.h"
+#include "shape_catalog.h"
 
 namespace cggraph_nodes
 {
@@ -198,7 +198,7 @@ ParametricShapeNode::ParametricShapeNode (const ShapeBinding &binding)
 	// Les valeurs par defaut du noeud sont celles de la forme, relevees sur une
 	// instance neuve. C'est la seule facon de les connaitre : elles ne sont
 	// declarees nulle part ailleurs que dans les membres de la classe emballee.
-	std::unique_ptr<IParameterized> shape = MakeParametricShape (binding.shapeName);
+	std::unique_ptr<IParameterized> shape = MakeCatalogShape (binding.shapeName);
 	if (shape == nullptr)
 		return;
 	for (Parameter &p : shape->GetParameters ())
@@ -238,7 +238,7 @@ bool ParametricShapeNode::Compute (cggraph::EvalContext &ctx, const cggraph::Val
 	// evaluations concurrentes du meme graphe partageraient l'objet, et
 	// Regenerate () ecrit dedans. Une instance par calcul rend la question sans
 	// objet.
-	std::unique_ptr<IParameterized> shape = MakeParametricShape (m_binding->shapeName);
+	std::unique_ptr<IParameterized> shape = MakeCatalogShape (m_binding->shapeName);
 	if (shape == nullptr)
 		return false;
 

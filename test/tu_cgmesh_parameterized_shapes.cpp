@@ -12,7 +12,7 @@
 
 #include "../src/cgmesh/mesh.h"
 #include "../src/cgmesh/parameterized.h"
-#include "../src/cgmesh/parameterized_gothic.h"
+#include <cgarchi/parameterized_gothic.h>
 #include "../src/cgmesh/parameterized_shapes.h"
 #include "../src/cgmesh/lsysteminit.h"   // les valeurs d'enum LSYSTEM_*
 
@@ -79,8 +79,8 @@ namespace
             { "Guimard",               make<ParameterizedGuimard>() },
             { "MengerSponge",          make<ParameterizedMengerSponge>() },
             { "LSystem",               make<ParameterizedLSystem>() },
-            { "GothicBlock",           make<ParameterizedGothicBlock>() },
-            { "GothicWindow",          make<ParameterizedGothicWindow>() },
+            { "GothicBlock",           make<cgarchi::ParameterizedGothicBlock>() },
+            { "GothicWindow",          make<cgarchi::ParameterizedGothicWindow>() },
         };
         return c;
     }

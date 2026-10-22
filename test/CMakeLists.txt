@@ -88,6 +88,18 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/test/data")
     )
 endif()
 
+# Schemas JSON de cgarchi, lus par les tests gothiques. Copies sous le MEME chemin
+# relatif que dans le depot ("./src/cgarchi/schemas/..."), comme test/data : un
+# test les lit alors de la meme facon depuis TU_RUN_DIR ou depuis la racine.
+if(EXISTS "${CMAKE_SOURCE_DIR}/src/cgarchi/schemas")
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E ${CG_COPY_DIRECTORY}
+            "${CMAKE_SOURCE_DIR}/src/cgarchi/schemas"
+            "${TU_RUN_DIR}/src/cgarchi/schemas"
+        COMMENT "Copying src/cgarchi/schemas to ${TU_RUN_DIR}/src/cgarchi/schemas"
+    )
+endif()
+
 if (UNIX AND ENABLE_OPENNURBS)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -202,11 +214,11 @@ if (NOT CG_ENABLE_SANITIZERS)
     add_executable(TU_faults ${FAULT_SRC_FILES})
     # GTest::gtest et non gtest_main : le fichier porte son main (cgmesh en
     # embarque un, celui de la demo glutess).
-    target_link_libraries(TU_faults cgmath cgimg cgmesh cggraph cggraph_nodes GTest::gtest)
+    target_link_libraries(TU_faults cgmath cgimg cgmesh cgarchi cggraph cggraph_nodes GTest::gtest)
     gtest_discover_tests(TU_faults DISCOVERY_TIMEOUT 60)
 endif ()
 
-target_link_libraries(${PROJECT_NAME} cgmath cgimg cgmesh cggraph cggraph_nodes cggraph_ui)
+target_link_libraries(${PROJECT_NAME} cgmath cgimg cgmesh cgarchi cggraph cggraph_nodes cggraph_ui)
 if ( WIN32 )
     target_link_libraries(${PROJECT_NAME} cgnet)
 endif ()

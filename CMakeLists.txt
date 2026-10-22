@@ -73,7 +73,7 @@ if (EMSCRIPTEN)
     set(ENABLE_SULINA    Off)
     set(ENABLE_CGRE      Off)
 
-    # -fexceptions sur TOUTE la cible WASM (cgmath, cgimg, cgmesh, maker).
+    # -fexceptions sur TOUTE la cible WASM (cgmath, cgimg, cgmesh, cgarchi, maker).
     # Sans cela, un `throw` dans cgmath (ex. buildFoilRing sur des parametres
     # degeneres) ne peut PAS remonter jusqu'au catch(...) de cgmesh : l'unwinder
     # manque les tables dans les frames cgmath -> trap qui traverse vers JS au
@@ -251,8 +251,11 @@ endif ()
 add_subdirectory(src/cgmath)
 add_subdirectory(src/cgimg)
 add_subdirectory(src/cgmesh)
+# Architecture gothique, au-dessus de cgmesh. Sans condition : cggraph/nodes,
+# maker et les tests la lient.
+add_subdirectory(src/cgarchi)
 # Couche A de cggraph : moteur de graphe, sans dependance. Sans condition, comme
-# les trois ci-dessus -- une option la sortirait des deux chaines de CI.
+# les bibliotheques ci-dessus -- une option la sortirait des deux chaines de CI.
 add_subdirectory(src/cggraph/core)
 # Couche B : les adaptateurs. Une seule cible, rangee par domaine, qui depend de
 # cgmesh -- c'est elle qui nomme les types de domaine, et le moteur l'ignore.

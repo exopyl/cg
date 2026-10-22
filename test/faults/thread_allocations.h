@@ -2,7 +2,7 @@
 //
 //  Compteur et injection d'echec sur les allocations du THREAD APPELANT.
 //
-// Definis dans tu_cgmesh_gothic_print_faults.cpp, qui remplace l'operator new
+// Definis dans tu_cgarchi_gothic_print_faults.cpp, qui remplace l'operator new
 // global de TU_faults ; les autres threads ne sont jamais comptes ni touches.
 //
 #include <functional>
