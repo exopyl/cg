@@ -12,8 +12,8 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-// We redefine the structures and functions here to make the test self-contained,
-// as src/cgmesh/metaballs.cpp seems to be a standalone demo file with its own definitions.
+// Self-contained test : it defines its own structures and functions and calls
+// no library code.
 
 namespace MetaballsTest {
 

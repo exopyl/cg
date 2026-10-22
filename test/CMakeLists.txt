@@ -88,6 +88,18 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/test/data")
     )
 endif()
 
+# Schemas JSON de cgarchi, lus par les tests gothiques. Copies sous le MEME chemin
+# relatif que dans le depot ("./src/cgarchi/schemas/..."), comme test/data : un
+# test les lit alors de la meme facon depuis TU_RUN_DIR ou depuis la racine.
+if(EXISTS "${CMAKE_SOURCE_DIR}/src/cgarchi/schemas")
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E ${CG_COPY_DIRECTORY}
+            "${CMAKE_SOURCE_DIR}/src/cgarchi/schemas"
+            "${TU_RUN_DIR}/src/cgarchi/schemas"
+        COMMENT "Copying src/cgarchi/schemas to ${TU_RUN_DIR}/src/cgarchi/schemas"
+    )
+endif()
+
 if (UNIX AND ENABLE_OPENNURBS)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -183,6 +195,9 @@ gtest_discover_tests(${PROJECT_NAME}
     WORKING_DIRECTORY "${TU_RUN_DIR}"
     DISCOVERY_TIMEOUT 60
 )
+# Label `slow` (slow_tests.cmake) : les tests decouverts n'existent qu'a l'execution de CTest,
+# d'ou un fichier inclus apres celui de gtest_discover_tests.
+set_property(DIRECTORY APPEND PROPERTY TEST_INCLUDE_FILES "${PROJECT_SOURCE_DIR}/slow_tests.cmake")
 
 # ---------------------------------------------------------------------------
 # TU_faults : tests d'injection de defauts
@@ -200,13 +215,26 @@ gtest_discover_tests(${PROJECT_NAME}
 if (NOT CG_ENABLE_SANITIZERS)
     file(GLOB FAULT_SRC_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/faults/*.cpp)
     add_executable(TU_faults ${FAULT_SRC_FILES})
-    # GTest::gtest et non gtest_main : le fichier porte son main (cgmesh en
-    # embarque un, celui de la demo glutess).
-    target_link_libraries(TU_faults cgmath cgimg cgmesh cggraph cggraph_nodes GTest::gtest)
+    target_link_libraries(TU_faults cgmath cgimg cgmesh cgarchi cggraph cggraph_nodes GTest::gtest_main)
     gtest_discover_tests(TU_faults DISCOVERY_TIMEOUT 60)
 endif ()
 
-target_link_libraries(${PROJECT_NAME} cgmath cgimg cgmesh cggraph cggraph_nodes cggraph_ui)
+# ---------------------------------------------------------------------------
+# TU_glutess_main_probe : cgmesh ne fournit pas de main
+# ---------------------------------------------------------------------------
+# Lie a cgmesh AVANT GTest::gtest_main : une bibliotheque placee devant
+# gtest_main qui definirait main le fournirait a sa place. CTest juge sur la
+# ligne de resultat de gtest, pas sur le code de sortie ; un rapport de
+# sanitizer le fait echouer meme si cette ligne est presente. Construit aussi
+# sous sanitizers.
+add_executable(TU_glutess_main_probe ${PROJECT_SOURCE_DIR}/link/tu_glutess_main_probe.cpp)
+target_link_libraries(TU_glutess_main_probe cgmesh GTest::gtest_main)
+add_test(NAME TU_glutess_main_probe COMMAND TU_glutess_main_probe)
+set_tests_properties(TU_glutess_main_probe PROPERTIES
+    PASS_REGULAR_EXPRESSION "\\[  PASSED  \\] 1 test\\."
+    FAIL_REGULAR_EXPRESSION "AddressSanitizer|runtime error")
+
+target_link_libraries(${PROJECT_NAME} cgmath cgimg cgmesh cgarchi cggraph cggraph_nodes cggraph_ui)
 if ( WIN32 )
     target_link_libraries(${PROJECT_NAME} cgnet)
 endif ()

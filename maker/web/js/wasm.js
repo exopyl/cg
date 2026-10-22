@@ -1,5 +1,5 @@
 // ===========================================================================
-//  Chargement du module WASM, partage par les quatre pages de generation.
+//  Chargement du module WASM, partage par toutes les pages de generation.
 // ===========================================================================
 //  Un SEUL maker.wasm sert toutes les pages (cf. ANALYSE.md sec.15) : le noyau
 //  geometrique commun domine le binaire, le decouper en un module par page le
@@ -19,6 +19,7 @@ const REQUIRED_BINDINGS = [
   "setPrintConstraints", "printConstraints", "setPrintedWidthMm", "gothicPrintReport",
   "regenerate", "exportObj", "exportGlb", "meshData", "destroyShape",
   "createImagePixelBlocks", "exportPixelBlocks",
+  "createMicroarchFromJson", "microarchTubeReport", "microarchOrigin", "exportMicroarchObj", "exportMicroarchStl",
   // Pages GABARIT (template.html) : elles pilotent un graphe sur CETTE instance
   // -- le meme artefact porte les deux facades -- et le rendent par o3dv.
   "graphFromJson", "graphToJson", "graphEvaluate", "graphNodeInfo",

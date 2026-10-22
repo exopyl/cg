@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <stdlib.h>
 
 struct vec3f { float fX, fY, fZ; };
@@ -15,9 +16,17 @@ typedef void  (*mc_normal_func_t) (float, float, float, void*);
 typedef void  (*mc_face_completed_func_t) (void*);
 typedef void  (*mc_layer_completed_func_t) (void*);
 
+// Marching cubes sur une grille reguliere de la boite (set_bbox), resolution[i] cubes par
+// axe (set_resolution_per_unit). Convention : un noeud est INTERIEUR si sa valeur est <= a
+// l'iso (set_value). Orientation des triangles : set_orientation(1), le defaut, donne des
+// normales tournees vers l'interieur ; set_orientation(0), vers l'exterieur.
 class ImplicitSurface
 {
 public:
+	// Plafond de (R0 + 1)(R1 + 1), noeuds d'une couche : au-dela, les indices d'aretes de
+	// compute_cube (jusqu'a 6 (R0 + 1)(R1 + 1)) ne tiennent plus en 32 bits.
+	static constexpr std::size_t kMaxLayerNodes = std::size_t (1) << 28;
+
 	ImplicitSurface ();
 	virtual ~ImplicitSurface () {};
 
@@ -63,14 +72,29 @@ public:
 	inline void set_vertex_func (mc_vertex_func_t _vertex_func) { vertex_func = _vertex_func; };
 	inline void set_face_completed_func (mc_face_completed_func_t _face_completed_func) { face_completed_func = _face_completed_func; };
 
-	void compute (int bUsecache);
-	void get_triangulation (int *nvertices, float **vertices, int *nfaces, unsigned int **faces);
+	// Parcourt la grille et appelle les rappels. bUsecache : valeurs des noeuds gardees sur
+	// deux couches (sinon, huit evaluations par cube). Le champ est evalue une fois par noeud
+	// avec le cache ; get_normal (six evaluations par sommet) ne l'est que si un rappel de
+	// normale ou de couleur est pose. Les sommets sont numerotes a partir de 0 a chaque appel.
+	// Faux, sans aucun rappel ni allocation, si une resolution est < 1 ou si
+	// (R0 + 1)(R1 + 1) > kMaxLayerNodes ; faux aussi si l'allocation des caches echoue
+	// (std::bad_alloc rattrape). Une exception levee par un rappel se propage.
+	bool compute (int bUsecache);
+	// Triangulation indexee (compute avec cache) dans des tampons alloues par malloc, que
+	// l'appelant libere par free (un tampon vide peut etre nul). Faux si compute echoue ou si
+	// une allocation echoue : sorties a 0 et nullptr, rien a liberer.
+	bool get_triangulation (int *nvertices, float **vertices, int *nfaces, unsigned int **faces);
 
 	void get_normal (vec3f &pt, vec3f &normal);
 
 protected:
+	// Accumulateur de get_triangulation : pre le cree et le designe par `data` (une
+	// ImplicitTriangulation, surface_implicit_triangulation.h, ou une classe derivee) ; peut
+	// lever std::bad_alloc, sans rien laisser. post le libere toujours, et ne remplit les
+	// sorties que si `computed` ; faux si rien n'est rendu.
 	virtual void get_triangulation_pre (void);
-	virtual void get_triangulation_post (int *nvertices, float **vertices, int *nfaces, unsigned int **faces);
+	virtual bool get_triangulation_post (int *nvertices, float **vertices, int *nfaces, unsigned int **faces,
+	                                     bool computed);
 
 	mc_face_completed_func_t face_completed_func;
 	mc_layer_completed_func_t layer_completed_func;
@@ -82,7 +106,7 @@ private:
 	int bBoundary;
 
 	float min[3], max[3];
-	float resolution[3];
+	int   resolution[3];
 	float step[3];
 	float fValue;
 	
@@ -92,7 +116,7 @@ private:
 	mc_normal_func_t normal_func;
 	void *eval_data; // opaque context passed to eval/color/normal callbacks
 
-	// temporary variables used in mc_compute
+	// Caches de compute, valides pendant son appel seulement ; nuls sinon.
 	float *fValueCached;
 	int *fIndicesCached;
 	int iCurrentVertex;

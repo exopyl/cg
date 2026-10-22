@@ -113,14 +113,17 @@ public:
 		return (i == 1) ? y : x;
 	}
 
+	// const : sur un membre gauche const, une version non const n'est pas viable
+	// et la comparaison retombe sur l'operateur integre via operator const TValue*(),
+	// qui compare des adresses.
 	template <class S>
-	bool operator == (const TVector2<S> &right)
+	bool operator == (const TVector2<S> &right) const noexcept
 	{
 		return (x == right.x && y == right.y);
 	}
 
 	template <class S>
-	bool operator != (const TVector2<S> &right)
+	bool operator != (const TVector2<S> &right) const noexcept
 	{
 		return !(x == right.x && y == right.y );
 	}

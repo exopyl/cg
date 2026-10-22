@@ -45,6 +45,8 @@ bool AmbientOcclusionNode::Compute (cggraph::EvalContext &ctx, const cggraph::Va
 	const std::shared_ptr<const Mesh> input = in[0].Share<Mesh> (Types ().mesh);
 	if (input == nullptr)
 		return false;
+	if (IsEmptyMesh (*input))
+		return FailOnEmptyMesh (ctx);
 
 	const unsigned int nv = input->GetNVertices ();
 	if (nv == 0 || input->GetNFaces () == 0)

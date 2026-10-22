@@ -158,7 +158,8 @@ public:
 		return *this;
 	}
 
-	inline bool operator == (const TVector4<TValue> &right)
+	// const : voir TVector2::operator==.
+	inline bool operator == (const TVector4<TValue> &right) const noexcept
 	{
 		return (
 			x == right.x &&
@@ -168,7 +169,7 @@ public:
 			);
 	}
 
-	bool operator != (const TVector4<TValue> &right)
+	bool operator != (const TVector4<TValue> &right) const noexcept
 	{
 		return !(
 			x == right.x &&

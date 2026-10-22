@@ -14,15 +14,17 @@
 #include "../src/cggraph/core/evaluator.h"
 #include "../src/cggraph/nodes/catalog.h"
 #include "../src/cggraph/nodes/io/file_ref.h"
-#include "../src/cggraph/nodes/shapes/gothic_window.h"
+#include "../src/cggraph/nodes/archi/gothic_window.h"
 #include "../src/cggraph/nodes/shapes/parametric_shape.h"
 #include "../src/cggraph/nodes/shapes/profile.h"
+#include "../src/cggraph/nodes/shapes/shape_catalog.h"
 #include "../src/cggraph/nodes/svg/svg_contours.h"
 #include "../src/cggraph/nodes/text/load_font.h"
 #include "../src/cggraph/nodes/value_types.h"
 #include "../src/cgmesh/extrude_contours.h"
+#include <cgarchi/gothic_parametric_catalog.h>
 #include "../src/cgmesh/mesh.h"
-#include "../src/cgmesh/parameterized_gothic.h"
+#include <cgarchi/parameterized_gothic.h>
 #include "../src/cgmesh/parameterized_shapes.h"
 #include "../src/cgmesh/parametric_catalog.h"
 #include "../src/cgmesh/profile2d.h"
@@ -136,11 +138,11 @@ TEST (TEST_cggraph_nodes_shapes, the_generic_adapter_covers_the_shape_catalogue_
 	{
 		EXPECT_TRUE (bound.insert (binding.shapeName).second)
 			<< "deux liaisons pour la meme forme : " << binding.shapeName;
-		EXPECT_NE (FindParametricShape (binding.shapeName), nullptr)
-			<< "liaison vers une forme inconnue de cgmesh : " << binding.shapeName;
+		EXPECT_NE (FindCatalogShape (binding.shapeName), nullptr)
+			<< "liaison vers une forme inconnue du catalogue : " << binding.shapeName;
 	}
 
-	for (const ParametricShapeEntry &shape : ParametricShapes ())
+	for (const ParametricShapeEntry &shape : CatalogShapes ())
 	{
 		if (std::string (shape.name) == "Gothic Window")
 		{
@@ -152,8 +154,43 @@ TEST (TEST_cggraph_nodes_shapes, the_generic_adapter_covers_the_shape_catalogue_
 		EXPECT_EQ (bound.count (shape.name), 1u) << "forme sans noeud : " << shape.name;
 	}
 
-	EXPECT_EQ (ParametricShapes ().size (), 27u);
+	EXPECT_EQ (CatalogShapes ().size (), 27u);
 	EXPECT_EQ (ShapeBindings ().size (), 26u);
+}
+
+TEST (TEST_cggraph_nodes_shapes, the_shape_catalogue_joins_cgmesh_then_gothic_in_order)
+{
+	// 25 formes dans cgmesh, 2 formes gothiques, 27 dans la reunion : celles de
+	// cgmesh d'abord, dans leur ordre, puis les gothiques dans le leur.
+	const std::vector<ParametricShapeEntry> &generic = ParametricShapes ();
+	const std::vector<ParametricShapeEntry> &gothic  = cgarchi::GothicParametricShapes ();
+	const std::vector<ParametricShapeEntry> &all     = CatalogShapes ();
+	ASSERT_EQ (generic.size (), 25u);
+	ASSERT_EQ (gothic.size (), 2u);
+	ASSERT_EQ (all.size (), 27u);
+	for (std::size_t i = 0; i < generic.size (); ++i)
+		EXPECT_STREQ (all[i].name, generic[i].name) << i;
+	for (std::size_t i = 0; i < gothic.size (); ++i)
+		EXPECT_STREQ (all[generic.size () + i].name, gothic[i].name) << i;
+	EXPECT_STREQ (gothic[0].name, "Gothic Window");
+	EXPECT_STREQ (gothic[1].name, "Gothic Block");
+
+	// Le nom est la cle : unique sur la reunion.
+	std::set<std::string> names;
+	for (const ParametricShapeEntry &entry : all)
+		EXPECT_TRUE (names.insert (entry.name).second) << "nom en double : " << entry.name;
+
+	// Les formes gothiques se trouvent par la reunion, pas dans cgmesh.
+	for (std::size_t i = 0; i < gothic.size (); ++i)
+	{
+		const char *name = gothic[i].name;
+		EXPECT_EQ (FindParametricShape (name), nullptr) << name;
+		EXPECT_EQ (FindCatalogShape (name), &all[generic.size () + i]) << name;
+		EXPECT_NE (MakeCatalogShape (name), nullptr) << name;
+	}
+	EXPECT_EQ (FindCatalogShape ("Cube"), &all[0]);
+	EXPECT_EQ (FindCatalogShape ("no such shape"), nullptr);
+	EXPECT_EQ (MakeCatalogShape ("no such shape"), nullptr);
 }
 
 TEST (TEST_cggraph_nodes_shapes, no_shape_node_wraps_a_form_that_reads_a_file)
@@ -172,7 +209,7 @@ TEST (TEST_cggraph_nodes_shapes, no_shape_node_wraps_a_form_that_reads_a_file)
 	                               "Implicit (point cloud)" };
 	for (const char *name : withResource)
 	{
-		EXPECT_EQ (FindParametricShape (name), nullptr)
+		EXPECT_EQ (FindCatalogShape (name), nullptr)
 			<< name << " ne doit pas figurer au catalogue de formes SANS ressource";
 		for (const ShapeBinding &binding : ShapeBindings ())
 			EXPECT_NE (std::string (binding.shapeName), name);
@@ -180,7 +217,7 @@ TEST (TEST_cggraph_nodes_shapes, no_shape_node_wraps_a_form_that_reads_a_file)
 
 	// CONTROLE POSITIF : sans lui, la boucle ci-dessus passerait tout aussi bien
 	// sur un catalogue VIDE.
-	EXPECT_NE (FindParametricShape ("Cube"), nullptr);
+	EXPECT_NE (FindCatalogShape ("Cube"), nullptr);
 
 	for (const ShapeBinding &binding : ShapeBindings ())
 	{
@@ -354,7 +391,7 @@ TEST (TEST_cggraph_nodes_shapes, an_unfed_profile_port_gives_back_the_flat_posit
 	ASSERT_NE (fromNode, nullptr);
 
 	// La forme paramerie, menu sur « Flat » -- son defaut.
-	ParameterizedGothicWindow shape;
+	cgarchi::ParameterizedGothicWindow shape;
 	shape.Regenerate ();
 	std::unique_ptr<Mesh> reference (shape.TakeMesh ());
 	ASSERT_NE (reference, nullptr);
@@ -381,7 +418,7 @@ TEST (TEST_cggraph_nodes_shapes, the_chamfer_port_reproduces_the_menu_position_i
 	std::shared_ptr<const Mesh> fromPort = outputs[0].Share<Mesh> (Types ().mesh);
 	ASSERT_NE (fromPort, nullptr);
 
-	ParameterizedGothicWindow shape;
+	cgarchi::ParameterizedGothicWindow shape;
 	for (Parameter &p : shape.GetParameters ())
 		if (p.GetName () == "Profile")
 			p.SetInt (1);                       // Chamfer
@@ -458,7 +495,7 @@ TEST (TEST_cggraph_nodes_shapes, a_bar_profile_port_reproduces_its_menu_position
 	}
 	EXPECT_GT (zMax, 20.f) << "la barre ne fait plus saillie sur la face avant";
 
-	ParameterizedGothicWindow shape;
+	cgarchi::ParameterizedGothicWindow shape;
 	for (Parameter &p : shape.GetParameters ())
 		if (p.GetName () == "Profile")
 			p.SetInt (2);                       // Roll bar
@@ -487,11 +524,11 @@ TEST (TEST_cggraph_nodes_shapes, a_failed_gothic_construction_fails_the_node)
 	const float nan = std::numeric_limits<float>::quiet_NaN ();
 
 	// Precondition : la forme seule, avec le meme profil, porte l'erreur.
-	ParameterizedGothicWindow shape;
+	cgarchi::ParameterizedGothicWindow shape;
 	const Profile2D bar = rollBarProfile (nan);
 	shape.SetBarProfile (&bar);
 	shape.Regenerate ();
-	ASSERT_EQ (shape.LastBuildReport ().Count (GothicBuildError::InvalidParameter), 1u)
+	ASSERT_EQ (shape.LastBuildReport ().Count (cgarchi::GothicBuildError::InvalidParameter), 1u)
 		<< "precondition : le profil non fini n'est plus refuse, le cas ne teste plus le noeud";
 
 	Graph graph;
@@ -538,7 +575,7 @@ TEST (TEST_cggraph_nodes_shapes, the_gothic_node_publishes_its_build_warnings)
 			if (s.name == "gothic.depth_fallback")
 				fallbacks = s.value;
 		}
-		EXPECT_EQ (published, kGothicBuildWarningCount);
+		EXPECT_EQ (published, cgarchi::kGothicBuildWarningCount);
 		EXPECT_EQ (fallbacks, depth == 2 ? 4.0 : 0.0);
 	}
 }
@@ -904,4 +941,35 @@ TEST (TEST_cggraph_nodes_shapes, the_svg_fit_size_is_the_largest_dimension_in_mi
 	const float none = largestSide (0.0f);
 	ASSERT_GT (none, 0.0f);
 	EXPECT_NEAR (none, 1.0f, 1e-3f);
+}
+
+TEST (TEST_cggraph_nodes_shapes, nodes_that_refuse_an_empty_shape_say_so)
+{
+	// Un L-system sans trait (systeme 5, iteration 0) rend un maillage vide (M37).
+	// Les noeuds qui ne savent rien en faire le refusent, avec une raison lisible :
+	// un ComputeFailed muet ne se distingue pas d'une panne.
+	for (const char *typeName : {"mesh.mounts", "mesh.align.icp", "mesh.ambient_occlusion",
+	                             "mesh.thickness", "mesh.curvature"})
+	{
+		SCOPED_TRACE (typeName);
+		Graph graph;
+		std::unique_ptr<Node> shape = MakeShapeNode ("shape.lsystem");
+		ASSERT_NE (shape, nullptr);
+		shape->GetParams ().SetInt ("System", 5);
+		shape->GetParams ().SetInt ("Iterations", 0);
+		const NodeId shapeId = graph.AddNode (std::move (shape));
+		std::unique_ptr<Node> node = MakeNode (typeName);
+		ASSERT_NE (node, nullptr);
+		const std::size_t inputs = node->GetDesc ().inputs.size ();
+		const NodeId nodeId = graph.AddNode (std::move (node));
+		for (std::size_t i = 0; i < inputs; ++i)
+			ASSERT_EQ (graph.Connect (shapeId, 0, nodeId, static_cast<PortIdx> (i)), ConnectStatus::Ok);
+		Evaluator evaluator (graph);
+		EvalContext ctx;
+		ValueList outputs;
+		const EvalResult result = evaluator.Evaluate (nodeId, outputs, ctx);
+		EXPECT_EQ (result.status, EvalStatus::ComputeFailed);
+		EXPECT_EQ (result.node, nodeId);
+		EXPECT_EQ (result.detail, "maillage vide");
+	}
 }

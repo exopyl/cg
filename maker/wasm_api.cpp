@@ -50,6 +50,7 @@
 #include <fstream>
 #include <iterator>
 #include <functional>
+#include <iostream>
 #include <limits>
 #include <map>
 #include <memory>
@@ -58,15 +59,18 @@
 #include <vector>
 
 #include "parameterized_shapes.h"   // IParameterized + formes a ressource
-#include "parameterized_gothic.h"   // ParameterizedGothicWindow (createGothicFromJson, exportGothicJson)
-#include "print_validation_json.h"  // print-constraints/v1, print-report/v1 (garde d'impression)
-#include "parametric_catalog.h"     // fabriques des formes sans ressource
+#include <cgarchi/parameterized_gothic.h>   // ParameterizedGothicWindow (createGothicFromJson, exportGothicJson)
+#include "print_validation_json.h"  // print-constraints/v1
+#include <cgarchi/gothic_print_json.h>      // GothicPrintVerdictToJson : print-report/v1 de la garde d'impression
+#include <cgarchi/parameterized_gothic_microarchitecture.h>   // ParameterizedGothicMicroarchitecture (createMicroarchFromJson)
+#include <cgarchi/gothic_microarchitecture_json.h>            // ReportToJson
 #include "image_pixel_blocks.h"      // image_to_pixel_blocks_per_component
 #include "material.h"                // Material::GetName (nommage des groupes OBJ)
 #include "mesh.h"                    // GetNVertices / GetVertex / GetTriangles
 #include "mesh_io.h"                 // MeshIO::export_obj (serialisation OBJ+MTL)
 #include "mesh_payload.h"
 #include "graph_host.h"              // maker_graph::host () -- resultat du graphe (graphExportObj)
+#include "../src/cggraph/nodes/shapes/shape_catalog.h"   // fabriques des formes sans ressource (cgmesh + gothique)
 #include "../src/cggraph/nodes/value_types.h"
 
 #ifdef __EMSCRIPTEN__
@@ -117,13 +121,14 @@ struct CatalogEntry {
 };
 
 // Catalogue de PRESENTATION : nom, categorie de page, groupe de liste. La
-// FABRIQUE n'est plus ici -- elle vit dans cgmesh (parametric_catalog.h), d'ou
-// la couche nodale la lit aussi. Deux listes de fabriques auraient diverge au
-// premier ajout ; celle-ci ne porte plus que ce qui est propre a maker, et le
-// nom sert de cle entre les deux.
+// FABRIQUE n'est pas ici -- elle vit dans le catalogue reuni de la couche
+// nodale (cggraph_nodes::CatalogShapes : formes de cgmesh, puis formes
+// gothiques), que l'adaptateur generique lit aussi. Celle-ci ne porte que ce qui
+// est propre a maker, et le nom sert de cle entre les deux.
 //
 // Une entree dont le nom ne se resout pas est ECARTEE, et la forme disparait de
-// la page -- l'ecart se voit donc, au lieu de produire une fabrique nulle.
+// la page ; l'ecart est signale sur std::cerr (la console sous Emscripten), au
+// lieu de produire une fabrique nulle.
 const std::vector<CatalogEntry>& catalog()
 {
     static const std::string P = "parametric";
@@ -170,13 +175,17 @@ const std::vector<CatalogEntry>& catalog()
         out.reserve(rows.size());
         for (const Row& r : rows) {
             const std::string name = r.name;
-            if (!FindParametricShape(name)) continue;   // nom inconnu de cgmesh
+            if (!cggraph_nodes::FindCatalogShape(name)) {
+                std::cerr << "maker: catalog entry \"" << name << "\" (" << r.category
+                          << ") is unknown to the shape catalogue; dropped from the page\n";
+                continue;
+            }
             // Les formes de la page parametrique recoivent l'option Extrude
             // (epaississement) ; les formes gothiques ont deja leur propre
             // extrusion (zHeight, profils).
             const bool extrudable = (r.category == P);
             out.push_back(CatalogEntry{name, r.category, r.group, [name, extrudable] {
-                std::unique_ptr<IParameterized> shape = MakeParametricShape(name);
+                std::unique_ptr<IParameterized> shape = cggraph_nodes::MakeCatalogShape(name);
                 if (!extrudable) return shape;
                 return std::unique_ptr<IParameterized>(new ParameterizedExtruded(std::move(shape)));
             }});
@@ -500,17 +509,17 @@ emscripten::val exportPixelBlocks(int id, const std::string& base)
 // refus.
 bool gothicExportGuard(int id, IParameterized* obj, const Mesh& m, emscripten::val& out)
 {
-    const auto* gw = dynamic_cast<const ParameterizedGothicWindow*>(obj);
+    const auto* gw = dynamic_cast<const cgarchi::ParameterizedGothicWindow*>(obj);
     if (!gw) return true;
-    std::optional<GothicExportCheck> geometry;
+    std::optional<cgarchi::GothicExportCheck> geometry;
     try
     {
         const auto width = g_printedWidthMm.find(id);
         const std::optional<double> printedWidthMm =
             (width == g_printedWidthMm.end()) ? std::nullopt : std::optional<double>(width->second);
-        const GothicPrintVerdict verdict = CheckGothicExportAndPrintAtWidth(*gw, m, g_printer, printedWidthMm);
+        const cgarchi::GothicPrintVerdict verdict = cgarchi::CheckGothicExportAndPrintAtWidth(*gw, m, g_printer, printedWidthMm);
         geometry = verdict.check.geometry;
-        out.set("print", GothicPrintVerdictToJson(verdict));
+        out.set("print", cgarchi::GothicPrintVerdictToJson(verdict));
     }
     catch (const std::exception& e)
     {
@@ -524,7 +533,7 @@ bool gothicExportGuard(int id, IParameterized* obj, const Mesh& m, emscripten::v
     {
         try
         {
-            geometry = CheckGothicExport(*gw, m);
+            geometry = cgarchi::CheckGothicExport(*gw, m);
         }
         catch (const std::exception& e)
         {
@@ -537,7 +546,7 @@ bool gothicExportGuard(int id, IParameterized* obj, const Mesh& m, emscripten::v
             return false;
         }
     }
-    const GothicExportCheck check = *geometry;
+    const cgarchi::GothicExportCheck check = *geometry;
     if (!check.allowed)
     {
         out.set("refused", check.message);
@@ -548,15 +557,30 @@ bool gothicExportGuard(int id, IParameterized* obj, const Mesh& m, emscripten::v
     return true;
 }
 
+// Garde des exports generiques pour la microarchitecture gothique : son maillage
+// n'est qu'un affichage (tubes qui se traversent aux jonctions, ni coque ni solide,
+// sommets relatifs a une origine). Pose `refused` et rend false pour elle ; true
+// pour toute autre forme.
+bool microarchExportGuard(IParameterized* obj, emscripten::val& out)
+{
+    if (!dynamic_cast<cgarchi::ParameterizedGothicMicroarchitecture*>(obj)) return true;
+    out.set("refused", emscripten::val(std::string(
+        "display mesh only: tubes cross each other at the junctions, neither a shell nor a solid. "
+        "Export the network (JSON), the curves (OBJ) or the tubes (OBJ, origin applied) from the microarchitecture panel")));
+    return false;
+}
+
 // Verdict de la garde d'export de `id`, sans octets : Regenerate, puis
 // gothicExportGuard. Sert au controle a la demande et a la garde du STL, dont
-// l'encodeur est en JS. Objet vide pour une forme qui n'est pas une Gothic
-// Window, ou un id inconnu.
+// l'encodeur est en JS. `refused` pour une microarchitecture
+// (microarchExportGuard) ; objet vide pour une autre forme qui n'est pas une
+// Gothic Window, ou un id inconnu.
 emscripten::val gothicPrintReport(int id)
 {
     emscripten::val out = emscripten::val::object();
     IParameterized* obj = find(id);
-    if (!obj || !dynamic_cast<ParameterizedGothicWindow*>(obj)) return out;
+    if (obj && !microarchExportGuard(obj, out)) return out;
+    if (!obj || !dynamic_cast<cgarchi::ParameterizedGothicWindow*>(obj)) return out;
     obj->Regenerate();
     Mesh* m = meshOf(obj);
     if (m) gothicExportGuard(id, obj, *m, out);
@@ -585,7 +609,7 @@ emscripten::val exportObj(int id, const std::string& base)
     g_exportBytes.clear();
 
     IParameterized* obj = find(id);
-    if (obj)
+    if (obj && microarchExportGuard(obj, out))
     {
         obj->Regenerate();
         Mesh* m = meshOf(obj);
@@ -622,7 +646,7 @@ emscripten::val exportGlb(int id, const std::string& base)
     g_exportBytes.clear();
 
     IParameterized* obj = find(id);
-    if (obj)
+    if (obj && microarchExportGuard(obj, out))
     {
         obj->Regenerate();
         Mesh* m = meshOf(obj);
@@ -647,6 +671,166 @@ emscripten::val exportGlb(int id, const std::string& base)
                                            (const unsigned char*)g_exportBytes.data())));
     return out;
 }
+
+// ---------------------------------------------------------------------------
+// Microarchitecture gothique. Le resultat est le reseau de courbes ; le
+// maillage n'est que son affichage tubulaire (exports generiques refuses par
+// microarchExportGuard).
+// ---------------------------------------------------------------------------
+
+// { id, report, network [, failure] }
+//   id      : id du registre, -1 si la specification ou le reseau est refuse
+//   report  : ReportToJson(LoadReport()) -- lecture et reseau
+//   network : texte gothic-microarchitecture-network/v1, "" sur refus. Copie en
+//             chaine JS dans le rappel de Load, donc AVANT la construction des
+//             tubes, et liberee du tas WASM au retour du rappel.
+//   failure : what() d'une exception (epuisement de la memoire), id = -1
+emscripten::val createMicroarchFromJson(const std::string& specText)
+{
+    using namespace emscripten;
+    val out = val::object();
+    out.set("id", -1);
+    out.set("network", std::string());
+    out.set("report", std::string());
+    try
+    {
+        auto obj = std::make_unique<cgarchi::ParameterizedGothicMicroarchitecture>();
+        const bool ok = obj->Load(specText, [&](const std::string& json) { out.set("network", val(json)); });
+        out.set("report", cgarchi::microarch::ReportToJson(obj->LoadReport()));
+        if (ok) out.set("id", registerObject(std::move(obj)));
+    }
+    catch (const std::exception& e)
+    {
+        out.set("failure", std::string(e.what()));
+    }
+    return out;
+}
+
+// ReportToJson du dernier maillage tente ; "" si `id` n'est pas une microarchitecture.
+std::string microarchTubeReport(int id)
+{
+    auto* m = dynamic_cast<cgarchi::ParameterizedGothicMicroarchitecture*>(find(id));
+    return m ? cgarchi::microarch::ReportToJson(m->TubeReport()) : std::string();
+}
+
+// [x, y, z] en doubles (point du dessin = sommet + origine), ou null sans maillage
+// ou si `id` n'est pas une microarchitecture.
+emscripten::val microarchOrigin(int id)
+{
+    using namespace emscripten;
+    auto* m = dynamic_cast<cgarchi::ParameterizedGothicMicroarchitecture*>(find(id));
+    if (!m || !m->GetMesh()) return val::null();
+    val a = val::array();
+    a.call<void>("push", m->MeshOrigin().x);
+    a.call<void>("push", m->MeshOrigin().y);
+    a.call<void>("push", m->MeshOrigin().z);
+    return a;
+}
+
+// { name, bytes, report } ; kind = "curves" (polylignes du reseau) | "tubes"
+// (maillage, origine appliquee). Un seul fichier .obj, sans materiau ; bytes vide
+// sur refus, motif dans report (ReportToJson).
+emscripten::val exportMicroarchObj(int id, const std::string& base, const std::string& kind)
+{
+    using namespace emscripten;
+    val out = val::object();
+    out.set("name", std::string());
+    out.set("report", std::string());
+    g_exportBytes.clear();
+    auto* m = dynamic_cast<cgarchi::ParameterizedGothicMicroarchitecture*>(find(id));
+    if (m && (kind == "curves" || kind == "tubes"))
+    {
+        std::string safe;
+        for (char c : base)
+            if (isalnum((unsigned char)c) || c == '-' || c == '_') safe += c;
+        if (safe.empty()) safe = "microarchitecture";
+        cgarchi::microarch::MicroarchReport report;
+        if (kind == "curves")
+            g_exportBytes = m->NetworkObj(report);
+        else
+        {
+            m->Regenerate();
+            g_exportBytes = m->TubeObj(report);
+            // Sans maillage, le motif est celui du dernier maillage tente.
+            if (!m->GetMesh()) report = m->TubeReport();
+        }
+        out.set("report", cgarchi::microarch::ReportToJson(report));
+        if (!g_exportBytes.empty()) out.set("name", safe + "_" + kind);
+    }
+    out.set("bytes", val(typed_memory_view(g_exportBytes.size(),
+                                           (const unsigned char*)g_exportBytes.data())));
+    return out;
+}
+
+// Solide imprimable (J7-d, decisions M29 point 5 et M33), construit au clic puis libere : ni
+// affiche, ni garde. { name, bytes, verdict, triangles, threshold, extentMm, report [, failure] }
+//   bytes     : STL binaire en mm (centre en x et y, base a z = 0), Uint8Array COPIE dans le tas
+//               JS ; le tampon du tas WASM est rendu avant le retour. Vide si refuse.
+//   verdict   : "printable" | "not_printable" | "unverified" (F > threshold, STL exporte sans
+//               verdict) | "refused" (parametres, plafonds dont le plafond exact de triangles
+//               atteint pendant l'extraction, ou forme qui n'est pas une microarchitecture)
+//   report    : ReportToJson -- construction et verdict, codes et positions
+//   failure   : what() d'une exception (epuisement de la memoire), verdict "refused"
+// Rayon en permil de D, q entier (jamais arrondi : refus sinon), echelle en mm par unite du
+// dessin ; paroi minimale et enveloppe : imprimante en vigueur (g_printer).
+emscripten::val exportMicroarchStl(int id, const std::string& base, double radiusPermil, double cellsPerRadius,
+                                   double mmPerUnit)
+{
+    using namespace emscripten;
+    // Le tampon du dernier export OBJ ou GLB est rendu avant de construire le solide.
+    std::string().swap(g_exportBytes);
+    val out = val::object();
+    out.set("name", std::string());
+    out.set("verdict", std::string("refused"));
+    out.set("triangles", 0);
+    out.set("report", std::string());
+    std::size_t size = 0;
+    val bytes = val::global("Uint8Array").new_(0);
+    auto* m = dynamic_cast<cgarchi::ParameterizedGothicMicroarchitecture*>(find(id));
+    if (m)
+    {
+        out.set("threshold", static_cast<double>(m->Limits().max_verified_triangles));
+        try
+        {
+            cgarchi::MicroarchSolidExport e;
+            if (!(std::isfinite(cellsPerRadius) && std::floor(cellsPerRadius) == cellsPerRadius
+                  && std::fabs(cellsPerRadius) < 1e6))
+                e.report.Record(cgarchi::microarch::MicroarchError::SolidInvalidParameter, "solid.cells_per_radius",
+                                "the number of cells per radius must be an integer");
+            else
+            {
+                cgarchi::microarch::SolidParams params;
+                params.radius_ratio     = radiusPermil / 1000.0;
+                params.cells_per_radius = static_cast<int>(cellsPerRadius);
+                e = m->ExportSolidStl(params, mmPerUnit, g_printer);
+            }
+            out.set("verdict", std::string(cgarchi::SolidExportVerdictName(e.verdict)));
+            out.set("triangles", static_cast<double>(e.triangles));
+            out.set("report", cgarchi::microarch::ReportToJson(e.report));
+            val extent = val::array();
+            for (double x : e.extent_mm) extent.call<void>("push", x);
+            out.set("extentMm", extent);
+            size = e.stl.size();
+            if (size)
+            {
+                bytes = val::global("Uint8Array").new_(size);
+                bytes.call<void>("set", val(typed_memory_view(size, (const unsigned char*)e.stl.data())));
+                std::string safe;
+                for (char c : base)
+                    if (isalnum((unsigned char)c) || c == '-' || c == '_') safe += c;
+                if (safe.empty()) safe = "microarchitecture";
+                out.set("name", safe + "_solid");
+            }
+        }
+        catch (const std::exception& e)
+        {
+            out.set("verdict", std::string("refused"));
+            out.set("failure", std::string(e.what()));
+        }
+    }
+    out.set("bytes", bytes);
+    return out;
+}
 #endif
 
 // Rapport JSON (GothicBuildReportToJson) du dernier createGothicFromJson,
@@ -660,9 +844,9 @@ namespace { std::string g_lastGothicLoadReport; }
 // JSON est refuse ; le motif est dans lastGothicLoadReport().
 int createGothicFromJson(const std::string& jsonText)
 {
-    auto obj = std::unique_ptr<ParameterizedGothicWindow>(new ParameterizedGothicWindow());
+    auto obj = std::unique_ptr<cgarchi::ParameterizedGothicWindow>(new cgarchi::ParameterizedGothicWindow());
     const bool loaded = obj->LoadFromJson(jsonText);
-    g_lastGothicLoadReport = GothicBuildReportToJson(obj->LastLoadReport());
+    g_lastGothicLoadReport = cgarchi::GothicBuildReportToJson(obj->LastLoadReport());
     if (!loaded) return -1;
     return registerObject(std::move(obj));
 }
@@ -677,10 +861,10 @@ std::string lastGothicLoadReport()
 // une Gothic Window.
 std::string gothicReport(int id)
 {
-    const ParameterizedGothicWindow* gw = dynamic_cast<ParameterizedGothicWindow*>(find(id));
+    const cgarchi::ParameterizedGothicWindow* gw = dynamic_cast<cgarchi::ParameterizedGothicWindow*>(find(id));
     if (!gw) return std::string();
-    return "{\"load\":" + GothicBuildReportToJson(gw->LastLoadReport())
-         + ",\"build\":" + GothicBuildReportToJson(gw->LastBuildReport()) + "}";
+    return "{\"load\":" + cgarchi::GothicBuildReportToJson(gw->LastLoadReport())
+         + ",\"build\":" + cgarchi::GothicBuildReportToJson(gw->LastBuildReport()) + "}";
 }
 
 // Pose l'imprimante : document print-constraints/v1, lecture stricte
@@ -738,7 +922,7 @@ bool setPrintedWidthMm(int id, double mm)
 std::string exportGothicJson(int id)
 {
     IParameterized* obj = find(id);
-    ParameterizedGothicWindow* gw = dynamic_cast<ParameterizedGothicWindow*>(obj);
+    cgarchi::ParameterizedGothicWindow* gw = dynamic_cast<cgarchi::ParameterizedGothicWindow*>(obj);
     return gw ? gw->ExportJson() : std::string();
 }
 
@@ -848,12 +1032,15 @@ bool setParamString(int id, const std::string& name, const std::string& value)
 // Reconstruit le maillage depuis les parametres courants et renvoie l'OBJ
 // d'AMORCAGE du viseur (cf. l'en-tete : son `mtllib` ne resout pas). Le shell
 // rebascule aussitot sur meshData(), qui porte la geometrie non soudee ET les
-// materiaux.
+// materiaux. "" pour une microarchitecture, ou sans maillage.
 std::string regenerate(int id)
 {
     IParameterized* obj = find(id);
     if (!obj) return std::string();
     obj->Regenerate();
+    // Microarchitecture : pas d'OBJ texte d'amorcage. Au plafond de triangles, il
+    // porterait le tas au-dela de 1 Gio ; le shell affiche alors par meshData.
+    if (dynamic_cast<cgarchi::ParameterizedGothicMicroarchitecture*>(obj)) return std::string();
     Mesh* m = meshOf(obj);
     return m ? MeshIO::export_obj_bytes(*m, "model") : std::string();
 }
@@ -913,9 +1100,12 @@ emscripten::val meshData(int id)
 {
     using namespace emscripten;
     val out = val::object();
-    g_pos.clear();
-    g_idx.clear();
-    g_col.clear();
+    // Tampons rendus au tas AVANT Regenerate, pas seulement vides : une capacite
+    // gardee fragmente le tas pendant la reconstruction, qui croit alors a chaque
+    // changement de curseur.
+    std::vector<float>().swap(g_pos);
+    std::vector<unsigned int>().swap(g_idx);
+    std::vector<float>().swap(g_col);
 
     IParameterized* obj = find(id);
     if (obj) {
@@ -972,10 +1162,6 @@ emscripten::val meshData(int id)
 // `color` par sommet, que viewer.js branche sur three.js. fillVertexColors rend
 // un tableau VIDE pour un maillage mono-materiau, et le JS retombe alors sur le
 // selecteur de couleur -- exactement comme pour une forme parametrique.
-//
-// Reutilise g_pos / g_idx / g_col : ces tampons servent deja meshData(), et les
-// deux ne sont jamais en vol en meme temps -- une page est pilotee par une forme
-// ou par un graphe, jamais par les deux.
 // Geometrie du resultat nodal, telle que three.js la veut.
 //
 // Le corps vit dans mesh_payload.cpp, PARTAGE avec graphMeshView : les deux vues
@@ -1094,5 +1280,10 @@ EMSCRIPTEN_BINDINGS(maker)
     emscripten::function("exportGlb",         &exportGlb);
     emscripten::function("meshData",          &meshData);
     emscripten::function("destroyShape",      &destroyShape);
+    emscripten::function("createMicroarchFromJson", &createMicroarchFromJson);
+    emscripten::function("microarchTubeReport",     &microarchTubeReport);
+    emscripten::function("microarchOrigin",         &microarchOrigin);
+    emscripten::function("exportMicroarchObj",      &exportMicroarchObj);
+    emscripten::function("exportMicroarchStl",      &exportMicroarchStl);
 }
 #endif

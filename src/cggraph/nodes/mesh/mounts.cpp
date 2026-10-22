@@ -84,6 +84,8 @@ bool MountsNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueList &i
 	const std::shared_ptr<const Mesh> input = in[0].Share<Mesh> (Types ().mesh);
 	if (input == nullptr)
 		return false;
+	if (IsEmptyMesh (*input))
+		return FailOnEmptyMesh (ctx);
 
 	const float bandWidth = GetFloat (GetParams (), "bandWidth", 6.0f);
 	const float earR = 0.5f * GetFloat (GetParams (), "earDiameter", 12.0f);

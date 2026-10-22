@@ -804,6 +804,7 @@ void ParameterizedImplicitFromPoints::Regenerate()
 	int nv = 0, nf = 0;
 	float* verts = nullptr;
 	unsigned int* faces = nullptr;
+	// Echec (resolution hors garde, memoire) : sorties a 0 et nullptr, donc maillage vide.
 	surf->get_triangulation(&nv, &verts, &nf, &faces);
 	delete surf;
 

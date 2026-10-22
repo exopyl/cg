@@ -171,12 +171,13 @@ class TQuaternion
 		return TQuaternion<TValue> (x/d, y/d, z/d, w/d);
 	}
 
-	bool operator== (const TQuaternion &s)
+	// const : voir TVector2::operator==.
+	bool operator== (const TQuaternion &s) const noexcept
 	{
 		return ( x == s.x && y == s.y && z == s.z && w == s.w );
 	}
 
-	bool operator!= (const TQuaternion &q)
+	bool operator!= (const TQuaternion &q) const noexcept
 	{
 		return !(*this == q);
 	}

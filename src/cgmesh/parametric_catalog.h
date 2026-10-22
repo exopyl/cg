@@ -1,15 +1,17 @@
 #pragma once
 
 // ============================================================================
-//  Catalogue des formes parametriques -- une seule liste de fabriques
+//  Catalogue des formes parametriques de cgmesh
 // ============================================================================
 //
 // Les formes de parameterized_shapes.h qui se construisent SANS RESSOURCE : un
 // constructeur par defaut, des parametres, un maillage. Ce sont exactement
-// celles qu'un adaptateur generique sait emballer, et c'est pourquoi la liste
-// vit ici plutot que chez l'un de ses consommateurs -- les pages de maker et la
-// couche nodale la lisent toutes les deux, et deux listes auraient diverge au
-// premier ajout.
+// celles qu'un adaptateur generique sait emballer.
+//
+// Cette liste ne contient QUE les formes de cgmesh. Les consommateurs -- les
+// pages de maker et la couche nodale -- ne la lisent pas directement : ils
+// lisent la reunion cggraph_nodes::CatalogShapes () (shapes/shape_catalog.h),
+// qui la complete par les formes gothiques (gothic_parametric_catalog.h).
 //
 // ⚠ N'Y FIGURENT PAS les formes dont le constructeur prend un FICHIER --
 // extrusion SVG, quantification d'image, blocs pixelises, texte 3D, surface
@@ -24,8 +26,8 @@
 // plus ParameterizedText3D, dont le constructeur a deux arguments n'est pas
 // `explicit`.
 //
-// Le NOM est celui que rend GetName() : c'est la cle du catalogue, et les deux
-// consommateurs s'en servent pour retrouver une forme.
+// Le NOM est celui que rend GetName() : c'est la cle de recherche, unique sur
+// la reunion.
 //
 #include <memory>
 #include <string>

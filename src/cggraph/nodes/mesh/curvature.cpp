@@ -61,6 +61,8 @@ bool CurvatureNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueList
 	const std::shared_ptr<const Mesh> input = in[0].Share<Mesh> (Types ().mesh);
 	if (input == nullptr)
 		return false;
+	if (IsEmptyMesh (*input))
+		return FailOnEmptyMesh (ctx);
 
 	int method = GetInt (GetParams (), "method", 0);
 	if (method < 0 || method >= kMethodCount)

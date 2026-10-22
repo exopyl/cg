@@ -1,7 +1,7 @@
 # `maker` — Analyse d'une interface web pour cgmesh (Online3DViewer + Emscripten)
 
 > Statut : implémenté. Les §1–14 sont l'analyse de faisabilité d'origine (2026-07-15), conservée
-> pour ses justifications ; la §15 décrit l'organisation effective du front-end (cinq pages,
+> pour ses justifications ; la §15 décrit l'organisation effective du front-end (une page par générateur, huit au 2026-11-04,
 > un module WASM partagé) et la §16 la brique « blocs pixelisés ». Les §15–16 priment sur les
 > §3 et §6 là où elles divergent.
 
@@ -77,6 +77,7 @@ nom de paramètre — la couche JS ne touche jamais un pointeur.
 │      │                                                              │
 │      ├─→ shapes.html    ┐                                           │
 │      ├─→ gothic.html    │                                           │
+│      ├─→ microarch.html │                                           │
 │      ├─→ relief.html    │  une page par générateur                  │
 │      ├─→ pixels.html    │  (§15, §16)                               │
 │      └─→ svg.html       ┘                                           │

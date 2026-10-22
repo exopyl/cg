@@ -1164,3 +1164,198 @@ TEST(TEST_cgmesh_mesh_validation, fine_sphere_is_valid)
     EXPECT_EQ(r.components, 1u);
     EXPECT_NEAR(r.signedVolume, 4.0 / 3.0 * std::acos(-1.0), 1e-3);
 }
+
+// ---------------------------------------------------------------------------
+//  Empreinte d'un maillage abime (option A, jalon A2)
+// ---------------------------------------------------------------------------
+//
+// Le rapport de ValidateMesh sur un maillage qui porte chaque categorie de defaut est
+// fige par une empreinte DISCRETE : comptes, grappes, composantes, budget de paires et
+// enregistrements dans l'ordre (type, faces, sommets). Elle ne depend pas du compilateur.
+// Les double (aire, volume signe) sont compares a part, a 1e-12 pres en relatif.
+
+namespace
+{
+    // Chaque bloc est decale en x pour rester disjoint des autres.
+    Mesh damagedMesh()
+    {
+        const float pi = 3.14159265358979f;
+        std::vector<std::array<float, 3>> v;
+        std::vector<std::vector<unsigned>> f;
+        auto add = [&](float x, float y, float z) {
+            v.push_back({x, y, z});
+            return static_cast<unsigned>(v.size() - 1);
+        };
+        // Cube [0,1]^3, chaque face en grille 2 x 2, sommets propres a chaque face (soudes par le validateur).
+        const float O[6][3] = {{0, 0, 0}, {0, 0, 1}, {0, 0, 0}, {0, 1, 0}, {0, 0, 0}, {1, 0, 0}};
+        const float U[6][3] = {{0, 1, 0}, {1, 0, 0}, {1, 0, 0}, {0, 0, 1}, {0, 0, 1}, {0, 1, 0}};
+        const float W[6][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+        for (int s = 0; s < 6; ++s)
+        {
+            unsigned g[3][3];
+            for (int i = 0; i < 3; ++i)
+                for (int j = 0; j < 3; ++j)
+                    g[i][j] = add(O[s][0] + 0.5f * (i * U[s][0] + j * W[s][0]),
+                                  O[s][1] + 0.5f * (i * U[s][1] + j * W[s][1]),
+                                  O[s][2] + 0.5f * (i * U[s][2] + j * W[s][2]));
+            for (int i = 0; i < 2; ++i)
+                for (int j = 0; j < 2; ++j)
+                {
+                    f.push_back({g[i][j], g[i + 1][j], g[i + 1][j + 1]});
+                    f.push_back({g[i][j], g[i + 1][j + 1], g[i][j + 1]});
+                }
+        }
+        // Triple doublon d'une face de la grille, indices permutes.
+        {
+            const std::vector<unsigned> t = f[0];
+            f.push_back({t[1], t[2], t[0]});
+            f.push_back({t[2], t[0], t[1]});
+            f.push_back({t[1], t[0], t[2]});
+        }
+        // Pentagone et hexagone plans, l'hexagone en double, indices tournes.
+        {
+            std::vector<unsigned> pent, hex;
+            for (int k = 0; k < 5; ++k)
+                pent.push_back(add(3.f, std::cos(2 * pi * k / 5), std::sin(2 * pi * k / 5)));
+            for (int k = 0; k < 6; ++k)
+                hex.push_back(add(3.5f, std::cos(2 * pi * k / 6), std::sin(2 * pi * k / 6)));
+            f.push_back(pent);
+            f.push_back(hex);
+            f.push_back({hex[2], hex[3], hex[4], hex[5], hex[0], hex[1]});
+        }
+        // Arete non manifold (trois ailettes) et sommet non manifold (noeud papillon).
+        {
+            const unsigned p = add(6, 0, 0), q = add(6, 0, 1);
+            f.push_back({p, q, add(7, 0, 0.5f)});
+            f.push_back({q, p, add(6, 1, 0.5f)});
+            f.push_back({p, q, add(5, -1, 0.5f)});
+            const unsigned c = add(9, 0, 0);
+            f.push_back({c, add(10, 0, 0), add(10, 1, 0)});
+            f.push_back({c, add(8, 0, 0), add(8, -1, 0)});
+        }
+        // Coque retournee (tetraedre aux faces inversees) et trou (tetraedre sans une face).
+        {
+            const unsigned a = add(12, 0, 0), b = add(13, 0, 0), c = add(12, 1, 0), d = add(12, 0, 1);
+            f.push_back({a, b, c});
+            f.push_back({a, d, b});
+            f.push_back({a, c, d});
+            f.push_back({b, d, c});
+            const unsigned e = add(15, 0, 0), g = add(16, 0, 0), h = add(15, 1, 0), i = add(15, 0, 1);
+            f.push_back({e, h, g});
+            f.push_back({e, g, i});
+            f.push_back({e, i, h});
+        }
+        // Sommet NaN et indice hors bornes.
+        {
+            const unsigned n = add(std::numeric_limits<float>::quiet_NaN(), 0, 0);
+            f.push_back({add(18, 0, 0), add(19, 0, 0), n});
+            f.push_back({add(18, 2, 0), add(19, 2, 0), 999999u});
+        }
+        // Triangle dont les sommets sont un prefixe de ceux d'un quadrilatere : deux cles de doublon
+        // de tailles differentes, voisines dans l'ordre lexicographique.
+        {
+            const unsigned b = add(27, 0, 0);
+            add(28, 0, 0);
+            add(28, 1, 0);
+            add(27, 1, 0);
+            add(27, 0, 2);
+            add(28, 0, 2);
+            f.push_back({b, b + 1, b + 2});
+            f.push_back({b + 3, b + 4, b + 5});
+            f.push_back({b, b + 1, b + 2, b + 3});
+        }
+        // Faces degenerees (alignee, indice repete), auto-intersection, sommet isole.
+        {
+            f.push_back({add(21, 0, 0), add(22, 0, 0), add(23, 0, 0)});
+            const unsigned r = add(21, 1, 0);
+            f.push_back({r, r, add(22, 1, 0)});
+            f.push_back({add(24, -1, 0), add(24, 1, 0), add(24, 0, 2)});
+            f.push_back({add(23, 0, 1), add(25, 0.2f, 1), add(25, -0.2f, 1)});
+            add(30, 30, 30);
+        }
+        Mesh m;
+        m.Init(static_cast<unsigned>(v.size()), static_cast<unsigned>(f.size()));
+        for (unsigned i = 0; i < v.size(); ++i)
+            m.SetVertex(i, v[i][0], v[i][1], v[i][2]);
+        for (unsigned i = 0; i < f.size(); ++i)
+        {
+            const auto face = m.FaceAt(i);
+            face->SetNVertices(static_cast<unsigned>(f[i].size()));
+            for (unsigned k = 0; k < f[i].size(); ++k)
+                face->SetVertex(k, f[i][k]);
+        }
+        return m;
+    }
+
+    // Partie discrete du rapport, en texte : lisible quand l'empreinte change.
+    std::string discreteReport(const MeshValidationReport &r)
+    {
+        std::string s = "counts";
+        for (std::size_t c : r.counts)
+            s += " " + std::to_string(c);
+        s += "\nwelded " + std::to_string(r.weldedVertices) + " components " + std::to_string(r.components);
+        s += "\nself " + std::to_string(r.selfIntersectionChecked) + " " + std::to_string(r.selfIntersectionTruncated) +
+             " " + std::to_string(r.selfIntersectionPairsTested) + " " + std::to_string(r.selfIntersectionPairBudget);
+        for (const MeshDefectRecord &rec : r.records)
+        {
+            s += std::string("\n") + MeshDefectName(rec.kind) + " f";
+            for (unsigned f : rec.faces)
+                s += " " + std::to_string(f);
+            s += " v";
+            for (unsigned v : rec.vertices)
+                s += " " + std::to_string(v);
+        }
+        s += "\nvalid " + std::to_string(r.IsValid()) + "\n";
+        return s;
+    }
+
+    // FNV-1a 64 bits.
+    std::uint64_t fingerprint(const std::string &s)
+    {
+        std::uint64_t h = 1469598103934665603ull;
+        for (unsigned char c : s)
+        {
+            h ^= c;
+            h *= 1099511628211ull;
+        }
+        return h;
+    }
+}
+
+TEST(TEST_cgmesh_mesh_validation, damaged_mesh_report_fingerprint)
+{
+    const Mesh m = damagedMesh();
+    struct Case
+    {
+        const char           *name;
+        MeshValidationOptions options;
+        std::uint64_t         fingerprint;
+        double                area, signedVolume;
+    };
+    MeshValidationOptions explicitWeld;
+    explicitWeld.weldTolerance = 1e-5;
+    MeshValidationOptions oneComponent;
+    oneComponent.expectedComponents = 1u;
+    MeshValidationOptions fewRecords;
+    fewRecords.maxRecordsPerKind = 2;
+    fewRecords.checkSelfIntersection = false;
+    const Case cases[] = {
+        {"weld 1e-5", explicitWeld, 0x64d0b34484c7c257ull, 25.539960025310741, 24.973152593331516},
+        {"default, one component expected", oneComponent, 0xc759c874bf94896bull, 25.539960025310741, 24.973152593331516},
+        {"two records per kind, no self-intersection", fewRecords, 0xe64fc9ad9016145aull, 25.539960025310741,
+         24.973152593331516},
+    };
+    for (const Case &c : cases)
+    {
+        SCOPED_TRACE(c.name);
+        const MeshValidationReport r = ValidateMesh(m, c.options);
+        const std::string text = discreteReport(r);
+        EXPECT_EQ(fingerprint(text), c.fingerprint) << text;
+        EXPECT_NEAR(r.area, c.area, 1e-12 * std::fabs(c.area)) << "area";
+        EXPECT_NEAR(r.signedVolume, c.signedVolume, 1e-12 * std::fabs(c.signedVolume)) << "signedVolume";
+        for (std::size_t k = 0; k < kMeshDefectCount; ++k)
+            if (k != static_cast<std::size_t>(MeshDefect::UnexpectedComponentCount) &&
+                (k != static_cast<std::size_t>(MeshDefect::SelfIntersection) || c.options.checkSelfIntersection))
+                EXPECT_GT(r.counts[k], 0u) << MeshDefectName(static_cast<MeshDefect>(k));
+    }
+}

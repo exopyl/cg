@@ -6,10 +6,8 @@
 
 import { createShell, runPage } from "../shell.js";
 import { saveBlob, safeName } from "../exporters.js";
-import {
-  applyPrintConstraints, browserStorage, constraintsRefusal, describePrint, guardVerdict,
-  printDefects, readStoredConstraints, writeStoredConstraints,
-} from "../print.js";
+import { describePrint, guardVerdict, printDefects } from "../print.js";
+import { mountPrinterControls } from "../printer_panel.js";
 
 runPage(async () => {
   const ctx = await createShell({
@@ -32,58 +30,11 @@ runPage(async () => {
   // garde dans le navigateur, valable pour toutes les fenetres.
   const printGroup  = document.getElementById("printGroup");
   const widthInput  = document.getElementById("printedWidth");
-  const thresholdInputs = [...printGroup.querySelectorAll(".pc")];
-  const envelopeInputs  = [...printGroup.querySelectorAll(".pcEnv")];
   const checkBtn    = document.getElementById("printCheckBtn");
   const detailsEl   = document.getElementById("printDetails");
   detailsEl.style.whiteSpace = "pre-line";
   const hasPrint = ["setPrintConstraints", "printConstraints", "setPrintedWidthMm", "gothicPrintReport", "gothicReport"]
     .every((f) => typeof ctx.Module[f] === "function");
-  const storage = browserStorage();
-
-  function currentPrinter() {
-    try { return JSON.parse(ctx.Module.printConstraints()); } catch { return null; }
-  }
-
-  // Champs = imprimante en vigueur (defauts compris).
-  function showPrinter() {
-    const doc = currentPrinter();
-    if (!doc) return;
-    for (const i of thresholdInputs) i.value = doc[i.dataset.field] ?? "";
-    envelopeInputs.forEach((i, k) => { i.value = doc.envelopeMm ? doc.envelopeMm[k] : ""; });
-  }
-
-  // Pose un document d'imprimante. Accepte : garde dans le navigateur. Refuse :
-  // motif en banniere, imprimante en vigueur inchangee -- l'export n'en depend
-  // jamais.
-  function setPrinter(text, origin) {
-    const r = applyPrintConstraints(ctx.Module, text);
-    if (!r.accepted) {
-      ctx.banner.report(`${origin} refusée — ${constraintsRefusal(r)} ; imprimante en vigueur inchangée`);
-      return false;
-    }
-    writeStoredConstraints(storage, ctx.Module.printConstraints());
-    showPrinter();
-    if (r.ignored && r.ignored.length)
-      ctx.setStatus(`${origin} : ${r.ignored.join(", ")} ignoré, l'échelle vient de la largeur imprimée`);
-    return true;
-  }
-
-  // Document des champs : seuil vide -> absent (sa valeur par defaut) ; volume
-  // entierement vide -> absent ; un cote vide ou illisible part tel quel, et la
-  // lecture stricte le refuse en le nommant (envelopeMm[1]).
-  function printerFromFields() {
-    const doc = currentPrinter() || { schema: "print-constraints/v1" };
-    for (const i of thresholdInputs) {
-      const v = i.value.trim();
-      if (v === "") delete doc[i.dataset.field];
-      else doc[i.dataset.field] = Number(v);
-    }
-    const env = envelopeInputs.map((i) => i.value.trim());
-    if (env.every((v) => v === "")) delete doc.envelopeMm;
-    else doc.envelopeMm = env.map((v) => (v === "" ? null : Number(v)));
-    return JSON.stringify(doc);
-  }
 
   function applyPrintedWidth() {
     const id = ctx.currentId();
@@ -124,23 +75,8 @@ runPage(async () => {
   }
 
   if (hasPrint) {
-    const stored = readStoredConstraints(storage);
-    if (stored !== null) {
-      const r = applyPrintConstraints(ctx.Module, stored);
-      if (!r.accepted)
-        ctx.banner.report(`Imprimante enregistrée refusée — ${constraintsRefusal(r)} ; seuils par défaut`);
-    }
-    showPrinter();
+    mountPrinterControls(ctx, printGroup);
     widthInput.addEventListener("change", applyPrintedWidth);
-    for (const i of [...thresholdInputs, ...envelopeInputs])
-      i.addEventListener("change", () => setPrinter(printerFromFields(), "Imprimante"));
-    ctx.registerFileInput(document.getElementById("printConstraintsInput"), async (file) => {
-      if (setPrinter(await file.text(), `Imprimante « ${file.name} »`))
-        ctx.setStatus(`Imprimante « ${file.name} » chargée`);
-    });
-    document.getElementById("printConstraintsExportBtn").addEventListener("click", () => {
-      saveBlob(new Blob([ctx.Module.printConstraints()], { type: "application/json" }), "print-constraints.json");
-    });
     checkBtn.addEventListener("click", () => {
       const id = ctx.currentId();
       if (id < 0) return;
@@ -156,6 +92,13 @@ runPage(async () => {
     });
   } else {
     printGroup.hidden = true;
+  }
+
+  // Option de provenance du catalogue (import JSON, modele par defaut) : une seule
+  // par valeur, selectionnee.
+  function setProvenance(label, value) {
+    for (const o of [...catalogEl.options]) if (o.value === value) o.remove();
+    catalogEl.appendChild(new Option(label, value, true, true));
   }
 
   // Adopte la forme `id` (setShape) : nouvelle piece, largeur imprimee non
@@ -221,7 +164,7 @@ runPage(async () => {
     if (id < 0) { ctx.banner.report(refusedMessage()); return; }
     // Reflete la provenance dans le catalogue, et bootstrap : le recadrage camera
     // doit rester fiable sur un gros saut d'echelle (bloc ~1 -> fenetre ~500).
-    catalogEl.appendChild(new Option(`JSON : ${file.name}`, "__gothicjson__", true, true));
+    setProvenance(`JSON : ${file.name}`, "__gothicjson__");
     adopt(id, file.name.replace(/\.json$/i, ""), { bootstrap: true });
     const warnings = loadWarnings(id);
     if (warnings) ctx.banner.report(warnings);
@@ -262,8 +205,7 @@ runPage(async () => {
     // Le descripteur par defaut n'affiche pas de banniere : son rapport part en
     // console, la banniere reste aux imports de l'utilisateur.
     if (id < 0) { console.warn(refusedMessage()); return false; }
-    catalogEl.appendChild(
-      new Option("Modele par defaut (JSON)", "__gothicdefault__", true, true));
+    setProvenance("Modele par defaut (JSON)", "__gothicdefault__");
     // bootstrap : le descripteur travaille en centaines d unites, le recadrage
     // camera doit repartir de zero (meme raison que pour un import manuel).
     adopt(id, "gothic-window-instance", { bootstrap: true });

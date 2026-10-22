@@ -30,7 +30,7 @@
 #include "mesh/save_mesh.h"
 #include "mesh/simplify.h"
 #include "mesh/smooth_laplacian.h"
-#include "shapes/gothic_window.h"
+#include "archi/gothic_window.h"
 #include "shapes/parametric_shape.h"
 #include "shapes/profile.h"
 #include "shapes/boolean2d.h"

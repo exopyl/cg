@@ -436,3 +436,23 @@ TEST(TEST_cgmath_TQuaternion, DoubleType)
 	EXPECT_DOUBLE_EQ(q.z, 3.0);
 	EXPECT_DOUBLE_EQ(q.w, 4.0);
 }
+
+// Comparaisons sur des operandes const : elles comparent les composantes, pas les
+// adresses (operator const float*() ne doit pas etre retenu).
+TEST(TEST_cgmath_TQuaternion, EqualityOnConstOperands)
+{
+    const Quaternionf a(1.f, 2.f, 3.f, 4.f);
+    const Quaternionf b(1.f, 2.f, 3.f, 4.f);
+    const Quaternionf c(1.f, 2.f, 3.f, 5.f);
+    Quaternionf m(1.f, 2.f, 3.f, 4.f);
+    EXPECT_TRUE(a == b);
+    EXPECT_FALSE(a != b);
+    EXPECT_FALSE(a == c);
+    EXPECT_TRUE(a != c);
+    EXPECT_TRUE(a == m);
+    EXPECT_FALSE(a != m);
+    EXPECT_TRUE(m == a);
+    EXPECT_FALSE(c == m);
+    EXPECT_TRUE(c != m);
+    EXPECT_TRUE(a == a);
+}

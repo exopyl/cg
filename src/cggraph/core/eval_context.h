@@ -10,6 +10,7 @@
 //
 #include <atomic>
 #include <functional>
+#include <string>
 #include <utility>
 
 namespace cggraph
@@ -45,9 +46,15 @@ public:
 			m_progress (t, label);
 	}
 
+	// Raison d'un Compute qui rend false, posee par le noeud : l'evaluateur la reprend
+	// dans EvalResult::detail du statut ComputeFailed, puis l'efface.
+	void SetFailureDetail (std::string detail) { m_failureDetail = std::move (detail); }
+	std::string TakeFailureDetail () { return std::exchange (m_failureDetail, std::string ()); }
+
 private:
 	std::atomic<bool> *m_cancelled = nullptr;
 	ProgressSink m_progress;
+	std::string m_failureDetail;
 };
 
 } // namespace cggraph

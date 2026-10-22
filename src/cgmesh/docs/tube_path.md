@@ -202,7 +202,13 @@ Priorisation pour `src/cgmesh` sous {perf interactive 60k, branches L-système, 
 > Analyse produite après lecture ciblée de `surface_basic.{h,cpp}`, `parameterized_shapes.cpp`, `mesh.h`, `chull.{h,cpp}`. Aucun fichier modifié.
 > Convention : **[vérifié]** = lu dans le code ; **[hypothèse]** = déduction non confirmée par exécution.
 
-## 0. Faits d'ancrage (état actuel vérifié)
+## 0. Faits d'ancrage (état antérieur à R1-R4, historique)
+
+> **Historique.** Cette section décrit `CreateTubes` **avant** R1-R4. Le code actuel partage un anneau par
+> point, joint en onglet ou en biseau, ferme les boucles sans trou, ferme les jonctions par une enveloppe
+> convexe et rend un maillage **vide** (0 sommet, 0 face) quand il n'y a rien à tuber : la référence est
+> l'en-tête `surface_basic.h`, testé par `test/tu_cgmesh_surface_tubes.cpp`. Les appelants ne sont plus le
+> seul L-system (`cgarchi`, `BuildTubeMesh`, en dépend aussi).
 
 - **[vérifié]** `CreateTubes(polylines, radius, nSides=6, caps=true)` tube **chaque segment indépendamment** : `nv = nSeg*2*K` (2 anneaux non partagés/segment), repère de section arbitraire recalculé par segment (`a`=Z ou X selon `|d.z|<0.9`, `u=a×d`, `v=d×u`). Aucune continuité de repère → vrille et décrochements.
 - **[vérifié]** Faces : `nf = nSeg*2*K` latéraux + `nCapped*2*(K-2)` (fans de cap). Triangulé, via `SetVertices`/`SetFaces`.

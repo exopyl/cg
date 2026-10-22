@@ -1,31 +1,51 @@
 #include "surface_implicit_tandem.h"
 
 #include <stdlib.h>
-#include <set>
+#include <algorithm>
+#include <cstddef>
+#include <memory>
+#include <new>
+#include <utility>
 #include <vector>
 
 #include "half_edge.h"
+#include "surface_implicit_triangulation.h"
 #include <cgmath/cgmath.h>
 
-
-typedef struct _mc_triangulation_
+namespace
 {
-	float *vertices;
-	int nvertices;
-	int nverticesmax;
+	struct FacePlane { plane_t p; };
+	struct VertexQuadric { quadric_t q; };
 
-	int iCurrentVertexInFace;
-	unsigned int *faces;
-	int nfaces;
-	int nfacesmax;
+	// Donnees d'une arete, partagees par ses deux demi-aretes (Che_edge::m_data).
+	struct edge_data_t
+	{
+		float m_error;
+		quadric_t q;
+		Vector3f m_p;
+	};
 
-	// specific for tandem
-	Che_mesh *he_mesh;
-	float *farea;
-	float *varea;
-	quadric_t *q;
-	plane_t *fplane;
-} mc_triangulation_t;
+	// Accumulateur du tandem : celui d'ImplicitSurface (sommets, faces), plus le maillage en
+	// demi-aretes et les donnees par face et par sommet, agrandies a chaque face ajoutee
+	// (tandem_add_face). edgeData possede les donnees d'aretes ; Che_edge::m_data ne fait
+	// que les designer.
+	struct TandemTriangulation : ImplicitTriangulation
+	{
+		std::unique_ptr<Che_mesh>                 he_mesh = std::make_unique<Che_mesh> ();
+		std::vector<float>                        farea;    // par face
+		std::vector<FacePlane>                    fplane;   // par face
+		std::vector<float>                        varea;    // par sommet
+		std::vector<VertexQuadric>                q;        // par sommet
+		std::vector<std::unique_ptr<edge_data_t>> edgeData;
+
+		static TandemTriangulation *FromData (void *data)
+		{
+			return static_cast<TandemTriangulation *> (ImplicitTriangulation::FromData (data));
+		}
+	};
+}
+
+typedef TandemTriangulation mc_triangulation_t;
 
 
 
@@ -33,12 +53,6 @@ typedef struct _mc_triangulation_
 //
 // tandem
 //
-typedef struct _edge_data_
-{
-	float m_error;
-	quadric_t q;
-	Vector3f m_p;
-} edge_data_t;
 
 static void edge_data_dump (Che_edge &e)
 {
@@ -51,8 +65,8 @@ static int slice = 0;
 // evaluate quadric metric at a vertex
 static int tandem_update_face_info (mc_triangulation_t *pTri, int fi)
 {
-	unsigned int *faces = pTri->faces;
-	float *vertices = pTri->vertices;
+	const unsigned int *faces = pTri->faces.data();
+	const float *vertices = pTri->vertices.data();
 
 	unsigned int iv1 = faces[3*fi];
 	unsigned int iv2 = faces[3*fi+1];
@@ -64,28 +78,27 @@ static int tandem_update_face_info (mc_triangulation_t *pTri, int fi)
 	v3.Set (vertices[3*iv3], vertices[3*iv3+1], vertices[3*iv3+2]);
 	
 	pTri->farea[fi] = 2.*Vector3f::evaluate_triangle_area (v1, v2, v3);
-	plane_init (pTri->fplane[fi], v1, v2, v3);
+	plane_init (pTri->fplane[fi].p, v1, v2, v3);
 
 	return 0;
 }
 
 static void tandem_add_face (mc_triangulation_t *pTri, unsigned int fi, unsigned int iv1, unsigned int iv2, unsigned int iv3)
 {
-	Che_mesh *he_mesh = pTri->he_mesh;
-	if (!he_mesh)
-		return;
-	
+	Che_mesh *he_mesh = pTri->he_mesh.get();
 	he_mesh->add_face (fi, iv1, iv2, iv3);
 
-	// update data
-	if (fi >= pTri->nfacesmax)
+	// donnees par face et par sommet a la taille du maillage (std::bad_alloc sur echec)
+	if (fi >= pTri->farea.size ())
 	{
-		pTri->farea = (float*)realloc(pTri->farea, pTri->nfacesmax*sizeof(float));
+		pTri->farea.resize (fi + 1);
+		pTri->fplane.resize (fi + 1);
 	}
-	if (iv1 >= pTri->nverticesmax || iv2 >= pTri->nverticesmax || iv3 >= pTri->nverticesmax )
+	const unsigned int ivMax = std::max (iv1, std::max (iv2, iv3));
+	if (ivMax >= pTri->varea.size ())
 	{
-		pTri->varea = (float*)realloc(pTri->varea, pTri->nverticesmax*sizeof(float));
-		pTri->q = (quadric_t*)realloc(pTri->q, pTri->nverticesmax*sizeof(quadric_t));
+		pTri->varea.resize (ivMax + 1);
+		pTri->q.resize (ivMax + 1);
 	}
 
 	tandem_update_face_info (pTri, fi);
@@ -94,7 +107,7 @@ static void tandem_add_face (mc_triangulation_t *pTri, unsigned int fi, unsigned
 // evaluate quadric metric at a vertex
 static int tandem_update_vertex_quadric (mc_triangulation_t *pTri, int vi)
 {
-	Che_mesh *he_mesh = pTri->he_mesh;
+	Che_mesh *he_mesh = pTri->he_mesh.get();
 	
 	if (he_mesh->is_border (vi))
 		return -1;
@@ -124,7 +137,7 @@ static int tandem_update_vertex_quadric (mc_triangulation_t *pTri, int vi)
 		{
 			quadric_t qf;
 
-			plane_quadric(pTri->fplane[f], qf);
+			plane_quadric(pTri->fplane[f].p, qf);
 //			quadric_dump (qf);
 
 			quadric_scale(qf, qf, pTri->farea[f]);
@@ -139,7 +152,7 @@ static int tandem_update_vertex_quadric (mc_triangulation_t *pTri, int vi)
 	if (total_area != 0.0f)
 		quadric_scale(qv, qv, 1.0f / total_area);
 	
-	quadric_copy(pTri->q[vi], qv);
+	quadric_copy(pTri->q[vi].q, qv);
 	pTri->varea[vi] = total_area;
 
 	return 0;
@@ -148,7 +161,7 @@ static int tandem_update_vertex_quadric (mc_triangulation_t *pTri, int vi)
 // evaluate quadric metric on an edge
 static int tandem_update_edge_quadric (mc_triangulation_t *pTri, int he_idx, float errors_range[2])
 {
-	Che_mesh *he_mesh = pTri->he_mesh;
+	Che_mesh *he_mesh = pTri->he_mesh.get();
 	Che_edge &he = he_mesh->edge(he_idx);
 
 	unsigned int v0 = he.m_v_begin;
@@ -163,8 +176,8 @@ static int tandem_update_edge_quadric (mc_triangulation_t *pTri, int he_idx, flo
 	vec0.Set (pTri->vertices[3*v0], pTri->vertices[3*v0+1], pTri->vertices[3*v0+2]);
 	vec1.Set (pTri->vertices[3*v1], pTri->vertices[3*v1+1], pTri->vertices[3*v1+2]);
 	
-	quadric_scale (q0, pTri->q[v0], pTri->varea[v0]);
-	quadric_scale (q1, pTri->q[v1], pTri->varea[v1]);
+	quadric_scale (q0, pTri->q[v0].q, pTri->varea[v0]);
+	quadric_scale (q1, pTri->q[v1].q, pTri->varea[v1]);
 	quadric_add (qe, q0, q1);
 	quadric_scale (qe, qe, 1.0f / (pTri->varea[v0] + pTri->varea[v1]));
 
@@ -191,7 +204,7 @@ static int tandem_update_edge_quadric (mc_triangulation_t *pTri, int he_idx, flo
 		bool bFlip = false;
 		unsigned int vis[2] = {v0, v1};
 		Vector3f vec0, vec1, vec2, n, nnew;
-		float *vertices = pTri->vertices;
+		const float *vertices = pTri->vertices.data();
 		for (int i=0; i<2; i++)
 		{
 			int vi0 = vis[i];
@@ -241,7 +254,9 @@ static int tandem_update_edge_quadric (mc_triangulation_t *pTri, int he_idx, flo
 	edge_data_t *edata = nullptr;
 	if (he.m_data == nullptr)
 	{
-		he.m_data = (edge_data_t*)malloc(sizeof(edge_data_t));
+		auto block = std::make_unique<edge_data_t> ();
+		pTri->edgeData.push_back (std::move (block));
+		he.m_data = pTri->edgeData.back ().get ();
 	}
 	if (he.m_pair >= 0)
 		he_mesh->edge(he.m_pair).m_data = he.m_data;
@@ -266,12 +281,11 @@ static void tandem_simplify (mc_triangulation_t *pTri)
 	if (!pTri)
 		return;
 
-	Che_mesh *he_mesh = pTri->he_mesh;
+	Che_mesh *he_mesh = pTri->he_mesh.get();
 
 	unsigned int nvertices = pTri->nvertices;
 	unsigned int nfaces = pTri->nfaces;
-	float *vertices = pTri->vertices;
-	unsigned int *faces = pTri->faces;
+	float *vertices = pTri->vertices.data();
 
 	// evaluate quadric metric at each vertex
 	for (int v=0; v<nvertices; v++)
@@ -356,7 +370,7 @@ static void tandem_simplify (mc_triangulation_t *pTri)
 				vertices[3*v1+2] = vnew[2];
 
 				pTri->varea[v1] += pTri->varea[v2];
-				quadric_copy (pTri->q[v1], edata->q);
+				quadric_copy (pTri->q[v1].q, edata->q);
 
 				//
 				std::map<int,int>::iterator it = he_mesh->VertexEdgeMap ()->find (v1);
@@ -393,11 +407,9 @@ static void tandem_simplify (mc_triangulation_t *pTri)
 
 static void export_tandem (mc_triangulation_t *pTri, char *filename)
 {
-	Che_mesh *he_mesh = pTri->he_mesh;
+	Che_mesh *he_mesh = pTri->he_mesh.get();
 	int nvertices = pTri->nvertices;
-	float *vertices = pTri->vertices;
-	int nfaces = pTri->nfaces;
-	unsigned int *faces = pTri->faces;
+	const float *vertices = pTri->vertices.data();
 
 	FILE *ptr = fopen (filename, "w");
 	//fprintf (ptr, "mtllib export_simplified.mtl\n");
@@ -450,9 +462,9 @@ static void export_tandem (mc_triangulation_t *pTri, char *filename)
 // tandem
 //
 ////////////////////////////////////////////////////////////////////////////////
-void new_face_completed (void *pData)
+static void new_face_completed (void *pData)
 {
-	mc_triangulation_t *pTri = (mc_triangulation_t*)pData;
+	mc_triangulation_t *pTri = TandemTriangulation::FromData (pData);
 
 	// update the half edge structure
 	int findex = pTri->nfaces-1;
@@ -463,11 +475,9 @@ ImplicitSurfaceTandem::ImplicitSurfaceTandem ()
 	: ImplicitSurface ()
 {
 	face_completed_func = new_face_completed;
-	// NOTE: simplification is run ONCE in get_triangulation_post() over the
-	// complete mesh, not per Z-layer. The half-edge mesh accumulates the whole
-	// surface anyway (completed layers are never flushed), so re-simplifying it
-	// on every layer was redundant work scaling with the layer count. A genuine
-	// streaming variant would flush+simplify finalized layers here instead.
+	// La simplification se fait UNE fois, dans get_triangulation_post, sur le maillage
+	// complet : le maillage en demi-aretes accumule toute la surface (aucune couche n'est
+	// videe). Une variante en flux simplifierait ici les couches terminees.
 }
 
 ImplicitSurfaceTandem::~ImplicitSurfaceTandem ()
@@ -476,79 +486,80 @@ ImplicitSurfaceTandem::~ImplicitSurfaceTandem ()
 
 void ImplicitSurfaceTandem::get_triangulation_pre (void)
 {
-	mc_triangulation_t *tri = (mc_triangulation_t*)malloc(sizeof(mc_triangulation_t));
-	tri->nverticesmax = 100000;
-	tri->vertices = (float*)malloc(3*tri->nverticesmax*sizeof(float));
-	tri->nvertices = 0;
-
-	tri->nfacesmax = 100000;
-	tri->faces = (unsigned int*)malloc(3*tri->nfacesmax*sizeof(unsigned int));
-	tri->nfaces = 0;
-
-	tri->iCurrentVertexInFace = 0;
-
-	// tandem specific
-	tri->farea = (float*)malloc(tri->nfacesmax*sizeof(float));
-	tri->fplane = (plane_t*)malloc(tri->nfacesmax*sizeof(plane_t));
-	tri->varea = (float*)malloc(tri->nverticesmax*sizeof(float));
-	tri->q = (quadric_t*)malloc(tri->nverticesmax*sizeof(quadric_t));
-	tri->he_mesh = new Che_mesh ();
-
-	data = (void*)tri;
+	data = static_cast<ImplicitTriangulation *> (new TandemTriangulation ());
 }
 
-void ImplicitSurfaceTandem::get_triangulation_post (int *nvertices, float **vertices, int *nfaces, unsigned int **faces)
+bool ImplicitSurfaceTandem::get_triangulation_post (int *nvertices, float **vertices, int *nfaces, unsigned int **faces,
+                                                    bool computed)
 {
-	mc_triangulation_t *tri = (mc_triangulation_t*)data;
-	Che_mesh *he_mesh = tri->he_mesh;
+	std::unique_ptr<TandemTriangulation> tri (TandemTriangulation::FromData (data));
+	data = nullptr;
+	if (!computed)
+		return false;
 
-	// Simplify the whole iso-surface once, now that extraction has built the
-	// complete half-edge mesh (see the constructor note on why this is not done
-	// per-layer).
-	tandem_simplify (tri);
+	// tandem_add_face agrandit les donnees par face et par sommet a chaque face : toute face
+	// et tout sommet cite en ont. Faux, plutot qu'une lecture hors bornes, si ce n'est pas le cas.
+	const std::size_t nf = static_cast<std::size_t> (tri->nfaces);
+	const std::size_t nv = static_cast<std::size_t> (tri->nvertices);
+	if (tri->farea.size () != nf || tri->fplane.size () != nf || tri->varea.size () != nv || tri->q.size () != nv)
+		return false;
 
-	// Rebuild compact output buffers from the *simplified* half-edge mesh.
-	// tandem_simplify() decimated he_mesh in place (contracting edges and
-	// updating the surviving vertex positions in tri->vertices); the surviving
-	// triangles are exactly the entries of FaceEdgeMap (), and contracted-away
-	// vertices are simply no longer referenced. We gather the still-used
-	// vertices, remap them to a dense range, and emit remapped triangles -- so
-	// the public API returns the decimated mesh instead of the raw MC faces.
-	const int oldNV = tri->nvertices;
-	std::vector<int> remap(oldNV, -1);
+	// Simplification sur le maillage complet, puis sortie compacte rebatie depuis le
+	// maillage en demi-aretes decime : les triangles survivants sont les entrees de
+	// FaceEdgeMap (), les sommets contractes ne sont plus cites ; les sommets encore cites
+	// sont renumerotes dans l'ordre de leur premiere citation.
+	std::vector<int> remap;
 	std::vector<unsigned int> outFaces;
-	outFaces.reserve(3 * he_mesh->FaceEdgeMap ()->size());
 	int newNV = 0;
-
-	for (std::map<int,int>::iterator it = he_mesh->FaceEdgeMap ()->begin();
-	     it != he_mesh->FaceEdgeMap ()->end(); ++it)
+	const int oldNV = tri->nvertices;
+	try
 	{
-		int he_idx = it->second;
-		Che_edge &he = he_mesh->edge(he_idx);
-		if (!he.m_valid)
-			continue;
-
-		const int v1 = he.m_v_begin;
-		const int v2 = he.m_v_end;
-		const int v3 = he_mesh->edge(he.m_he_next).m_v_end;
-
-		// skip out-of-range or degenerate triangles defensively
-		if (v1 < 0 || v2 < 0 || v3 < 0 || v1 >= oldNV || v2 >= oldNV || v3 >= oldNV)
-			continue;
-		if (v1 == v2 || v2 == v3 || v1 == v3)
-			continue;
-
-		const int tv[3] = { v1, v2, v3 };
-		for (int k = 0; k < 3; k++)
+		tandem_simplify (tri.get ());
+		Che_mesh *he_mesh = tri->he_mesh.get ();
+		remap.assign (oldNV, -1);
+		outFaces.reserve (3 * he_mesh->FaceEdgeMap ()->size ());
+		for (std::map<int,int>::iterator it = he_mesh->FaceEdgeMap ()->begin();
+		     it != he_mesh->FaceEdgeMap ()->end(); ++it)
 		{
-			if (remap[tv[k]] == -1)
-				remap[tv[k]] = newNV++;
-			outFaces.push_back((unsigned int)remap[tv[k]]);
+			int he_idx = it->second;
+			Che_edge &he = he_mesh->edge(he_idx);
+			if (!he.m_valid)
+				continue;
+
+			const int v1 = he.m_v_begin;
+			const int v2 = he.m_v_end;
+			const int v3 = he_mesh->edge(he.m_he_next).m_v_end;
+
+			// triangles hors bornes ou degeneres ecartes
+			if (v1 < 0 || v2 < 0 || v3 < 0 || v1 >= oldNV || v2 >= oldNV || v3 >= oldNV)
+				continue;
+			if (v1 == v2 || v2 == v3 || v1 == v3)
+				continue;
+
+			const int tv[3] = { v1, v2, v3 };
+			for (int k = 0; k < 3; k++)
+			{
+				if (remap[tv[k]] == -1)
+					remap[tv[k]] = newNV++;
+				outFaces.push_back((unsigned int)remap[tv[k]]);
+			}
 		}
 	}
+	catch (const std::bad_alloc &)
+	{
+		return false;
+	}
 
-	// compacted vertices (allocate at least 1 element to keep free() simple)
-	float *outVerts = (float*)malloc(3 * (newNV > 0 ? newNV : 1) * sizeof(float));
+	// tampons d'au moins un element : free reste simple pour l'appelant
+	const int outNF = (int)outFaces.size() / 3;
+	float *outVerts = static_cast<float *> (AllocateImplicitOutput (3 * (newNV > 0 ? newNV : 1) * sizeof(float)));
+	unsigned int *outFacesArr = static_cast<unsigned int *> (AllocateImplicitOutput (3 * (outNF > 0 ? outNF : 1) * sizeof(unsigned int)));
+	if (!outVerts || !outFacesArr)
+	{
+		ReleaseImplicitOutput (outVerts);
+		ReleaseImplicitOutput (outFacesArr);
+		return false;
+	}
 	for (int v = 0; v < oldNV; v++)
 		if (remap[v] >= 0)
 		{
@@ -556,10 +567,6 @@ void ImplicitSurfaceTandem::get_triangulation_post (int *nvertices, float **vert
 			outVerts[3*remap[v]+1] = tri->vertices[3*v+1];
 			outVerts[3*remap[v]+2] = tri->vertices[3*v+2];
 		}
-
-	const int outNF = (int)outFaces.size() / 3;
-	unsigned int *outFacesArr =
-		(unsigned int*)malloc(3 * (outNF > 0 ? outNF : 1) * sizeof(unsigned int));
 	for (size_t i = 0; i < outFaces.size(); i++)
 		outFacesArr[i] = outFaces[i];
 
@@ -567,26 +574,5 @@ void ImplicitSurfaceTandem::get_triangulation_post (int *nvertices, float **vert
 	*vertices  = outVerts;
 	*nfaces    = outNF;
 	*faces     = outFacesArr;
-
-	// release the intermediate extraction buffers and the half-edge mesh.
-	// edge_data_t blocks are shared between an edge and its pair (see
-	// tandem_update_edge_quadric), so free each unique pointer once.
-	std::set<void*> freed;
-	for (size_t e = 0; e < he_mesh->m_edges.size(); e++)
-	{
-		void *d = he_mesh->m_edges[e].m_data;
-		if (d && freed.insert(d).second)
-			free(d);
-		he_mesh->m_edges[e].m_data = nullptr;
-	}
-	delete he_mesh;
-
-	free(tri->vertices);
-	free(tri->faces);
-	free(tri->farea);
-	free(tri->fplane);
-	free(tri->varea);
-	free(tri->q);
-	free(tri);
-	data = nullptr;
+	return true;
 }

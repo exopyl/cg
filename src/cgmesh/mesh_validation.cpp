@@ -1,6 +1,7 @@
 #include "mesh_validation.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cfloat>
 #include <cmath>
 #include <cstdint>
@@ -338,7 +339,42 @@ namespace
 			m_order.resize (tris.size ());
 			std::iota (m_order.begin (), m_order.end (), 0u);
 			if (!tris.empty ())
+			{
+				const std::size_t expected = nodeCount (static_cast<unsigned> (tris.size ()));
+				m_nodes.reserve (expected);
 				build (0, static_cast<unsigned> (tris.size ()));
+				assert (m_nodes.size () == expected);
+				(void) expected;
+			}
+		}
+
+		// Nombre exact de noeuds de build (begin, begin + n) : la decoupe ne depend que de n,
+		// coupe en n / 2 et n - n / 2, feuille a kLeafSize triangles ou moins. Les tailles d'un
+		// meme niveau valent au plus deux entiers consecutifs, small et small + 1 : un passage par
+		// niveau.
+		static std::size_t nodeCount (unsigned n)
+		{
+			std::size_t total = 0, nSmall = 1, nLarge = 0;
+			unsigned small = n;
+			while (nSmall + nLarge > 0)
+			{
+				total += nSmall + nLarge;
+				const unsigned half = small / 2;
+				std::size_t nextSmall = 0, nextLarge = 0;
+				const auto children = [&] (unsigned size, std::size_t count) {
+					if (count == 0 || size <= kLeafSize)
+						return;
+					const unsigned left = size / 2, right = size - left;
+					(left == half ? nextSmall : nextLarge) += count;
+					(right == half ? nextSmall : nextLarge) += count;
+				};
+				children (small, nSmall);
+				children (small + 1, nLarge);
+				small = half;
+				nSmall = nextSmall;
+				nLarge = nextLarge;
+			}
+			return total;
 		}
 
 		template <class Visit>
@@ -509,21 +545,45 @@ namespace
 		return std::isfinite (V[3 * i]) && std::isfinite (V[3 * i + 1]) && std::isfinite (V[3 * i + 2]);
 	}
 
+	// Vue sur les sommets d'une face d'un tableau plat.
+	struct FaceView
+	{
+		const unsigned *p;
+		std::size_t     n;
+		std::size_t size () const { return n; }
+		unsigned operator[] (std::size_t k) const { return p[k]; }
+		const unsigned *begin () const { return p; }
+		const unsigned *end () const { return p + n; }
+		unsigned front () const { return p[0]; }
+	};
+
+	// Faces retenues, a plat : sommets de la face i dans index[offset[i], offset[i + 1]).
+	struct FlatFaces
+	{
+		std::vector<unsigned> original;   // indice de la face dans le Mesh
+		std::vector<unsigned> offset {0u};
+		std::vector<unsigned> index;
+		std::size_t size () const { return original.size (); }
+		FaceView operator[] (std::size_t i) const { return {index.data () + offset[i], offset[i + 1] - offset[i]}; }
+	};
+
 	// Faces de 3 sommets ou plus, indices dans les bornes ; marque les sommets cites.
-	std::vector<std::pair<unsigned, std::vector<unsigned>>> collectFaces (const Mesh &mesh, std::vector<char> &used,
-	                                                                     Recorder *recorder)
+	FlatFaces collectFaces (const Mesh &mesh, std::vector<char> &used, Recorder *recorder)
 	{
 		const unsigned nv = mesh.GetNVertices ();
-		std::vector<std::pair<unsigned, std::vector<unsigned>>> faces;
-		faces.reserve (mesh.GetNFaces ());
+		FlatFaces faces;
+		faces.original.reserve (mesh.GetNFaces ());
+		faces.offset.reserve (mesh.GetNFaces () + 1u);
+		faces.index.reserve (3u * static_cast<std::size_t> (mesh.GetNFaces ()));
 		used.assign (nv, 0);
+		std::vector<unsigned> idx;
 		for (unsigned f = 0; f < mesh.GetNFaces (); ++f)
 		{
 			const auto face = mesh.FaceAt (f);
 			if (!face)
 				continue;
 			const int n = face->GetNVertices ();
-			std::vector<unsigned> idx (static_cast<std::size_t> (std::max (n, 0)));
+			idx.assign (static_cast<std::size_t> (std::max (n, 0)), 0u);
 			bool inRange = true;
 			for (int k = 0; k < n; ++k)
 			{
@@ -545,7 +605,9 @@ namespace
 				continue;
 			for (unsigned v : idx)
 				used[v] = 1;
-			faces.emplace_back (f, std::move (idx));
+			faces.original.push_back (f);
+			faces.index.insert (faces.index.end (), idx.begin (), idx.end ());
+			faces.offset.push_back (static_cast<unsigned> (faces.index.size ()));
 		}
 		return faces;
 	}
@@ -604,7 +666,7 @@ MeshValidationReport ValidateMesh (const Mesh &mesh, const MeshValidationOptions
 		}
 
 	std::vector<char> used;
-	const auto rawFaces = collectFaces (mesh, used, &rec);
+	auto rawFaces = collectFaces (mesh, used, &rec);
 	for (unsigned i = 0; i < nv; ++i)
 		if (!used[i])
 			rec.add (MeshDefect::UnreferencedVertex, {}, {i});
@@ -701,6 +763,7 @@ MeshValidationReport ValidateMesh (const Mesh &mesh, const MeshValidationOptions
 						continue;
 					uniteClosePairs (cd.members, od.members, false, bounded);
 				}
+	std::unordered_map<Cell, CellData, CellHash> ().swap (cells);   // la table ne sert qu'a l'union
 
 	// Une grappe par racine ; la racine est le plus petit indice original.
 	std::vector<unsigned> rootToWelded (nv, kNone);
@@ -708,6 +771,12 @@ MeshValidationReport ValidateMesh (const Mesh &mesh, const MeshValidationOptions
 	std::vector<Vec3>     W;
 	std::vector<unsigned> weldedOrigin;   // plus petit indice original de chaque grappe
 	std::vector<char>     weldedFinite;
+	{
+		const std::size_t nUsed = static_cast<std::size_t> (std::count (used.begin (), used.end (), 1));
+		W.reserve (nUsed);
+		weldedOrigin.reserve (nUsed);
+		weldedFinite.reserve (nUsed);
+	}
 	for (unsigned i = 0; i < nv; ++i)
 	{
 		if (!used[i])
@@ -726,26 +795,24 @@ MeshValidationReport ValidateMesh (const Mesh &mesh, const MeshValidationOptions
 		weld[i] = w;
 	}
 	report.weldedVertices = static_cast<unsigned> (W.size ());
+	std::vector<unsigned> ().swap (cluster);
+	std::vector<unsigned> ().swap (rootToWelded);
 
 	const std::size_t nf = rawFaces.size ();
-	std::vector<std::vector<unsigned>> faces (nf);
-	for (std::size_t fi = 0; fi < nf; ++fi)
-	{
-		const auto &raw = rawFaces[fi].second;
-		faces[fi].resize (raw.size ());
-		for (std::size_t k = 0; k < raw.size (); ++k)
-			faces[fi][k] = weld[raw[k]];
-	}
-	auto originalFace = [&rawFaces] (std::size_t fi) { return rawFaces[fi].first; };
+	for (unsigned &v : rawFaces.index)   // soudure en place : les indices bruts ne servent plus
+		v = weld[v];
+	const FlatFaces &faces = rawFaces;
+	auto originalFace = [&rawFaces] (std::size_t fi) { return rawFaces.original[fi]; };
 
 	// --- Geometrie par face ---
 	std::vector<char>   geometric (nf, 0);   // tous sommets finis
 	std::vector<char>   degenerate (nf, 0);
 	std::vector<double> faceVolume (nf, 0.0);
+	std::vector<unsigned> sorted;
 	for (std::size_t fi = 0; fi < nf; ++fi)
 	{
-		const auto &f = faces[fi];
-		std::vector<unsigned> sorted = f;
+		const auto f = faces[fi];
+		sorted.assign (f.begin (), f.end ());
 		std::sort (sorted.begin (), sorted.end ());
 		const bool repeated = std::adjacent_find (sorted.begin (), sorted.end ()) != sorted.end ();
 		geometric[fi] = std::all_of (f.begin (), f.end (), [&weldedFinite] (unsigned w) { return weldedFinite[w] != 0; });
@@ -774,25 +841,35 @@ MeshValidationReport ValidateMesh (const Mesh &mesh, const MeshValidationOptions
 
 	// --- Faces dupliquees ---
 	{
-		std::vector<std::pair<std::vector<unsigned>, unsigned>> keyed;
-		keyed.reserve (nf);
+		// Cle d'une face : ses sommets soudes tries, a plat ; ordre lexicographique puis indice.
+		std::vector<unsigned> keys (faces.index);
 		for (std::size_t fi = 0; fi < nf; ++fi)
-		{
-			std::vector<unsigned> key = faces[fi];
-			std::sort (key.begin (), key.end ());
-			keyed.emplace_back (std::move (key), static_cast<unsigned> (fi));
-		}
-		std::sort (keyed.begin (), keyed.end ());
+			std::sort (keys.begin () + faces.offset[fi], keys.begin () + faces.offset[fi + 1]);
+		auto key = [&] (unsigned fi) { return FaceView {keys.data () + faces.offset[fi], faces.offset[fi + 1] - faces.offset[fi]}; };
+		std::vector<unsigned> keyed (nf);
+		std::iota (keyed.begin (), keyed.end (), 0u);
+		std::sort (keyed.begin (), keyed.end (), [&] (unsigned a, unsigned b) {
+			const FaceView ka = key (a), kb = key (b);
+			if (std::lexicographical_compare (ka.begin (), ka.end (), kb.begin (), kb.end ()))
+				return true;
+			if (std::lexicographical_compare (kb.begin (), kb.end (), ka.begin (), ka.end ()))
+				return false;
+			return a < b;
+		});
+		auto sameKey = [&] (unsigned a, unsigned b) {
+			const FaceView ka = key (a), kb = key (b);
+			return ka.size () == kb.size () && std::equal (ka.begin (), ka.end (), kb.begin ());
+		};
 		std::size_t groupStart = 0;
 		for (std::size_t i = 1; i < keyed.size (); ++i)
 		{
-			if (keyed[i].first != keyed[groupStart].first)
+			if (!sameKey (keyed[i], keyed[groupStart]))
 			{
 				groupStart = i;
 				continue;
 			}
 			rec.add (MeshDefect::DuplicateFace,
-			         {originalFace (keyed[groupStart].second), originalFace (keyed[i].second)});
+			         {originalFace (keyed[groupStart]), originalFace (keyed[i])});
 		}
 	}
 
@@ -804,9 +881,10 @@ MeshValidationReport ValidateMesh (const Mesh &mesh, const MeshValidationOptions
 		int           dir;
 	};
 	std::vector<EdgeUse> edges;
+	edges.reserve (faces.index.size ());
 	for (std::size_t fi = 0; fi < nf; ++fi)
 	{
-		const auto &f = faces[fi];
+		const auto f = faces[fi];
 		for (std::size_t k = 0; k < f.size (); ++k)
 		{
 			const unsigned a = f[k];
@@ -852,6 +930,7 @@ MeshValidationReport ValidateMesh (const Mesh &mesh, const MeshValidationOptions
 			unite (component, edges[i].face, edges[k].face);
 		i = j;
 	}
+	std::vector<EdgeUse> ().swap (edges);
 
 	// --- Composantes et coques inversees ---
 	{
@@ -881,7 +960,8 @@ MeshValidationReport ValidateMesh (const Mesh &mesh, const MeshValidationOptions
 		std::vector<std::vector<unsigned>> vertexFaces (W.size ());
 		for (std::size_t fi = 0; fi < nf; ++fi)
 		{
-			std::vector<unsigned> distinct = faces[fi];
+			const auto f = faces[fi];
+			std::vector<unsigned> distinct (f.begin (), f.end ());
 			std::sort (distinct.begin (), distinct.end ());
 			distinct.erase (std::unique (distinct.begin (), distinct.end ()), distinct.end ());
 			for (unsigned v : distinct)
@@ -897,7 +977,7 @@ MeshValidationReport ValidateMesh (const Mesh &mesh, const MeshValidationOptions
 			spokes.clear ();
 			for (unsigned i = 0; i < fs.size (); ++i)
 			{
-				const auto &f = faces[fs[i]];
+				const auto f = faces[fs[i]];
 				const std::size_t n = f.size ();
 				for (std::size_t k = 0; k < n; ++k)
 				{
@@ -933,9 +1013,10 @@ MeshValidationReport ValidateMesh (const Mesh &mesh, const MeshValidationOptions
 	{
 		report.selfIntersectionChecked = true;
 		std::vector<Tri> tris;
+		tris.reserve (nf);
 		for (std::size_t fi = 0; fi < nf; ++fi)
 		{
-			const auto &f = faces[fi];
+			const auto f = faces[fi];
 			if (f.size () != 3 || degenerate[fi] || !geometric[fi])
 				continue;
 			Tri t;

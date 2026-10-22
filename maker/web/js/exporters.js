@@ -131,6 +131,8 @@ export function downloadGlb(Module, id, base) {
   const bytes = new Uint8Array(res.bytes);   // copie hors du tas WASM
   if (bytes.length)
     saveBlob(new Blob([bytes], { type: "model/gltf-binary" }), res.name + ".glb");
+  else if (res.refused === undefined)
+    return { refused: "rien à exporter" };   // maillage vide : aucun fichier GLB
   return exportVerdict(res);
 }
 

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Micro architecture gothique — maker</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <aside class="panel" id="panel">
+    <div id="pageControls">
+      <section class="group" id="microarchGroup">
+        <label class="lbl" for="microarchJsonInput">Import microarchitecture (JSON)</label>
+        <input type="file" id="microarchJsonInput" accept=".json,application/json">
+        <p class="hint-sm">Schéma <code>gothic-microarchitecture/v1</code>, 4 Mio au plus. Le résultat est le
+          réseau de courbes ; les tubes n'en sont que l'affichage (ils se traversent aux jonctions) et les
+          exports OBJ, GLB et STL du pied de page sont refusés. Les curseurs ne règlent que les tubes, et le
+          pas angulaire de l'OBJ des courbes.</p>
+        <div class="btnrow">
+          <button id="microarchNetworkBtn" disabled>Réseau JSON</button>
+          <button id="microarchCurvesBtn" disabled>Courbes OBJ</button>
+          <button id="microarchTubesBtn" disabled>Tubes OBJ</button>
+        </div>
+        <div id="microarchDetails" class="hint-sm"></div>
+      </section>
+
+      <section class="group" id="solidGroup">
+        <div class="lbl">Solide imprimable (STL)</div>
+        <div class="ctrlrow"><label for="solidRadius">Rayon (‰ de D)</label>
+          <input type="number" id="solidRadius" min="0" max="100" step="any" value="5"></div>
+        <div class="ctrlrow"><label for="solidCells">Cellules par rayon (q)</label>
+          <input type="number" id="solidCells" min="2" max="8" step="1" value="3"></div>
+        <div class="ctrlrow"><label for="solidScale">Échelle (mm par unité)</label>
+          <input type="number" id="solidScale" min="0" step="any" value="1"></div>
+        <div class="btnrow">
+          <button id="microarchSolidBtn" disabled>Solide STL</button>
+        </div>
+        <p class="hint-sm">Construit au clic, exporté puis libéré : il n'est ni affiché ni gardé. Paroi
+          minimale et volume utile : ceux de l'imprimante ci-dessous. Verdict en bannière ; au-delà du
+          seuil de vérification, le STL est exporté marqué « non vérifié ».</p>
+      </section>
+
+      <section class="group" id="printGroup">
+        <div class="lbl">Imprimante</div>
+        <div class="ctrlrow"><label for="pcMinWall">Paroi min. (mm)</label>
+          <input type="number" id="pcMinWall" class="pc" data-field="minWallMm" min="0" step="any"></div>
+        <div class="ctrlrow"><label for="pcMinHole">Ouverture min. (mm)</label>
+          <input type="number" id="pcMinHole" class="pc" data-field="minHoleMm" min="0" step="any"></div>
+        <div class="ctrlrow"><label for="pcMaxTip">Pointe mince max. (mm)</label>
+          <input type="number" id="pcMaxTip" class="pc" data-field="maxTipLengthMm" min="0" step="any"></div>
+        <div class="ctrlrow"><span>Volume utile x · y · z (mm)</span>
+          <span class="triple">
+            <input type="number" class="pcEnv" min="0" step="any" placeholder="x" aria-label="volume utile x">
+            <input type="number" class="pcEnv" min="0" step="any" placeholder="y" aria-label="volume utile y">
+            <input type="number" class="pcEnv" min="0" step="any" placeholder="z" aria-label="volume utile z">
+          </span></div>
+        <p class="hint-sm">Document <code>print-constraints/v1</code>, gardé par le navigateur et partagé avec
+          la page « Fenêtre gothique ». Seuil vide : sa valeur par défaut ; volume vide : non contrôlé.</p>
+        <label class="lbl" for="printConstraintsInput">Import imprimante (JSON)</label>
+        <input type="file" id="printConstraintsInput" accept=".json,application/json">
+        <div class="btnrow">
+          <button id="printConstraintsExportBtn">Export imprimante</button>
+        </div>
+      </section>
+    </div>
+  </aside>
+
+  <main id="viewer" class="viewer">
+    <div id="viewerHint" class="hint">Chargement du module…</div>
+  </main>
+
+  <script type="module" src="./js/pages/microarch.js"></script>
+</body>
+</html>

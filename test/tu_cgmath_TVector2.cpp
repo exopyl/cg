@@ -153,3 +153,23 @@ TEST(TEST_cgmath_TVector2, GetLengthAndLength2)
     EXPECT_DOUBLE_EQ(v.getLength2(), 25.0);
     EXPECT_DOUBLE_EQ(v.getLength(), 5.0);
 }
+
+// Comparaisons sur des operandes const : elles comparent les composantes, pas les
+// adresses (operator const double*() ne doit pas etre retenu).
+TEST(TEST_cgmath_TVector2, EqualityOnConstOperands)
+{
+    const Vector2d a(1.0, 2.0);
+    const Vector2d b(1.0, 2.0);
+    const Vector2d c(1.0, 3.0);
+    Vector2d m(1.0, 2.0);
+    EXPECT_TRUE(a == b);
+    EXPECT_FALSE(a != b);
+    EXPECT_FALSE(a == c);
+    EXPECT_TRUE(a != c);
+    EXPECT_TRUE(a == m);
+    EXPECT_FALSE(a != m);
+    EXPECT_TRUE(m == a);
+    EXPECT_FALSE(c == m);
+    EXPECT_TRUE(c != m);
+    EXPECT_TRUE(a == a);
+}

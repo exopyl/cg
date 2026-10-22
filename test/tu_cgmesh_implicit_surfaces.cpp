@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <cstdint>
 #include <map>
 #include <utility>
 #include <vector>
@@ -21,10 +22,11 @@ struct Triangulation
 	int nfaces = 0;
 	float* vertices = nullptr;
 	unsigned int* faces = nullptr;
+	bool ok = false;
 
 	explicit Triangulation(ImplicitSurface* mc)
 	{
-		mc->get_triangulation(&nvertices, &vertices, &nfaces, &faces);
+		ok = mc->get_triangulation(&nvertices, &vertices, &nfaces, &faces);
 	}
 	~Triangulation()
 	{
@@ -636,4 +638,280 @@ TEST(TEST_cgmesh_implicit_pointcloud, eval_uses_user_data_not_globals)
 	EXPECT_NEAR(va, 1.0f, 1e-3f);
 	EXPECT_NEAR(vb, 0.0f, 1e-3f);
 	EXPECT_GT(va, vb);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//
+// Indices du cache, numerotation, evaluations du champ, tandem au-dela de
+// 100 000 faces (option A, jalon A3)
+//
+namespace
+{
+	// Change de signe dans une large part des cubes, sans symetrie entre x et y.
+	float stripes(float x, float y, float, void*)
+	{
+		const float s = 0.37f * x + 0.61f * y;
+		return s - std::floor(s) - 0.5f;
+	}
+
+	// Comme stripes, et depend aussi de z : une valeur lue dans la mauvaise couche se voit.
+	float slantedStripes(float x, float y, float z, void*)
+	{
+		const float s = 0.37f * x + 0.61f * y + 0.29f * z;
+		return s - std::floor(s) - 0.5f;
+	}
+
+	float ball(float x, float y, float z, void*)
+	{
+		return x * x + y * y + z * z - 0.36f;
+	}
+
+	// Empreinte FNV-1a de la suite des coins rendus par compute (position et indice).
+	struct CornerDigest
+	{
+		std::uint64_t hash = 1469598103934665603ull;
+		std::size_t   corners = 0;
+		void mix(const void* p, std::size_t n)
+		{
+			const unsigned char* b = static_cast<const unsigned char*>(p);
+			for (std::size_t i = 0; i < n; ++i)
+			{
+				hash ^= b[i];
+				hash *= 1099511628211ull;
+			}
+		}
+	};
+
+	bool digestCorner(float x, float y, float z, int index, void* self)
+	{
+		CornerDigest* d = static_cast<CornerDigest*>(self);
+		d->mix(&x, sizeof x);
+		d->mix(&y, sizeof y);
+		d->mix(&z, sizeof z);
+		d->mix(&index, sizeof index);
+		return ++d->corners % 3 == 0;
+	}
+
+	// Le rappel de sommet recoit le pointeur `data` d'ImplicitSurface, protege.
+	class DigestSurface : public ImplicitSurface
+	{
+	public:
+		explicit DigestSurface(CornerDigest* digest)
+		{
+			data = digest;
+			set_vertex_func(&digestCorner);
+		}
+	};
+
+	struct FieldLog
+	{
+		long long          evaluations = 0;
+		std::vector<float> normals;
+	};
+
+	float loggedBall(float x, float y, float z, void* log)
+	{
+		++static_cast<FieldLog*>(log)->evaluations;
+		return ball(x, y, z, nullptr);
+	}
+
+	void logNormal(float x, float y, float z, void* log)
+	{
+		std::vector<float>& n = static_cast<FieldLog*>(log)->normals;
+		n.insert(n.end(), {x, y, z});
+	}
+}
+
+// Indices des caches : le cache de valeurs (compute(1)) et l'evaluation directe
+// (compute(0)) rendent la meme suite de coins, au-dela de la plage ou un indice
+// calcule en float est exact (R0 = 2 895) et ou il deborde (2 897). R1 != R0 : un
+// pas pris sur le mauvais axe se voit. Grille R0 x R1 x 1, noeuds entiers, champ
+// a deux variables qui coupe une large part des cubes.
+TEST(TEST_cgmesh_implicit_surface, cache_and_direct_evaluation_agree_beyond_float_indices)
+{
+	std::vector<int> sizes = {2895, 2896, 2897};
+#ifndef CG_SANITIZERS_ENABLED
+	sizes.push_back(4096);
+#endif
+	for (const int r0 : sizes)
+	{
+		SCOPED_TRACE(r0);
+		const int r1 = r0 + 7;
+		CornerDigest cached, direct;
+		for (CornerDigest* digest : {&cached, &direct})
+		{
+			DigestSurface mc(digest);
+			mc.set_bbox(0.f, 0.f, 0.f, static_cast<float>(r0), static_cast<float>(r1), 1.f);
+			mc.set_resolution_per_unit(1);
+			mc.set_eval_func(&stripes);
+			mc.set_value(0.f);
+			ASSERT_TRUE(mc.compute(digest == &cached ? 1 : 0));
+		}
+		EXPECT_GT(direct.corners, 1000000u);
+		EXPECT_EQ(cached.corners, direct.corners);
+		EXPECT_EQ(cached.hash, direct.hash);
+	}
+}
+
+// Meme comparaison sur trois couches de cubes : la mise a jour des couches suivantes
+// (double tampon des valeurs, recopie des indices d'aretes) au-dela des indices exacts
+// en float. Le champ depend de z.
+TEST(TEST_cgmesh_implicit_surface, cache_and_direct_evaluation_agree_over_several_layers)
+{
+	const int r0 = 2897, r1 = r0 + 7, r2 = 3;
+	CornerDigest cached, direct;
+	for (CornerDigest* digest : {&cached, &direct})
+	{
+		DigestSurface mc(digest);
+		mc.set_bbox(0.f, 0.f, 0.f, static_cast<float>(r0), static_cast<float>(r1), static_cast<float>(r2));
+		mc.set_resolution_per_unit(1);
+		mc.set_eval_func(&slantedStripes);
+		mc.set_value(0.f);
+		ASSERT_TRUE(mc.compute(digest == &cached ? 1 : 0));
+	}
+	EXPECT_GT(direct.corners, 3000000u);
+	EXPECT_EQ(cached.corners, direct.corners);
+	EXPECT_EQ(cached.hash, direct.hash);
+}
+
+// Les sommets sont numerotes a partir de 0 a chaque appel : une seconde
+// triangulation sur le meme objet est identique a la premiere.
+TEST(TEST_cgmesh_implicit_surface, a_second_triangulation_on_the_same_object_is_identical)
+{
+	ImplicitSurface mc;
+	mc.set_bbox(-1.f, -1.f, -1.f, 1.f, 1.f, 1.f);
+	mc.set_resolution_per_unit(8);
+	mc.set_eval_func(&ball);
+	mc.set_value(0.f);
+	const Triangulation a(&mc), b(&mc);
+	ASSERT_TRUE(a.ok);
+	ASSERT_TRUE(b.ok);
+	ASSERT_GT(a.nfaces, 0);
+	ASSERT_EQ(a.nvertices, b.nvertices);
+	ASSERT_EQ(a.nfaces, b.nfaces);
+	EXPECT_TRUE(std::equal(a.vertices, a.vertices + 3 * a.nvertices, b.vertices));
+	EXPECT_TRUE(std::equal(a.faces, a.faces + 3 * a.nfaces, b.faces));
+}
+
+// set_boundary(1) elargit la boite et la resolution le temps d'un calcul seulement :
+// une seconde triangulation sur le meme objet est identique a la premiere.
+TEST(TEST_cgmesh_implicit_surface, a_second_triangulation_with_a_boundary_is_identical)
+{
+	ImplicitSurface mc;
+	mc.set_bbox(-1.f, -1.f, -1.f, 1.f, 1.f, 1.f);
+	mc.set_resolution_per_unit(8);
+	mc.set_eval_func(&ball);
+	mc.set_value(0.f);
+	mc.set_boundary(1);
+	const Triangulation a(&mc), b(&mc);
+	ASSERT_TRUE(a.ok);
+	ASSERT_TRUE(b.ok);
+	ASSERT_GT(a.nfaces, 0);
+	ASSERT_EQ(a.nvertices, b.nvertices);
+	ASSERT_EQ(a.nfaces, b.nfaces);
+	EXPECT_TRUE(std::equal(a.vertices, a.vertices + 3 * a.nvertices, b.vertices));
+	EXPECT_TRUE(std::equal(a.faces, a.faces + 3 * a.nfaces, b.faces));
+	vec3f lo, hi;
+	mc.get_bbox(lo, hi);
+	EXPECT_EQ(lo.fX, -1.f);
+	EXPECT_EQ(lo.fZ, -1.f);
+	EXPECT_EQ(hi.fY, 1.f);
+	EXPECT_EQ(hi.fZ, 1.f);
+}
+
+// Avec le cache et sans rappel de normale ni de couleur, le champ est evalue une
+// fois par noeud. Avec un rappel de normale, les normales (gradient, six
+// evaluations par sommet d'arete) arrivent, unitaires, et la geometrie ne change pas.
+TEST(TEST_cgmesh_implicit_surface, the_field_is_evaluated_once_per_node_without_normal_callback)
+{
+	const int r = 20;   // 2 x 10 cubes par axe
+	auto make = [](ImplicitSurface& mc, FieldLog& log) {
+		mc.set_bbox(-1.f, -1.f, -1.f, 1.f, 1.f, 1.f);
+		mc.set_resolution_per_unit(10);
+		mc.set_eval_func(&loggedBall);
+		mc.set_eval_data(&log);
+		mc.set_value(0.f);
+	};
+	FieldLog plain;
+	ImplicitSurface a;
+	make(a, plain);
+	const Triangulation ta(&a);
+	ASSERT_TRUE(ta.ok);
+	ASSERT_GT(ta.nfaces, 0);
+	EXPECT_EQ(plain.evaluations, static_cast<long long>(r + 1) * (r + 1) * (r + 1));
+	EXPECT_TRUE(plain.normals.empty());
+
+	FieldLog withNormals;
+	ImplicitSurface b;
+	make(b, withNormals);
+	b.set_normal_func(&logNormal);
+	const Triangulation tb(&b);
+	ASSERT_TRUE(tb.ok);
+	EXPECT_GT(withNormals.evaluations, plain.evaluations);
+	ASSERT_EQ(withNormals.normals.size(), 3u * 3u * static_cast<std::size_t>(tb.nfaces));
+	for (std::size_t i = 0; i < withNormals.normals.size(); i += 3)
+	{
+		const float* n = &withNormals.normals[i];
+		EXPECT_NEAR(std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]), 1.0, 1e-5);
+	}
+	ASSERT_EQ(ta.nvertices, tb.nvertices);
+	ASSERT_EQ(ta.nfaces, tb.nfaces);
+	EXPECT_TRUE(std::equal(ta.vertices, ta.vertices + 3 * ta.nvertices, tb.vertices));
+	EXPECT_TRUE(std::equal(ta.faces, ta.faces + 3 * ta.nfaces, tb.faces));
+}
+
+// Le tandem accumule ses donnees par face et par sommet avec les triangles : au-dela
+// de 100 000 faces avant decimation, la sortie reste un maillage valide.
+TEST(TEST_cgmesh_implicit_surface, tandem_beyond_100000_faces_gives_a_valid_mesh)
+{
+	auto configure = [](ImplicitSurface& mc) {
+		mc.set_bbox(-1.f, -1.f, -1.f, 1.f, 1.f, 1.f);
+		mc.set_resolution_per_unit(100);
+		mc.set_eval_func(&ball);
+		mc.set_value(0.f);
+	};
+	ImplicitSurface plain;
+	configure(plain);
+	const Triangulation before(&plain);
+	ASSERT_TRUE(before.ok);
+	ASSERT_GT(before.nfaces, 100000);
+
+	ImplicitSurfaceTandem tandem;
+	configure(tandem);
+	const Triangulation t(&tandem);
+	ASSERT_TRUE(t.ok);
+	ASSERT_GT(t.nfaces, 0);
+	ASSERT_GT(t.nvertices, 0);
+	for (int f = 0; f < 3 * t.nfaces; f++)
+		ASSERT_LT(static_cast<int>(t.faces[f]), t.nvertices);
+	for (int i = 0; i < 3 * t.nvertices; i++)
+		ASSERT_TRUE(std::isfinite(t.vertices[i]));
+}
+
+// Garde de resolution : une resolution nulle ou une couche de plus de 2^28 noeuds
+// est refusee sans evaluer le champ.
+TEST(TEST_cgmesh_implicit_surface, out_of_range_resolutions_are_refused)
+{
+	struct Case { const char* name; float box[6]; };
+	const Case cases[] = {
+		{"flat in z", {0.f, 0.f, 0.f, 4.f, 4.f, 0.5f}},
+		{"layer of 16 385 x 16 385 nodes", {0.f, 0.f, 0.f, 16384.f, 16384.f, 1.f}},
+	};
+	for (const Case& c : cases)
+	{
+		SCOPED_TRACE(c.name);
+		FieldLog log;
+		ImplicitSurface mc;
+		mc.set_bbox(c.box[0], c.box[1], c.box[2], c.box[3], c.box[4], c.box[5]);
+		mc.set_resolution_per_unit(1);
+		mc.set_eval_func(&loggedBall);
+		mc.set_eval_data(&log);
+		Triangulation t(&mc);
+		EXPECT_FALSE(t.ok);
+		EXPECT_EQ(t.nvertices, 0);
+		EXPECT_EQ(t.nfaces, 0);
+		EXPECT_EQ(t.vertices, nullptr);
+		EXPECT_EQ(t.faces, nullptr);
+		EXPECT_EQ(log.evaluations, 0);
+	}
 }

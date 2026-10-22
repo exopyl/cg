@@ -17,6 +17,10 @@ import { downloadObj, downloadGlb, downloadStl, reportExportVerdict } from "./ex
 
 const el = (id) => document.getElementById(id);
 
+// Amorce d'o3dv quand la forme n'a pas d'OBJ texte : un triangle, remplace par
+// meshData des que le modele est charge.
+const PLACEHOLDER_OBJ = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+
 // Cree le shell : charge le module WASM, monte le panneau, initialise le viewer.
 // Renvoie un contexte imperatif que la page utilise pour ses propres controles.
 export async function createShell({ title, subtitle }) {
@@ -113,8 +117,16 @@ export async function createShell({ title, subtitle }) {
       "Le panneau et la génération restent fonctionnels (télécharge l'OBJ).");
   }
 
+  // Appeles apres chaque affichage de la forme courante (meshData ou amorcage), avec
+  // son id : une page y lit ce que la reconstruction a rapporte.
+  const shownHooks = [];
+  function shown() {
+    for (const f of shownHooks) f(currentId);
+  }
+
   function showStats(s) {
     if (s) statsEl.textContent = `${s.nv} sommets · ${s.nf} faces · ${s.ms.toFixed(1)} ms`;
+    shown();
   }
 
   // --------------------------------------------------------------------------
@@ -146,12 +158,23 @@ export async function createShell({ title, subtitle }) {
   // Amorcage (premier affichage, ou import) : reload complet via o3dv, qui
   // recadre la camera et permet a captureMesh() de recuperer le mesh three.js +
   // ses constructeurs. Ensuite tout passe par updateInPlace().
+  //
+  // Sans OBJ d'amorcage (regenerate rend "" : microarchitecture, ou forme sans
+  // maillage), ou avec un OBJ sans face (forme vide, qu'o3dv refuse d'importer), o3dv
+  // est amorce sur un triangle ; onModelReady bascule aussitot sur meshData, avec
+  // recadrage.
   function firstRender(id) {
     const obj = Module.regenerate(id);
-    const v = (obj.match(/^v /gm) || []).length;
-    const f = (obj.match(/^f /gm) || []).length;
-    statsEl.textContent = `${v} sommets · ${f} faces`;
-    viewer.bootstrap(obj);
+    if (obj === "" || !/^f /m.test(obj)) {
+      statsEl.textContent = "—";
+      viewer.bootstrap(PLACEHOLDER_OBJ);
+    } else {
+      const v = (obj.match(/^v /gm) || []).length;
+      const f = (obj.match(/^f /gm) || []).length;
+      statsEl.textContent = `${v} sommets · ${f} faces`;
+      viewer.bootstrap(obj);
+    }
+    shown();
   }
 
   // Affiche la forme `id` : en place (avec recadrage anime) si le viewer est deja
@@ -247,6 +270,9 @@ export async function createShell({ title, subtitle }) {
     // une page de rejouer son propre import sur un fichier synthetique, par
     // exemple l'image chargee par defaut au demarrage.
     registerFileInput(input, handler) { return files.register(input, handler); },
+
+    // Enregistre `fn(id)`, appele apres chaque affichage de la forme courante.
+    onShapeShown(fn) { shownHooks.push(fn); },
   };
 
   return ctx;

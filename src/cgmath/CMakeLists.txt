@@ -7,11 +7,8 @@ file(GLOB HEADER_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/*.h)
 
 add_library(cgmath STATIC ${HEADER_FILES} ${SRC_FILES})
 
-# Third-party headers under <repo>/extern (e.g. nlohmann/json.hpp), used only
-# by cgmath's own .cpp (architecture_gothic_io.cpp) -> PRIVATE so the dependency
-# does not leak to consumers. Path relative to cgmath's own location so this
-# works whether built from the repo-root CMakeLists or as a subproject of vecna/.
-target_include_directories(cgmath PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../extern)
+# Pas de repertoire d'inclusion tiers : la seule dependance, stb_truetype
+# (font.cpp), est incluse par chemin relatif.
 
 # REPERTOIRE D'INCLUSION PUBLIC. Sans lui, les consommateurs ecrivent
 # `#include "../cgmath/TVector3.h"` -- plus de soixante fois dans quatre modules

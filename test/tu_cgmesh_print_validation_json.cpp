@@ -11,9 +11,10 @@
 
 #include <nlohmann/json.hpp>
 
-#include "../src/cgmesh/parameterized_gothic.h"
+#include <cgarchi/parameterized_gothic.h>
 #include "../src/cgmesh/print_validation.h"
 #include "../src/cgmesh/print_validation_json.h"
+#include <cgarchi/gothic_print_json.h>
 
 // ===========================================================================
 //  Serialisation du controle de fabrication : print-constraints/v1 (lecture
@@ -74,10 +75,10 @@ namespace
 
     struct Window
     {
-        ParameterizedGothicWindow shape;
+        cgarchi::ParameterizedGothicWindow shape;
         std::unique_ptr<Mesh>     mesh;
 
-        explicit Window(const GothicWindowSettings &s = GothicWindowSettings())
+        explicit Window(const cgarchi::GothicWindowSettings &s = cgarchi::GothicWindowSettings())
         {
             shape.SetSettings(s);
             shape.Regenerate();
@@ -205,11 +206,11 @@ TEST(TEST_cgmesh_print_validation_json, numbers_ignore_the_global_locale)
     const std::vector<PrintJsonError> ok = PrintConstraintsFromJson(text, back);
     PrintConstraints out;
     const std::vector<PrintJsonError> bad = PrintConstraintsFromJson(doc("\"minWallMm\": 0.0015"), out);
-    GothicPrintVerdict v;
+    cgarchi::GothicPrintVerdict v;
     v.check.print.mmPerUnit = 0.25;
     v.check.print.evaluated = true;
     v.printedSizeMm = std::array<double, 3>{12.5, 1.5, 0.5};
-    const std::string report = GothicPrintVerdictToJson(v);
+    const std::string report = cgarchi::GothicPrintVerdictToJson(v);
     std::locale::global(previous);
 
     EXPECT_NE(text.find("0.45"), std::string::npos) << text;
@@ -228,8 +229,8 @@ TEST(TEST_cgmesh_print_validation_json, numbers_ignore_the_global_locale)
 TEST(TEST_cgmesh_print_validation_json, report_lists_the_ten_categories_zero_included)
 {
     const Window w;
-    const GothicPrintVerdict v = CheckGothicExportAndPrint(w.shape, *w.mesh, at(0.1));
-    const json j = json::parse(GothicPrintVerdictToJson(v));
+    const cgarchi::GothicPrintVerdict v = cgarchi::CheckGothicExportAndPrint(w.shape, *w.mesh, at(0.1));
+    const json j = json::parse(cgarchi::GothicPrintVerdictToJson(v));
     EXPECT_EQ(j.at("schema"), "print-report/v1");
     EXPECT_EQ(j.at("scope"), "complete");
     EXPECT_EQ(j.at("printable"), false);
@@ -268,13 +269,13 @@ TEST(TEST_cgmesh_print_validation_json, report_lists_the_ten_categories_zero_inc
 TEST(TEST_cgmesh_print_validation_json, report_shows_the_maximum_per_slice)
 {
     // Chamfer a 20 mm : les six nervures minces dans chacune des deux tranches.
-    GothicWindowSettings s;
+    cgarchi::GothicWindowSettings s;
     s.profile = 1;
     const Window w(s);
     PrintConstraints c = at(0.1);
     c.maxTipLengthMm = 2.0;
-    const GothicPrintVerdict v = CheckGothicExportAndPrint(w.shape, *w.mesh, c);
-    const json j = json::parse(GothicPrintVerdictToJson(v));
+    const cgarchi::GothicPrintVerdict v = cgarchi::CheckGothicExportAndPrint(w.shape, *w.mesh, c);
+    const json j = json::parse(cgarchi::GothicPrintVerdictToJson(v));
     EXPECT_EQ(j.at("counts").at("thin_wall"), 12u);
     EXPECT_EQ(j.at("displayCounts").at("thin_wall"), 6u);
     ASSERT_EQ(j.at("slices").size(), 3u);
@@ -285,8 +286,8 @@ TEST(TEST_cgmesh_print_validation_json, report_shows_the_maximum_per_slice)
 TEST(TEST_cgmesh_print_validation_json, report_without_scale_has_null_scale)
 {
     const Window w;
-    const GothicPrintVerdict v = CheckGothicExportAndPrint(w.shape, *w.mesh, std::nullopt);
-    const json j = json::parse(GothicPrintVerdictToJson(v));
+    const cgarchi::GothicPrintVerdict v = cgarchi::CheckGothicExportAndPrint(w.shape, *w.mesh, std::nullopt);
+    const json j = json::parse(cgarchi::GothicPrintVerdictToJson(v));
     EXPECT_EQ(j.at("scope"), "not_run");
     EXPECT_EQ(j.at("reason"), "print scale not set");
     EXPECT_EQ(j.at("evaluated"), false);
@@ -299,19 +300,136 @@ TEST(TEST_cgmesh_print_validation_json, report_without_scale_has_null_scale)
 
 TEST(TEST_cgmesh_print_validation_json, report_carries_the_error_and_survives_invalid_text)
 {
-    GothicPrintVerdict v;
+    cgarchi::GothicPrintVerdict v;
     v.check.geometry.allowed = true;
     v.check.geometry.message = std::string("bad byte \xff here");
     v.printError = "CheckPrintRegion: half-extent 1740 mm exceeds 1048.58 mm";
     v.check.reason = "print check error";
     v.check.print.counts[static_cast<std::size_t>(PrintDefect::EnvelopeExceeded)] = 1;
     std::string text;
-    ASSERT_NO_THROW(text = GothicPrintVerdictToJson(v));
+    ASSERT_NO_THROW(text = cgarchi::GothicPrintVerdictToJson(v));
     const json j = json::parse(text);
     EXPECT_EQ(j.at("error"), v.printError);
     EXPECT_EQ(j.at("counts").at("envelope_exceeded"), 1u);
     EXPECT_EQ(j.at("displayCounts").at("envelope_exceeded"), 1u);
     EXPECT_EQ(j.at("printable"), false);
+    // allowed et strict different ici : chacun doit aller a sa cle.
+    EXPECT_EQ(j.at("geometry").at("allowed"), true);
+    EXPECT_EQ(j.at("geometry").at("strict"), false);
+    EXPECT_EQ(j.at("exportAllowed"), true);
+    EXPECT_EQ(j.at("scope"), "not_run");
+    EXPECT_EQ(j.at("reason"), "print check error");
+}
+
+TEST(TEST_cgmesh_print_validation_json, generic_report_writes_every_envelope_field)
+{
+    // Valeurs toutes distinctes : une cle alimentee par le mauvais champ se voit.
+    PrintReportEnvelope e;
+    e.scope = "scope_name";
+    e.reason = "reason text";
+    e.printable = true;
+    e.exportAllowed = false;
+    e.geometry.allowed = true;
+    e.geometry.strict = false;
+    e.geometry.message = "geometry text";
+    e.printedSizeMm = std::array<double, 3>{1.5, 2.5, 3.5};
+    e.error = "error text";
+    e.constraints = everyFieldSet();
+
+    PrintabilityReport r;
+    r.evaluated = true;
+    r.mmPerUnit = 0.25;
+    r.counts[static_cast<std::size_t>(PrintDefect::ThinWall)] = 3;
+    r.counts[static_cast<std::size_t>(PrintDefect::NarrowOpening)] = 4;
+    PrintDefectRecord d;
+    d.kind = PrintDefect::NarrowOpening;
+    d.boxMm = {1.0, 2.0, 3.0, 4.0};
+    d.depthMm = 5.0;
+    d.areaMm2 = 6.0;
+    d.contacts = 7;
+    d.widthBelowMm = 8.0;
+    d.slice = 0;
+    d.zLowMm = 9.0;
+    d.zHighMm = 10.0;
+    r.records.push_back(d);
+    PrintSliceSummary s;
+    s.zLowMm = 11.0;
+    s.zHighMm = 12.0;
+    s.zCutMm = 13.0;
+    s.areaMm2 = 14.0;
+    s.silhouette = true;
+    s.counts[static_cast<std::size_t>(PrintDefect::ThinWall)] = 2;
+    r.slices.push_back(s);
+
+    const json j = json::parse(PrintReportToJson(e, r));
+
+    std::vector<std::string> keys;
+    for (auto it = j.begin(); it != j.end(); ++it)
+        keys.push_back(it.key());
+    const std::vector<std::string> expected = {"constraints", "counts", "displayCounts", "error", "evaluated",
+                                               "exportAllowed", "geometry", "mmPerUnit", "printable",
+                                               "printedSizeMm", "reason", "records", "schema", "scope", "slices"};
+    EXPECT_EQ(keys, expected);
+
+    EXPECT_EQ(j.at("schema"), "print-report/v1");
+    EXPECT_EQ(j.at("scope"), "scope_name");
+    EXPECT_EQ(j.at("reason"), "reason text");
+    EXPECT_EQ(j.at("printable"), true);
+    EXPECT_EQ(j.at("exportAllowed"), false);
+    EXPECT_EQ(j.at("geometry").size(), 3u);
+    EXPECT_EQ(j.at("geometry").at("allowed"), true);
+    EXPECT_EQ(j.at("geometry").at("strict"), false);
+    EXPECT_EQ(j.at("geometry").at("message"), "geometry text");
+    EXPECT_EQ(j.at("evaluated"), true);
+    EXPECT_EQ(j.at("mmPerUnit").get<double>(), 0.25);
+    EXPECT_EQ(j.at("printedSizeMm"), json::array({1.5, 2.5, 3.5}));
+    EXPECT_EQ(j.at("counts").size(), kPrintDefectCount);
+    EXPECT_EQ(j.at("counts").at("thin_wall"), 3u);
+    EXPECT_EQ(j.at("counts").at("narrow_opening"), 4u);
+    EXPECT_EQ(j.at("displayCounts").size(), kPrintDefectCount);
+    for (std::size_t k = 0; k < kPrintDefectCount; ++k)
+        EXPECT_EQ(j.at("displayCounts").at(PrintDefectName(static_cast<PrintDefect>(k))).get<std::size_t>(),
+                  PrintDisplayCounts(r)[k]) << k;
+    ASSERT_EQ(j.at("records").size(), 1u);
+    const json &rec = j.at("records").at(0);
+    EXPECT_EQ(rec.at("kind"), "narrow_opening");
+    EXPECT_EQ(rec.at("boxMm"), json::array({1.0, 2.0, 3.0, 4.0}));
+    EXPECT_EQ(rec.at("depthMm").get<double>(), 5.0);
+    EXPECT_EQ(rec.at("areaMm2").get<double>(), 6.0);
+    EXPECT_EQ(rec.at("contacts"), 7u);
+    EXPECT_EQ(rec.at("widthBelowMm").get<double>(), 8.0);
+    EXPECT_EQ(rec.at("slice"), 0);
+    EXPECT_EQ(rec.at("zLowMm").get<double>(), 9.0);
+    EXPECT_EQ(rec.at("zHighMm").get<double>(), 10.0);
+    ASSERT_EQ(j.at("slices").size(), 1u);
+    const json &sl = j.at("slices").at(0);
+    EXPECT_EQ(sl.at("zLowMm").get<double>(), 11.0);
+    EXPECT_EQ(sl.at("zHighMm").get<double>(), 12.0);
+    EXPECT_EQ(sl.at("zCutMm").get<double>(), 13.0);
+    EXPECT_EQ(sl.at("areaMm2").get<double>(), 14.0);
+    EXPECT_EQ(sl.at("silhouette"), true);
+    EXPECT_EQ(sl.at("counts").at("thin_wall"), 2u);
+    EXPECT_EQ(j.at("error"), "error text");
+    const json &c = j.at("constraints");
+    EXPECT_FALSE(c.contains("schema"));
+    EXPECT_EQ(c.at("mmPerUnit").get<double>(), 1.0 / 3.0);
+    EXPECT_EQ(c.at("minWallMm").get<double>(), 0.45);
+    EXPECT_EQ(c.at("maxRecordsPerKind"), 7u);
+    EXPECT_EQ(c.at("envelopeMm"), json::array({218.0, 123.0, 250.0}));
+}
+
+TEST(TEST_cgmesh_print_validation_json, generic_report_writes_null_for_absent_fields)
+{
+    const json j = json::parse(PrintReportToJson(PrintReportEnvelope{}, PrintabilityReport{}));
+    EXPECT_EQ(j.at("scope"), "");
+    EXPECT_EQ(j.at("reason"), "");
+    EXPECT_EQ(j.at("evaluated"), false);
+    EXPECT_TRUE(j.at("mmPerUnit").is_null());
+    EXPECT_TRUE(j.at("printedSizeMm").is_null());
+    EXPECT_TRUE(j.at("error").is_null());
+    EXPECT_TRUE(j.at("constraints").is_null());
+    EXPECT_TRUE(j.at("records").is_array() && j.at("records").empty());
+    EXPECT_TRUE(j.at("slices").is_array() && j.at("slices").empty());
 }
 
 TEST(TEST_cgmesh_print_validation_json, duplicate_keys_are_refused)

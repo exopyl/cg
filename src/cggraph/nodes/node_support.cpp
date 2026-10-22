@@ -1,5 +1,7 @@
 #include "node_support.h"
 
+#include "../../cgmesh/mesh.h"
+
 namespace cggraph_nodes
 {
 
@@ -42,6 +44,17 @@ std::string GetString (const cggraph::ParamSet &params, const std::string &name,
 {
 	const cggraph::ParamValue *value = Literal (params, name, cggraph::ParamType::String);
 	return value != nullptr ? value->stringValue : fallback;
+}
+
+bool IsEmptyMesh (const Mesh &mesh)
+{
+	return mesh.GetNVertices () == 0 && mesh.GetNFaces () == 0;
+}
+
+bool FailOnEmptyMesh (cggraph::EvalContext &ctx)
+{
+	ctx.SetFailureDetail ("maillage vide");
+	return false;
 }
 
 } // namespace cggraph_nodes

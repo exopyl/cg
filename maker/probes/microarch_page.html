@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Sonde : la page microarch.html, et gothic.html sans microarchitecture</title>
+  <style>
+    body { margin: 0; font: 13px/1.5 ui-monospace, monospace; }
+    iframe { width: 900px; height: 560px; border: 0; display: block; }
+    #out { white-space: pre-wrap; padding: 8px; }
+  </style>
+</head>
+<body>
+  <!-- ready : premier import (viseur jamais amorce : amorce d'un triangle), exports,
+               solide, second import (en place), import refuse (etat oublie).
+       cold  : second import pendant l'amorcage o3dv lance par le premier. -->
+  <iframe id="ready" src="../web/microarch.html"></iframe>
+  <iframe id="cold" src="../web/microarch.html"></iframe>
+  <!-- controle : meme page sans import ; invitation a importer, rien d'actif. -->
+  <iframe id="control" src="../web/microarch.html"></iframe>
+  <!-- forme vide (M40) : L-system sans trait, amorcage puis export GLB. -->
+  <iframe id="empty" src="../web/shapes.html?shape=L-system&System=5&Iterations=0"></iframe>
+  <!-- fenetre gothique : plus aucune trace de la microarchitecture. -->
+  <iframe id="gothic" src="../web/gothic.html?shape=Gothic%20Block"></iframe>
+  <div id="out"></div>
+  <script type="module" src="./microarch_page.js"></script>
+</body>
+</html>

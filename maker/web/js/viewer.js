@@ -229,13 +229,21 @@ export function createViewer({
   // affichage et aux imports de fichier. Recadre la camera sur la nouvelle
   // geometrie. C'est la seule voie qui "flicke", mais c'est une action
   // ponctuelle, pas le drag.
+  //
+  // Un seul chargement a la fois : un second LoadModelFromFileList pendant le
+  // premier casse o3dv (innerHTML sur un noeud retire), et le viewer ne devient
+  // jamais pret. Celui en vol se termine par onModelReady, qui affiche la forme
+  // COURANTE par meshData : la demande ignoree n'est pas perdue.
+  let loading = false;
   function bootstrap(objText) {
-    if (!viewer) return;
+    if (!viewer || loading) return;
+    loading = true;
     try {
       const file = new File([objText], "model.obj", { type: "text/plain" });
       viewer.LoadModelFromFileList([file]); // captureMesh() appele via onModelLoaded
       hintEl.hidden = true;
     } catch (e) {
+      loading = false;
       console.error(e);
       hintEl.hidden = false;
       hintEl.textContent = "Erreur de chargement du modèle : " + e.message;
@@ -359,7 +367,8 @@ export function createViewer({
       viewer = new OV.EmbeddedViewer(container, {
         backgroundColor: themeBackground(),
         defaultColor: new OV.RGBColor(180, 190, 200),
-        onModelLoaded: captureMesh,
+        onModelLoaded: () => { loading = false; captureMesh(); },
+        onModelLoadFailed: () => { loading = false; },
       });
       // Rotation libre (trackball) au lieu de l'orbite a vecteur up fixe, qui
       // "verrouille" la rotation autour de l'axe vertical.

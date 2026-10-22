@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <map>
 #include <array>
+#include <algorithm>
+#include <cmath>
+#include <vector>
 
 #include "surface_basic.h"
 #include "chull.h"
@@ -722,12 +725,14 @@ Mesh* CreateKleinBottle (int ThetaResolution, int PhiResolution)
 // ===========================================================================
 //  Tubes le long de polylignes (primitive generique reutilisable)
 // ===========================================================================
-//  Extrait de ParameterizedLSystem : "walk -> tube" n'a rien de specifique aux
-//  L-systemes. Utilisable pour toute polyligne (courbe parametrique, ligne
-//  extraite d'un mesh, chemin SVG...). Ne normalise pas les points.
-//  Iso-fonctionnel : chaque segment est tube independamment (repere de section
-//  propre) ; les jointures (alignement le long des chaines + coins/branches)
-//  viendront enrichir cette fonction.
+//  Primitive generique : toute polyligne (L-systeme, courbe parametrique, ligne
+//  extraite d'un maillage, chemin SVG...). Les points sont pris tels quels, sans
+//  normalisation. Par polyligne (sweepPolyline) : un anneau de K sommets par
+//  station, repere transporte a rotation minimale, onglet a chaque coin (biseau,
+//  deux anneaux, au-dela de la limite d'onglet), bandes laterales entre anneaux
+//  consecutifs. Puis CreateTubes regroupe les anneaux par centre : un centre seul
+//  recoit un capuchon s'il est une extremite ; un centre partage (jonction) recoit
+//  l'enveloppe convexe des anneaux qui s'y touchent, ou leurs capuchons a defaut.
 
 namespace {
 
@@ -883,27 +888,39 @@ void sweepPolyline(const std::vector<Vector3f>& raw, float r, int K, float miter
 
 Mesh* CreateTubes (const std::vector<std::vector<Vector3f>>& polylines, float radius, int nSides, bool caps)
 {
-	if (nSides < 3) nSides = 3;
-	const int   K = nSides;
+	const int   K = std::clamp(nSides, kTubeMinSides, kTubeMaxSides);
 	const float r = radius;
 	const float miterLimit = 4.0f;
 
 	std::vector<float>        verts;
 	std::vector<unsigned int> faces;
 	std::vector<RingRec>      rings;
-	for (const auto& pl : polylines)
-		sweepPolyline(pl, r, K, miterLimit, verts, faces, rings);
+	for (const auto& pl : polylines) {
+		// Un point non fini fausserait le repere et la cle de regroupement (un NaN
+		// casse l'ordre de la std::map) : la polyligne entiere est ecartee.
+		const bool finite = std::all_of(pl.begin(), pl.end(), [](const Vector3f& q) {
+			return std::isfinite(q.x) && std::isfinite(q.y) && std::isfinite(q.z);
+		});
+		if (finite)
+			sweepPolyline(pl, r, K, miterLimit, verts, faces, rings);
+	}
 
 	// --- R3/R4 : traiter les extremites et les noeuds de branchement ---------
-	// Cluster les anneaux par centre (points partages = noeuds implicites).
-	// tol minuscule : on ne cluster que les points STRICTEMENT coincidents (les
-	// vrais noeuds, coords bit-identiques), pas les points proches — sinon
-	// sur-clustering sur fractales denses -> clusters geants -> hull qui boucle.
+	// Regroupe les anneaux par centre, sur une grille de pas tol : les points
+	// partages sont les noeuds implicites. tol minuscule : seuls les points
+	// coincidents (vrais noeuds, coordonnees bit-identiques) sont regroupes, pas les
+	// points proches -- sinon, sur une fractale dense, des groupes geants font
+	// boucler l'enveloppe. La cle est l'indice de case floorf(c / tol) garde en
+	// float : defini pour tout centre fini (infini au-dela de FLT_MAX * tol), et du
+	// meme ordre que l'indice entier la ou celui-ci tient dans un int. Les groupes
+	// sont parcourus dans l'ordre des cles, qui fixe l'ordre des faces ajoutees.
+	// Au-dela de |c| = 2^24 * tol (environ 1 678), c / tol n'est plus exact : des
+	// centres distants de quelques ulp seulement peuvent partager une case.
 	const float tol = 1e-4f;
-	std::map<std::array<int,3>, std::vector<int>> cells;
+	std::map<std::array<float,3>, std::vector<int>> cells;
 	for (int i=0;i<(int)rings.size();i++) {
 		const V3& c = rings[i].c;
-		std::array<int,3> key = { (int)floorf(c.x/tol), (int)floorf(c.y/tol), (int)floorf(c.z/tol) };
+		const std::array<float,3> key = { floorf(c.x/tol), floorf(c.y/tol), floorf(c.z/tol) };
 		cells[key].push_back(i);
 	}
 
@@ -968,13 +985,8 @@ Mesh* CreateTubes (const std::vector<std::vector<Vector3f>>& polylines, float ra
 	}
 
 	Mesh* mesh = new Mesh();
-	if (verts.empty()) {
-		std::vector<float>        vtri = {0.f,0.f,0.f, 0.001f,0.f,0.f, 0.f,0.001f,0.f};
-		std::vector<unsigned int> ftri = {0u,1u,2u};
-		mesh->SetVertices(3, vtri.data());
-		mesh->SetFaces(1, 3, ftri.data());
+	if (verts.empty())
 		return mesh;
-	}
 	mesh->SetVertices((unsigned int)(verts.size()/3), verts.data());
 	mesh->SetFaces((unsigned int)(faces.size()/3), 3, faces.data());
 	return mesh;

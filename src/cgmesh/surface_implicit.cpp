@@ -12,8 +12,16 @@
 #include <math.h>
 #include <string.h>
 
+#include <algorithm>
+#include <atomic>
+#include <cstddef>
+#include <memory>
+#include <new>
+#include <vector>
+
 #include "surface_implicit.h"
 #include "surface_implicit_def.h"
+#include "surface_implicit_triangulation.h"
 
 ImplicitSurface::ImplicitSurface ()
 {
@@ -37,124 +45,133 @@ ImplicitSurface::ImplicitSurface ()
 };
 
 
-typedef struct _mc_triangulation_
-{
-	float *vertices;
-	int nvertices;
-	int nverticesmax;
-
-	int iCurrentVertexInFace;
-	unsigned int *faces;
-	int nfaces;
-	int nfacesmax;
-} mc_triangulation_t;
-
 ////////////////////////////////////////////////////////////////////////////////
 //
 // triangulation
 //
-static bool mc_get_triangulation_vertex_func (float x, float y, float z, int index, void *data)
+namespace
 {
-	bool new_triangle_completed = false;
-	mc_triangulation_t *tri = (mc_triangulation_t*)data;
+	std::atomic<void *(*) (std::size_t)> outputAllocate {nullptr};
+	std::atomic<void (*) (void *)>       outputRelease {nullptr};
+}
 
-	//
-	// treat the current vertex
-	//
-	if (index >= tri->nvertices) // manage memory for tri->vertices (case when the indexed triangulation is evaluated)
-	{
-		if (index >= tri->nverticesmax)
-		{
-			while (index >= tri->nverticesmax)
-				tri->nverticesmax *= 2;
-			tri->vertices = (float*)realloc(tri->vertices, 3*tri->nverticesmax*sizeof(float));
-		}
-	}
-	else if (index == -1) // add a new vertex and evaluate its associated index (case when the indexed triangulation is not evaluated)
-	{
-		if (tri->nvertices >= tri->nverticesmax)
-		{
-			tri->nverticesmax *= 2;
-			tri->vertices = (float*)realloc(tri->vertices, 3*tri->nverticesmax*sizeof(float));
-		}
+ImplicitOutputAllocator SetImplicitOutputAllocator (ImplicitOutputAllocator allocator)
+{
+	ImplicitOutputAllocator previous;
+	previous.allocate = outputAllocate.exchange (allocator.allocate);
+	previous.release = outputRelease.exchange (allocator.release);
+	return previous;
+}
+
+void *AllocateImplicitOutput (std::size_t bytes)
+{
+	void *(*const allocate) (std::size_t) = outputAllocate.load ();
+	return allocate ? allocate (bytes) : malloc (bytes);
+}
+
+void ReleaseImplicitOutput (void *block)
+{
+	void (*const release) (void *) = outputRelease.load ();
+	if (release)
+		release (block);
+	else
+		free (block);
+}
+
+bool ImplicitTriangulation::AddCorner (float x, float y, float z, int index, void *self)
+{
+	ImplicitTriangulation *tri = FromData (self);
+	if (index < 0)
 		index = tri->nvertices;
-	}
-
-	// write the coordinates in tri->vertices
-	tri->vertices[3*index]   = x;
-	tri->vertices[3*index+1] = y;
-	tri->vertices[3*index+2] = z;
-
-	// update tri->nvertices
+	const std::size_t i = static_cast<std::size_t> (index);
+	if (3 * i + 3 > tri->vertices.size ())
+		tri->vertices.resize (3 * i + 3);
+	tri->vertices[3 * i]     = x;
+	tri->vertices[3 * i + 1] = y;
+	tri->vertices[3 * i + 2] = z;
 	if (index >= tri->nvertices)
-		tri->nvertices = index+1;
-	
-	//
-	// treat the current face
-	//
-	if (tri->iCurrentVertexInFace == 0)
-	{
-		if (tri->nfaces >= tri->nfacesmax)
-		{
-			tri->nfacesmax *= 2;
-			tri->faces = (unsigned int*)realloc(tri->faces, 3*tri->nfacesmax*sizeof(unsigned int));
-		}
-	}
+		tri->nvertices = index + 1;
 
-	tri->faces[3*tri->nfaces+tri->iCurrentVertexInFace] = index;
-	tri->iCurrentVertexInFace = (tri->iCurrentVertexInFace+1) % 3;
-	if (tri->iCurrentVertexInFace == 0) // new triangle has been completed
-	{
-		tri->nfaces++; // update tri
+	tri->faces.push_back (static_cast<unsigned int> (index));
+	if (tri->faces.size () % 3 != 0)
+		return false;
+	++tri->nfaces;
+	return true;
+}
 
-		new_triangle_completed = true;
+bool ImplicitTriangulation::CopyOut (int *nv, float **v, int *nf, unsigned int **f) const
+{
+	*nv = 0;
+	*v = nullptr;
+	*nf = 0;
+	*f = nullptr;
+	const std::size_t vertexFloats = 3 * static_cast<std::size_t> (nvertices);
+	const std::size_t faceIndices = 3 * static_cast<std::size_t> (nfaces);
+	float *outVertices = vertexFloats ? static_cast<float *> (AllocateImplicitOutput (vertexFloats * sizeof (float))) : nullptr;
+	unsigned int *outFaces = faceIndices ? static_cast<unsigned int *> (AllocateImplicitOutput (faceIndices * sizeof (unsigned int))) : nullptr;
+	if ((vertexFloats && !outVertices) || (faceIndices && !outFaces))
+	{
+		ReleaseImplicitOutput (outVertices);
+		ReleaseImplicitOutput (outFaces);
+		return false;
 	}
-	
-	return new_triangle_completed;
+	if (vertexFloats)
+		memcpy (outVertices, vertices.data (), vertexFloats * sizeof (float));
+	if (faceIndices)
+		memcpy (outFaces, faces.data (), faceIndices * sizeof (unsigned int));
+	*nv = nvertices;
+	*v = outVertices;
+	*nf = nfaces;
+	*f = outFaces;
+	return true;
 }
 
 void ImplicitSurface::get_triangulation_pre (void)
 {
-	mc_triangulation_t *tri = (mc_triangulation_t*)malloc(sizeof(mc_triangulation_t));
-	tri->nverticesmax = 100000;
-	tri->vertices = (float*)malloc(3*tri->nverticesmax*sizeof(float));
-	tri->nvertices = 0;
-
-	tri->nfacesmax = 100000;
-	tri->faces = (unsigned int*)malloc(3*tri->nfacesmax*sizeof(unsigned int));
-	tri->nfaces = 0;
-
-	tri->iCurrentVertexInFace = 0;
-
-	data = (void*)tri;
+	data = new ImplicitTriangulation ();
 }
 
-void ImplicitSurface::get_triangulation_post (int *nvertices, float **vertices, int *nfaces, unsigned int **faces)
+bool ImplicitSurface::get_triangulation_post (int *nvertices, float **vertices, int *nfaces, unsigned int **faces,
+                                              bool computed)
 {
-	mc_triangulation_t *tri = (mc_triangulation_t*)data;
-	*nvertices = tri->nvertices;
-	*vertices = tri->vertices;
-	*nfaces = tri->nfaces;
-	*faces = tri->faces;
-
-	free (data);
+	std::unique_ptr<ImplicitTriangulation> tri (ImplicitTriangulation::FromData (data));
 	data = nullptr;
+	return computed && tri->CopyOut (nvertices, vertices, nfaces, faces);
 }
 
-void ImplicitSurface::get_triangulation (int *nvertices, float **vertices, int *nfaces, unsigned int **faces)
+bool ImplicitSurface::get_triangulation (int *nvertices, float **vertices, int *nfaces, unsigned int **faces)
 {
-	// store initial data
-	mc_vertex_func_t vertex_func_bak = vertex_func;
-	void *data_bak = data;
-	vertex_func = mc_get_triangulation_vertex_func;
+	*nvertices = 0;
+	*vertices = nullptr;
+	*nfaces = 0;
+	*faces = nullptr;
 
-	get_triangulation_pre ();
-	compute (1);
-	get_triangulation_post (nvertices, vertices, nfaces, faces);
-	
-	// restore former callbacks
-	vertex_func = vertex_func_bak;
-	data = data_bak;
+	const mc_vertex_func_t vertexFuncBak = vertex_func;
+	void *const dataBak = data;
+	bool prepared = false, computed = false;
+	try
+	{
+		get_triangulation_pre ();
+		prepared = true;
+		vertex_func = &ImplicitTriangulation::AddCorner;
+		computed = compute (1);
+	}
+	catch (const std::bad_alloc &)
+	{
+		computed = false;
+	}
+	catch (...)
+	{
+		vertex_func = vertexFuncBak;
+		if (prepared)
+			get_triangulation_post (nvertices, vertices, nfaces, faces, false);
+		data = dataBak;
+		throw;
+	}
+	vertex_func = vertexFuncBak;
+	const bool ok = prepared && get_triangulation_post (nvertices, vertices, nfaces, faces, computed);
+	data = dataBak;
+	return ok;
 }
 //
 // triangulation
@@ -240,11 +257,13 @@ void ImplicitSurface::compute_cube (unsigned int iX, unsigned int iY, unsigned i
     // Make a local copy of the values at the cube's corners
 	if (fValueCached) // use cache
 	{
+		const std::size_t row = static_cast<std::size_t> (resX) + 1U;
+		const std::size_t layer = row * (static_cast<std::size_t> (resY) + 1U);
 		unsigned int iCacheOrder[2] = {iZ % 2U, (iZ+1U) % 2U};
 		for(iVertex = 0; iVertex < 8; iVertex++)
 		{
-			int index = iCacheOrder[a2fVertexOffset[iVertex][2]]*(resolution[1]+1)*(resolution[0]+1) +
-				(iY + a2fVertexOffset[iVertex][1])*(resolution[0]+1) +
+			const std::size_t index = iCacheOrder[a2fVertexOffset[iVertex][2]]*layer +
+				(iY + a2fVertexOffset[iVertex][1])*row +
 				iX + a2fVertexOffset[iVertex][0];
 			afCubeValue[iVertex] = fValueCached[index];
 		}
@@ -289,7 +308,8 @@ void ImplicitSurface::compute_cube (unsigned int iX, unsigned int iY, unsigned i
 				asEdgeVertex[iEdge].fY = fY + (a2fVertexOffset[a2iEdgeConnection[iEdge][0]][1] + fOffset*a2fEdgeDirection[iEdge][1])*fStepY;
 				asEdgeVertex[iEdge].fZ = fZ + (a2fVertexOffset[a2iEdgeConnection[iEdge][0]][2] + fOffset*a2fEdgeDirection[iEdge][2])*fStepZ;
 
-				get_normal (asEdgeVertex[iEdge], asEdgeNorm[iEdge]);
+				if (normal_func || color_func)
+					get_normal (asEdgeVertex[iEdge], asEdgeNorm[iEdge]);
 			}
 		}
 
@@ -319,56 +339,110 @@ void ImplicitSurface::compute_cube (unsigned int iX, unsigned int iY, unsigned i
         }
 }
 
-// iterates over the entire dataset, calling compute_cube on each cube
-void ImplicitSurface::compute (int bUsecache)
+namespace
 {
-    int iX, iY, iZ;
+	// Pendant compute : boite et resolution elargies d'un bord (set_boundary), caches
+	// designes par les pointeurs membres. Retabli a la sortie, exception comprise.
+	class ComputeScope
+	{
+	public:
+		ComputeScope (int boundary, float *min, float *max, int *resolution, const float *step,
+		              float *&values, int *&indices, float *valueData, int *indexData)
+			: m_boundary (boundary), m_min (min), m_max (max), m_resolution (resolution), m_step (step),
+			  m_values (values), m_indices (indices)
+		{
+			if (m_boundary)
+			{
+				m_resolution[0] += 2;
+				m_resolution[1] += 2;
+				m_resolution[2] += 3;
+				m_min[0] -= m_step[0];
+				m_max[0] += m_step[0];
+				m_min[1] -= m_step[1];
+				m_max[1] += m_step[1];
+				m_min[2] -= 2*m_step[2];
+				m_max[2] += m_step[2];
+			}
+			m_values = valueData;
+			m_indices = indexData;
+		}
+		~ComputeScope ()
+		{
+			m_values = nullptr;
+			m_indices = nullptr;
+			if (m_boundary)
+			{
+				m_resolution[0] -= 2;
+				m_resolution[1] -= 2;
+				m_resolution[2] -= 3;
+				m_min[0] += m_step[0];
+				m_max[0] -= m_step[0];
+				m_min[1] += m_step[1];
+				m_max[1] -= m_step[1];
+				m_min[2] += 2*m_step[2];
+				m_max[2] -= m_step[2];
+			}
+		}
+		ComputeScope (const ComputeScope &) = delete;
+		ComputeScope &operator= (const ComputeScope &) = delete;
+
+	private:
+		int          m_boundary;
+		float       *m_min, *m_max;
+		int         *m_resolution;
+		const float *m_step;
+		float      *&m_values;
+		int        *&m_indices;
+	};
+}
+
+// iterates over the entire dataset, calling compute_cube on each cube
+bool ImplicitSurface::compute (int bUsecache)
+{
+	iCurrentVertex = -1;
+
+	const long long grow[3] = {bBoundary ? 2 : 0, bBoundary ? 2 : 0, bBoundary ? 3 : 0};
+	const long long r0 = static_cast<long long> (resolution[0]) + grow[0];
+	const long long r1 = static_cast<long long> (resolution[1]) + grow[1];
+	const long long r2 = static_cast<long long> (resolution[2]) + grow[2];
+	if (r0 < 1 || r1 < 1 || r2 < 1 || (r0 + 1) * (r1 + 1) > static_cast<long long> (kMaxLayerNodes))
+		return false;
+	const std::size_t layer = static_cast<std::size_t> ((r0 + 1) * (r1 + 1));
+
+	// Caches : valeurs des noeuds sur deux couches, indices des sommets sur les trois aretes
+	// issues de chaque noeud de deux couches.
+	std::vector<float> valueCache;
+	std::vector<int>   indexCache;
+	try
+	{
+		if (bUsecache)
+			valueCache.resize (2 * layer);
+		indexCache.resize (6 * layer);
+	}
+	catch (const std::bad_alloc &)
+	{
+		return false;
+	}
+	const ComputeScope scope (bBoundary, min, max, resolution, step, fValueCached, fIndicesCached,
+	                          bUsecache ? valueCache.data () : nullptr, indexCache.data ());
+
+	const std::size_t row = static_cast<std::size_t> (resolution[0]) + 1;
+	int iX, iY, iZ;
 	int i, j, k;
-
-	if (bBoundary)
-	{
-		resolution[0] += 2;
-		resolution[1] += 2;
-		resolution[2] += 3;
-		min[0] -= step[0];
-		max[0] += step[0];
-		min[1] -= step[1];
-		max[1] += step[1];
-		min[2] -= 2*step[2];
-		max[2] += step[2];
-	}
-
-	// allocate the caches
-	if (bUsecache)
-	{
-		fValueCached = (float*)malloc((resolution[0]+1)*(resolution[1]+1)*2*sizeof(float));
-		if (!fValueCached)
-			bUsecache = 0;
-	}
-
-	int bUseIndexedFaces = 1;
-	int nIndicesCached = (resolution[0]+1)*(resolution[1]+1) * 3 * 2; // 3 edges per vertex & 2 layers of vertices
-	if (bUseIndexedFaces)
-	{
-		fIndicesCached = (int*)malloc(nIndicesCached*sizeof(int));
-		if (!fIndicesCached)
-			bUseIndexedFaces = 0;
-	}
-
 	for (iZ=0; iZ<resolution[2]; iZ++)
 	{
 		// initialize the cache
 		if (bUsecache)
 		{
-			int index = 0;
-			int Zoffset = (resolution[1]+1)*(resolution[0]+1);
+			std::size_t index = 0;
+			std::size_t Zoffset = layer;
 			if (iZ == 0)
 			{
 				for (k=0; k<2; k++)
 					for (j=0; j<=resolution[1]; j++)
 						for(i = 0; i <= resolution[0]; i++)
 						{
-							index = k*Zoffset + j*(resolution[0]+1) + i;
+							index = k*Zoffset + j*row + i;
 							fValueCached[index] = eval_func (min[0]+i*step[0],
 											 min[1]+j*step[1],
 											 min[2]+k*step[2], eval_data);
@@ -386,15 +460,12 @@ void ImplicitSurface::compute (int bUsecache)
 			}
 			else
 			{
-				int XYoffset = 0;
+				std::size_t XYoffset = 0;
 				if (iZ % 2) Zoffset = 0; // use a double buffer for the value cached
 				for (j=0; j<=resolution[1]; j++)
 					for (i=0; i<=resolution[0]; i++)
 					{
-						XYoffset = j*(resolution[0]+1) + i;
-
-						// copy layer iZ+1 on layer iZ
-						//fValueCached[XYoffset] = fValueCached[Zoffset + XYoffset];
+						XYoffset = j*row + i;
 
 						// update next layer
 						fValueCached[Zoffset + XYoffset] = eval_func (min[0]+i*step[0],
@@ -414,25 +485,22 @@ void ImplicitSurface::compute (int bUsecache)
 		}
 
 		// initialize the indexed faces cache
-		if (bUseIndexedFaces)
 		{
-//			int index = 0;
-			int Zoffset = 3*(resolution[0]+1)*(resolution[1]+1);
+			const std::size_t Zoffset = 3*layer;
 			if (iZ == 0)
-				memset (fIndicesCached, -1, nIndicesCached*sizeof(int));
+				std::fill (indexCache.begin (), indexCache.end (), -1);
 			else
 			{
-//				if (iZ % 2) Zoffset = 0; // use a double buffer
 				for (j=0; j<=resolution[1]; j++)
 					for (i=0; i<=resolution[0]; i++)
 					{
-						int index = j*(resolution[0]+1) + i;
+						const std::size_t index = j*row + i;
 
 						// copy layer 2 on layer 0
 						fIndicesCached[3*index]   = fIndicesCached[Zoffset + 3*index];
 						fIndicesCached[3*index+1] = fIndicesCached[Zoffset + 3*index+1];
 						fIndicesCached[3*index+2] = fIndicesCached[Zoffset + 3*index+2];
-						
+
 						// update next layers
 						fIndicesCached[Zoffset + 3*index]   = -1;
 						fIndicesCached[Zoffset + 3*index+1] = -1;
@@ -449,30 +517,5 @@ void ImplicitSurface::compute (int bUsecache)
 		if (layer_completed_func)
 			layer_completed_func (data);
 	}
-
-	// free the cache
-	if (bUseIndexedFaces)
-	{
-		free (fIndicesCached);
-		fIndicesCached = nullptr;
-	}
-	if (bUsecache)
-	{
-		free (fValueCached);
-		fValueCached = nullptr;
-	}
-
-	// restore
-	if (bBoundary)
-	{
-		resolution[0] -= 2;
-		resolution[1] -= 2;
-		resolution[2] -= 3;
-		min[0] += step[0];
-		max[0] -= step[0];
-		min[1] += step[1];
-		max[1] -= step[1];
-		min[2] += 2*step[2];
-		max[2] -= step[2];
-	}
+	return true;
 }

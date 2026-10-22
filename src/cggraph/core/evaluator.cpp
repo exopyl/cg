@@ -321,7 +321,9 @@ EvalResult Evaluator::EvaluateNode (NodeId id, ValueList &outputs, EvalContext &
 
 	ValueList produced (desc.outputs.size ());
 	++m_stats.misses;
+	ctx.TakeFailureDetail ();
 	const bool computed = node->Compute (ctx, inputs, produced);
+	std::string failureDetail = ctx.TakeFailureDetail ();
 
 	// LE CONTEXTE AVANT LE CODE DE RETOUR, et l'ordre est le sujet.
 	//
@@ -340,7 +342,7 @@ EvalResult Evaluator::EvaluateNode (NodeId id, ValueList &outputs, EvalContext &
 		return MakeResult (EvalStatus::Aborted, id, std::string ());
 
 	if (!computed)
-		return MakeResult (EvalStatus::ComputeFailed, id, std::string ());
+		return MakeResult (EvalStatus::ComputeFailed, id, std::move (failureDetail));
 
 	// Un noeud a effet de bord n'entre pas au cache, et cela SUFFIT : la lecture
 	// du cache plus haut ne peut pas trouver ce qui n'y a jamais ete mis. Une

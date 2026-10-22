@@ -49,6 +49,8 @@ bool IcpAlignNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueList 
 	const std::shared_ptr<const Mesh> target = in[1].Share<Mesh> (Types ().mesh);
 	if (source == nullptr || target == nullptr)
 		return false;
+	if (IsEmptyMesh (*source) || IsEmptyMesh (*target))
+		return FailOnEmptyMesh (ctx);
 	if (source->GetNVertices () < 3 || target->GetNFaces () == 0)
 		return false;
 

@@ -58,11 +58,13 @@ Mesh* ImplicitSurfaceReconstructor::reconstruct(const PointCloud& cloud)
     mc.set_eval_func(&PointCloudField::Eval);
     mc.set_eval_data(&field);
 
-    // get_triangulation alloue vertices/faces (malloc) et appelle compute() en interne.
+    // get_triangulation alloue vertices/faces (malloc) et appelle compute() en interne ;
+    // en cas d'echec, rien n'est alloue.
     int            nv = 0, nf = 0;
     float*         verts = nullptr;
     unsigned int*  faces = nullptr;
-    mc.get_triangulation(&nv, &verts, &nf, &faces);
+    if (!mc.get_triangulation(&nv, &verts, &nf, &faces))
+        return nullptr;
 
     Mesh* mesh = nullptr;
     if (nv > 0 && nf > 0 && verts && faces)

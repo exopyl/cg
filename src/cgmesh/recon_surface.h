@@ -12,8 +12,10 @@ namespace recon {
 // ImplicitSurface (marching cubes). Ne requiert PAS de normales orientées.
 // Renvoie un Mesh* (propriété transférée) ou nullptr.
 //
-// NB : la triangulation de ImplicitSurface est plafonnée à 100000 sommets/faces
-// (surface_implicit.cpp) ; garder gridCells modéré sur des nuages denses/complexes.
+// Renvoie nullptr si le nuage est degenere ou si la triangulation echoue : grille au-dela
+// de ImplicitSurface::kMaxLayerNodes noeuds par couche, ou memoire insuffisante. La
+// resolution suit gridCells le long du plus grand axe : garder gridCells modere sur des
+// nuages denses.
 class ImplicitSurfaceReconstructor : public ISurfaceReconstructor
 {
 public:

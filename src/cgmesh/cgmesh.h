@@ -25,7 +25,6 @@
 #include "surface_implicit_tandem.h"
 #include "surface_implicit_samples.h"
 #include "surface_implicit_pointcloud.h"
-#include "surface_architecture.h"
 
 // convex hull
 #include "chull.h"

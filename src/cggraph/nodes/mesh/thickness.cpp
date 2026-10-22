@@ -46,6 +46,8 @@ bool ThicknessNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueList
 	const std::shared_ptr<const Mesh> input = in[0].Share<Mesh> (Types ().mesh);
 	if (input == nullptr)
 		return false;
+	if (IsEmptyMesh (*input))
+		return FailOnEmptyMesh (ctx);
 
 	// Copie profonde : le corps recalcule les normales et la boite englobante
 	// du maillage qu'on lui donne. Le maillage de travail ne sort pas d'ici --

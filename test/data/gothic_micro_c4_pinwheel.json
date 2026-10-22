@@ -1,0 +1,10 @@
+{
+  "schema": "gothic-microarchitecture/v1",
+  "meta": { "id": "c4-pinwheel", "label": "C4 sans reflexion, croisements faux" },
+  "symmetry": { "center": [0, 0], "rotation_order": 4 },
+  "points": [
+    { "id": "A", "xy": [3, -1], "ground": true },
+    { "id": "B", "xy": [-1, 2], "height": 10 }
+  ],
+  "curves": [ { "id": "l1", "type": "segment", "start": "A", "end": "B" } ]
+}

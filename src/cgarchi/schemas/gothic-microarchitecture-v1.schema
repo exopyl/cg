@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gothic-tracery/schema/microarchitecture/v1.schema.json",
+  "title": "Gothic microarchitecture (v1)",
+  "description": "Plan 2D parametre d'une microarchitecture gothique (Segall et al., SIGGRAPH 2025) : courbes de base, groupe de symetrie, points au sol ou a hauteur donnee, tolerances. Les repliques par symetrie ne sont pas ecrites. Lecteur : cgarchi::microarch::LoadSpecFromJson, qui applique les bornes de ce schema.",
+  "type": "object",
+  "required": ["schema", "symmetry", "points", "curves"],
+  "additionalProperties": false,
+
+  "$defs": {
+    "xy": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "levelId": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483647
+    }
+  },
+
+  "properties": {
+    "schema": { "type": "string", "const": "gothic-microarchitecture/v1" },
+
+    "meta": {
+      "description": "Metadonnees libres, sans effet geometrique.",
+      "type": "object",
+      "additionalProperties": true
+    },
+
+    "symmetry": {
+      "description": "Groupe C_n(p), ou D_n(p) si un axe de reflexion est donne. L'axe passe par le centre.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["center", "rotation_order"],
+      "properties": {
+        "center":              { "$ref": "#/$defs/xy" },
+        "rotation_order":      { "type": "integer", "minimum": 1, "maximum": 64 },
+        "reflection_axis_deg": { "type": "number", "minimum": 0, "exclusiveMaximum": 180 }
+      }
+    },
+
+    "levels": {
+      "description": "Niveaux. Defaut : [{\"id\": 0, \"base\": 0}]. La v1 n'en accepte qu'un (unsupported_multi_level).",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id"],
+        "properties": {
+          "id":   { "$ref": "#/$defs/levelId" },
+          "base": { "type": "number", "default": 0 }
+        }
+      }
+    },
+
+    "points": {
+      "description": "Sommets du plan. Exactement un de ground (true) ou height. Au plus 4096 : le developpement du plan croit avec leur nombre.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "xy"],
+        "oneOf": [
+          { "required": ["ground"], "properties": { "ground": { "const": true } } },
+          { "required": ["height"] }
+        ],
+        "properties": {
+          "id":     { "type": "string", "minLength": 1 },
+          "xy":     { "$ref": "#/$defs/xy" },
+          "ground": { "type": "boolean", "description": "Point au sol : hauteur 0." },
+          "height": { "type": "number", "description": "Hauteur au-dessus de la base du niveau." }
+        }
+      }
+    },
+
+    "curves": {
+      "description": "Courbes de base, deux a deux non deductibles par symetrie. Sens de parcours : de start vers end. Au plus 1024 : le developpement du plan croit avec leur nombre.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "start", "end"],
+        "properties": {
+          "id":     { "type": "string", "minLength": 1 },
+          "type":   { "type": "string", "enum": ["segment", "arc"] },
+          "start":  { "type": "string", "minLength": 1 },
+          "end":    { "type": "string", "minLength": 1 },
+          "level":  { "$ref": "#/$defs/levelId", "default": 0 },
+          "center": { "$ref": "#/$defs/xy", "description": "Arc seulement : centre, equidistant de start et end." },
+          "ccw":    { "type": "boolean", "description": "Arc seulement : sens trigonometrique de start vers end." },
+          "prc": {
+            "description": "Selection explicite du PRC : u = s/L, accroche au candidat le plus proche.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["u"],
+            "properties": {
+              "u": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 }
+            }
+          }
+        },
+        "if":   { "properties": { "type": { "const": "arc" } } },
+        "then": { "required": ["center", "ccw"] },
+        "else": { "not": { "anyOf": [ { "required": ["center"] }, { "required": ["ccw"] } ] } }
+      }
+    },
+
+    "tolerances": {
+      "description": "Tolerances relatives a la diagonale D de la boite des points et du centre ; prc_snap est sans dimension.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "point":     { "type": "number", "exclusiveMinimum": 0, "maximum": 0.001, "default": 1e-9 },
+        "parameter": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.01,  "default": 1e-7 },
+        "height":    { "type": "number", "exclusiveMinimum": 0, "maximum": 0.01,  "default": 1e-7 },
+        "prc_snap":  { "type": "number", "exclusiveMinimum": 0, "maximum": 0.5,   "default": 0.001 }
+      }
+    }
+  }
+}

@@ -1,0 +1,538 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gothic-microarchitecture-network-v1",
+  "title": "Gothic microarchitecture network (output of NetworkToJson)",
+  "description": "Analytic 3D curve network: replicas (exact plan curve + side profile of their basic curve), junctions, visual crossings, free ends and the build report. No sampled point.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "scale",
+    "tolerances",
+    "levels",
+    "basic_curves",
+    "curves",
+    "junctions",
+    "crossings",
+    "free_ends",
+    "report"
+  ],
+  "properties": {
+    "schema": {
+      "const": "gothic-microarchitecture-network/v1"
+    },
+    "scale": {
+      "type": "number",
+      "description": "Drawing scale D"
+    },
+    "tolerances": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "point",
+        "parameter",
+        "height",
+        "prc_snap"
+      ],
+      "properties": {
+        "point": {
+          "type": "number"
+        },
+        "parameter": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "prc_snap": {
+          "type": "number"
+        }
+      }
+    },
+    "levels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "base"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "base": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "basic_curves": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "level",
+          "length",
+          "prc",
+          "profile"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "length": {
+            "type": "number"
+          },
+          "prc": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "s",
+              "u",
+              "rule",
+              "xy",
+              "candidates"
+            ],
+            "properties": {
+              "s": {
+                "type": "number"
+              },
+              "u": {
+                "type": "number"
+              },
+              "rule": {
+                "$ref": "#/$defs/rule"
+              },
+              "xy": {
+                "$ref": "#/$defs/xy"
+              },
+              "candidates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "s",
+                    "u",
+                    "tier",
+                    "xy",
+                    "tangential"
+                  ],
+                  "properties": {
+                    "s": {
+                      "type": "number"
+                    },
+                    "u": {
+                      "type": "number"
+                    },
+                    "tier": {
+                      "$ref": "#/$defs/rule"
+                    },
+                    "xy": {
+                      "$ref": "#/$defs/xy"
+                    },
+                    "tangential": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "profile": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "length",
+              "z_start",
+              "z_end",
+              "s_prc",
+              "z_prc",
+              "r_start",
+              "r_end",
+              "center_start",
+              "center_end",
+              "monotonic"
+            ],
+            "properties": {
+              "length": {
+                "type": "number"
+              },
+              "z_start": {
+                "type": "number"
+              },
+              "z_end": {
+                "type": "number"
+              },
+              "s_prc": {
+                "type": "number"
+              },
+              "z_prc": {
+                "type": "number"
+              },
+              "r_start": {
+                "type": "number"
+              },
+              "r_end": {
+                "type": "number"
+              },
+              "center_start": {
+                "$ref": "#/$defs/xy"
+              },
+              "center_end": {
+                "$ref": "#/$defs/xy"
+              },
+              "monotonic": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "curves": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "basic",
+          "basic_id",
+          "element",
+          "level",
+          "length",
+          "plan"
+        ],
+        "properties": {
+          "basic": {
+            "type": "integer"
+          },
+          "basic_id": {
+            "type": "string"
+          },
+          "element": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "k",
+              "reflected"
+            ],
+            "properties": {
+              "k": {
+                "type": "integer"
+              },
+              "reflected": {
+                "type": "boolean"
+              }
+            }
+          },
+          "level": {
+            "type": "integer"
+          },
+          "length": {
+            "type": "number"
+          },
+          "plan": {
+            "description": "Exact plan curve of the replica",
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "type",
+                  "start",
+                  "end"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "segment"
+                  },
+                  "start": {
+                    "$ref": "#/$defs/xy"
+                  },
+                  "end": {
+                    "$ref": "#/$defs/xy"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "type",
+                  "center",
+                  "radius",
+                  "start_angle_rad",
+                  "sweep_rad"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "arc"
+                  },
+                  "center": {
+                    "$ref": "#/$defs/xy"
+                  },
+                  "radius": {
+                    "type": "number"
+                  },
+                  "start_angle_rad": {
+                    "type": "number"
+                  },
+                  "sweep_rad": {
+                    "type": "number"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "junctions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "position",
+          "incidences",
+          "max_gap",
+          "prc",
+          "ground"
+        ],
+        "properties": {
+          "position": {
+            "$ref": "#/$defs/xyz"
+          },
+          "incidences": {
+            "$ref": "#/$defs/incidences"
+          },
+          "max_gap": {
+            "type": "number"
+          },
+          "prc": {
+            "type": "boolean"
+          },
+          "ground": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "crossings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "xy",
+          "groups",
+          "min_dz"
+        ],
+        "properties": {
+          "xy": {
+            "$ref": "#/$defs/xy"
+          },
+          "groups": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "z",
+                "incidences"
+              ],
+              "properties": {
+                "z": {
+                  "type": "number"
+                },
+                "incidences": {
+                  "$ref": "#/$defs/incidences"
+                }
+              }
+            }
+          },
+          "min_dz": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "free_ends": {
+      "$ref": "#/$defs/incidences"
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "errors",
+        "warnings",
+        "entries"
+      ],
+      "properties": {
+        "errors": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/errorCode"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "warnings": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/warningCode"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "severity",
+              "code",
+              "parameter",
+              "message"
+            ],
+            "properties": {
+              "severity": {
+                "enum": [
+                  "error",
+                  "warning"
+                ]
+              },
+              "code": {
+                "type": "string"
+              },
+              "parameter": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "xy": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "number"
+      }
+    },
+    "xyz": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "number"
+      }
+    },
+    "rule": {
+      "enum": [
+        "replica_fixed_point",
+        "other_basic_curve",
+        "midpoint",
+        "explicit",
+        "replica_crossing"
+      ]
+    },
+    "incidences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "curve",
+          "s"
+        ],
+        "properties": {
+          "curve": {
+            "type": "integer"
+          },
+          "s": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "errorCode": {
+      "enum": [
+        "json_parse",
+        "json_schema",
+        "json_type",
+        "json_value",
+        "json_missing",
+        "duplicate_id",
+        "unknown_reference",
+        "degenerate_curve",
+        "arc_endpoint_mismatch",
+        "degenerate_scale",
+        "unsupported_multi_level",
+        "self_reversed_replica",
+        "redundant_basic_curve",
+        "plan_overlap",
+        "profile_flat",
+        "profile_invalid",
+        "prc_selection_no_candidate",
+        "segment_endpoint_mismatch",
+        "nearly_flat_arc",
+        "sample_limit_exceeded",
+        "too_many_replicas",
+        "too_many_contacts",
+        "export_write_failed",
+        "tube_invalid_parameter",
+        "tube_limit_exceeded",
+        "json_too_large",
+        "solid_invalid_parameter",
+        "solid_limit_exceeded",
+        "solid_generator_defect"
+      ]
+    },
+    "warningCode": {
+      "enum": [
+        "field_ignored",
+        "prc_midpoint_fallback",
+        "prc_from_other_basic_curve",
+        "prc_tie",
+        "prc_on_false_intersection",
+        "profile_not_monotonic",
+        "tangential_contact",
+        "endpoint_height_conflict",
+        "prc_near_endpoint",
+        "junction_height_spread",
+        "tube_radius_hides_crossing",
+        "solid_unplanned_fusion",
+        "solid_floating_component",
+        "solid_wall_too_thin",
+        "solid_closed_cell",
+        "solid_fork_neck",
+        "solid_unverified",
+        "solid_triangle_estimate_high",
+        "solid_sealed_cavity",
+        "solid_unplanned_split",
+        "solid_discretization_unchecked"
+      ]
+    }
+  }
+}

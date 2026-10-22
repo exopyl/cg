@@ -10,6 +10,8 @@
 #include <vector>
 
 #include "../core/eval_context.h"
+
+class Mesh;
 #include "../core/param_set.h"
 #include "../../cgmath/context.h"
 
@@ -110,6 +112,12 @@ float GetFloat (const cggraph::ParamSet &params, const std::string &name, float 
 bool GetBool (const cggraph::ParamSet &params, const std::string &name, bool fallback);
 std::string GetString (const cggraph::ParamSet &params, const std::string &name,
                        const std::string &fallback);
+
+// Maillage sans sommet ni face, tel qu'une forme vide le rend en amont.
+bool IsEmptyMesh (const Mesh &mesh);
+// Refus d'une entree vide par un noeud qui ne sait rien en faire : pose le detail
+// « maillage vide » (EvalResult::detail) et rend false.
+bool FailOnEmptyMesh (cggraph::EvalContext &ctx);
 
 // SORTIE D'UN ADAPTATEUR QUI PASSE PAR Mesh_half_edge -- regle, pas conseil.
 //

@@ -16,7 +16,7 @@
 #include "../src/cggraph/nodes/catalog_factory.h"
 #include "../src/cggraph/nodes/value_types.h"
 #include "../src/cgmesh/mesh.h"
-#include "../src/cgmesh/parameterized_gothic.h"
+#include <cgarchi/parameterized_gothic.h>
 #include "../src/cgmesh/print_validation.h"
 #include "../src/cgmesh/profile2d.h"
 
@@ -164,7 +164,7 @@ struct WindowGraph
 // La meme baie hors graphe : forme regeneree par cgmesh seul.
 struct ReferenceWindow
 {
-	ParameterizedGothicWindow shape;
+	cgarchi::ParameterizedGothicWindow shape;
 	std::optional<Profile2D>  profile;
 
 	ReferenceWindow (Relief relief, const std::optional<Profile2D> &p, int recursion = 0) : profile (p)
@@ -196,19 +196,19 @@ void ExpectSameMesh (const Mesh &a, Mesh &b)
 	}
 }
 
-double ScopeCode (GothicPrintScope scope)
+double ScopeCode (cgarchi::GothicPrintScope scope)
 {
 	switch (scope)
 	{
-	case GothicPrintScope::NotRun:            return 0.0;
-	case GothicPrintScope::Complete:          return 1.0;
-	case GothicPrintScope::ProfileNotChecked: return 2.0;
+	case cgarchi::GothicPrintScope::NotRun:            return 0.0;
+	case cgarchi::GothicPrintScope::Complete:          return 1.0;
+	case cgarchi::GothicPrintScope::ProfileNotChecked: return 2.0;
 	}
 	return -1.0;
 }
 
 // Les stats print.* qu'un verdict natif doit donner.
-std::map<std::string, double> ExpectedPrintStats (const GothicPrintVerdict &v)
+std::map<std::string, double> ExpectedPrintStats (const cgarchi::GothicPrintVerdict &v)
 {
 	std::map<std::string, double> out;
 	const std::array<std::size_t, kPrintDefectCount> shown = PrintDisplayCounts (v.check.print);
@@ -297,8 +297,8 @@ TEST (TEST_cggraph_gothic_print, print_check_off_publishes_no_print_stat_and_kee
 		ASSERT_TRUE (g.Run ());
 
 		EXPECT_EQ (CountPrefixed (g.stats, "print."), 0u);
-		EXPECT_EQ (CountPrefixed (g.stats, "gothic."), kGothicBuildWarningCount);
-		EXPECT_EQ (g.stats.size (), kGothicBuildWarningCount);
+		EXPECT_EQ (CountPrefixed (g.stats, "gothic."), cgarchi::kGothicBuildWarningCount);
+		EXPECT_EQ (g.stats.size (), cgarchi::kGothicBuildWarningCount);
 
 		ReferenceWindow ref (relief, g.UpstreamProfile ());
 		ExpectSameMesh (*g.mesh, *ref.shape.GetMesh ());
@@ -359,8 +359,8 @@ TEST (TEST_cggraph_gothic_print, graph_documents_written_before_the_print_check_
 		const std::shared_ptr<const Mesh> mesh = outputs[0].Share<Mesh> (Types ().mesh);
 		ASSERT_NE (mesh, nullptr);
 		const std::map<std::string, double> stats = StatsOf (evaluator, c.window);
-		EXPECT_EQ (stats.size (), kGothicBuildWarningCount);
-		EXPECT_EQ (CountPrefixed (stats, "gothic."), kGothicBuildWarningCount);
+		EXPECT_EQ (stats.size (), cgarchi::kGothicBuildWarningCount);
+		EXPECT_EQ (CountPrefixed (stats, "gothic."), cgarchi::kGothicBuildWarningCount);
 		if (c.recursion == 2)
 		{
 			EXPECT_EQ (Stat (stats, "gothic.depth_fallback"), 4.0);
@@ -412,12 +412,12 @@ TEST (TEST_cggraph_gothic_print, print_check_reports_the_native_verdict)
 		printer.maxTipLengthMm = static_cast<double> (c.maxTipMm);
 		if (c.envelope)
 			printer.envelopeMm = std::array<double, 3> { c.side[0], c.side[1], c.side[2] };
-		const GothicPrintVerdict native =
-			CheckGothicExportAndPrintAtWidth (ref.shape, ref.MeshRef (), printer, static_cast<double> (c.widthMm));
+		const cgarchi::GothicPrintVerdict native =
+			cgarchi::CheckGothicExportAndPrintAtWidth (ref.shape, ref.MeshRef (), printer, static_cast<double> (c.widthMm));
 		ASSERT_TRUE (native.printError.empty ()) << native.printError;
 
 		EXPECT_EQ (PrintStatsOf (g.stats), ExpectedPrintStats (native));
-		EXPECT_EQ (g.stats.size (), kGothicBuildWarningCount + kPrintStatCount);
+		EXPECT_EQ (g.stats.size (), cgarchi::kGothicBuildWarningCount + kPrintStatCount);
 		EXPECT_EQ (Stat (g.stats, "print.scope"), c.scope);
 		EXPECT_EQ (Stat (g.stats, "print.printable"), c.printable);
 		EXPECT_EQ (Stat (g.stats, "print.evaluated"), 1.0);

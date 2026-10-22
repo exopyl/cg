@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include <cgarchi/gothic_parametric_catalog.h>
 #include "../src/cgmesh/mesh.h"
 #include "../src/cgmesh/mesh_solidify.h"
 #include "../src/cgmesh/parameterized.h"
@@ -163,11 +164,16 @@ TEST(TU_cgmesh_solidify, decoratorAddsParamsAndKeepsName)
     EXPECT_GT(ext.GetMesh()->GetNVertices(), 2u * nvPlain);
 }
 
-// Tout le catalogue, aux valeurs par defaut : l'epaississement produit une
-// geometrie finie et non vide. Couvre d'office une forme ajoutee plus tard.
+// La liste de fabriques de cgmesh, ParametricShapes (), et celle de cgarchi,
+// GothicParametricShapes (), aux valeurs par defaut : l'epaississement produit
+// une geometrie finie et non vide. Une forme ajoutee a l'une de ces deux listes
+// est couverte ; une forme qui n'entrerait que dans la reunion de cggraph_nodes
+// ne l'est pas (ce test ne depend pas de cggraph).
 TEST(TU_cgmesh_solidify, everyCatalogShapeSolidifiesToFiniteGeometry)
 {
-    for (const ParametricShapeEntry& e : ParametricShapes())
+    std::vector<ParametricShapeEntry> shapes = ParametricShapes();
+    shapes.insert(shapes.end(), cgarchi::GothicParametricShapes().begin(), cgarchi::GothicParametricShapes().end());
+    for (const ParametricShapeEntry& e : shapes)
     {
         auto shape = e.make();
         ParameterizedMesh* pm = dynamic_cast<ParameterizedMesh*>(shape.get());
