@@ -26,7 +26,7 @@ endif()
 # UN SEUL artefact (D27) : les trois facades Embind -- les formes parametriques
 # (wasm_api.cpp), la couche nodale procedurale (graph_api.cpp) et l'hote ImGui
 # du canvas nodal (graph_editor.cpp) -- vivent dans le meme maker.js. Ce sont
-# les INSTANCES qui sont deux (D17) : les six pages chargent la leur sur le
+# les INSTANCES qui sont deux (D17) : les pages de formes chargent la leur sur le
 # thread UI, graph.html charge la sienne dans un Web Worker.
 #
 # imgui_impl_opengl3.cpp est ici et non dans src/cggraph/canvas : les BACKENDS
@@ -74,7 +74,7 @@ set_source_files_properties(
 # tous ajoutes a la liste EMSCRIPTEN de src/cgmesh/CMakeLists.txt.
 #
 # cggraph_canvas amene ImGui et imgui-node-editor. C'est la contrepartie chiffree
-# de D27 : l'artefact etant unique, les six pages qui n'ouvrent jamais le graphe
+# de D27 : l'artefact etant unique, les pages qui n'ouvrent jamais le graphe
 # portent le poids du canvas. Le chiffre est mesure avant/apres sur le meme etat
 # de l'arbre, jamais estime.
 target_link_libraries(maker PRIVATE cggraph_canvas cggraph_ui cggraph_nodes cgarchi cgmesh)

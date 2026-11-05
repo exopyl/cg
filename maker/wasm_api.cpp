@@ -59,6 +59,7 @@
 #include <vector>
 
 #include "parameterized_shapes.h"   // IParameterized + formes a ressource
+#include <cgarchi/parameterized_classical.h>   // ParameterizedClassicalColonnade (shapeWarnings)
 #include <cgarchi/parameterized_gothic.h>   // ParameterizedGothicWindow (createGothicFromJson, exportGothicJson)
 #include "print_validation_json.h"  // print-constraints/v1
 #include <cgarchi/gothic_print_json.h>      // GothicPrintVerdictToJson : print-report/v1 de la garde d'impression
@@ -70,7 +71,7 @@
 #include "mesh_io.h"                 // MeshIO::export_obj (serialisation OBJ+MTL)
 #include "mesh_payload.h"
 #include "graph_host.h"              // maker_graph::host () -- resultat du graphe (graphExportObj)
-#include "../src/cggraph/nodes/shapes/shape_catalog.h"   // fabriques des formes sans ressource (cgmesh + gothique)
+#include "../src/cggraph/nodes/shapes/shape_catalog.h"   // fabriques des formes sans ressource (cgmesh + gothique + classique)
 #include "../src/cggraph/nodes/value_types.h"
 
 #ifdef __EMSCRIPTEN__
@@ -115,7 +116,7 @@ void removeTempFile(int id)
 // une forme ne demande d'editer qu'un seul endroit.
 struct CatalogEntry {
     std::string name;       // cle du catalogue (== GetName())
-    std::string category;   // "parametric" | "gothic"
+    std::string category;   // "parametric" | "gothic" | "classical"
     std::string group;      // en-tete <optgroup> dans la liste ("" = aucun)
     std::function<std::unique_ptr<IParameterized>()> make;
 };
@@ -123,8 +124,9 @@ struct CatalogEntry {
 // Catalogue de PRESENTATION : nom, categorie de page, groupe de liste. La
 // FABRIQUE n'est pas ici -- elle vit dans le catalogue reuni de la couche
 // nodale (cggraph_nodes::CatalogShapes : formes de cgmesh, puis formes
-// gothiques), que l'adaptateur generique lit aussi. Celle-ci ne porte que ce qui
-// est propre a maker, et le nom sert de cle entre les deux.
+// gothiques, puis formes classiques), que l'adaptateur generique lit aussi.
+// Celle-ci ne porte que ce qui est propre a maker, et le nom sert de cle entre
+// les deux.
 //
 // Une entree dont le nom ne se resout pas est ECARTEE, et la forme disparait de
 // la page ; l'ecart est signale sur std::cerr (la console sous Emscripten), au
@@ -133,6 +135,7 @@ const std::vector<CatalogEntry>& catalog()
 {
     static const std::string P = "parametric";
     static const std::string G = "gothic";
+    static const std::string C = "classical";
     // Groupes : de simples en-tetes de liste, ils ne changent rien au comportement.
     // Chaque forme garde son entree et son nom -- on cherche « Klein Bottle » ou
     // « Trefoil Knot » par son nom, et les regrouper derriere une famille les rendait
@@ -169,6 +172,8 @@ const std::vector<CatalogEntry>& catalog()
         {"L-system",              P, FRA},
         {"Gothic Window",         G, ""},
         {"Gothic Block",          G, ""},
+        {"Classical Column",      C, ""},
+        {"Classical Colonnade",   C, ""},
     };
     static const std::vector<CatalogEntry> c = [] {
         std::vector<CatalogEntry> out;
@@ -182,7 +187,8 @@ const std::vector<CatalogEntry>& catalog()
             }
             // Les formes de la page parametrique recoivent l'option Extrude
             // (epaississement) ; les formes gothiques ont deja leur propre
-            // extrusion (zHeight, profils).
+            // extrusion (zHeight, profils), et une colonne classique est un
+            // solide ferme.
             const bool extrudable = (r.category == P);
             out.push_back(CatalogEntry{name, r.category, r.group, [name, extrudable] {
                 std::unique_ptr<IParameterized> shape = cggraph_nodes::MakeCatalogShape(name);
@@ -260,7 +266,7 @@ Mesh* meshOf(IParameterized* obj)
 // Catalogue des formes d'une CATEGORIE : listShapes("parametric") renvoie
 // ["Cube","Sphere",...]. Une categorie vide renvoie le catalogue entier ; un nom
 // de categorie inconnu renvoie [] (et non le tout, qui masquerait la faute de
-// frappe en peuplant la page avec les 27 formes).
+// frappe en peuplant la page avec tout le catalogue).
 std::string listShapes(const std::string& category)
 {
     std::string j = "[";
@@ -276,6 +282,14 @@ std::string listShapes(const std::string& category)
     }
     j += ']';
     return j;
+}
+
+// Avertissements de la derniere generation de la forme `id` ("" s'il n'y en a
+// pas, ou si la forme n'en rend pas) : taille du maillage d'une colonnade.
+std::string shapeWarnings(int id)
+{
+    const auto* colonnade = dynamic_cast<const cgarchi::ParameterizedClassicalColonnade*>(find(id));
+    return colonnade ? colonnade->Warnings() : std::string();
 }
 
 // Cree une forme du catalogue. Renvoie son id, ou -1 si le nom est inconnu. Les
@@ -1254,6 +1268,7 @@ emscripten::val graphExportGlb(unsigned int port, const std::string& base)
 EMSCRIPTEN_BINDINGS(maker)
 {
     emscripten::function("listShapes",        &listShapes);
+    emscripten::function("shapeWarnings",     &shapeWarnings);
     emscripten::function("createShape",       &createShape);
     emscripten::function("createSvgExtrusion",&createSvgExtrusion);
     emscripten::function("createImageRelief", &createImageRelief);

@@ -137,7 +137,18 @@ const std::vector<ShapeBinding> &ShapeBindings ()
 		  "d'effet qu'en mode Extrusion" },
 		{ "shape.gothic.block", "Gothic Block", "Bloc gothique",
 		  SHAPE_CAVEAT_COMMON " CreateBlock n'est pas verifie avant "
-		  "ComputeNormals ()" }
+		  "ComputeNormals ()" },
+		{ "shape.classical.column", "Classical Column", "Colonne classique (Vignole)",
+		  SHAPE_CAVEAT_COMMON " Les donnees des cinq ordres sont embarquees ; une "
+		  "generation en echec rend un maillage VIDE (LastError), pas une "
+		  "exception. Seules les volutes ioniques sont modelisees (coussinets "
+		  "concatenes au tour, sans union) ; volutes composites, feuillages et "
+		  "ornements de l'entablement ne le sont pas" },
+		{ "shape.classical.colonnade", "Classical Colonnade", "Colonnade classique (Vignole)",
+		  SHAPE_CAVEAT_COMMON " Colonnes, entablement file et familles d'ornements sont "
+		  "des coques fermees concatenees, sans union ; au-dela de 300 000 faces, "
+		  "Warnings () le signale (12 colonnes cannelees a volutes en approchent "
+		  "le million)" }
 	};
 	return bindings;
 }

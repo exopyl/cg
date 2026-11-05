@@ -22,6 +22,7 @@
 #include "../src/cggraph/nodes/text/load_font.h"
 #include "../src/cggraph/nodes/value_types.h"
 #include "../src/cgmesh/extrude_contours.h"
+#include <cgarchi/classical_parametric_catalog.h>
 #include <cgarchi/gothic_parametric_catalog.h>
 #include "../src/cgmesh/mesh.h"
 #include <cgarchi/parameterized_gothic.h>
@@ -154,26 +155,33 @@ TEST (TEST_cggraph_nodes_shapes, the_generic_adapter_covers_the_shape_catalogue_
 		EXPECT_EQ (bound.count (shape.name), 1u) << "forme sans noeud : " << shape.name;
 	}
 
-	EXPECT_EQ (CatalogShapes ().size (), 27u);
-	EXPECT_EQ (ShapeBindings ().size (), 26u);
+	EXPECT_EQ (CatalogShapes ().size (), 29u);
+	EXPECT_EQ (ShapeBindings ().size (), 28u);
 }
 
-TEST (TEST_cggraph_nodes_shapes, the_shape_catalogue_joins_cgmesh_then_gothic_in_order)
+TEST (TEST_cggraph_nodes_shapes, the_shape_catalogue_joins_cgmesh_then_gothic_then_classical_in_order)
 {
-	// 25 formes dans cgmesh, 2 formes gothiques, 27 dans la reunion : celles de
-	// cgmesh d'abord, dans leur ordre, puis les gothiques dans le leur.
+	// 25 formes dans cgmesh, 2 formes gothiques, 2 formes classiques, 29 dans
+	// la reunion : celles de cgmesh d'abord, dans leur ordre, puis les
+	// gothiques dans le leur, puis les classiques.
 	const std::vector<ParametricShapeEntry> &generic = ParametricShapes ();
 	const std::vector<ParametricShapeEntry> &gothic  = cgarchi::GothicParametricShapes ();
+	const std::vector<ParametricShapeEntry> &classic = cgarchi::ClassicalParametricShapes ();
 	const std::vector<ParametricShapeEntry> &all     = CatalogShapes ();
 	ASSERT_EQ (generic.size (), 25u);
 	ASSERT_EQ (gothic.size (), 2u);
-	ASSERT_EQ (all.size (), 27u);
+	ASSERT_EQ (classic.size (), 2u);
+	ASSERT_EQ (all.size (), 29u);
 	for (std::size_t i = 0; i < generic.size (); ++i)
 		EXPECT_STREQ (all[i].name, generic[i].name) << i;
 	for (std::size_t i = 0; i < gothic.size (); ++i)
 		EXPECT_STREQ (all[generic.size () + i].name, gothic[i].name) << i;
+	for (std::size_t i = 0; i < classic.size (); ++i)
+		EXPECT_STREQ (all[generic.size () + gothic.size () + i].name, classic[i].name) << i;
 	EXPECT_STREQ (gothic[0].name, "Gothic Window");
 	EXPECT_STREQ (gothic[1].name, "Gothic Block");
+	EXPECT_STREQ (classic[0].name, "Classical Column");
+	EXPECT_STREQ (classic[1].name, "Classical Colonnade");
 
 	// Le nom est la cle : unique sur la reunion.
 	std::set<std::string> names;
@@ -186,6 +194,14 @@ TEST (TEST_cggraph_nodes_shapes, the_shape_catalogue_joins_cgmesh_then_gothic_in
 		const char *name = gothic[i].name;
 		EXPECT_EQ (FindParametricShape (name), nullptr) << name;
 		EXPECT_EQ (FindCatalogShape (name), &all[generic.size () + i]) << name;
+		EXPECT_NE (MakeCatalogShape (name), nullptr) << name;
+	}
+	// Les formes classiques de meme.
+	for (std::size_t i = 0; i < classic.size (); ++i)
+	{
+		const char *name = classic[i].name;
+		EXPECT_EQ (FindParametricShape (name), nullptr) << name;
+		EXPECT_EQ (FindCatalogShape (name), &all[generic.size () + gothic.size () + i]) << name;
 		EXPECT_NE (MakeCatalogShape (name), nullptr) << name;
 	}
 	EXPECT_EQ (FindCatalogShape ("Cube"), &all[0]);
@@ -259,6 +275,32 @@ TEST (TEST_cggraph_nodes_shapes, every_shape_node_produces_a_finite_non_degenera
 		// Une forme reduite a un point n'est pas une forme.
 		EXPECT_GT ((hi[0]-lo[0]) + (hi[1]-lo[1]) + (hi[2]-lo[2]), 0.f) << binding.typeName;
 	}
+}
+
+TEST (TEST_cggraph_nodes_shapes, the_classical_column_node_wraps_the_catalogue_shape)
+{
+	// T7 du module « cinq ordres » : la forme est au catalogue reuni, liee a
+	// un noeud, et son parametre d'ordre atteint le corps.
+	ASSERT_NE (FindCatalogShape ("Classical Column"), nullptr);
+	const ShapeBinding *binding = FindShapeBinding ("shape.classical.column");
+	ASSERT_NE (binding, nullptr);
+	EXPECT_STREQ (binding->shapeName, "Classical Column");
+
+	// Defaut : toscan, colonne seule, module 1 -> 14 M de haut.
+	std::unique_ptr<Node> tuscan = MakeShapeNode ("shape.classical.column");
+	ASSERT_NE (tuscan, nullptr);
+	std::shared_ptr<const Mesh> a = EvaluateShape (tuscan.release ());
+	ASSERT_NE (a, nullptr);
+	EXPECT_NEAR (ZExtent (*a), 14.0f, 1e-3f);
+
+	// Order = 2 (ionique) : 18 M. Sans ce second point, un adaptateur qui
+	// ignorerait le parametre passerait.
+	std::unique_ptr<Node> ionic = MakeShapeNode ("shape.classical.column");
+	ASSERT_NE (ionic, nullptr);
+	ionic->GetParams ().SetInt ("Order", 2);
+	std::shared_ptr<const Mesh> b = EvaluateShape (ionic.release ());
+	ASSERT_NE (b, nullptr);
+	EXPECT_NEAR (ZExtent (*b), 18.0f, 1e-3f);
 }
 
 TEST (TEST_cggraph_nodes_shapes, a_parameter_really_reaches_the_wrapped_body)

@@ -13,7 +13,7 @@
 // un tampon de sommets ou une image dans un postMessage refuterait D27.
 //
 // INSTANCE PROPRE (D17) : ce worker charge sa propre instance de maker.js. Les
-// sept pages de formes gardent la leur sur le thread UI, inchangees, et les deux
+// pages de formes gardent la leur sur le thread UI, inchangees, et les deux
 // documents sont disjoints -- des formes parametrees d'un cote, un DAG de
 // l'autre.
 //

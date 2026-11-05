@@ -2,16 +2,17 @@
 //
 //  Catalogue REUNI des formes parametriques sans ressource.
 //
-// Deux listes de fabriques, tenues par deux proprietaires : celle de cgmesh
-// (ParametricShapes, parametric_catalog.h) et celle des formes gothiques
-// (GothicParametricShapes, gothic_parametric_catalog.h). La reunion est faite
-// ICI, chez le consommateur, et nulle part ailleurs : ni enregistrement
-// statique, ni registre mutable. L'adaptateur generique et les pages de maker
-// lisent cette liste-ci.
+// Trois listes de fabriques, tenues par leurs proprietaires : celle de cgmesh
+// (ParametricShapes, parametric_catalog.h), celle des formes gothiques
+// (GothicParametricShapes, gothic_parametric_catalog.h) et celle des formes
+// classiques (ClassicalParametricShapes, classical_parametric_catalog.h). La
+// reunion est faite ICI, chez le consommateur, et nulle part ailleurs : ni
+// enregistrement statique, ni registre mutable. L'adaptateur generique et les
+// pages de maker lisent cette liste-ci.
 //
 // Ordre stable : les formes de cgmesh dans leur ordre, puis les formes
-// gothiques dans le leur. Les noms sont uniques sur la reunion (verifie par
-// test) ; c'est la cle de recherche.
+// gothiques, puis les formes classiques, chacune dans le leur. Les noms sont
+// uniques sur la reunion (verifie par test) ; c'est la cle de recherche.
 //
 #include <memory>
 #include <string>

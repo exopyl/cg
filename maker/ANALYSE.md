@@ -403,14 +403,31 @@ en-tête, bannière, panneau de paramètres, section Vue et footer d'export auto
 ### 15.3 Catalogue catégorisé
 
 `catalog()` dans `wasm_api.cpp` porte désormais une **catégorie** par entrée (`"parametric"` |
-`"gothic"`) et `listShapes(category)` filtre. La catégorie vit en C++ et non en JS pour rester
+`"gothic"` | `"classical"`) et `listShapes(category)` filtre. La catégorie vit en C++ et non en JS pour rester
 une source unique de vérité : ajouter une forme n'oblige à éditer qu'un seul endroit. Une
 catégorie inconnue renvoie `[]` (et non tout le catalogue, qui masquerait la faute de frappe).
+
+`"classical"` (2026-11-04) contient `Classical Column` et, depuis le 2026-11-05, `Classical Colonnade`
+(colonnade sous entablement filé ; bannière `shapeWarnings` au-delà de 300 000 faces) (`cgarchi`,
+`parameterized_classical.h`), servie par sa page `orders.html` (`js/pages/orders.js`). Comme les
+formes gothiques, elle ne reçoit pas l'option Extrude (`extrudable` est réservé à `"parametric"`) :
+c'est un solide fermé. Les données des cinq ordres (`src/cgarchi/data/cinq_ordres.json`, 238 Ko)
+sont embarquées dans le binaire, puisqu'une forme du catalogue ne lit aucun fichier. Coût mesuré
+(`gzip -c maker.wasm | wc -c`, artefact du dépôt avant, build après) : 1 129 162 → 1 240 016 octets, +110 854 (dont +13 838 pour les volutes ioniques, +11 009 pour les
+congés du fût et les cannelures et +25 747 pour la colonnade, données comprises), dont
+28 319 pour le JSON compressé seul (`classical_orders_implementation.md` §5).
+
+Pages servies par `index.html` : **neuf** générateurs — formes paramétriques, fenêtre gothique,
+cinq ordres, micro architecture, image to puzzle, blocs pixelisés, extrusion SVG, texte 3D, et le
+graphe nodal (seul à charger son module dans un Web Worker). Sept partagent `js/shell.js` ;
+l'extrusion SVG est un gabarit (`js/template.js`).
 
 ### 15.4 Deep-link
 
 Les query strings de capture automatisée sont conservées : `?shape=Torus` sur `shapes.html`,
-`?shape=Gothic%20Window&Rosette%20foil%20count=18` sur `gothic.html`. Les paramètres sont
+`?shape=Gothic%20Window&Rosette%20foil%20count=18` sur `gothic.html`,
+`?shape=Classical%20Column&Order=3` sur `orders.html` (un paramètre ENUM se donne par son indice :
+`Order` 0 à 4 = toscan, dorique, ionique, corinthien, composite). Les paramètres sont
 maintenant appliqués **avant** le premier rendu (`setShape(..., {deepLink:true})`), au lieu de
 rendre les valeurs par défaut puis de re-déclencher un chargement o3dv par-dessus — l'ancien
 enchaînement laissait le recadrage caméra calé sur la géométrie du premier chargement.

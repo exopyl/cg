@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cinq ordres — maker</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <aside class="panel" id="panel">
+    <div id="pageControls">
+      <section class="group">
+        <label class="lbl" for="catalog">Forme</label>
+        <select id="catalog"></select>
+        <p class="hint-sm">Colonnes toscane, dorique, ionique, corinthienne et composite
+          d'après Vignole (<i>Regola delli cinque ordini</i>, 1562), seules ou en
+          colonnade (<code>Columns</code>, à l'entraxe de Vignole) sous un entablement
+          filé, ornements compris (triglyphes, gouttes, mutules, denticules, modillons,
+          blocs). Le module est le demi-diamètre inférieur du fût ; <code>Module</code>
+          en fixe la taille.</p>
+      </section>
+
+      <section class="group">
+        <div class="lbl">Hors périmètre</div>
+        <p class="hint-sm">Profils et plans, congés du fût, volutes ioniques (douze
+          centres, pl. XX ; <code>Volutes</code>), à canal plat et sans ceinture, et
+          cannelures en option (<code>Flutes</code>, décochée : Vignole montre des fûts
+          lisses sur ses planches d'ordre ; <code>Doric flutes</code> : A, arc de 60°, ou
+          B, demi-cercle). Non modélisés : volutes composites, feuilles d'acanthe,
+          caulicoles, fleurons, décor des métopes, console en S des modillons, pommes
+          de pin et éléments d'angle, caissons et rosaces des plafonds, rudentures. La
+          colonne seule porte son entablement en ressaut carré ; la colonnade, un
+          entablement filé en coupe symétrique. Les cornes de l'abaque corinthien sont
+          vives. Les ornements à deux surfaces
+          (corbeille et feuillages) sont rendus par leur noyau ou, avec
+          <code>Ornament envelope</code>, par leur enveloppe.</p>
+      </section>
+    </div>
+  </aside>
+
+  <main id="viewer" class="viewer">
+    <div id="viewerHint" class="hint">Chargement du module…</div>
+  </main>
+
+  <script type="module" src="./js/pages/orders.js"></script>
+</body>
+</html>

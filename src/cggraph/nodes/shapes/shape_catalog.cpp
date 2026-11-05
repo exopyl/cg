@@ -1,5 +1,6 @@
 #include "shape_catalog.h"
 
+#include <cgarchi/classical_parametric_catalog.h>
 #include <cgarchi/gothic_parametric_catalog.h>
 #include "../../../cgmesh/parametric_catalog.h"
 
@@ -11,10 +12,12 @@ const std::vector<ParametricShapeEntry> &CatalogShapes ()
 	static const std::vector<ParametricShapeEntry> entries = [] {
 		const std::vector<ParametricShapeEntry> &generic = ParametricShapes ();
 		const std::vector<ParametricShapeEntry> &gothic  = cgarchi::GothicParametricShapes ();
+		const std::vector<ParametricShapeEntry> &classic = cgarchi::ClassicalParametricShapes ();
 		std::vector<ParametricShapeEntry> all;
-		all.reserve (generic.size () + gothic.size ());
+		all.reserve (generic.size () + gothic.size () + classic.size ());
 		all.insert (all.end (), generic.begin (), generic.end ());
 		all.insert (all.end (), gothic.begin (), gothic.end ());
+		all.insert (all.end (), classic.begin (), classic.end ());
 		return all;
 	}();
 	return entries;

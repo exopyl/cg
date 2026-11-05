@@ -220,7 +220,7 @@ TEST (TEST_cggraph_nodes_catalog, the_native_only_entries_are_named_one_by_one)
 	}
 
 	// Les six premiers, dans l'ordre : maillage et texte. Les GENERATEURS
-	// suivent -- 26 formes par l'adaptateur generique, la fenetre gothique par
+	// suivent -- 28 formes par l'adaptateur generique, la fenetre gothique par
 	// son descripteur ecrit a la main, cinq profils --, tous portables eux
 	// aussi : leurs corps vivent dans parameterized_shapes.cpp et dans les
 	// generateurs qu'il appelle, tous dans la liste EMSCRIPTEN de cgmesh.
@@ -283,7 +283,7 @@ TEST (TEST_cggraph_nodes_catalog, the_native_only_entries_are_named_one_by_one)
 		if (std::string (entry.category) == "Image") ++images;
 	}
 
-	EXPECT_EQ (shapes, 27u);      // 26 generiques + la fenetre gothique
+	EXPECT_EQ (shapes, 29u);      // 28 generiques + la fenetre gothique
 	EXPECT_EQ (profiles, 5u);
 	// HUIT depuis le selecteur de profil, qui rejoint ceux de maillage et de
 	// contours : flow.select.mesh et flow.select.contours
@@ -315,8 +315,12 @@ TEST (TEST_cggraph_nodes_catalog, the_native_only_entries_are_named_one_by_one)
 	// Le CHEMIN COLORE en ajoute un dernier : svg.extrude.colored, monolithique
 	// la ou svg.contours + shape.extrude sont deux etages. Les deux voies
 	// coexistent -- retirer la premiere casserait les documents enregistres.
-	EXPECT_EQ (portable.size (), 63u);
-	EXPECT_EQ (Catalog ().size (), 70u);
+	//
+	// La COLONNE et la COLONNADE CLASSIQUES (shape.classical.*) sont
+	// portables : cgarchi est lie par maker et compile entierement sous
+	// Emscripten.
+	EXPECT_EQ (portable.size (), 65u);
+	EXPECT_EQ (Catalog ().size (), 72u);
 }
 
 TEST (TEST_cggraph_nodes_catalog, every_entry_either_carries_a_caveat_or_declares_it_has_none)

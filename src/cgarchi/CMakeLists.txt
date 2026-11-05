@@ -4,12 +4,33 @@ project(libcgarchi)
 
 # Architecture gothique : remplage parametrique, region de pierre, fusion des
 # barres de moulure, formes parametriques gothiques et leur serialisation.
+# Architecture classique : les cinq ordres de Vignole (classical_*).
 # Toutes les sources se compilent aussi sous Emscripten (maker lie cette cible) :
 # aucune n'est reservee au natif.
 file(GLOB SRC_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/*.cpp)
 file(GLOB HEADER_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/*.h)
 
 add_library(cgarchi STATIC ${HEADER_FILES} ${SRC_FILES})
+
+# Donnees des cinq ordres (Vignole), embarquees dans le binaire : les formes du
+# catalogue parametrique ne lisent aucun fichier (parametric_catalog.h). Le JSON
+# est la copie a l'identique de la source documentaire ; la source C++ qui le
+# porte est regeneree quand il change.
+set(CGARCHI_ORDERS_JSON "${PROJECT_SOURCE_DIR}/data/cinq_ordres.json")
+set(CGARCHI_ORDERS_CPP  "${CMAKE_CURRENT_BINARY_DIR}/generated/classical_orders_data.cpp")
+add_custom_command(
+    OUTPUT  "${CGARCHI_ORDERS_CPP}"
+    COMMAND ${CMAKE_COMMAND}
+            -DINPUT=${CGARCHI_ORDERS_JSON}
+            -DOUTPUT=${CGARCHI_ORDERS_CPP}
+            -DNAMESPACE=cgarchi
+            -DFUNCTION=ClassicalOrdersJson
+            -DHEADER=cgarchi/classical_orders_data.h
+            -P "${PROJECT_SOURCE_DIR}/embed_file.cmake"
+    DEPENDS "${CGARCHI_ORDERS_JSON}" "${PROJECT_SOURCE_DIR}/embed_file.cmake"
+    COMMENT "Embedding data/cinq_ordres.json"
+    VERBATIM)
+target_sources(cgarchi PRIVATE "${CGARCHI_ORDERS_CPP}")
 
 # Inclusions : `#include <cgarchi/x.h>` depuis partout, comme cgmath et cgimg.
 # BUILD_INTERFACE seul : le module n'installe aucun en-tete.

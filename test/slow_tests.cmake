@@ -5,7 +5,9 @@
 # d'ou list(FIND).
 foreach (name
     TEST_cgmesh_implicit_surface.cache_and_direct_evaluation_agree_beyond_float_indices
-    TEST_cgmesh_implicit_surface.cache_and_direct_evaluation_agree_over_several_layers)
+    TEST_cgmesh_implicit_surface.cache_and_direct_evaluation_agree_over_several_layers
+    TEST_cgarchi_classical_orders.every_configuration_lathes_into_a_closed_valid_solid_at_the_default_resolution
+    TEST_cgarchi_classical_flutes.every_fluted_configuration_lathes_into_a_valid_solid_at_the_default_resolution)
   list (FIND TU_TESTS "${name}" index)
   if (NOT index EQUAL -1)
     set_tests_properties ("${name}" PROPERTIES LABELS slow)
