@@ -39,6 +39,13 @@ target_include_directories(cgimg PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>)
 target_compile_features(cgimg PUBLIC cxx_std_17)
 
+# Avertissements portes par la cible, sans -Werror : le niveau ne fuit pas vers
+# les consommateurs (PRIVATE), et un compilateur plus recent ne casse pas le
+# build sur un avertissement nouveau.
+target_compile_options(cgimg PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall;-Wextra>
+    $<$<CXX_COMPILER_ID:MSVC>:/W4>)
+
 # PUBLIC, et non la forme sans mot-cle : `image.h` inclut `cgmath.h`, donc tout
 # consommateur de cgimg compile contre cgmath. La forme historique laissait la
 # dependance passer transitivement sans etre declaree.

@@ -716,33 +716,71 @@ TEST(TEST_cgmesh_print_validation, scale_unset_record_obeys_the_record_cap)
 
 // --- cout ---------------------------------------------------------------------
 
-// Grille de 60 x 60 cellules de 1 mm, barreaux de 0,2 mm, dans un cadre de
-// 2 mm : un seul morceau du reste a 3 600 trous.
-TEST(TEST_cgmesh_print_validation, dense_lattice_is_checked_in_well_under_a_second)
+namespace
 {
-    const int n = 60;
-    const double w = 0.2, l = n * 1.0 + w;
-    std::vector<ExtrudeContour> region(1);
-    region[0].pts = rectMm(-2, -2, l + 2, l + 2);
-    for (int i = 0; i < n; ++i)
-        for (int j = 0; j < n; ++j)
-        {
-            ExtrudeContour h;
-            h.pts = reversed(rectMm(i + w, j + w, i + 1.0, j + 1.0));
-            region.push_back(h);
-        }
+    // Grille de n x n cellules de 1 mm, barreaux de 0,2 mm, dans un cadre de
+    // 2 mm : un seul morceau du reste a n^2 trous.
+    std::vector<ExtrudeContour> latticeMm(int n)
+    {
+        const double w = 0.2, l = n * 1.0 + w;
+        std::vector<ExtrudeContour> region(1);
+        region[0].pts = rectMm(-2, -2, l + 2, l + 2);
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j)
+            {
+                ExtrudeContour h;
+                h.pts = reversed(rectMm(i + w, j + w, i + 1.0, j + 1.0));
+                region.push_back(h);
+            }
+        return region;
+    }
+
+    double checkMs(const std::vector<ExtrudeContour> &region, const PrintConstraints &c)
+    {
+        const auto t0 = std::chrono::steady_clock::now();
+        const PrintabilityReport r = CheckPrintRegion(region, c);
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        EXPECT_GE(r.Count(PrintDefect::ThinWall), 1u);
+        return ms;
+    }
+
+    double median(std::vector<double> v)
+    {
+        std::sort(v.begin(), v.end());
+        return v[v.size() / 2];
+    }
+}
+
+// Le cout est juge par sa CROISSANCE, pas par une duree : grille de 15 x 15
+// puis de 30 x 30, soit quatre fois plus de trous. Un cout lineaire ou en
+// n log n donne un rapport de 4 a 5, un cout quadratique en nombre de trous un
+// rapport de 16 ; le seuil de 8 separe les deux familles sans dependre de la
+// vitesse de la machine. Chaque paire mesure les deux tailles l'une apres
+// l'autre, de sorte qu'une charge passagere frappe les deux termes du meme
+// rapport, et la mediane des rapports ecarte la paire qu'elle a desequilibree.
+TEST(TEST_cgmesh_print_validation, dense_lattice_cost_grows_quasi_linearly_with_the_holes)
+{
+    const std::vector<ExtrudeContour> small = latticeMm(15), large = latticeMm(30);
     PrintConstraints c;
     c.mmPerUnit = 1.0;
-    const auto t0 = std::chrono::steady_clock::now();
-    const PrintabilityReport r = CheckPrintRegion(region, c);
-    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-    RecordProperty("check_ms_lattice_60", std::to_string(ms));
-    EXPECT_GE(r.Count(PrintDefect::ThinWall), 1u);
+
+    const int kPairs = 5;
+    std::vector<double> msSmall, msLarge, ratios;
+    for (int k = 0; k < kPairs; ++k)
+    {
+        msSmall.push_back(checkMs(small, c));
+        msLarge.push_back(checkMs(large, c));
+        ratios.push_back(msLarge.back() / msSmall.back());
+    }
+    const double growth = median(ratios);
+    RecordProperty("check_ms_lattice_15", std::to_string(median(msSmall)));
+    RecordProperty("check_ms_lattice_30", std::to_string(median(msLarge)));
+    RecordProperty("check_growth_15_to_30", std::to_string(growth));
 #if defined(NDEBUG) && !defined(CG_SANITIZERS_ENABLED) && !defined(__SANITIZE_ADDRESS__)
-    // Borne de temps sur build optimisee sans sanitizer seulement : en Debug ou
-    // sous ASan (CG_ENABLE_SANITIZERS, qui garde NDEBUG en Release), le cout est
+    // Rapport asserte sur build optimisee sans sanitizer seulement : en Debug ou
+    // sous ASan (CG_ENABLE_SANITIZERS, qui garde NDEBUG en Release), il est
     // mesure (propriete) mais pas asserte.
-    EXPECT_LT(ms, 1000.0);
+    EXPECT_LT(growth, 8.0) << "15 x 15 : " << median(msSmall) << " ms, 30 x 30 : " << median(msLarge) << " ms";
 #endif
 }
 

@@ -185,6 +185,11 @@ set(ENABLE_ZLIB On CACHE BOOL "Enable zlib (vendored extern/zlib-1.3.2); require
 set(ZLIB_DIR "${CMAKE_SOURCE_DIR}/extern/zlib-1.3.2" CACHE PATH "Path to the vendored zlib source tree.")
 set(ENABLE_SULINA Off CACHE BOOL "Compile sulina (Qt 6 + Vulkan, via cgre2).")
 
+# Bancs de performance (bench/, Google Benchmark versionne sous extern/). DEFAUT
+# Off : desactivee, l'option n'ajoute ni cible ni sous-repertoire.
+set(ENABLE_BENCHMARKS Off CACHE BOOL "Build the cg_bench performance benchmarks (vendored Google Benchmark).")
+set(BENCHMARK_DIR "${CMAKE_SOURCE_DIR}/extern/benchmark-1.10.0" CACHE PATH "Path to the vendored Google Benchmark source tree.")
+
 # Canvas nodal ImGui et son hote natif. DEFAUT Off : l'option ajoute des cibles
 # et un executable dont la plupart des configurations n'ont que faire. Elle
 # n'ajoute PLUS d'exigence de reseau -- ses trois tierces sont versionnees sous
@@ -278,6 +283,37 @@ endif ()
 if ( NOT EMSCRIPTEN )
 	enable_testing()
 	add_subdirectory(test)
+endif ()
+
+# Bancs : ni sous Emscripten, ni sans l'option, ni sous sanitizers (plus bas).
+# Google Benchmark est construit sans ses tests (ni googletest), sans cible
+# d'installation, et sans -Werror / -WX : un compilateur plus recent ne doit pas
+# casser le build sur une tierce.
+# Variables normales, lues par option() (CMP0077) : elles ne touchent pas le
+# cache. EXCLUDE_FROM_ALL : seule cg_bench tire la bibliotheque.
+#
+# CRT sous MSVC : benchmark, gtest (gtest_force_shared_crt) et le depot
+# compilent tous trois en /MD, valeur par defaut de CMAKE_MSVC_RUNTIME_LIBRARY.
+#
+# Sanitizers : cg_bench remplace l'operator new global par
+# malloc / free (bench/allocation_counter.cpp), ce qui retire a ASan ses
+# controles alloc-dealloc-mismatch et new-delete-type-mismatch -- la raison
+# pour laquelle test/CMakeLists.txt ecarte TU_faults -- et une mesure sous
+# sanitizer ne vaut rien. Exclusion, annoncee par un avertissement.
+if ( ENABLE_BENCHMARKS AND CG_ENABLE_SANITIZERS )
+	message(WARNING "ENABLE_BENCHMARKS ignore sous CG_ENABLE_SANITIZERS : cg_bench n'est pas construit.")
+endif ()
+if ( ENABLE_BENCHMARKS AND NOT EMSCRIPTEN AND NOT CG_ENABLE_SANITIZERS )
+	if (NOT EXISTS "${BENCHMARK_DIR}/include/benchmark/benchmark.h")
+		message(FATAL_ERROR "ENABLE_BENCHMARKS : benchmark.h introuvable sous ${BENCHMARK_DIR}/include")
+	endif ()
+	set(BENCHMARK_ENABLE_TESTING OFF)
+	set(BENCHMARK_ENABLE_GTEST_TESTS OFF)
+	set(BENCHMARK_ENABLE_INSTALL OFF)
+	set(BENCHMARK_INSTALL_DOCS OFF)
+	set(BENCHMARK_ENABLE_WERROR OFF)
+	add_subdirectory(${BENCHMARK_DIR} ${CMAKE_BINARY_DIR}/extern/benchmark EXCLUDE_FROM_ALL)
+	add_subdirectory(bench)
 endif ()
 
 

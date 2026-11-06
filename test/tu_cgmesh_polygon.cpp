@@ -1,6 +1,8 @@
 #include <cmath>
 #include <cstring>
 #include <cstdio>
+#include <algorithm>
+#include <string>
 
 #include <gtest/gtest.h>
 
@@ -1581,16 +1583,23 @@ TEST(TEST_cgmesh_polygon, GeneralizedBarycentricCoordinates_SumToOne)
 }
 
 // ---------------------------------------------------------------------------
-// TEST: dump (just verify it does not crash)
+// TEST: dump writes one header per contour and one line per point
 // ---------------------------------------------------------------------------
-TEST(TEST_cgmesh_polygon, Dump_DoesNotCrash)
+TEST(TEST_cgmesh_polygon, Dump_PrintsEveryContourPoint)
 {
 	// context
 	Polygon2 pol;
 	make_unit_square(pol);
 
-	// action & expectations -- no crash
+	// action
+	testing::internal::CaptureStdout();
 	pol.dump();
+	const std::string out = testing::internal::GetCapturedStdout();
+
+	// expectations
+	EXPECT_NE(out.find("contour 0 / 1"), std::string::npos) << out;
+	EXPECT_EQ(std::count(out.begin(), out.end(), '\n'), 5) << out;
+	EXPECT_NE(out.find(" 1.000000 1.000000"), std::string::npos) << out;
 }
 
 // ---------------------------------------------------------------------------

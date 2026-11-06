@@ -43,7 +43,7 @@ public:
 	void At (double t, double &radius, double &y) const;
 
 private:
-	double m_H, m_upper, m_cd, m_e;
+	double m_H, m_cd, m_e;
 };
 
 // CD qui donne un rayon `lowerRadius` au pied du fut (y = 0). C'est la regle du

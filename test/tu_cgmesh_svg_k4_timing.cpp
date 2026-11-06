@@ -25,17 +25,19 @@
 //
 // Et surtout R6 : sous G2 (noeud monolithique `svg.extrude.colored`), `depth`
 // devient un parametre du noeud qui fait l'import ET les booleens, donc toucher
-// `depth` invalide sa signature de cache et rejoue TOUT (sec. 11.3). Le
-// chronometre compare les deux couts -- rejeu complet contre rejeu du seul
-// poste (c), qui est ce que le graphe etage rend gratuit aujourd'hui.
+// `depth` invalide sa signature de cache et rejoue TOUT (sec. 11.3). QUI est
+// recalcule se compte dans le cache de l'evaluateur, sans chronometre
+// (tu_cggraph_svg_k5_colored.cpp). Ce fichier mesure ce que pese l'epargne :
+// le poste (c) seul, que le graphe etage rejoue, contre le pipeline entier.
 //
 // ---------------------------------------------------------------------------
 //  Ce que K4 ne fait pas
 // ---------------------------------------------------------------------------
 // Il ne juge pas la geometrie : un chronometre ne dit rien de la qualite du
-// resultat. Il n'assere aucune duree -- une machine plus lente ferait echouer
-// la suite sans rien apprendre. Les durees sont PUBLIEES ; la decision revient
-// a l'utilisateur, conformement a la regle de bascule de D6.
+// resultat. Il n'assere aucune duree absolue -- une machine plus lente ferait
+// echouer la suite sans rien apprendre. Les durees sont PUBLIEES ; la decision
+// revient a l'utilisateur, conformement a la regle de bascule de D6. Seul R6
+// assere un RAPPORT de durees, mesurees par paires entrelacees (sec. 2).
 //
 // ⚠ nanosvg est instancie une seule fois dans le depot, par import_svg.cpp qui
 // definit NANOSVG_IMPLEMENTATION.
@@ -257,78 +259,85 @@ TEST(TEST_cgmesh_svg_k4, tiger_three_post_timing_consolidated)
 //  2 -- R6 : ce que coute un changement de `depth`
 // ============================================================================
 //
-// Sous le graphe ACTUEL (svg.contours -> shape.extrude), `depth` est un
+// Sous le graphe ETAGE (svg.contours -> shape.extrude), `depth` est un
 // parametre du noeud AVAL : la signature de `svg.contours` ne change pas, son
 // entree de cache ressert, et seul le poste (c) est rejoue (sec. 11.2).
 //
 // Sous G2, `depth` est un parametre du noeud MONOLITHIQUE : sa signature change,
 // son entree de cache est invalidee, et les trois postes sont rejoues.
 //
-// R6 est confirmee si le second cout egale celui d'un recalcul complet -- c'est
-// a dire s'il n'existe aucune economie residuelle qu'une implementation aurait
-// pu conserver.
+// QUI est recalcule est un compte de cache, tenu sans chronometre par
+// TEST_cggraph_svg_k5.r6_depth_change_costs_a_full_recompute_under_g2. Ce test
+// mesure ce que pese l'epargne : le poste (c) seul doit rester une fraction du
+// pipeline entier, sans quoi l'etagement n'epargnerait rien et R6 ne couterait
+// rien.
+//
+// Mesure par PAIRES entrelacees -- (c), G2 et reference l'un apres l'autre,
+// ordre alterne d'un tour a l'autre -- et jugee sur la mediane des rapports par
+// paire : une charge qui varie pese sur les termes d'une meme paire et
+// s'annule dans leur rapport.
 
-TEST(TEST_cgmesh_svg_k4, r6_depth_change_costs_a_full_recompute_under_g2)
+TEST(TEST_cgmesh_svg_k4, r6_staged_depth_change_replays_a_fraction_of_the_g2_recompute)
 {
     SvgExtrudeOptions opt = tigerOptions();
     opt.strokeOnFilledShapes = true;
     opt.perShapeMaterials    = true;
     opt.overlapPolicy        = SvgExtrudeOptions::OverlapPolicy::Subtract;
 
-    // Cout d'un changement de `depth` sous le graphe ETAGE d'aujourd'hui :
-    // les groupes resolus sont en cache, seule l'extrusion est refaite.
+    // Groupes resolus : l'etat que l'etagement garde en cache.
     std::vector<SvgShapeGroup> resolved;
     ASSERT_TRUE(svg_to_shape_groups(kTiger, opt, resolved));
     svg_subtract_overlaps(resolved, nullptr);
 
-    std::vector<double> staged;
-    for (int i = 0; i < kRuns; ++i)
+    auto monolithicMs = [&](const SvgExtrudeOptions& o) -> double
     {
-        SvgExtrudeOptions o = opt;
-        o.height = 0.05f + 0.01f * (float)i;   // la profondeur change a chaque tour
-        staged.push_back(tessellateMs(resolved, o.height));
-    }
-
-    // Cout d'un changement de `depth` sous G2 : le pipeline entier, palette
-    // comprise, exactement ce que `svg.extrude.colored` recalculerait.
-    std::vector<double> monolithic;
-    for (int i = 0; i < kRuns; ++i)
-    {
-        SvgExtrudeOptions o = opt;
-        o.height = 0.05f + 0.01f * (float)i;
         const auto t0 = std::chrono::steady_clock::now();
         std::unique_ptr<Mesh> m(import_svg_extruded(kTiger, o));
         const double ms = msSince(t0);
-        ASSERT_NE(m, nullptr);
-        monolithic.push_back(ms);
-    }
+        EXPECT_NE(m, nullptr);
+        return ms;
+    };
 
-    // Recalcul complet de reference : un changement de `flattenTol`, qu'aucun
-    // etagement ne protege (sec. 11.7). C'est la borne a laquelle comparer.
-    std::vector<double> full;
+    std::vector<double> staged, monolithic, full, stagedOverMono, monoOverFull;
     for (int i = 0; i < kRuns; ++i)
     {
-        SvgExtrudeOptions o = opt;
-        o.flattenTol = 0.005f + 0.0001f * (float)i;
-        const auto t0 = std::chrono::steady_clock::now();
-        std::unique_ptr<Mesh> m(import_svg_extruded(kTiger, o));
-        const double ms = msSince(t0);
-        ASSERT_NE(m, nullptr);
-        full.push_back(ms);
+        SvgExtrudeOptions depthMoved = opt;
+        depthMoved.height = 0.05f + 0.01f * (float)i;
+        SvgExtrudeOptions tolMoved = opt;
+        tolMoved.flattenTol = 0.005f + 0.0001f * (float)i;
+
+        double s, m, f;
+        if (i % 2 == 0)
+        {
+            s = tessellateMs(resolved, depthMoved.height);
+            m = monolithicMs(depthMoved);
+            f = monolithicMs(tolMoved);
+        }
+        else
+        {
+            f = monolithicMs(tolMoved);
+            m = monolithicMs(depthMoved);
+            s = tessellateMs(resolved, depthMoved.height);
+        }
+        staged.push_back(s);
+        monolithic.push_back(m);
+        full.push_back(f);
+        stagedOverMono.push_back(s / m);
+        monoOverFull.push_back(m / f);
     }
 
     const Stat sStaged = summarize(staged);
     const Stat sMono   = summarize(monolithic);
     const Stat sFull   = summarize(full);
+    const Stat rStaged = summarize(stagedOverMono);
+    const Stat rMono   = summarize(monoOverFull);
 
     std::cout << "  Cout d'un mouvement de curseur sur le Tigre (D7, M2a), ms :\n";
     printStat("depth, graphe etage",    sStaged);
     printStat("depth, G2 monolithique", sMono);
     printStat("flattenTol (reference)", sFull);
-    std::cout << "    rapport G2 / recalcul complet : "
-              << (sMono.median / sFull.median) << "\n"
-              << "    rapport G2 / etage            : "
-              << (sMono.median / sStaged.median) << "\n"
+    std::cout << "    mediane des rapports G2 / recalcul complet : " << rMono.median << "\n"
+              << "    mediane des rapports etage / G2            : " << rStaged.median << "\n"
               << "    surcout absolu de la regression R6 : "
               << (sMono.median - sStaged.median) << " ms" << std::endl;
 
@@ -336,13 +345,9 @@ TEST(TEST_cgmesh_svg_k4, r6_depth_change_costs_a_full_recompute_under_g2)
     RecordProperty("msDepthG2",     (int)sMono.median);
     RecordProperty("msFullRecompute", (int)sFull.median);
 
-    // Ce que le test etablit, et rien de plus : sous G2 un changement de `depth`
-    // coute le meme ordre qu'un recalcul complet, alors que l'etagement le
-    // ramenait a une fraction. Les bornes sont larges a dessein -- elles
-    // qualifient un rapport, pas une machine.
-    EXPECT_LT(sMono.median, 1.5 * sFull.median);
-    EXPECT_GT(sMono.median, 0.5 * sFull.median);
-    EXPECT_LT(sStaged.median, 0.5 * sMono.median);
+    // 0,5 est le point ou l'etagement n'epargnerait plus que la moitie du
+    // cout. La valeur observee est publiee ci-dessus.
+    EXPECT_LT(rStaged.median, 0.5);
 }
 
 // ============================================================================

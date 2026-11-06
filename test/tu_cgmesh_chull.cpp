@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include "../src/cgmesh/cgmesh.h"
+#include "../src/cgmesh/mesh_validation.h"
 
 // ---------------------------------------------------------------------------
 // Helper: build a regular tetrahedron
@@ -388,7 +389,7 @@ TEST(TEST_cgmesh_chull, CubeWithInterior_HullVerticesMatchInput)
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// TEST: export_obj -- produces a valid file
+// TEST: export_obj -- the file reloads as the closed, outward unit cube
 // ---------------------------------------------------------------------------
 TEST(TEST_cgmesh_chull, ExportObj_ProducesFile)
 {
@@ -401,10 +402,19 @@ TEST(TEST_cgmesh_chull, ExportObj_ProducesFile)
 	ch.export_obj(filename);
 
 	// expectations
-	FILE *f = fopen(filename, "r");
-	EXPECT_NE(f, nullptr);
-	if (f)
-		fclose(f);
+	Mesh reloaded;
+	ASSERT_EQ(reloaded.load(filename), 0);
+	EXPECT_EQ(reloaded.GetNVertices(), 8u);
+	EXPECT_EQ(reloaded.GetNFaces(), 12u);
+	const MeshValidationReport r = ValidateMesh(reloaded);
+	EXPECT_TRUE(r.IsValid());
+	EXPECT_EQ(r.components, 1u);
+	EXPECT_NEAR(r.signedVolume, 1.0, 1e-6);
+	for (int k = 0; k < 3; ++k)
+	{
+		EXPECT_NEAR(r.bbMin[k], 0.0, 1e-6) << k;
+		EXPECT_NEAR(r.bbMax[k], 1.0, 1e-6) << k;
+	}
 }
 
 // ---------------------------------------------------------------------------

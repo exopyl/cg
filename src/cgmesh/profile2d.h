@@ -1,39 +1,46 @@
 #pragma once
 
 // ============================================================================
-//  Profile2D -- une section de moulure, valeur partagee
+//  Profile2D -- section de moulure en (u, v), type partage
 // ============================================================================
 //
-// Trois chantiers demandaient la meme chose sans se connaitre : la moulure des
-// bords de champ du gothique, le biseau du texte 3D, la section balayee le long
-// d'un chemin. Chacun l'avait ecrite dans son coin -- le gothique sous la forme
-// d'un couple (chamW, chamD) et d'un menu a cinq positions, la these de Havemann
-// sous celle d'un catalogue de sections fermees. Le type est ici, et les
-// producteurs de profils cessent d'etre une enumeration figee : une famille de
-// fonctions libres, qu'un appelant etend sans toucher au consommateur.
+// Profile2D est la section 2D commune aux profils d'ebrasement et de barre. Le
+// type ne porte que la forme. Les producteurs sont des fonctions libres
+// (ci-dessous) : un appelant en ajoute sans toucher aux consommateurs.
 //
-// UNITES ET REPERE -- c'est le point qui ne se devine pas :
+// Consommateurs :
+//   - cgmesh : extrudeProfiledToMesh (ici) et extrudeProfiledContours
+//     (extrude_profiled.h), pour les profils d'ebrasement ;
+//   - cgarchi : la fenetre gothique parametree, qui passe l'ebrasement a
+//     extrudeProfiledToMesh et la barre a fuseBarsOnPlate ou, par ses points, au
+//     balayage des bords de champ (buildBayMoulding et ses deux moities
+//     collectBayMouldingOutlines / sweepBayMoulding) ; extrudeMoulureAlongCurve ;
+//   - cggraph/nodes : produit par les noeuds `profile.*` (shapes/profile.cpp),
+//     lu par les noeuds `extrude_profiled` et `gothic_window`.
+// Les noms hors de cgmesh ne sont pas verifies par le compilateur.
+//
+// UNITES ET REPERE :
 //
 //   u = enfoncement SOUS la face de reference, positif vers l'arriere ;
 //   v = decalage dans le plan, positif vers la matiere.
 //
-// u est RELATIF. Le code du gothique ecrivait ses sections de barre en z ABSOLU
-// (`zF + 1.2 * rb`), ce qui liait la section a la profondeur d'extrusion de la
-// baie et interdisait de la produire ailleurs. Ici le profil est une forme ; son
-// PLACEMENT appartient au consommateur, qui ajoute la cote de sa face.
+// u est RELATIF : le profil est une forme, son PLACEMENT appartient au
+// consommateur, qui ajoute la cote de sa face (translatedInU).
 //
 // Deux familles, qui ne se substituent pas l'une a l'autre :
 //
 //   - profil d'EBRASEMENT (ouvert) : polyligne partant de (0, 0), consommee par
-//     extrudeProfiledToMesh. Le premier point est sur la face avant, le dernier
-//     donne l'anneau decale qui descend ensuite droit jusqu'au fond ;
-//   - profil de BARRE (ferme) : boucle consommee par sweepProfileAlongArc* et
-//     buildBayMoulding, balayee le long d'un chemin.
+//     extrudeProfiledToMesh et extrudeProfiledContours. Le premier point est sur
+//     la face avant, le dernier donne l'anneau decale qui descend ensuite droit
+//     jusqu'au fond ;
+//   - profil de BARRE (ferme) : boucle balayee le long d'un chemin. Les
+//     balayages (sweepProfileAlongArc*, buildBayMoulding) en recoivent les
+//     points (`points`), pas le type.
 //
 // Rien dans le type ne distingue les deux : c'est le CONSOMMATEUR qui fixe la
-// lecture, exactement comme aujourd'hui. La couche nodale, elle, les separe par
-// deux types de port distincts -- une barre branchee sur un ebrasement est
-// refusee a la connexion plutot que silencieusement mal lue.
+// lecture. La couche nodale les separe par deux types de port distincts : une
+// barre branchee sur un ebrasement est refusee a la connexion plutot que
+// silencieusement mal lue.
 //
 #include <vector>
 

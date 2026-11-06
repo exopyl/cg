@@ -33,7 +33,8 @@ enum class Order { Tuscan, Doric, Ionic, Corinthian, Composite };
 constexpr int kOrderCount = 5;
 
 // Cle de l'ordre dans le JSON : "toscan", "dorique", "ionique", "corinthien",
-// "composite".
+// "composite" ; "" pour une valeur hors enumeration. Litteral statique, valide
+// pour la duree du programme.
 const char *OrderKey (Order order);
 
 // conventions.plans du JSON.
@@ -287,11 +288,14 @@ enum class EntablatureOrnament { Dentils, Mutules, Modillions, Blocks };
 struct OrderData;
 double AxisSpacing (const OrderData &order);
 
-// Table du lien ornement -> membre ; nul si l'ordre n'a pas cet ornement.
+// Table du lien ornement -> membre ; nul si l'ordre n'a pas cet ornement. Le
+// pointeur designe une table statique : valide pour la duree du programme, a ne
+// pas liberer.
 const OrnamentMember *EntablatureOrnamentMember (const std::string &orderKey, EntablatureOrnament ornament);
 
 // Le membre lie (EntablatureOrnamentMember) dans les donnees de l'ordre. Leve
-// std::invalid_argument s'il est absent.
+// std::invalid_argument s'il est absent. La reference designe un membre de
+// `order` : valide tant que `order` vit et que ses blocs ne changent pas.
 const Member &LinkedOrnamentMember (const OrderData &order, EntablatureOrnament ornament);
 
 struct OrderData
@@ -305,7 +309,8 @@ struct OrderData
 	std::optional<FluteData> flutes;            // ornements.cannelures, si present
 	EntablatureOrnaments entablatureOrnaments;
 
-	// Nul si le bloc n'existe pas pour cet ordre.
+	// Nul si le bloc n'existe pas pour cet ordre. Pointeur sans propriete dans
+	// `blocks`, valide tant que l'OrderData vit et que `blocks` ne change pas.
 	const Block *FindBlock (std::string_view key) const;
 };
 
@@ -343,11 +348,14 @@ struct OrdersData
 	const OrderData &Get (Order order) const { return orders[static_cast<int> (order)]; }
 };
 
-// Lecture stricte d'un texte JSON au format de cinq_ordres.json.
+// Lecture stricte d'un texte JSON au format de cinq_ordres.json ; resultat rendu
+// par valeur, longueurs en parties. Leve std::runtime_error (voir l'en-tete).
 OrdersData ParseClassicalOrders (std::string_view jsonText);
 
 // Les donnees embarquees, lues une fois. Une lecture en echec leve a chaque
-// appel.
+// appel. La reference designe un objet statique local : valide pour la duree du
+// programme, premiere lecture sure entre fils (initialisation d'une statique
+// locale).
 const OrdersData &ClassicalOrders ();
 
 // Valeur d'un nombre ecrit « a/b », « a » ou en decimal. Leve
@@ -370,7 +378,8 @@ struct ControlCheck
 // + s)). Les « mesure sur la gravure » ne le sont pas : computable = false.
 // Leve std::invalid_argument si le champ « attendu » d'un controle
 // recalculable n'est pas un nombre (ParseExactNumber) : un controle illisible
-// n'est pas un controle passe.
+// n'est pas un controle passe. Chaque ControlCheck::control pointe dans
+// data.controls : valide tant que `data` vit et que sa liste ne change pas.
 std::vector<ControlCheck> RecomputeControls (const OrdersData &data);
 
 } // namespace classical

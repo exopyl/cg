@@ -35,13 +35,12 @@ jobs:
           mv cgbinaries-*-linux-x86_64/* cg_binaries/
           rm -rf cgbinaries-*-linux-x86_64 cgbinaries-*-linux-x86_64.zip
 
-      - name: Install Ninja + GTest + OCCT
+      - name: Install Ninja + OCCT
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             ninja-build \
             zlib1g-dev \
-            libgtest-dev libgmock-dev \
             libocct-foundation-dev \
             libocct-modeling-data-dev \
             libocct-modeling-algorithms-dev \
@@ -126,13 +125,12 @@ jobs:
           mv cgbinaries-*-linux-x86_64/* cg_binaries/
           rm -rf cgbinaries-*-linux-x86_64 cgbinaries-*-linux-x86_64.zip
 
-      - name: Install Ninja + GTest + OCCT
+      - name: Install Ninja + OCCT
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             ninja-build \
             zlib1g-dev \
-            libgtest-dev libgmock-dev \
             libocct-foundation-dev \
             libocct-modeling-data-dev \
             libocct-modeling-algorithms-dev \
@@ -201,10 +199,10 @@ jobs:
           mv cgbinaries-*-linux-x86_64/* cg_binaries/
           rm -rf cgbinaries-*-linux-x86_64 cgbinaries-*-linux-x86_64.zip
 
-      - name: Install Ninja + GTest + OCCT
+      - name: Install Ninja + OCCT
         run: |
           sudo apt-get update
-          sudo apt-get install -y             ninja-build             zlib1g-dev             libgtest-dev libgmock-dev             libocct-foundation-dev             libocct-modeling-data-dev             libocct-modeling-algorithms-dev             libocct-data-exchange-dev             libtbb-dev
+          sudo apt-get install -y             ninja-build             zlib1g-dev             libocct-foundation-dev             libocct-modeling-data-dev             libocct-modeling-algorithms-dev             libocct-data-exchange-dev             libtbb-dev
 
       - name: Install GLFW build dependencies
         # GLFW est versionne sous extern/, mais il se COMPILE contre les en-tetes
@@ -228,3 +226,221 @@ jobs:
           exe=build/ci-linux-boilerplate/cggraph-boilerplate/cggraph-boilerplate
           test -x "$exe"
           ls -l "$exe"
+
+  clang:
+    name: ci-linux-clang
+    runs-on: ubuntu-latest
+
+    # Ce que ce job prouve : le depot compile, lie et passe sa suite sous Clang,
+    # en Release, avec les memes options et les memes tierces que ci-linux.
+    # Le job SQ compile aussi avec Clang, mais en Debug instrumente pour la
+    # couverture et sur une configuration a part (coverage.sh) : il ne dit rien
+    # d'un build Clang optimise.
+    #
+    # Pas de -Werror (D7 du plan 1) : les warnings Clang se lisent dans le
+    # journal du build, prefixes par le chemin de l'unite qui les emet.
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download cg_binaries archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .deps/cg_binaries
+          cd .deps
+          gh release download "$CG_BINARIES_VERSION" \
+            --repo "${{ github.repository_owner }}/cg_binaries" \
+            --pattern 'cgbinaries-*-linux-x86_64.zip'
+          unzip -q cgbinaries-*-linux-x86_64.zip
+          mv cgbinaries-*-linux-x86_64/* cg_binaries/
+          rm -rf cgbinaries-*-linux-x86_64 cgbinaries-*-linux-x86_64.zip
+
+      - name: Install Clang + Ninja + OCCT
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            ninja-build \
+            zlib1g-dev \
+            libocct-foundation-dev \
+            libocct-modeling-data-dev \
+            libocct-modeling-algorithms-dev \
+            libocct-data-exchange-dev \
+            libtbb-dev
+          # OpenSCAD : meme regle que ci-linux (lanceur des tests .scad,
+          # --no-install-recommends borne a ce seul paquet).
+          sudo apt-get install -y --no-install-recommends openscad
+          openscad --version
+          clang++ --version
+
+      - name: Configure
+        run: cmake --preset ci-linux-clang
+
+      - name: Build
+        run: cmake --build --preset ci-linux-clang
+
+      - name: Test
+        # -j et CG_REQUIRE_OPENSCAD : memes raisons que l'etape Test de ci-linux.
+        env:
+          CG_REQUIRE_OPENSCAD: "1"
+        run: |
+          echo "nproc = $(nproc)"
+          ctest --preset ci-linux-clang -j "$(nproc)"
+
+  windows:
+    name: ci-windows (${{ matrix.config }})
+    # Image figee et non windows-latest : le preset ci-windows exige VS 2026
+    # (generateur Visual Studio 18 2026, binaires de cg_binaries lies par
+    # l'editeur de liens 14.50), et windows-latest change d'image sans preavis.
+    runs-on: windows-2025-vs2026
+
+    # Ce que ce job prouve : le depot compile, lie et passe sa suite sous MSVC,
+    # en Debug et en Release, contre les binaires Windows de cg_binaries -- la
+    # meme release que les jobs Linux (CG_BINARIES_VERSION).
+    #
+    # Le preset ci-windows herite du generateur Visual Studio 18 2026 : il exige
+    # un runner qui porte VS 2026. Les DLL d'OCCT, d'OpenNURBS et de lib3mf sont
+    # copiees a cote de TU.exe par test/CMakeLists.txt : aucun PATH a poser.
+    #
+    # OpenSCAD n'est pas installe sur ce runner et CG_REQUIRE_OPENSCAD n'est pas
+    # pose : les tests de l'import .scad y sont SAUTES (GTEST_SKIP), comme sur un
+    # poste sans OpenSCAD. Le lanceur de processus Windows n'est donc pas exerce
+    # par ce job.
+    #
+    # fail-fast desactive : un echec Debug ne doit pas annuler la Release, les
+    # deux colonnes se lisent separement.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - config: Debug
+            preset: ci-windows-debug
+          - config: Release
+            preset: ci-windows-release
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download cg_binaries archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .deps/cg_binaries
+          cd .deps
+          gh release download "$CG_BINARIES_VERSION" \
+            --repo "${{ github.repository_owner }}/cg_binaries" \
+            --pattern 'cgbinaries-*-windows-x86_64.zip'
+          7z x -y -bso0 -bsp0 cgbinaries-*-windows-x86_64.zip
+          mv cgbinaries-*-windows-x86_64/* cg_binaries/
+          rm -rf cgbinaries-*-windows-x86_64 cgbinaries-*-windows-x86_64.zip
+          ls cg_binaries
+
+      - name: Toolchain versions
+        # Versions de CMake et de Visual Studio de l'image : un echec du
+        # generateur Visual Studio 18 2026 a l'etape suivante se lit ici.
+        run: |
+          cmake --version
+          "/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" \
+            -latest -property catalog_productDisplayVersion
+
+      - name: Configure
+        run: cmake --preset ci-windows
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Test
+        # -j : nombre de processeurs du runner du jour, trace dans le log (cf.
+        # l'etape Test de ci-linux). Debug et Release partagent test-run dans un
+        # meme arbre ; ici chaque configuration a son propre runner.
+        run: |
+          echo "NUMBER_OF_PROCESSORS = $NUMBER_OF_PROCESSORS"
+          ctest --preset ${{ matrix.preset }} -j "$NUMBER_OF_PROCESSORS"
+
+  maker-wasm:
+    name: maker-wasm
+    runs-on: ubuntu-latest
+
+    # Ce que ce job prouve : maker se compile ET se lie sous Emscripten, et le
+    # module produit se charge, expose son catalogue de formes et rend pour
+    # chacune un maillage non vide, sans ecrire sur stderr
+    # (maker/tools/check_module.mjs).
+    #
+    # Runner Linux et preset ci-maker-wasm (Ninja) : le preset maker-wasm est en
+    # NMake, qui n'existe qu'avec Visual Studio. ci-maker-wasm en herite et ne
+    # change que le generateur ; la configuration WebAssembly reste unique.
+    #
+    # Le build ecrit maker.js et maker.wasm dans maker/web/, fichiers suivis par
+    # git. Ce job ne commite rien : ces fichiers n'existent que dans l'espace de
+    # travail du runner.
+    env:
+      # Version d'Emscripten figee, celle de l'emsdk de reference (D11). Sert de
+      # tag au depot emsdk et de version a installer.
+      EMSDK_VERSION: 6.0.8
+      # Cardinalites attendues du catalogue (listShapes) : toute forme ajoutee
+      # ou retiree doit les mettre a jour ici.
+      MAKER_EXPECTED_SHAPES: "29"
+      MAKER_EXPECTED_GOTHIC: "2"
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install Ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Install emsdk
+        run: |
+          set -euo pipefail
+          git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$EMSDK_VERSION" \
+            https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          cd "$RUNNER_TEMP/emsdk"
+          ./emsdk install "$EMSDK_VERSION"
+          ./emsdk activate "$EMSDK_VERSION"
+
+      - name: Remove committed module artefacts
+        # Les artefacts suivis par git sont retires AVANT le build : un build
+        # qui ne relierait pas maker laisserait sinon le harnais verifier la
+        # version commitee, et passer au vert sur un module qui n'est pas celui
+        # de ce commit.
+        run: rm -f maker/web/maker.js maker/web/maker.wasm
+
+      - name: Configure and build
+        # emsdk_env.sh n'agit que sur le shell qui le source : configuration et
+        # build partagent donc cette etape.
+        run: |
+          set -euo pipefail
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          emcc --version
+          ninja --version
+          cmake --preset ci-maker-wasm
+          cmake --build --preset ci-maker-wasm
+
+      - name: Assert the module exists
+        # C'est le fichier qui fait foi, pas le code de sortie du build.
+        run: |
+          set -euo pipefail
+          test -s maker/web/maker.js
+          test -s maker/web/maker.wasm
+          ls -l maker/web/maker.js maker/web/maker.wasm
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check the module
+        run: |
+          node --version
+          node maker/tools/check_module.mjs maker/web \
+            "$MAKER_EXPECTED_SHAPES" "$MAKER_EXPECTED_GOTHIC"

@@ -11,6 +11,11 @@ namespace cgarchi
 {
 
 // Reglages d'une colonne, communs a Classical Column et Classical Colonnade.
+// `module` est la longueur du module (demi-diametre inferieur du fut) en unites
+// de la scene. Les classes parametrees bornent les reglages a chaque Regenerate
+// (Module dans [0,1 ; 10], Radial segments dans [8 ; 256], Curve segments dans
+// [2 ; 32], enumerations ramenees dans leur domaine) ; BuildClassicalColumnMesh
+// ne les borne pas.
 struct ClassicalColumnSettings
 {
 	int   order = 0;              // classical::Order
@@ -27,8 +32,12 @@ struct ClassicalColumnSettings
 };
 
 // Maillage d'une colonne (tour sur plan, coussinets ioniques), axe Z, pied a
-// z = 0. `profile` et `conflicts`, s'ils sont fournis, recoivent le profil et
-// ses jonctions croisees. Leve en cas d'echec.
+// z = 0 ; une partie de module vaut settings.module / parties par module unites.
+// `profile` et `conflicts`, s'ils sont fournis, recoivent le profil (en parties)
+// et ses jonctions croisees. Le maillage rendu appartient a l'appelant.
+// Precondition NON VERIFIEE : settings.order dans [0, classical::kOrderCount)
+// (indice de tableau). Leve une std::exception en cas d'echec ; `*profile`
+// n'est alors pas ecrit, `*conflicts` peut l'avoir ete.
 std::unique_ptr<Mesh> BuildClassicalColumnMesh (const ClassicalColumnSettings &settings,
                                                 classical::ColumnProfile *profile = nullptr,
                                                 std::vector<classical::PlanConflict> *conflicts = nullptr);
@@ -37,6 +46,12 @@ std::unique_ptr<Mesh> BuildClassicalColumnMesh (const ClassicalColumnSettings &s
 // option piedestal et entablement, tournes sur leurs plans
 // (classical_lathe.h). Axe Z, pied a z = 0 ; une partie de module vaut
 // Module / parties par module unites.
+//
+// Le maillage appartient a l'objet (ParameterizedMesh) : GetMesh () est valide
+// jusqu'au Regenerate suivant ou a la destruction, TakeMesh () en cede la
+// propriete. Regenerate capture toute std::exception de la construction : en
+// echec, le maillage est vide, LastError () non vide, Profile () et
+// PlanConflicts () vides.
 //
 // Ionique : « Volutes » ajoute les deux coussinets a volutes du chapiteau
 // (classical_ionic_capital.h), coques fermees concatenees au tour, sans union.
@@ -58,7 +73,7 @@ public:
 	void Regenerate () override;
 	std::string GetName () const override { return "Classical Column"; }
 
-	// Profil du dernier Regenerate reussi.
+	// Profil du dernier Regenerate, en parties ; vide si celui-ci a echoue.
 	const classical::ColumnProfile &Profile () const { return m_profile; }
 
 	// Jonctions croisees du dernier profil (FindPlanConflicts) : traitees par le
@@ -91,6 +106,12 @@ private:
 // entablement file en coupe symetrique (classical_entablature.h), avec ses
 // ornements (classical_colonnade.h). Colonnes, entablement et familles
 // d'ornements sont des coques fermees concatenees, sans union.
+//
+// Repere de classical_colonnade.h (X le long de la colonnade, axes des colonnes
+// centres sur X = 0, Z vertical, pied a z = 0), mis a l'echelle comme la
+// colonne seule. Les colonnes n'ont jamais leur entablement propre. Propriete
+// du maillage et regime d'erreur : ceux de ParameterizedClassicalColumn (en
+// echec, maillage vide et LastError () non vide ; Warnings () vide).
 class ParameterizedClassicalColonnade : public ParameterizedMesh
 {
 public:

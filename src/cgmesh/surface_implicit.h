@@ -41,7 +41,7 @@ public:
 			vmax.fX = max[0]; vmax.fY = max[1]; vmax.fZ = max[2];
 		};
 	inline void set_value (float _fValue) { fValue = _fValue; };
-	inline float get_value (float _fValue) { return fValue; };
+	inline float get_value (float /*_fValue*/) { return fValue; };
 	inline void set_boundary (int _bBoundary) { bBoundary = _bBoundary; };
 	inline void set_orientation (int bInf)
 		{

@@ -431,4 +431,25 @@ TEST(TEST_cgmesh_metaballs, stage_10_heightmap_pgm) {
     std::vector<Motif> motifs = { foil_motif({140,140}, 80, 4, PI / 4, 1.5f) };
     FieldParams p; p.threshold = 1.2f;
     write_heightmap_pgm(motifs, p, 0, 0, 280, 280, 280, 280, "stage_10_heightmap.pgm");
+
+    // PGM ASCII 280 x 280, niveaux 0..255, normalise sur le maximum du champ.
+    std::ifstream f("stage_10_heightmap.pgm");
+    ASSERT_TRUE(f.good());
+    std::string magic;
+    int nx = 0, ny = 0, maxval = 0;
+    f >> magic >> nx >> ny >> maxval;
+    EXPECT_EQ(magic, "P2");
+    EXPECT_EQ(nx, 280);
+    EXPECT_EQ(ny, 280);
+    EXPECT_EQ(maxval, 255);
+    int count = 0, lo = 256, hi = -1, g = 0;
+    while (f >> g) {
+        ++count;
+        lo = std::min(lo, g);
+        hi = std::max(hi, g);
+    }
+    EXPECT_EQ(count, 280 * 280);
+    EXPECT_GE(lo, 0);
+    EXPECT_EQ(hi, 255);   // le maximum du champ donne le blanc
+    EXPECT_LT(lo, hi);    // le champ n'est pas uniforme
 }

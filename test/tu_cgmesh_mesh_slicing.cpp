@@ -1949,6 +1949,9 @@ TEST (TEST_mesh_slicing, fine_cylinders_keep_their_section)
 		const double seconds = std::chrono::duration<double> (std::chrono::steady_clock::now () - t0).count ();
 		if (c.n == 20000)
 		{
+			// Garde-fou contre un blocage, pas une mesure de performance : la
+			// borne est tres au-dessus du cout lineaire et ne juge que l'ordre
+			// de grandeur ; un surcout lineaire passe dessous.
 			EXPECT_LT (seconds, 5.) << "O(k^2) ?";
 		}
 

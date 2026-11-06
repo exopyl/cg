@@ -507,78 +507,82 @@ void tridiagonal (TValue diag[3], TValue subd[3])
 }
 
 /**
-* QL algorithm. This transform is used to solve the eigensystem.
+* Implicit QL algorithm on the tridiagonal form (diag, subd); the rotations are
+* accumulated into m_Mat. Each index i0 is iterated until its off-diagonal term
+* is negligible (at most imaxiter sweeps), then the next index is processed.
+* \returns false if an index did not converge.
 */
 bool QLalgorithm (TValue diag[3], TValue subd[3])
 {
-	int imaxiter = 32;
-	int i0, i1=0, i2, i3, i4;
-	
-	for (i0=0; i0<3; i0++)
-    {
-		TValue G, R;
-		TValue sinus, cosinus, P;
-		
-		for (i2=i0; i2<=1; i2++)
+	const int imaxiter = 32;
+
+	for (int i0=0; i0<3; i0++)
+	{
+		int iter;
+		for (iter=0; iter<imaxiter; iter++)
 		{
-			TValue tmp = std::fabs (diag[i2]) + std::fabs(diag[i2+1]);
-			if (std::fabs(subd[i2])+tmp == tmp)
+			int i2;
+			for (i2=i0; i2<=1; i2++)
+			{
+				TValue tmp = std::fabs (diag[i2]) + std::fabs(diag[i2+1]);
+				if (std::fabs(subd[i2])+tmp == tmp)
+					break;
+			}
+			if (i2 == i0)
 				break;
-		}
-		if (i2 == i0)
-			break;
-		
-		G = (diag[i0+1] - diag[i0]) / (2.0*subd[i0]);
-		R = std::sqrt (G*G+1.0);
-		if (G < 0.0)
-			G = diag[i2] - diag[i0] + subd[i0] / (G - R);
-		else
-			G = diag[i2] - diag[i0] + subd[i0] / (G + R);
-		
-		sinus = 1.0;
-		cosinus = 1.0;
-		P = 0.0;
-		
-		for (i3=i2-1; i3>=i0; i3--)
-		{
-			TValue F = sinus*subd[i3];
-			TValue B = cosinus*subd[i3];
-			if (std::fabs(F) >= std::fabs(G))
-			{
-				cosinus = G/F;
-				R = std::sqrt(cosinus*cosinus + 1.0);
-				subd[i3+1] = F*R;
-				sinus = 1.0/R;
-				cosinus *= sinus;
-			}
+
+			TValue G = (diag[i0+1] - diag[i0]) / (2.0*subd[i0]);
+			TValue R = std::sqrt (G*G+1.0);
+			if (G < 0.0)
+				G = diag[i2] - diag[i0] + subd[i0] / (G - R);
 			else
+				G = diag[i2] - diag[i0] + subd[i0] / (G + R);
+
+			TValue sinus = 1.0;
+			TValue cosinus = 1.0;
+			TValue P = 0.0;
+
+			for (int i3=i2-1; i3>=i0; i3--)
 			{
-				sinus = F/G;
-				R = std::sqrt (sinus*sinus + 1.0);
-				subd[i3+1]=G*R;
-				cosinus = 1.0/R;
-				sinus *= cosinus;
+				TValue F = sinus*subd[i3];
+				TValue B = cosinus*subd[i3];
+				if (std::fabs(F) >= std::fabs(G))
+				{
+					cosinus = G/F;
+					R = std::sqrt(cosinus*cosinus + 1.0);
+					subd[i3+1] = F*R;
+					sinus = 1.0/R;
+					cosinus *= sinus;
+				}
+				else
+				{
+					sinus = F/G;
+					R = std::sqrt (sinus*sinus + 1.0);
+					subd[i3+1]=G*R;
+					cosinus = 1.0/R;
+					sinus *= cosinus;
+				}
+				G = diag[i3+1] - P;
+				R = (diag[i3] - G)*sinus + 2.0*B*cosinus;
+				P = sinus*R;
+				diag[i3+1] = G + P;
+				G = cosinus*R - B;
+
+				for (int i4=0; i4<3; i4++)
+				{
+					F = m_Mat[i4][i3+1];
+					m_Mat[i4][i3+1] = sinus*m_Mat[i4][i3] + cosinus*F;
+					m_Mat[i4][i3] = cosinus*m_Mat[i4][i3] - sinus*F;
+				}
 			}
-			G = diag[i3+1] - P;
-			R = (diag[i3] - G)*sinus + 2.0*B*cosinus;
-			P = sinus*R;
-			diag[i3+1] = G + P;
-			G = cosinus*R - B;
-			
-			for (i4=0; i4<3; i4++)
-			{
-				F = m_Mat[i4][i3+1];
-				m_Mat[i4][i3+1] = sinus*m_Mat[i4][i3] + cosinus*F;
-				m_Mat[i4][i3] = cosinus*m_Mat[i4][i3] - sinus*F;
-			}
+			diag[i0] -= P;
+			subd[i0] = G;
+			subd[i2] = 0.0;
 		}
-		diag[i0] -= P;
-		subd[i0] = G;
-		subd[i2] = 0.0;
-    }
-	if (i1 == imaxiter)
-		return false;
-	
+		if (iter == imaxiter)
+			return false;
+	}
+
 	return true;
 }
 
@@ -648,14 +652,14 @@ int SolveEigensystem (TVector3<TValue>& e1, TVector3<TValue>& e2, TVector3<TValu
 	  TValue diag[3] = {0.0, 0.0, 0.0};
 	  TValue subd[3] = {0.0, 0.0, 0.0};
 	  tmp.tridiagonal    (diag, subd);
-	  tmp.QLalgorithm    (diag, subd);
+	  const bool converged = tmp.QLalgorithm (diag, subd);
 	  tmp.decreasingsort (diag, subd);
 
 	  e1.Set (tmp.m_Mat[0][0], tmp.m_Mat[1][0], tmp.m_Mat[2][0]);
 	  e2.Set (tmp.m_Mat[0][1], tmp.m_Mat[1][1], tmp.m_Mat[2][1]);
 	  e3.Set (tmp.m_Mat[0][2], tmp.m_Mat[1][2], tmp.m_Mat[2][2]);
 	  v.Set (diag[0], diag[1], diag[2]);
-	  return true;
+	  return converged;
   }
   else
   {

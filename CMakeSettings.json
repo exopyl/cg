@@ -27,11 +27,6 @@
           "type": "BOOL"
         },
         {
-          "name": "EXTERN_GOOGLETEST",
-          "value": "C:/home/dev/extern/googletest-1.15.2",
-          "type": "PATH"
-        },
-        {
           "name": "EXTERN_WXWIDGETS",
           "value": "C:/home/dev/extern/wxWidgets-3.3.2",
           "type": "PATH"
@@ -62,11 +57,6 @@
           "name": "ENABLE_SINAIA",
           "value": "False",
           "type": "BOOL"
-        },
-        {
-          "name": "EXTERN_GOOGLETEST",
-          "value": "C:/home/dev/extern/googletest-1.15.2",
-          "type": "PATH"
         },
         {
           "name": "EXTERN_WXWIDGETS",
@@ -101,11 +91,6 @@
           "type": "BOOL"
         },
         {
-          "name": "EXTERN_GOOGLETEST",
-          "value": "C:/home/dev/extern/googletest-1.15.2",
-          "type": "PATH"
-        },
-        {
           "name": "EXTERN_WXWIDGETS",
           "value": "C:/home/dev/extern/wxWidgets-3.3.2",
           "type": "PATH"
@@ -136,11 +121,6 @@
           "name": "ENABLE_SINAIA",
           "value": "True",
           "type": "BOOL"
-        },
-        {
-          "name": "EXTERN_GOOGLETEST",
-          "value": "C:/home/dev/extern/googletest-1.15.2",
-          "type": "PATH"
         },
         {
           "name": "EXTERN_WXWIDGETS",
@@ -175,11 +155,6 @@
           "type": "BOOL"
         },
         {
-          "name": "EXTERN_GOOGLETEST",
-          "value": "C:/home/dev/extern/googletest-1.15.2",
-          "type": "PATH"
-        },
-        {
           "name": "EXTERN_WXWIDGETS",
           "value": "C:/home/dev/extern/wxWidgets-3.3.2",
           "type": "PATH"
@@ -210,11 +185,6 @@
           "name": "ENABLE_VECNA",
           "value": "True",
           "type": "BOOL"
-        },
-        {
-          "name": "EXTERN_GOOGLETEST",
-          "value": "C:/home/dev/extern/googletest-1.15.2",
-          "type": "PATH"
         },
         {
           "name": "EXTERN_WXWIDGETS",

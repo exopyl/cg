@@ -464,9 +464,9 @@ public:
 				unsigned int b = (unsigned int)f->GetVertex (1);
 				unsigned int c = (unsigned int)f->GetVertex (2);
 				bar.Set (
-					   (m_pVertices[3*a] + m_pVertices[3*b] + m_pVertices[3*c]) / 3.,
-					   (m_pVertices[3*a+1] + m_pVertices[3*b+1] + m_pVertices[3*c+1]) / 3.,
-					   (m_pVertices[3*a+2] + m_pVertices[3*b+2] + m_pVertices[3*c+2]) / 3. );
+					   (m_pVertices[3*a] + m_pVertices[3*b] + m_pVertices[3*c]) / 3.f,
+					   (m_pVertices[3*a+1] + m_pVertices[3*b+1] + m_pVertices[3*c+1]) / 3.f,
+					   (m_pVertices[3*a+2] + m_pVertices[3*b+2] + m_pVertices[3*c+2]) / 3.f );
 			}
 		};
 

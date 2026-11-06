@@ -1,6 +1,15 @@
 #include <gtest/gtest.h>
 
+#include <array>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <map>
+#include <memory>
+#include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "../src/cgmesh/cgmesh.h"
 
@@ -137,96 +146,201 @@ TEST(TEST_cgmesh_he, normals)
 //
 //
 //
-// `prefix` distingue les fichiers de sortie d'un appelant a l'autre. Sans lui, les
-// trois tests qui appellent cette fonction ecrivaient les MEMES quatre
-// histogrammes.
-static void diff_common(TensorMethodId tensorMethodId, const char* prefix)
+// Icosaedre subdivise `subdivisions` fois, sommets projetes sur la sphere de
+// rayon `radius`, faces orientees vers l'exterieur. Coque fermee sans couture ni
+// pole degenere : chaque sommet a un 1-anneau complet.
+static Mesh_half_edge* build_icosphere (double radius, int subdivisions)
+{
+	using P3 = std::array<double, 3>;
+	const double t = (1. + std::sqrt (5.)) / 2.;
+	std::vector<P3> v = {{-1, t, 0}, {1, t, 0}, {-1, -t, 0}, {1, -t, 0},
+	                     {0, -1, t}, {0, 1, t}, {0, -1, -t}, {0, 1, -t},
+	                     {t, 0, -1}, {t, 0, 1}, {-t, 0, -1}, {-t, 0, 1}};
+	std::vector<std::array<unsigned, 3>> f = {
+		{0, 11, 5}, {0, 5, 1}, {0, 1, 7}, {0, 7, 10}, {0, 10, 11},
+		{1, 5, 9}, {5, 11, 4}, {11, 10, 2}, {10, 7, 6}, {7, 1, 8},
+		{3, 9, 4}, {3, 4, 2}, {3, 2, 6}, {3, 6, 8}, {3, 8, 9},
+		{4, 9, 5}, {2, 4, 11}, {6, 2, 10}, {8, 6, 7}, {9, 8, 1}};
+
+	for (int level = 0; level < subdivisions; ++level)
+	{
+		std::map<std::pair<unsigned, unsigned>, unsigned> midpoints;
+		const auto midpoint = [&] (unsigned a, unsigned b) {
+			const auto key = std::make_pair ((std::min) (a, b), (std::max) (a, b));
+			const auto it = midpoints.find (key);
+			if (it != midpoints.end ())
+				return it->second;
+			v.push_back ({(v[a][0] + v[b][0]) / 2., (v[a][1] + v[b][1]) / 2., (v[a][2] + v[b][2]) / 2.});
+			const auto index = static_cast<unsigned> (v.size () - 1);
+			midpoints.emplace (key, index);
+			return index;
+		};
+		std::vector<std::array<unsigned, 3>> refined;
+		refined.reserve (4 * f.size ());
+		for (const auto& [a, b, c] : f)
+		{
+			const unsigned ab = midpoint (a, b), bc = midpoint (b, c), ca = midpoint (c, a);
+			refined.push_back ({a, ab, ca});
+			refined.push_back ({b, bc, ab});
+			refined.push_back ({c, ca, bc});
+			refined.push_back ({ab, bc, ca});
+		}
+		f = std::move (refined);
+	}
+
+	std::vector<float> vertices;
+	vertices.reserve (3 * v.size ());
+	for (const P3& p : v)
+	{
+		const double scale = radius / std::sqrt (p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
+		for (double c : p)
+			vertices.push_back (static_cast<float> (c * scale));
+	}
+	std::vector<unsigned int> faces;
+	faces.reserve (3 * f.size ());
+	for (const auto& tri : f)
+		faces.insert (faces.end (), tri.begin (), tri.end ());
+
+	Mesh_half_edge* he = new Mesh_half_edge ();
+	he->m_pMesh->SetVertices (static_cast<unsigned int> (v.size ()), vertices.data ());
+	he->m_pMesh->SetFaces (static_cast<unsigned int> (f.size ()), 3, faces.data ());
+	he->create_half_edge ();
+	he->m_pMesh->InitVertexNormals ();
+	Normals normals;
+	normals.EvalOnVertices (he, Normals::THURMER);
+	return he;
+}
+
+// Valeurs connues independantes de l'estimateur : sur la sphere de rayon R,
+// |k1| = |k2| = 1/R en tout point. Les estimateurs comptent la courbure
+// negative quand la surface s'ecarte de la normale sortante : H = -1/R,
+// K = 1/R^2. R = 2 separe les grandeurs (une erreur d'echelle en R, 1/R ou
+// 1/R^2 se voit), le signe de H fixe la convention, K > 0 impose deux
+// courbures principales de meme signe. `relTol` : erreur relative admise sur H
+// et K en chaque sommet.
+static void expect_sphere_curvatures (TensorMethodId tensorMethodId, double relTol)
+{
+	const double radius = 2.;
+	std::unique_ptr<Mesh_half_edge> he (build_icosphere (radius, 3));
+	const unsigned int nVertices = he->m_pMesh->GetNVertices ();
+	ASSERT_EQ (nVertices, 642u);
+
+	MeshAlgoTensorEvaluator evaluator;
+	ASSERT_TRUE (evaluator.Init (he.get ()));
+	ASSERT_TRUE (evaluator.Evaluate (tensorMethodId));
+
+	double worstH = 0., worstK = 0.;
+	for (unsigned int i = 0; i < nVertices; ++i)
+	{
+		const Tensor* t = evaluator.GetDiffParam (static_cast<int> (i));
+		ASSERT_NE (t, nullptr) << i;
+		const double h = t->GetCurvature (CurvatureType::Mean);
+		const double k = t->GetCurvature (CurvatureType::Gaussian);
+		EXPECT_NEAR (h, -1. / radius, relTol / radius) << i;
+		EXPECT_NEAR (k, 1. / (radius*radius), relTol / (radius*radius)) << i;
+		worstH = (std::max) (worstH, std::fabs (h * radius + 1.));
+		worstK = (std::max) (worstK, std::fabs (k * radius * radius - 1.));
+	}
+	std::printf ("sphere R=%g : ecart relatif maximal H %.4f, K %.4f (tolerance %.4f)\n",
+	             radius, worstH, worstK, relTol);
+}
+
+// `prefix` distingue les fichiers de sortie d'un appelant a l'autre.
+// `sphereRelTol` : tolerance de expect_sphere_curvatures, ecart maximal mesure
+// sur l'icosphere avec sa marge, toujours sous 0,5 pour qu'une erreur d'un
+// facteur 2 echoue ; absente pour une methode dont les tenseurs ne sont pas des
+// courbures de la sphere.
+//
+// Pour chaque type de courbure : extremes finis et ordonnes, une courbure par
+// tenseur, toutes entre les extremes, histogramme normalise (somme 1). Puis
+// courbures de la sphere, valeurs connues.
+static void diff_common(TensorMethodId tensorMethodId, const char* prefix,
+                        std::optional<double> sphereRelTol)
 {
 	Mesh_half_edge* he = nullptr;
 	ASSERT_NO_FATAL_FAILURE(load_mesh(&he));
+	std::unique_ptr<Mesh_half_edge> heOwner(he);
 
-	Normals* normalsEvaluator = new Normals();
-	normalsEvaluator->EvalOnVertices(he, Normals::THURMER);
+	Normals normalsEvaluator;
+	normalsEvaluator.EvalOnVertices(he, Normals::THURMER);
 
-	bool res;
+	MeshAlgoTensorEvaluator evaluator;
+	ASSERT_TRUE(evaluator.Init (he));
+	ASSERT_TRUE(evaluator.Evaluate (tensorMethodId));
 
-	MeshAlgoTensorEvaluator *pDiffParamEvaluator = new MeshAlgoTensorEvaluator();
-	pDiffParamEvaluator->Init (he);
-	
-	pDiffParamEvaluator->Evaluate (tensorMethodId);
-	float fCurvature;
-	//pDiffParamEvaluator->Dump ();
-	pDiffParamEvaluator->GetExtremalCurvature (CurvatureType::Max, 1, &fCurvature);
-	printf ("GetMaxCurvatureMaximal : %f\n", fCurvature);
-	
-	pDiffParamEvaluator->GetExtremalCurvature (CurvatureType::Max, 0, &fCurvature);
-	printf ("GetMinCurvatureMaximal : %f\n", fCurvature);
-	
-	pDiffParamEvaluator->GetExtremalCurvature (CurvatureType::Min, 1, &fCurvature);
-	printf ("GetMaxCurvatureMinimal : %f\n", fCurvature);
-	
-	pDiffParamEvaluator->GetExtremalCurvature (CurvatureType::Min, 0, &fCurvature);
-	printf ("GetMinCurvatureMinimal : %f\n", fCurvature);
-	
-	int n;
-	float *curvatures;
-	pDiffParamEvaluator->GetCurvatures (CurvatureType::Max, &n, &curvatures);
-	printf ("GetMaximalCurvatures : %d\n", n);
+	const std::pair<CurvatureType, const char*> types[] = {
+		{CurvatureType::Max, "maximal"}, {CurvatureType::Min, "minimal"},
+		{CurvatureType::Mean, "mean"}, {CurvatureType::Gaussian, "gaussian"}};
+	for (const auto& [type, name] : types)
+	{
+		SCOPED_TRACE(name);
+		float lo = 0.f, hi = 0.f;
+		ASSERT_TRUE(evaluator.GetExtremalCurvature (type, 0, &lo));
+		ASSERT_TRUE(evaluator.GetExtremalCurvature (type, 1, &hi));
+		EXPECT_TRUE(std::isfinite (lo));
+		EXPECT_TRUE(std::isfinite (hi));
+		EXPECT_LE(lo, hi);
 
-	// histogram
-	float *histogram;
-	int nbins = 64;
-	res = pDiffParamEvaluator->GetCurvaturesHistogram (CurvatureType::Max, nbins, &histogram);
-	if (res == true)
-	{
-		output_1array (histogram, nbins, (std::string(prefix) + "_histogram_maximal_curvatures.txt").c_str());
-		SAFE_FREE (histogram);
+		int n = 0;
+		float *curvatures = nullptr;
+		ASSERT_TRUE(evaluator.GetCurvatures (type, &n, &curvatures));
+		std::unique_ptr<float, decltype(&free)> curvaturesOwner(curvatures, &free);
+		EXPECT_GT(n, 0);
+		EXPECT_LE(n, static_cast<int>(he->m_pMesh->GetNVertices ()));
+		for (int i = 0; i < n; ++i)
+		{
+			EXPECT_GE(curvatures[i], lo) << i;
+			EXPECT_LE(curvatures[i], hi) << i;
+		}
+
+		const int nbins = 64;
+		float *histogram = nullptr;
+		ASSERT_TRUE(evaluator.GetCurvaturesHistogram (type, nbins, &histogram));
+		std::unique_ptr<float, decltype(&free)> histogramOwner(histogram, &free);
+		double sum = 0.0;
+		for (int i = 0; i < nbins; ++i)
+		{
+			EXPECT_GE(histogram[i], 0.f) << i;
+			sum += histogram[i];
+		}
+		EXPECT_NEAR(sum, 1.0, 1e-4);
+		output_1array (histogram, nbins, (std::string(prefix) + "_histogram_" + name + "_curvatures.txt").c_str());
 	}
-	res = pDiffParamEvaluator->GetCurvaturesHistogram (CurvatureType::Min, nbins, &histogram);
-	if (res == true)
+
+	if (sphereRelTol)
 	{
-		output_1array (histogram, nbins, (std::string(prefix) + "_histogram_minimal_curvatures.txt").c_str());
-		SAFE_FREE (histogram);
+		SCOPED_TRACE("sphere");
+		expect_sphere_curvatures (tensorMethodId, *sphereRelTol);
 	}
-	res = pDiffParamEvaluator->GetCurvaturesHistogram (CurvatureType::Mean, nbins, &histogram);
-	if (res == true)
-	{
-		output_1array (histogram, nbins, (std::string(prefix) + "_histogram_mean_curvatures.txt").c_str());
-		SAFE_FREE (histogram);
-	}
-	res = pDiffParamEvaluator->GetCurvaturesHistogram (CurvatureType::Gaussian, nbins, &histogram);
-	if (res == true)
-	{
-		output_1array (histogram, nbins, (std::string(prefix) + "_histogram_gaussian_curvatures.txt").c_str());
-		SAFE_FREE (histogram);
-	}
-	
-	delete pDiffParamEvaluator;
 }
 
 TEST(TEST_cgmesh_he, diff_hamman)
 {
-	diff_common(TENSOR_HAMANN, "hamman");
+	diff_common(TENSOR_HAMANN, "hamman", 0.03);     // mesure : H 0,7 %, K 1,4 %
 }
 
 TEST(TEST_cgmesh_he, diff_taubin)
 {
-	diff_common(TENSOR_TAUBIN, "taubin");
+	diff_common(TENSOR_TAUBIN, "taubin", 0.03);     // mesure : H 0,3 %, K 0,7 %
 }
 
 TEST(TEST_cgmesh_he, diff_desbrun)
 {
-	diff_common(TENSOR_DESBRUN, "desbrun");
+	diff_common(TENSOR_DESBRUN, "desbrun", 1e-3);    // mesure : H 2e-5, K 5e-5
 }
 
 TEST(TEST_cgmesh_he, diff_steiner)
 {
-	diff_common(TENSOR_STEINER, "steiner");
+	// ApplySteiner n'ecrit aucun tenseur (TensorSaddle_Steiner, tu_cgmesh_tensor.cpp).
+	diff_common(TENSOR_STEINER, "steiner", std::nullopt);
 }
 
 TEST(TEST_cgmesh_he, diff_goldfeather)
 {
-	diff_common(TENSOR_GOLDFEATHER, "goldfeather");
+	// Sur la sphere, Goldfeather rend |k| R entre 0,0025 et 1,03 et K < 0 en
+	// 8 sommets sur 642 : aucune tolerance ne separe ce resultat d'une erreur
+	// (debt_cgmesh.md).
+	diff_common(TENSOR_GOLDFEATHER, "goldfeather", std::nullopt);
 }
 
 TEST(TEST_cgmesh_he, clipper)

@@ -22,7 +22,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential clang llvm libgtest-dev googletest gcovr \
+            build-essential clang llvm gcovr \
             libocct-foundation-dev \
             libocct-modeling-data-dev \
             libocct-modeling-algorithms-dev \
@@ -58,11 +58,15 @@ jobs:
           rm -rf cgbinaries-*-linux-x86_64 cgbinaries-*-linux-x86_64.zip
 
       - name: Run coverage
+        id: coverage
         working-directory: ${{github.workspace}}
+        # coverage.sh rend le code de sortie de TU, APRES avoir produit la
+        # couverture : un test en echec fait echouer cette etape, donc le job.
+        # Les etapes de conversion et d'envoi a Sonar qui suivent tournent malgre
+        # cet echec des que coverage.info existe (conditions `if:` ci-dessous) :
+        # l'analyse d'un commit rouge reste consultable.
         # CG_REQUIRE_OPENSCAD : OpenSCAD est installe ci-dessus ; introuvable, les
-        # tests .scad ECHOUENT au lieu de sauter (test/scad_test_support.h). Le job,
-        # lui, n'echoue pas : coverage.sh ignore le code de sortie de TU ; un tel
-        # echec se voit a la baisse de couverture.
+        # tests .scad ECHOUENT au lieu de sauter (test/scad_test_support.h).
         # coverage.sh lance TU depuis build_coverage/test/test-run : OpenSCAD y est
         # trouve par le PATH.
         env:
@@ -72,6 +76,13 @@ jobs:
           sh coverage.sh
          
       - name: Convert existing coverage.info to SonarQube XML
+        id: convert
+        # Tourne si coverage.sh a ete lance et a produit coverage.info, qu'il ait
+        # reussi ou que TU ait echoue ; ne tourne pas si une etape anterieure a
+        # empeche le lancement. coverage.sh ne cree coverage.info que si
+        # llvm-cov export a reussi et rendu au moins une ligne SF: : sa presence
+        # suffit a dire que la couverture est exploitable.
+        if: ${{ !cancelled() && steps.coverage.outcome != 'skipped' && hashFiles('coverage.info') != '' }}
         run: |
           cat > convert_lcov.py << 'EOF'
           #!/usr/bin/env python3
@@ -123,6 +134,11 @@ jobs:
 #          cp build/compile_commands.json .
 
       - name: Run build-wrapper
+        id: wrapper
+        # Chaine de l'envoi a Sonar : chaque etape exige le succes de la
+        # precedente, et non le succes du job, que l'echec de TU a deja rendu
+        # rouge.
+        if: ${{ !cancelled() && steps.convert.outcome == 'success' }}
         run: |
           curl -L -o build-wrapper.zip https://sonarcloud.io/static/cpp/build-wrapper-linux-x86.zip
           unzip build-wrapper.zip
@@ -139,12 +155,15 @@ jobs:
           ./build-wrapper-linux-x86/build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build build/
 
       - name: Download sonar-scanner
+        id: scanner
+        if: ${{ !cancelled() && steps.wrapper.outcome == 'success' }}
         run: |
           curl -L -o sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-6.2.1.4610-linux-x64.zip
           unzip -q sonar-scanner.zip
           echo "$PWD/sonar-scanner-6.2.1.4610-linux-x64/bin" >> $GITHUB_PATH
 
       - name: Run SonarScanner
+        if: ${{ !cancelled() && steps.scanner.outcome == 'success' }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

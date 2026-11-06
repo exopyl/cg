@@ -418,65 +418,6 @@ namespace
 		return out;
 	}
 
-	// Points along the circular arc through P0 -> Pm -> P1 (circumcircle of the
-	// three). Falls back to a straight segment if they are collinear.
-	std::vector<Vector2d> arcThrough3 (Vector2d P0, Vector2d Pm, Vector2d P1, double maxAngleRad)
-	{
-		const double PI = 3.14159265358979323846;
-		const double ax=P0.x, ay=P0.y, bx=Pm.x, by=Pm.y, cx=P1.x, cy=P1.y;
-		const double d = 2.0*(ax*(by-cy) + bx*(cy-ay) + cx*(ay-by));
-		std::vector<Vector2d> out;
-		if (std::fabs(d) < 1e-9)
-		{
-			const int k=8;
-			for (int i=0;i<=k;++i){ double t=(double)i/k; out.emplace_back(P0.x+(P1.x-P0.x)*t, P0.y+(P1.y-P0.y)*t); }
-			return out;
-		}
-		const double a2=ax*ax+ay*ay, b2=bx*bx+by*by, c2=cx*cx+cy*cy;
-		const double ux=(a2*(by-cy)+b2*(cy-ay)+c2*(ay-by))/d;
-		const double uy=(a2*(cx-bx)+b2*(ax-cx)+c2*(bx-ax))/d;
-		const double r = std::sqrt((ax-ux)*(ax-ux)+(ay-uy)*(ay-uy));
-		auto wrap=[&](double x){ while(x>PI)x-=2*PI; while(x<-PI)x+=2*PI; return x; };
-		const double a0=std::atan2(ay-uy,ax-ux), am=std::atan2(by-uy,bx-ux), a1=std::atan2(cy-uy,cx-ux);
-		const double amU=a0+wrap(am-a0), a1U=amU+wrap(a1-am);
-		const int seg=std::max(3,(int)std::ceil(std::fabs(a1U-a0)/maxAngleRad));
-		for (int i=0;i<=seg;++i){ double t=(double)i/seg, a=a0+(a1U-a0)*t; out.emplace_back(ux+r*std::cos(a), uy+r*std::sin(a)); }
-		return out;
-	}
-
-	// n POINTED foils (Havemann Fig 5.27 1b) as separate almond/vesica petals :
-	// each pointed at the centre (inner tip) AND at the rim (outer tip), bounded
-	// by two circular arcs bulging sideways ; one petal centred at phi0. The
-	// classic pointed sexfoil. Adjacent petals leave thin stone cusps between them.
-	std::vector<std::vector<Vector2d>> pointedFoilPetals (Vector2d C, double R, int n,
-	                                                      double phi0, double maxAngleRad,
-	                                                      double pointedness)
-	{
-		const double PI = 3.14159265358979323846;
-		if (n < 3) n = 3;
-		const double alpha = 2.0*PI/n;
-		// pointedness in [0,2] : 0 = fat / almost round petals, 2 = slender sharp
-		// petals. Controls the sideways bulge, the bulge radius and the inner tip.
-		const double t     = std::min(std::max(pointedness, 0.0), 2.0) / 2.0;   // 0..1
-		const double r_in  = R * (0.18 - 0.13*t);   // sharper centre point at high t
-		const double r_mid = R * (0.64 - 0.12*t);   // bulge nearer the rim at low t
-		const double beta  = alpha * (0.48 - 0.16*t);  // narrower petals at high t
-		std::vector<std::vector<Vector2d>> out;
-		for (int i = 0; i < n; ++i)
-		{
-			const double m = phi0 + i*alpha;
-			const Vector2d Pi(C.x + r_in*std::cos(m),        C.y + r_in*std::sin(m));         // inner tip
-			const Vector2d Po(C.x + R   *std::cos(m),        C.y + R   *std::sin(m));         // outer tip
-			const Vector2d Ml(C.x + r_mid*std::cos(m-beta),  C.y + r_mid*std::sin(m-beta));   // left bulge
-			const Vector2d Mr(C.x + r_mid*std::cos(m+beta),  C.y + r_mid*std::sin(m+beta));   // right bulge
-			std::vector<Vector2d> petal = arcThrough3(Pi, Ml, Po, maxAngleRad);               // inner->left->outer
-			std::vector<Vector2d> rgt   = arcThrough3(Po, Mr, Pi, maxAngleRad);               // outer->right->inner
-			for (size_t k = 1; k < rgt.size(); ++k) petal.push_back(rgt[k]);
-			out.push_back(std::move(petal));
-		}
-		return out;
-	}
-
 	// Single CONNECTED pointed multifoil as ONE closed contour : n outward pointed
 	// lobe tips at radius R (touching the ring) and n inward cusps at radius rc,
 	// all lobes sharing one open centre (a void of radius ~rc). pointedness in

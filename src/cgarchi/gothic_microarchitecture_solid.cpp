@@ -630,7 +630,6 @@ std::size_t EstimateSolidTriangles (const Network &network, const SolidParams &p
 
 namespace
 {
-	constexpr double kPi = 3.14159265358979323846;
 	// c_max = kWallDiscretization / q^2 : tolerance de la paroi hors des fourches, en fraction de
 	// 2r. Mesure (plan d'execution, §14.13) : deficit 0,078 a q = 2, 0,037 a q = 3, 0,0047 a
 	// q = 8 sur D4 segment et le moulinet, soit ~0,31 / q^2 ; le double.

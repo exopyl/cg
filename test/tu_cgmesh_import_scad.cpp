@@ -282,6 +282,10 @@ TEST(ExternalProcess, timeout_and_cancellation_kill_the_process_tree)
 		EXPECT_TRUE (grandchild.DiesWithin (std::chrono::milliseconds (2000))) << "petit-enfant survivant";
 	}
 
+	// Borne absolue a dessein : elle se compare aux deux fois 30 s du petit-enfant
+	// qu'on n'aurait pas tue, pas a la vitesse de la machine. Le chemin nominal
+	// (2 s de delai, deux attentes de mort de 2 s au plus) reste plus de deux
+	// fois dessous.
 	EXPECT_LT (std::chrono::steady_clock::now () - t0, std::chrono::seconds (15));
 }
 
@@ -303,6 +307,8 @@ TEST(ExternalProcess, output_limit_kills_a_chatty_process)
 	const process::ProcessResult r = process::RunProcess (request);
 	EXPECT_EQ (r.outcome, process::ProcessOutcome::OutputLimitExceeded);
 	EXPECT_STREQ (process::ProcessOutcomeName (r.outcome), "output limit exceeded");
+	// Garde-fou contre un blocage : un programme sans fin non tue ne rendrait
+	// jamais la main ; 10 s ecrivent 64 Kio meme sur un hote tres lent.
 	EXPECT_LT (std::chrono::steady_clock::now () - t0, std::chrono::seconds (10));
 	EXPECT_LE (r.output.size (), request.maxOutputBytes + 16);
 }
@@ -1006,6 +1012,8 @@ TEST(ImportScad, long_render_is_cancelled_and_cleaned_up)
 	const scad::ImportResult timedOut = scad::ImportScad (vm, kData / "slow.scad", options);
 	EXPECT_EQ (timedOut.status, scad::ImportStatus::TimedOut) << timedOut.message;
 
+	// Borne absolue a dessein : elle se compare aux dizaines de secondes du
+	// rendu complet de slow.scad, pas a la vitesse de la machine.
 	EXPECT_LT (std::chrono::steady_clock::now () - t0, std::chrono::seconds (15));
 	EXPECT_EQ (vm.GetNMeshes (), 0u);
 	EXPECT_TRUE (TemporaryEntries (root.path ()).empty ());

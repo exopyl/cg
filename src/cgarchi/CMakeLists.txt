@@ -38,6 +38,13 @@ target_include_directories(cgarchi PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>)
 target_compile_features(cgarchi PUBLIC cxx_std_17)
 
+# Avertissements portes par la cible, sans -Werror : le niveau ne fuit pas vers
+# les consommateurs (PRIVATE), et un compilateur plus recent ne casse pas le
+# build sur un avertissement nouveau.
+target_compile_options(cgarchi PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall;-Wextra>
+    $<$<CXX_COMPILER_ID:MSVC>:/W4>)
+
 # PUBLIC : les en-tetes de cgarchi exposent Mesh, Polygon2, Profile2D,
 # ParameterizedMesh... Les en-tetes de cgmesh s'incluent par leur nom seul
 # ("mesh.h"), via le repertoire PUBLIC de cgmesh.

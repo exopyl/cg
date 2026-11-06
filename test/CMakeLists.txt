@@ -174,14 +174,37 @@ if (WIN32 AND ENABLE_ONNX)
     )
 endif()
 
-if (WIN32 AND EXTERN_GOOGLETEST)
-    add_subdirectory(${EXTERN_GOOGLETEST} gtest)
-    target_link_libraries(${PROJECT_NAME} GTest::gtest_main)
-    target_link_libraries(${PROJECT_NAME} GTest::gmock_main)
-elseif (NOT WIN32)
-    find_package(GTest REQUIRED)
-    target_link_libraries(${PROJECT_NAME} GTest::gtest_main)
-endif (WIN32 AND EXTERN_GOOGLETEST)
+# ---------------------------------------------------------------------------
+# googletest : copie versionnee sous extern/ (FORK.md), sur toutes les plateformes
+# ---------------------------------------------------------------------------
+# Construit avec les options de ce repertoire : sanitizers (add_compile_options
+# racine) et drapeaux de couverture (CMAKE_CXX_FLAGS ci-dessus) s'y appliquent
+# comme au reste de TU. Les warnings /W4 et -Wall -Wextra du depot sont poses par
+# cible et n'atteignent pas gtest, dont les en-tetes sont exposes en SYSTEM.
+#
+# gtest_force_shared_crt : gtest remplace /MD par /MT dans les CMAKE_<LANG>_FLAGS*
+# quand l'option est OFF. Avec CMP0091 a NEW (cmake_minimum_required racine >= 3.15),
+# le CRT vient de CMAKE_MSVC_RUNTIME_LIBRARY et ces drapeaux ne contiennent pas /MD :
+# le remplacement est alors sans effet. L'option garde gtest en /MD, comme le
+# depot, si /MD y est un jour ecrit a la main.
+#
+# EXCLUDE_FROM_ALL : seules les cibles liees ci-dessous sont construites. gmock
+# reste disponible (GTest::gmock) pour un test qui en aurait besoin. Pas de
+# GTest::gmock_main a cote de GTest::gtest_main : chacun fournit main, et sous
+# MSVC gmock_main embarque en plus sa propre copie de gtest.
+set(GOOGLETEST_DIR "${CMAKE_SOURCE_DIR}/extern/googletest-1.15.2" CACHE PATH "Path to the vendored googletest source tree.")
+if (NOT EXISTS "${GOOGLETEST_DIR}/googletest/include/gtest/gtest.h")
+    message(FATAL_ERROR "gtest.h introuvable sous ${GOOGLETEST_DIR}/googletest/include")
+endif ()
+# Ancienne source de googletest sous Windows. Ignoree, mais signalee : un preset
+# qui la renseigne encore croirait sinon que sa copie est celle qui est construite.
+if (EXTERN_GOOGLETEST)
+    message(WARNING "EXTERN_GOOGLETEST (${EXTERN_GOOGLETEST}) est ignore : googletest est construit depuis ${GOOGLETEST_DIR}. Retirer la variable du preset.")
+endif ()
+set(INSTALL_GTEST OFF)
+set(gtest_force_shared_crt ON)
+add_subdirectory(${GOOGLETEST_DIR} ${CMAKE_BINARY_DIR}/extern/googletest EXCLUDE_FROM_ALL)
+target_link_libraries(${PROJECT_NAME} GTest::gtest_main)
 
 # WORKING_DIRECTORY explicite : sans lui, ctest utilise CMAKE_CURRENT_BINARY_DIR,
 # le parent de TU_RUN_DIR, ou test/data n'est pas copie (cf. TU_RUN_DIR ci-dessus).
@@ -216,6 +239,13 @@ if (NOT CG_ENABLE_SANITIZERS)
     file(GLOB FAULT_SRC_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/faults/*.cpp)
     add_executable(TU_faults ${FAULT_SRC_FILES})
     target_link_libraries(TU_faults cgmath cgimg cgmesh cgarchi cggraph cggraph_nodes GTest::gtest_main)
+    # Sous Windows, TU_faults charge les DLL d'OpenNURBS, lib3mf et OCCT des son
+    # lancement, y compris pour la decouverte de ses tests, qui s'execute a son
+    # POST_BUILD. Ces DLL sont deposees par les POST_BUILD de TU, dans le meme
+    # repertoire de sortie : TU doit donc etre construit avant TU_faults.
+    if (WIN32)
+        add_dependencies(TU_faults TU)
+    endif ()
     gtest_discover_tests(TU_faults DISCOVERY_TIMEOUT 60)
 endif ()
 

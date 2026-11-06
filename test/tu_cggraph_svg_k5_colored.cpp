@@ -478,3 +478,116 @@ TEST (TEST_cggraph_svg_k5, the_ring_of_a_filled_shape_is_on_by_default_here_and_
 	ASSERT_NE (toggle, nullptr);
 	EXPECT_TRUE (toggle->boolValue);
 }
+
+// ---------------------------------------------------------------------------
+//  R6 -- ce que recalcule un changement de `depth` (svg_couleurs_faisabilite.md,
+//  sec. 11.3)
+// ---------------------------------------------------------------------------
+//
+// Sous G2, `depth` est un parametre du noeud MONOLITHIQUE : sa signature change
+// et l'import entier est rejoue, exactement comme pour `flattenTol`, qu'aucun
+// etagement ne protege. Sous le graphe etage (svg.contours -> shape.extrude),
+// `depth` appartient a l'extrudeur AVAL : seul lui est recalcule, les contours
+// ressortent du cache.
+//
+// Un defaut de cache est un appel a Node::Compute : les defauts se comptent a
+// l'egalite. Les succes ne sont pas comptes -- leur nombre depend de la
+// profondeur a laquelle l'evaluateur descend sous un noeud deja en cache, ce
+// qui n'est pas la propriete jugee. Ce qui doit rester en cache est interroge
+// par IsCached. Le cout de l'epargne, lui, est une duree et se mesure dans K4.
+
+namespace {
+
+// Valeur d'un parametre flottant, ecrite sans redeclarer son role : c'est la
+// declaration du NOEUD qui decide s'il entre dans la signature, et c'est elle
+// que le test juge. Faux si le noeud ou le parametre manque.
+bool SetParamValue (Graph &graph, NodeId id, const char *name, float value)
+{
+	Node *node = graph.FindNode (id);
+	if (node == nullptr)
+		return false;
+	ParamValue *p = node->GetParams ().Find (name);
+	if (p == nullptr)
+		return false;
+	p->floatValue = value;
+	return true;
+}
+
+// Reevalue `out` et rend le nombre de calculs de CE SEUL parcours.
+std::size_t ComputesOf (Evaluator &evaluator, NodeId out,
+                        std::shared_ptr<const Mesh> *mesh = nullptr)
+{
+	evaluator.ResetStats ();
+	EvalContext ctx;
+	ValueList outputs;
+	const EvalResult r = evaluator.Evaluate (out, outputs, ctx);
+	EXPECT_TRUE (r.IsOk ()) << r.detail;
+	if (mesh != nullptr && r.IsOk () && !outputs.empty ())
+		*mesh = outputs[0].Share<Mesh> (Types ().mesh);
+	return evaluator.GetStats ().misses;
+}
+
+float ZExtent (const Mesh &mesh)
+{
+	float e[3];
+	Extent (mesh, e);
+	return e[2];
+}
+
+} // namespace
+
+TEST (TEST_cggraph_svg_k5, r6_depth_change_costs_a_full_recompute_under_g2)
+{
+	// G2 : file.ref -> svg.extrude.colored.
+	Graph g2;
+	const NodeId g2File = g2.AddNode (MakeNode ("file.ref"));
+	const NodeId g2Node = g2.AddNode (MakeNode ("svg.extrude.colored"));
+	FileRefNode *g2Source = static_cast<FileRefNode *> (g2.FindNode (g2File));
+	ASSERT_NE (g2Source, nullptr);
+	ASSERT_NE (g2.FindNode (g2Node), nullptr);
+	g2Source->SetPath (kTiger);
+	ASSERT_EQ (g2.Connect (g2File, 0, g2Node, 0), ConnectStatus::Ok);
+
+	Evaluator g2Eval (g2);
+	ASSERT_EQ (ComputesOf (g2Eval, g2Node), 2u);
+
+	ASSERT_TRUE (SetParamValue (g2, g2Node, "depth", 0.35f));
+	EXPECT_FALSE (g2Eval.IsCached (g2Node));
+	EXPECT_TRUE (g2Eval.IsCached (g2File));
+	std::shared_ptr<const Mesh> g2Mesh;
+	const std::size_t depthComputes = ComputesOf (g2Eval, g2Node, &g2Mesh);
+
+	ASSERT_TRUE (SetParamValue (g2, g2Node, "flattenTol", 0.0051f));
+	const std::size_t flattenComputes = ComputesOf (g2Eval, g2Node);
+
+	// Le monolithe seul est recalcule, une fois, et `depth` coute ce que coute
+	// `flattenTol` : aucune economie residuelle.
+	EXPECT_EQ (depthComputes, 1u);
+	EXPECT_EQ (depthComputes, flattenComputes);
+	// Le recalcul porte la nouvelle profondeur : un cache qui l'ignorerait
+	// rendrait l'ancien solide.
+	ASSERT_NE (g2Mesh, nullptr);
+	EXPECT_NEAR (ZExtent (*g2Mesh), 0.35f, 1e-5f);
+
+	// Etage : file.ref -> svg.contours -> shape.extrude.
+	Graph st;
+	const NodeId stFile = st.AddNode (MakeNode ("file.ref"));
+	const NodeId stContours = st.AddNode (MakeNode ("svg.contours"));
+	const NodeId stExtrude = st.AddNode (MakeNode ("shape.extrude"));
+	FileRefNode *stSource = static_cast<FileRefNode *> (st.FindNode (stFile));
+	ASSERT_NE (stSource, nullptr);
+	ASSERT_NE (st.FindNode (stContours), nullptr);
+	ASSERT_NE (st.FindNode (stExtrude), nullptr);
+	stSource->SetPath (kTiger);
+	ASSERT_EQ (st.Connect (stFile, 0, stContours, 0), ConnectStatus::Ok);
+	ASSERT_EQ (st.Connect (stContours, 0, stExtrude, 0), ConnectStatus::Ok);
+
+	Evaluator stEval (st);
+	ASSERT_EQ (ComputesOf (stEval, stExtrude), 3u);
+
+	ASSERT_TRUE (SetParamValue (st, stExtrude, "depth", 0.35f));
+	EXPECT_TRUE (stEval.IsCached (stContours));
+	EXPECT_EQ (ComputesOf (stEval, stExtrude), 1u);
+	// L'extrudeur seul a ete recalcule : les contours sont toujours en cache.
+	EXPECT_TRUE (stEval.IsCached (stContours));
+}

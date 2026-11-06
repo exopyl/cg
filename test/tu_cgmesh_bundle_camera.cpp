@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <string>
+
 #include "../src/cgmesh/bundle_camera.h"
 
 //
@@ -62,10 +64,13 @@ TEST(TEST_bundle_camera, default_constructor_zeroes_vectors_and_scalars)
     EXPECT_EQ(cam.h, 0u);
 }
 
-TEST(TEST_bundle_camera, dump_does_not_crash)
+TEST(TEST_bundle_camera, dump_prints_the_camera_parameters)
 {
     BundleCamera cam;
-    // Smoke test: Dump dereferences R/Rinv/T/d; just make sure it runs.
+    cam.f_pxl = 1234.5f;
+    testing::internal::CaptureStdout();
     cam.Dump();
-    SUCCEED();
+    const std::string out = testing::internal::GetCapturedStdout();
+    EXPECT_NE(out.find("[camera] focal length : 1234.500000"), std::string::npos) << out;
+    EXPECT_NE(out.find("[camera] rotation :"), std::string::npos) << out;
 }

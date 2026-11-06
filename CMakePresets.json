@@ -21,7 +21,7 @@
     {
       "name": "local-windows",
       "displayName": "Local (Windows, VS 2026)",
-      "description": "Gabarit destine a etre HERITE, jamais configure directement : ses cinq EXTERN_* valent \"...\". Chaque machine cree un preset qui en herite dans CMakeUserPresets.json et renseigne les chemins reels (cf. README). Masque pour cette raison -- selectionne tel quel dans Visual Studio, il echoue sur un repertoire d'inclusion inexistant.",
+      "description": "Gabarit destine a etre HERITE, jamais configure directement : ses quatre EXTERN_* valent \"...\". Chaque machine cree un preset qui en herite dans CMakeUserPresets.json et renseigne les chemins reels (cf. README). Masque pour cette raison -- selectionne tel quel dans Visual Studio, il echoue sur un repertoire d'inclusion inexistant.",
       "inherits": "_base",
       "generator": "Visual Studio 18 2026",
       "architecture": {
@@ -34,7 +34,6 @@
         "EXTERN_OPENNURBS": "...",
         "EXTERN_OCCT": "...",
         "EXTERN_WXWIDGETS": "...",
-        "EXTERN_GOOGLETEST": "...",
         "EXTERN_LIB3MF": "..."
       },
       "hidden": true
@@ -83,6 +82,40 @@
       }
     },
     {
+      "name": "ci-linux-clang",
+      "displayName": "CI Linux -- Clang",
+      "description": "Meme configuration que ci-linux, compilee par Clang au lieu de GCC. HERITE de ci-linux (chemins EXTERN_*, options, Release) pour la meme raison que ci-linux-asan : une seule liste a tenir a jour. Seuls les compilateurs changent ; les bibliotheques tierces binaires (OCCT via apt, OpenNURBS et lib3mf de cg_binaries) restent celles compilees par GCC, liees a travers l'ABI libstdc++ commune. googletest, versionne sous extern/, est compile par Clang avec le reste. Aucun -Werror : les warnings se lisent dans le journal, cible par cible. Restreint a Linux par heritage de la condition de ci-linux.",
+      "inherits": "ci-linux",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
+    },
+    {
+      "name": "ci-windows",
+      "displayName": "CI Windows -- MSVC (VS 2026)",
+      "description": "Workflow GitHub Actions Windows. HERITE du gabarit local-windows (generateur Visual Studio 18 2026, x64, lib3mf) : la CI construit avec la meme chaine que les postes de developpement, et un runner sans VS 2026 echoue des la configuration au lieu de compiler avec une autre version. Les binaires de cg_binaries sont lies par l'editeur de liens 14.50 (VS 2026) : une chaine plus ancienne ne garantit pas leur lien. Multi-configuration : Debug et Release se choisissent dans les presets de build et de test. Perimetre D1 du plan 1 : sinaia, cgre, sulina, ONNX et le canvas ImGui sont eteints ; cgnet reste construit, le CMakeLists racine l'ajoute sans option sous WIN32 et TU le lie. EXTERN_* pointent sous .deps/, que seule l'etape de telechargement du workflow cree (archive cgbinaries-*-windows-x86_64.zip). googletest est versionne sous extern/. Restreint a Windows par condition, pour la meme raison que ci-linux l'est a Linux.",
+      "inherits": "local-windows",
+      "cacheVariables": {
+        "ENABLE_SINAIA": "OFF",
+        "ENABLE_CGRE": "OFF",
+        "ENABLE_SULINA": "OFF",
+        "ENABLE_ONNX": "OFF",
+        "ENABLE_RECONSTRUCTION_CLI": "OFF",
+        "ENABLE_CGGRAPH_BOILERPLATE": "OFF",
+        "ENABLE_POISSON": "ON",
+        "EXTERN_OPENNURBS": "${sourceDir}/.deps/cg_binaries/opennurbs-v8.27.26019.16021",
+        "EXTERN_OCCT": "${sourceDir}/.deps/cg_binaries/OCCT-8_0_0",
+        "EXTERN_LIB3MF": "${sourceDir}/.deps/cg_binaries/lib3mf-2.5.0",
+        "EXTERN_WXWIDGETS": null
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
       "name": "maker-wasm",
       "displayName": "maker (WebAssembly, Emscripten)",
       "description": "Module WASM maker : cgmesh via Emscripten. Generateur NMake (nmake fourni par Visual Studio). Necessite EMSDK dans l'environnement, et cmake + nmake sur le PATH. Configurer avec `cmake --preset maker-wasm` (ou `emcmake cmake --preset maker-wasm`).",
@@ -102,6 +135,13 @@
         "ENABLE_CGNET_DEMO": "OFF",
         "ENABLE_RECONSTRUCTION_CLI": "OFF"
       }
+    },
+    {
+      "name": "ci-maker-wasm",
+      "displayName": "CI maker (WebAssembly, Emscripten, Ninja)",
+      "description": "Meme configuration que maker-wasm, generateur Ninja au lieu de NMake. HERITE de maker-wasm (chaine Emscripten, options eteintes) : la liste des options WebAssembly reste unique. NMake n'existe qu'avec Visual Studio ; Ninja existe sur les deux systemes, ce qui permet au job maker-wasm de tourner sur un runner Linux. Comme maker-wasm, exige EMSDK dans l'environnement et ecrit maker.js et maker.wasm dans maker/web/, fichiers suivis par git.",
+      "inherits": "maker-wasm",
+      "generator": "Ninja"
     }
   ],
   "buildPresets": [
@@ -133,6 +173,38 @@
         "lhs": "${hostSystemName}",
         "rhs": "Linux"
       }
+    },
+    {
+      "name": "ci-linux-clang",
+      "inherits": "ci-linux",
+      "configurePreset": "ci-linux-clang"
+    },
+    {
+      "name": "ci-windows-debug",
+      "configurePreset": "ci-windows",
+      "configuration": "Debug",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "ci-windows-release",
+      "configurePreset": "ci-windows",
+      "configuration": "Release",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "ci-maker-wasm",
+      "configurePreset": "ci-maker-wasm",
+      "targets": [
+        "maker"
+      ]
     }
   ],
   "testPresets": [
@@ -165,6 +237,37 @@
         "lhs": "${hostSystemName}",
         "rhs": "Linux"
       }
+    },
+    {
+      "name": "ci-linux-clang",
+      "inherits": "ci-linux",
+      "configurePreset": "ci-linux-clang"
+    },
+    {
+      "name": "_ci-windows",
+      "hidden": true,
+      "configurePreset": "ci-windows",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "ci-windows-debug",
+      "inherits": "_ci-windows",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ci-windows-release",
+      "inherits": "_ci-windows",
+      "configuration": "Release"
     }
   ]
 }

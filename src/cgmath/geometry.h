@@ -326,7 +326,7 @@ class Torus : public Geometry
 {
 public:
 	Torus () {
-		R = 1.; r = 0.2;
+		R = 1.f; r = 0.2f;
 		m_pAABox = nullptr;
 	};
 	Torus (float _R, float _r) {

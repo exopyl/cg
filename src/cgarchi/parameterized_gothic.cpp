@@ -39,9 +39,11 @@ std::vector<Parameter> ParameterizedGothicBlock::GetParameters()
 }
 void ParameterizedGothicBlock::Regenerate()
 {
+	// Construit avant de detruire : un echec laisse l'ancien maillage en place.
+	auto mesh = CreateBlock(m_width, m_height, m_depth, m_bevel);
+	mesh->ComputeNormals();
 	delete m_pMesh;
-	m_pMesh = CreateBlock(m_width, m_height, m_depth, m_bevel);
-	m_pMesh->ComputeNormals();
+	m_pMesh = mesh.release();
 }
 
 // --- Gothic Window (remplage parametrique complet) -------------------------
@@ -155,14 +157,22 @@ namespace
 // plus). Un champ ajoute ou retire fait echouer la compilation : mettre alors a
 // jour operator== ci-dessous, settings_equality_compares_every_field, puis ce
 // compte. La taille ne suffit pas : un champ peut se loger dans le bourrage.
-namespace
+//
+// AnyField se convertit en n'importe quel champ ; son operateur n'est employe
+// que dans un contexte non evalue (decltype) et n'est donc pas defini. Le type
+// vit hors du namespace anonyme : -Wunused-template ne compte pas un usage non
+// evalue et signalerait un gabarit a liaison interne comme inutilise.
+namespace gothic_window_settings_guard
 {
-	constexpr std::size_t kSettingsFieldCount = 32;
-
 	struct AnyField
 	{
 		template <class T> operator T () const;
 	};
+}
+
+namespace
+{
+	constexpr std::size_t kSettingsFieldCount = 32;
 
 	template <class T, class... Args>
 	constexpr auto braceInitializable (int) -> decltype(T{ std::declval<Args>()... }, true) { return true; }
@@ -172,7 +182,7 @@ namespace
 	template <class T, std::size_t... I>
 	constexpr bool initializableFrom (std::index_sequence<I...>)
 	{
-		return braceInitializable<T, decltype((void)I, AnyField{})...>(0);
+		return braceInitializable<T, decltype((void)I, gothic_window_settings_guard::AnyField{})...>(0);
 	}
 }
 static_assert(initializableFrom<GothicWindowSettings>(std::make_index_sequence<kSettingsFieldCount>{})
@@ -386,7 +396,7 @@ double ParameterizedGothicWindow::prepareBay (WindowGeometry &geom, GothicMeshPa
 		wi.hasRosetteFoils = true;
 		wi.rosetteFoils.count = std::min(std::max(m_settings.rosetteFoilCount, 3), 24);
 		// Always build the cgmath foil ring as ROUND : the maker rendering
-		// builds its own pointed petals (pointedFoilPetals), so we only need
+		// builds its own pointed petals (cuspedFlowerPointed), so we only need
 		// count + outerCircle from cgmath. Forcing Round avoids buildFoilRing
 		// throwing on extreme pointedness (which made the whole window vanish).
 		wi.rosetteFoils.type  = FoilType::Round;

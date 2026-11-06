@@ -248,9 +248,10 @@ TEST (TEST_cgmesh_diffparam_colors, curvature_colors_are_exactly_the_jet_of_the_
 	EXPECT_FLOAT_EQ (colors[3 * (size_t)argmax + 2], 0.f);
 
 	// Derive lente de la COURBURE : surveillee par ses bornes seulement, a 1e-6.
-	// Valeurs concordantes sous MSVC et sous GCC, relevees le 2026-08-30.
-	EXPECT_NEAR (min_value, 0.000784f, 1e-6f);
-	EXPECT_NEAR (max_value, 0.953061f, 1e-6f);
+	// Valeurs relevees sous MSVC ; elles supposent le solveur propre de
+	// TMatrix3 converge (TEST_cgmath_TMatrix3.SolveEigensystem*).
+	EXPECT_NEAR (min_value, 0.031894f, 1e-6f);
+	EXPECT_NEAR (max_value, 0.953063f, 1e-6f);
 
 	delete he;
 }

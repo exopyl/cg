@@ -19,7 +19,7 @@ double CosineShaftRadius (double y, double H, double lowerRadius, double upperRa
 }
 
 Conchoid::Conchoid (double H, double upperRadius, double cd)
-	: m_H (H), m_upper (upperRadius), m_cd (cd), m_e (0.0)
+	: m_H (H), m_cd (cd), m_e (0.0)
 {
 	if (!(H > 0.0) || !(upperRadius > 0.0) || !(cd > upperRadius))
 		throw std::invalid_argument ("Conchoid : il faut H > 0 et CD > r_sup > 0");
