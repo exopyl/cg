@@ -1,5 +1,7 @@
-#include <stdio.h>
-#include <math.h>
+#include <cmath>
+#include <cstdint>
+#include <stdexcept>
+#include <string>
 
 #include <cgarchi/surface_architecture.h>
 #include <cgmath/cgmath.h>
@@ -7,13 +9,65 @@
 namespace cgarchi
 {
 
-Mesh* CreateBlock (float _width, float _height, float _depth, float bevel)
+namespace
 {
-	Mesh *mesh = new Mesh (24, 26);
 
-	float width = _width/2.;
-	float height = _height/2.;
-	float depth = _depth/2.;
+float toFloat (double v) { return static_cast<float> (v); }
+
+void requireFinite (float value, const char *function, const char *name)
+{
+	if (!std::isfinite (value))
+		throw std::invalid_argument (std::string (function) + ": " + name + " is not finite");
+}
+
+// Refuse npts = 1 : un echantillonnage d'arc exige ses deux extremites.
+void requireTwoSamplesOrNone (unsigned npts, const char *function)
+{
+	if (npts == 1)
+		throw std::invalid_argument (std::string (function) + ": npts must be 0 or at least 2");
+}
+
+// Angle de l'echantillon i sur count echantillons repartis de start a end,
+// extremites comprises ; un echantillon unique est pris en start.
+double sampleAngle (double start, double end, unsigned i, unsigned count)
+{
+	if (count < 2)
+		return start;
+	return start + (end - start) * i / (count - 1);
+}
+
+ArcSamples makeSamples (unsigned npts)
+{
+	ArcSamples s;
+	s.points.resize (npts);
+	s.tangents.resize (npts);
+	return s;
+}
+
+// Cercle echantillonne de angle0 a angle1 inclus.
+std::vector<Vector2f> sampleCircle (const Vector2f &center, float radius,
+                                    float angle0, float angle1, unsigned npts)
+{
+	std::vector<Vector2f> points (npts);
+	for (unsigned i = 0; i < npts; ++i)
+	{
+		const float alpha = (npts < 2) ? angle0
+			: angle0 + (angle1 - angle0) * static_cast<float> (i) / static_cast<float> (npts - 1);
+		points[i] = Vector2f (center[0] + radius * std::cos (alpha),
+		                      center[1] + radius * std::sin (alpha));
+	}
+	return points;
+}
+
+} // namespace
+
+std::unique_ptr<Mesh> CreateBlock (float _width, float _height, float _depth, float bevel)
+{
+	auto mesh = std::make_unique<Mesh> (24, 26);
+
+	const float width = _width / 2.f;
+	const float height = _height / 2.f;
+	const float depth = _depth / 2.f;
 
 	// vertices
 	float vertices[3*24] = {width-bevel,    depth-bevel,   -height,
@@ -73,168 +127,15 @@ Mesh* CreateBlock (float _width, float _height, float _depth, float bevel)
 	return mesh;
 }
 
-/*
-//
-// Arch (triangles)
-//
-Mesh* CreateArch (void)
+std::unique_ptr<Mesh> CreateArch ()
 {
-	int n=50;
-	printf ("-> %d %d\n", 16+2*(n-1), 22 + 4 + 4*(n-2) + 2 + 4);
-	Mesh *mesh = new Mesh (16+2*(n-1), 22 + 4 + 4*(n-2) + 2 + 4);
+	const unsigned int n = 40;
+	auto mesh = std::make_unique<Mesh> (16+2*(n-1), 11 + 3 + 3*(n-2) + 2 + 3);
 
-	float door_width = 3.;
-	float door_height = 6.;
-	float column_thickness = 2.;
-	float column_height = 2.;
-
-	//
-	// vertices
-	//
-	// bottom left
-	mesh->SetVertex (0, -door_width-column_thickness, -column_thickness/2., 0.);
-	mesh->SetVertex (1, -door_width-column_thickness,  column_thickness/2., 0.);
-	mesh->SetVertex (2, -door_width,                   column_thickness/2., 0.);
-	mesh->SetVertex (3, -door_width,                  -column_thickness/2., 0.);
-
-	// bottom right
-	mesh->SetVertex (4, door_width+column_thickness, -column_thickness/2., 0.);
-	mesh->SetVertex (5, door_width+column_thickness,  column_thickness/2., 0.);
-	mesh->SetVertex (6, door_width,                   column_thickness/2., 0.);
-	mesh->SetVertex (7, door_width,                  -column_thickness/2., 0.);
-
-	// top
-	mesh->SetVertex (8,  -door_width-column_thickness, -column_thickness/2., door_height);
-	mesh->SetVertex (9,  -door_width-column_thickness,  column_thickness/2., door_height);
-	mesh->SetVertex (10,  door_width+column_thickness,  column_thickness/2., door_height);
-	mesh->SetVertex (11,  door_width+column_thickness, -column_thickness/2., door_height);
-
-	// middle
-	mesh->SetVertex (12, -door_width, -column_thickness/2., column_height);
-	mesh->SetVertex (13, -door_width,  column_thickness/2., column_height);
-	mesh->SetVertex (14,  door_width,  column_thickness/2., column_height);
-	mesh->SetVertex (15,  door_width, -column_thickness/2., column_height);
-
-	//
-	// faces
-	//
-
-	// bottom
-	mesh->SetFace (0, 0, 1, 2);
-	mesh->SetFace (1, 0, 2, 3);
-
-	mesh->SetFace (2, 4, 6, 5);
-	mesh->SetFace (3, 4, 7, 6);
-
-	// up
-	mesh->SetFace (4, 8, 10, 9);
-	mesh->SetFace (5, 8, 11, 10);
-
-	// side left
-	mesh->SetFace (6, 0, 8, 1);
-	mesh->SetFace (7, 1, 8, 9);
-
-	// side right
-	mesh->SetFace (8, 4, 5, 10);
-	mesh->SetFace (9, 4, 10, 11);
-	
-	// front left
-	mesh->SetFace (10, 12, 0, 3);
-	mesh->SetFace (11, 12, 8, 0);
-
-	// front right
-	mesh->SetFace (12, 15, 7, 4);
-	mesh->SetFace (13, 15, 4, 11);
-
-	// back left
-	mesh->SetFace (14, 13, 2, 1);
-	mesh->SetFace (15, 13, 1, 9);
-
-	// back right
-	mesh->SetFace (16, 14, 5, 6);
-	mesh->SetFace (17, 14, 10, 5);
-
-	// side interior left
-	mesh->SetFace (18, 3, 2, 12);
-	mesh->SetFace (19, 2, 13, 12);
-
-	// side interior left
-	mesh->SetFace (20, 6, 15, 14);
-	mesh->SetFace (21, 6, 7, 15);
-
-	unsigned int vn = 16;
-	unsigned int fn = 22;
-
-	//
-	// arch
-	//
-	// link extremities
-	for (unsigned int i=1; i<n; i++)
-	{
-		mesh->SetVertex (vn,
-				 door_width*cos(3.14159-i*3.14159/n),
-				 -column_thickness/2.,
-				 column_height + door_width*sin(3.14159-i*3.14159/n));
-		mesh->SetVertex (vn+1,
-				 door_width*cos(3.14159-i*3.14159/n),
-				 column_thickness/2.,
-				 column_height + door_width*sin(3.14159-i*3.14159/n));
-		if (i==1)
-		{
-			// under
-			mesh->SetFace (fn++, 12, 13, vn);
-			mesh->SetFace (fn++, vn, 13, vn+1);
-			
-			// front
-			mesh->SetFace (fn++, 8, 12, vn);
-
-			// back
-			mesh->SetFace (fn++, 13, 9, vn+1);
-		}
-		else
-		{
-			// under
-			mesh->SetFace (fn++, vn-2, vn-1, vn);
-			mesh->SetFace (fn++, vn, vn-1, vn+1);
-
-			// front
-			mesh->SetFace (fn++, vn-2, vn, (i-1<n/2)?8:11);
-			if ((i-1<n/2) != (i-2<n/2))
-				mesh->SetFace (fn++, 11, 8, vn-2);
-				
-
-			// back
-			mesh->SetFace (fn++, vn+1, vn-1, (i-1<n/2)?9:10);
-			if ((i-1<n/2) != (i-2<n/2))
-				mesh->SetFace (fn++, 9, 10, vn-1);
-		}
-		if (i==n-1)
-		{
-			mesh->SetFace (fn++, vn, vn+1, 15);
-			mesh->SetFace (fn++, 15, vn+1, 14);
-			
-			// front
-			mesh->SetFace (fn++, 10, 14, vn+1);
-
-			// back
-			mesh->SetFace (fn++, 15, 11, vn);
-		}
-		vn+=2;
-	}
-
-	return mesh;
-}
-*/
-
-Mesh* CreateArch (void)
-{
-	int n=40;
-	Mesh *mesh = new Mesh (16+2*(n-1), 11 + 3 + 3*(n-2) + 2 + 3);
-
-	float door_width = 3.;
-	float door_height = 6.;
-	float column_thickness = 2.;
-	float column_height = 2.;
+	const float door_width = 3.f;
+	const float door_height = 6.f;
+	const float column_thickness = 2.f;
+	const float column_height = 2.f;
 
 	unsigned int vn = 0;
 	unsigned int fn = 0;
@@ -243,28 +144,28 @@ Mesh* CreateArch (void)
 	// vertices
 	//
 	// bottom left
-	mesh->SetVertex (vn++, -door_width-column_thickness, -column_thickness/2., 0.);
-	mesh->SetVertex (vn++, -door_width-column_thickness,  column_thickness/2., 0.);
-	mesh->SetVertex (vn++, -door_width,                   column_thickness/2., 0.);
-	mesh->SetVertex (vn++, -door_width,                  -column_thickness/2., 0.);
+	mesh->SetVertex (vn++, -door_width-column_thickness, -column_thickness/2.f, 0.f);
+	mesh->SetVertex (vn++, -door_width-column_thickness,  column_thickness/2.f, 0.f);
+	mesh->SetVertex (vn++, -door_width,                   column_thickness/2.f, 0.f);
+	mesh->SetVertex (vn++, -door_width,                  -column_thickness/2.f, 0.f);
 
 	// bottom right
-	mesh->SetVertex (vn++, door_width+column_thickness, -column_thickness/2., 0.);
-	mesh->SetVertex (vn++, door_width+column_thickness,  column_thickness/2., 0.);
-	mesh->SetVertex (vn++, door_width,                   column_thickness/2., 0.);
-	mesh->SetVertex (vn++, door_width,                  -column_thickness/2., 0.);
+	mesh->SetVertex (vn++, door_width+column_thickness, -column_thickness/2.f, 0.f);
+	mesh->SetVertex (vn++, door_width+column_thickness,  column_thickness/2.f, 0.f);
+	mesh->SetVertex (vn++, door_width,                   column_thickness/2.f, 0.f);
+	mesh->SetVertex (vn++, door_width,                  -column_thickness/2.f, 0.f);
 
 	// top
-	mesh->SetVertex (vn++,  -door_width-column_thickness, -column_thickness/2., door_height);
-	mesh->SetVertex (vn++,  -door_width-column_thickness,  column_thickness/2., door_height);
-	mesh->SetVertex (vn++,  door_width+column_thickness,  column_thickness/2., door_height);
-	mesh->SetVertex (vn++,  door_width+column_thickness, -column_thickness/2., door_height);
+	mesh->SetVertex (vn++,  -door_width-column_thickness, -column_thickness/2.f, door_height);
+	mesh->SetVertex (vn++,  -door_width-column_thickness,  column_thickness/2.f, door_height);
+	mesh->SetVertex (vn++,  door_width+column_thickness,  column_thickness/2.f, door_height);
+	mesh->SetVertex (vn++,  door_width+column_thickness, -column_thickness/2.f, door_height);
 
 	// middle
-	mesh->SetVertex (vn++, -door_width, -column_thickness/2., column_height);
-	mesh->SetVertex (vn++, -door_width,  column_thickness/2., column_height);
-	mesh->SetVertex (vn++,  door_width,  column_thickness/2., column_height);
-	mesh->SetVertex (vn++,  door_width, -column_thickness/2., column_height);
+	mesh->SetVertex (vn++, -door_width, -column_thickness/2.f, column_height);
+	mesh->SetVertex (vn++, -door_width,  column_thickness/2.f, column_height);
+	mesh->SetVertex (vn++,  door_width,  column_thickness/2.f, column_height);
+	mesh->SetVertex (vn++,  door_width, -column_thickness/2.f, column_height);
 
 	//
 	// faces
@@ -282,7 +183,7 @@ Mesh* CreateArch (void)
 
 	// side right
 	mesh->SetFace (fn++, 4, 5, 10, 11);
-	
+
 	// front left
 	mesh->SetFace (fn++, 12, 8, 0, 3);
 
@@ -298,7 +199,7 @@ Mesh* CreateArch (void)
 	// side interior left
 	mesh->SetFace (fn++, 2, 13, 12, 3);
 
-	// side interior left
+	// side interior right
 	mesh->SetFace (fn++, 6, 7, 15, 14);
 
 	//
@@ -307,19 +208,16 @@ Mesh* CreateArch (void)
 	// link extremities
 	for (unsigned int i=1; i<n; i++)
 	{
-		mesh->SetVertex (vn,
-				 door_width*cos(3.14159-i*3.14159/n),
-				 -column_thickness/2.,
-				 column_height + door_width*sin(3.14159-i*3.14159/n));
-		mesh->SetVertex (vn+1,
-				 door_width*cos(3.14159-i*3.14159/n),
-				 column_thickness/2.,
-				 column_height + door_width*sin(3.14159-i*3.14159/n));
+		const double angle = 3.14159-i*3.14159/n;
+		const float x = toFloat (door_width*std::cos (angle));
+		const float z = toFloat (column_height + door_width*std::sin (angle));
+		mesh->SetVertex (vn,   x, -column_thickness/2.f, z);
+		mesh->SetVertex (vn+1, x,  column_thickness/2.f, z);
 		if (i==1)
 		{
 			// under
 			mesh->SetFace (fn++, 12, 13, vn+1, vn);
-			
+
 			// front
 			mesh->SetFace (fn++, 8, 12, vn);
 
@@ -335,7 +233,6 @@ Mesh* CreateArch (void)
 			mesh->SetFace (fn++, vn-2, vn, (i-1<n/2)?8:11);
 			if ((i-1<n/2) != (i-2<n/2))
 				mesh->SetFace (fn++, 11, 8, vn-2);
-				
 
 			// back
 			mesh->SetFace (fn++, vn+1, vn-1, (i-1<n/2)?9:10);
@@ -345,7 +242,7 @@ Mesh* CreateArch (void)
 		if (i==n-1)
 		{
 			mesh->SetFace (fn++, vn, vn+1, 14, 15);
-			
+
 			// front
 			mesh->SetFace (fn++, 10, 14, vn+1);
 
@@ -358,262 +255,276 @@ Mesh* CreateArch (void)
 	return mesh;
 }
 
-Mesh* CreateArch2 (void)
+std::unique_ptr<Mesh> CreateArch2 ()
 {
-	Mesh *mesh = new Mesh (360, 0);
+	const unsigned int nVertices = 360;
+	auto mesh = std::make_unique<Mesh> (nVertices, 0);
 
-	float fWidth = 3.;
-	float fTop = 4.;
-	float fRadius = 4.;
-	
-	Vector2f vCenter (-fWidth/4., -fTop/2.);
-
-	unsigned int vn=0;
-	for (unsigned int i=0; i<360; i++)
-	  mesh->SetVertex (vn++, fRadius*cos((float)(i)), fRadius*sin((float)(i)), 0.);
-	  
+	const float fRadius = 4.f;
+	for (unsigned int i=0; i<nVertices; i++)
+	{
+		const float angle = static_cast<float> (i);
+		mesh->SetVertex (i, fRadius*std::cos (angle), fRadius*std::sin (angle), 0.f);
+	}
 
 	return mesh;
 }
 
-
-int create_arc_circle (float center[2], float radius, float angles[2], unsigned int npts, float **p, float **tgt)
+ArcSamples sampleArcBrise (float a, float b, unsigned npts, float offset)
 {
-	float *_p = *p;
-	float *_tgt = *tgt;
-	
-	for (int i=0; i<npts; i++)
-	{
-		float alpha = angles[0] + (angles[1]-angles[0]) * i / (npts - 1);
-		_p[2*i]   = center[0]+radius*cos(alpha);
-		_p[2*i+1] = center[1]+radius*sin(alpha);
-	}
+	static const char *fn = "sampleArcBrise";
+	requireFinite (a, fn, "a");
+	requireFinite (b, fn, "b");
+	requireFinite (offset, fn, "offset");
+	requireTwoSamplesOrNone (npts, fn);
 
-	return 0;
-}
-
-//
-// a = width/2.
-// b = height
-// 
-int create_arc_brise (float a, float b, unsigned int npts, float **p, float **tgt, float offset)
-{
-	float *_p = *p;
-	float *_tgt = *tgt;
-	unsigned int hnpts = npts/2;
-	
 	a += offset;
 	b += offset;
+	if (!(a > 0.f))
+		throw std::invalid_argument ("sampleArcBrise: a + offset must be positive");
+	if (!(b > a))
+		throw std::invalid_argument ("sampleArcBrise: b + offset must exceed a + offset");
 
-	Vector2f C ((a*a - b*b)/(2.*a), 0.);
-	float r = a-C[0];
-	float alpha_max = atan (-b/C[0]);
-	//printf ("[create_arc_brise] %f %f / %f\n", C[0], C[1], r);
+	ArcSamples s = makeSamples (npts);
+	if (npts == 0)
+		return s;
 
-	float x, y;
-	for (int i=0; i<hnpts; i++)
+	// Centre du cercle de la moitie droite, sur l'axe des pieds : il passe par
+	// le pied (a, 0) et par le sommet (0, b).
+	const Vector2f C (toFloat ((a*a - b*b)/(2.*a)), 0.f);
+	const float r = a-C[0];
+	const float alpha_max = std::atan (-b/C[0]);
+
+	const unsigned hnpts = npts/2;
+	const bool odd = (npts % 2) != 0;
+	for (unsigned i=0; i<hnpts; i++)
 	{
-		float alpha = alpha_max * i / (hnpts - 1);
-		_p[2*i] = C[0]+r*cos(alpha);
-		_p[2*i+1] = C[1]+r*sin(alpha);
+		// npts pair : la moitie atteint le sommet ; impair : le sommet est
+		// l'echantillon du milieu, la moitie s'arrete avant.
+		const unsigned last = odd ? hnpts : hnpts - 1;
+		const float alpha = (last == 0) ? 0.f : alpha_max * static_cast<float> (i) / static_cast<float> (last);
+		const float x = C[0]+r*std::cos (alpha);
+		const float y = C[1]+r*std::sin (alpha);
+		const float sa = std::sin (alpha);
+		const float ca = std::cos (alpha);
 
-		// symmetry
-		_p[2*(npts-1-i)]   = -_p[2*i];
-		_p[2*(npts-1-i)+1] = _p[2*i+1];
+		s.points[i] = Vector2f (x, y);
+		s.tangents[i] = Vector2f (-sa, ca);
+
+		// symetrie x -> -x, parcourue en sens inverse
+		s.points[npts-1-i] = Vector2f (-x, y);
+		s.tangents[npts-1-i] = Vector2f (-sa, -ca);
+	}
+	if (odd)
+	{
+		s.points[hnpts] = Vector2f (0.f, b);
+		s.tangents[hnpts] = Vector2f (-1.f, 0.f);
 	}
 
-	return 0;
+	return s;
 }
 
 // http://ens.math.univ-montp2.fr/SPIP/irem/archi/mathtxt/arcaccolade.php
-int create_arc_accolade (float a, float b, float e, unsigned int npts, float **p, float **n)
+ArcSamples sampleArcAccolade (float /*a*/, float /*b*/, float /*e*/, unsigned npts)
 {
-	float *_p = *p;
-	float *_n = *n;
-	unsigned int hnpts = npts/2;
+	requireTwoSamplesOrNone (npts, "sampleArcAccolade");
 
-	float x, y;
+	ArcSamples s = makeSamples (npts);
+	if (npts == 0)
+		return s;
 
-	a = 5.; // Ox
-	b = 3.; // Oy
-	e = 0.3; // 0. (0) -> 1. (A)
+	const float a = 5.f; // Ox
+	const float b = 3.f; // Oy
+	const float e = 0.3f; // 0. (0) -> 1. (A)
 
-	Vector2f A (a, 0.);
-	Vector2f B (0., b);
-	Vector2f E (a*e, b*(1.-e));
-	Vector2f O1 (a*e, 0.5*(b*b-a*a)*(1-e)/b);
-	Vector2f O2 (a*e, 0.5*(a*a-b*b)*e/b+b);
+	const Vector2f E (a*e, b*(1.f-e));
+	const Vector2f O1 (a*e, toFloat (0.5*(b*b-a*a)*(1-e)/b));
+	const Vector2f O2 (a*e, toFloat (0.5*(a*a-b*b)*e/b+b));
 
-	Vector2f O1A = A - O1;
-	Vector2f O1E = E - O1;
-	Vector2f O2E = E - O2;
-	Vector2f O2B = B - O2;
-	float r1 = O1E.getLength ();
-	float r2 = O2E.getLength ();
+	const float r1 = (E - O1).getLength ();
+	const float r2 = (E - O2).getLength ();
 
-	float alpha;
-	float alpha1 = -atan (O1[1]/a);
-	for (int i=0; i<hnpts; i++)
+	const unsigned n1 = npts/2;
+
+	const float alpha1 = -std::atan (O1[1]/a);
+	for (unsigned i=0; i<n1; i++)
 	{
-		alpha = alpha1 + (.5*3.14159-alpha1) * i / (hnpts - 1);
-		x = O1[0]+r1*cos(alpha);
-		y = O1[1]+r1*sin(alpha);
-		_p[2*i]   = x;
-		_p[2*i+1] = y;
+		const float alpha = toFloat (sampleAngle (alpha1, .5*3.14159, i, n1));
+		s.points[i] = Vector2f (O1[0]+r1*std::cos (alpha), O1[1]+r1*std::sin (alpha));
+		s.tangents[i] = Vector2f (-std::sin (alpha), std::cos (alpha));
 	}
 
-	float alpha2 = 3.14159 + atan ((O2[1]-b)/O2[0]);
-	for (int i=0; i<hnpts; i++)
-	{
-		alpha = alpha2 + (.5*3.*3.14159-alpha2) * i / (hnpts - 1);
-		x = O2[0]+r2*cos(alpha);
-		y = O2[1]+r2*sin(alpha);
-		_p[2*(hnpts+i)]   = x;
-		_p[2*(hnpts+i)+1] = y;
-	}
+	// Second arc : n1 echantillons de alpha2 a 3pi/2, comme pour npts pair ;
+	// npts impair ajoute le dernier echantillon en 3pi/2 (D12).
+	const float alpha2 = toFloat (3.14159 + std::atan ((O2[1]-b)/O2[0]));
+	const double alpha2End = .5*3.*3.14159;
+	const auto setSecondArc = [&] (unsigned k, float alpha) {
+		s.points[k] = Vector2f (O2[0]+r2*std::cos (alpha), O2[1]+r2*std::sin (alpha));
+		s.tangents[k] = Vector2f (-std::sin (alpha), std::cos (alpha));
+	};
+	for (unsigned i=0; i<n1; i++)
+		setSecondArc (n1+i, toFloat (sampleAngle (alpha2, alpha2End, i, n1)));
+	if ((npts % 2) != 0)
+		setSecondArc (npts-1, toFloat (alpha2End));
 
-	return 0;
+	return s;
 }
 
 // http://ens.math.univ-montp2.fr/SPIP/irem/archi/mathtxt/arcanse.php
-int create_arc_anse_de_panier (float a, float e, unsigned int npts, float **p, float **n)
+ArcSamples sampleArcAnseDePanier (float a, float e, unsigned npts)
 {
-	float *_p = *p;
-	float *_n = *n;
+	static const char *fn = "sampleArcAnseDePanier";
+	requireFinite (a, fn, "a");
+	requireFinite (e, fn, "e");
+	requireTwoSamplesOrNone (npts, fn);
+	if (!(a > 0.f))
+		throw std::invalid_argument ("sampleArcAnseDePanier: a must be positive");
+	if (!(e >= 0.f && e < 1.f))
+		throw std::invalid_argument ("sampleArcAnseDePanier: e must be in [0, 1)");
 
-	Vector2f O1 ( a*e, 0.);
-	Vector2f O2 (-a*e, 0.);
-	Vector2f O0 (0., -a*e*tan(3.14159/3.));
-	float r = a*(1.-e);
-	float rc = r+a*e*sqrt(1+tan(3.14159/3.)*tan(3.14159/3.));
+	ArcSamples s = makeSamples (npts);
+	if (npts == 0)
+		return s;
 
-	for (int i=0; i<npts; i++)
-	{
-		float alpha = 3.14159 * i / (npts - 1);
-		if (i < npts/3.) // left portion
-		{
-			_p[2*i] = O1[0]+r*cos(alpha);
-			_p[2*i+1] = O1[1]+r*sin(alpha);
-		}
-		else if (i > 2*npts/3.) // right portion
-		{
-			_p[2*i] = O2[0]+r*cos(alpha);
-			_p[2*i+1] = O2[1]+r*sin(alpha);
-		}
-		else // central portion
-		{
-			_p[2*i] = O0[0]+rc*cos(alpha);
-			_p[2*i+1] = O0[1]+rc*sin(alpha);
-		}
+	const double tan60 = std::tan (3.14159/3.);
+	const Vector2f O1 ( a*e, 0.f);
+	const Vector2f O2 (-a*e, 0.f);
+	const Vector2f O0 (0.f, toFloat (-a*e*tan60));
+	const float r = toFloat (a*(1.-e));
+	const float rc = toFloat (r+a*e*std::sqrt (1+tan60*tan60));
 
-		_n[2*i] = -sin(alpha);
-		_n[2*i+1] = cos(alpha);
-	}
-/*	
-	// right portion
-	for (float alpha=0.; alpha<3.14159/3.; alpha+=0.01)
+	// Les trois arcs se raccordent tangentiellement a pi/3 et 2pi/3 : la portion
+	// est choisie par l'angle de l'echantillon.
+	const float alphaRight = toFloat (3.14159/3.);
+	const float alphaLeft = toFloat (2.*3.14159/3.);
+	for (unsigned i=0; i<npts; i++)
 	{
-		_p[2*vi] = O1[0]+r*cos(alpha);
-		_p[2*vi+1] = O1[1]+r*sin(alpha);
-		//printf ("v %f %f 0.\n", O1[0]+r*cos(alpha), O1[1]+r*sin(alpha));
+		const float alpha = toFloat (3.14159 * i / (npts - 1));
+		const float ca = std::cos (alpha);
+		const float sa = std::sin (alpha);
+		if (alpha < alphaRight) // portion du pied droit
+			s.points[i] = Vector2f (O1[0]+r*ca, O1[1]+r*sa);
+		else if (alpha > alphaLeft) // portion du pied gauche
+			s.points[i] = Vector2f (O2[0]+r*ca, O2[1]+r*sa);
+		else // portion centrale
+			s.points[i] = Vector2f (O0[0]+rc*ca, O0[1]+rc*sa);
+
+		s.tangents[i] = Vector2f (-sa, ca);
 	}
-	// central portion
-	for (float alpha=3.14159/3.; alpha<2.*3.14159/3.; alpha+=0.01)
-	{
-		_p[2*] = O0[0]+rc*cos(alpha);
-		_p[2*] = O0[1]+rc*sin(alpha);
-		//printf ("v %f %f 0.\n", O0[0]+rc*cos(alpha), O0[1]+rc*sin(alpha));x
-	}
-	// left portion
-	for (float alpha=2.*3.14159/3.; alpha<3.14159; alpha+=0.01)
-	{
-		_p[2*] = O2[0]+r*cos(alpha);
-		_p[2*] = O2[1]+r*sin(alpha);
-		//printf ("v %f %f 0.\n", O2[0]+r*cos(alpha), O2[1]+r*sin(alpha));
-	}
-*/
-	return 0;
+
+	return s;
 }
 
 // http://ens.math.univ-montp2.fr/SPIP/irem/archi/mathtxt/arcram.php
-int create_arc_rampant (float a, float t, unsigned int npts, float **p, float **n)
+ArcSamples sampleArcRampant (float /*a*/, float /*t*/, unsigned npts)
 {
-	float *_p = *p;
-	float *_n = *n;
+	requireTwoSamplesOrNone (npts, "sampleArcRampant");
 
-	a = 1.;
-	t = 0.6;
+	ArcSamples s = makeSamples (npts);
+	if (npts == 0)
+		return s;
 
-	Vector2f O1 (0., 0.);
-	Vector2f O2 (0., t*a);
-	
-	int nh = npts/2;
-	int vi = 0;
-	
-	// left portion : 3.14159 <= alpha < 3.14159/2
-	for (vi=0; vi<nh; vi++)
+	const float a = 1.f;
+	const float t = 0.6f;
+
+	const Vector2f O1 (0.f, 0.f);
+	const Vector2f O2 (0.f, t*a);
+
+	const unsigned nh = npts/2;
+
+	// premiere portion : pi >= alpha > pi/2, parcourue a angle decroissant
+	for (unsigned vi=0; vi<nh; vi++)
 	{
-		float alpha = 3.14159 * (1. - (float)vi/(2*nh));
-		_p[2*vi] = O1[0]+a*cos(alpha);
-		_p[2*vi+1] = O1[1]+a*sin(alpha);
-		
-		_n[2*vi] = -sin(alpha);
-		_n[2*vi+1] = cos(alpha);
+		const float alpha = toFloat (3.14159 * (1. - static_cast<float> (vi)/(2*nh)));
+		s.points[vi] = Vector2f (O1[0]+a*std::cos (alpha), O1[1]+a*std::sin (alpha));
+		s.tangents[vi] = Vector2f (std::sin (alpha), -std::cos (alpha));
 	}
-	
-	// right portion : 3.14159/2 <= alpha <= 0
-	for (vi=0; vi<npts-nh; vi++)
+
+	// seconde portion : pi/2 >= alpha > 0, parcourue a angle decroissant
+	for (unsigned vi=0; vi<npts-nh; vi++)
 	{
-		float alpha = 0.5 * 3.14159 * (1. - (float)vi/npts);
-		_p[2*(nh+vi)] = O2[0]+a*(1.-t)*cos(alpha);
-		_p[2*(nh+vi)+1] = O2[1]+a*(1.-t)*sin(alpha);
-		
-		_n[2*(nh+vi)] = -sin(alpha);
-		_n[2*(nh+vi)+1] = cos(alpha);
+		const float alpha = toFloat (0.5 * 3.14159 * (1. - static_cast<float> (vi)/npts));
+		s.points[nh+vi] = Vector2f (toFloat (O2[0]+a*(1.-t)*std::cos (alpha)),
+		                            toFloat (O2[1]+a*(1.-t)*std::sin (alpha)));
+		s.tangents[nh+vi] = Vector2f (std::sin (alpha), -std::cos (alpha));
 	}
-	
-	return 0;
+
+	return s;
 }
 
-int extrude_moulure_along_curve (unsigned int npcurve, float *pcurve, float *tcurve,
-				 unsigned int npmoulure, float *pmoulure,
-				 float **points, unsigned int **faces)
+void extrudeMoulureAlongCurve (const ArcSamples &curve, const Profile2D &moulure, Mesh &out)
 {
-	float *_points = *points;
-	unsigned int *_faces = *faces;
-	for (int i=0; i<npcurve; i++)
+	static const char *fn = "extrudeMoulureAlongCurve";
+	if (moulure.points.size () < 3)
+		throw std::invalid_argument ("extrudeMoulureAlongCurve: moulure must have at least 3 points");
+	if (curve.points.size () < 2)
+		throw std::invalid_argument ("extrudeMoulureAlongCurve: curve must have at least 2 samples");
+	if (curve.tangents.size () != curve.points.size ())
+		throw std::invalid_argument ("extrudeMoulureAlongCurve: curve points and tangents differ in size");
+	for (const Vector2d &q : moulure.points)
+		if (!std::isfinite (q[0]) || !std::isfinite (q[1]))
+			throw std::invalid_argument ("extrudeMoulureAlongCurve: moulure point is not finite");
+	for (std::size_t i = 0; i < curve.points.size (); ++i)
 	{
-		Vector3f c (pcurve[2*i], 0., pcurve[2*i+1]);
-		for (int j=0; j<npmoulure; j++)
+		requireFinite (curve.points[i][0], fn, "curve point");
+		requireFinite (curve.points[i][1], fn, "curve point");
+		requireFinite (curve.tangents[i][0], fn, "curve tangent");
+		requireFinite (curve.tangents[i][1], fn, "curve tangent");
+		if (curve.tangents[i][0] == 0.f && curve.tangents[i][1] == 0.f)
+			throw std::invalid_argument ("extrudeMoulureAlongCurve: curve tangent is null");
+	}
+
+	const std::size_t n = curve.points.size ();
+	const std::size_t m = moulure.points.size ();
+
+	std::vector<float> vertices;
+	vertices.reserve (3 * n * m);
+	for (std::size_t i = 0; i < n; ++i)
+	{
+		const double cx = curve.points[i][0];
+		const double cz = curve.points[i][1];
+		double tx = curve.tangents[i][0];
+		double tz = curve.tangents[i][1];
+		const double len = std::sqrt (tx*tx + tz*tz);
+		tx /= len;
+		tz /= len;
+
+		// B = (0, -1, 0), T = (tx, 0, tz), N = B x T = (-tz, 0, tx)
+		const double nx = -tz;
+		const double nz = tx;
+		for (std::size_t j = 0; j < m; ++j)
 		{
-			float alpha = 2.*3.14159*j/npmoulure;
-			Vector3f m (pmoulure[2*i], pmoulure[2*i+1], 0.);
-
-			// tangent
-			Vector3f t (tcurve[0], 0., tcurve[1]);
-			t.Normalize ();
-
-			// binormal (= T ^ N)
-			Vector3f b (0., -1., 0.);
-
-			// normal (= B ^ T)
-			Vector3f n = b.CrossProduct (t);
-			n.Normalize ();
-
-			float r = m.getLength ();
-			
-			float x = c[0] + r*(-n[0]*cos(alpha) + b[0]*sin(alpha));
-			float y = c[1] + r*(-n[1]*cos(alpha) + b[1]*sin(alpha));
-			float z = c[2] + r*(-n[2]*cos(alpha) + b[2]*sin(alpha));
-
-			_points[3*(npmoulure*i+j)]   = x;
-			_points[3*(npmoulure*i+j)+1] = y;
-			_points[3*(npmoulure*i+j)+2] = z;
-			printf ("v %f %f %f\n", x, y, z);
+			const double u = moulure.points[j][0];
+			const double v = moulure.points[j][1];
+			vertices.push_back (toFloat (cx + v*nx));
+			vertices.push_back (toFloat (-u));
+			vertices.push_back (toFloat (cz + v*nz));
 		}
 	}
 
-	return 0;
+	std::vector<unsigned int> faces;
+	faces.reserve (6 * m * (n - 1));
+	for (std::size_t i = 0; i + 1 < n; ++i)
+		for (std::size_t j = 0; j < m; ++j)
+		{
+			const std::size_t j1 = (j + 1) % m;
+			const auto v00 = static_cast<unsigned int> (i       * m + j);
+			const auto v10 = static_cast<unsigned int> ((i + 1) * m + j);
+			const auto v11 = static_cast<unsigned int> ((i + 1) * m + j1);
+			const auto v01 = static_cast<unsigned int> (i       * m + j1);
+			faces.insert (faces.end (), {v00, v10, v11, v00, v11, v01});
+		}
+
+	Mesh result;
+	result.SetVertices (static_cast<unsigned int> (n * m), vertices.data ());
+	result.SetFaces (static_cast<unsigned int> (faces.size () / 3), 3, faces.data ());
+
+	// L'affectation recopie aussi la revision de `result` ; celle de `out` doit
+	// rester croissante, car elle sert de cle aux caches indexes sur le maillage.
+	const uint64_t revisionBefore = out.GetRevision ();
+	out = result;
+	while (out.GetRevision () <= revisionBefore)
+		out.IncrementRevision ();
 }
 
 ArcBrise::ArcBrise ()
@@ -648,7 +559,7 @@ void ArcBrise::SetSecondArc (float altitude2, float width2, float height2)
 Rosace::Rosace ()
 {
 	m_nFoils = 3;
-	
+	m_fRadius = 1.f;
 }
 
 Rosace::~Rosace ()
@@ -657,30 +568,28 @@ Rosace::~Rosace ()
 
 Polygon2* Rosace::Generate (void)
 {
-	unsigned int resolution = 20;
+	const unsigned int resolution = 20;
 	Polygon2 *pol = new Polygon2 ();
 	float *p = pol->add_contour (0, m_nFoils*resolution, nullptr);
 
-	float alpha = 2.*M_PI/m_nFoils;
-	float halpha = M_PI/m_nFoils;
-	float radius = sin(halpha) / (1. + sin(halpha));
-	Vector2f center ((1.-radius)*cos(halpha), radius);
+	const float alpha = toFloat (2.*M_PI/m_nFoils);
+	const float halpha = toFloat (M_PI/m_nFoils);
+	const float radius = toFloat (std::sin (halpha) / (1. + std::sin (halpha)));
+	const Vector2f center (toFloat ((1.-radius)*std::cos (halpha)), radius);
 
-	for (int i=0; i<resolution; i++)
+	for (unsigned int i=0; i<resolution; i++)
 	{
-		float a = -.5*M_PI + i*(M_PI+alpha)/resolution;
-		float x = center[0] + radius*cos(a);
-		float y = center[1] + radius*sin(a);
-		p[2*i]   = x;
-		p[2*i+1] = y;
+		const float a = toFloat (-.5*M_PI + i*(M_PI+alpha)/resolution);
+		p[2*i]   = center[0] + radius*std::cos (a);
+		p[2*i+1] = center[1] + radius*std::sin (a);
 	}
 
-	for (int i=1; i<m_nFoils; i++)
+	for (unsigned int i=1; i<m_nFoils; i++)
 	{
-		float theta = i * alpha;
-		Matrix2f rot (cos (theta), -sin (theta),
-			      sin (theta),  cos (theta));
-		for (int j=0; j<resolution; j++)
+		const float theta = static_cast<float> (i) * alpha;
+		Matrix2f rot (std::cos (theta), -std::sin (theta),
+			      std::sin (theta),  std::cos (theta));
+		for (unsigned int j=0; j<resolution; j++)
 		{
 			Vector2f v = rot * Vector2f (p[2*j], p[2*j+1]);
 			p[2*resolution*i + 2*j]   = v[0];
@@ -691,45 +600,31 @@ Polygon2* Rosace::Generate (void)
 	return pol;
 }
 
-//
-// TODO :
-// - treat case when the altitudes are not null
-//
+// Altitudes : decalages verticaux des arcs. Le cercle central n'est juste que
+// pour des altitudes nulles.
 Polygon2* ArcBrise::Generate (void)
 {
-	unsigned int npts = 32;
+	const unsigned int npts = 32;
 
-	// VALIDER AVANT D'ALLOUER : ce refus sortait apres les deux malloc et sans
-	// les liberer, donc toute geometrie invalide fuyait 768 octets
-	// (cpp:S3584, surface_architecture.cpp:703).
-	if (m_fWidth2 > m_fWidth/2.)
-	{
-		printf ("!!! m_fWidth2 > m_fWidth/2.");
+	if (m_fWidth2 > m_fWidth/2.f)
 		return nullptr;
-	}
 
-	float *p = (float*)malloc(3*npts*sizeof(float));
-	float *t = (float*)malloc(3*npts*sizeof(float));
-	if (p == nullptr || t == nullptr)
-	{
-		free (p);
-		free (t);
-		return nullptr;
-	}
+	const ArcSamples principal = sampleArcBrise (m_fWidth/2.f, m_fHeight, npts, 0.f);
+	const ArcSamples second = sampleArcBrise (m_fWidth2/2.f, m_fHeight2, npts, 0.f);
+
+	auto pol = std::make_unique<Polygon2> ();
 
 	// principal arc
-	create_arc_brise (m_fWidth/2., m_fHeight, npts, &p, &t, 0.);
-	Polygon2 *pol = new Polygon2 ();
 	pol->add_contour (0, 3*npts, nullptr);
-	for (int i=0; i<npts; i++)
-		pol->set_point (0, i, p[2*i], m_fAltitude + p[2*i+1]);
+	for (unsigned int i=0; i<npts; i++)
+		pol->set_point (0, i, principal.points[i][0], m_fAltitude + principal.points[i][1]);
 
-	// second arc
-	create_arc_brise (m_fWidth2/2., m_fHeight2, npts, &p, &t, 0.);
-	for (int i=0; i<npts; i++)
+	// second arc, twice, in reverse order
+	for (unsigned int i=0; i<npts; i++)
 	{
-		pol->set_point (0, npts+i, p[2*(npts-1-i)]-m_fWidth/4., m_fAltitude2 + p[2*(npts-1-i)+1]);
-		pol->set_point (0, 2*npts+i, p[2*(npts-1-i)]+m_fWidth/4., m_fAltitude2 + p[2*(npts-1-i)+1]);
+		const Vector2f &q = second.points[npts-1-i];
+		pol->set_point (0, npts+i, q[0]-m_fWidth/4.f, m_fAltitude2 + q[1]);
+		pol->set_point (0, 2*npts+i, q[0]+m_fWidth/4.f, m_fAltitude2 + q[1]);
 	}
 
 	//
@@ -743,103 +638,46 @@ Polygon2* ArcBrise::Generate (void)
 	//
 
 	// principal circle
-	float a, b;
-	a = m_fWidth/2.;
-	b = m_fHeight;
-	Vector2f c_principal ((a*a - b*b)/(2.*a), m_fAltitude);
-	float r_principal = a-c_principal[0];
-	//printf ("principal : %f %f - %f\n", c_principal[0], c_principal[1], r_principal);
+	float a = m_fWidth/2.f;
+	float b = m_fHeight;
+	const Vector2f c_principal (toFloat ((a*a - b*b)/(2.*a)), m_fAltitude);
+	const float r_principal = a-c_principal[0];
 
 	// second circle
 	Vector2f c_second;
-	a = m_fWidth2/2.;
+	a = m_fWidth2/2.f;
 	b = m_fHeight2;
-	c_second.Set ((a*a - b*b)/(2.*a), m_fAltitude2);
-	float r_second = a-c_second[0];
-	c_second[0] -= m_fWidth/4.;
-	//printf ("second : %f %f - %f\n", c_second[0], c_second[1], r_second);
-	
+	c_second.Set (toFloat ((a*a - b*b)/(2.*a)), m_fAltitude2);
+	const float r_second = a-c_second[0];
+	c_second[0] = toFloat (c_second[0] - m_fWidth/4.);
+
 	// middle
 	Vector2f c_mid = c_principal + c_second;
 	c_mid = c_mid * 0.5f;
-	//printf ("middle : %f %f\n", c_mid[0], c_mid[1]);
 
 	// ellipse equation : x^2/a^2 + y^2/b^2 = 1 (centered on c_mid)
-	a = (r_principal + r_second) / 2.;
+	a = toFloat ((r_principal + r_second) / 2.);
 
 	Vector2f tmp = c_principal - c_second;
-	float l = tmp.getLength ()/2.;
-	b = sqrt (a*a - l*l);
-	//printf ("ellipse : a = %f    b = %f\n", a, b);
+	const float l = toFloat (tmp.getLength ()/2.);
+	b = std::sqrt (a*a - l*l);
 
 	// and the translation is :
-	float x_trans = c_mid[0];
-	//printf ("x_trans = %f\n", -x_trans);
+	const float x_trans = c_mid[0];
 
 	// solve the equation with x = x_trans
-	float rosace_y = b * sqrt (1. - x_trans*x_trans/(a*a));
-	printf ("rosace_y = %f\n", rosace_y);
+	const float rosace_y = toFloat (b * std::sqrt (1. - x_trans*x_trans/(a*a)));
 
-	// check the solution
-	tmp.Set (c_principal[0], c_principal[1]-rosace_y);
-	float rosace_radius = r_principal - tmp.getLength ();
-	//printf ("rosace_radius = %f\n", rosace_radius);
-
-	// alternate
 	tmp.Set (c_second[0], c_second[1]-rosace_y);
-	rosace_radius = tmp.getLength () - r_second;
-	//printf ("rosace_radius = %f\n", rosace_radius);
+	const float rosace_radius = tmp.getLength () - r_second;
 
-/*
-	Img *pImg = new Img (1200, 1200);
-	float s = 2.;
-
-	ImgDraw::circle (*pImg, 600, 600,    (int)10/2., 0, 0, 0, 255);
-
-	ImgDraw::circle (*pImg, 600+c_principal[0]/s, 600+c_principal[1]/s,    (int)10/2., 255, 0, 0, 255);
-	ImgDraw::circle (*pImg, 600+c_principal[0]/s, 600+c_principal[1]/s,    (int)r_principal/s, 255, 0, 0, 255);
-
-	ImgDraw::circle (*pImg, 600+c_second[0]/s, 600+c_second[1]/s,    (int)10/2., 0, 255, 0, 255);
-	ImgDraw::circle (*pImg, 600+c_second[0]/s, 600+c_second[1]/s,    (int)r_second/s, 0, 255, 0, 255);
-
-	ImgDraw::circle (*pImg, 600+c_mid[0]/s, 600+c_mid[1]/s,    (int)10/2., 0, 0, 255, 255);
-	ImgDraw::ellipse (*pImg, 600+c_mid[0]/s, 600+c_mid[1]/s,    a/s, b/s, 0., 0., 255, 255);
-	ImgDraw::circle (*pImg, 600, 600-rosace_y/s,    (int)10/2., 0, 0, 255, 255);
-
-	pImg->save ("toto.png");
-*/
-
+	const std::vector<Vector2f> circle =
+		sampleCircle (Vector2f (0.f, rosace_y), rosace_radius, 0.f, toFloat (2.*3.14159), npts);
 	pol->add_contour (1, npts, nullptr);
-	float c[2] = {0., rosace_y};
-	float angles[2] = {0., 2.*3.14159};
-	create_arc_circle (c, rosace_radius, angles, npts, &p, &t);
-	for (int i=0; i<npts; i++)
-		pol->set_point (1, i, p[2*(npts-i-1)], p[2*(npts-i-1)+1]);
+	for (unsigned int i=0; i<npts; i++)
+		pol->set_point (1, i, circle[npts-i-1][0], circle[npts-i-1][1]);
 
-	pol->output ((char*)"polygon1.ppm");
-
-	// create_arc_brise / create_arc_circle ecrivent dans les tampons fournis sans
-	// en prendre la propriete : ils reviennent a l'appelant.
-	free (p);
-	free (t);
-	return pol;
-	//pol->dump ();
-
-
-
-//	return;
-	float *_pVertices;
-	unsigned int _nVertices;
-	unsigned int *_pFaces;
-	unsigned int _nFaces;
-	pol->tesselate (&_pVertices, &_nVertices, &_pFaces, &_nFaces);
-	FILE *f = fopen ("arc_offset.obj", "w");
-	for (int i=0; i<_nVertices; i++)
-		fprintf (f, "v %f %f %f\n", _pVertices[3*i], _pVertices[3*i+1], _pVertices[3*i+2]);
-	for (int i=0; i<_nFaces; i++)
-		fprintf (f, "f %d %d %d\n", 1+_pFaces[3*i], 1+_pFaces[3*i+1], 1+_pFaces[3*i+2]);
-	fclose (f);
+	return pol.release ();
 }
-
 
 } // namespace cgarchi

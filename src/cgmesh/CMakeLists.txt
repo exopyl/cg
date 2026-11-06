@@ -169,10 +169,6 @@ set(CLIPPER2_SRC_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/clipper2/clipper.offset.cpp)
 file(GLOB CLIPPER2_HEADER_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/clipper2/*.h)
 
-if (UNIX)
-	add_compile_options(-fpermissive)
-endif (UNIX)
-
 add_library(cgmesh STATIC ${HEADER_FILES} ${SRC_FILES} ${GLUTESS_HEADER_FILES} ${GLUTESS_SRC_FILES} ${CLIPPER2_SRC_FILES} ${CLIPPER2_HEADER_FILES})
 source_group("glutess" FILES ${GLUTESS_HEADER_FILES} ${GLUTESS_SRC_FILES})
 source_group("clipper2" FILES ${CLIPPER2_SRC_FILES} ${CLIPPER2_HEADER_FILES})
@@ -183,6 +179,17 @@ target_include_directories(cgmesh PUBLIC ${PROJECT_SOURCE_DIR})
 # clipper.engine.h, et un avertissement qu'on apprend a ignorer ne sert plus.
 target_include_directories(cgmesh SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../extern)
 target_link_libraries(cgmesh cgimg)
+
+# Standard porte par la cible : cgmesh ne depend pas de CMAKE_CXX_STANDARD.
+target_compile_features(cgmesh PUBLIC cxx_std_17)
+
+# Avertissements portes par la cible, sans -Werror. Restreints au C++ : les
+# sources C compilees dans cgmesh (glutess, zlib) sont tierces. Sous les
+# generateurs Visual Studio, un niveau d'avertissement vaut pour tout le projet
+# et s'applique donc aussi a ces sources ; leurs diagnostics sont comptes a part.
+target_compile_options(cgmesh PRIVATE
+    $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:GNU,Clang,AppleClang>>:-Wall;-Wextra>
+    $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:MSVC>>:/W4>)
 
 # ---------------------------------------------------------------------------
 #  EN-TETES PRECOMPILES

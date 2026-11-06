@@ -26,6 +26,13 @@ target_include_directories(cgmath PUBLIC
 # herite alors du minimum exige au lieu de le deviner.
 target_compile_features(cgmath PUBLIC cxx_std_17)
 
+# Avertissements portes par la cible, sans -Werror : le niveau ne fuit pas vers
+# les consommateurs (PRIVATE), et un compilateur plus recent ne casse pas le
+# build sur un avertissement nouveau.
+target_compile_options(cgmath PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall;-Wextra>
+    $<$<CXX_COMPILER_ID:MSVC>:/W4>)
+
 # Alias d'espace de noms : `cg::cgmath` se lit comme une cible importee, et une
 # faute de frappe echoue a la configuration au lieu d'inventer un `-lcgmath`.
 add_library(cg::cgmath ALIAS cgmath)

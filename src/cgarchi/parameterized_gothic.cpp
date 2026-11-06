@@ -39,9 +39,11 @@ std::vector<Parameter> ParameterizedGothicBlock::GetParameters()
 }
 void ParameterizedGothicBlock::Regenerate()
 {
+	// Construit avant de detruire : un echec laisse l'ancien maillage en place.
+	auto mesh = CreateBlock(m_width, m_height, m_depth, m_bevel);
+	mesh->ComputeNormals();
 	delete m_pMesh;
-	m_pMesh = CreateBlock(m_width, m_height, m_depth, m_bevel);
-	m_pMesh->ComputeNormals();
+	m_pMesh = mesh.release();
 }
 
 // --- Gothic Window (remplage parametrique complet) -------------------------

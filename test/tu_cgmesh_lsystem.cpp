@@ -1,5 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
+#include <fstream>
+#include <iterator>
+#include <string>
+
 #include "../src/cgmesh/cgmesh.h"
 
 using namespace std;
@@ -19,14 +24,23 @@ TEST(TEST_cgmesh_lsystem, cube)
 		if (pLSystem == nullptr)
 			continue;
 
-		//for (int j=0; j<pLSystemData->nNberIterations; j++,	pLSystem->Next ())
+		SCOPED_TRACE(pLSystem->GetName());
 		int j = 0;
+		int previousPoints = 0;
 		while (1)
 		{
 			if (pLSystem->m_iDimension == 3)
 				pLSystem->ComputeGraphicalInterpretation3D();
 			else
 				pLSystem->ComputeGraphicalInterpretation2D();
+
+			// Le trace a au moins un segment et ne raccourcit pas d'une iteration
+			// a la suivante ; toutes ses coordonnees sont finies.
+			ASSERT_GT(pLSystem->m_iNumberPoints, 0) << j;
+			EXPECT_GE(pLSystem->m_iNumberPoints, previousPoints) << j;
+			previousPoints = pLSystem->m_iNumberPoints;
+			for (float c : pLSystem->m_walk)
+				ASSERT_TRUE(std::isfinite(c)) << j;
 
 			if (pLSystem->m_iDimension == 2)
 			{
@@ -35,6 +49,15 @@ TEST(TEST_cgmesh_lsystem, cube)
 				float fWidth = 250.;
 				float fHeight = 250.;
 				pLSystem->FittIn(fWidth, fHeight, 10);
+
+				// Le trace ajuste tient dans la page.
+				const int nWalk = 2 * (pLSystem->m_iNumberPoints + 1);
+				ASSERT_LE(nWalk, static_cast<int>(pLSystem->m_walk.size())) << j;
+				for (int k = 0; k < nWalk; ++k)
+				{
+					EXPECT_GE(pLSystem->m_walk[k], -1e-2f) << j << ' ' << k;
+					EXPECT_LE(pLSystem->m_walk[k], fWidth + 1e-2f) << j << ' ' << k;
+				}
 
 				WriterSVG* pWriterSVG = new WriterSVG();
 
@@ -107,6 +130,15 @@ TEST(TEST_cgmesh_lsystem, cube)
 						continue;
 					}
 				}
+				// Fin du dernier segment trace : aucun segment suivant ne la porte.
+				const int nLast = pLSystem->m_iNumberPoints;
+				if (nLast > 0 && pLSystem->m_bDrawable[nLast - 1])
+				{
+					point2D ptLast;
+					ptLast.x = pLSystem->m_walk[2 * nLast];
+					ptLast.y = pLSystem->m_walk[2 * nLast + 1];
+					listPoints.push_back(ptLast);
+				}
 				emit(listPoints);
 
 				pWriterSVG->WriteGroupEnd();
@@ -114,15 +146,28 @@ TEST(TEST_cgmesh_lsystem, cube)
 				pWriterSVG->WriteFooter();
 
 				delete pWriterSVG;
+
+				std::ifstream svg(strFilename);
+				ASSERT_TRUE(svg.good()) << strFilename;
+				const std::string text((std::istreambuf_iterator<char>(svg)), std::istreambuf_iterator<char>());
+				EXPECT_NE(text.find("</svg>"), std::string::npos) << strFilename;
+				// Un trace ecrit si et seulement si un segment au moins est dessine
+				// (un axiome sans F, comme « X », ne dessine rien).
+				bool anyDrawn = false;
+				for (int i = 0; i < pLSystem->m_iNumberPoints; i++)
+					anyDrawn = anyDrawn || pLSystem->m_bDrawable[i];
+				const bool written = text.find(pLSystemData->bClosed ? "<polygon" : "<polyline") != std::string::npos;
+				EXPECT_EQ(written, anyDrawn) << strFilename;
 			}
 
-			if (++j < pLSystemData->nNberIterations)
+			if (++j < static_cast<int>(pLSystemData->nNberIterations))
 			{
 				pLSystem->Next();
 			}
 			else
 				break;
 		}
+		EXPECT_EQ(j, static_cast<int>(pLSystemData->nNberIterations));
 	}
 
 }
