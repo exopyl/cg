@@ -41,7 +41,7 @@ std::string ReplaceOnce (std::string text, const std::string &from, const std::s
 TEST (TEST_cgarchi_classical_orders, the_embedded_data_parses_and_carries_the_five_orders)
 {
 	const OrdersData &data = ClassicalOrders ();
-	EXPECT_EQ (data.version, "2026-11-04");
+	EXPECT_EQ (data.version, "2026-11-05.1");
 	EXPECT_EQ (data.controls.size (), 61u);
 	const int ppm[kOrderCount] = { 12, 12, 18, 18, 18 };
 	for (int i = 0; i < kOrderCount; ++i)

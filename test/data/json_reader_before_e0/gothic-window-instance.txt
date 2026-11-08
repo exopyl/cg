@@ -1,0 +1,99 @@
+accepted
+W field_ignored @wall : the wall is not modelled
+W field_ignored @variants : 5 variant(s) not applied
+W field_ignored @window.arch.profile.depth : the profile depth derives from the offsets
+W field_ignored @window.arch.profile.segments : explicit profile segments are not read
+W field_converted @window.subwindows.foils : 3 lancet foils -> foiled lancet head of 3 foils
+W field_ignored @window.rosette.hub.radiusFactor : the rosette hub is not built
+W field_ignored @window.fillets.subdivide : fillets are not subdivided
+W field_ignored @window.fillets.subdivisionDepth : fillets are not subdivided
+W field_ignored @window.style.windowStyle : not modelled by the generator
+W field_ignored @window.style.glass : not modelled by the generator
+W field_ignored @window.style.stone : not modelled by the generator
+W field_ignored @window.style.subdivisionSurface : not modelled by the generator
+W field_ignored @window.style.recursive.scaleFactor : the recursion scale derives from the lancets
+W field_ignored @window.tessellation.targetEdgeLength : arcs are tessellated by angle only
+W field_ignored @window.tessellation.adaptiveSubdivision : arcs are tessellated by angle only
+W field_ignored @window.tessellation.manifold : not an input of the generator
+---
+{
+  "extrusion": {
+    "zHeight": 20.0
+  },
+  "geometry": {
+    "bdInner": 10.0,
+    "bdOuter": 16.0,
+    "excess": 1.0,
+    "heightBott": -180.0,
+    "kseg": 72,
+    "subwindows": {
+      "arcDown": 0.0,
+      "count": 2,
+      "excess": 1.0,
+      "gap": {
+        "gapFraction": 0.11,
+        "mode": "fraction"
+      },
+      "layout": "uniform"
+    },
+    "width": 200.0
+  },
+  "recursion": {
+    "depth": 0
+  },
+  "schema": "gothic-window/v2",
+  "style": {
+    "fillet": {
+      "fill": "plain",
+      "mouchette": {
+        "size": 0.92,
+        "type": "vesica"
+      }
+    },
+    "mainArch": {
+      "profile": {
+        "type": "chamfer"
+      },
+      "trefoil": {
+        "enabled": false,
+        "foilRadiusFactor": 0.3,
+        "splitParameter": 0.45
+      }
+    },
+    "rosette": {
+      "foils": {
+        "count": 6,
+        "orientation": "standing",
+        "pointedness": 0.5,
+        "type": "round"
+      },
+      "present": true,
+      "profile": {
+        "type": "chamfer"
+      }
+    },
+    "subArch": {
+      "head": {
+        "foils": 3,
+        "type": "foiled"
+      },
+      "profile": {
+        "type": "chamfer"
+      }
+    }
+  },
+  "thresholds": {
+    "barRadiusAdd": 1.5,
+    "chamferWidthAdd": 2.0,
+    "maxMouchetteInset": 4.0,
+    "minBand": 0.5,
+    "minBarRadius": 0.8,
+    "minChamferWidth": 0.5,
+    "minEyeletInset": 1.5,
+    "minFilletInnerOffset": 1.0,
+    "minMouchetteRadius": 1.5,
+    "minRingWidth": 3.0,
+    "minRosetteRadius": 1.0,
+    "minSubRosetteRadius": 3.0
+  }
+}

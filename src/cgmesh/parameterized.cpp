@@ -52,3 +52,10 @@ Parameter Parameter::MakeEnum(const std::string &name, int *value, const std::ve
 	p.m_maxInt = (int)choices.size() - 1;
 	return p;
 }
+
+Parameter Parameter::WithId(const std::string &id) const
+{
+	Parameter p = *this;
+	p.m_id = id;
+	return p;
+}

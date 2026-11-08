@@ -19,9 +19,13 @@ inline constexpr const char *kMicroarchNetworkSchemaV1 = "gothic-microarchitectu
 // Un texte de plus de SpecLimits::max_text_bytes octets est refuse avant le parsing,
 // par la seule erreur json_too_large.
 // Lit un document v1 et releve toutes ses erreurs en une passe : erreurs JSON
-// (json_*), puis controles structurels (ValidateStructure). Un epuisement de la
-// memoire pendant la lecture est une erreur json_parse comptee sans entree ; seul
-// l'ajout des diagnostics a `report` peut encore lever std::bad_alloc. Transactionnel :
+// (json_*), puis controles structurels (ValidateStructure). Une cle en double est
+// une erreur json_schema nommee par son chemin, qui n'arrete pas la lecture : la
+// derniere valeur est lue. Un `id` de point repete dans son objet garde donc sa
+// derniere valeur, et les courbes qui citent la premiere ajoutent des erreurs de
+// reference. Un epuisement de la memoire pendant la lecture est une erreur
+// json_parse comptee sans entree ; seul l'ajout des diagnostics a `report` peut
+// encore lever std::bad_alloc. Transactionnel :
 // `out` n'est ecrit que si le document est accepte, c'est-a-dire sans erreur.
 // Les diagnostics s'ajoutent a `report`.
 bool LoadSpecFromJson (const std::string &text, MicroarchSpec &out, MicroarchReport &report);

@@ -1,4 +1,6 @@
 #include <math.h>
+#include <cmath>
+#include <limits>
 
 #include "geometry.h"
 #include "common.h"
@@ -454,6 +456,21 @@ Vector2d Arc::normalAt (double t) const
 	return Vector2d (-cos(theta), -sin(theta));
 }
 
+int angularSegmentCount (double span, double maxAngleRad)
+{
+	if (!(maxAngleRad > 0.0))
+		return 1;
+	const double ratio = std::fabs(span) / maxAngleRad;
+	if (!std::isfinite(ratio))
+		return 1;
+	const double n = std::ceil(ratio * (1.0 - 1e-9));
+	if (n < 1.0)
+		return 1;
+	if (n >= static_cast<double>(std::numeric_limits<int>::max()))
+		return std::numeric_limits<int>::max();
+	return static_cast<int>(n);
+}
+
 std::vector<Vector2d> Arc::tessellate (int n) const
 {
 	if (n < 1) n = 1;
@@ -471,12 +488,7 @@ std::vector<Vector2d> Arc::tessellate (int n) const
 
 std::vector<Vector2d> Arc::tessellateAdaptive (double maxAngleRad) const
 {
-	if (maxAngleRad <= 0.0)
-		return tessellate(1);
-	double span = fabs(spanAngle());
-	int n = (int)ceil(span / maxAngleRad);
-	if (n < 1) n = 1;
-	return tessellate(n);
+	return tessellate(angularSegmentCount(spanAngle(), maxAngleRad));
 }
 
 

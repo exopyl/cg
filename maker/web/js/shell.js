@@ -212,8 +212,9 @@ export async function createShell({ title, subtitle }) {
   el("downloadGlbBtn").addEventListener("click", withVerdict(downloadGlb));
   el("downloadStlBtn").addEventListener("click", withVerdict(downloadStl));
 
-  // Deep-link des parametres : toute cle de la query string dont le nom correspond
-  // a un parametre de la forme est appliquee via setParam (ex.
+  // Deep-link des parametres : toute cle de la query string egale a l'identifiant
+  // (`id` de getParams, Parameter::Id) d'un parametre de la forme est appliquee
+  // via setParam. L'identifiant vaut le libelle tant qu'aucun n'est pose (ex.
   // ?shape=Gothic%20Window&Rosette%20foil%20count=18&Offset%20outer=40). Utile pour
   // les captures automatisees.
   //
@@ -225,9 +226,9 @@ export async function createShell({ title, subtitle }) {
   function applyQueryParams(id) {
     const qs = new URLSearchParams(location.search);
     if (![...qs.keys()].length) return;
-    const names = new Set(JSON.parse(Module.getParams(id)).map((p) => p.name));
+    const ids = new Set(JSON.parse(Module.getParams(id)).map((p) => p.id));
     for (const [k, v] of qs.entries()) {
-      if (k === "shape" || !names.has(k)) continue;
+      if (k === "shape" || !ids.has(k)) continue;
       Module.setParam(id, k, Number(v));
     }
   }

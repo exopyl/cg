@@ -164,11 +164,13 @@ struct IonicVoluteData
 	double listelFace = 0.0;        // listel_face : saillie du listel sur la face
 };
 
-// Section d'une cannelure (ornements.cannelures).
+// Section d'une cannelure (ornements.cannelures pour les deux premieres).
 enum class FluteSection
 {
 	Segment60,    // dorique A : arc de 60 degres, rayon = corde, fleche 0,134 corde
-	Semicircle    // dorique B, ionique, corinthien, composite : demi-cercle sur la corde
+	Semicircle,   // dorique B, ionique, corinthien, composite : demi-cercle sur la corde
+	ThreeCentred  // dorique grec : "fausse ellipse" a trois centres (Stuart et Revett, pl. IX C),
+	              // profondeur / corde libre ; absente de cinq_ordres.json (classical_flutes.h)
 };
 
 // ornements.cannelures du JSON. Les regles textuelles (arc de 60 degres,

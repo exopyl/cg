@@ -137,22 +137,25 @@ TEST (TEST_cggraph_nodes_shapes, the_generic_adapter_covers_the_shape_catalogue_
 	std::set<std::string> bound;
 	for (const ShapeBinding &binding : ShapeBindings ())
 	{
-		EXPECT_TRUE (bound.insert (binding.shapeName).second)
-			<< "deux liaisons pour la meme forme : " << binding.shapeName;
-		EXPECT_NE (FindCatalogShape (binding.shapeName), nullptr)
-			<< "liaison vers une forme inconnue du catalogue : " << binding.shapeName;
+		ASSERT_NE (binding.shape, nullptr);
+		EXPECT_TRUE (bound.insert (binding.shape->id).second)
+			<< "deux liaisons pour la meme forme : " << binding.shape->id;
 	}
+	// Une annotation dont l'identifiant n'est pas au catalogue ne produit pas
+	// de liaison : c'est ici qu'elle se voit.
+	EXPECT_EQ (ShapeBindings ().size (), ShapeNoteCount ())
+		<< "annotation sans forme au catalogue";
 
 	for (const ParametricShapeEntry &shape : CatalogShapes ())
 	{
-		if (std::string (shape.name) == "Gothic Window")
+		if (std::string (shape.id) == "shape.gothic.window")
 		{
 			// La seule exception, et elle est NOMMEE : sous-objets geometriques,
 			// donc descripteur ecrit a la main.
-			EXPECT_EQ (bound.count (shape.name), 0u);
+			EXPECT_EQ (bound.count (shape.id), 0u);
 			continue;
 		}
-		EXPECT_EQ (bound.count (shape.name), 1u) << "forme sans noeud : " << shape.name;
+		EXPECT_EQ (bound.count (shape.id), 1u) << "forme sans noeud : " << shape.id;
 	}
 
 	EXPECT_EQ (CatalogShapes ().size (), 29u);
@@ -228,7 +231,7 @@ TEST (TEST_cggraph_nodes_shapes, no_shape_node_wraps_a_form_that_reads_a_file)
 		EXPECT_EQ (FindCatalogShape (name), nullptr)
 			<< name << " ne doit pas figurer au catalogue de formes SANS ressource";
 		for (const ShapeBinding &binding : ShapeBindings ())
-			EXPECT_NE (std::string (binding.shapeName), name);
+			EXPECT_NE (std::string (binding.shape->name), name);
 	}
 
 	// CONTROLE POSITIF : sans lui, la boucle ci-dessus passerait tout aussi bien
@@ -284,7 +287,7 @@ TEST (TEST_cggraph_nodes_shapes, the_classical_column_node_wraps_the_catalogue_s
 	ASSERT_NE (FindCatalogShape ("Classical Column"), nullptr);
 	const ShapeBinding *binding = FindShapeBinding ("shape.classical.column");
 	ASSERT_NE (binding, nullptr);
-	EXPECT_STREQ (binding->shapeName, "Classical Column");
+	EXPECT_STREQ (binding->shape->name, "Classical Column");
 
 	// Defaut : toscan, colonne seule, module 1 -> 14 M de haut.
 	std::unique_ptr<Node> tuscan = MakeShapeNode ("shape.classical.column");

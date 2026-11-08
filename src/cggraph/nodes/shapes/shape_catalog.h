@@ -14,6 +14,10 @@
 // gothiques, puis les formes classiques, chacune dans le leur. Les noms sont
 // uniques sur la reunion (verifie par test) ; c'est la cle de recherche.
 //
+// L'identifiant (type de noeud des documents) et la categorie (page de maker)
+// de chaque forme se lisent dans son entree : aucun consommateur n'en tient de
+// copie. Identifiants uniques et categories connues : verifie par test.
+//
 #include <memory>
 #include <string>
 #include <vector>
@@ -32,5 +36,10 @@ const ParametricShapeEntry *FindCatalogShape (const std::string &name);
 
 // Nul si le nom est inconnu.
 std::unique_ptr<IParameterized> MakeCatalogShape (const std::string &name);
+
+// Nul si l'identifiant est inconnu. Ne CONSTRUIT rien. C'est la recherche des
+// consommateurs qui designent une forme de facon stable : l'identifiant ne
+// change pas quand le nom change.
+const ParametricShapeEntry *FindCatalogShapeById (const std::string &id);
 
 } // namespace cggraph_nodes

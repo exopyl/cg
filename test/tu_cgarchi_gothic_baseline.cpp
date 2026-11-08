@@ -687,6 +687,26 @@ TEST(TEST_cgarchi_gothic_baseline, rosette_pointedness_nan_is_reported_as_an_err
     expectNonFiniteParameterReported("Rosette pointedness", std::numeric_limits<double>::quiet_NaN());
 }
 
+// La fleur de la rosace ronde du descripteur v1 (6 lobes, pas de 5 degres) :
+// chaque lobe couvre 4*pi/3, multiple exact du pas, et recoit le meme nombre
+// de points, quelle que soit la bibliotheque C qui calcule atan2, sin et cos.
+// La fleur est le vide le plus echantillonne de la region directe.
+TEST(TEST_cgarchi_gothic_baseline, v1_round_rosette_lobes_are_sampled_alike)
+{
+    const std::string json = readFile("./test/data/gothic-window-instance.json");
+    ASSERT_FALSE(json.empty()) << "./test/data/gothic-window-instance.json introuvable";
+    ParameterizedGothicWindow loaded;
+    ASSERT_TRUE(loaded.LoadFromJson(json));
+    GothicBuildReport report;
+    const Polygon2 stone = loaded.BuildStonePolygon(&report);
+    ASSERT_EQ(report.Count(GothicBuildWarning::RegionRepaired), 0u) << GothicBuildReportToJson(report);
+    ASSERT_GE(stone.get_n_contours(), 2);
+    int flower = 0;
+    for (int c = 1; c < stone.get_n_contours(); ++c)
+        flower = std::max(flower, stone.get_n_points(c));
+    EXPECT_EQ(flower, 6 * 48);
+}
+
 // Le descripteur v1 de la page gothique est converti en v2 : meme maillage que
 // son equivalent v2 ecrit a la main, et chaque chemin perdu ou converti est
 // liste, nomme par son chemin v1.
@@ -702,8 +722,8 @@ TEST(TEST_cgarchi_gothic_baseline, v1_instance_is_converted_to_v2)
     loaded.Regenerate();
     const std::unique_ptr<Mesh> mesh(loaded.TakeMesh());
     ASSERT_TRUE(mesh);
-    EXPECT_EQ(mesh->GetNVertices(), 3790u);
-    EXPECT_EQ(mesh->GetNFaces(), 4592u);
+    EXPECT_EQ(mesh->GetNVertices(), 3775u);
+    EXPECT_EQ(mesh->GetNFaces(), 4574u);
 
     const char *const v2Equivalent = R"({
         "schema": "gothic-window/v2",

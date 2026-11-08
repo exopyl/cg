@@ -13,8 +13,8 @@ runPage(async () => {
 
   const catalogEl = document.getElementById("catalog");
 
-  // Catalogue de la categorie "classical" (wasm_api.cpp) : Classical Column et
-  // Classical Colonnade, liste plate, sans groupe.
+  // Catalogue de la categorie "classical" (classical_parametric_catalog.cpp) :
+  // Classical Column et Classical Colonnade, liste plate, sans groupe.
   const shapes = JSON.parse(ctx.Module.listShapes("classical")).map((e) => e.name);
   for (const s of shapes) catalogEl.appendChild(new Option(s, s));
 

@@ -211,6 +211,18 @@ public:
 };
 
 //
+// Number of segments, each sweeping at most maxAngleRad, that cover the angle
+// |span| : ceil(|span| / maxAngleRad), at least 1. A ratio within a relative
+// 1e-9 above an integer counts as that integer. A span obtained through
+// atan2, sin or cos carries a last-bit error that differs from one C runtime
+// to another ; when the span is analytically an exact multiple of the step
+// (a round multifoil lobe, 4*pi/3, at 5 degrees), a plain ceil would give a
+// segment count, hence a geometry, that depends on the platform. A slack of
+// 1e-9 lengthens a segment by at most that fraction of maxAngleRad.
+// maxAngleRad <= 0, or a non-finite ratio, gives 1.
+int angularSegmentCount (double span, double maxAngleRad);
+
+//
 // Arc (2D oriented arc of a circle)
 //
 // Reference : Havemann, "Generative Mesh Modeling", TU Braunschweig, 2005,
@@ -259,7 +271,7 @@ public:
 	std::vector<Vector2d> tessellate (int n) const;
 
 	// Adaptive tessellation : at most maxAngleRad swept per segment.
-	// Equivalent to tessellate(ceil(|spanAngle| / maxAngleRad)).
+	// Equivalent to tessellate(angularSegmentCount(spanAngle(), maxAngleRad)) :
 	// maxAngleRad <= 0 falls back to a single segment.
 	std::vector<Vector2d> tessellateAdaptive (double maxAngleRad) const;
 

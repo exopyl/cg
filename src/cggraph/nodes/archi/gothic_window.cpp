@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstddef>
+#include <iostream>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -15,6 +17,7 @@
 #include "../../../cgmesh/print_validation.h"
 #include "../node_support.h"
 #include "../value_types.h"
+#include "../shapes/shape_catalog.h"
 
 namespace cggraph_nodes
 {
@@ -22,11 +25,22 @@ namespace cggraph_nodes
 namespace
 {
 
+// Identifiant de la fenetre au catalogue reuni : le type du noeud.
+const char *const kCatalogId = "shape.gothic.window";
+
 const cggraph::NodeDesc &Desc ()
 {
 	static const cggraph::NodeDesc desc = [] {
 		cggraph::NodeDesc d;
-		d.typeName = "shape.gothic.window";
+		// Le type est l'identifiant ; il doit figurer au catalogue. Son absence
+		// est une faute de programmation, signalee et jamais masquee par un
+		// type vide.
+		const ParametricShapeEntry *entry = FindCatalogShapeById (kCatalogId);
+		if (entry == nullptr)
+			std::cerr << "cggraph_nodes: \"" << kCatalogId
+			          << "\" is unknown to the shape catalogue\n";
+		assert (entry != nullptr);
+		d.typeName = kCatalogId;
 		// Les deux sous-objets geometriques promus. OPTIONNELS : une baie sans
 		// moulure est le cas le plus courant, et c'est la position « Flat » du
 		// menu qu'ils remplacent.
@@ -38,9 +52,9 @@ const cggraph::NodeDesc &Desc ()
 	return desc;
 }
 
-// Le nom du parametre « Profile », qui n'a PAS sa place ici : les deux ports le
-// remplacent. Ecrit une fois, pour que le filtre du constructeur et le test qui
-// le verifie ne puissent pas diverger.
+// L'identifiant (Parameter::Id) du parametre « Profile », qui n'a PAS sa place
+// ici : les deux ports le remplacent. Ecrit une fois, pour que le filtre du
+// constructeur et le test qui le verifie ne puissent pas diverger.
 const char *const kMenuParam = "Profile";
 
 // Controle d'impression : noms stables, comme ceux des stats.
@@ -155,22 +169,22 @@ GothicWindowNode::GothicWindowNode ()
 	cgarchi::ParameterizedGothicWindow shape;
 	for (Parameter &p : shape.GetParameters ())
 	{
-		if (p.GetName () == kMenuParam)
+		if (p.Id () == kMenuParam)
 			continue;
 		switch (p.GetType ())
 		{
 		case Parameter::INT:
 		case Parameter::ENUM:
-			GetParams ().SetInt (p.GetName (), p.GetInt ());
+			GetParams ().SetInt (p.Id (), p.GetInt ());
 			break;
 		case Parameter::FLOAT:
-			GetParams ().SetFloat (p.GetName (), p.GetFloat ());
+			GetParams ().SetFloat (p.Id (), p.GetFloat ());
 			break;
 		case Parameter::BOOL:
-			GetParams ().SetBool (p.GetName (), p.GetBool ());
+			GetParams ().SetBool (p.Id (), p.GetBool ());
 			break;
 		case Parameter::STRING:
-			GetParams ().SetString (p.GetName (), p.GetString ());
+			GetParams ().SetString (p.Id (), p.GetString ());
 			break;
 		}
 	}
@@ -180,6 +194,11 @@ GothicWindowNode::GothicWindowNode ()
 const cggraph::NodeDesc &GothicWindowNode::GetDesc () const
 {
 	return Desc ();
+}
+
+const char *GothicWindowTypeName ()
+{
+	return Desc ().typeName.c_str ();
 }
 
 bool GothicWindowNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueList &in,
@@ -198,35 +217,35 @@ bool GothicWindowNode::Compute (cggraph::EvalContext &ctx, const cggraph::ValueL
 		if (i >= declared.size ())
 			break;
 		Parameter &p = declared[i];
-		if (p.GetName () == kMenuParam)
+		if (p.Id () == kMenuParam)
 			continue;      // remplace par les ports
 
 		switch (p.GetType ())
 		{
 		case Parameter::INT:
 		{
-			int v = GetInt (GetParams (), p.GetName (), p.GetInt ());
+			int v = GetInt (GetParams (), p.Id (), p.GetInt ());
 			p.SetInt (std::max (p.GetMinInt (), std::min (p.GetMaxInt (), v)));
 			break;
 		}
 		case Parameter::ENUM:
 		{
-			int v = GetInt (GetParams (), p.GetName (), p.GetInt ());
+			int v = GetInt (GetParams (), p.Id (), p.GetInt ());
 			const int last = static_cast<int> (p.GetChoices ().size ()) - 1;
 			p.SetInt (std::max (0, std::min (last < 0 ? 0 : last, v)));
 			break;
 		}
 		case Parameter::FLOAT:
 		{
-			float v = GetFloat (GetParams (), p.GetName (), p.GetFloat ());
+			float v = GetFloat (GetParams (), p.Id (), p.GetFloat ());
 			p.SetFloat (std::max (p.GetMinFloat (), std::min (p.GetMaxFloat (), v)));
 			break;
 		}
 		case Parameter::BOOL:
-			p.SetBool (GetBool (GetParams (), p.GetName (), p.GetBool ()));
+			p.SetBool (GetBool (GetParams (), p.Id (), p.GetBool ()));
 			break;
 		case Parameter::STRING:
-			p.SetString (GetString (GetParams (), p.GetName (), p.GetString ()));
+			p.SetString (GetString (GetParams (), p.Id (), p.GetString ()));
 			break;
 		}
 	}

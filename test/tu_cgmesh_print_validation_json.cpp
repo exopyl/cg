@@ -452,3 +452,35 @@ TEST(TEST_cgmesh_print_validation_json, duplicate_keys_are_refused)
         expectSameConstraints(out, everyFieldSet());
     }
 }
+
+// Messages figes du lecteur print-constraints/v1, dans l'ordre : chemin et texte
+// de chaque erreur. Ils different de ceux des lecteurs de cgarchi (cle en double
+// refusee, non fini et borne confondus, schema compare au texte).
+TEST(TEST_cgmesh_print_validation_json, refusal_messages_are_pinned)
+{
+    struct Case { std::string text; std::string expected; };
+    const Case cases[] = {
+        {doc("\"printer\": 1"), "printer : unknown field\n"},
+        {doc("\"mmPerUnit\": \"0.1\""), "mmPerUnit : expected a number, not string\n"},
+        {doc("\"mmPerUnit\": 0"), "mmPerUnit : 0 outside (0, inf)\n"},
+        {doc("\"noiseDepthRatio\": 1"), "noiseDepthRatio : 1 outside [0, 1)\n"},
+        {doc("\"minWallMm\": 0.001"), "minWallMm : 0.001 outside [0.002, 1000]\n"},
+        {doc("\"maxRecordsPerKind\": 2.5"), "maxRecordsPerKind : expected an integer >= 0, not 2.5\n"},
+        {doc("\"envelopeMm\": [218, 123]"), "envelopeMm : expected an array of 3 numbers, not an array of 2\n"},
+        {"{\"mmPerUnit\": 0.1}", "schema : required field is missing\n"},
+        {"{\"schema\": \"print-constraints/v2\"}",
+         "schema : expected \"print-constraints/v1\", not \"print-constraints/v2\"\n"},
+        {"{\"schema\": 1}", "schema : expected \"print-constraints/v1\", not 1\n"},
+        {doc("\"minWallMm\": 1e400"), " : [json.exception.out_of_range.406] number overflow parsing '1e400'\n"},
+        {"[]", " : expected an object, not array\n"},
+        {doc("\"minWallMm\": 0.4, \"minWallMm\": 5"), "minWallMm : duplicate key\n"},
+    };
+    for (const Case &k : cases)
+    {
+        PrintConstraints out;
+        std::string got;
+        for (const PrintJsonError &e : PrintConstraintsFromJson(k.text, out))
+            got += e.path + " : " + e.message + "\n";
+        EXPECT_EQ(got, k.expected) << k.text;
+    }
+}

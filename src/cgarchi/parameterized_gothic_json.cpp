@@ -3,14 +3,13 @@
 // src/cgarchi/schemas/gothic-tracery.schema (v1).
 #include <cgarchi/parameterized_gothic.h>
 
+#include <cgarchi/json_reader.h>
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cmath>
 #include <initializer_list>
-#include <iomanip>
-#include <limits>
-#include <sstream>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -46,78 +45,48 @@ namespace
 	// field_ignored, jamais exporte.
 	const char *const kIgnoredThreshold = "fallbackFilletInset";
 
-	std::string join (const std::string &parent, const std::string &key)
-	{
-		return parent.empty() ? key : parent + "." + key;
-	}
+	using json_reader::Above;
+	using json_reader::AnyNumber;
+	using json_reader::AtLeast;
+	using json_reader::Bounds;
+	using json_reader::Interval;
+	using json_reader::JsonFault;
+	using json_reader::Join;
+	using json_reader::Member;
+
+	// Chiffres significatifs des nombres cites dans les messages.
+	constexpr int kNumberPrecision = 6;
+
+	static_assert(kGothicBuildReportMaxEntries <= json_reader::kDuplicateKeyPathLimit,
+	              "chaque entree du rapport porte le chemin de son doublon");
 
 	std::string valueText (double v)
 	{
-		std::ostringstream os;
-		os << v;
-		return os.str();
+		return json_reader::NumberText(v, kNumberPrecision);
 	}
 
-	// Domaine d'un nombre au sens de JSON Schema (minimum / exclusiveMinimum...).
-	struct Bounds
+	GothicBuildError toError (JsonFault kind)
 	{
-		double lo = -std::numeric_limits<double>::infinity();
-		double hi =  std::numeric_limits<double>::infinity();
-		bool   loOpen = false;
-		bool   hiOpen = false;
-
-		bool Contains (double v) const
+		switch (kind)
 		{
-			return (loOpen ? v > lo : v >= lo) && (hiOpen ? v < hi : v <= hi);
+		case JsonFault::Type:    return GothicBuildError::JsonType;
+		case JsonFault::Value:   return GothicBuildError::JsonValue;
+		case JsonFault::Missing: return GothicBuildError::JsonMissing;
+		case JsonFault::Schema:  break;
 		}
-
-		// Reglage float : la valeur arrondie est comparee aux bornes arrondies,
-		// pour qu'une borne incluse non representable (0.3) reste acceptee.
-		bool ContainsFloat (float v) const
-		{
-			const float flo = static_cast<float>(lo);
-			const float fhi = static_cast<float>(hi);
-			return (loOpen ? v > flo : v >= flo) && (hiOpen ? v < fhi : v <= fhi);
-		}
-
-		std::string Text () const
-		{
-			return (loOpen ? "(" : "[") + valueText(lo) + ", " + valueText(hi) + (hiOpen ? ")" : "]");
-		}
-	};
-
-	Bounds anyNumber () { return Bounds(); }
-	Bounds atLeast (double lo) { Bounds b; b.lo = lo; return b; }
-	Bounds above (double lo) { Bounds b; b.lo = lo; b.loOpen = true; return b; }
-	Bounds interval (double lo, bool loOpen, double hi, bool hiOpen)
-	{
-		Bounds b;
-		b.lo = lo; b.loOpen = loOpen;
-		b.hi = hi; b.hiOpen = hiOpen;
-		return b;
+		return GothicBuildError::JsonSchema;
 	}
 
-	const json *member (const json &obj, const char *key)
-	{
-		const auto it = obj.find(key);
-		return it == obj.end() ? nullptr : &*it;
-	}
-
-	// Lecture typee d'un champ, avec diagnostic nomme par son chemin. Chaque
-	// accesseur rend true et ecrit `out` seulement si le champ est present et
-	// valide ; absent, il rend false sans rien enregistrer.
-	class Reader
+	// Lecteur strict commun (json_reader.h), refus portes au GothicBuildReport ;
+	// s'y ajoutent les avertissements de la fenetre.
+	class Reader final : public json_reader::StrictReader
 	{
 	public:
-		explicit Reader (GothicBuildReport &report) : m_report(report) {}
+		explicit Reader (GothicBuildReport &report) : StrictReader(kNumberPrecision), m_report(report) {}
 
 		void Error (GothicBuildError kind, const std::string &path, const std::string &message)
 		{
 			m_report.Record(kind, path, message);
-		}
-		void TypeError (const std::string &path, const char *expected, const json &value)
-		{
-			Error(GothicBuildError::JsonType, path, std::string("expected ") + expected + ", not " + value.type_name());
 		}
 		void Ignored (const std::string &path, const std::string &message)
 		{
@@ -133,183 +102,12 @@ namespace
 		}
 		bool Failed () const { return m_report.HasErrors(); }
 
-		// Champ hors schema (additionalProperties false).
-		void Known (const json &obj, const std::string &parent, std::initializer_list<const char *> names)
-		{
-			for (auto it = obj.begin(); it != obj.end(); ++it)
-				if (std::none_of(names.begin(), names.end(), [&](const char *n) { return it.key() == n; }))
-					Error(GothicBuildError::JsonSchema, join(parent, it.key()), "unknown field");
-		}
-
-		bool Require (const json &obj, const std::string &parent, std::initializer_list<const char *> names)
-		{
-			bool ok = true;
-			for (const char *n : names)
-				if (!obj.contains(n))
-				{
-					Error(GothicBuildError::JsonMissing, join(parent, n), "required field is missing");
-					ok = false;
-				}
-			return ok;
-		}
-
-		const json *Object (const json &obj, const std::string &parent, const char *key)
-		{
-			const json *v = member(obj, key);
-			if (v && !v->is_object())
-			{
-				TypeError(join(parent, key), "an object", *v);
-				return nullptr;
-			}
-			return v;
-		}
-
-		// Nombre fini, sans controle de domaine.
-		bool Finite (const json &obj, const std::string &parent, const char *key, double &out)
-		{
-			const json *v = member(obj, key);
-			if (!v)
-				return false;
-			const std::string path = join(parent, key);
-			if (!v->is_number())
-			{
-				TypeError(path, "a number", *v);
-				return false;
-			}
-			const double x = v->get<double>();
-			if (!std::isfinite(x))
-			{
-				Error(GothicBuildError::JsonValue, path, "non-finite value");
-				return false;
-			}
-			out = x;
-			return true;
-		}
-
-		bool Number (const json &obj, const std::string &parent, const char *key, const Bounds &bounds, double &out)
-		{
-			double x = 0.0;
-			if (!Finite(obj, parent, key, x))
-				return false;
-			const std::string path = join(parent, key);
-			if (!bounds.Contains(x))
-			{
-				Error(GothicBuildError::JsonValue, path, valueText(x) + " outside " + bounds.Text());
-				return false;
-			}
-			out = x;
-			return true;
-		}
-
-		// Reglage float : le nombre doit aussi rester fini une fois arrondi en float.
-		bool ToFloat (const std::string &path, double x, float &out)
-		{
-			if (std::fabs(x) > std::numeric_limits<float>::max())
-			{
-				Error(GothicBuildError::JsonValue, path, valueText(x) + " is not finite as a float");
-				return false;
-			}
-			out = static_cast<float>(x);
-			return true;
-		}
-
-		// Le domaine est controle sur la valeur arrondie en float, celle qui est posee.
-		bool Float (const json &obj, const std::string &parent, const char *key, const Bounds &bounds, float &out)
-		{
-			double x = 0.0;
-			float f = 0.f;
-			const std::string path = join(parent, key);
-			if (!Finite(obj, parent, key, x) || !ToFloat(path, x, f))
-				return false;
-			if (!bounds.ContainsFloat(f))
-			{
-				std::ostringstream read;
-				read << std::setprecision(12) << x;
-				const std::string rounded = (static_cast<double>(f) != x) ? " (" + valueText(f) + " as a float)" : "";
-				Error(GothicBuildError::JsonValue, path, read.str() + rounded + " outside " + bounds.Text());
-				return false;
-			}
-			out = f;
-			return true;
-		}
-
-		// Entier au sens de JSON Schema : 2 et 2.0 le sont, 2.5 non.
-		bool Integer (const json &obj, const std::string &parent, const char *key, int lo, int hi, int &out)
-		{
-			const json *v = member(obj, key);
-			if (!v)
-				return false;
-			const std::string path = join(parent, key);
-			const double x = v->is_number() ? v->get<double>() : 0.0;
-			if (!v->is_number() || !std::isfinite(x) || std::floor(x) != x)
-			{
-				TypeError(path, "an integer", *v);
-				return false;
-			}
-			if (x < lo || x > hi)
-			{
-				Error(GothicBuildError::JsonValue, path,
-				      valueText(x) + " outside [" + std::to_string(lo) + ", " + std::to_string(hi) + "]");
-				return false;
-			}
-			out = static_cast<int>(x);
-			return true;
-		}
-
-		bool Boolean (const json &obj, const std::string &parent, const char *key, bool &out)
-		{
-			const json *v = member(obj, key);
-			if (!v)
-				return false;
-			if (!v->is_boolean())
-			{
-				TypeError(join(parent, key), "a boolean", *v);
-				return false;
-			}
-			out = v->get<bool>();
-			return true;
-		}
-
-		bool String (const json &obj, const std::string &parent, const char *key, std::string &out)
-		{
-			const json *v = member(obj, key);
-			if (!v)
-				return false;
-			if (!v->is_string())
-			{
-				TypeError(join(parent, key), "a string", *v);
-				return false;
-			}
-			out = v->get<std::string>();
-			return true;
-		}
-
-		// `index` recoit la position de la valeur dans `names`.
-		bool Enum (const json &obj, const std::string &parent, const char *key,
-		           std::initializer_list<const char *> names, int &index)
-		{
-			std::string s;
-			if (!String(obj, parent, key, s))
-				return false;
-			int i = 0;
-			for (const char *n : names)
-			{
-				if (s == n)
-				{
-					index = i;
-					return true;
-				}
-				++i;
-			}
-			std::string expected;
-			for (const char *n : names)
-				expected += (expected.empty() ? "" : ", ") + std::string(n);
-			Error(GothicBuildError::JsonValue, join(parent, key),
-			      "unknown value \"" + s + "\" (expected one of: " + expected + ")");
-			return false;
-		}
-
 	private:
+		void OnFault (JsonFault kind, const std::string &path, const std::string &message) override
+		{
+			Error(toError(kind), path, message);
+		}
+
 		GothicBuildReport &m_report;
 	};
 
@@ -325,8 +123,8 @@ namespace
 		int type = -1;
 		r.Enum(p, path, "type", {"flat", "chamfer", "roll", "keel", "ogee"}, type);
 		double depth = 0.0;
-		if (r.Number(p, path, "depth", above(0.0), depth))
-			r.Ignored(join(path, "depth"), "the profile depth derives from the offsets");
+		if (r.Number(p, path, "depth", Above(0.0), depth))
+			r.Ignored(Join(path, "depth"), "the profile depth derives from the offsets");
 		return type;
 	}
 
@@ -335,15 +133,15 @@ namespace
 		const std::string p = "geometry";
 		r.Known(g, p, {"width", "excess", "bdOuter", "bdInner", "heightBott", "wallSetback", "kseg", "subwindows"});
 		r.Require(g, p, {"width", "excess", "bdOuter", "bdInner"});
-		r.Float(g, p, "width",   above(0.0),   s.width);
-		r.Float(g, p, "excess",  above(0.5),   s.excess);
-		r.Float(g, p, "bdOuter", atLeast(0.0), s.offsetOuter);
-		r.Float(g, p, "bdInner", atLeast(0.0), s.offsetInner);
+		r.Float(g, p, "width",   Above(0.0),   s.width);
+		r.Float(g, p, "excess",  Above(0.5),   s.excess);
+		r.Float(g, p, "bdOuter", AtLeast(0.0), s.offsetOuter);
+		r.Float(g, p, "bdInner", AtLeast(0.0), s.offsetInner);
 		// heightBott : niveau du bas de la baie, springline a y = 0. Au-dessus
 		// de la naissance, le corps est vide.
 		double heightBott = 0.0;
 		float body = 0.f;
-		if (r.Number(g, p, "heightBott", anyNumber(), heightBott) && r.ToFloat(p + ".heightBott", -heightBott, body))
+		if (r.Number(g, p, "heightBott", AnyNumber(), heightBott) && r.ToFloat(p + ".heightBott", -heightBott, body))
 		{
 			if (body < 0.f)
 			{
@@ -353,7 +151,7 @@ namespace
 			s.bodyHeight = body;
 		}
 		double setback = 0.0;
-		if (r.Number(g, p, "wallSetback", atLeast(0.0), setback) && setback != 0.0)
+		if (r.Number(g, p, "wallSetback", AtLeast(0.0), setback) && setback != 0.0)
 			r.Ignored(p + ".wallSetback", "the window is not set in a wall");
 		// kseg : segments par cercle complet.
 		int kseg = 0;
@@ -368,8 +166,8 @@ namespace
 		r.Require(*sw, ps, {"count"});
 		if (r.Integer(*sw, ps, "count", 1, 6, s.subCount) && s.subCount != 2)
 			r.Ignored(ps + ".count", "the lancet count is fixed at 2");
-		r.Float(*sw, ps, "arcDown", atLeast(0.0), s.subDrop);
-		r.Float(*sw, ps, "excess",  above(0.5),   s.subExcess);
+		r.Float(*sw, ps, "arcDown", AtLeast(0.0), s.subDrop);
+		r.Float(*sw, ps, "excess",  Above(0.5),   s.subExcess);
 		r.Enum(*sw, ps, "layout", {"uniform", "prototype"}, s.lancetLayout);
 		if (const json *gap = r.Object(*sw, ps, "gap"))
 		{
@@ -379,9 +177,9 @@ namespace
 			if (r.Enum(*gap, pg, "mode", {"fraction", "absolute"}, mode) && mode == 1)
 				r.Ignored(pg + ".mode", "absolute gaps are not supported: gapFraction is used");
 			// Lu dans les deux dispositions : il borne aussi l'offset interieur.
-			r.Float(*gap, pg, "gapFraction", interval(0.0, true, 0.3, false), s.gapFraction);
+			r.Float(*gap, pg, "gapFraction", Interval(0.0, true, 0.3, false), s.gapFraction);
 			double absolute = 0.0;
-			if (r.Number(*gap, pg, "absoluteWidth", above(0.0), absolute))
+			if (r.Number(*gap, pg, "absoluteWidth", Above(0.0), absolute))
 				r.Ignored(pg + ".absoluteWidth", "absolute gaps are not supported");
 		}
 	}
@@ -419,8 +217,8 @@ namespace
 				r.Known(*tf, pt, {"enabled", "splitParameter", "foilRadiusFactor"});
 				if (r.Boolean(*tf, pt, "enabled", s.archTrefoil) && s.archTrefoil)
 					r.Ignored(pt + ".enabled", "the main arch trefoil is not built");
-				r.Float(*tf, pt, "splitParameter",   interval(0.0, true, 1.0, true),  s.trefoilSplit);
-				r.Float(*tf, pt, "foilRadiusFactor", interval(0.0, true, 0.5, false), s.trefoilFoilRadius);
+				r.Float(*tf, pt, "splitParameter",   Interval(0.0, true, 1.0, true),  s.trefoilSplit);
+				r.Float(*tf, pt, "foilRadiusFactor", Interval(0.0, true, 0.5, false), s.trefoilFoilRadius);
 			}
 		}
 
@@ -452,7 +250,7 @@ namespace
 				s.rosetteFoils = true;
 				r.Integer(*f, pf, "count", 3, 24, s.rosetteFoilCount);
 				r.Enum(*f, pf, "type", {"round", "pointed"}, s.rosetteFoilType);
-				r.Float(*f, pf, "pointedness", interval(0.0, true, 2.0, false), s.rosetteFoilPointed);
+				r.Float(*f, pf, "pointedness", Interval(0.0, true, 2.0, false), s.rosetteFoilPointed);
 				int orientation = 0;
 				if (r.Enum(*f, pf, "orientation", {"standing", "lying"}, orientation) && orientation == 1)
 					r.Ignored(pf + ".orientation", "the rosette always stands, a foil at the top");
@@ -478,7 +276,7 @@ namespace
 				r.Require(*mo, pm, {"type"});
 				r.Enum(*mo, pm, "type", {"vesica", "teardrop", "soufflet"}, s.mouchetteType);
 				double size = 0.0;
-				if (r.Number(*mo, pm, "size", interval(0.0, true, 1.0, false), size) && size != mouchetteSize)
+				if (r.Number(*mo, pm, "size", Interval(0.0, true, 1.0, false), size) && size != mouchetteSize)
 					r.Ignored(pm + ".size", "the mouchette size is fixed at " + valueText(mouchetteSize));
 			}
 		}
@@ -514,7 +312,7 @@ namespace
 		if (const json *ex = r.Object(doc, std::string(), "extrusion"))
 		{
 			r.Known(*ex, "extrusion", {"zHeight"});
-			r.Float(*ex, "extrusion", "zHeight", atLeast(0.0), s.zHeight);
+			r.Float(*ex, "extrusion", "zHeight", AtLeast(0.0), s.zHeight);
 		}
 		if (const json *th = r.Object(doc, std::string(), "thresholds"))
 		{
@@ -522,12 +320,12 @@ namespace
 				if (it.key() != kIgnoredThreshold
 				    && std::none_of(std::begin(kThresholdFields), std::end(kThresholdFields),
 				                    [&](const auto &f) { return it.key() == f.first; }))
-					r.Error(GothicBuildError::JsonSchema, join("thresholds", it.key()), "unknown field");
+					r.Error(GothicBuildError::JsonSchema, Join("thresholds", it.key()), "unknown field");
 			for (const auto &[name, field] : kThresholdFields)
-				r.Number(*th, "thresholds", name, atLeast(0.0), t.*field);
+				r.Number(*th, "thresholds", name, AtLeast(0.0), t.*field);
 			double ignored = 0.0;
-			if (r.Number(*th, "thresholds", kIgnoredThreshold, atLeast(0.0), ignored))
-				r.Ignored(join("thresholds", kIgnoredThreshold),
+			if (r.Number(*th, "thresholds", kIgnoredThreshold, AtLeast(0.0), ignored))
+				r.Ignored(Join("thresholds", kIgnoredThreshold),
 				          "the spandrel inset is max(bdInner, minFilletInnerOffset)");
 		}
 	}
@@ -550,11 +348,11 @@ namespace
 		const json *pt = r.Object(obj, parent, key);
 		if (!pt)
 			return false;
-		const std::string path = join(parent, key);
+		const std::string path = Join(parent, key);
 		r.Known(*pt, path, {"x", "y"});
 		const bool complete = r.Require(*pt, path, {"x", "y"});
-		const bool hasX = r.Number(*pt, path, "x", anyNumber(), x);
-		const bool hasY = r.Number(*pt, path, "y", anyNumber(), y);
+		const bool hasX = r.Number(*pt, path, "x", AnyNumber(), x);
+		const bool hasY = r.Number(*pt, path, "y", AnyNumber(), y);
 		return complete && hasX && hasY;
 	}
 
@@ -575,8 +373,8 @@ namespace
 		bool ok = r.Require(f, path, {"count", "type"});
 		ok = r.Integer(f, path, "count", 3, 24, out.count) && ok;
 		ok = r.Enum(f, path, "type", {"round", "pointed"}, out.type) && ok;
-		r.Number(f, path, "pointedness", interval(0.0, false, 2.0, false), out.pointedness);
-		r.Number(f, path, "phi0", anyNumber(), out.phi0);
+		r.Number(f, path, "pointedness", Interval(0.0, false, 2.0, false), out.pointedness);
+		r.Number(f, path, "phi0", AnyNumber(), out.phi0);
 		r.Enum(f, path, "orientation", {"standing", "lying"}, out.orientation);
 		if (out.type == 0 && out.pointedness != 0.0)
 			r.Error(GothicBuildError::JsonValue, path + ".pointedness", "round foils have pointedness 0");
@@ -593,9 +391,9 @@ namespace
 		if (r.Boolean(tf, path, "enabled", enabled))
 			out["enabled"] = enabled;
 		double v = 0.0;
-		if (r.Number(tf, path, "splitParameter", interval(0.0, true, 1.0, true), v))
+		if (r.Number(tf, path, "splitParameter", Interval(0.0, true, 1.0, true), v))
 			out["splitParameter"] = v;
-		if (r.Number(tf, path, "foilRadiusFactor", interval(0.0, true, 0.5, false), v))
+		if (r.Number(tf, path, "foilRadiusFactor", Interval(0.0, true, 0.5, false), v))
 			out["foilRadiusFactor"] = v;
 		int continuity = 0;
 		r.Enum(tf, path, "continuity", {"tangent"}, continuity);
@@ -621,7 +419,7 @@ namespace
 		r.String(doc, std::string(), "$schema", text);
 		if (r.Object(doc, std::string(), "wall"))
 			r.Ignored("wall", "the wall is not modelled");
-		if (const json *variants = member(doc, "variants"))
+		if (const json *variants = Member(doc, "variants"))
 		{
 			if (!variants->is_array())
 				r.TypeError("variants", "an array", *variants);
@@ -655,7 +453,7 @@ namespace
 			double ox = 0.0, oy = 0.0;
 			if (readPoint(*b, pb, "origin", r, ox, oy) && (ox != 0.0 || oy != 0.0))
 				r.Ignored(pb + ".origin", "the bay is placed with its springline centre at the origin");
-			const bool haveRise = r.Number(*b, pb, "archRise", atLeast(0.0), archRise);
+			const bool haveRise = r.Number(*b, pb, "archRise", AtLeast(0.0), archRise);
 			const bool left  = readPoint(*b, pb, "pL", r, pLx, pLy);
 			const bool right = readPoint(*b, pb, "pR", r, pRx, pRy);
 			havePoints = left && right;
@@ -677,7 +475,7 @@ namespace
 			r.Known(*a, pa, {"width", "excess", "offset", "profile", "trefoil"});
 			r.Require(*a, pa, {"excess", "offset", "profile"});
 			double width = 0.0;
-			if (r.Number(*a, pa, "width", above(0.0), width))
+			if (r.Number(*a, pa, "width", Above(0.0), width))
 			{
 				g["width"] = width;
 				if (havePoints && std::fabs(pRx - pLx) != width)
@@ -692,7 +490,7 @@ namespace
 					r.Error(GothicBuildError::JsonMissing, pa + ".width", "required field is missing (no basis pL / pR)");
 			}
 			double excess = 0.0;
-			if (r.Number(*a, pa, "excess", interval(0.5, false, 2.0, false), excess))
+			if (r.Number(*a, pa, "excess", Interval(0.5, false, 2.0, false), excess))
 				g["excess"] = convertExcessV1(excess, pa + ".excess", r);
 			if (const json *o = r.Object(*a, pa, "offset"))
 			{
@@ -700,9 +498,9 @@ namespace
 				r.Known(*o, po, {"outer", "inner", "method"});
 				r.Require(*o, po, {"outer", "inner"});
 				double v = 0.0;
-				if (r.Number(*o, po, "outer", atLeast(0.0), v))
+				if (r.Number(*o, po, "outer", AtLeast(0.0), v))
 					g["bdOuter"] = v;
-				if (r.Number(*o, po, "inner", atLeast(0.0), v))
+				if (r.Number(*o, po, "inner", AtLeast(0.0), v))
 					g["bdInner"] = v;
 				int method = 0;
 				r.Enum(*o, po, "method", {"fixed-centers"}, method);
@@ -728,9 +526,9 @@ namespace
 						r.Ignored(pp + ".type", "\"" + profileName + "\" has no equivalent: the profile is unchanged");
 				}
 				double depth = 0.0;
-				if (r.Number(*pr, pp, "depth", above(0.0), depth))
+				if (r.Number(*pr, pp, "depth", Above(0.0), depth))
 					r.Ignored(pp + ".depth", "the profile depth derives from the offsets");
-				if (const json *segments = member(*pr, "segments"))
+				if (const json *segments = Member(*pr, "segments"))
 				{
 					if (!segments->is_array())
 						r.TypeError(pp + ".segments", "an array", *segments);
@@ -756,10 +554,10 @@ namespace
 			if (r.Integer(*sw, ps, "count", 1, 6, count))
 				sub["count"] = count;
 			double drop = 0.0;
-			r.Number(*sw, ps, "drop", atLeast(0.0), drop);
+			r.Number(*sw, ps, "drop", AtLeast(0.0), drop);
 			sub["arcDown"] = drop;
 			double excess = 0.0;
-			if (r.Number(*sw, ps, "excess", interval(0.5, false, 2.0, false), excess))
+			if (r.Number(*sw, ps, "excess", Interval(0.5, false, 2.0, false), excess))
 				sub["excess"] = convertExcessV1(excess, ps + ".excess", r);
 			if (const json *gap = r.Object(*sw, ps, "gap"))
 			{
@@ -770,10 +568,10 @@ namespace
 				int mode = -1;
 				r.Enum(*gap, pg, "mode", {"fraction", "absolute"}, mode);
 				double fraction = 0.0, absolute = 0.0;
-				const bool haveFraction = r.Number(*gap, pg, "gapFraction", interval(0.0, true, 0.3, false), fraction);
-				const json *absoluteValue = member(*gap, "absoluteWidth");
+				const bool haveFraction = r.Number(*gap, pg, "gapFraction", Interval(0.0, true, 0.3, false), fraction);
+				const json *absoluteValue = Member(*gap, "absoluteWidth");
 				const bool haveAbsolute = absoluteValue && !absoluteValue->is_null()
-				                          && r.Number(*gap, pg, "absoluteWidth", above(0.0), absolute);
+				                          && r.Number(*gap, pg, "absoluteWidth", Above(0.0), absolute);
 				if (mode == 0)
 				{
 					if (!gap->contains("gapFraction"))
@@ -856,7 +654,7 @@ namespace
 				const std::string ph = pr + ".hub";
 				r.Known(*hub, ph, {"radiusFactor"});
 				double v = 0.0;
-				if (r.Number(*hub, ph, "radiusFactor", interval(0.0, true, 0.3, false), v))
+				if (r.Number(*hub, ph, "radiusFactor", Interval(0.0, true, 0.3, false), v))
 					r.Ignored(ph + ".radiusFactor", "the rosette hub is not built");
 			}
 		}
@@ -875,7 +673,7 @@ namespace
 			if (r.Integer(*fi, pfi, "subdivisionDepth", 1, 3, depth))
 				r.Ignored(pfi + ".subdivisionDepth", "fillets are not subdivided");
 			double band = 0.0;
-			if (r.Number(*fi, pfi, "stoneBandWidth", above(0.0), band)
+			if (r.Number(*fi, pfi, "stoneBandWidth", Above(0.0), band)
 			    && !(g.contains("bdInner") && g["bdInner"].get<double>() == band))
 				r.Ignored(pfi + ".stoneBandWidth", "the fillet stone band is window.arch.offset.inner");
 		}
@@ -890,9 +688,9 @@ namespace
 			if (r.Enum(*mo, pm, "type", {"vesica", "teardrop", "soufflet"}, type))
 				style["fillet"]["mouchette"]["type"] = kTypes[type];
 			double v = 0.0;
-			if (r.Number(*mo, pm, "radiusFactor", interval(0.0, true, 0.5, false), v))
+			if (r.Number(*mo, pm, "radiusFactor", Interval(0.0, true, 0.5, false), v))
 				r.Ignored(pm + ".radiusFactor", "the mouchette fills its spandrel field");
-			if (r.Number(*mo, pm, "rotation", anyNumber(), v))
+			if (r.Number(*mo, pm, "rotation", AnyNumber(), v))
 				r.Ignored(pm + ".rotation", "mouchettes are not rotated");
 		}
 		if (mouchettes && !fillets)
@@ -930,7 +728,7 @@ namespace
 				int maxDepth = 2;
 				r.Integer(*rec, prc, "maxDepth", 1, 4, maxDepth);
 				double v = 0.0;
-				if (r.Number(*rec, prc, "scaleFactor", interval(0.0, true, 1.0, true), v))
+				if (r.Number(*rec, prc, "scaleFactor", Interval(0.0, true, 1.0, true), v))
 					r.Ignored(prc + ".scaleFactor", "the recursion scale derives from the lancets");
 				if (enabled)
 				{
@@ -950,7 +748,7 @@ namespace
 			r.Known(*te, pt, {"targetEdgeLength", "angularResolution", "adaptiveSubdivision", "manifold"});
 			r.Integer(*te, pt, "angularResolution", 12, 360, kseg);
 			double length = 0.0;
-			if (r.Number(*te, pt, "targetEdgeLength", above(0.0), length))
+			if (r.Number(*te, pt, "targetEdgeLength", Above(0.0), length))
 				r.Ignored(pt + ".targetEdgeLength", "arcs are tessellated by angle only");
 			bool flag = false;
 			if (r.Boolean(*te, pt, "adaptiveSubdivision", flag))
@@ -970,27 +768,16 @@ namespace
 
 	JsonVersion detectVersion (const json &doc, Reader &r)
 	{
-		const json *dollar = member(doc, "$schema");
+		const json *dollar = Member(doc, "$schema");
 		if (dollar && dollar->is_string() && dollar->get<std::string>().find("/v1/") != std::string::npos)
 			return JsonVersion::V1;
-		const json *window = member(doc, "window");
+		const json *window = Member(doc, "window");
 		if (window && window->is_object() && !doc.contains("geometry"))
 			return JsonVersion::V1;
-		if (const json *schema = member(doc, "schema"))
-		{
-			if (!schema->is_string())
-			{
-				r.TypeError("schema", "a string", *schema);
-				return JsonVersion::Unsupported;
-			}
-			if (schema->get<std::string>() != kV2Schema)
-			{
-				r.Error(GothicBuildError::JsonSchema, "schema",
-				        "unsupported schema \"" + schema->get<std::string>() + "\" (expected " + kV2Schema + ")");
-				return JsonVersion::Unsupported;
-			}
-		}
-		return JsonVersion::V2;
+		// Sans `schema`, le document est lu comme v2.
+		const json_reader::SchemaStatus schema = json_reader::ReadSchema(r, doc, kV2Schema).status;
+		return schema == json_reader::SchemaStatus::Absent || schema == json_reader::SchemaStatus::Expected
+		       ? JsonVersion::V2 : JsonVersion::Unsupported;
 	}
 }
 
@@ -1010,7 +797,9 @@ bool ParameterizedGothicWindow::LoadFromJson (const std::string &jsonText, Gothi
 		Reader r(load);
 		try
 		{
-			const json doc = json::parse(jsonText);
+			// Une cle en double est refusee (json_schema) et la lecture continue sur
+			// la derniere valeur, pour rapporter aussi les refus independants.
+			const json doc = r.ParseRejectingDuplicateKeys(jsonText);
 			if (!doc.is_object())
 				r.Error(GothicBuildError::JsonType, std::string(),
 				        std::string("the document root must be an object, not ") + doc.type_name());

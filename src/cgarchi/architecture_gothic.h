@@ -293,10 +293,13 @@ Polygon2 buildLevel0StoneRegion (const std::vector<Vector2d> &frame,
 // rim, and the rosette (rim of the lobed motif, void edge of a plain oculus) —
 // reproducing the exact curves that `buildBayStonePolygon` cuts as voids.
 //
-// `profile` is a CLOSED loop in (u, v), in the units of `geom` : u = z (depth ; flat side on
-// the front face, molding proud toward +z), v = in-plane offset perpendicular to
-// the path. See the barProfile factories in parameterized_shapes (Roll / Keel /
-// Ogee). Meant to be appended (appendMesh) onto a flat extruded bay plate.
+// `profile` is a CLOSED loop in (u, v), in the units of `geom`, read as a BAR
+// profile (profile2d.h, UNITES ET REPERE) : u = z, ABSOLUTE height, the molding
+// proud of the front face toward +z ; v = in-plane offset along
+// N = (T.y, -T.x), right of the walk direction. The caller places the relative
+// bar factories of profile2d.h (rollBarProfile, keelBarProfile, ogeeBarProfile)
+// on the front face with translatedInU (bar, zFace). Meant to be appended
+// (appendMesh) onto a flat extruded bay plate.
 //
 // Result written into `out` (replaces previous content). `out` is left empty when
 // the geometry yields no sweepable outline. Corner joints are left "open" (no

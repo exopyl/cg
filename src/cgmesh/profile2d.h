@@ -19,13 +19,41 @@
 //     lu par les noeuds `extrude_profiled` et `gothic_window`.
 // Les noms hors de cgmesh ne sont pas verifies par le compilateur.
 //
-// UNITES ET REPERE :
+// UNITES ET REPERE : x = u, y = v, dans les unites de l'appelant. Le SENS de u
+// n'est pas porte par le type : il est fixe par la famille du consommateur, et
+// les deux familles le lisent en sens OPPOSES de part et d'autre de la face
+// avant (cote zTop de la plaque).
 //
-//   u = enfoncement SOUS la face de reference, positif vers l'arriere ;
-//   v = decalage dans le plan, positif vers la matiere.
+//   - EBRASEMENT (extrudeProfiledToMesh, extrudeProfiledContours) :
+//       u = enfoncement SOUS la face avant, positif vers l'arriere :
+//       z = zTop - u (extrudeProfiledToMesh comprime u quand le profil est plus
+//       profond que la piece) ;
+//       v = decalage dans le plan, dont le sens depend du consommateur :
+//         . extrudeProfiledToMesh : v positif vers la pierre, le long des
+//           normales par sommet du contour ;
+//         . extrudeProfiledContours : l'anneau k est le contour decale de
+//           v_k - v_max (Inward) ou de v_k (Outward), un decalage positif
+//           DILATANT la matiere (extrude_profiled.h, CE QUE LE PROFIL DOIT ETRE).
+//   - BARRE (buildBayMoulding, collectBayMouldingOutlines, sweepBayMoulding,
+//     fuseBarsOnPlate, sweepProfileAlongArc*) :
+//       u = saillie AU-DESSUS de la face avant, positif vers +z :
+//       z = cote de la face + u ;
+//       v = decalage lateral selon N = (T.y, -T.x), positif a DROITE du sens de
+//       parcours du chemin.
+//     Les balayages lisent z = u et posent v * N. sweepProfileAlongArc* les
+//     multiplient par scale_u et scale_v : z = u * scale_u. sweepBayMoulding
+//     met chaque barre a l'echelle autour de la base du profil (u minimal).
+//     La cote de la face est ajoutee par l'appelant, par translatedInU :
+//     translatedInU (bar, zFace) si scale_u = 1, translatedInU (bar,
+//     zFace / scale_u) sinon. fuseBarsOnPlate recoit la barre relative et la
+//     cote de la face (zTop).
+//   - extrudeMoulureAlongCurve (cgarchi, surface_architecture.h) : u porte sur
+//     -y, v sur N = B x T avec B = (0, -1, 0). Ce n'est aucune des deux lectures
+//     ci-dessus.
 //
 // u est RELATIF : le profil est une forme, son PLACEMENT appartient au
-// consommateur, qui ajoute la cote de sa face (translatedInU).
+// consommateur, qui pose u au-dessus ou au-dessous de la cote de sa face selon
+// sa famille.
 //
 // Deux familles, qui ne se substituent pas l'une a l'autre :
 //

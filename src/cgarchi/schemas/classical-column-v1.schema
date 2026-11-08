@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "classical-column-v1",
+  "title": "Classical Column (v1)",
+  "description": "Réglages d'une colonne d'un des cinq ordres de Vignole (ClassicalColumnSettings, src/cgarchi/parameterized_classical.h). Lecteur : LoadClassicalColumnFromJson ; écriture canonique : ExportClassicalColumnJson (parameterized_classical_json.h). Chaque domaine est celui du Parameter de même rôle de ParameterizedClassicalColumn.",
+  "$comment": "Tous les champs sont requis. Les clés en double sont refusées par le lecteur. `module` est un float : le lecteur compare la valeur arrondie en float aux bornes arrondies en float.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "order", "module", "pedestal", "entablature", "doricCornice", "envelope", "volutes",
+               "flutes", "doricFlutes", "radialSegments", "curveSegments"],
+  "properties": {
+    "schema":         { "const": "classical-column/v1" },
+    "order":          { "type": "string", "enum": ["toscan", "dorique", "ionique", "corinthien", "composite"],
+                        "description": "Clé de l'ordre dans les données des cinq ordres (classical::OrderKey)." },
+    "module":         { "type": "number", "minimum": 0.1, "maximum": 10,
+                        "description": "Module (demi-diamètre inférieur du fût), en unités de la scène." },
+    "pedestal":       { "type": "boolean" },
+    "entablature":    { "type": "boolean" },
+    "doricCornice":   { "type": "string", "enum": ["dentils", "mutules"],
+                        "description": "Corniche du dorique (classical::DoricCornice)." },
+    "envelope":       { "type": "boolean",
+                        "description": "Ornements rendus par leur enveloppe plutôt que par leur noyau." },
+    "volutes":        { "type": "boolean", "description": "Coussinets à volutes de l'ionique." },
+    "flutes":         { "type": "boolean", "description": "Cannelures du fût." },
+    "doricFlutes":    { "type": "string", "enum": ["segment60", "semicircle"],
+                        "description": "Section des cannelures du dorique : A, arc de 60 degrés ; B, demi-cercle (classical::FluteSection)." },
+    "radialSegments": { "type": "integer", "minimum": 8, "maximum": 256 },
+    "curveSegments":  { "type": "integer", "minimum": 2, "maximum": 32 }
+  }
+}

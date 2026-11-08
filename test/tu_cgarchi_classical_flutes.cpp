@@ -744,3 +744,281 @@ TEST (TEST_cgarchi_classical_flutes, the_parameterized_column_exposes_flutes_unc
 	// B a des meridiens de paroi que A (arc sans surplomb) n'a pas.
 	EXPECT_GT (doricB, doricA);
 }
+
+// ===========================================================================
+//  F6 : section a trois centres (Stuart et Revett, pl. IX C)
+// ===========================================================================
+
+namespace {
+
+// Oracle de la construction (README du temple d'Hephaistos, l. 154), ecrit
+// directement, sans les formes stables du module. Repere de la corde, en
+// unites de corde : a = (-1/2, 0), b = (1/2, 0), fond (0, -q), centre
+// e = (0, rc - q) ; droites e-f, e-g par x = -+3/10 (points a 1/5 et 4/5) ;
+// h au tiers de e-f cote f, rayon lateral rc / 3.
+struct TcGeometry
+{
+	double q = 0.0, rc = 0.0, k = 0.0;
+	double fx = 0.0, fy = 0.0, hx = 0.0, hy = 0.0, rl = 0.0;
+};
+
+TcGeometry TcConstruct (const ThreeCentredFlute &f)
+{
+	TcGeometry g;
+	g.q = f.depthRatio;
+	g.rc = f.centralRadiusRatio;
+	g.k = g.rc - g.q;
+	const double l = std::hypot (0.3, g.k);
+	const double ux = 0.3 / l, uy = -g.k / l;
+	g.fx = g.rc * ux;
+	g.fy = g.k + g.rc * uy;
+	g.hx = 2.0 / 3.0 * g.rc * ux;
+	g.hy = g.k + 2.0 / 3.0 * g.rc * uy;
+	g.rl = g.rc / 3.0;
+	return g;
+}
+
+// Angle, vu de l'axe, du point de tangence f, pour un fut de demi-angle beta.
+double TcTangentAngle (const TcGeometry &g, double beta)
+{
+	const double axis = std::cos (beta) / (2.0 * std::sin (beta));
+	return std::atan2 (g.fx, axis + g.fy);
+}
+
+// Rayon a l'angle |theta| < beta du centre de la cannelure : intersection la
+// plus proche de l'axe du rayon issu de l'axe avec l'arc central ou lateral.
+double TcRadius (const TcGeometry &g, double R, double beta, double theta)
+{
+	const double w = 2.0 * R * std::sin (beta), axis = R * std::cos (beta);
+	const double t = std::fabs (theta);
+	const bool central = t <= TcTangentAngle (g, beta);
+	const double cx = central ? 0.0 : g.hx * w, cy = (central ? g.k : g.hy) * w;
+	const double r = (central ? g.rc : g.rl) * w;
+	const double ox = cx, oy = cy + axis;   // centre - axe
+	const double b = ox * std::sin (t) + oy * std::cos (t);
+	return b - std::sqrt (b * b - (ox * ox + oy * oy - r * r));
+}
+
+// Etoilement echantillonne : angle vu de l'axe strictement croissant de d a b
+// le long des deux arcs, trace sous la corde. Un surplomb plus petit que le
+// pas passerait : majorant de l'etoilement.
+bool TcSampledStarShaped (const TcGeometry &g, double beta, int n)
+{
+	const double axis = std::cos (beta) / (2.0 * std::sin (beta));
+	const double a1 = std::atan2 (g.fy - g.k, g.fx);
+	const double b0 = std::atan2 (g.fy - g.hy, g.fx - g.hx), b1 = std::atan2 (-g.hy, 0.5 - g.hx);
+	double previous = -1.0;
+	for (int i = 0; i <= n; ++i)
+	{
+		const double t = -kPi / 2.0 + (a1 + kPi / 2.0) * i / n;
+		const double a = std::atan2 (g.rc * std::cos (t), axis + g.k + g.rc * std::sin (t));
+		if (!(a > previous))
+			return false;
+		previous = a;
+	}
+	for (int i = 1; i <= n; ++i)
+	{
+		const double t = b0 + (b1 - b0) * i / n;
+		const double x = g.hx + g.rl * std::cos (t), y = g.hy + g.rl * std::sin (t);
+		const double a = std::atan2 (x, axis + y);
+		if (!(a > previous) || y > 1e-12)
+			return false;
+		previous = a;
+	}
+	return true;
+}
+
+}  // namespace
+
+TEST (TEST_cgarchi_classical_flutes, the_three_centred_construction_gives_the_radii_of_stuart_and_revett)
+{
+	// README l. 151-154 : corde 6,25 in, profondeur 1,1 in ; rayons deduits par
+	// la source : Rc = 6,36 in et Rc / 3 = 2,12 in.
+	const double chord = 6.25;
+	const ThreeCentredFlute f = SolveThreeCentredFlute (1.1 / chord);
+	EXPECT_EQ (f.depthRatio, 1.1 / chord);
+	const double rc = f.centralRadiusRatio * chord;
+	RecordProperty ("central_radius_in", std::to_string (rc));
+	EXPECT_NEAR (rc / 3.0, 2.12, 0.005);
+	// Rc n'est pas compare a 6,36 : il en est a 0,0052 in, au-dela de la
+	// demi-unite (question Q3-47 du plan 3 revise, section 17.19).
+
+	// Propriete qui definit Rc : l'arc lateral, centre au tiers de e-f cote f,
+	// passe par l'arete b ; il est tangent a l'arc central en f.
+	const TcGeometry g = TcConstruct (f);
+	EXPECT_NEAR (std::hypot (0.5 - g.hx, g.hy), g.rl, 1e-12);
+	EXPECT_NEAR (std::hypot (g.fx - g.hx, g.fy - g.hy), g.rl, 1e-12);
+	EXPECT_NEAR (std::hypot (g.fx, g.fy - g.k), g.rc, 1e-12);
+}
+
+TEST (TEST_cgarchi_classical_flutes, the_three_centred_section_is_continuous_and_tangent_at_its_joins)
+{
+	struct Case
+	{
+		int    count;
+		double depthRatio;
+	};
+	const double R = 0.537;
+	for (const Case c : {Case {20, 0.17}, Case {12, 0.21}, Case {8, 0.11}, Case {28, 0.27}})
+	{
+		SCOPED_TRACE (c.count);
+		SCOPED_TRACE (c.depthRatio);
+		const double beta = kPi / c.count;
+		const Ring ring = Ring::MakeFluted (R, c.count, beta, FluteSection::ThreeCentred, c.depthRatio);
+		const TcGeometry g = TcConstruct (SolveThreeCentredFlute (c.depthRatio));
+		for (const int j : {0, 3, c.count - 1})
+		{
+			const double centre = Pitch (c.count) * j;
+			// Fond a R cos beta - 2 R sin beta . p / w ; aretes sur le cercle du fut.
+			EXPECT_NEAR (ring.RadiusAt (centre), R * std::cos (beta) - 2.0 * R * std::sin (beta) * c.depthRatio, 1e-12 * R) << j;
+			EXPECT_EQ (ring.RadiusAt (centre - beta), R) << j;
+			EXPECT_EQ (ring.RadiusAt (centre + beta), R) << j;
+			// Forme : l'oracle de la construction a 127 angles de ]-beta, beta[.
+			for (int i = -63; i <= 63; ++i)
+			{
+				const double t = beta * i / 64.0;
+				EXPECT_NEAR (ring.RadiusAt (centre + t), TcRadius (g, R, beta, t), 1e-9 * R) << j << " " << i;
+			}
+		}
+		// Au point de tangence : rayon et pente continus. Une jonction anguleuse
+		// changerait la pente d'un ordre de grandeur de R.
+		auto r = [&] (double t) { return ring.RadiusAt (t); };
+		const double tf = TcTangentAngle (g, beta), d = 1e-6 * beta;
+		ASSERT_GT (tf, 0.0);
+		ASSERT_LT (tf, beta);
+		EXPECT_NEAR (r (tf - d), r (tf + d), 1e-6 * R);
+		const double left = (r (tf) - r (tf - d)) / d, right = (r (tf + d) - r (tf)) / d;
+		EXPECT_GT (std::fabs (left), 1e-2 * R);
+		EXPECT_NEAR (left, right, 1e-4 * R);
+		// A l'arete : le rayon tend vers R.
+		EXPECT_NEAR (r (beta - d), R, 1e-5 * R);
+	}
+
+	// Rapports minuscules (rayon central de l'ordre de 1,6e8 et 1,6e299 cordes,
+	// puis fenetre sous-normale : 1e-308 et 5e-309, rayon central de 1,6e307 et
+	// 3,3e307 cordes, pres de DBL_MAX) : fond, aretes, rayon croissant du fond a
+	// l'arete et au plus R ; grille finie et croissante.
+	struct Tiny
+	{
+		int    count;
+		double depthRatio;
+	};
+	for (const Tiny c : {Tiny {20, 1e-9}, Tiny {20, 1e-300}, Tiny {48, 1e-308}, Tiny {20, 5e-309}})
+	{
+		const double q = c.depthRatio;
+		SCOPED_TRACE (c.count);
+		SCOPED_TRACE (q);
+		const double beta = kPi / c.count;
+		ASSERT_TRUE (IsThreeCentredFluteStarShaped (beta, q));
+		const Ring ring = Ring::MakeFluted (R, c.count, beta, FluteSection::ThreeCentred, q);
+		EXPECT_TRUE (std::isfinite (ring.centralRadiusRatio));
+		const std::vector<double> grid = ThreeCentredFluteOffsets (beta, SolveThreeCentredFlute (q), 6);
+		EXPECT_EQ (grid.front (), 0.0);
+		EXPECT_EQ (grid.back (), beta);
+		for (std::size_t i = 1; i < grid.size (); ++i)
+			EXPECT_TRUE (std::isfinite (grid[i]) && grid[i] > grid[i - 1]) << i << " " << grid[i];
+		EXPECT_NEAR (ring.RadiusAt (0.0), R * std::cos (beta) - 2.0 * R * std::sin (beta) * q, 1e-12 * R);
+		EXPECT_EQ (ring.RadiusAt (beta), R);
+		double previous = 0.0;
+		for (int i = 0; i < 1000; ++i)
+		{
+			const double rr = ring.RadiusAt (beta * i / 1000.0);
+			EXPECT_TRUE (rr >= previous && rr <= R) << i << " " << rr;
+			previous = rr;
+		}
+	}
+}
+
+TEST (TEST_cgarchi_classical_flutes, the_three_centred_section_scales_with_the_radius)
+{
+	const double R = 0.537, beta = kPi / 20;
+	const Ring base = Ring::MakeFluted (R, 20, beta, FluteSection::ThreeCentred, 0.17);
+	for (const double k : {3.7, 1e-3, 1e4})
+	{
+		SCOPED_TRACE (k);
+		const Ring scaled = Ring::MakeFluted (k * R, 20, beta, FluteSection::ThreeCentred, 0.17);
+		for (int i = 0; i <= 200; ++i)
+		{
+			const double t = 2.0 * beta * i / 200.0 - 0.3 * beta;
+			EXPECT_NEAR (scaled.RadiusAt (t), k * base.RadiusAt (t), 1e-12 * k * R) << i;
+		}
+	}
+}
+
+TEST (TEST_cgarchi_classical_flutes, the_star_shaped_domain_is_bounded_on_both_sides)
+{
+	struct Case
+	{
+		int    count;
+		double depthRatio;
+		bool   star;
+	};
+	// Points de la conception (domain.py), puis voisins des seuils analytiques
+	// a 1e-3 de part et d'autre (4 : 0,1472 ; 8 : 0,2279 ; 20 : 0,2839 ;
+	// 48 : 0,3106), confirmes par echantillonnage dense hors du module.
+	const Case cases[] = {
+		{20, 0.25, true},  {8, 0.2, true},    {4, 0.134, true},  {20, 0.30, false}, {8, 0.25, false},  {4, 0.15, false},
+		{4, 0.146, true},  {4, 0.148, false}, {8, 0.227, true},  {8, 0.229, false}, {20, 0.283, true}, {20, 0.285, false},
+		{48, 0.310, true}, {48, 0.312, false},
+	};
+	for (const Case &c : cases)
+	{
+		SCOPED_TRACE (c.count);
+		SCOPED_TRACE (c.depthRatio);
+		const double beta = kPi / c.count;
+		EXPECT_EQ (IsThreeCentredFluteStarShaped (beta, c.depthRatio), c.star);
+		// Oracle independant du critere : echantillonnage de la construction.
+		EXPECT_EQ (TcSampledStarShaped (TcConstruct (SolveThreeCentredFlute (c.depthRatio)), beta, 200000), c.star);
+		if (c.star)
+			EXPECT_NO_THROW (Ring::MakeFluted (1.0, c.count, beta, FluteSection::ThreeCentred, c.depthRatio));
+		else
+			EXPECT_THROW (Ring::MakeFluted (1.0, c.count, beta, FluteSection::ThreeCentred, c.depthRatio), std::invalid_argument);
+	}
+
+	// Hors de ]0, 1/2[ : pas de construction.
+	const double nan = std::nan ("");
+	for (const double q : {0.0, -0.1, 0.5, 0.7, nan})
+	{
+		SCOPED_TRACE (q);
+		EXPECT_FALSE (IsThreeCentredFluteStarShaped (kPi / 20, q));
+		EXPECT_THROW (SolveThreeCentredFlute (q), std::invalid_argument);
+		EXPECT_THROW (Ring::MakeFluted (1.0, 20, kPi / 20, FluteSection::ThreeCentred, q), std::invalid_argument);
+	}
+	// Rayon central non representable en double.
+	EXPECT_THROW (SolveThreeCentredFlute (1e-320), std::invalid_argument);
+	EXPECT_FALSE (IsThreeCentredFluteStarShaped (kPi / 20, 1e-320));
+	// Sans rapport, la fabrique a quatre arguments refuse la section.
+	EXPECT_THROW (Ring::MakeFluted (1.0, 20, kPi / 20, FluteSection::ThreeCentred), std::invalid_argument);
+	// Les autres sections ignorent le rapport.
+	EXPECT_TRUE (Ring::MakeFluted (1.0, 20, kPi / 20, FluteSection::Semicircle, 0.37) ==
+	             Ring::MakeFluted (1.0, 20, kPi / 20, FluteSection::Semicircle));
+}
+
+TEST (TEST_cgarchi_classical_flutes, the_three_centred_grid_holds_bottom_tangency_and_arris)
+{
+	struct Case
+	{
+		int    count;
+		double depthRatio;
+	};
+	for (const Case c : {Case {20, 0.17}, Case {4, 0.13}, Case {48, 0.31}})
+	{
+		const double beta = kPi / c.count;
+		const ThreeCentredFlute f = SolveThreeCentredFlute (c.depthRatio);
+		const double tf = TcTangentAngle (TcConstruct (f), beta);
+		for (const int samples : {1, 2, 6, 16})
+		{
+			SCOPED_TRACE (c.count);
+			SCOPED_TRACE (samples);
+			const std::vector<double> o = ThreeCentredFluteOffsets (beta, f, samples);
+			ASSERT_GE (o.size (), 3u);
+			EXPECT_LE (o.size (), static_cast<std::size_t> (samples) + 2);
+			EXPECT_EQ (o.front (), 0.0);
+			EXPECT_EQ (o.back (), beta);
+			for (std::size_t i = 1; i < o.size (); ++i)
+				EXPECT_GT (o[i] - o[i - 1], kFluteAngleTolerance) << i;
+			// Le point de tangence est un sommet de la grille.
+			EXPECT_TRUE (std::any_of (o.begin (), o.end (), [&] (double x) { return std::fabs (x - tf) < 1e-12; }));
+		}
+	}
+}

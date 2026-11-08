@@ -92,6 +92,16 @@
       }
     },
     {
+      "name": "ci-linux-clang-fma",
+      "displayName": "CI Linux -- Clang, cible a FMA, contraction libre",
+      "description": "Meme configuration que ci-linux-clang, compilee pour x86-64-v3 (AVX2 et FMA) avec -ffp-contract=fast : Clang y fusionne a*b+c en une instruction FMA, entre instructions comprises. Sa raison d'etre est d'exposer le code dont le resultat change avec la contraction (egalites au bit pres contre une expression a*b+c recalculee, predicats d'orientation testes a 0) : MSVC ne contracte jamais, et ci-linux-clang vise le x86-64 de base, sans instruction FMA. HERITE de ci-linux-clang (compilateurs, chemins EXTERN_*, options) pour la meme raison que ci-linux-asan herite de ci-linux. Release, mais -O2 au lieu du -O3 par defaut de CMake : c'est le niveau auquel les detecteurs de contraction du depot sont qualifies (mutation rouge sous ce preset, verte sans -march=x86-64-v3). Pas de -g (RelWithDebInfo) : aucune pile a lire, et des objets plus lourds a lier. Le build preset ne construit que TU et TU_faults, le test preset n'execute que les suites cgarchi. Les binaires exigent une machine x86-64-v3 : le job verifie le processeur avant de compiler. Restreint a Linux par heritage de la condition de ci-linux.",
+      "inherits": "ci-linux-clang",
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "-march=x86-64-v3 -ffp-contract=fast",
+        "CMAKE_CXX_FLAGS_RELEASE": "-O2 -DNDEBUG"
+      }
+    },
+    {
       "name": "ci-windows",
       "displayName": "CI Windows -- MSVC (VS 2026)",
       "description": "Workflow GitHub Actions Windows. HERITE du gabarit local-windows (generateur Visual Studio 18 2026, x64, lib3mf) : la CI construit avec la meme chaine que les postes de developpement, et un runner sans VS 2026 echoue des la configuration au lieu de compiler avec une autre version. Les binaires de cg_binaries sont lies par l'editeur de liens 14.50 (VS 2026) : une chaine plus ancienne ne garantit pas leur lien. Multi-configuration : Debug et Release se choisissent dans les presets de build et de test. Perimetre D1 du plan 1 : sinaia, cgre, sulina, ONNX et le canvas ImGui sont eteints ; cgnet reste construit, le CMakeLists racine l'ajoute sans option sous WIN32 et TU le lie. EXTERN_* pointent sous .deps/, que seule l'etape de telechargement du workflow cree (archive cgbinaries-*-windows-x86_64.zip). googletest est versionne sous extern/. Restreint a Windows par condition, pour la meme raison que ci-linux l'est a Linux.",
@@ -180,6 +190,15 @@
       "configurePreset": "ci-linux-clang"
     },
     {
+      "name": "ci-linux-clang-fma",
+      "inherits": "ci-linux",
+      "configurePreset": "ci-linux-clang-fma",
+      "targets": [
+        "TU",
+        "TU_faults"
+      ]
+    },
+    {
       "name": "ci-windows-debug",
       "configurePreset": "ci-windows",
       "configuration": "Debug",
@@ -229,6 +248,11 @@
       "output": {
         "outputOnFailure": true
       },
+      "filter": {
+        "exclude": {
+          "label": "slow"
+        }
+      },
       "execution": {
         "noTestsAction": "error"
       },
@@ -242,6 +266,16 @@
       "name": "ci-linux-clang",
       "inherits": "ci-linux",
       "configurePreset": "ci-linux-clang"
+    },
+    {
+      "name": "ci-linux-clang-fma",
+      "inherits": "ci-linux",
+      "configurePreset": "ci-linux-clang-fma",
+      "filter": {
+        "include": {
+          "name": "^TEST_cgarchi_"
+        }
+      }
     },
     {
       "name": "_ci-windows",
@@ -262,7 +296,12 @@
     {
       "name": "ci-windows-debug",
       "inherits": "_ci-windows",
-      "configuration": "Debug"
+      "configuration": "Debug",
+      "filter": {
+        "exclude": {
+          "label": "slow"
+        }
+      }
     },
     {
       "name": "ci-windows-release",

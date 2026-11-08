@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -15,7 +16,7 @@ namespace cgarchi
 // de la scene. Les classes parametrees bornent les reglages a chaque Regenerate
 // (Module dans [0,1 ; 10], Radial segments dans [8 ; 256], Curve segments dans
 // [2 ; 32], enumerations ramenees dans leur domaine) ; BuildClassicalColumnMesh
-// ne les borne pas.
+// ne les borne pas et rejette un `order` hors domaine.
 struct ClassicalColumnSettings
 {
 	int   order = 0;              // classical::Order
@@ -31,16 +32,57 @@ struct ClassicalColumnSettings
 	int   curveSegments = 6;
 };
 
+// Domaine des reglages numeriques : bornes de leurs Parameter, du bornage de
+// Regenerate et du document JSON (parameterized_classical_json.h).
+constexpr float kClassicalModuleMin = 0.1f, kClassicalModuleMax = 10.f;
+constexpr int   kClassicalRadialSegmentsMin = 8, kClassicalRadialSegmentsMax = 256;
+constexpr int   kClassicalCurveSegmentsMin = 2, kClassicalCurveSegmentsMax = 32;
+
 // Maillage d'une colonne (tour sur plan, coussinets ioniques), axe Z, pied a
 // z = 0 ; une partie de module vaut settings.module / parties par module unites.
 // `profile` et `conflicts`, s'ils sont fournis, recoivent le profil (en parties)
 // et ses jonctions croisees. Le maillage rendu appartient a l'appelant.
-// Precondition NON VERIFIEE : settings.order dans [0, classical::kOrderCount)
-// (indice de tableau). Leve une std::exception en cas d'echec ; `*profile`
-// n'est alors pas ecrit, `*conflicts` peut l'avoir ete.
+// Leve std::invalid_argument si settings.order est hors de
+// [0, classical::kOrderCount), avant d'ecrire `*profile` ou `*conflicts`. Leve
+// une std::exception sur tout autre echec ; `*profile` n'est alors pas ecrit,
+// `*conflicts` peut l'avoir ete.
 std::unique_ptr<Mesh> BuildClassicalColumnMesh (const ClassicalColumnSettings &settings,
                                                 classical::ColumnProfile *profile = nullptr,
                                                 std::vector<classical::PlanConflict> *conflicts = nullptr);
+
+// Cotes z d'une colonne, en unites monde, dans le repere de
+// BuildClassicalColumnMesh (axe Z, pied a z = 0). Chacune est la cote d'un
+// sommet du profil tourne, donc d'un anneau du maillage.
+struct ClassicalColumnLevels
+{
+	double foot = 0.0;            // pied du premier membre (piedestal s'il y en a un, sinon base) : 0
+	std::optional<double> pedestalTop;   // pied du premier membre du bloc base, si settings.pedestal
+	double shaftFoot = 0.0;       // sommet du listel du pied du fut (ShaftZone::foot)
+	double shaftTop = 0.0;        // pied du listel de fut_haut (ShaftZone::top)
+	double capitalBottom = 0.0;   // pied du premier membre du bloc chapiteau
+	double capitalTop = 0.0;      // sommet du dernier membre du bloc chapiteau
+	double top = 0.0;             // sommet du profil (ColumnProfile::height) : capitalTop sans entablement
+	std::optional<double> entablatureFoot;   // pied de l'architrave, si settings.entablature
+};
+
+// Cotes de la colonne que BuildClassicalColumnMesh construirait pour
+// `settings`, calculees sur le seul profil, sans tour ni volutes. Memes
+// reglages, meme profil, memes cotes : y du profil fois settings.module / parties
+// par module, comme le tour.
+//
+// Domaine : celui de BuildClassicalColumnMesh. Leve std::invalid_argument si
+// settings.order est hors de [0, classical::kOrderCount) ; leve une
+// std::exception si le profil ne se construit pas. Ne borne rien : `module`
+// n'est pas verifie (les cotes lui sont proportionnelles, un module non fini
+// les rend non finies) ; `radialSegments` et `curveSegments` sont transmis au
+// profil comme pour le maillage, et dans le domaine des Parameter les cotes ne
+// dependent d'aucun des deux.
+//
+// Exclusion : les coussinets ioniques a volutes (« Volutes ») sont concatenes au
+// tour et hors profil. Leurs sommets ne sont pas sur des anneaux, et les cotes
+// ne disent rien de l'emprise horizontale du maillage de l'ionique a volutes ;
+// en z, ces sommets restent dans [foot, top].
+ClassicalColumnLevels ComputeClassicalColumnLevels (const ClassicalColumnSettings &settings);
 
 // Colonne d'un des cinq ordres de Vignole : base, fut diminue, chapiteau, et en
 // option piedestal et entablement, tournes sur leurs plans
@@ -84,19 +126,14 @@ public:
 	// echec, le maillage est vide.
 	const std::string &LastError () const { return m_lastError; }
 
-private:
-	int   m_order = 0;            // classical::Order
-	float m_module = 1.f;
-	bool  m_pedestal = false;
-	bool  m_entablature = false;
-	int   m_doricCornice = 0;     // classical::DoricCornice
-	bool  m_envelope = false;
-	bool  m_volutes = true;
-	bool  m_flutes = false;
-	int   m_doricFlutes = 0;      // 0 : A (Segment60), 1 : B (Semicircle)
-	int   m_radialSegments = 48;
-	int   m_curveSegments = 6;
+	// Reglages courants, ceux que GetParameters expose. SetSettings les remplace
+	// en entier, sans regenerer ; Regenerate les borne en place avant de
+	// construire par BuildClassicalColumnMesh.
+	const ClassicalColumnSettings &Settings () const { return m_settings; }
+	void SetSettings (const ClassicalColumnSettings &settings) { m_settings = settings; }
 
+private:
+	ClassicalColumnSettings m_settings;
 	classical::ColumnProfile m_profile;
 	std::vector<classical::PlanConflict> m_conflicts;
 	std::string m_lastError;

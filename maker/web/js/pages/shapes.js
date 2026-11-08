@@ -14,8 +14,9 @@ runPage(async () => {
   const catalogEl = document.getElementById("catalog");
 
   // Le catalogue vient du C++ (listShapes("parametric")) : pas de liste de noms
-  // dupliquee ici, ajouter une forme ne demande d'editer que wasm_api.cpp. Chaque
-  // entree porte son groupe, qui devient un <optgroup> -- les entrees consecutives
+  // dupliquee ici. Une forme s'ajoute dans la liste de son proprietaire
+  // (src/cgmesh/parametric_catalog.cpp) ; wasm_api.cpp ne porte que son groupe.
+  // Chaque entree porte son groupe, qui devient un <optgroup> -- les entrees consecutives
   // de meme groupe partagent le leur, l'ordre du catalogue fait donc l'ordre des
   // sections.
   const entries = JSON.parse(ctx.Module.listShapes("parametric"));

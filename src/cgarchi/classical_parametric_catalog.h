@@ -12,7 +12,7 @@ namespace cgarchi
 // Colonnade ». Elles ne figurent
 // ni dans ParametricShapes () ni dans GothicParametricShapes () ; la reunion
 // vit chez les consommateurs (cggraph_nodes : shapes/shape_catalog.h). Ordre
-// stable.
+// stable. Categorie « classical » ; identifiants « shape.classical.* ».
 const std::vector<ParametricShapeEntry> &ClassicalParametricShapes ();
 
 } // namespace cgarchi

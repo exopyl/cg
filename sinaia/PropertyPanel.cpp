@@ -40,30 +40,32 @@ void PropertyPanel::Rebuild()
 	// Section header with the object's display name
 	m_pGrid->Append(new wxPropertyCategory(m_pBound->GetName()));
 
-	// One grid property per Parameter. The property name is used as a lookup
-	// key when the user edits a value (matched against Parameter::GetName()).
+	// One grid property per Parameter. The property label is Parameter::GetName();
+	// the property name is Parameter::Id(), the lookup key when the user edits a
+	// value.
 	for (const Parameter &p : m_params)
 	{
-		const wxString name = p.GetName();
+		const wxString label = p.GetName();
+		const wxString name = p.Id();
 		switch (p.GetType())
 		{
 		case Parameter::INT:
 		{
-			wxPGProperty *prop = m_pGrid->Append(new wxIntProperty(name, name, p.GetInt()));
+			wxPGProperty *prop = m_pGrid->Append(new wxIntProperty(label, name, p.GetInt()));
 			prop->SetAttribute(wxPG_ATTR_MIN, p.GetMinInt());
 			prop->SetAttribute(wxPG_ATTR_MAX, p.GetMaxInt());
 			break;
 		}
 		case Parameter::FLOAT:
 		{
-			wxPGProperty *prop = m_pGrid->Append(new wxFloatProperty(name, name, p.GetFloat()));
+			wxPGProperty *prop = m_pGrid->Append(new wxFloatProperty(label, name, p.GetFloat()));
 			prop->SetAttribute(wxPG_ATTR_MIN, p.GetMinFloat());
 			prop->SetAttribute(wxPG_ATTR_MAX, p.GetMaxFloat());
 			break;
 		}
 		case Parameter::BOOL:
 		{
-			wxPGProperty *prop = m_pGrid->Append(new wxBoolProperty(name, name, p.GetBool()));
+			wxPGProperty *prop = m_pGrid->Append(new wxBoolProperty(label, name, p.GetBool()));
 			prop->SetAttribute(wxPG_BOOL_USE_CHECKBOX, true);
 			break;
 		}
@@ -76,7 +78,7 @@ void PropertyPanel::Rebuild()
 				labels.Add(p.GetChoices()[i]);
 				values.Add((int)i);
 			}
-			m_pGrid->Append(new wxEnumProperty(name, name, labels, values, p.GetInt()));
+			m_pGrid->Append(new wxEnumProperty(label, name, labels, values, p.GetInt()));
 			break;
 		}
 		case Parameter::STRING:
@@ -91,9 +93,9 @@ void PropertyPanel::Rebuild()
 			// un texte a plusieurs lignes saisissable, la grille elle-meme ne
 			// gerant qu'une ligne. wxStringProperty sinon.
 			if (p.IsMultiline())
-				m_pGrid->Append(new wxLongStringProperty(name, name, value));
+				m_pGrid->Append(new wxLongStringProperty(label, name, value));
 			else
-				m_pGrid->Append(new wxStringProperty(name, name, value));
+				m_pGrid->Append(new wxStringProperty(label, name, value));
 			break;
 		}
 		}
@@ -112,7 +114,7 @@ void PropertyPanel::RefreshBounds()
 	std::vector<Parameter> cur = m_pBound->GetParameters();
 	for (Parameter &p : cur)
 	{
-		wxPGProperty *prop = m_pGrid->GetPropertyByName(p.GetName());
+		wxPGProperty *prop = m_pGrid->GetPropertyByName(p.Id());
 		if (!prop)
 			continue;
 
@@ -152,11 +154,11 @@ void PropertyPanel::OnPropertyChanged(wxPropertyGridEvent &event)
 
 	const wxString changedName = prop->GetName();
 
-	// Look up the Parameter matching the property name and push the new value
+	// Look up the Parameter whose Id() is the property name and push the new value
 	// back into the underlying storage.
 	for (Parameter &p : m_params)
 	{
-		if (changedName != p.GetName())
+		if (changedName != p.Id())
 			continue;
 
 		switch (p.GetType())

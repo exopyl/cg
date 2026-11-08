@@ -85,5 +85,56 @@ std::vector<double> HeadHalfAngles (double halfAngle, FluteSection section, int 
 // meridien de pied de paroi. Croissants, sans doublon.
 std::vector<double> FluteGridOffsets (double halfAngle, FluteSection section, int samples, int headRings);
 
+// FlutedRadius, FluteSampleOffsets, HeadHalfAngles et FluteGridOffsets ne
+// couvrent que Segment60 et Semicircle : la section ThreeCentred a ses propres
+// fonctions, ci-dessous, et Ring::RadiusAt aiguille vers elles.
+
+// ============================================================================
+//  Section a trois centres ("fausse ellipse", Stuart et Revett, pl. IX C)
+// ============================================================================
+//
+// Repere de la corde ab, en unites de corde w : a = (-1/2, 0), b = (1/2, 0),
+// y croissant vers l'exterieur du fut, axe du fut en (0, -cos beta / w).
+// Profondeur q = p / w au milieu : fond d = (0, -q). Construction : centre e
+// sur la mediatrice, e = (0, Rc - q), arc central de rayon Rc passant par d ;
+// droites e-f et e-g par les points de division de la corde a 1/5 et 4/5
+// (x = -+3/10), f et g a la distance Rc de e ; h et i aux tiers de e-f et e-g
+// cote f et g, centres des arcs lateraux de rayon Rc / 3, tangents a l'arc
+// central en f et g. Rc est le seul rayon pour lequel l'arc lateral passe par
+// l'arete b ; il ne depend que de q (section homothetique, registre GD2a).
+//
+// Domaine : une solution unique pour 0 < q < 1/2. La section n'est un rayon
+// fonction de l'angle que si elle est etoilee depuis l'axe, ce qui depend de
+// beta : IsThreeCentredFluteStarShaped.
+struct ThreeCentredFlute
+{
+	double depthRatio = 0.0;           // q = profondeur / corde
+	double centralRadiusRatio = 0.0;   // Rc / corde
+};
+
+// Resout la construction. Leve std::invalid_argument si depthRatio n'est pas
+// dans ]0, 1/2[, ou si Rc / corde n'est pas representable en double (q de
+// l'ordre de 1e-308).
+ThreeCentredFlute SolveThreeCentredFlute (double depthRatio);
+
+// Vrai si la section de demi-angle halfAngle et de rapport depthRatio est
+// etoilee depuis l'axe du fut et sous sa corde : sur chaque arc, le rayon issu
+// de l'axe entre dans le cercle de l'arc (critere analytique, aux extremites
+// de l'arc et a son extremum). Faux hors de ]0, 1/2[ ou si halfAngle n'est pas
+// dans ]0, pi / 2[ ; ne leve pas.
+bool IsThreeCentredFluteStarShaped (double halfAngle, double depthRatio);
+
+// Rayon de la section a l'angle theta, cannelures centrees aux angles
+// 2 pi j / count : R a l'arete et au-dela (|offset| >= halfAngle -
+// kFluteAngleTolerance), sinon intersection proche de l'axe du rayon issu de
+// l'axe avec l'arc central ou lateral. `flute` vient de SolveThreeCentredFlute
+// et la section est supposee etoilee.
+double ThreeCentredFluteRadius (double R, int count, double halfAngle, const ThreeCentredFlute &flute, double theta);
+
+// Decalages angulaires >= 0 des sommets d'une demi-cannelure, croissants, sans
+// doublon : fond (0), samples - 1 points uniformes en abscisse curviligne sur
+// la demi-section, le point de tangence f, l'arete (halfAngle).
+std::vector<double> ThreeCentredFluteOffsets (double halfAngle, const ThreeCentredFlute &flute, int samples);
+
 } // namespace classical
 } // namespace cgarchi

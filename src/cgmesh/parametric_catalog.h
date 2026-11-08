@@ -29,6 +29,9 @@
 // Le NOM est celui que rend GetName() : c'est la cle de recherche, unique sur
 // la reunion.
 //
+// L'IDENTIFIANT et la CATEGORIE de chaque forme sont ecrits dans la liste de
+// son proprietaire, et nulle part ailleurs : les consommateurs les lisent ici.
+//
 #include <memory>
 #include <string>
 #include <vector>
@@ -37,8 +40,18 @@
 
 struct ParametricShapeEntry
 {
+	// Identifiant stable, unique sur la reunion : c'est le type du noeud de la
+	// forme dans les documents cggraph (« shape.cube »). Il ne change jamais,
+	// meme si le nom change : les documents deja ecrits le portent.
+	const char *id = nullptr;
+
 	// == GetName() de l'objet construit. Verifie par test.
 	const char *name = nullptr;
+
+	// Famille de formes, qui partitionne la reunion entre les pages de maker
+	// (listShapes). Chaque liste proprietaire ecrit la sienne : « parametric »
+	// pour ParametricShapes ().
+	const char *category = nullptr;
 
 	std::unique_ptr<IParameterized> (*make) () = nullptr;
 };

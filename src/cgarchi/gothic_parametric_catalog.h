@@ -10,7 +10,8 @@ namespace cgarchi
 // Formes parametriques gothiques sans ressource : « Gothic Window », puis
 // « Gothic Block ». Elles ne figurent pas dans ParametricShapes () ; la
 // recherche qui reunit les deux listes vit chez leurs consommateurs
-// (cggraph_nodes : shapes/shape_catalog.h). Ordre stable.
+// (cggraph_nodes : shapes/shape_catalog.h). Ordre stable. Categorie
+// « gothic » ; identifiants « shape.gothic.* ».
 const std::vector<ParametricShapeEntry> &GothicParametricShapes ();
 
 } // namespace cgarchi

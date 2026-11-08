@@ -187,12 +187,28 @@ Ring Ring::MakeFluted (double R, int count, double halfAngle, FluteSection secti
 	constexpr double pi = 3.14159265358979323846;
 	if (!(R > 0.0) || count < 3 || count % 4 != 0 || !(halfAngle > 0.0) || halfAngle > pi / count * (1.0 + 1e-12))
 		throw std::invalid_argument ("Ring : cannelures hors domaine");
+	if (section == FluteSection::ThreeCentred)
+		throw std::invalid_argument ("Ring : section a trois centres sans rapport profondeur / corde");
 	Ring ring;
 	ring.shape = RingShape::Fluted;
 	ring.radius = R;
 	ring.flutes = count;
 	ring.halfAngle = halfAngle;
 	ring.section = section;
+	return ring;
+}
+
+Ring Ring::MakeFluted (double R, int count, double halfAngle, FluteSection section, double depthRatio)
+{
+	if (section != FluteSection::ThreeCentred)
+		return MakeFluted (R, count, halfAngle, section);
+	Ring ring = MakeFluted (R, count, halfAngle, FluteSection::Segment60);
+	if (!IsThreeCentredFluteStarShaped (halfAngle, depthRatio))
+		throw std::invalid_argument ("Ring : section a trois centres non etoilee depuis l'axe (ou profondeur / corde hors de ]0, 1/2[)");
+	const ThreeCentredFlute flute = SolveThreeCentredFlute (depthRatio);
+	ring.section = FluteSection::ThreeCentred;
+	ring.depthRatio = flute.depthRatio;
+	ring.centralRadiusRatio = flute.centralRadiusRatio;
 	return ring;
 }
 
@@ -222,7 +238,9 @@ double Ring::RadiusAt (double theta) const
 	if (shape == RingShape::Circle)
 		return radius;
 	if (shape == RingShape::Fluted)
-		return FlutedRadius (radius, flutes, halfAngle, section, theta);
+		return section == FluteSection::ThreeCentred
+		           ? ThreeCentredFluteRadius (radius, flutes, halfAngle, {depthRatio, centralRadiusRatio}, theta)
+		           : FlutedRadius (radius, flutes, halfAngle, section, theta);
 	double t = std::fmod (theta, 0.5 * kPi);
 	if (t < 0.0)
 		t += 0.5 * kPi;
@@ -241,7 +259,7 @@ double Ring::RadiusAt (double theta) const
 bool Ring::operator== (const Ring &o) const
 {
 	return shape == o.shape && Same (radius, o.radius) && Same (face, o.face) && flutes == o.flutes &&
-	       Same (halfAngle, o.halfAngle) && section == o.section;
+	       Same (halfAngle, o.halfAngle) && section == o.section && Same (depthRatio, o.depthRatio);
 }
 
 std::vector<double> RingCrossings (const Ring &a, const Ring &b)
