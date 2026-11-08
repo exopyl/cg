@@ -7,6 +7,8 @@
 //   - listShapes("") rend exactement <nb formes> noms, distincts ;
 //   - listShapes("gothic") rend exactement <nb gothiques> noms, tous présents dans le catalogue ;
 //   - chaque forme du catalogue se crée et rend un maillage non vide (nv > 0, nf > 0) ;
+//   - chaque entrée de getParams porte un `id` chaîne non vide, distinct dans sa
+//     forme (paramIdFailures, param_ids.mjs) ;
 //   - le module n'écrit aucune ligne sur stderr pendant ces opérations ;
 //   - le détecteur de stderr est lui-même vu fonctionner (contrôle positif).
 //
@@ -20,6 +22,7 @@
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
+import { paramIdFailures } from "./param_ids.mjs";
 
 function usage(message) {
   process.stderr.write(`${message}\n`);
@@ -98,6 +101,7 @@ for (const name of gothic) {
 }
 
 const counts = {};
+let paramsChecked = 0;
 for (const name of all) {
   const id = Module.createShape(name);
   if (id < 0) {
@@ -107,9 +111,13 @@ for (const name of all) {
   const mesh = Module.meshData(id);
   counts[name] = [mesh.nv, mesh.nf];
   if (!(mesh.nv > 0 && mesh.nf > 0)) failures.push(`${name} : maillage vide (nv=${mesh.nv}, nf=${mesh.nf})`);
+  const params = JSON.parse(Module.getParams(id));
+  failures.push(...paramIdFailures(name, params));
+  if (Array.isArray(params)) paramsChecked += params.length;
   Module.destroyShape(id);
 }
 
+if (paramsChecked === 0) failures.push("getParams : aucun paramètre contrôlé");
 if (!probeDetected) failures.push("détecteur stderr inopérant : la sonde n'a pas été vue");
 if (stderrLines.length !== 0) failures.push(`${stderrLines.length} ligne(s) écrite(s) sur stderr par le module`);
 
@@ -119,6 +127,7 @@ const report = {
   gothic,
   expectedGothic,
   counts,
+  paramsChecked,
   stderrLines,
   stderrProbeDetected: probeDetected,
   failures,

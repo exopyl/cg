@@ -31,43 +31,64 @@
 //    « Iterations » du L-systeme sont celles du systeme COURANT. Les valeurs
 //    sont donc posees dans l'ordre de declaration, et les bornes relues avant
 //    chacune ;
-//  - l'IDENTIFIANT. Parameter n'a pas d'identifiant stable, seulement un nom
-//    d'affichage : c'est lui qui sert de cle dans le ParamSet, donc dans le
-//    document. Renommer un libelle dans cgmesh casse les documents deja ecrits.
-//    C'est le manque que P9 nomme depuis longtemps, et l'adaptateur ne peut
-//    que le subir.
+//  - l'IDENTIFIANT. La cle d'un parametre dans le ParamSet, donc dans le
+//    document, est Parameter::Id (), et non son libelle GetName (). Un libelle
+//    renomme qui garde son identifiant se relit depuis les documents deja
+//    ecrits. Il n'y a pas de repli sur le libelle a la lecture : Id () vaut le
+//    libelle tant qu'aucun identifiant n'est pose, et un identifiant pose sur
+//    un parametre publie prend la valeur de son libelle courant (parameterized.h).
 //
 // ANNULATION : Regenerate() est un appel MONOLITHIQUE, sans boucle externe. Le
 // jeton n'a aucun endroit ou entrer, et l'adaptateur n'en fabrique pas un
 // faux -- c'est le meme perimetre que les trois noeuds d'analyse monolithiques.
 //
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "../../core/node.h"
 
+class IParameterized;
+struct ParametricShapeEntry;
+
 namespace cggraph_nodes
 {
+
+// Pose dans `params` la valeur courante de chaque parametre de `shape`, sous
+// Parameter::Id ().
+void DeclareShapeParams (IParameterized &shape, cggraph::ParamSet &params);
+
+// Ecrit dans `shape` les valeurs de `params` lues sous Parameter::Id (), dans
+// l'ordre de declaration, bornes comprises. Un identifiant absent de `params`,
+// ou d'un autre type, laisse la valeur de la forme.
+void ApplyShapeParams (IParameterized &shape, const cggraph::ParamSet &params);
 
 // Liaison entre un type de noeud et une forme de la reunion CatalogShapes ()
 // (shape_catalog.h).
 struct ShapeBinding
 {
-	// Identifiant SERIALISE du type de noeud. Il est ecrit ici, et non derive du
-	// nom d'affichage : un libelle se retouche, un identifiant de document non.
-	const char *typeName = nullptr;
+	// La forme emballee, dans CatalogShapes (). Jamais nulle.
+	const ParametricShapeEntry *shape = nullptr;
 
-	// Cle dans CatalogShapes() (shape_catalog.h) -- c'est-a-dire GetName() de la forme.
-	const char *shapeName = nullptr;
+	// Identifiant SERIALISE du type de noeud : shape->id. Champ garde pour ses
+	// lecteurs existants (catalog.cpp, tests) ; il n'est ecrit que par
+	// ShapeBindings (), depuis le catalogue.
+	const char *typeName = nullptr;
 
 	const char *label = nullptr;
 	const char *caveat = nullptr;
 };
 
-// Les liaisons publiees par la couche. Adresses stables pour la duree du
-// programme.
+// Les liaisons publiees par la couche, dans l'ordre de leurs annotations.
+// Chaque annotation designe sa forme par son identifiant au catalogue ; une
+// annotation dont l'identifiant ne s'y trouve pas ne produit pas de liaison, ce
+// que ShapeBindings ().size () != ShapeNoteCount () rend visible. Adresses
+// stables pour la duree du programme.
 const std::vector<ShapeBinding> &ShapeBindings ();
+
+// Nombre d'annotations, resolues ou non.
+std::size_t ShapeNoteCount ();
 
 // Nulle si le type est inconnu.
 const ShapeBinding *FindShapeBinding (const std::string &typeName);

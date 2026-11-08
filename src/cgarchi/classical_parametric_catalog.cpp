@@ -16,13 +16,15 @@ std::unique_ptr<IParameterized> Make ()
 	return std::unique_ptr<IParameterized> (new T ());
 }
 
+const char *const kCategory = "classical";
+
 } // namespace
 
 const std::vector<ParametricShapeEntry> &ClassicalParametricShapes ()
 {
 	static const std::vector<ParametricShapeEntry> entries = {
-		{ "Classical Column", &Make<ParameterizedClassicalColumn> },
-		{ "Classical Colonnade", &Make<ParameterizedClassicalColonnade> }
+		{ "shape.classical.column", "Classical Column", kCategory, &Make<ParameterizedClassicalColumn> },
+		{ "shape.classical.colonnade", "Classical Colonnade", kCategory, &Make<ParameterizedClassicalColonnade> }
 	};
 	return entries;
 }

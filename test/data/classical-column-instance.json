@@ -1,0 +1,14 @@
+{
+  "curveSegments": 8,
+  "doricCornice": "mutules",
+  "doricFlutes": "semicircle",
+  "entablature": true,
+  "envelope": false,
+  "flutes": true,
+  "module": 2.5,
+  "order": "ionique",
+  "pedestal": true,
+  "radialSegments": 64,
+  "schema": "classical-column/v1",
+  "volutes": true
+}

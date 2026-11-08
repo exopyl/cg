@@ -1,0 +1,14 @@
+{
+  "curveSegments": 6,
+  "doricCornice": "dentils",
+  "doricFlutes": "segment60",
+  "entablature": false,
+  "envelope": false,
+  "flutes": false,
+  "module": 0.3,
+  "order": "toscan",
+  "pedestal": false,
+  "radialSegments": 48,
+  "schema": "classical-column/v1",
+  "volutes": true
+}

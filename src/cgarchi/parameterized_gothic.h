@@ -103,9 +103,13 @@ public:
 	//
 	// Lecture stricte : document illisible, type faux, valeur hors schema
 	// (enumeration inconnue, borne, valeur non finie une fois convertie en
-	// float), champ inconnu ou champ requis absent -> erreur json_*, nommee par le
-	// chemin JSON. Rend alors false, et les reglages comme les seuils restent
-	// strictement inchanges ; sinon ils sont poses ensemble. Un champ absent garde
+	// float), champ inconnu, cle en double ou champ requis absent -> erreur
+	// json_*, nommee par le chemin JSON. Rend alors false, et les reglages comme
+	// les seuils restent strictement inchanges ; sinon ils sont poses ensemble.
+	// Une cle en double (json_schema) n'arrete pas la lecture, qui continue sur
+	// la derniere valeur. En v1, elle est relevee avant la conversion, et le
+	// document converti n'est pas lu : les refus v2 independants ne sont alors
+	// pas rapportes. Un champ absent garde
 	// sa valeur, sauf `style.rosette.foils` : une rosace decrite sans foils est
 	// une rosace sans lobes. Un champ lu sans effet sur la baie donne
 	// field_ignored, un champ v1 traduit par son plus proche equivalent

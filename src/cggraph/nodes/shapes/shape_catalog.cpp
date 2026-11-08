@@ -37,4 +37,12 @@ std::unique_ptr<IParameterized> MakeCatalogShape (const std::string &name)
 	return entry ? entry->make () : nullptr;
 }
 
+const ParametricShapeEntry *FindCatalogShapeById (const std::string &id)
+{
+	for (const ParametricShapeEntry &entry : CatalogShapes ())
+		if (id == entry.id)
+			return &entry;
+	return nullptr;
+}
+
 } // namespace cggraph_nodes

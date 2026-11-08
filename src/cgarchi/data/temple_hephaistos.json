@@ -1,0 +1,968 @@
+{
+  "schema": "monument/v6",
+  "monument": "temple-hephaistos",
+  "source": {
+    "document": "Architecture/Antique/TempleHephaistos/README.md",
+    "sha256": "0faba870763b5fab4368449767be7562315560654c22951739e412314adfe77d",
+    "bytes": 56443,
+    "derivedBy": "src/cgarchi/data/temple_hephaistos_from_readme.py"
+  },
+  "sources": {
+    "D": "W. B. Dinsmoor, *The Architecture of Ancient Greece* (refonte d'Anderson et Spiers), `General/1950 - …Dinsmoor….pdf`",
+    "L": "J.-D. Le Roy, *Les Ruines des plus beaux monuments de la Grèce*, 1770, pl. XVII, `TempleHephaistos/Plan_of_the_Temple_of_Hephaestus….jpg`",
+    "S": "J. Stuart et N. Revett, *The Antiquities of Athens*, vol. III, chap. I, « Of the Temple of Theseus », `General/1726 - Sturt Revett - Antiquities of Athens, vol. III.pdf` (planches datées de 1794 ; exemplaire Internet Archive `antiqvitiesAthe3Stua`)",
+    "W": "Wikipédia, [Héphaïstéion](https://fr.wikipedia.org/wiki/H%C3%A9pha%C3%AFst%C3%A9ion) (fr), et [Temple of Hephaestus](https://en.wikipedia.org/wiki/Temple_of_Hephaestus) (en) pour recoupement"
+  },
+  "krepis": {
+    "stylobateWidth": {
+      "value": 13.719,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["D"],
+      "readme": "§3.2, l. 72"
+    },
+    "stylobateLength": {
+      "value": 31.769,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["D"],
+      "readme": "§3.2, l. 72"
+    },
+    "stepCount": {
+      "value": 3,
+      "unit": "1",
+      "status": "lu",
+      "sources": ["D", "L", "W"],
+      "readme": "§3.2, l. 73"
+    },
+    "stylobateHeight": {
+      "value": 0.365,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§3.2, l. 74"
+    },
+    "secondStepHeight": {
+      "value": 0.347,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§3.2, l. 75"
+    },
+    "thirdStepHeight": {
+      "value": 0.35,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§3.2, l. 76"
+    },
+    "secondStepTread": {
+      "value": 0.372,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§3.2, l. 77"
+    },
+    "thirdStepTread": {
+      "value": 0.372,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§3.2, l. 78"
+    },
+    "cornerMargin": {
+      "value": 0.057,
+      "unit": "m",
+      "status": "déduit",
+      "sources": ["S"],
+      "readme": "§3.2, l. 79"
+    },
+    "euthynteria": {
+      "unit": "m",
+      "status": "manquant",
+      "sources": [],
+      "readme": "§3.2, l. 80"
+    }
+  },
+  "peristyle": {
+    "frontColumns": {
+      "value": 6,
+      "unit": "1",
+      "status": "lu",
+      "sources": ["D", "S", "W"],
+      "readme": "§2, l. 50"
+    },
+    "flankColumns": {
+      "value": 13,
+      "unit": "1",
+      "status": "lu",
+      "sources": ["D", "S", "W"],
+      "readme": "§2, l. 50"
+    },
+    "frontSpacing": {
+      "value": 2.588,
+      "unit": "m",
+      "status": "déduit",
+      "sources": [],
+      "readme": "§4.2, l. 102"
+    },
+    "flankSpacing": {
+      "value": 2.581,
+      "unit": "m",
+      "status": "déduit",
+      "sources": [],
+      "readme": "§4.2, l. 103"
+    },
+    "frontCornerSpacing": {
+      "value": 2.401,
+      "unit": "m",
+      "status": "déduit",
+      "sources": ["S"],
+      "readme": "§4.2, l. 101"
+    },
+    "flankCornerSpacing": {
+      "value": 2.404,
+      "unit": "m",
+      "status": "déduit",
+      "sources": ["S"],
+      "readme": "§4.2, l. 101"
+    }
+  },
+  "columns": {
+    "lowerDiameter": {
+      "value": 1.016,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["D"],
+      "readme": "§4.1, l. 90"
+    },
+    "cornerLowerDiameter": {
+      "value": 1.038,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§4.1, l. 91"
+    },
+    "upperDiameter": {
+      "value": 0.775,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["D"],
+      "readme": "§4.1, l. 92"
+    },
+    "height": {
+      "value": 5.715,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["D"],
+      "readme": "§4.1, l. 93"
+    },
+    "fluteCount": {
+      "value": 20,
+      "unit": "1",
+      "status": "lu",
+      "sources": ["D", "S"],
+      "readme": "§5.1, l. 150"
+    },
+    "fluteDepth": {
+      "value": 1.1,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§5.1, l. 153"
+    },
+    "entasisSagitta": {
+      "value": 7,
+      "unit": "mm",
+      "status": "déduit",
+      "sources": ["D"],
+      "readme": "§5.1, l. 156"
+    },
+    "entasisHeight": {
+      "value": 2.605,
+      "unit": "m",
+      "status": "déduit",
+      "sources": [],
+      "readme": "§5.1, l. 157"
+    },
+    "abacusHeight": {
+      "value": 7.85,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§5.2, l. 165"
+    },
+    "abacusHalfWidth": {
+      "value": 22.451,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§5.2, l. 165"
+    },
+    "echinusHeight": {
+      "value": 6.5,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§5.2, l. 166"
+    },
+    "echinusJunctionDepth": {
+      "value": 1.7,
+      "unit": "in",
+      "status": "mesuré",
+      "sources": ["S"],
+      "readme": "§5.2, l. 188"
+    },
+    "echinusJunctionRetreat": {
+      "value": 1.0,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§5.2, l. 190"
+    },
+    "echinusTopRetreat": {
+      "value": 0.625,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§5.2, l. 190"
+    },
+    "echinusLipRadius": {
+      "value": 1.15,
+      "unit": "in",
+      "status": "mesuré",
+      "sources": ["S"],
+      "readme": "§5.2, l. 197"
+    },
+    "annuletCount": {
+      "value": 4,
+      "unit": "1",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§5.2, l. 167"
+    },
+    "annuletsHeight": {
+      "value": 1.234,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§5.2, l. 167"
+    },
+    "annuletsTopRetreat": {
+      "value": 5.334,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§5.2, l. 167"
+    },
+    "annuletsBottomRetreat": {
+      "value": 6.25,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§5.2, l. 167"
+    },
+    "hypotrachelionHeight": {
+      "value": 4.3,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§5.2, l. 169"
+    },
+    "grooveHeight": {
+      "value": 0.188,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§5.2, l. 178"
+    },
+    "grooveDepth": {
+      "unit": "m",
+      "status": "manquant",
+      "sources": [],
+      "readme": "§5.2, l. 183"
+    }
+  },
+  "controls": {
+    "frontAxesY": {
+      "values": [-6.283, -3.882, -1.294, 1.294, 3.882, 6.283],
+      "readme": "§4.3, l. 111"
+    },
+    "flankAxesX": {
+      "values": [-15.309, -12.905, -10.324, -7.743, -5.162, -2.581, 0, 2.581, 5.162, 7.743, 10.324, 12.905, 15.309],
+      "readme": "§4.3, l. 116"
+    },
+    "frontSum": {
+      "value": 13.718,
+      "readme": "§12, l. 441"
+    },
+    "flankSum": {
+      "value": 31.770,
+      "readme": "§12, l. 442"
+    }
+  },
+  "columnControls": {
+    "shaftHeight": {
+      "value": 5.210,
+      "unit": "m",
+      "readme": "§5.1, l. 149"
+    },
+    "footFluteChord": {
+      "value": 6.25,
+      "unit": "in",
+      "readme": "§5.1, l. 151"
+    },
+    "fluteCentralRadius": {
+      "value": 6.37,
+      "unit": "in",
+      "readme": "§5.1, l. 154"
+    },
+    "fluteLateralRadius": {
+      "value": 2.12,
+      "unit": "in",
+      "readme": "§5.1, l. 154"
+    },
+    "topFluteDepth": {
+      "value": 0.85,
+      "unit": "in",
+      "readme": "§5.1, l. 155"
+    },
+    "cornerFluteChord": {
+      "value": 0.162,
+      "unit": "m",
+      "readme": "§4.4, l. 130"
+    },
+    "cornerFluteDepth": {
+      "value": 0.029,
+      "unit": "m",
+      "readme": "§4.4, l. 130"
+    },
+    "capitalHeight": {
+      "value": 19.884,
+      "unit": "in",
+      "readme": "§12, l. 449"
+    },
+    "annuletsAndRelief": {
+      "value": 7.134,
+      "unit": "in",
+      "readme": "§12, l. 450"
+    },
+    "upperRadius": {
+      "value": 15.317,
+      "unit": "in",
+      "readme": "§12, l. 451"
+    },
+    "echinusLipRetreat": {
+      "value": 0.42,
+      "unit": "in",
+      "readme": "§5.2, l. 197"
+    },
+    "echinusProfile": {
+      "depths": [0, 0.5, 0.9, 1.3, 1.7, 4.4, 6.5],
+      "retreats": [0.625, 0.42, 0.44, 0.62, 1.0, 3.5, 5.334],
+      "unit": "in",
+      "readme": "§5.2, l. 188"
+    }
+  },
+  "entablature": {
+    "architraveHeightFt": {
+      "value": 2,
+      "unit": "ft",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 209"
+    },
+    "architraveHeightIn": {
+      "value": 8.9,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 209"
+    },
+    "taeniaHeight": {
+      "value": 3.0,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 210"
+    },
+    "regulaHeight": {
+      "value": 2.734,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 211"
+    },
+    "guttaeHeight": {
+      "value": 0.95,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 212"
+    },
+    "architraveFaceHeight": {
+      "value": 26.216,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 213"
+    },
+    "friezeHeightFt": {
+      "value": 2,
+      "unit": "ft",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 214"
+    },
+    "friezeHeightIn": {
+      "value": 8.55,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 214"
+    },
+    "triglyphCapitalHeight": {
+      "value": 4.6,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 215"
+    },
+    "corniceHeightFt": {
+      "value": 1,
+      "unit": "ft",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 216"
+    },
+    "corniceHeightIn": {
+      "value": 0.45,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 216"
+    },
+    "mutulePlateHeight": {
+      "value": 2.35,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 217"
+    },
+    "dripHeight": {
+      "value": 1.25,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 217"
+    },
+    "coronaHeight": {
+      "value": 7.35,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 217"
+    },
+    "filletHeight": {
+      "value": 0.35,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 217"
+    },
+    "crownHeight": {
+      "value": 1.15,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 217"
+    },
+    "architraveTopProjection": {
+      "value": 19.259,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.2, l. 229"
+    },
+    "architraveFootProjection": {
+      "value": 19.459,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.2, l. 229"
+    },
+    "taeniaProjection": {
+      "value": 20.859,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.2, l. 230"
+    },
+    "triglyphFace": {
+      "value": 19.259,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.2, l. 233"
+    },
+    "triglyphCapitalBandProjection": {
+      "value": 20.259,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.2, l. 234"
+    },
+    "triglyphCapitalListelProjection": {
+      "value": 20.659,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.2, l. 234"
+    },
+    "triglyphCapitalListelHeight": {
+      "value": 1.0,
+      "unit": "in",
+      "status": "convention",
+      "sources": [],
+      "readme": "§6.2, l. 235"
+    },
+    "triglyphCapitalBandHeight": {
+      "value": 3.6,
+      "unit": "in",
+      "status": "convention",
+      "sources": [],
+      "readme": "§6.2, l. 235"
+    },
+    "metopeFace": {
+      "value": 16.459,
+      "unit": "in",
+      "status": "déduit",
+      "sources": ["S"],
+      "readme": "§6.2, l. 236"
+    },
+    "mutulePlateProjection": {
+      "value": 35.825,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.2, l. 237"
+    },
+    "dripProjection": {
+      "value": 37.225,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.2, l. 239"
+    },
+    "coronaProjection": {
+      "value": 37.375,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.2, l. 240"
+    },
+    "filletProjection": {
+      "value": 38.375,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.2, l. 241"
+    },
+    "crownProjection": {
+      "value": 38.975,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.2, l. 242"
+    },
+    "innerFace": {
+      "unit": "m",
+      "status": "manquant",
+      "sources": [],
+      "readme": "§6.2, l. 243"
+    },
+    "triglyphWidthFt": {
+      "value": 1,
+      "unit": "ft",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.3, l. 250"
+    },
+    "triglyphWidthIn": {
+      "value": 8.3,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.3, l. 250"
+    },
+    "metopeWidthFt": {
+      "value": 2,
+      "unit": "ft",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.3, l. 251"
+    },
+    "metopeWidthIn": {
+      "value": 6.475,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.3, l. 251"
+    },
+    "triglyphDivisions": {
+      "values": [2.0, 2.8, 3.95, 2.8, 3.95, 2.8, 2.0],
+      "kinds": ["demi-canal", "bande", "canal", "bande", "canal", "bande", "demi-canal"],
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.3, l. 253"
+    },
+    "channelDepth": {
+      "value": 1.98,
+      "unit": "in",
+      "status": "mesuré",
+      "sources": ["S"],
+      "readme": "§6.3, l. 254"
+    },
+    "regulaProjection": {
+      "value": 20.859,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.2, l. 231"
+    },
+    "regulaGuttaCount": {
+      "value": 6,
+      "unit": "1",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 212"
+    },
+    "regulaGuttaDiameter": {
+      "value": 1.466,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 212"
+    },
+    "regulaGuttaGap": {
+      "value": 2.25,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.1, l. 212"
+    },
+    "regulaGuttaTopProjection": {
+      "value": 20.809,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.2, l. 232"
+    },
+    "regulaGuttaFootProjection": {
+      "value": 20.859,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.2, l. 232"
+    },
+    "mutuleWidthFt": {
+      "value": 1,
+      "unit": "ft",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.4, l. 273"
+    },
+    "mutuleWidthIn": {
+      "value": 8.75,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.4, l. 273"
+    },
+    "mutuleDepth": {
+      "value": 15.876,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.4, l. 274"
+    },
+    "soffitSlope": {
+      "value": 14,
+      "unit": "°",
+      "status": "mesuré",
+      "sources": ["S"],
+      "readme": "§6.4, l. 276"
+    },
+    "mutuleGuttaFrontDiameter": {
+      "value": 1.46,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleGuttaMiddleDiameter": {
+      "value": 1.55,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleGuttaRearDiameter": {
+      "value": 1.5,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleGuttaFrontGap": {
+      "value": 4.4,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleGuttaRearGap": {
+      "value": 4.466,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleGuttaHeight": {
+      "value": 1.0,
+      "unit": "in",
+      "status": "mesuré",
+      "sources": ["S"],
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleGuttaEdgeAxis": {
+      "value": 1.775,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleGuttaPerRow": {
+      "value": 6,
+      "unit": "1",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleGuttaFootFlare": {
+      "value": 0.5,
+      "unit": "in",
+      "status": "déduit",
+      "sources": ["S"],
+      "readme": "§6.4, l. 275"
+    }
+  },
+  "entablatureControls": {
+    "total": {
+      "value": 1.979,
+      "unit": "m",
+      "readme": "§6.1, l. 218"
+    },
+    "corniceSum": {
+      "value": 12.45,
+      "unit": "in",
+      "readme": "§12, l. 446"
+    },
+    "triglyphDivisionSum": {
+      "value": 20.3,
+      "unit": "in",
+      "readme": "§12, l. 445"
+    },
+    "frontMetope": {
+      "value": 0.778,
+      "unit": "m",
+      "readme": "§6.3, l. 252"
+    },
+    "flankMetope": {
+      "value": 0.775,
+      "unit": "m",
+      "readme": "§6.3, l. 252"
+    },
+    "metopeCount": {
+      "value": 68,
+      "unit": "1",
+      "readme": "§6.3, l. 249"
+    },
+    "frontTriglyphs": {
+      "value": 11,
+      "unit": "1",
+      "readme": "§6.3, l. 249"
+    },
+    "flankTriglyphs": {
+      "value": 25,
+      "unit": "1",
+      "readme": "§6.3, l. 249"
+    },
+    "channelBottom": {
+      "value": 0.439,
+      "unit": "m",
+      "readme": "§6.3, l. 254"
+    },
+    "metopeRecess": {
+      "value": 2.8,
+      "unit": "in",
+      "readme": "§6.2, l. 236"
+    },
+    "cornerTriglyphOffset": {
+      "value": 0.231,
+      "unit": "m",
+      "readme": "§6.3, l. 255"
+    },
+    "frontCornerDistance": {
+      "value": 2.632,
+      "unit": "m",
+      "readme": "§6.3, l. 256"
+    },
+    "frontCornerMetope": {
+      "value": 0.801,
+      "unit": "m",
+      "readme": "§6.3, l. 256"
+    },
+    "flankCornerMetope": {
+      "value": 0.802,
+      "unit": "m",
+      "readme": "§6.3, l. 256"
+    },
+    "intermediateShift": {
+      "value": 0.116,
+      "unit": "m",
+      "readme": "§6.3, l. 256"
+    },
+    "frontMidBayInnerMetope": {
+      "value": 0.685,
+      "unit": "m",
+      "readme": "§6.3, l. 256"
+    },
+    "frontMidBayOuterMetope": {
+      "value": 0.916,
+      "unit": "m",
+      "readme": "§6.3, l. 256"
+    },
+    "flankMidBayInnerMetope": {
+      "value": 0.686,
+      "unit": "m",
+      "readme": "§6.3, l. 256"
+    },
+    "flankMidBayOuterMetope": {
+      "value": 0.918,
+      "unit": "m",
+      "readme": "§6.3, l. 256"
+    },
+    "regulaGuttaMargin": {
+      "value": 0.127,
+      "unit": "in",
+      "readme": "§6.1, l. 212"
+    },
+    "regulaGuttaShortfall": {
+      "value": 0.254,
+      "unit": "in",
+      "readme": "§6.1, l. 212"
+    },
+    "regulaGuttaCountCheck": {
+      "value": 6,
+      "unit": "1",
+      "readme": "§6.4, l. 277"
+    },
+    "mutuleBack": {
+      "value": 19.949,
+      "unit": "in",
+      "readme": "§6.4, l. 274"
+    },
+    "mutuleGuttaRows": {
+      "value": 3,
+      "unit": "1",
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleGuttaPitchCount": {
+      "value": 5,
+      "unit": "1",
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleGuttaMiddleAxis": {
+      "value": 6.635,
+      "unit": "in",
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleGuttaRearAxis": {
+      "value": 12.626,
+      "unit": "in",
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleGuttaPitch": {
+      "value": 3.44,
+      "unit": "in",
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleRearMargin": {
+      "value": 2.5,
+      "unit": "in",
+      "readme": "§6.4, l. 274"
+    },
+    "mutuleHorizontalDepth": {
+      "value": 15.404,
+      "unit": "in",
+      "readme": "§6.4, l. 274"
+    },
+    "mutuleInclinedBack": {
+      "value": 20.421,
+      "unit": "in",
+      "readme": "§6.4, l. 274"
+    },
+    "soffitPivotZ": {
+      "value": 7.377,
+      "unit": "m",
+      "readme": "§6.4, l. 276"
+    },
+    "mutuleFrontTopZ": {
+      "value": 7.437,
+      "unit": "m",
+      "readme": "§6.4, l. 276"
+    },
+    "soffitBackZ": {
+      "value": 7.475,
+      "unit": "m",
+      "readme": "§6.4, l. 276"
+    },
+    "soffitRise": {
+      "value": 3.84,
+      "unit": "in",
+      "readme": "§6.4, l. 276"
+    },
+    "geisonBackStep": {
+      "value": 3.9,
+      "unit": "in",
+      "readme": "§6.4, l. 276"
+    },
+    "dripTopZ": {
+      "value": 7.469,
+      "unit": "m",
+      "readme": "§6.4, l. 276"
+    },
+    "soffitPivotProjection": {
+      "value": 35.825,
+      "unit": "in",
+      "readme": "§6.4, l. 276"
+    },
+    "mutuleGuttaRadialFlare": {
+      "value": 0.25,
+      "unit": "in",
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleGuttaRadialFlareExact": {
+      "value": 0.249,
+      "unit": "in",
+      "readme": "§6.4, l. 275"
+    },
+    "mutuleGuttaFrontFootProjection": {
+      "value": 35.826,
+      "unit": "in",
+      "readme": "§6.4, l. 275"
+    }
+  }
+}

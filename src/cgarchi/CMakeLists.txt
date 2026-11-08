@@ -32,6 +32,26 @@ add_custom_command(
     VERBATIM)
 target_sources(cgarchi PRIVATE "${CGARCHI_ORDERS_CPP}")
 
+# Document du temple d'Hephaistos ("monument/v6"), embarque de meme. Le JSON est
+# la sortie de data/temple_hephaistos_from_readme.py sur le README de
+# l'utilisateur, hors du depot : le script se lance a la main, jamais par la
+# construction.
+set(CGARCHI_MONUMENT_JSON "${PROJECT_SOURCE_DIR}/data/temple_hephaistos.json")
+set(CGARCHI_MONUMENT_CPP  "${CMAKE_CURRENT_BINARY_DIR}/generated/classical_monument_data.cpp")
+add_custom_command(
+    OUTPUT  "${CGARCHI_MONUMENT_CPP}"
+    COMMAND ${CMAKE_COMMAND}
+            -DINPUT=${CGARCHI_MONUMENT_JSON}
+            -DOUTPUT=${CGARCHI_MONUMENT_CPP}
+            -DNAMESPACE=cgarchi
+            -DFUNCTION=TempleHephaistosJson
+            -DHEADER=cgarchi/classical_monument_data.h
+            -P "${PROJECT_SOURCE_DIR}/embed_file.cmake"
+    DEPENDS "${CGARCHI_MONUMENT_JSON}" "${PROJECT_SOURCE_DIR}/embed_file.cmake"
+    COMMENT "Embedding data/temple_hephaistos.json"
+    VERBATIM)
+target_sources(cgarchi PRIVATE "${CGARCHI_MONUMENT_CPP}")
+
 # Inclusions : `#include <cgarchi/x.h>` depuis partout, comme cgmath et cgimg.
 # BUILD_INTERFACE seul : le module n'installe aucun en-tete.
 target_include_directories(cgarchi PUBLIC

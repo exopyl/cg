@@ -3,6 +3,7 @@
 // appliquees ici sont celles du schema (verifie par tu_cgarchi_gothic_micro_json).
 #include <cgarchi/gothic_microarchitecture_json.h>
 #include <cgarchi/gothic_microarchitecture_detail.h>
+#include <cgarchi/json_reader.h>
 
 #include <nlohmann/json.hpp>
 
@@ -28,63 +29,38 @@ namespace
 	// Valeur illisible, deja signalee : la validation structurelle la saute.
 	const double kUnread = std::numeric_limits<double>::quiet_NaN();
 
-	std::string join (const std::string &parent, const std::string &key)
-	{
-		return parent.empty() ? key : parent + "." + key;
-	}
+	using json_reader::Bounds;
+	using json_reader::Indexed;
+	using json_reader::Interval;
+	using json_reader::JsonFault;
+	using json_reader::Join;
+	using json_reader::Member;
 
-	std::string indexed (const std::string &array, std::size_t i)
-	{
-		return array + "[" + std::to_string(i) + "]";
-	}
+	// Chiffres significatifs des nombres cites dans les messages : un double
+	// s'y relit a l'identique.
+	constexpr int kNumberPrecision = 17;
 
-	std::string valueText (double v)
-	{
-		std::ostringstream os;
-		os.precision(17);
-		os << v;
-		return os.str();
-	}
+	static_assert(kMicroarchReportMaxEntries <= json_reader::kDuplicateKeyPathLimit,
+	              "chaque entree du rapport porte le chemin de son doublon");
 
-	const json *member (const json &obj, const char *key)
+	MicroarchError toError (JsonFault kind)
 	{
-		const auto it = obj.find(key);
-		return it == obj.end() ? nullptr : &*it;
-	}
-
-	// Domaine d'un nombre au sens de JSON Schema.
-	struct Bounds
-	{
-		double lo = -std::numeric_limits<double>::infinity();
-		double hi =  std::numeric_limits<double>::infinity();
-		bool   loOpen = false;
-		bool   hiOpen = false;
-
-		bool Contains (double v) const
+		switch (kind)
 		{
-			return (loOpen ? v > lo : v >= lo) && (hiOpen ? v < hi : v <= hi);
+		case JsonFault::Type:    return MicroarchError::JsonType;
+		case JsonFault::Value:   return MicroarchError::JsonValue;
+		case JsonFault::Missing: return MicroarchError::JsonMissing;
+		case JsonFault::Schema:  break;
 		}
-		std::string Text () const
-		{
-			return (loOpen ? "(" : "[") + valueText(lo) + ", " + valueText(hi) + (hiOpen ? ")" : "]");
-		}
-	};
-
-	Bounds interval (double lo, bool loOpen, double hi, bool hiOpen)
-	{
-		Bounds b;
-		b.lo = lo; b.loOpen = loOpen;
-		b.hi = hi; b.hiOpen = hiOpen;
-		return b;
+		return MicroarchError::JsonSchema;
 	}
 
-	// Lecture typee d'un champ, diagnostic nomme par son chemin. Chaque accesseur
-	// rend true et ecrit `out` seulement si le champ est present et valide ;
-	// absent, il rend false sans rien enregistrer.
-	class Reader
+	// Lecteur strict commun (json_reader.h), refus portes au MicroarchReport ;
+	// s'y ajoutent les tableaux bornes, les identifiants et les points du plan.
+	class Reader final : public json_reader::StrictReader
 	{
 	public:
-		explicit Reader (MicroarchReport &report) : m_report(report) {}
+		explicit Reader (MicroarchReport &report) : StrictReader(kNumberPrecision), m_report(report) {}
 
 		void Error (MicroarchError kind, const std::string &path, const std::string &message)
 		{
@@ -94,46 +70,16 @@ namespace
 		{
 			m_report.Record(kind, path, message);
 		}
-		void TypeError (const std::string &path, const char *expected, const json &value)
-		{
-			Error(MicroarchError::JsonType, path, std::string("expected ") + expected + ", not " + value.type_name());
-		}
-
-		// Champ hors schema (additionalProperties false).
-		void Known (const json &obj, const std::string &parent, std::initializer_list<const char *> names)
-		{
-			for (auto it = obj.begin(); it != obj.end(); ++it)
-				if (std::none_of(names.begin(), names.end(), [&](const char *n) { return it.key() == n; }))
-					Error(MicroarchError::JsonSchema, join(parent, it.key()), "unknown field");
-		}
-
-		void Require (const json &obj, const std::string &parent, std::initializer_list<const char *> names)
-		{
-			for (const char *n : names)
-				if (!obj.contains(n))
-					Error(MicroarchError::JsonMissing, join(parent, n), "required field is missing");
-		}
-
-		const json *Object (const json &obj, const std::string &parent, const char *key)
-		{
-			const json *v = member(obj, key);
-			if (v && !v->is_object())
-			{
-				TypeError(join(parent, key), "an object", *v);
-				return nullptr;
-			}
-			return v;
-		}
 
 		// Tableau d'au plus `maxItems` elements ; `nonEmpty` : un tableau vide est
 		// une erreur json_value. Un tableau refuse n'est pas lu.
 		const json *Array (const json &obj, const std::string &parent, const char *key, bool nonEmpty,
 		                   std::size_t maxItems = std::numeric_limits<std::size_t>::max())
 		{
-			const json *v = member(obj, key);
+			const json *v = Member(obj, key);
 			if (!v)
 				return nullptr;
-			const std::string path = join(parent, key);
+			const std::string path = Join(parent, key);
 			if (!v->is_array())
 			{
 				TypeError(path, "an array", *v);
@@ -153,97 +99,28 @@ namespace
 			return v;
 		}
 
-		bool Number (const json &obj, const std::string &parent, const char *key, const Bounds &bounds, double &out)
-		{
-			const json *v = member(obj, key);
-			if (!v)
-				return false;
-			const std::string path = join(parent, key);
-			if (!v->is_number())
-			{
-				TypeError(path, "a number", *v);
-				return false;
-			}
-			const double x = v->get<double>();
-			if (!std::isfinite(x))
-			{
-				Error(MicroarchError::JsonValue, path, "non-finite value");
-				return false;
-			}
-			if (!bounds.Contains(x))
-			{
-				Error(MicroarchError::JsonValue, path, valueText(x) + " outside " + bounds.Text());
-				return false;
-			}
-			out = x;
-			return true;
-		}
-
-		// Entier au sens de JSON Schema : 2 et 2.0 le sont, 2.5 non.
-		bool Integer (const json &obj, const std::string &parent, const char *key, int lo, int hi, int &out)
-		{
-			const json *v = member(obj, key);
-			if (!v)
-				return false;
-			const std::string path = join(parent, key);
-			const double x = v->is_number() ? v->get<double>() : 0.0;
-			if (!v->is_number() || !std::isfinite(x) || std::floor(x) != x)
-			{
-				TypeError(path, "an integer", *v);
-				return false;
-			}
-			if (x < lo || x > hi)
-			{
-				Error(MicroarchError::JsonValue, path,
-				      valueText(x) + " outside [" + std::to_string(lo) + ", " + std::to_string(hi) + "]");
-				return false;
-			}
-			out = static_cast<int>(x);
-			return true;
-		}
-
-		bool Boolean (const json &obj, const std::string &parent, const char *key, bool &out)
-		{
-			const json *v = member(obj, key);
-			if (!v)
-				return false;
-			if (!v->is_boolean())
-			{
-				TypeError(join(parent, key), "a boolean", *v);
-				return false;
-			}
-			out = v->get<bool>();
-			return true;
-		}
-
 		// Chaine non vide.
 		bool Id (const json &obj, const std::string &parent, const char *key, std::string &out)
 		{
-			const json *v = member(obj, key);
-			if (!v)
+			std::string s;
+			if (!String(obj, parent, key, s))
 				return false;
-			const std::string path = join(parent, key);
-			if (!v->is_string())
+			if (s.empty())
 			{
-				TypeError(path, "a string", *v);
+				Error(MicroarchError::JsonValue, Join(parent, key), "empty string");
 				return false;
 			}
-			if (v->get<std::string>().empty())
-			{
-				Error(MicroarchError::JsonValue, path, "empty string");
-				return false;
-			}
-			out = v->get<std::string>();
+			out = std::move(s);
 			return true;
 		}
 
 		// Tableau de deux nombres finis.
 		bool Point (const json &obj, const std::string &parent, const char *key, Vector2d &out)
 		{
-			const json *v = member(obj, key);
+			const json *v = Member(obj, key);
 			if (!v)
 				return false;
-			const std::string path = join(parent, key);
+			const std::string path = Join(parent, key);
 			if (!v->is_array() || v->size() != 2 || !(*v)[0].is_number() || !(*v)[1].is_number())
 			{
 				Error(MicroarchError::JsonType, path, "expected an array of 2 numbers");
@@ -261,12 +138,17 @@ namespace
 		}
 
 	private:
+		void OnFault (JsonFault kind, const std::string &path, const std::string &message) override
+		{
+			Error(toError(kind), path, message);
+		}
+
 		MicroarchReport &m_report;
 	};
 
 	// Bornes du schema v1.
-	const Bounds kAxisDeg       = interval(0.0, false, 180.0, true);
-	const Bounds kPrcU          = interval(0.0, true, 1.0, true);
+	const Bounds kAxisDeg       = Interval(0.0, false, 180.0, true);
+	const Bounds kPrcU          = Interval(0.0, true, 1.0, true);
 	constexpr int kMaxLevelId   = INT_MAX;
 
 	// =======================================================================
@@ -298,7 +180,7 @@ namespace
 		for (std::size_t i = 0; i < levels->size(); ++i)
 		{
 			const json &l = (*levels)[i];
-			const std::string path = indexed("levels", i);
+			const std::string path = Indexed("levels", i);
 			LevelSpec level;
 			level.id = -1;
 			if (!l.is_object())
@@ -339,7 +221,7 @@ namespace
 		for (std::size_t i = 0; i < points.size(); ++i)
 		{
 			const json &p = points[i];
-			const std::string path = indexed("points", i);
+			const std::string path = Indexed("points", i);
 			PointSpec point;
 			point.xy = Vector2d(kUnread, kUnread);
 			if (!p.is_object())
@@ -357,22 +239,10 @@ namespace
 
 	CurveType readCurveType (const json &c, const std::string &path, Reader &r)
 	{
-		const json *t = member(c, "type");
-		if (!t)
+		int index = 0;
+		if (!r.Enum(c, path, "type", {"segment", "arc"}, index))
 			return CurveType::Unknown;
-		if (!t->is_string())
-		{
-			r.TypeError(join(path, "type"), "a string", *t);
-			return CurveType::Unknown;
-		}
-		const std::string name = t->get<std::string>();
-		if (name == "segment")
-			return CurveType::Segment;
-		if (name == "arc")
-			return CurveType::Arc;
-		r.Error(MicroarchError::JsonValue, join(path, "type"),
-		        "unknown value \"" + name + "\" (expected one of: segment, arc)");
-		return CurveType::Unknown;
+		return index == 0 ? CurveType::Segment : CurveType::Arc;
 	}
 
 	void readPrc (const json &c, const std::string &path, Reader &r, PrcSelection &out)
@@ -380,7 +250,7 @@ namespace
 		const json *prc = r.Object(c, path, "prc");
 		if (!prc)
 			return;
-		const std::string prcPath = join(path, "prc");
+		const std::string prcPath = Join(path, "prc");
 		r.Known(*prc, prcPath, {"u"});
 		r.Require(*prc, prcPath, {"u"});
 		double u = 0.0;
@@ -405,7 +275,7 @@ namespace
 			if (it != byId.end())
 				return it->second;
 			if (usable)
-				r.Error(MicroarchError::UnknownReference, join(path, field), "unknown point \"" + id + "\"");
+				r.Error(MicroarchError::UnknownReference, Join(path, field), "unknown point \"" + id + "\"");
 			return -1;
 		}
 	};
@@ -423,7 +293,7 @@ namespace
 		if (type == CurveType::Segment)
 			for (const char *f : {"center", "ccw"})
 				if (c.contains(f))
-					r.Error(MicroarchError::JsonSchema, join(path, f), "field only allowed for an arc");
+					r.Error(MicroarchError::JsonSchema, Join(path, f), "field only allowed for an arc");
 		return true;
 	}
 
@@ -468,7 +338,7 @@ namespace
 		for (std::size_t i = 0; i < curves.size(); ++i)
 		{
 			const json &c = curves[i];
-			const std::string path = indexed("curves", i);
+			const std::string path = Indexed("curves", i);
 			if (!c.is_object())
 			{
 				r.TypeError(path, "an object", c);
@@ -483,30 +353,17 @@ namespace
 	{
 		const std::string path = "tolerances";
 		r.Known(t, path, {"point", "parameter", "height", "prc_snap"});
-		r.Number(t, path, "point",     interval(0.0, true, ToleranceBounds::point, false),     out.point);
-		r.Number(t, path, "parameter", interval(0.0, true, ToleranceBounds::parameter, false), out.parameter);
-		r.Number(t, path, "height",    interval(0.0, true, ToleranceBounds::height, false),    out.height);
-		r.Number(t, path, "prc_snap",  interval(0.0, true, ToleranceBounds::prc_snap, false),  out.prc_snap);
+		r.Number(t, path, "point",     Interval(0.0, true, ToleranceBounds::point, false),     out.point);
+		r.Number(t, path, "parameter", Interval(0.0, true, ToleranceBounds::parameter, false), out.parameter);
+		r.Number(t, path, "height",    Interval(0.0, true, ToleranceBounds::height, false),    out.height);
+		r.Number(t, path, "prc_snap",  Interval(0.0, true, ToleranceBounds::prc_snap, false),  out.prc_snap);
 	}
 
 	// Rend false si le document n'a pas pu etre lu du tout (controles structurels inutiles).
+	// Un schema absent ou qui n'est pas une chaine est deja signale : la lecture continue.
 	bool readSchema (const json &doc, Reader &r)
 	{
-		const json *schema = member(doc, "schema");
-		if (!schema)
-			return true;
-		if (!schema->is_string())
-		{
-			r.TypeError("schema", "a string", *schema);
-			return true;
-		}
-		if (schema->get<std::string>() != kMicroarchSchemaV1)
-		{
-			r.Error(MicroarchError::JsonSchema, "schema",
-			        "unsupported schema \"" + schema->get<std::string>() + "\" (expected " + kMicroarchSchemaV1 + ")");
-			return false;
-		}
-		return true;
+		return json_reader::ReadSchema(r, doc, kMicroarchSchemaV1).status != json_reader::SchemaStatus::Unsupported;
 	}
 
 	bool readSpec (const json &doc, Reader &r, MicroarchSpec &spec)
@@ -538,7 +395,7 @@ namespace
 		if (curves)
 			for (std::size_t i = 0; i < spec.points.size(); ++i)
 				if (!spec.points[i].id.empty() && resolver.referenced.count(spec.points[i].id) == 0)
-					r.Warning(MicroarchWarning::FieldIgnored, indexed("points", i),
+					r.Warning(MicroarchWarning::FieldIgnored, Indexed("points", i),
 					          "point \"" + spec.points[i].id + "\" is not referenced by any curve");
 		return true;
 	}
@@ -644,7 +501,12 @@ bool LoadSpecFromJson (const std::string &text, MicroarchSpec &out, MicroarchRep
 		{
 			// Toute exception du parseur est une erreur de syntaxe, y compris un
 			// nombre hors du domaine des doubles (out_of_range.406).
-			doc = json::parse(text);
+			// Une cle en double est refusee (json_schema, chemin du doublon) sans
+			// arreter la lecture : comme les autres refus d'un document bien forme,
+			// elle n'empeche pas de rapporter les erreurs independantes, lues sur la
+			// derniere valeur. Un texte illisible apres un doublon donne les deux
+			// erreurs, json_schema puis json_parse.
+			doc = r.ParseRejectingDuplicateKeys(text);
 			parsed = true;
 		}
 		catch (const json::exception &e)

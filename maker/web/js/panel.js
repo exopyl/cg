@@ -4,14 +4,14 @@
 //  Reecriture JS du PropertyPanel de sinaia (cf. ANALYSE.md sec.6) : les
 //  Parameter du moteur natif referencent des pointeurs crus vers les membres de
 //  l'objet, ils ne traversent jamais la frontiere JS -- on lit du JSON et on
-//  ecrit par nom via setParam.
+//  ecrit via setParam sous l'identifiant `p.id` ; `p.name` n'est qu'un libelle.
 // ===========================================================================
 
-// Peuple `paramsEl` avec les widgets de l'objet `id`. `onChange` est appele
+// Peuple `paramsEl` avec les widgets de l'objet `objId`. `onChange` est appele
 // apres chaque ecriture ; c'est au shell d'y planifier le re-rendu.
-export function buildPanel(Module, paramsEl, id, onChange) {
+export function buildPanel(Module, paramsEl, objId, onChange) {
   paramsEl.innerHTML = "";
-  const params = JSON.parse(Module.getParams(id));
+  const params = JSON.parse(Module.getParams(objId));
 
   // Les bornes d'un parametre peuvent dependre de la valeur d'un AUTRE : le
   // plafond de recursions du L-systeme depend du systeme choisi (2 pour Plant1,
@@ -22,16 +22,16 @@ export function buildPanel(Module, paramsEl, id, onChange) {
   // perte de focus sur la liste qu'on vient de manipuler.
   const refreshers = [];
   const refresh = () => {
-    const cur = JSON.parse(Module.getParams(id));
+    const cur = JSON.parse(Module.getParams(objId));
     for (const r of refreshers) r(cur);
   };
 
   for (const p of params) {
-    paramsEl.appendChild(buildParamWidget(Module, id, p, onChange, refreshers, refresh));
+    paramsEl.appendChild(buildParamWidget(Module, objId, p, onChange, refreshers, refresh));
   }
 }
 
-function buildParamWidget(Module, id, p, onChange, refreshers, refresh) {
+function buildParamWidget(Module, objId, p, onChange, refreshers, refresh) {
   const wrap = document.createElement("div");
   wrap.className = "param " + p.type;
 
@@ -39,7 +39,7 @@ function buildParamWidget(Module, id, p, onChange, refreshers, refresh) {
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.checked = !!p.value;
-    cb.id = "p_" + p.name;
+    cb.id = "p_" + p.id;
     const row = document.createElement("div");
     row.className = "row";
     const lab = document.createElement("label");
@@ -49,7 +49,7 @@ function buildParamWidget(Module, id, p, onChange, refreshers, refresh) {
     row.append(cb, lab);
     wrap.appendChild(row);
     cb.addEventListener("change", () => {
-      Module.setParam(id, p.name, cb.checked ? 1 : 0);
+      Module.setParam(objId, p.id, cb.checked ? 1 : 0);
       refresh();   // meme raison que pour les listes : les bornes peuvent bouger
       onChange();
     });
@@ -72,7 +72,7 @@ function buildParamWidget(Module, id, p, onChange, refreshers, refresh) {
       sel.appendChild(o);
     });
     sel.addEventListener("change", () => {
-      Module.setParam(id, p.name, Number(sel.value));
+      Module.setParam(objId, p.id, Number(sel.value));
       refresh();   // le choix peut avoir change les bornes d'un autre parametre
       onChange();
     });
@@ -105,7 +105,7 @@ function buildParamWidget(Module, id, p, onChange, refreshers, refresh) {
     // setParamString et NON setParam : une chaine n'a pas de valeur numerique,
     // et le pont refuse explicitement le second chemin (cf. wasm_api.cpp).
     field.addEventListener("input", () => {
-      Module.setParamString(id, p.name, field.value);
+      Module.setParamString(objId, p.id, field.value);
       onChange();
     });
     wrap.appendChild(field);
@@ -134,7 +134,7 @@ function buildParamWidget(Module, id, p, onChange, refreshers, refresh) {
   range.addEventListener("input", () => {
     const v = Number(range.value);
     val.textContent = fmt(v, isInt);
-    Module.setParam(id, p.name, v);
+    Module.setParam(objId, p.id, v);
     onChange();
   });
   wrap.appendChild(range);
@@ -143,13 +143,13 @@ function buildParamWidget(Module, id, p, onChange, refreshers, refresh) {
   // depasse la nouvelle borne est REECRITE : Regenerate() la plafonne de son cote,
   // afficher 6 recursions sous une borne a 1 serait mensonger.
   refreshers.push((cur) => {
-    const q = cur.find((x) => x.name === p.name);
+    const q = cur.find((x) => x.id === p.id);
     if (!q || q.type !== p.type) return;
     range.min = q.min;
     range.max = q.max;
     range.step = isInt ? 1 : (q.max - q.min) / 200 || 0.001;
     const v = Math.min(Math.max(q.value, q.min), q.max);
-    if (v !== q.value) Module.setParam(id, p.name, v);
+    if (v !== q.value) Module.setParam(objId, p.id, v);
     range.value = v;
     val.textContent = fmt(v, isInt);
   });

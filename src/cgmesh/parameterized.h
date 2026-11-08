@@ -30,6 +30,18 @@ public:
 	static Parameter MakeString(const std::string &name, std::string *value,
 	                            bool multiline = false);
 
+	// Copie portant l'identifiant `id`, a chainer sur une fabrique :
+	//   Parameter::MakeFloat("Height (mm)", &m_height, 0.f, 10.f).WithId("Height")
+	// Un identifiant vide equivaut a son absence.
+	Parameter WithId(const std::string &id) const;
+
+	// Identifiant stable : la cle sous laquelle les documents et les liens
+	// designent le parametre. C'est l'identifiant pose par WithId, ou a defaut le
+	// nom. Le nom est un libelle d'affichage et peut changer ; l'identifiant non.
+	// Poser un identifiant sur un parametre deja publie exige de lui donner la
+	// valeur du nom courant, celle que portent les documents deja ecrits.
+	const std::string&              Id() const           { return m_id.empty() ? m_name : m_id; }
+
 	// Accessors used by the UI
 	Type                            GetType() const      { return m_type; }
 	const std::string&              GetName() const      { return m_name; }
@@ -54,6 +66,7 @@ public:
 private:
 	Type m_type;
 	std::string m_name;
+	std::string m_id;
 	std::vector<std::string> m_choices;
 
 	// value pointers (only one is used depending on type)

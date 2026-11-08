@@ -14,8 +14,9 @@
 // moulding) is swept along a 3D path (typically an arc lifted into the wall
 // plane) to produce a tube-like 3D mesh.
 //
-// Profile coordinates :
-//   x = u  : depth into the wall  (z direction in our flat config)
+// Profile coordinates, read as a BAR profile (profile2d.h, UNITES ET REPERE) :
+//   x = u  : height ABOVE the plane z = 0, proud toward +z ; the caller places
+//            the face cote with translatedInU (profile, zFace / scale_u)
 //   y = v  : offset perpendicular to the path (in-plane, "outward" of the
 //            traversal direction = right of CCW arc walking)
 //
@@ -28,7 +29,7 @@
 
 // Sweep a closed 2D profile along an arc, producing a tube mesh of triangulated
 // quads. `profile` is a vector of (u, v) points. `scale_u` maps profile u to
-// world wall depth (z axis). `scale_v` maps profile v to in-plane offset.
+// world height (z axis). `scale_v` maps profile v to in-plane offset.
 // Result written into `out` (replaces previous content).
 //
 // Throws std::invalid_argument if `profile` has fewer than 3 points or

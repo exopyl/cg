@@ -4,6 +4,7 @@
 #include <exception>
 #include <string>
 #include <memory>
+#include <stdexcept>
 
 #include <cgarchi/classical_colonnade.h>
 #include <cgarchi/classical_entablature.h>
@@ -15,12 +16,35 @@
 namespace cgarchi
 {
 
-std::unique_ptr<Mesh> BuildClassicalColumnMesh (const ClassicalColumnSettings &settings,
-                                                classical::ColumnProfile *profileOut,
-                                                std::vector<classical::PlanConflict> *conflictsOut)
+namespace
 {
-	const classical::OrderData &order = classical::ClassicalOrders ().Get (static_cast<classical::Order> (settings.order));
 
+// Ramene chaque reglage de valeur finie dans le domaine que son Parameter
+// expose : enumerations dans leurs choix, Module, Radial segments et Curve
+// segments dans leurs bornes. Un module NaN reste NaN (std::clamp).
+void ClampClassicalColumnSettings (ClassicalColumnSettings &s)
+{
+	s.order = std::clamp (s.order, 0, classical::kOrderCount - 1);
+	s.doricCornice = std::clamp (s.doricCornice, 0, 1);
+	s.doricFlutes = std::clamp (s.doricFlutes, 0, 1);
+	s.module = std::clamp (s.module, kClassicalModuleMin, kClassicalModuleMax);
+	s.radialSegments = std::clamp (s.radialSegments, kClassicalRadialSegmentsMin, kClassicalRadialSegmentsMax);
+	s.curveSegments = std::clamp (s.curveSegments, kClassicalCurveSegmentsMin, kClassicalCurveSegmentsMax);
+}
+
+// Donnees de l'ordre de `settings` ; leve std::invalid_argument, au nom de
+// `caller`, si settings.order est hors de [0, kOrderCount).
+const classical::OrderData &CheckedOrder (const ClassicalColumnSettings &settings, const char *caller)
+{
+	if (settings.order < 0 || settings.order >= classical::kOrderCount)
+		throw std::invalid_argument (std::string (caller) + " : order " + std::to_string (settings.order) +
+		                             " hors de [0, " + std::to_string (classical::kOrderCount) + ")");
+	return classical::ClassicalOrders ().Get (static_cast<classical::Order> (settings.order));
+}
+
+// Options du profil de la colonne, communes au maillage et aux cotes.
+classical::ColumnOptions ColumnOptionsOf (const classical::OrderData &order, const ClassicalColumnSettings &settings)
+{
 	classical::ColumnOptions options;
 	options.order = order.order;
 	options.pedestal = settings.pedestal;
@@ -40,13 +64,32 @@ std::unique_ptr<Mesh> BuildClassicalColumnMesh (const ClassicalColumnSettings &s
 		const int count = order.flutes->count;
 		options.fluteSamples = std::max ({6, settings.curveSegments, (settings.radialSegments + 2 * count - 1) / (2 * count)});
 	}
+	return options;
+}
+
+// Unites monde par partie de module, celles du tour. Quotient float / int,
+// arrondi en float (ecart relatif au quotient exact d'au plus 2^-24) : les cotes
+// prennent la meme echelle que les sommets.
+double LatheScale (const classical::OrderData &order, const ClassicalColumnSettings &settings)
+{
+	return settings.module / order.partsPerModule;
+}
+
+} // namespace
+
+std::unique_ptr<Mesh> BuildClassicalColumnMesh (const ClassicalColumnSettings &settings,
+                                                classical::ColumnProfile *profileOut,
+                                                std::vector<classical::PlanConflict> *conflictsOut)
+{
+	const classical::OrderData &order = CheckedOrder (settings, "BuildClassicalColumnMesh");
+	const classical::ColumnOptions options = ColumnOptionsOf (order, settings);
 	const classical::ColumnProfile profile = classical::BuildColumnProfile (order, options);
 	if (conflictsOut)
 		*conflictsOut = classical::FindPlanConflicts (profile);
 
 	classical::LatheOptions lathe;
 	lathe.radialSegments = settings.radialSegments;
-	lathe.scale = settings.module / order.partsPerModule;
+	lathe.scale = LatheScale (order, settings);
 	std::unique_ptr<Mesh> mesh = classical::LatheColumnProfile (profile, lathe);
 	if (options.ionicVolutes)
 	{
@@ -61,52 +104,77 @@ std::unique_ptr<Mesh> BuildClassicalColumnMesh (const ClassicalColumnSettings &s
 	return mesh;
 }
 
+ClassicalColumnLevels ComputeClassicalColumnLevels (const ClassicalColumnSettings &settings)
+{
+	const classical::OrderData &order = CheckedOrder (settings, "ComputeClassicalColumnLevels");
+	const classical::ColumnProfile profile = classical::BuildColumnProfile (order, ColumnOptionsOf (order, settings));
+	const double scale = LatheScale (order, settings);
+
+	const classical::ProfileMember *baseFirst = nullptr, *capitalFirst = nullptr, *capitalLast = nullptr,
+	                               *architrave = nullptr;
+	for (const classical::ProfileMember &member : profile.members)
+	{
+		if (member.block == "base" && !baseFirst)
+			baseFirst = &member;
+		else if (member.block == "chapiteau")
+		{
+			if (!capitalFirst)
+				capitalFirst = &member;
+			capitalLast = &member;
+		}
+		else if (member.block == "architrave" && !architrave)
+			architrave = &member;
+	}
+	if (profile.vertices.empty ())
+		throw std::runtime_error ("ComputeClassicalColumnLevels : profil sans sommet : " + order.key);
+	if (!baseFirst || !capitalFirst || (settings.entablature && !architrave))
+		throw std::runtime_error ("ComputeClassicalColumnLevels : profil sans base, sans chapiteau ou sans architrave : " +
+		                          order.key);
+
+	ClassicalColumnLevels levels;
+	levels.foot = profile.vertices.front ().y * scale;
+	if (settings.pedestal)
+		levels.pedestalTop = baseFirst->y0 * scale;
+	levels.shaftFoot = profile.shaft.foot * scale;
+	levels.shaftTop = profile.shaft.top * scale;
+	levels.capitalBottom = capitalFirst->y0 * scale;
+	levels.capitalTop = capitalLast->y1 * scale;
+	levels.top = profile.height * scale;
+	if (settings.entablature)
+		levels.entablatureFoot = architrave->y0 * scale;
+	return levels;
+}
+
 ParameterizedClassicalColumn::ParameterizedClassicalColumn () { Regenerate (); }
 
 std::vector<Parameter> ParameterizedClassicalColumn::GetParameters ()
 {
+	ClassicalColumnSettings &s = m_settings;
 	return {
-		Parameter::MakeEnum ("Order", &m_order, {"Tuscan", "Doric", "Ionic", "Corinthian", "Composite"}),
-		Parameter::MakeFloat ("Module", &m_module, 0.1f, 10.f),
-		Parameter::MakeBool ("Pedestal", &m_pedestal),
-		Parameter::MakeBool ("Entablature", &m_entablature),
-		Parameter::MakeEnum ("Doric cornice", &m_doricCornice, {"Dentils", "Mutules"}),
-		Parameter::MakeBool ("Ornament envelope", &m_envelope),
-		Parameter::MakeBool ("Volutes", &m_volutes),
-		Parameter::MakeBool ("Flutes", &m_flutes),
-		Parameter::MakeEnum ("Doric flutes", &m_doricFlutes, {"Segment (A)", "Semicircle (B)"}),
-		Parameter::MakeInt ("Radial segments", &m_radialSegments, 8, 256),
-		Parameter::MakeInt ("Curve segments", &m_curveSegments, 2, 32),
+		Parameter::MakeEnum ("Order", &s.order, {"Tuscan", "Doric", "Ionic", "Corinthian", "Composite"}),
+		Parameter::MakeFloat ("Module", &s.module, kClassicalModuleMin, kClassicalModuleMax),
+		Parameter::MakeBool ("Pedestal", &s.pedestal),
+		Parameter::MakeBool ("Entablature", &s.entablature),
+		Parameter::MakeEnum ("Doric cornice", &s.doricCornice, {"Dentils", "Mutules"}),
+		Parameter::MakeBool ("Ornament envelope", &s.envelope),
+		Parameter::MakeBool ("Volutes", &s.volutes),
+		Parameter::MakeBool ("Flutes", &s.flutes),
+		Parameter::MakeEnum ("Doric flutes", &s.doricFlutes, {"Segment (A)", "Semicircle (B)"}),
+		Parameter::MakeInt ("Radial segments", &s.radialSegments, kClassicalRadialSegmentsMin, kClassicalRadialSegmentsMax),
+		Parameter::MakeInt ("Curve segments", &s.curveSegments, kClassicalCurveSegmentsMin, kClassicalCurveSegmentsMax),
 	};
 }
 
 void ParameterizedClassicalColumn::Regenerate ()
 {
-	m_order = std::clamp (m_order, 0, classical::kOrderCount - 1);
-	m_doricCornice = std::clamp (m_doricCornice, 0, 1);
-	m_doricFlutes = std::clamp (m_doricFlutes, 0, 1);
-	m_module = std::clamp (m_module, 0.1f, 10.f);
-	m_radialSegments = std::clamp (m_radialSegments, 8, 256);
-	m_curveSegments = std::clamp (m_curveSegments, 2, 32);
+	ClampClassicalColumnSettings (m_settings);
 
 	delete m_pMesh;
 	m_pMesh = nullptr;
 	m_lastError.clear ();
 	try
 	{
-		ClassicalColumnSettings settings;
-		settings.order = m_order;
-		settings.module = m_module;
-		settings.pedestal = m_pedestal;
-		settings.entablature = m_entablature;
-		settings.doricCornice = m_doricCornice;
-		settings.envelope = m_envelope;
-		settings.volutes = m_volutes;
-		settings.flutes = m_flutes;
-		settings.doricFlutes = m_doricFlutes;
-		settings.radialSegments = m_radialSegments;
-		settings.curveSegments = m_curveSegments;
-		m_pMesh = BuildClassicalColumnMesh (settings, &m_profile, &m_conflicts).release ();
+		m_pMesh = BuildClassicalColumnMesh (m_settings, &m_profile, &m_conflicts).release ();
 	}
 	catch (const std::exception &e)
 	{
@@ -125,7 +193,7 @@ std::vector<Parameter> ParameterizedClassicalColonnade::GetParameters ()
 	ClassicalColumnSettings &s = m_settings;
 	return {
 		Parameter::MakeEnum ("Order", &s.order, {"Tuscan", "Doric", "Ionic", "Corinthian", "Composite"}),
-		Parameter::MakeFloat ("Module", &s.module, 0.1f, 10.f),
+		Parameter::MakeFloat ("Module", &s.module, kClassicalModuleMin, kClassicalModuleMax),
 		Parameter::MakeInt ("Columns", &m_columns, 1, 12),
 		Parameter::MakeBool ("Pedestal", &s.pedestal),
 		Parameter::MakeEnum ("Doric cornice", &s.doricCornice, {"Dentils", "Mutules"}),
@@ -134,20 +202,15 @@ std::vector<Parameter> ParameterizedClassicalColonnade::GetParameters ()
 		Parameter::MakeBool ("Volutes", &s.volutes),
 		Parameter::MakeBool ("Flutes", &s.flutes),
 		Parameter::MakeEnum ("Doric flutes", &s.doricFlutes, {"Segment (A)", "Semicircle (B)"}),
-		Parameter::MakeInt ("Radial segments", &s.radialSegments, 8, 256),
-		Parameter::MakeInt ("Curve segments", &s.curveSegments, 2, 32),
+		Parameter::MakeInt ("Radial segments", &s.radialSegments, kClassicalRadialSegmentsMin, kClassicalRadialSegmentsMax),
+		Parameter::MakeInt ("Curve segments", &s.curveSegments, kClassicalCurveSegmentsMin, kClassicalCurveSegmentsMax),
 	};
 }
 
 void ParameterizedClassicalColonnade::Regenerate ()
 {
 	ClassicalColumnSettings &s = m_settings;
-	s.order = std::clamp (s.order, 0, classical::kOrderCount - 1);
-	s.doricCornice = std::clamp (s.doricCornice, 0, 1);
-	s.doricFlutes = std::clamp (s.doricFlutes, 0, 1);
-	s.module = std::clamp (s.module, 0.1f, 10.f);
-	s.radialSegments = std::clamp (s.radialSegments, 8, 256);
-	s.curveSegments = std::clamp (s.curveSegments, 2, 32);
+	ClampClassicalColumnSettings (s);
 	s.entablature = false;
 	m_columns = std::clamp (m_columns, 1, 12);
 
@@ -158,7 +221,7 @@ void ParameterizedClassicalColonnade::Regenerate ()
 	try
 	{
 		const classical::OrderData &order = classical::ClassicalOrders ().Get (static_cast<classical::Order> (s.order));
-		const double scale = s.module / order.partsPerModule;
+		const double scale = LatheScale (order, s);
 		classical::ColumnProfile columnProfile;
 		const std::unique_ptr<Mesh> column = BuildClassicalColumnMesh (s, &columnProfile);
 		const classical::ColonnadeLayout layout = classical::LayoutColonnade (order, m_columns);

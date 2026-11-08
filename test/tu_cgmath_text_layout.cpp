@@ -2,6 +2,7 @@
 
 #include "../src/cgmath/text_layout.h"
 
+#include <cfloat>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -120,7 +121,15 @@ TEST(TEST_cgmath_text_layout, kerning_tightens_the_AV_pair)
 	const TextLayout unkerned = layoutText ("AV", m, off);
 
 	EXPECT_LT (width (kerned), width (unkerned));
-	EXPECT_FLOAT_EQ (width (unkerned) - width (kerned), 0.1f);   // 100 / 1000
+
+	// Difference de deux largeurs de l'ordre de W = 1.0 : l'erreur absolue suit
+	// W, pas le resultat 0.1, et un critere en ULP de 0.1 est donc 16 fois trop
+	// strict. Les deux largeurs cumulent au plus 7 arrondis binary32
+	// (produits avance x echelle, sommes de plume), chacun <= FLT_EPSILON/2 * W :
+	// borne 3.5 * FLT_EPSILON * W, arrondie a 4. Le signal teste vaut 0.1, soit
+	// 2e5 fois la tolerance.
+	const float tolerance = 4.f * FLT_EPSILON * width (unkerned);
+	EXPECT_NEAR (width (unkerned) - width (kerned), 0.1f, tolerance);   // 100 / 1000
 	EXPECT_FLOAT_EQ (kerned.glyphs[1].pen.x, 0.4f);              // 500 - 100
 }
 

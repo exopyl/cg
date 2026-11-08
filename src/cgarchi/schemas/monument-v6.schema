@@ -1,0 +1,387 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "monument-v6",
+  "title": "Monument (v6)",
+  "description": "Document d'un monument, à la forme de sa source : sections et valeurs du README du monument, chacune avec son unité telle qu'écrite, dans son repère. Écrit par src/cgarchi/data/temple_hephaistos_from_readme.py, jamais à la main. Lecteur : ParseMonument (src/cgarchi/classical_monument.h).",
+  "$comment": "Règles que ce fichier n'exprime pas, tenues par le lecteur : `value` est requise si et seulement si `status` n'est pas « manquant » ; « lu » et « mesuré » citent au moins une source, « manquant » aucune ; chaque source citée est une clé de `sources`, et chaque clé de `sources` est citée ; `readme` n'est pas vide ; les coordonnées de contrôle sont strictement croissantes ; les deux listes d'un profil de contrôle ont la même longueur, non nulle, et ses profondeurs sont strictement croissantes ; l'unité « ft » est celle des seules clés `…Ft`, et ces clés n'en ont pas d'autre ; l'unité « ° » est celle des seuls angles (`$defs/angle`) ; une suite de divisions n'est jamais « manquant », et ses deux listes ont la même longueur, non nulle. Les clés en double sont refusées. Les contrôles du péristyle (`controls`) sont en mètres.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "monument", "source", "sources", "krepis", "peristyle", "columns", "controls", "columnControls",
+               "entablature", "entablatureControls"],
+  "properties": {
+    "schema":   { "const": "monument/v6" },
+    "monument": { "type": "string" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document", "sha256", "bytes", "derivedBy"],
+      "properties": {
+        "document":  { "type": "string", "description": "Chemin du README, relatif à la racine des documents de l'utilisateur." },
+        "sha256":    { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "bytes":     { "type": "integer", "exclusiveMinimum": 0 },
+        "derivedBy": { "type": "string" }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "description": "Références citées par les valeurs : identifiant du README (« D », « S »...) vers son libellé.",
+      "additionalProperties": { "type": "string" }
+    },
+    "krepis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stylobateWidth", "stylobateLength", "stepCount", "stylobateHeight", "secondStepHeight",
+                   "thirdStepHeight", "secondStepTread", "thirdStepTread", "cornerMargin", "euthynteria"],
+      "properties": {
+        "stylobateWidth":   { "$ref": "#/$defs/length" },
+        "stylobateLength":  { "$ref": "#/$defs/length" },
+        "stepCount":        { "$ref": "#/$defs/count" },
+        "stylobateHeight":  { "$ref": "#/$defs/length" },
+        "secondStepHeight": { "$ref": "#/$defs/length" },
+        "thirdStepHeight":  { "$ref": "#/$defs/length" },
+        "secondStepTread":  { "$ref": "#/$defs/length" },
+        "thirdStepTread":   { "$ref": "#/$defs/length" },
+        "cornerMargin":     { "$ref": "#/$defs/length" },
+        "euthynteria":      { "$ref": "#/$defs/length" }
+      }
+    },
+    "peristyle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frontColumns", "flankColumns", "frontSpacing", "flankSpacing", "frontCornerSpacing",
+                   "flankCornerSpacing"],
+      "properties": {
+        "frontColumns":       { "$ref": "#/$defs/count" },
+        "flankColumns":       { "$ref": "#/$defs/count" },
+        "frontSpacing":       { "$ref": "#/$defs/length" },
+        "flankSpacing":       { "$ref": "#/$defs/length" },
+        "frontCornerSpacing": { "$ref": "#/$defs/length" },
+        "flankCornerSpacing": { "$ref": "#/$defs/length" }
+      }
+    },
+    "columns": {
+      "type": "object",
+      "description": "README sections 4.1, 4.4 et 5 : la colonne. Retraits de l'échine et des annelets depuis le nu de l'abaque, profondeurs sous le lit de l'abaque.",
+      "additionalProperties": false,
+      "required": ["lowerDiameter", "cornerLowerDiameter", "upperDiameter", "height", "fluteCount", "fluteDepth",
+                   "entasisSagitta", "entasisHeight", "abacusHeight", "abacusHalfWidth", "echinusHeight",
+                   "echinusJunctionDepth", "echinusJunctionRetreat", "echinusTopRetreat", "echinusLipRadius",
+                   "annuletCount", "annuletsHeight", "annuletsTopRetreat", "annuletsBottomRetreat",
+                   "hypotrachelionHeight", "grooveHeight", "grooveDepth"],
+      "properties": {
+        "lowerDiameter":          { "$ref": "#/$defs/length" },
+        "cornerLowerDiameter":    { "$ref": "#/$defs/length" },
+        "upperDiameter":          { "$ref": "#/$defs/length" },
+        "height":                 { "$ref": "#/$defs/length" },
+        "fluteCount":             { "$ref": "#/$defs/count" },
+        "fluteDepth":             { "$ref": "#/$defs/length" },
+        "entasisSagitta":         { "$ref": "#/$defs/length" },
+        "entasisHeight":          { "$ref": "#/$defs/length" },
+        "abacusHeight":           { "$ref": "#/$defs/length" },
+        "abacusHalfWidth":        { "$ref": "#/$defs/length" },
+        "echinusHeight":          { "$ref": "#/$defs/length" },
+        "echinusJunctionDepth":   { "$ref": "#/$defs/length" },
+        "echinusJunctionRetreat": { "$ref": "#/$defs/length" },
+        "echinusTopRetreat":      { "$ref": "#/$defs/length" },
+        "echinusLipRadius":       { "$ref": "#/$defs/length" },
+        "annuletCount":           { "$ref": "#/$defs/count" },
+        "annuletsHeight":         { "$ref": "#/$defs/length" },
+        "annuletsTopRetreat":     { "$ref": "#/$defs/length" },
+        "annuletsBottomRetreat":  { "$ref": "#/$defs/length" },
+        "hypotrachelionHeight":   { "$ref": "#/$defs/length" },
+        "grooveHeight":           { "$ref": "#/$defs/length" },
+        "grooveDepth":            { "$ref": "#/$defs/length" }
+      }
+    },
+    "controls": {
+      "type": "object",
+      "description": "Résultats imprimés par le README, relus et recalculés par les tests ; sans statut ; en mètres.",
+      "additionalProperties": false,
+      "required": ["frontAxesY", "flankAxesX", "frontSum", "flankSum"],
+      "properties": {
+        "frontAxesY": { "$ref": "#/$defs/axes" },
+        "flankAxesX": { "$ref": "#/$defs/axes" },
+        "frontSum":   { "$ref": "#/$defs/result" },
+        "flankSum":   { "$ref": "#/$defs/result" }
+      }
+    },
+    "columnControls": {
+      "type": "object",
+      "description": "Contrôles de la colonne imprimés par le README, chacun avec son unité, relus et recalculés par les tests ; sans statut.",
+      "additionalProperties": false,
+      "required": ["shaftHeight", "footFluteChord", "fluteCentralRadius", "fluteLateralRadius", "topFluteDepth",
+                   "cornerFluteChord", "cornerFluteDepth", "capitalHeight", "annuletsAndRelief", "upperRadius",
+                   "echinusLipRetreat", "echinusProfile"],
+      "properties": {
+        "shaftHeight":        { "$ref": "#/$defs/control" },
+        "footFluteChord":     { "$ref": "#/$defs/control" },
+        "fluteCentralRadius": { "$ref": "#/$defs/control" },
+        "fluteLateralRadius": { "$ref": "#/$defs/control" },
+        "topFluteDepth":      { "$ref": "#/$defs/control" },
+        "cornerFluteChord":   { "$ref": "#/$defs/control" },
+        "cornerFluteDepth":   { "$ref": "#/$defs/control" },
+        "capitalHeight":      { "$ref": "#/$defs/control" },
+        "annuletsAndRelief":  { "$ref": "#/$defs/control" },
+        "upperRadius":        { "$ref": "#/$defs/control" },
+        "echinusLipRetreat":  { "$ref": "#/$defs/control" },
+        "echinusProfile":     { "$ref": "#/$defs/profile" }
+      }
+    },
+    "entablature": {
+      "type": "object",
+      "description": "README sections 6.1 à 6.4 : l'entablement du péristyle, regulae, gouttes des regulae, mutules, sous-face inclinée du géison et gouttes des mutules compris (diamètres et vides des têtes, du devant vers le dos ; évasement du pied en diamètre). Hauteurs de bas en haut ; saillies depuis la ligne des axes des colonnes. Une cote en pieds et pouces occupe deux clés, `…Ft` et `…In`.",
+      "additionalProperties": false,
+      "required": ["architraveHeightFt", "architraveHeightIn", "taeniaHeight", "regulaHeight", "guttaeHeight",
+                   "architraveFaceHeight", "friezeHeightFt", "friezeHeightIn", "triglyphCapitalHeight",
+                   "corniceHeightFt", "corniceHeightIn", "mutulePlateHeight", "dripHeight", "coronaHeight",
+                   "filletHeight", "crownHeight", "architraveTopProjection", "architraveFootProjection",
+                   "taeniaProjection", "triglyphFace", "triglyphCapitalBandProjection",
+                   "triglyphCapitalListelProjection", "triglyphCapitalListelHeight", "triglyphCapitalBandHeight",
+                   "metopeFace", "mutulePlateProjection", "dripProjection", "coronaProjection", "filletProjection",
+                   "crownProjection", "innerFace", "triglyphWidthFt", "triglyphWidthIn", "metopeWidthFt",
+                   "metopeWidthIn", "triglyphDivisions", "channelDepth", "regulaProjection", "regulaGuttaCount",
+                   "regulaGuttaDiameter", "regulaGuttaGap", "regulaGuttaTopProjection", "regulaGuttaFootProjection",
+                   "mutuleWidthFt", "mutuleWidthIn", "mutuleDepth",
+                   "soffitSlope", "mutuleGuttaFrontDiameter", "mutuleGuttaMiddleDiameter", "mutuleGuttaRearDiameter",
+                   "mutuleGuttaFrontGap", "mutuleGuttaRearGap", "mutuleGuttaHeight", "mutuleGuttaEdgeAxis",
+                   "mutuleGuttaPerRow", "mutuleGuttaFootFlare"],
+      "properties": {
+        "architraveHeightFt":              { "$ref": "#/$defs/feet" },
+        "architraveHeightIn":              { "$ref": "#/$defs/length" },
+        "taeniaHeight":                    { "$ref": "#/$defs/length" },
+        "regulaHeight":                    { "$ref": "#/$defs/length" },
+        "guttaeHeight":                    { "$ref": "#/$defs/length" },
+        "architraveFaceHeight":            { "$ref": "#/$defs/length" },
+        "friezeHeightFt":                  { "$ref": "#/$defs/feet" },
+        "friezeHeightIn":                  { "$ref": "#/$defs/length" },
+        "triglyphCapitalHeight":           { "$ref": "#/$defs/length" },
+        "corniceHeightFt":                 { "$ref": "#/$defs/feet" },
+        "corniceHeightIn":                 { "$ref": "#/$defs/length" },
+        "mutulePlateHeight":               { "$ref": "#/$defs/length" },
+        "dripHeight":                      { "$ref": "#/$defs/length" },
+        "coronaHeight":                    { "$ref": "#/$defs/length" },
+        "filletHeight":                    { "$ref": "#/$defs/length" },
+        "crownHeight":                     { "$ref": "#/$defs/length" },
+        "architraveTopProjection":         { "$ref": "#/$defs/length" },
+        "architraveFootProjection":        { "$ref": "#/$defs/length" },
+        "taeniaProjection":                { "$ref": "#/$defs/length" },
+        "triglyphFace":                    { "$ref": "#/$defs/length" },
+        "triglyphCapitalBandProjection":   { "$ref": "#/$defs/length" },
+        "triglyphCapitalListelProjection": { "$ref": "#/$defs/length" },
+        "triglyphCapitalListelHeight":     { "$ref": "#/$defs/length" },
+        "triglyphCapitalBandHeight":       { "$ref": "#/$defs/length" },
+        "metopeFace":                      { "$ref": "#/$defs/length" },
+        "mutulePlateProjection":           { "$ref": "#/$defs/length" },
+        "dripProjection":                  { "$ref": "#/$defs/length" },
+        "coronaProjection":                { "$ref": "#/$defs/length" },
+        "filletProjection":                { "$ref": "#/$defs/length" },
+        "crownProjection":                 { "$ref": "#/$defs/length" },
+        "innerFace":                       { "$ref": "#/$defs/length" },
+        "triglyphWidthFt":                 { "$ref": "#/$defs/feet" },
+        "triglyphWidthIn":                 { "$ref": "#/$defs/length" },
+        "metopeWidthFt":                   { "$ref": "#/$defs/feet" },
+        "metopeWidthIn":                   { "$ref": "#/$defs/length" },
+        "triglyphDivisions":               { "$ref": "#/$defs/divisions" },
+        "channelDepth":                    { "$ref": "#/$defs/length" },
+        "regulaProjection":                { "$ref": "#/$defs/length" },
+        "regulaGuttaCount":                { "$ref": "#/$defs/count" },
+        "regulaGuttaDiameter":             { "$ref": "#/$defs/length" },
+        "regulaGuttaGap":                  { "$ref": "#/$defs/length" },
+        "regulaGuttaTopProjection":        { "$ref": "#/$defs/length" },
+        "regulaGuttaFootProjection":       { "$ref": "#/$defs/length" },
+        "mutuleWidthFt":                   { "$ref": "#/$defs/feet" },
+        "mutuleWidthIn":                   { "$ref": "#/$defs/length" },
+        "mutuleDepth":                     { "$ref": "#/$defs/length" },
+        "soffitSlope":                     { "$ref": "#/$defs/angle" },
+        "mutuleGuttaFrontDiameter":        { "$ref": "#/$defs/length" },
+        "mutuleGuttaMiddleDiameter":       { "$ref": "#/$defs/length" },
+        "mutuleGuttaRearDiameter":         { "$ref": "#/$defs/length" },
+        "mutuleGuttaFrontGap":             { "$ref": "#/$defs/length" },
+        "mutuleGuttaRearGap":              { "$ref": "#/$defs/length" },
+        "mutuleGuttaHeight":               { "$ref": "#/$defs/length" },
+        "mutuleGuttaEdgeAxis":             { "$ref": "#/$defs/length" },
+        "mutuleGuttaPerRow":               { "$ref": "#/$defs/count" },
+        "mutuleGuttaFootFlare":            { "$ref": "#/$defs/length" }
+      }
+    },
+    "entablatureControls": {
+      "type": "object",
+      "description": "Contrôles de l'entablement imprimés par le README, chacun avec son unité, relus et recalculés par les tests ; sans statut. Angle de la frise (README §6.3) : première solution, celle du modèle (centre du triglyphe d'angle au-delà de l'axe, distance d'angle de façade, métopes d'angle, décalage de l'intermédiaire), puis seconde solution (intermédiaire au milieu de la travée : métopes intérieure et extérieure, façade et flanc). Gouttes des regulae (README §6.1, §6.4) : marge de chaque bout, reste de la largeur de la regula, nombre ; dos des mutules depuis l'axe (README §6.4). Gouttes des mutules (README §6.4) : rangs, diviseur du pas, axes des rangs du milieu et de l'arrière, pas en largeur, évasement en rayon, sa valeur non arrondie et l'avant du pied ; profondeur sous la pente : marge arrière, projection horizontale, dos ; sous-face du géison : cotes du pivot, de l'arête avant-haute, du dessous au dos et du haut du bec, montée, ressaut au dos, saillie du pivot.",
+      "additionalProperties": false,
+      "required": ["total", "corniceSum", "triglyphDivisionSum", "frontMetope", "flankMetope", "metopeCount",
+                   "frontTriglyphs", "flankTriglyphs", "channelBottom", "metopeRecess", "cornerTriglyphOffset",
+                   "frontCornerDistance", "frontCornerMetope", "flankCornerMetope", "intermediateShift",
+                   "frontMidBayInnerMetope", "frontMidBayOuterMetope", "flankMidBayInnerMetope",
+                   "flankMidBayOuterMetope", "regulaGuttaMargin", "regulaGuttaShortfall", "regulaGuttaCountCheck",
+                   "mutuleBack",
+                   "mutuleGuttaRows", "mutuleGuttaPitchCount", "mutuleGuttaMiddleAxis", "mutuleGuttaRearAxis",
+                   "mutuleGuttaPitch", "mutuleRearMargin", "mutuleHorizontalDepth", "mutuleInclinedBack",
+                   "soffitPivotZ", "mutuleFrontTopZ", "soffitBackZ", "soffitRise", "geisonBackStep", "dripTopZ",
+                   "soffitPivotProjection", "mutuleGuttaRadialFlare", "mutuleGuttaRadialFlareExact",
+                   "mutuleGuttaFrontFootProjection"],
+      "properties": {
+        "total":               { "$ref": "#/$defs/control" },
+        "corniceSum":          { "$ref": "#/$defs/control" },
+        "triglyphDivisionSum": { "$ref": "#/$defs/control" },
+        "frontMetope":         { "$ref": "#/$defs/control" },
+        "flankMetope":         { "$ref": "#/$defs/control" },
+        "metopeCount":         { "$ref": "#/$defs/countControl" },
+        "frontTriglyphs":      { "$ref": "#/$defs/countControl" },
+        "flankTriglyphs":      { "$ref": "#/$defs/countControl" },
+        "channelBottom":       { "$ref": "#/$defs/control" },
+        "metopeRecess":        { "$ref": "#/$defs/control" },
+        "cornerTriglyphOffset":   { "$ref": "#/$defs/control" },
+        "frontCornerDistance":    { "$ref": "#/$defs/control" },
+        "frontCornerMetope":      { "$ref": "#/$defs/control" },
+        "flankCornerMetope":      { "$ref": "#/$defs/control" },
+        "intermediateShift":      { "$ref": "#/$defs/control" },
+        "frontMidBayInnerMetope": { "$ref": "#/$defs/control" },
+        "frontMidBayOuterMetope": { "$ref": "#/$defs/control" },
+        "flankMidBayInnerMetope": { "$ref": "#/$defs/control" },
+        "flankMidBayOuterMetope": { "$ref": "#/$defs/control" },
+        "regulaGuttaMargin":      { "$ref": "#/$defs/control" },
+        "regulaGuttaShortfall":   { "$ref": "#/$defs/control" },
+        "regulaGuttaCountCheck":  { "$ref": "#/$defs/countControl" },
+        "mutuleBack":             { "$ref": "#/$defs/control" },
+        "mutuleGuttaRows":        { "$ref": "#/$defs/countControl" },
+        "mutuleGuttaPitchCount":  { "$ref": "#/$defs/countControl" },
+        "mutuleGuttaMiddleAxis":  { "$ref": "#/$defs/control" },
+        "mutuleGuttaRearAxis":    { "$ref": "#/$defs/control" },
+        "mutuleGuttaPitch":       { "$ref": "#/$defs/control" },
+        "mutuleRearMargin":       { "$ref": "#/$defs/control" },
+        "mutuleHorizontalDepth":  { "$ref": "#/$defs/control" },
+        "mutuleInclinedBack":     { "$ref": "#/$defs/control" },
+        "soffitPivotZ":           { "$ref": "#/$defs/control" },
+        "mutuleFrontTopZ":        { "$ref": "#/$defs/control" },
+        "soffitBackZ":            { "$ref": "#/$defs/control" },
+        "soffitRise":             { "$ref": "#/$defs/control" },
+        "geisonBackStep":         { "$ref": "#/$defs/control" },
+        "dripTopZ":               { "$ref": "#/$defs/control" },
+        "soffitPivotProjection":  { "$ref": "#/$defs/control" },
+        "mutuleGuttaRadialFlare": { "$ref": "#/$defs/control" },
+        "mutuleGuttaRadialFlareExact": { "$ref": "#/$defs/control" },
+        "mutuleGuttaFrontFootProjection": { "$ref": "#/$defs/control" }
+      }
+    }
+  },
+  "$defs": {
+    "status":     { "type": "string", "enum": ["lu", "déduit", "mesuré", "convention", "manquant"] },
+    "lengthUnit": { "type": "string", "enum": ["m", "in", "mm"], "description": "Unité telle qu'écrite dans le README ; 1 in = 0,0254 m (README l. 31)." },
+    "sources":    { "type": "array", "items": { "type": "string" } },
+    "readme":     { "type": "string", "description": "Lieu de la valeur dans le README : « §3.2, l. 74 »." },
+    "length": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "status", "sources", "readme"],
+      "properties": {
+        "value":   { "type": "number", "exclusiveMinimum": 0 },
+        "unit":    { "$ref": "#/$defs/lengthUnit" },
+        "status":  { "$ref": "#/$defs/status" },
+        "sources": { "$ref": "#/$defs/sources" },
+        "readme":  { "$ref": "#/$defs/readme" }
+      }
+    },
+    "angle": {
+      "type": "object",
+      "description": "Angle en degrés, unité « ° » collée au nombre dans le README (règle R9).",
+      "additionalProperties": false,
+      "required": ["unit", "status", "sources", "readme"],
+      "properties": {
+        "value":   { "type": "number", "exclusiveMinimum": 0 },
+        "unit":    { "const": "°" },
+        "status":  { "$ref": "#/$defs/status" },
+        "sources": { "$ref": "#/$defs/sources" },
+        "readme":  { "$ref": "#/$defs/readme" }
+      }
+    },
+    "feet": {
+      "type": "object",
+      "description": "Pieds d'une cote en pieds et pouces, entiers ; 1 ft = 12 in (README l. 31).",
+      "additionalProperties": false,
+      "required": ["unit", "status", "sources", "readme"],
+      "properties": {
+        "value":   { "type": "integer", "exclusiveMinimum": 0 },
+        "unit":    { "const": "ft" },
+        "status":  { "$ref": "#/$defs/status" },
+        "sources": { "$ref": "#/$defs/sources" },
+        "readme":  { "$ref": "#/$defs/readme" }
+      }
+    },
+    "count": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "status", "sources", "readme"],
+      "properties": {
+        "value":   { "type": "integer", "exclusiveMinimum": 0 },
+        "unit":    { "const": "1" },
+        "status":  { "$ref": "#/$defs/status" },
+        "sources": { "$ref": "#/$defs/sources" },
+        "readme":  { "$ref": "#/$defs/readme" }
+      }
+    },
+    "divisions": {
+      "type": "object",
+      "description": "Suite de largeurs de gauche à droite, chacune avec le mot du README qui la précède.",
+      "additionalProperties": false,
+      "required": ["values", "kinds", "unit", "status", "sources", "readme"],
+      "properties": {
+        "values":  { "type": "array", "items": { "type": "number", "exclusiveMinimum": 0 } },
+        "kinds":   { "type": "array", "items": { "type": "string", "enum": ["demi-canal", "bande", "canal"] } },
+        "unit":    { "$ref": "#/$defs/lengthUnit" },
+        "status":  { "$ref": "#/$defs/status" },
+        "sources": { "$ref": "#/$defs/sources" },
+        "readme":  { "$ref": "#/$defs/readme" }
+      }
+    },
+    "axes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["values", "readme"],
+      "properties": {
+        "values": { "type": "array", "items": { "type": "number" } },
+        "readme": { "$ref": "#/$defs/readme" }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "readme"],
+      "properties": {
+        "value":  { "type": "number" },
+        "readme": { "$ref": "#/$defs/readme" }
+      }
+    },
+    "control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit", "readme"],
+      "properties": {
+        "value":  { "type": "number", "exclusiveMinimum": 0 },
+        "unit":   { "$ref": "#/$defs/lengthUnit" },
+        "readme": { "$ref": "#/$defs/readme" }
+      }
+    },
+    "countControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit", "readme"],
+      "properties": {
+        "value":  { "type": "integer", "exclusiveMinimum": 0 },
+        "unit":   { "const": "1" },
+        "readme": { "$ref": "#/$defs/readme" }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "description": "Points d'un profil : profondeur sous le lit de l'abaque et retrait depuis son nu, de haut en bas.",
+      "additionalProperties": false,
+      "required": ["depths", "retreats", "unit", "readme"],
+      "properties": {
+        "depths":   { "type": "array", "items": { "type": "number" } },
+        "retreats": { "type": "array", "items": { "type": "number" } },
+        "unit":     { "$ref": "#/$defs/lengthUnit" },
+        "readme":   { "$ref": "#/$defs/readme" }
+      }
+    }
+  }
+}

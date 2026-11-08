@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include <cmath>
+#include <limits>
+#include <utility>
 #include <vector>
 
 #include "../src/cgmath/geometry.h"
@@ -273,4 +275,40 @@ TEST(TEST_cgmath_arc, TessellateAdaptiveCwUsesAbsoluteSpan)
     auto pCw  = cw.tessellateAdaptive(PI_4);
     EXPECT_EQ(pCcw.size(), pCw.size());
     EXPECT_EQ(pCw.size(), 5u);
+}
+
+//
+// angularSegmentCount
+//
+
+TEST(TEST_cgmath_arc, AngularSegmentCountCeilsUp)
+{
+    EXPECT_EQ(angularSegmentCount(PI, PI_4), 4);
+    EXPECT_EQ(angularSegmentCount(PI + 0.01, PI_4), 5);
+    EXPECT_EQ(angularSegmentCount(-PI, PI_4), 4);
+    EXPECT_EQ(angularSegmentCount(0.0, PI_4), 1);
+}
+
+TEST(TEST_cgmath_arc, AngularSegmentCountDegenerateInputsGiveOne)
+{
+    EXPECT_EQ(angularSegmentCount(PI, 0.0), 1);
+    EXPECT_EQ(angularSegmentCount(PI, -1.0), 1);
+    EXPECT_EQ(angularSegmentCount(std::nan(""), PI_4), 1);
+    EXPECT_EQ(angularSegmentCount(PI, std::nan("")), 1);
+    EXPECT_EQ(angularSegmentCount(std::numeric_limits<double>::infinity(), PI_4), 1);
+}
+
+// Lobe d'un multilobe rond a 6 lobes : 4*pi/3, multiple exact de 5 et de 1
+// degre. Les trois spans encadrent la valeur a un ulp pres, l'ecart que
+// laissent atan2, sin et cos d'une bibliotheque C a l'autre : le compte de
+// segments n'en depend pas.
+TEST(TEST_cgmath_arc, AngularSegmentCountAbsorbsLastBitNoise)
+{
+    const double span = 4.0 * PI / 3.0;
+    for (const auto &[step, expected] : {std::make_pair(PI / 36.0, 48), std::make_pair(PI / 180.0, 240)})
+        for (const double s : {std::nextafter(span, 0.0), span, std::nextafter(span, 10.0)})
+        {
+            SCOPED_TRACE(s);
+            EXPECT_EQ(angularSegmentCount(s, step), expected);
+        }
 }

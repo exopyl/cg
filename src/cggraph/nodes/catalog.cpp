@@ -356,14 +356,13 @@ const std::vector<CatalogEntry> &Catalog ()
 	                               "une correspondance un pour un. n negatif est REFUSE, "
 	                               "jamais rabote ; n = 0 est l'identite" });
 
-	// GENERATEURS -- les 26 formes que l'adaptateur GENERIQUE sait emballer.
-	// Elles ne sont pas epelees ici : elles se derivent des liaisons, qui se
-	// derivent elles-memes du catalogue de formes de cgmesh. Une liste recopiee
-	// aurait diverge au premier ajout, exactement comme la fabrique de l'etape 3
-	// qui delegue au catalogue plutot que de le reciter.
+	// GENERATEURS -- les formes que l'adaptateur GENERIQUE sait emballer.
+	// Elles ne sont pas epelees ici : elles se derivent des liaisons, dont le
+	// type est l'identifiant de la forme au catalogue reuni (shape_catalog.h).
 	//
-	// La 27e forme -- la fenetre gothique -- a son propre descripteur, plus bas :
-	// c'est le seul objet du catalogue a sous-objets geometriques.
+	// La fenetre gothique a son propre descripteur, plus bas : c'est le seul
+	// objet du catalogue a sous-objets geometriques. Son type se lit aussi au
+	// catalogue.
 	//
 	// PORTABLES : les corps emballes vivent dans parameterized_shapes.cpp et
 	// dans les generateurs qu'il appelle, tous presents dans la liste EMSCRIPTEN
@@ -380,7 +379,7 @@ const std::vector<CatalogEntry> &Catalog ()
 		                               binding.caveat });
 	}
 
-	table.push_back (CatalogEntry{ "shape.gothic.window", "Fenetre gothique", "Formes",
+	table.push_back (CatalogEntry{ GothicWindowTypeName (), "Fenetre gothique", "Formes",
 	                               &Make<GothicWindowNode>,
 	                               "Regenerate () rattrape TOUTE exception par un "
 	                               "PLACEHOLDER -- un unique triangle -- et rend donc "

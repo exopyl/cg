@@ -1020,9 +1020,9 @@ namespace
 
 // Niveau 0 : l'assemblage direct est garde s'il est valide ; sinon la region
 // est un seul booleen, garde comprise, enregistre region_repaired. La rosace a
-// lobes ronds de la fenetre par defaut se pince ; sans plancher de bande,
-// l'offset exterieur nul colle les lancettes au cadre. La region rendue est
-// valide avec ou sans rapport, et le maillage strict.
+// lobes ronds de la fenetre par defaut a un assemblage direct valide ; sans
+// plancher de bande, l'offset exterieur nul colle les lancettes au cadre. La
+// region rendue est valide avec ou sans rapport, et le maillage strict.
 TEST(TEST_cgarchi_gothic_build_report, level_0_region_defect_is_repaired)
 {
     GothicFeatureThresholds noBand;
@@ -1031,7 +1031,7 @@ TEST(TEST_cgarchi_gothic_build_report, level_0_region_defect_is_repaired)
     const std::vector<Case> cases = {
         {"defaut", {}, {}, 0},
         {"Recursion 1", {{"Recursion", 1}}, {}, 0},
-        {"rosace a lobes ronds", {{"Rosette foil type", 0}}, {}, 1},
+        {"rosace a lobes ronds", {{"Rosette foil type", 0}}, {}, 0},
         {"Offset outer 0, sans plancher", {{"Offset outer", 0}}, noBand, 1},
     };
     for (const Case &c : cases)
@@ -1118,6 +1118,47 @@ TEST(TEST_cgarchi_gothic_build_report, level_0_region_still_invalid_is_reported)
         EXPECT_EQ(r.Count(GothicBuildWarning::RegionRepaired), 1u);
         EXPECT_TRUE(ValidateContours(p).IsValid());
     }
+}
+
+// Une auto-intersection d'un vide de niveau 0 est reparee par le booleen : un
+// trou carre dont une arete revient sur elle-meme (pointe d'aire nulle). Les
+// coordonnees sont entieres, exactes en float et sur la grille de Clipper2 :
+// le defaut ne depend d'aucun arrondi. La region reparee est le cadre perce du
+// carre, sans la pointe.
+TEST(TEST_cgarchi_gothic_build_report, level_0_self_intersection_is_repaired)
+{
+    const std::vector<Vector2d> frame = rectRing(0, 0, 100, 100);
+    const std::vector<std::vector<Vector2d>> holes = {
+        {{20, 20}, {20, 40}, {40, 40}, {40, 20}, {28, 20}, {32, 20}}};
+
+    Polygon2 direct;
+    direct.alloc_contours(2);
+    for (int c = 0; c < 2; ++c)
+    {
+        const std::vector<Vector2d> &ring = (c == 0) ? frame : holes[0];
+        std::vector<float> packed;
+        for (const Vector2d &v : ring)
+        {
+            packed.push_back(static_cast<float>(v.x));
+            packed.push_back(static_cast<float>(v.y));
+        }
+        direct.add_contour(static_cast<unsigned>(c), static_cast<unsigned>(ring.size()), packed.data());
+    }
+    const ContourValidationReport check = ValidateContours(direct);
+    ASSERT_GE(check.Count(ContourDefect::SelfIntersection), 1u) << "gabarit non discriminant : pas d'auto-intersection";
+    EXPECT_EQ(check.Count(ContourDefect::ContourContact), 0u);
+
+    GothicBuildReport r;
+    const Polygon2 p = buildLevel0StoneRegion(frame, holes, &r);
+    EXPECT_EQ(r.Count(GothicBuildWarning::RegionInvalid), 0u);
+    const std::vector<GothicDiagnostic> d = entriesOf(r, GothicBuildWarning::RegionRepaired);
+    ASSERT_EQ(d.size(), 1u);
+    EXPECT_NE(d[0].message.find("self_intersection="), std::string::npos) << d[0].message;
+    EXPECT_TRUE(ValidateContours(p).IsValid());
+    ASSERT_EQ(p.get_n_contours(), 2);
+    EXPECT_EQ(p.get_n_points(1), 4u);
+    EXPECT_DOUBLE_EQ(polygonArea(p), 100.0 * 100.0 - 20.0 * 20.0);
+    EXPECT_TRUE(samePolygon(buildLevel0StoneRegion(frame, holes), p)) << "la region depend du rapport";
 }
 
 // Par Regenerate : une region de niveau 0 qui reste invalide apres reparation

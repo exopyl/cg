@@ -76,6 +76,11 @@ struct Ring
 	int       flutes = 0;     // Fluted : nombre de cannelures
 	double    halfAngle = 0.0;   // Fluted : demi-angle de chaque cannelure
 	FluteSection section = FluteSection::Semicircle;   // Fluted
+	// Fluted, ThreeCentred seulement (0 sinon) : profondeur / corde, et rayon
+	// de l'arc central / corde, resolu une fois par la fabrique
+	// (SolveThreeCentredFlute) pour que RadiusAt reste en O(1).
+	double    depthRatio = 0.0;
+	double    centralRadiusRatio = 0.0;
 
 	static Ring MakeCircle (double r);
 	static Ring MakeSquare (double halfSide);
@@ -87,7 +92,13 @@ struct Ring
 	static Ring MakeConcaveSquare (double corner, double face);
 	// Leve std::invalid_argument si R <= 0, count < 3 ou halfAngle hors de
 	// ]0, pi / count]. La symetrie d'ordre 4 demande count multiple de 4.
+	// Leve aussi pour la section ThreeCentred, qui demande son rapport.
 	static Ring MakeFluted (double R, int count, double halfAngle, FluteSection section);
+	// Meme domaine. ThreeCentred : leve aussi si la section n'est pas etoilee
+	// depuis l'axe (IsThreeCentredFluteStarShaped), en particulier si
+	// depthRatio est hors de ]0, 1/2[. Autres sections : depthRatio est ignore,
+	// et l'anneau est celui de la fabrique a quatre arguments.
+	static Ring MakeFluted (double R, int count, double halfAngle, FluteSection section, double depthRatio);
 
 	double RadiusAt (double theta) const;
 

@@ -10,9 +10,11 @@
 //   createSvgExtrusion(svg)    -> id, a partir du texte SVG (via MEMFS)
 //   createTextExtrusion(fontBytes, filename, text)
 //                              -> id, texte 3D : police en Uint8Array, texte en string
-//   getParams(id)              -> JSON : parametres typees (name/type/value/min/max/choices)
-//   setParam(id, name, value)  -> bool : ecrit la valeur (par nom, jamais de pointeur cru)
-//   setParamString(id, name, s)-> bool : idem pour un parametre TEXTUEL
+//   getParams(id)              -> JSON : parametres typees (id/name/type/value/min/max/choices)
+//   setParam(id, paramId, value)
+//                              -> bool : ecrit la valeur (par Parameter::Id, jamais de pointeur cru)
+//   setParamString(id, paramId, s)
+//                              -> bool : idem pour un parametre TEXTUEL
 //   regenerate(id)             -> string OBJ : Regenerate() puis export du maillage
 //   destroyShape(id)           -> libere l'objet
 //
@@ -47,6 +49,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <functional>
@@ -110,91 +113,88 @@ void removeTempFile(int id)
     g_tempFiles.erase(it);
 }
 
-// Une entree du catalogue. La CATEGORIE partitionne le catalogue entre les pages
-// de maker/web/ : chacune n'expose que ses propres formes (listShapes(category)).
-// Elle vit ici et pas dans le JS pour rester une source unique de verite : ajouter
-// une forme ne demande d'editer qu'un seul endroit.
+// Une forme de la page : son entree au catalogue reuni de la couche nodale
+// (cggraph_nodes::CatalogShapes : formes de cgmesh, puis formes gothiques, puis
+// formes classiques), qui porte le nom, la CATEGORIE et la fabrique, et son
+// groupe de liste, seule donnee propre a maker. La categorie partitionne le
+// catalogue entre les pages de maker/web/ : chacune n'expose que ses propres
+// formes (listShapes(category)).
 struct CatalogEntry {
-    std::string name;       // cle du catalogue (== GetName())
-    std::string category;   // "parametric" | "gothic" | "classical"
-    std::string group;      // en-tete <optgroup> dans la liste ("" = aucun)
-    std::function<std::unique_ptr<IParameterized>()> make;
+    const ParametricShapeEntry* shape;   // jamais nul
+    std::string group;                   // en-tete <optgroup> dans la liste ("" = aucun)
 };
 
-// Catalogue de PRESENTATION : nom, categorie de page, groupe de liste. La
-// FABRIQUE n'est pas ici -- elle vit dans le catalogue reuni de la couche
-// nodale (cggraph_nodes::CatalogShapes : formes de cgmesh, puis formes
-// gothiques, puis formes classiques), que l'adaptateur generique lit aussi.
-// Celle-ci ne porte que ce qui est propre a maker, et le nom sert de cle entre
-// les deux.
-//
-// Une entree dont le nom ne se resout pas est ECARTEE, et la forme disparait de
-// la page ; l'ecart est signale sur std::cerr (la console sous Emscripten), au
-// lieu de produire une fabrique nulle.
+// Categorie dont les formes recoivent l'option Extrude (epaississement) : les
+// formes gothiques ont deja leur propre extrusion (zHeight, profils), et une
+// colonne classique est un solide ferme.
+const char* const kExtrudableCategory = "parametric";
+
+std::unique_ptr<IParameterized> makeShape(const ParametricShapeEntry& shape)
+{
+    std::unique_ptr<IParameterized> made = shape.make();
+    if (std::strcmp(shape.category, kExtrudableCategory) != 0) return made;
+    return std::unique_ptr<IParameterized>(new ParameterizedExtruded(std::move(made)));
+}
+
+// Catalogue de la page, dans l'ordre du catalogue reuni. Les groupes designent
+// la forme par son identifiant au catalogue, qui ne change pas quand le nom
+// change ; une forme sans groupe a le groupe "". Un identifiant inconnu du
+// catalogue est signale sur std::cerr (la console sous Emscripten).
 const std::vector<CatalogEntry>& catalog()
 {
-    static const std::string P = "parametric";
-    static const std::string G = "gothic";
-    static const std::string C = "classical";
     // Groupes : de simples en-tetes de liste, ils ne changent rien au comportement.
     // Chaque forme garde son entree et son nom -- on cherche « Klein Bottle » ou
     // « Trefoil Knot » par son nom, et les regrouper derriere une famille les rendait
     // introuvables.
-    static const std::string SOL = "Solides";
-    static const std::string SUR = "Surfaces";
-    static const std::string FRA = "Fractales";
-    struct Row { const char *name; const std::string &category; const std::string &group; };
-    static const std::vector<Row> rows = {
-        {"Cube",                  P, SOL},
-        {"Sphere",                P, SOL},
-        {"Cylinder",              P, SOL},
-        {"Cone",                  P, SOL},
-        {"Capsule",               P, SOL},
-        {"Torus",                 P, SOL},
-        {"Seashell",              P, SUR},
-        {"Seashell (von Seggern)",P, SUR},
-        {"Klein Bottle",          P, SUR},
-        {"Breather",              P, SUR},
-        {"Hyperbolic Paraboloid", P, SUR},
-        {"Monkey Saddle",         P, SUR},
-        {"Blobs",                 P, SUR},
-        {"Drop",                  P, SUR},
-        {"Torus Knot",            P, SUR},
-        {"Cinquefoil Knot",       P, SUR},
-        {"Trefoil Knot",          P, SUR},
-        {"Borromean Rings",       P, SUR},
-        {"Helicoid",              P, SUR},
-        {"Corkscrew",             P, SUR},
-        {"Mobius Strip",          P, SUR},
-        {"Radial Wave",           P, SUR},
-        {"Guimard",               P, SUR},
-        {"Menger Sponge",         P, FRA},
-        {"L-system",              P, FRA},
-        {"Gothic Window",         G, ""},
-        {"Gothic Block",          G, ""},
-        {"Classical Column",      C, ""},
-        {"Classical Colonnade",   C, ""},
+    static const char* const SOL = "Solides";
+    static const char* const SUR = "Surfaces";
+    static const char* const FRA = "Fractales";
+    struct GroupRow { const char* id; const char* group; };
+    static const std::vector<GroupRow> groups = {
+        {"shape.cube",                  SOL},
+        {"shape.sphere",                SOL},
+        {"shape.cylinder",              SOL},
+        {"shape.cone",                  SOL},
+        {"shape.capsule",               SOL},
+        {"shape.torus",                 SOL},
+        {"shape.seashell",              SUR},
+        {"shape.seashell.von_seggern",  SUR},
+        {"shape.klein_bottle",          SUR},
+        {"shape.breather",              SUR},
+        {"shape.hyperbolic_paraboloid", SUR},
+        {"shape.monkey_saddle",         SUR},
+        {"shape.blobs",                 SUR},
+        {"shape.drop",                  SUR},
+        {"shape.knot.torus",            SUR},
+        {"shape.knot.cinquefoil",       SUR},
+        {"shape.knot.trefoil",          SUR},
+        {"shape.borromean_rings",       SUR},
+        {"shape.helicoid",              SUR},
+        {"shape.corkscrew",             SUR},
+        {"shape.mobius_strip",          SUR},
+        {"shape.radial_wave",           SUR},
+        {"shape.guimard",               SUR},
+        {"shape.menger_sponge",         FRA},
+        {"shape.lsystem",               FRA},
     };
     static const std::vector<CatalogEntry> c = [] {
+        for (const GroupRow& g : groups) {
+            if (!cggraph_nodes::FindCatalogShapeById(g.id))
+                std::cerr << "maker: group entry \"" << g.id
+                          << "\" is unknown to the shape catalogue\n";
+        }
+        const std::vector<ParametricShapeEntry>& shapes = cggraph_nodes::CatalogShapes();
         std::vector<CatalogEntry> out;
-        out.reserve(rows.size());
-        for (const Row& r : rows) {
-            const std::string name = r.name;
-            if (!cggraph_nodes::FindCatalogShape(name)) {
-                std::cerr << "maker: catalog entry \"" << name << "\" (" << r.category
-                          << ") is unknown to the shape catalogue; dropped from the page\n";
-                continue;
+        out.reserve(shapes.size());
+        for (const ParametricShapeEntry& shape : shapes) {
+            std::string group;
+            for (const GroupRow& g : groups) {
+                if (std::strcmp(shape.id, g.id) == 0) {
+                    group = g.group;
+                    break;
+                }
             }
-            // Les formes de la page parametrique recoivent l'option Extrude
-            // (epaississement) ; les formes gothiques ont deja leur propre
-            // extrusion (zHeight, profils), et une colonne classique est un
-            // solide ferme.
-            const bool extrudable = (r.category == P);
-            out.push_back(CatalogEntry{name, r.category, r.group, [name, extrudable] {
-                std::unique_ptr<IParameterized> shape = cggraph_nodes::MakeCatalogShape(name);
-                if (!extrudable) return shape;
-                return std::unique_ptr<IParameterized>(new ParameterizedExtruded(std::move(shape)));
-            }});
+            out.push_back(CatalogEntry{&shape, group});
         }
         return out;
     }();
@@ -272,12 +272,12 @@ std::string listShapes(const std::string& category)
     std::string j = "[";
     bool first = true;
     for (const auto& e : catalog()) {
-        if (!category.empty() && e.category != category) continue;
+        if (!category.empty() && std::strcmp(e.shape->category, category.c_str()) != 0) continue;
         if (!first) j += ',';
         first = false;
         // Objet et non simple chaine : le JS a besoin du groupe pour ses
         // <optgroup>. Le nom reste la cle -- createShape(name).
-        j += "{\"name\":\""; j += jsonEscape(e.name);
+        j += "{\"name\":\""; j += jsonEscape(e.shape->name);
         j += "\",\"group\":\""; j += jsonEscape(e.group); j += "\"}";
     }
     j += ']';
@@ -297,8 +297,8 @@ std::string shapeWarnings(int id)
 int createShape(const std::string& name)
 {
     for (const auto& e : catalog()) {
-        if (e.name == name)
-            return registerObject(e.make());
+        if (e.shape->name == name)
+            return registerObject(makeShape(*e.shape));
     }
     return -1;
 }
@@ -940,7 +940,8 @@ std::string exportGothicJson(int id)
     return gw ? gw->ExportJson() : std::string();
 }
 
-// Parametres typees d'un objet, serialises en JSON.
+// Parametres typees d'un objet, serialises en JSON. "id" est la cle de
+// setParam, setParamString et des liens profonds ; "name" n'est qu'un libelle.
 std::string getParams(int id)
 {
     IParameterized* obj = find(id);
@@ -952,7 +953,8 @@ std::string getParams(int id)
     for (Parameter& p : params) {
         if (!first) j += ',';
         first = false;
-        j += "{\"name\":\""; j += jsonEscape(p.GetName()); j += "\",";
+        j += "{\"id\":\""; j += jsonEscape(p.Id()); j += "\",";
+        j += "\"name\":\""; j += jsonEscape(p.GetName()); j += "\",";
         switch (p.GetType()) {
             case Parameter::INT:
                 j += "\"type\":\"int\",\"value\":" + std::to_string(p.GetInt());
@@ -993,10 +995,10 @@ std::string getParams(int id)
     return j;
 }
 
-// Ecrit une valeur de parametre par nom (aucun pointeur cru cote JS). Refuse une
-// valeur non finie (NaN, infinie), y compris une fois convertie en float (1e39) :
-// aucun parametre n'en admet.
-bool setParam(int id, const std::string& name, double value)
+// Ecrit une valeur de parametre designe par son identifiant (Parameter::Id), sans
+// pointeur cru cote JS. Refuse une valeur non finie (NaN, infinie), y compris une
+// fois convertie en float (1e39) : aucun parametre n'en admet.
+bool setParam(int id, const std::string& paramId, double value)
 {
     IParameterized* obj = find(id);
     if (!obj) return false;
@@ -1004,7 +1006,7 @@ bool setParam(int id, const std::string& name, double value)
 
     std::vector<Parameter> params = obj->GetParameters();
     for (Parameter& p : params) {
-        if (p.GetName() != name) continue;
+        if (p.Id() != paramId) continue;
         switch (p.GetType()) {
             case Parameter::INT:
             case Parameter::ENUM:  p.SetInt((int)value); break;
@@ -1028,14 +1030,14 @@ bool setParam(int id, const std::string& name, double value)
 // La chaine traverse en std::string, donc en UTF-8 : c'est bien ce que l'on veut
 // ici (contrairement aux OCTETS d'une police ou d'une image, que cette meme
 // conversion detruirait).
-bool setParamString(int id, const std::string& name, const std::string& value)
+bool setParamString(int id, const std::string& paramId, const std::string& value)
 {
     IParameterized* obj = find(id);
     if (!obj) return false;
 
     std::vector<Parameter> params = obj->GetParameters();
     for (Parameter& p : params) {
-        if (p.GetName() != name) continue;
+        if (p.Id() != paramId) continue;
         if (p.GetType() != Parameter::STRING) return false;
         p.SetString(value);
         return true;

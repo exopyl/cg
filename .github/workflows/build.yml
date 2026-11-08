@@ -289,6 +289,134 @@ jobs:
           echo "nproc = $(nproc)"
           ctest --preset ci-linux-clang -j "$(nproc)"
 
+  clang-fma:
+    name: ci-linux-clang-fma
+    runs-on: ubuntu-latest
+
+    # Ce que ce job prouve, et que RIEN d'autre ne prouve : les suites cgarchi
+    # passent quand le compilateur fusionne a*b+c en une instruction FMA. MSVC
+    # ne contracte jamais ; ci-linux-clang vise le x86-64 de base, sans
+    # instruction FMA ; ci-linux-asan compile en -O0 ; ci-linux (GCC) ne
+    # contracte que si sa cible porte FMA, ce que rien ne fixe. Deux classes de
+    # code n'echouent que sous contraction : une egalite au bit pres contre une
+    # expression a*b+c recalculee dans le test, et un predicat d'orientation
+    # (a*b - c*d) teste par egalite ou par signe, qui doit passer par une
+    # evaluation stricte (StrictCrossDifference, classical_greek_entablature.cpp).
+    #
+    # Preset ci-linux-clang-fma : -O2 -march=x86-64-v3 -ffp-contract=fast sur
+    # tout le depot, TU et TU_faults seuls construits, suites TEST_cgarchi_*
+    # seules executees. OpenSCAD n'est pas installe : aucune suite cgarchi ne
+    # le lance.
+    #
+    # Deux gardes garantissent que les suites tournent sur du code contracte :
+    # le processeur porte x86-64-v3, et l'objet de l'entablement grec contient
+    # au moins une instruction FMA. Elles ne garantissent pas qu'une mutation
+    # donnee rougisse : quelles expressions sont fusionnees, et dans quel
+    # ordre, depend de la version de Clang.
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Assert the runner supports x86-64-v3
+        # Echec avant toute compilation si le processeur ne porte pas
+        # x86-64-v3. fma et avx2 se lisent dans /proc/cpuinfo ; le niveau
+        # complet (bmi1, bmi2, f16c, lzcnt, movbe...) est juge par le chargeur
+        # de la glibc (>= 2.33), dont --help liste les niveaux x86-64-vN et
+        # marque « (supported » ceux du processeur. Un chargeur qui ne liste
+        # aucun niveau ne juge rien : le fait est ecrit dans le log, sans echec,
+        # et seuls fma et avx2 font foi.
+        #
+        # La sortie du chargeur est capturee avant d'etre filtree : sous
+        # pipefail, un grep qui s'arrete au premier resultat couperait le
+        # chargeur par SIGPIPE et ferait echouer l'etape a tort.
+        run: |
+          set -euo pipefail
+          grep -m1 'model name' /proc/cpuinfo || true
+          for flag in fma avx2; do
+            if ! grep -q -w "$flag" /proc/cpuinfo; then
+              echo "::error::processeur sans $flag : les binaires x86-64-v3 de ce job ne peuvent pas s'y executer"
+              exit 1
+            fi
+          done
+          echo "fma et avx2 presents"
+          levels=$(/lib64/ld-linux-x86-64.so.2 --help 2>&1 | grep -E 'x86-64-v[0-9]' || true)
+          if [ -z "$levels" ]; then
+            echo "le chargeur ne liste aucun niveau x86-64-vN : niveau complet non verifie"
+          else
+            echo "$levels"
+            if ! grep -q -E 'x86-64-v3 \(supported' <<< "$levels"; then
+              echo "::error::le chargeur juge x86-64-v3 non supporte par ce processeur"
+              exit 1
+            fi
+          fi
+
+      - name: Download cg_binaries archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .deps/cg_binaries
+          cd .deps
+          gh release download "$CG_BINARIES_VERSION" \
+            --repo "${{ github.repository_owner }}/cg_binaries" \
+            --pattern 'cgbinaries-*-linux-x86_64.zip'
+          unzip -q cgbinaries-*-linux-x86_64.zip
+          mv cgbinaries-*-linux-x86_64/* cg_binaries/
+          rm -rf cgbinaries-*-linux-x86_64 cgbinaries-*-linux-x86_64.zip
+
+      - name: Install Clang + Ninja + OCCT
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            ninja-build \
+            zlib1g-dev \
+            libocct-foundation-dev \
+            libocct-modeling-data-dev \
+            libocct-modeling-algorithms-dev \
+            libocct-data-exchange-dev \
+            libtbb-dev
+          clang++ --version
+
+      - name: Configure
+        run: cmake --preset ci-linux-clang-fma
+
+      - name: Build
+        run: cmake --build --preset ci-linux-clang-fma
+
+      - name: Assert FMA instructions in cgarchi
+        # Compte des vfmadd, vfmsub, vfnmadd, vfnmsub (et variantes
+        # vfmaddsub, vfmsubadd) par objet de cgarchi, trace dans le log. Le
+        # seuil porte sur l'objet de l'entablement grec : ses predicats sont en
+        # evaluation stricte, mais ses autres calculs se contractent, donc zero
+        # FMA y signifie que les drapeaux du preset n'ont pas ete appliques.
+        run: |
+          set -euo pipefail
+          dir=build/ci-linux-clang-fma/src/cgarchi
+          total=0
+          while IFS= read -r obj; do
+            n=$(objdump -d --no-show-raw-insn "$obj" | grep -c -E '\svf(n)?m(add|sub)' || true)
+            printf '%6d  %s\n' "$n" "${obj#$dir/}"
+            total=$((total + n))
+          done < <(find "$dir" -name '*.o' | sort)
+          echo "total : $total"
+          obj=$(find "$dir" -name 'classical_greek_entablature.cpp.o')
+          if [ -z "$obj" ]; then
+            echo "::error::objet classical_greek_entablature.cpp.o introuvable sous $dir"
+            exit 1
+          fi
+          n=$(objdump -d --no-show-raw-insn "$obj" | grep -c -E '\svf(n)?m(add|sub)' || true)
+          if [ "$n" -eq 0 ]; then
+            echo "::error::aucune instruction FMA dans $obj : la contraction n'a pas eu lieu, les suites n'eprouvent rien"
+            exit 1
+          fi
+
+      - name: Test
+        # -j : memes raisons que l'etape Test de ci-linux.
+        run: |
+          echo "nproc = $(nproc)"
+          ctest --preset ci-linux-clang-fma -j "$(nproc)"
+
   windows:
     name: ci-windows (${{ matrix.config }})
     # Image figee et non windows-latest : le preset ci-windows exige VS 2026

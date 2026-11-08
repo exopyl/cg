@@ -201,7 +201,7 @@ namespace
 			const double akU = a1  + wrap(ak - a1);       // unwrap through the peak
 			const double a2U = akU + wrap(a2 - ak);
 
-			int per = std::max(4, (int)std::ceil(std::fabs(a2U - a1) / maxAngleRad));
+			const int per = std::max(4, angularSegmentCount(a2U - a1, maxAngleRad));
 			for (int k = 0; k < per; ++k)                 // [a1, a2U) : cusp shared with next lobe
 			{
 				const double a = a1 + (a2U - a1) * (double)k / per;
@@ -248,7 +248,7 @@ namespace
 			const double a2U = akU + wrap(a2 - ak);
 
 			std::vector<Vector2d> petal;
-			int per = std::max(4, (int)std::ceil(std::fabs(a2U - a1) / maxAngleRad));
+			const int per = std::max(4, angularSegmentCount(a2U - a1, maxAngleRad));
 			for (int k = 0; k <= per; ++k)                // full outer lobe arc, cusp_left -> cusp_right
 			{
 				const double a = a1 + (a2U - a1) * (double)k / per;

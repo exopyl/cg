@@ -1,0 +1,51 @@
+accepted
+---
+{
+  "curves": [
+    {
+      "end": "B",
+      "id": "l1",
+      "level": 0,
+      "start": "A",
+      "type": "segment"
+    }
+  ],
+  "levels": [
+    {
+      "base": 0.0,
+      "id": 0
+    }
+  ],
+  "points": [
+    {
+      "ground": true,
+      "id": "A",
+      "xy": [
+        3.0,
+        -1.0
+      ]
+    },
+    {
+      "height": 10.0,
+      "id": "B",
+      "xy": [
+        -1.0,
+        2.0
+      ]
+    }
+  ],
+  "schema": "gothic-microarchitecture/v1",
+  "symmetry": {
+    "center": [
+      0.0,
+      0.0
+    ],
+    "rotation_order": 4
+  },
+  "tolerances": {
+    "height": 1e-07,
+    "parameter": 1e-07,
+    "point": 1e-09,
+    "prc_snap": 0.001
+  }
+}

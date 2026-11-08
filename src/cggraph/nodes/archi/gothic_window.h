@@ -78,4 +78,8 @@ private:
 	std::vector<cggraph::NodeStat> m_stats;
 };
 
+// Type du noeud : l'identifiant de la fenetre gothique au catalogue reuni
+// (shapes/shape_catalog.h). Adresse stable pour la duree du programme.
+const char *GothicWindowTypeName ();
+
 } // namespace cggraph_nodes
