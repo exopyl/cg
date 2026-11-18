@@ -32,14 +32,15 @@ add_custom_command(
     VERBATIM)
 target_sources(cgarchi PRIVATE "${CGARCHI_ORDERS_CPP}")
 
-# Documents des monuments ("monument/v9"), embarques de meme, un par monument,
+# Documents des monuments ("monument/v10"), embarques de meme, un par monument,
 # liste explicite : nom du JSON, puis fonction qui le rend
 # (classical_monument_data.h). Chaque JSON est la sortie de
 # data/<nom>_from_readme.py sur le README de l'utilisateur, hors du depot : le
 # script se lance a la main, jamais par la construction.
 set(CGARCHI_MONUMENTS
     temple_hephaistos TempleHephaistosJson
-    temple_ares       TempleAresJson)
+    temple_ares       TempleAresJson
+    temple_parthenon  TempleParthenonJson)
 while(CGARCHI_MONUMENTS)
     list(POP_FRONT CGARCHI_MONUMENTS monumentName monumentFunction)
     set(monumentJson "${PROJECT_SOURCE_DIR}/data/${monumentName}.json")

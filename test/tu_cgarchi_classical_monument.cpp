@@ -38,7 +38,7 @@
 #include "greek_doric_test_support.h"
 
 // ===========================================================================
-//  Document du monument "monument/v9" : lecteur, schema, conversions, mode partiel
+//  Document du monument "monument/v10" : lecteur, schema, conversions, mode partiel
 // ===========================================================================
 //
 // Donnee : le document embarque, derive du README du temple d'Hephaistos. Les
@@ -66,7 +66,7 @@
 //   - kReadMetopeTolerance (registre MO1) : metope lue contre metope courante du
 //     modele (J19) ;
 //   - au bit pres la ou la conversion n'est qu'une moitie (J7), ou recopie un
-//     reglage (J12, J15, J18), et pour une cote en pieds et pouces dont la seule
+//     reglage (J12, J15, J18), et pour une cote "ft+in" dont la seule
 //     multiplication inexacte vient en dernier (J10). Aucune comparaison au bit
 //     pres a une expression a * b +- c calculee ici avec un produit inexact : le
 //     job ci-linux contracte ces expressions en FMA (plan 3 section 20.7).
@@ -122,7 +122,7 @@ std::string RefusalOf (const std::string &text)
 	return std::string();
 }
 
-// Le document est refuse, et le message porte "monument/v9 <path> : <motif>".
+// Le document est refuse, et le message porte "monument/v10 <path> : <motif>".
 void ExpectRefused (const std::string &text, const std::string &path, const std::string &motif)
 {
 	const std::string message = RefusalOf(text);
@@ -189,17 +189,14 @@ std::vector<std::pair<std::string, const MonumentValue *>> AllValues (const Monu
 		{"columns.hypotrachelionHeight", &c.hypotrachelionHeight},
 		{"columns.grooveHeight", &c.grooveHeight},
 		{"columns.grooveDepth", &c.grooveDepth},
-		{"entablature.architraveHeightFt", &e.architraveHeightFt},
-		{"entablature.architraveHeightIn", &e.architraveHeightIn},
+		{"entablature.architraveHeight", &e.architraveHeight},
 		{"entablature.taeniaHeight", &e.taeniaHeight},
 		{"entablature.regulaHeight", &e.regulaHeight},
 		{"entablature.guttaeHeight", &e.guttaeHeight},
 		{"entablature.architraveFaceHeight", &e.architraveFaceHeight},
-		{"entablature.friezeHeightFt", &e.friezeHeightFt},
-		{"entablature.friezeHeightIn", &e.friezeHeightIn},
+		{"entablature.friezeHeight", &e.friezeHeight},
 		{"entablature.triglyphCapitalHeight", &e.triglyphCapitalHeight},
-		{"entablature.corniceHeightFt", &e.corniceHeightFt},
-		{"entablature.corniceHeightIn", &e.corniceHeightIn},
+		{"entablature.corniceHeight", &e.corniceHeight},
 		{"entablature.mutulePlateHeight", &e.mutulePlateHeight},
 		{"entablature.dripHeight", &e.dripHeight},
 		{"entablature.coronaHeight", &e.coronaHeight},
@@ -220,10 +217,8 @@ std::vector<std::pair<std::string, const MonumentValue *>> AllValues (const Monu
 		{"entablature.filletProjection", &e.filletProjection},
 		{"entablature.crownProjection", &e.crownProjection},
 		{"entablature.innerFace", &e.innerFace},
-		{"entablature.triglyphWidthFt", &e.triglyphWidthFt},
-		{"entablature.triglyphWidthIn", &e.triglyphWidthIn},
-		{"entablature.metopeWidthFt", &e.metopeWidthFt},
-		{"entablature.metopeWidthIn", &e.metopeWidthIn},
+		{"entablature.triglyphWidth", &e.triglyphWidth},
+		{"entablature.metopeWidth", &e.metopeWidth},
 		{"entablature.channelDepth", &e.channelDepth},
 		{"entablature.regulaProjection", &e.regulaProjection},
 		{"entablature.regulaGuttaCount", &e.regulaGuttaCount},
@@ -231,8 +226,7 @@ std::vector<std::pair<std::string, const MonumentValue *>> AllValues (const Monu
 		{"entablature.regulaGuttaGap", &e.regulaGuttaGap},
 		{"entablature.regulaGuttaTopProjection", &e.regulaGuttaTopProjection},
 		{"entablature.regulaGuttaFootProjection", &e.regulaGuttaFootProjection},
-		{"entablature.mutuleWidthFt", &e.mutuleWidthFt},
-		{"entablature.mutuleWidthIn", &e.mutuleWidthIn},
+		{"entablature.mutuleWidth", &e.mutuleWidth},
 		{"entablature.mutuleDepth", &e.mutuleDepth},
 		{"entablature.soffitSlope", &e.soffitSlope},
 		{"entablature.mutuleGuttaFrontDiameter", &e.mutuleGuttaFrontDiameter},
@@ -244,27 +238,22 @@ std::vector<std::pair<std::string, const MonumentValue *>> AllValues (const Monu
 		{"entablature.mutuleGuttaEdgeAxis", &e.mutuleGuttaEdgeAxis},
 		{"entablature.mutuleGuttaPerRow", &e.mutuleGuttaPerRow},
 		{"entablature.mutuleGuttaFootFlare", &e.mutuleGuttaFootFlare},
-		{"pediment.apexRiseFt", &d.pediment.apexRiseFt},
-		{"pediment.apexRiseIn", &d.pediment.apexRiseIn},
+		{"pediment.apexRise", &d.pediment.apexRise},
 		{"pediment.rakingRun", &d.pediment.rakingRun},
-		{"pediment.rakingProjectionFt", &d.pediment.rakingProjectionFt},
-		{"pediment.rakingProjectionIn", &d.pediment.rakingProjectionIn},
+		{"pediment.rakingProjection", &d.pediment.rakingProjection},
 		{"pediment.tympanumFace", &d.pediment.tympanumFace},
 		{"pediment.sima", &d.pediment.sima},
 	};
 }
 
-// Cle de pieds d'une cote en pieds et pouces : "<nom>Ft", seules valeurs d'unite "ft".
-bool IsFeetKey (const std::string &key)
+// Cotes en pieds et pouces du document (regle R6 du script) : les seules valeurs d'unite "ft+in".
+const std::set<std::string> &FeetAndInchesKeys ()
 {
-	const std::string suffix = "Ft";
-	return key.size() > suffix.size() && key.compare(key.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
-
-// Cote en pieds et pouces du document, en metres.
-double FeetAndInches (const MonumentValue &feet, const MonumentValue &inches)
-{
-	return MonumentFeetAndInches(feet, inches, "cote");
+	static const std::set<std::string> keys = {
+		"entablature.architraveHeight", "entablature.friezeHeight", "entablature.corniceHeight",
+		"entablature.triglyphWidth",    "entablature.metopeWidth",  "entablature.mutuleWidth",
+		"pediment.apexRise",            "pediment.rakingProjection"};
+	return keys;
 }
 
 // Cles des comptes du document : les seules valeurs d'unite "1".
@@ -299,9 +288,10 @@ double Value (const MonumentValue &v)
 //
 // Mots-cles connus : type, const, enum, properties, required,
 // additionalProperties (booleen ou schema), $defs, $ref ("#/$defs/<nom>"),
-// items, exclusiveMinimum, pattern, dependentRequired ; annotations sans effet : $schema, $id,
-// title, description, $comment. Tout autre mot-cle est un ecart : un schema
-// qui en emploierait un ne serait pas verifie en entier.
+// items, prefixItems, minItems, maxItems, exclusiveMinimum, minimum, pattern,
+// dependentRequired, oneOf (exactement une branche) ; annotations sans effet :
+// $schema, $id, title, description, $comment. Tout autre mot-cle est un ecart :
+// un schema qui en emploierait un ne serait pas verifie en entier.
 
 std::string Join (const std::string &parent, const std::string &key)
 {
@@ -336,7 +326,8 @@ std::string Violation (const json &v, const json &schemaIn, const json &root, co
 {
 	static const std::set<std::string> kKeywords = {
 		"type", "const", "enum", "properties", "required", "additionalProperties", "$defs", "$ref", "items",
-		"exclusiveMinimum", "pattern", "dependentRequired", "$schema", "$id", "title", "description", "$comment"};
+		"prefixItems", "minItems", "maxItems", "exclusiveMinimum", "minimum", "pattern", "dependentRequired", "oneOf",
+		"$schema", "$id", "title", "description", "$comment"};
 	for (auto it = schemaIn.begin(); it != schemaIn.end(); ++it)
 		if (kKeywords.count(it.key()) == 0)
 			return path + " : mot-cle inconnu du validateur : " + it.key();
@@ -355,6 +346,25 @@ std::string Violation (const json &v, const json &schemaIn, const json &root, co
 		return path + " : valeur hors enum";
 	if (s.contains("exclusiveMinimum") && !(v.get<double>() > s["exclusiveMinimum"].get<double>()))
 		return path + " : valeur <= exclusiveMinimum";
+	if (s.contains("minimum") && !(v.get<double>() >= s["minimum"].get<double>()))
+		return path + " : valeur < minimum";
+	if (s.contains("oneOf"))
+	{
+		std::string violations;
+		std::size_t matched = 0;
+		for (const json &branch : s["oneOf"])
+		{
+			const std::string inner = Violation(v, branch, root, path);
+			if (inner.empty())
+				++matched;
+			else
+				violations += (violations.empty() ? "" : " ; ") + inner;
+		}
+		if (matched == 0)
+			return path + " : aucune branche de oneOf (" + violations + ")";
+		if (matched > 1)
+			return path + " : plusieurs branches de oneOf";
+	}
 	if (s.contains("pattern") && !std::regex_search(v.get<std::string>(), std::regex(s["pattern"].get<std::string>())))
 		return path + " : motif non respecte";
 	if (s.contains("dependentRequired") && v.is_object())
@@ -381,6 +391,17 @@ std::string Violation (const json &v, const json &schemaIn, const json &root, co
 			if (!inner.empty())
 				return inner;
 		}
+	if (v.is_array() && s.contains("minItems") && v.size() < s["minItems"].get<std::size_t>())
+		return path + " : moins de minItems elements";
+	if (v.is_array() && s.contains("maxItems") && v.size() > s["maxItems"].get<std::size_t>())
+		return path + " : plus de maxItems elements";
+	if (v.is_array() && s.contains("prefixItems"))
+		for (std::size_t i = 0; i < v.size() && i < s["prefixItems"].size(); ++i)
+		{
+			const std::string inner = Violation(v[i], s["prefixItems"][i], root, path + "[" + std::to_string(i) + "]");
+			if (!inner.empty())
+				return inner;
+		}
 	if (v.is_array() && s.contains("items"))
 		for (std::size_t i = 0; i < v.size(); ++i)
 		{
@@ -392,11 +413,15 @@ std::string Violation (const json &v, const json &schemaIn, const json &root, co
 }
 
 // Chemins de chaque cle requise par le schema, presente dans `doc`, en suivant
-// les proprietes presentes.
+// les proprietes presentes ; d'un oneOf, la branche que `doc` respecte.
 void RequiredPaths (const json &doc, const json &schemaIn, const json &root, std::vector<std::string> &keys,
                     std::vector<std::vector<std::string>> &out)
 {
 	const json &s = Resolve(schemaIn, root);
+	if (s.contains("oneOf"))
+		for (const json &branch : s["oneOf"])
+			if (Violation(doc, branch, root, std::string()).empty())
+				RequiredPaths(doc, branch, root, keys, out);
 	if (s.contains("required"))
 		for (const json &name : s["required"])
 		{
@@ -416,7 +441,7 @@ void RequiredPaths (const json &doc, const json &schemaIn, const json &root, std
 
 json SchemaFile ()
 {
-	const std::filesystem::path path = std::filesystem::path("src") / "cgarchi" / "schemas" / "monument-v9.schema";
+	const std::filesystem::path path = std::filesystem::path("src") / "cgarchi" / "schemas" / "monument-v10.schema";
 	std::ifstream in(path, std::ios::binary);
 	if (!in)
 		return json();
@@ -515,7 +540,7 @@ TEST(TEST_cgarchi_classical_monument, the_reader_refuses_a_value_without_a_valid
 	ExpectEditRefused([&](json &d) { d["extra"] = 1; }, "extra", "unknown field");
 	ExpectEditRefused([&](json &d) { d["krepis"]["extra"] = 1; }, "krepis.extra", "unknown field");
 	ExpectEditRefused([&](json &d) { at(d)["extra"] = 1; }, h + ".extra", "unknown field");
-	// Version : seule monument/v9 est lue ; v1 a v8 sont refusees (D2-8).
+	// Version : seule monument/v10 est lue ; v1 a v9 sont refusees (D2-8).
 	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v1"; }, "schema", "unsupported schema \"monument/v1\"");
 	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v2"; }, "schema", "unsupported schema \"monument/v2\"");
 	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v3"; }, "schema", "unsupported schema \"monument/v3\"");
@@ -524,7 +549,13 @@ TEST(TEST_cgarchi_classical_monument, the_reader_refuses_a_value_without_a_valid
 	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v6"; }, "schema", "unsupported schema \"monument/v6\"");
 	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v7"; }, "schema", "unsupported schema \"monument/v7\"");
 	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v8"; }, "schema", "unsupported schema \"monument/v8\"");
-	// Un document de forme v7 (euthynteria manquante d'une cle, sans pente) sous l'etiquette v9 est refuse, cles
+	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v9"; }, "schema", "unsupported schema \"monument/v9\"");
+	// Un document de forme v9 (cote en pieds et pouces sur deux cles) sous l'etiquette v10 est refuse, cles nommees.
+	ExpectEditRefused([&](json &d) { d["entablature"]["friezeHeightFt"] = d["entablature"]["friezeHeight"]; },
+	                  "entablature.friezeHeightFt", "unknown field");
+	ExpectEditRefused([&](json &d) { d["entablature"].erase("friezeHeight"); }, "entablature.friezeHeight",
+	                  "required field is missing");
+	// Un document de forme v7 (euthynteria manquante d'une cle, sans pente) sous l'etiquette v10 est refuse, cles
 	// nommees.
 	ExpectEditRefused([&](json &d) { d["pediment"].erase("rakingRun"); }, "pediment.rakingRun", "required field is missing");
 	ExpectEditRefused([&](json &d) { d["krepis"]["euthynteria"] = d["krepis"]["euthynteriaHeight"]; }, "krepis.euthynteria",
@@ -545,13 +576,13 @@ TEST(TEST_cgarchi_classical_monument, the_reader_refuses_a_value_without_a_valid
 	                                   d.erase("krepis"); },
 	                  "krepisControls", "requires block \"krepis\"");
 	ExpectEditRefused([&](json &d) { d["controls"].erase("frontAxesY"); }, "controls.frontAxesY", "required field is missing");
-	// Un document de forme v5 (sans sous-face inclinee ni gouttes des mutules) sous l'etiquette v9 est refuse, cles
+	// Un document de forme v5 (sans sous-face inclinee ni gouttes des mutules) sous l'etiquette v10 est refuse, cles
 	// nommees.
 	ExpectEditRefused([&](json &d) { d["entablature"].erase("soffitSlope"); }, "entablature.soffitSlope",
 	                  "required field is missing");
 	ExpectEditRefused([&](json &d) { d["entablatureControls"].erase("mutuleGuttaRows"); },
 	                  "entablatureControls.mutuleGuttaRows", "required field is missing");
-	// Un document de forme v3 (sans les controles d'angle) sous l'etiquette v9 est refuse, cle nommee.
+	// Un document de forme v3 (sans les controles d'angle) sous l'etiquette v10 est refuse, cle nommee.
 	ExpectEditRefused([&](json &d) { d["entablatureControls"].erase("cornerTriglyphOffset"); },
 	                  "entablatureControls.cornerTriglyphOffset", "required field is missing");
 	// De meme un document de forme v4 (sans regulae ni mutules) : premieres cles absentes nommees.
@@ -605,7 +636,7 @@ TEST(TEST_cgarchi_classical_monument, the_reader_refuses_a_value_without_a_valid
 TEST(TEST_cgarchi_classical_monument, the_document_conforms_to_its_schema_file_and_every_required_key_is_required_by_the_reader)
 {
 	const json schema = SchemaFile();
-	ASSERT_TRUE(schema.is_object()) << "src/cgarchi/schemas/monument-v9.schema illisible depuis le repertoire courant";
+	ASSERT_TRUE(schema.is_object()) << "src/cgarchi/schemas/monument-v10.schema illisible depuis le repertoire courant";
 	const json doc = EmbeddedDocument();
 	EXPECT_EQ(Violation(doc, schema, schema, std::string()), "");
 	// Controle positif : le document complet est accepte, si bien que chaque refus
@@ -614,24 +645,38 @@ TEST(TEST_cgarchi_classical_monument, the_document_conforms_to_its_schema_file_a
 
 	// Controles negatifs du validateur : un mot-cle inconnu, puis une donnee hors schema.
 	json unknownKeyword = schema;
-	unknownKeyword["$defs"]["length"]["properties"]["value"]["minimum"] = 0;
+	unknownKeyword["$defs"]["scalarLength"]["properties"]["value"]["maximum"] = 0;
 	EXPECT_NE(Violation(doc, unknownKeyword, unknownKeyword, std::string()).find("mot-cle inconnu"), std::string::npos);
 	json offSchema = doc;
 	offSchema["krepis"]["stylobateHeight"]["status"] = kHypothesis;
-	EXPECT_EQ(Violation(offSchema, schema, schema, std::string()), "krepis.stylobateHeight.status : valeur hors enum");
+	EXPECT_NE(Violation(offSchema, schema, schema, std::string()).find("krepis.stylobateHeight.status : valeur hors enum"),
+	          std::string::npos);
+	// Cote "ft+in" : pieds non entiers, pouces negatifs, un seul nombre, et un nombre seul sous "ft+in", hors schema ;
+	// des pieds decimaux sont une longueur du schema.
+	for (const json &pair : {json::array({2.5, 8.55}), json::array({2, -1}), json::array({2}), json(2.7)})
+	{
+		json bad = doc;
+		bad["entablature"]["friezeHeight"]["value"] = pair;
+		EXPECT_NE(Violation(bad, schema, schema, std::string()).find("aucune branche de oneOf"), std::string::npos)
+			<< pair.dump();
+	}
+	json decimalFeet = doc;
+	decimalFeet["columns"]["abacusHeight"]["value"] = 0.654;
+	decimalFeet["columns"]["abacusHeight"]["unit"] = "ft";
+	EXPECT_EQ(Violation(decimalFeet, schema, schema, std::string()), "");
 
 	std::vector<std::string> keys;
 	std::vector<std::vector<std::string>> paths;
 	RequiredPaths(doc, schema, schema, keys, paths);
-	// 4 a la racine (blocs facultatifs, MO-P2), 4 dans source, 39 + 36 + 9 + 10 cles de valeur (angle compris) et 4
-	// par valeur, 2 axes du peristyle et 2 par axe, 2 sommes facultatives presentes et 2 cles chacune, 11 controles
-	// de la colonne et 3 par controle, un profil et ses 4 cles, une
-	// suite de divisions et ses 6 cles, 10 + 9 + 4 + 18 controles de l'entablement (dont ceux de l'angle, des
-	// gouttes, du dos des mutules, de la sous-face inclinee et des gouttes des mutules) et 3 par controle ; fronton :
-	// 7 cles de valeur (rapport compris) et 4 par valeur, une suite de hauteurs et un polygone et leurs 6 cles,
-	// 13 controles (pente comprise) et 3 par controle.
-	EXPECT_EQ(paths.size(), 4u + 4u + (39u + 36u + 9u + 10u) * 5u + (2u * 3u + 2u * 2u) + 11u * 4u + 5u + 7u +
-	                            (10u + 9u + 4u + 18u) * 4u + 7u * 5u + 2u * 7u + 13u * 4u);
+	// 4 a la racine (blocs facultatifs, MO-P2), 4 dans source, 39 cles de valeur de la krepis, du peristyle et de
+	// la colonne, 49 de l'entablement (angle et 6 cotes "ft+in" compris), et 4 par valeur, 2 axes du peristyle et 2
+	// par axe, 2 sommes facultatives presentes et 2 cles chacune, 11 controles de la colonne et 3 par controle, un
+	// profil et ses 4 cles, une suite de divisions et ses 6 cles, 10 + 9 + 4 + 18 controles de l'entablement (dont
+	// ceux de l'angle, des gouttes, du dos des mutules, de la sous-face inclinee et des gouttes des mutules) et 3 par
+	// controle ; fronton : 5 cles de valeur (rapport et 2 cotes "ft+in" compris) et 4 par valeur, une suite de
+	// hauteurs et un polygone et leurs 6 cles, 13 controles (pente comprise) et 3 par controle.
+	EXPECT_EQ(paths.size(), 4u + 4u + (39u + 49u) * 5u + (2u * 3u + 2u * 2u) + 11u * 4u + 5u + 7u +
+	                            (10u + 9u + 4u + 18u) * 4u + 5u * 5u + 2u * 7u + 13u * 4u);
 	for (const std::vector<std::string> &path : paths)
 	{
 		std::string dotted, pointer;
@@ -915,10 +960,13 @@ TEST(TEST_cgarchi_classical_monument, a_missing_value_is_refused_where_a_convers
 		MonumentDivisionKind::Band,        MonumentDivisionKind::Band, MonumentDivisionKind::Band,
 		MonumentDivisionKind::HalfChannel};
 	expectThrowNaming([&] { MonumentEntablatureSettings(noChannel); }, "'entablature.triglyphDivisions'");
-	// Pieds non entiers.
+	// Cote "ft+in" : pieds non entiers, pouces negatifs.
 	MonumentData halfFoot = base;
-	halfFoot.entablature.friezeHeightFt.value = 2.5;
-	expectThrowNaming([&] { MonumentEntablatureSettings(halfFoot); }, "'entablature.friezeHeightFt'");
+	halfFoot.entablature.friezeHeight.value = 2.5;
+	expectThrowNaming([&] { MonumentEntablatureSettings(halfFoot); }, "'entablature.friezeHeight'");
+	MonumentData negativeInches = base;
+	negativeInches.entablature.friezeHeight.inches = -1.0;
+	expectThrowNaming([&] { MonumentEntablatureSettings(negativeInches); }, "'entablature.friezeHeight'");
 	// Une valeur employee manquante.
 	MonumentData noFace = base;
 	noFace.entablature.triglyphFace.value.reset();
@@ -938,7 +986,10 @@ TEST(TEST_cgarchi_classical_monument, every_value_has_a_unit_from_the_closed_lis
 		SCOPED_TRACE(key);
 		seen.insert(v->unit);
 		EXPECT_EQ(v->unit == MonumentUnit::One, CountKeys().count(key) == 1u);
-		EXPECT_EQ(v->unit == MonumentUnit::Foot, IsFeetKey(key));
+		EXPECT_EQ(v->unit == MonumentUnit::FootInch, FeetAndInchesKeys().count(key) == 1u);
+		EXPECT_NE(v->unit, MonumentUnit::Foot);   // aucune longueur en pieds decimaux au README d'Hephaistos
+		if (v->unit != MonumentUnit::FootInch)
+			EXPECT_EQ(v->inches, 0.0);
 		EXPECT_EQ(v->unit == MonumentUnit::Degree, key == "entablature.soffitSlope");
 		EXPECT_EQ(v->unit == MonumentUnit::Ratio, key == "pediment.rakingRun");
 	}
@@ -973,18 +1024,28 @@ TEST(TEST_cgarchi_classical_monument, every_value_has_a_unit_from_the_closed_lis
 	inches["columns"]["entasisSagitta"]["unit"] = "in";
 	EXPECT_EQ(MonumentLength(ParseMonument(inches.dump()).columns.entasisSagitta, "s"), 7.0 * 0.0254);
 	EXPECT_EQ(MonumentMetres(1.0, MonumentUnit::Foot, "pied"), 0.3048);
+	// Pieds decimaux (registre section 10.14) : une unite de longueur ordinaire, lue partout ; 1 ft = 0,3048 m.
+	json feet = EmbeddedDocument();
+	feet["columns"]["abacusHeight"]["value"] = 1;
+	feet["columns"]["abacusHeight"]["unit"] = "ft";
+	feet["pediment"]["rakingHeights"]["unit"] = "ft";
+	feet["columnControls"]["capitalHeight"]["unit"] = "ft";
+	EXPECT_EQ(RefusalOf(feet.dump()), "");
+	const MonumentData feetData = ParseMonument(feet.dump());
+	EXPECT_EQ(feetData.columns.abacusHeight.unit, MonumentUnit::Foot);
+	EXPECT_EQ(MonumentLength(feetData.columns.abacusHeight, "columns.abacusHeight"), 0.3048);
+	EXPECT_EQ(feetData.pediment.rakingHeights.unit, MonumentUnit::Foot);
 
-	// Cote en pieds et pouces (README l. 251, 2 ft 8,9 in), calculee en pouces : 2 x 12 est exact
-	// et le produit par le pouce vient en dernier, donc l'egalite au bit pres tient avec ou sans
+	// Cote en pieds et pouces (README l. 251, 2 ft 8,9 in), une valeur "ft+in", calculee en pouces : 2 x 12 est
+	// exact et le produit par le pouce vient en dernier, donc l'egalite au bit pres tient avec ou sans
 	// contraction FMA ; ft x 0,3048 + in x 0,0254 en differe ici (plan 3, MS-40).
 	const MonumentEntablature &ent = data.entablature;
-	EXPECT_EQ(Value(ent.architraveHeightFt), 2.0);
-	EXPECT_EQ(Value(ent.architraveHeightIn), 8.9);
-	EXPECT_EQ(MonumentFeetAndInches(ent.architraveHeightFt, ent.architraveHeightIn, "entablature.architraveHeight"),
-	          (2.0 * 12.0 + 8.9) * kMonumentInch);
-	for (const MonumentValue *feet : {&ent.architraveHeightFt, &ent.friezeHeightFt, &ent.corniceHeightFt,
-	                                  &ent.triglyphWidthFt, &ent.metopeWidthFt})
-		EXPECT_EQ(feet->unit, MonumentUnit::Foot);
+	EXPECT_EQ(Value(ent.architraveHeight), 2.0);
+	EXPECT_EQ(ent.architraveHeight.inches, 8.9);
+	EXPECT_EQ(MonumentLength(ent.architraveHeight, "entablature.architraveHeight"), (2.0 * 12.0 + 8.9) * kMonumentInch);
+	for (const MonumentValue *pair : {&ent.architraveHeight, &ent.friezeHeight, &ent.corniceHeight, &ent.triglyphWidth,
+	                                  &ent.metopeWidth})
+		EXPECT_EQ(pair->unit, MonumentUnit::FootInch);
 
 	// MonumentLength : refus d'une valeur manquante et d'une valeur sans dimension.
 	const auto expectRefusalNaming = [](const MonumentValue &v, const std::string &key) {
@@ -1005,21 +1066,55 @@ TEST(TEST_cgarchi_classical_monument, every_value_has_a_unit_from_the_closed_lis
 	expectRefusalNaming(data.columns.grooveDepth, "columns.grooveDepth");
 	expectRefusalNaming(data.krepis.stepCount, "krepis.stepCount");
 	expectRefusalNaming(data.columns.fluteCount, "columns.fluteCount");
-	// Des pieds seuls ne sont pas une longueur : une cote en pieds et pouces passe par MonumentFeetAndInches.
-	expectRefusalNaming(data.entablature.friezeHeightFt, "entablature.friezeHeightFt");
+	// Cote "ft+in" : pieds non entiers ou < 1, pouces negatifs ou non finis refuses par MonumentLength ; deux
+	// nombres, que MonumentMetres refuse.
+	for (const auto &[ft, in] : {std::make_pair(2.5, 8.55), std::make_pair(0.0, 8.55), std::make_pair(2.0, -1.0),
+	                             std::make_pair(2.0, std::numeric_limits<double>::infinity())})
+	{
+		SCOPED_TRACE(std::to_string(ft) + " ft " + std::to_string(in) + " in");
+		MonumentValue pair = data.entablature.friezeHeight;
+		pair.value = ft;
+		pair.inches = in;
+		expectRefusalNaming(pair, "entablature.friezeHeight");
+	}
+	EXPECT_THROW(MonumentMetres(2.0, MonumentUnit::FootInch, "entablature.friezeHeight"), std::invalid_argument);
 
 	// Refus du lecteur, nommes.
 	const std::string a = "columns.abacusHeight";
 	const auto ab = [](json &d) -> json & { return d["columns"]["abacusHeight"]; };
 	ExpectEditRefused([&](json &d) { ab(d).erase("unit"); }, a + ".unit", "required field is missing");
 	ExpectEditRefused([&](json &d) { ab(d)["unit"] = "yd"; }, a + ".unit", "unknown value \"yd\"");
-	ExpectEditRefused([&](json &d) { ab(d)["unit"] = "ft"; }, a + ".unit", "unit \"ft\" outside a feet key");
-	ExpectEditRefused([&](json &d) { d["entablature"]["friezeHeightFt"]["unit"] = "in"; },
-	                  "entablature.friezeHeightFt.unit", "a feet value requires unit \"ft\", not \"in\"");
-	ExpectEditRefused([&](json &d) { d["entablature"]["friezeHeightFt"]["value"] = 2.5; },
-	                  "entablature.friezeHeightFt.value", "expected an integer, not number");
-	ExpectEditRefused([&](json &d) { d["entablature"]["friezeHeightFt"]["value"] = 0; },
-	                  "entablature.friezeHeightFt.value", "0 outside [1, ");
+	// Cote "ft+in" : deux nombres, pieds entiers >= 1, pouces finis >= 0 ; sur une valeur de longueur seulement.
+	const std::string fr = "entablature.friezeHeight";
+	const auto frieze = [](json &d) -> json & { return d["entablature"]["friezeHeight"]; };
+	ExpectEditRefused([&](json &d) { frieze(d)["unit"] = "in"; }, fr + ".value", "expected a number, not array");
+	ExpectEditRefused([&](json &d) { frieze(d)["value"] = 2.7; }, fr + ".value",
+	                  "expected an array [feet, inches], not number");
+	ExpectEditRefused([&](json &d) { frieze(d)["value"] = {2.5, 8.55}; }, fr + ".value[0]",
+	                  "expected an integer, not number");
+	ExpectEditRefused([&](json &d) { frieze(d)["value"] = {0, 8.55}; }, fr + ".value[0]", "0 outside [1, ");
+	ExpectEditRefused([&](json &d) { frieze(d)["value"] = {2, -1}; }, fr + ".value[1]", "-1 outside [0, inf]");
+	ExpectEditRefused([&](json &d) { frieze(d)["value"] = {2, "8,55"}; }, fr + ".value[1]",
+	                  "expected a number, not string");
+	ExpectEditRefused([&](json &d) { frieze(d)["value"] = json::array({2}); }, fr + ".value",
+	                  "expected [feet, inches], not 1 element(s)");
+	ExpectEditRefused([&](json &d) { frieze(d)["value"] = {2, 8.55, 0}; }, fr + ".value",
+	                  "expected [feet, inches], not 3 element(s)");
+	ExpectEditRefused([&](json &d) { d["pediment"]["rakingHeights"]["unit"] = "ft+in"; }, "pediment.rakingHeights.unit",
+	                  "unit \"ft+in\" outside a length value");
+	ExpectEditRefused([&](json &d) { d["columnControls"]["capitalHeight"]["unit"] = "ft+in"; },
+	                  "columnControls.capitalHeight.unit", "unit \"ft+in\" outside a length value");
+	ExpectEditRefused([&](json &d) { d["krepis"]["stepCount"]["unit"] = "ft+in"; }, "krepis.stepCount.unit",
+	                  "a count requires unit \"1\", not \"ft+in\"");
+	{
+		// Une cote "ft+in" manquante porte son unite, sans valeur.
+		json missing = EmbeddedDocument();
+		frieze(missing).erase("value");
+		frieze(missing)["status"] = "manquant";
+		frieze(missing)["sources"] = json::array();
+		const std::string refusal = RefusalOf(missing.dump());
+		EXPECT_EQ(refusal.find(fr), std::string::npos) << refusal;
+	}
 	ExpectEditRefused([&](json &d) { ab(d)["unit"] = nullptr; }, a + ".unit", "expected a string, not null");
 	ExpectEditRefused([&](json &d) { ab(d)["unit"] = "1"; }, a + ".unit", "unit \"1\" on a length");
 	ExpectEditRefused([&](json &d) { d["columns"]["grooveDepth"]["unit"] = "1"; }, "columns.grooveDepth.unit",
@@ -1046,26 +1141,24 @@ TEST(TEST_cgarchi_classical_monument, every_value_has_a_unit_from_the_closed_lis
 	// Regulae, gouttes et mutules (l. 254, 273, 274, 315, 316, 319) : nombre de gouttes en "1", largeur des
 	// mutules en pieds et pouces (R6), le reste en pouces, tels qu'ecrits.
 	EXPECT_EQ(ent.regulaGuttaCount.unit, MonumentUnit::One);
-	EXPECT_EQ(ent.mutuleWidthFt.unit, MonumentUnit::Foot);
+	EXPECT_EQ(ent.mutuleWidth.unit, MonumentUnit::FootInch);
 	for (const MonumentValue *v : {&ent.regulaProjection, &ent.regulaGuttaDiameter, &ent.regulaGuttaGap,
-	                               &ent.regulaGuttaTopProjection, &ent.regulaGuttaFootProjection, &ent.mutuleWidthIn,
-	                               &ent.mutuleDepth})
+	                               &ent.regulaGuttaTopProjection, &ent.regulaGuttaFootProjection, &ent.mutuleDepth})
 		EXPECT_EQ(v->unit, MonumentUnit::Inch);
 	const MonumentEntablatureControls &ornaments = data.entablatureControls;
 	EXPECT_EQ(ornaments.regulaGuttaCountCheck.unit, MonumentUnit::One);
 	for (const MonumentControlValue *c : {&ornaments.regulaGuttaMargin, &ornaments.regulaGuttaShortfall,
 	                                      &ornaments.mutuleBack})
 		EXPECT_EQ(c->unit, MonumentUnit::Inch);
-	EXPECT_EQ(MonumentFeetAndInches(ent.mutuleWidthFt, ent.mutuleWidthIn, "entablature.mutuleWidth"),
-	          (1.0 * 12.0 + 8.75) * kMonumentInch);
+	EXPECT_EQ(MonumentLength(ent.mutuleWidth, "entablature.mutuleWidth"), (1.0 * 12.0 + 8.75) * kMonumentInch);
 	ExpectEditRefused([&](json &d) { d["entablature"]["regulaGuttaCount"]["value"] = 6.5; },
 	                  "entablature.regulaGuttaCount.value", "expected an integer, not number");
 	ExpectEditRefused([&](json &d) { d["entablature"]["regulaGuttaCount"]["unit"] = "in"; },
 	                  "entablature.regulaGuttaCount.unit", "a count requires unit \"1\", not \"in\"");
 	ExpectEditRefused([&](json &d) { d["entablature"]["regulaGuttaCount"]["value"] = 0; },
 	                  "entablature.regulaGuttaCount.value", "0 outside [1, ");
-	ExpectEditRefused([&](json &d) { d["entablature"]["mutuleWidthFt"]["unit"] = "in"; },
-	                  "entablature.mutuleWidthFt.unit", "a feet value requires unit \"ft\", not \"in\"");
+	ExpectEditRefused([&](json &d) { d["entablature"]["mutuleWidth"]["unit"] = "in"; },
+	                  "entablature.mutuleWidth.value", "expected a number, not array");
 	ExpectEditRefused([&](json &d) { d["entablature"]["mutuleDepth"]["unit"] = "1"; },
 	                  "entablature.mutuleDepth.unit", "unit \"1\" on a length");
 	ExpectEditRefused([&](json &d) { d["entablatureControls"]["regulaGuttaCountCheck"]["unit"] = "in"; },
@@ -1131,18 +1224,17 @@ TEST(TEST_cgarchi_classical_monument, every_value_has_a_unit_from_the_closed_lis
 	                  "entablature.mutuleGuttaPerRow.unit", "a count requires unit \"1\", not \"" + degree + "\"");
 	ExpectEditRefused([&](json &d) { d["entablature"]["mutuleGuttaPerRow"]["value"] = 6.5; },
 	                  "entablature.mutuleGuttaPerRow.value", "expected an integer, not number");
-	ExpectEditRefused([&](json &d) { d["entablature"]["mutuleWidthFt"]["unit"] = degree; },
-	                  "entablature.mutuleWidthFt.unit", "a feet value requires unit \"ft\", not \"" + degree + "\"");
+	ExpectEditRefused([&](json &d) { d["entablature"]["mutuleWidth"]["unit"] = degree; },
+	                  "entablature.mutuleWidth.unit", "unit \"" + degree + "\" on a length");
 
 	// Fronton (l. 608 a 611, 616) : hauteur et saillie en pieds et pouces (R6), nu du tympan, hauteurs et section en
 	// pouces, sima manquante en metres (unite attendue) ; controles en metres ou en pouces tels qu'ecrits, pente en
 	// « ° » (R9).
 	const MonumentPediment &f = data.pediment;
 	const MonumentPedimentControls &fc = data.pedimentControls;
-	EXPECT_EQ(f.apexRiseFt.unit, MonumentUnit::Foot);
-	EXPECT_EQ(f.rakingProjectionFt.unit, MonumentUnit::Foot);
-	for (const MonumentValue *v : {&f.apexRiseIn, &f.rakingProjectionIn, &f.tympanumFace})
-		EXPECT_EQ(v->unit, MonumentUnit::Inch);
+	EXPECT_EQ(f.apexRise.unit, MonumentUnit::FootInch);
+	EXPECT_EQ(f.rakingProjection.unit, MonumentUnit::FootInch);
+	EXPECT_EQ(f.tympanumFace.unit, MonumentUnit::Inch);
 	EXPECT_EQ(f.rakingHeights.unit, MonumentUnit::Inch);
 	EXPECT_EQ(f.rakingSection.unit, MonumentUnit::Inch);
 	EXPECT_EQ(f.sima.unit, MonumentUnit::Metre);
@@ -1174,17 +1266,15 @@ TEST(TEST_cgarchi_classical_monument, every_value_has_a_unit_from_the_closed_lis
 	                                      &fc.rakingCoronaProjection, &fc.rakingBottomFilletProjection,
 	                                      &fc.rakingCoronaGap})
 		EXPECT_EQ(c->unit, MonumentUnit::Inch);
-	EXPECT_EQ(MonumentFeetAndInches(f.apexRiseFt, f.apexRiseIn, "pediment.apexRise"), (5.0 * 12.0 + 9.75) * kMonumentInch);
+	EXPECT_EQ(MonumentLength(f.apexRise, "pediment.apexRise"), (5.0 * 12.0 + 9.75) * kMonumentInch);
 	ExpectEditRefused([&](json &d) { d["pedimentControls"]["rakingSlope"]["unit"] = "m"; },
 	                  "pedimentControls.rakingSlope.unit", "an angle requires unit \"" + degree + "\", not \"m\"");
 	ExpectEditRefused([&](json &d) { d["pedimentControls"]["eaveHalfSpan"]["unit"] = degree; },
 	                  "pedimentControls.eaveHalfSpan.unit", "unit \"" + degree + "\" on a length");
 	ExpectEditRefused([&](json &d) { d["pediment"]["rakingSection"]["unit"] = "1"; }, "pediment.rakingSection.unit",
 	                  "unit \"1\" on a length");
-	ExpectEditRefused([&](json &d) { d["pediment"]["rakingHeights"]["unit"] = "ft"; }, "pediment.rakingHeights.unit",
-	                  "unit \"ft\" outside a feet key");
-	ExpectEditRefused([&](json &d) { d["pediment"]["apexRiseFt"]["unit"] = "in"; }, "pediment.apexRiseFt.unit",
-	                  "a feet value requires unit \"ft\", not \"in\"");
+	ExpectEditRefused([&](json &d) { d["pediment"]["apexRise"]["unit"] = "in"; }, "pediment.apexRise.value",
+	                  "expected a number, not array");
 	ExpectEditRefused([&](json &d) { d["pediment"]["sima"]["unit"] = "1"; }, "pediment.sima.unit",
 	                  "unit \"1\" on a length");
 }
@@ -1527,8 +1617,8 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_values_are_read_with_their
 			EXPECT_EQ(v->sources, s);
 		}
 	}
-	EXPECT_EQ(values, 55u);
-	EXPECT_EQ(read, 47u);
+	EXPECT_EQ(values, 49u);
+	EXPECT_EQ(read, 41u);
 	// Partage du chapiteau du triglyphe : convention de la source, sans reference (l. 277).
 	for (const MonumentValue *v : {&e.triglyphCapitalListelHeight, &e.triglyphCapitalBandHeight})
 	{
@@ -1546,8 +1636,7 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_values_are_read_with_their
 	EXPECT_EQ(e.innerFace.unit, MonumentUnit::Metre);
 	// Lieux de cinq cles temoins.
 	const std::string section = kSection;
-	EXPECT_EQ(e.friezeHeightFt.readme, section + "6.1, l. 256");
-	EXPECT_EQ(e.friezeHeightIn.readme, section + "6.1, l. 256");
+	EXPECT_EQ(e.friezeHeight.readme, section + "6.1, l. 256");
 	EXPECT_EQ(e.triglyphCapitalBandHeight.readme, section + "6.2, l. 277");
 	EXPECT_EQ(e.innerFace.readme, section + "6.2, l. 285");
 	EXPECT_EQ(e.triglyphDivisions.readme, section + "6.3, l. 295");
@@ -1622,7 +1711,8 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_values_are_read_with_their
 	ExpectEditRefused([&](json &doc) { doc["entablatureControls"]["flankMidBayOuterMetope"]["readme"] = ""; },
 	                  "entablatureControls.flankMidBayOuterMetope.readme", "empty place");
 
-	// Regulae, gouttes et mutules : les neuf valeurs telles qu'ecrites, lues [S], avec leur lieu.
+	// Regulae, gouttes et mutules : les huit valeurs telles qu'ecrites, lues [S], avec leur lieu (pieds pour la
+	// largeur des mutules, ses pouces ensuite).
 	const std::tuple<const char *, const MonumentValue *, double, const char *> ornaments[] = {
 		{"regulaProjection", &e.regulaProjection, 20.859, "6.2, l. 273"},
 		{"regulaGuttaCount", &e.regulaGuttaCount, 6.0, "6.1, l. 254"},
@@ -1630,8 +1720,7 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_values_are_read_with_their
 		{"regulaGuttaGap", &e.regulaGuttaGap, 2.25, "6.1, l. 254"},
 		{"regulaGuttaTopProjection", &e.regulaGuttaTopProjection, 20.809, "6.2, l. 274"},
 		{"regulaGuttaFootProjection", &e.regulaGuttaFootProjection, 20.859, "6.2, l. 274"},
-		{"mutuleWidthFt", &e.mutuleWidthFt, 1.0, "6.4, l. 315"},
-		{"mutuleWidthIn", &e.mutuleWidthIn, 8.75, "6.4, l. 315"},
+		{"mutuleWidth", &e.mutuleWidth, 1.0, "6.4, l. 315"},
 		{"mutuleDepth", &e.mutuleDepth, 15.876, "6.4, l. 316"},
 	};
 	for (const auto &[key, v, written, place] : ornaments)
@@ -1709,14 +1798,12 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_values_are_read_with_their
 		EXPECT_EQ(document["entablatureControls"][key]["readme"].get<std::string>(), section + place);
 	}
 
-	// Fronton (l. 608, 610, 611, 616) : six valeurs telles qu'ecrites, avec leur statut et leur lieu ; la sima est
-	// manquante, sans valeur ni source.
+	// Fronton (l. 608, 610, 611, 616) : valeurs telles qu'ecrites (pieds des cotes "ft+in", leurs pouces ensuite),
+	// avec leur statut et leur lieu ; la sima est manquante, sans valeur ni source.
 	const MonumentPediment &f = d.pediment;
 	const std::tuple<const char *, const MonumentValue *, double, MonumentStatus, const char *> pediment[] = {
-		{"apexRiseFt", &f.apexRiseFt, 5.0, lu, "9, l. 608"},
-		{"apexRiseIn", &f.apexRiseIn, 9.75, lu, "9, l. 608"},
-		{"rakingProjectionFt", &f.rakingProjectionFt, 1.0, lu, "9, l. 611"},
-		{"rakingProjectionIn", &f.rakingProjectionIn, 8.85, lu, "9, l. 611"},
+		{"apexRise", &f.apexRise, 5.0, lu, "9, l. 608"},
+		{"rakingProjection", &f.rakingProjection, 1.0, lu, "9, l. 611"},
 		{"tympanumFace", &f.tympanumFace, 18.125, deduit, "9, l. 611"},
 	};
 	for (const auto &[key, v, written, status, place] : pediment)
@@ -1813,9 +1900,9 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_controls_of_the_readme_rec
 	const MonumentEntablature &e = d.entablature;
 	const MonumentEntablatureControls &c = d.entablatureControls;
 	const GreekEntablatureSettings s = MonumentEntablatureSettings(d);
-	const double architrave = FeetAndInches(e.architraveHeightFt, e.architraveHeightIn);
-	const double frieze = FeetAndInches(e.friezeHeightFt, e.friezeHeightIn);
-	const double cornice = FeetAndInches(e.corniceHeightFt, e.corniceHeightIn);
+	const double architrave = Length(e.architraveHeight);
+	const double frieze = Length(e.friezeHeight);
+	const double cornice = Length(e.corniceHeight);
 
 	// Sommes ecrites par le README, egales en pouces : a kDecimalSumTolerance.
 	// Architrave (l. 251-255) : face lisse, gouttes, regula, tenia = 2 ft 8,9 in.
@@ -1834,7 +1921,7 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_controls_of_the_readme_rec
 	double divisions = 0.0;
 	for (const double v : e.triglyphDivisions.values)
 		divisions += MonumentMetres(v, e.triglyphDivisions.unit, "division");
-	EXPECT_NEAR(divisions, FeetAndInches(e.triglyphWidthFt, e.triglyphWidthIn), kDecimalSumTolerance);
+	EXPECT_NEAR(divisions, Length(e.triglyphWidth), kDecimalSumTolerance);
 	EXPECT_NEAR(divisions, Metres(c.triglyphDivisionSum), kDecimalSumTolerance);
 	// Ressaut de la metope (l. 278) : face du triglyphe moins nu des metopes = 2,8 in ; pas au bit
 	// pres, 19,259 - 16,459 valant 2,8000000000000007 en double.
@@ -1874,7 +1961,7 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_controls_of_the_readme_rec
 	// imprimes a trois decimales du pouce) : reste de la largeur de la regula, celle du triglyphe (20,3 in),
 	// apres six diametres et cinq vides ; marge de chaque bout, la moitie ; nombre.
 	const double guttae = Value(e.regulaGuttaCount);
-	const double shortfall = FeetAndInches(e.triglyphWidthFt, e.triglyphWidthIn) -
+	const double shortfall = Length(e.triglyphWidth) -
 	                         (guttae * Length(e.regulaGuttaDiameter) + (guttae - 1.0) * Length(e.regulaGuttaGap));
 	EXPECT_NEAR(shortfall, Metres(c.regulaGuttaShortfall), kInchHalfUnit);
 	EXPECT_NEAR(shortfall / 2.0, Metres(c.regulaGuttaMargin), kInchHalfUnit);
@@ -1893,7 +1980,7 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_controls_of_the_readme_rec
 	const double gap0 = Length(e.mutuleGuttaFrontGap), gap1 = Length(e.mutuleGuttaRearGap);
 	EXPECT_NEAR(head0 + gap0 + 0.5 * head1, Metres(c.mutuleGuttaMiddleAxis), kInchHalfUnit);
 	EXPECT_NEAR(head0 + gap0 + head1 + gap1 + 0.5 * head2, Metres(c.mutuleGuttaRearAxis), kInchHalfUnit);
-	EXPECT_NEAR((FeetAndInches(e.mutuleWidthFt, e.mutuleWidthIn) - 2.0 * Length(e.mutuleGuttaEdgeAxis)) /
+	EXPECT_NEAR((Length(e.mutuleWidth) - 2.0 * Length(e.mutuleGuttaEdgeAxis)) /
 	                c.mutuleGuttaPitchCount.value,
 	            Metres(c.mutuleGuttaPitch), kInchHalfUnit);
 	EXPECT_NEAR(Length(e.mutuleDepth) - (head0 + gap0 + head1 + gap1 + head2), Metres(c.mutuleRearMargin), kInchHalfUnit);
@@ -1916,7 +2003,7 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_controls_of_the_readme_rec
 	// Fronton (l. 608 a 611, 616), recalcule depuis les valeurs lues. Hauteur (l. 608) : 5 ft 9,75 in contre 1,772 m.
 	const MonumentPediment &f = d.pediment;
 	const MonumentPedimentControls &fc = d.pedimentControls;
-	EXPECT_NEAR(FeetAndInches(f.apexRiseFt, f.apexRiseIn), Metres(fc.apexRise), kPrintedHalfUnit);
+	EXPECT_NEAR(Length(f.apexRise), Metres(fc.apexRise), kPrintedHalfUnit);
 	// Hauteurs des membres (l. 610) : leur somme est le total ecrit, 7,70 in, et la hauteur maximale du polygone de la
 	// l. 611 ; 0,196 m a la demi-unite.
 	const MonumentPolygon &section = f.rakingSection;
@@ -1950,14 +2037,14 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_controls_of_the_readme_rec
 	// Saillies (l. 611) : u maximal = listel 20,85 in = 1 ft 8,85 in = 0,530 m ; larmier 19,36 in et filet du bas
 	// 0,85 in sont des saillies du polygone.
 	EXPECT_NEAR(uMax, Metres(fc.rakingListelProjection), kDecimalSumTolerance);
-	EXPECT_NEAR(uMax, FeetAndInches(f.rakingProjectionFt, f.rakingProjectionIn), kDecimalSumTolerance);
+	EXPECT_NEAR(uMax, Length(f.rakingProjection), kDecimalSumTolerance);
 	EXPECT_NEAR(uMax, Metres(fc.rakingProjection), kPrintedHalfUnit);
 	EXPECT_TRUE(amongU(Metres(fc.rakingCoronaProjection)));
 	EXPECT_TRUE(amongU(Metres(fc.rakingBottomFilletProjection)));
 	// Nu du tympan (l. 611) : couronnement de la corniche horizontale (l. 284, 38,975 in) moins la saillie, 18,125 in ;
 	// 0,460 m a la demi-unite ; ecart des larmiers 18,125 + 19,36 - 37,375 = 0,11 in, a la demi-unite du centieme.
 	const double tympanum = Length(f.tympanumFace);
-	EXPECT_NEAR(Length(e.crownProjection) - FeetAndInches(f.rakingProjectionFt, f.rakingProjectionIn), tympanum,
+	EXPECT_NEAR(Length(e.crownProjection) - Length(f.rakingProjection), tympanum,
 	            kDecimalSumTolerance);
 	EXPECT_NEAR(tympanum, Metres(fc.tympanumFaceM), kPrintedHalfUnit);
 	EXPECT_NEAR(tympanum + Metres(fc.rakingCoronaProjection) - Length(e.coronaProjection), Metres(fc.rakingCoronaGap),
@@ -2038,14 +2125,14 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_settings_of_the_readme_are
 	// (une contraction FMA peut fusionner un produit avec l'addition, ici ou dans la bibliotheque).
 	EXPECT_NEAR(s.bands[1].height, Length(e.regulaHeight) + Length(e.guttaeHeight), 1e-12);
 	EXPECT_NEAR(s.bands[3].height,
-	            FeetAndInches(e.friezeHeightFt, e.friezeHeightIn) - Length(e.triglyphCapitalHeight), 1e-12);
+	            Length(e.friezeHeight) - Length(e.triglyphCapitalHeight), 1e-12);
 	double total = 0.0;
 	for (const EntablatureBand &band : s.bands)
 		total += band.height;
 	EXPECT_NEAR(total,
-	            FeetAndInches(e.architraveHeightFt, e.architraveHeightIn) +
-	                FeetAndInches(e.friezeHeightFt, e.friezeHeightIn) +
-	                FeetAndInches(e.corniceHeightFt, e.corniceHeightIn),
+	            Length(e.architraveHeight) +
+	                Length(e.friezeHeight) +
+	                Length(e.corniceHeight),
 	            1e-12);
 	EXPECT_EQ(s.friezeBand, 3);
 	EXPECT_LT(s.bands[0].topProjection, s.bands[0].projection);   // face lisse inclinee vers l'axe (l. 271)
@@ -2054,7 +2141,7 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_settings_of_the_readme_are
 	// Triglyphe : largeur en pieds et pouces, face, divisions lues, profondeurs par l'angle droit (EN11).
 	const GreekTriglyphSettings &t = s.triglyph;
 	const MonumentDivisions &dv = e.triglyphDivisions;
-	EXPECT_EQ(t.width, FeetAndInches(e.triglyphWidthFt, e.triglyphWidthIn));
+	EXPECT_EQ(t.width, Length(e.triglyphWidth));
 	EXPECT_EQ(t.face, Length(e.triglyphFace));
 	ASSERT_EQ(t.divisionWidths.size(), 7u);
 	for (std::size_t i = 0; i < t.divisionWidths.size(); ++i)
@@ -2139,7 +2226,7 @@ TEST(TEST_cgarchi_classical_monument, the_temple_of_the_readme_has_a_corner_trig
 	EXPECT_EQ(cornerPieces, 4u);
 	EXPECT_EQ(static_cast<double>(metopeCount), c.metopeCount.value);
 	// Metope lue (l. 293) : a MO1 de la metope courante de flanc, hors de MO1 en facade (l. 294).
-	const double readMetope = FeetAndInches(e.metopeWidthFt, e.metopeWidthIn);
+	const double readMetope = Length(e.metopeWidth);
 	EXPECT_LE(std::fabs(flankCurrent - readMetope), kReadMetopeTolerance);
 	EXPECT_GT(std::fabs(frontCurrent - readMetope), kReadMetopeTolerance);
 	RecordProperty("flank_read_metope_gap_mm", std::to_string(1e3 * (flankCurrent - readMetope)));
@@ -2400,7 +2487,7 @@ TEST(TEST_cgarchi_classical_monument, the_temple_of_the_readme_has_regulae_gutta
 	// absente) : l'anneau monte du listel au dos par un ressaut ; vias courantes n/4 - largeur, sans confrontation
 	// a la via lue (B15) ; degagement d'angle contre le plan des dos du cote voisin.
 	const double width = s.mutules->width, back = s.bands[mb].projection;
-	EXPECT_EQ(width, FeetAndInches(e.mutuleWidthFt, e.mutuleWidthIn));
+	EXPECT_EQ(width, Length(e.mutuleWidth));
 	EXPECT_NEAR(back, 0.5186828603, 1e-9);
 	for (const OrnamentPiece &m : o.mutules)
 	{
@@ -2723,8 +2810,31 @@ TEST(TEST_cgarchi_classical_monument, the_temple_of_the_readme_has_regulae_gutta
 	}
 	EXPECT_EQ(refusal.rfind("Entablement : 'mutules.width'", 0), 0u) << refusal;
 
-	// Le dos des mutules se calcule en pouces : la face de la plaque ou la profondeur dans une autre unite, ou
-	// une profondeur manquante, sont refusees, cle nommee (contrat de MonumentEntablatureSettings).
+	// Dos et montee des mutules (registre section 10.14) : deux valeurs en pouces se calculent en pouces, converties
+	// en dernier ; d'unites differentes, chacune en metres d'abord. Le resultat reste celui des pouces a 1e-12 m pres
+	// (deux arrondis de plus), jamais au bit pres. Les deux en millimetres : calcul en millimetres, meme tolerance.
+	const auto expressedIn = [](MonumentValue &v, MonumentUnit unit, double perInch) {
+		v.value = *v.value * perInch;
+		v.unit = unit;
+	};
+	for (const auto &[plateUnit, plateFactor, depthUnit, depthFactor] :
+	     {std::make_tuple(MonumentUnit::Metre, kMonumentInch, MonumentUnit::Inch, 1.0),
+	      std::make_tuple(MonumentUnit::Inch, 1.0, MonumentUnit::Metre, kMonumentInch),
+	      std::make_tuple(MonumentUnit::Millimetre, 25.4, MonumentUnit::Millimetre, 25.4),
+	      std::make_tuple(MonumentUnit::Millimetre, 25.4, MonumentUnit::Foot, 1.0 / 12.0)})
+	{
+		SCOPED_TRACE(static_cast<int>(plateUnit) * 10 + static_cast<int>(depthUnit));
+		MonumentData mixed = d;
+		expressedIn(mixed.entablature.mutulePlateProjection, plateUnit, plateFactor);
+		expressedIn(mixed.entablature.mutuleDepth, depthUnit, depthFactor);
+		GreekEntablatureSettings converted;
+		ASSERT_NO_THROW(converted = MonumentEntablatureSettings(mixed));
+		EXPECT_NEAR(converted.bands[6].projection, s.bands[6].projection, 1e-12);
+		ASSERT_TRUE(converted.mutules && s.mutules);
+		EXPECT_NEAR(converted.mutules->rise, s.mutules->rise, 1e-12);
+	}
+
+	// Une profondeur manquante, ou une profondeur sans dimension, sont refusees, cle nommee.
 	auto conversionRefusal = [&](const std::function<void (MonumentEntablature &)> &edit) {
 		MonumentData changed = d;
 		edit(changed.entablature);
@@ -2738,12 +2848,9 @@ TEST(TEST_cgarchi_classical_monument, the_temple_of_the_readme_has_regulae_gutta
 		}
 		return std::string();
 	};
-	const std::string plateInMetres =
-		conversionRefusal([](MonumentEntablature &m) { m.mutulePlateProjection.unit = MonumentUnit::Metre; });
-	EXPECT_NE(plateInMetres.find("'entablature.mutulePlateProjection'"), std::string::npos) << plateInMetres;
-	const std::string depthInMetres =
-		conversionRefusal([](MonumentEntablature &m) { m.mutuleDepth.unit = MonumentUnit::Metre; });
-	EXPECT_NE(depthInMetres.find("'entablature.mutuleDepth'"), std::string::npos) << depthInMetres;
+	const std::string depthWithoutDimension =
+		conversionRefusal([](MonumentEntablature &m) { m.mutuleDepth.unit = MonumentUnit::One; });
+	EXPECT_NE(depthWithoutDimension.find("'entablature.mutuleDepth'"), std::string::npos) << depthWithoutDimension;
 	const std::string depthMissing = conversionRefusal([](MonumentEntablature &m) {
 		m.mutuleDepth.value.reset();
 		m.mutuleDepth.status = MonumentStatus::Missing;
@@ -3159,10 +3266,10 @@ TEST(TEST_cgarchi_classical_monument, the_pediments_of_the_readme_rest_on_their_
 	uneven.pediment.rakingSection.h.pop_back();
 	EXPECT_EQ(refusalOf(uneven).rfind("Monument : 'pediment.rakingSection'", 0), 0u) << refusalOf(uneven);
 	MonumentData noHeight = d;
-	noHeight.pediment.apexRiseIn.value.reset();
-	noHeight.pediment.apexRiseIn.status = MonumentStatus::Missing;
-	noHeight.pediment.apexRiseIn.sources.clear();
-	EXPECT_NE(refusalOf(noHeight).find("'pediment.apexRiseIn'"), std::string::npos) << refusalOf(noHeight);
+	noHeight.pediment.apexRise.value.reset();
+	noHeight.pediment.apexRise.status = MonumentStatus::Missing;
+	noHeight.pediment.apexRise.sources.clear();
+	EXPECT_NE(refusalOf(noHeight).find("'pediment.apexRise'"), std::string::npos) << refusalOf(noHeight);
 	EXPECT_EQ(refusalOf(d), "");
 }
 
@@ -3322,7 +3429,7 @@ TEST(TEST_cgarchi_classical_monument, the_consumed_keys_of_each_part_are_exactly
 	const MonumentData &heph = HephaistosMonument();
 	std::map<MonumentPart, std::vector<double>> reference;
 	std::set<std::string> consumed;
-	const std::array<std::size_t, 5> counts = {10u, 6u, 21u, 48u, 5u};
+	const std::array<std::size_t, 5> counts = {10u, 6u, 21u, 45u, 4u};
 	for (MonumentPart part : kParts)
 	{
 		// Bloc absent : toutes les cles consommees manquent.
@@ -3358,10 +3465,10 @@ TEST(TEST_cgarchi_classical_monument, the_consumed_keys_of_each_part_are_exactly
 				EXPECT_TRUE(ConvertedPart(d, part) == reference[part]);
 		}
 	}
-	// 90 cles consommees moins la suite et le polygone ; non listees et renseignees : cornerMargin, 7 de
-	// l'entablement, 2 du fronton.
-	EXPECT_EQ(listed, 88);
-	EXPECT_EQ(unlisted, 10);
+	// 86 cles consommees moins la suite et le polygone ; non listees et renseignees : cornerMargin, 4 de
+	// l'entablement, 1 du fronton.
+	EXPECT_EQ(listed, 84);
+	EXPECT_EQ(unlisted, 6);
 
 	// Suite et polygone, jamais manquants au document : rendus manquants dans le C++.
 	MonumentData noDivisions = heph;
@@ -3497,12 +3604,12 @@ TEST(TEST_cgarchi_classical_monument, the_monument_build_is_the_temple_mesh_or_i
 	            noTympanum.mesh->GetNFaces(), noDrip.mesh->GetNFaces());
 }
 
-// P4 (revue des lots B) : le document d'Ares, a blocs absents, respecte le schema v9 ; dependentRequired lie
+// P4 (revue des lots B) : le document d'Ares, a blocs absents, respecte le schema v10 ; dependentRequired lie
 // chaque bloc de controle a sa partie, et le lecteur refuse ce que le schema refuse.
 TEST(TEST_cgarchi_classical_monument, the_ares_document_conforms_to_the_schema_file_and_its_block_dependencies)
 {
 	const json schema = SchemaFile();
-	ASSERT_TRUE(schema.is_object()) << "src/cgarchi/schemas/monument-v9.schema illisible depuis le repertoire courant";
+	ASSERT_TRUE(schema.is_object()) << "src/cgarchi/schemas/monument-v10.schema illisible depuis le repertoire courant";
 	const std::string_view text = cgarchi::TempleAresJson();
 	const json ares = json::parse(text.begin(), text.end());
 	EXPECT_EQ(Violation(ares, schema, schema, std::string()), "");
@@ -3592,4 +3699,87 @@ TEST(TEST_cgarchi_classical_monument, the_temple_of_ares_builds_its_krepis_and_v
 	EXPECT_EQ(ReportOf(none, MonumentPart::Krepis).missingKeys, std::vector<std::string>{"krepis.stylobateHeight"});
 	EXPECT_EQ(ReportOf(none, MonumentPart::Peristyle).state, MonumentPartState::Blocked);
 	EXPECT_TRUE(ReportOf(none, MonumentPart::Peristyle).blockedBy == std::optional<MonumentPart>(MonumentPart::Krepis));
+}
+
+// Le document du Parthenon, a blocs absents et cotes en pieds decimaux, respecte le schema v10.
+TEST(TEST_cgarchi_classical_monument, the_parthenon_document_conforms_to_the_schema_file)
+{
+	const json schema = SchemaFile();
+	ASSERT_TRUE(schema.is_object()) << "src/cgarchi/schemas/monument-v10.schema illisible depuis le repertoire courant";
+	const std::string_view text = cgarchi::TempleParthenonJson();
+	const json parthenon = json::parse(text.begin(), text.end());
+	EXPECT_EQ(Violation(parthenon, schema, schema, std::string()), "");
+	EXPECT_EQ(RefusalOf(parthenon.dump()), "");
+	EXPECT_EQ(parthenon["krepis"]["stylobateWidth"]["unit"], "ft");
+	EXPECT_EQ(parthenon["krepis"]["cornerMargin"]["unit"], "m");
+}
+
+// Le Parthenon, krepis seule : cotes de Penrose en pieds decimaux (README sections 3.2 et 4.1), emprise de
+// l'euthynteria de la section 12, axes du peristyle de la section 4.2 au millimetre imprime.
+TEST(TEST_cgarchi_classical_monument, the_parthenon_builds_its_krepis_and_validates_its_peristyle)
+{
+	const MonumentData &parthenon = EmbeddedMonument("temple-parthenon");
+	EXPECT_EQ(parthenon.monument, "temple-parthenon");
+	EXPECT_EQ(parthenon.source.derivedBy, "src/cgarchi/data/temple_parthenon_from_readme.py");
+	EXPECT_TRUE(parthenon.present.krepis && parthenon.present.peristyle && parthenon.present.controls &&
+	            parthenon.present.krepisControls);
+	EXPECT_FALSE(parthenon.present.columns || parthenon.present.entablature || parthenon.present.pediment);
+
+	const MonumentBuild b = BuildMonumentMesh(parthenon);
+	ASSERT_TRUE(b.mesh);
+	EXPECT_EQ(b.mesh->GetNVertices(), 64);
+	EXPECT_EQ(b.mesh->GetNFaces(), 48u);
+	EXPECT_EQ(b.parts.size(), 4u);
+	EXPECT_EQ(ReportOf(b, MonumentPart::Krepis).state, MonumentPartState::Built);
+	EXPECT_EQ(ReportOf(b, MonumentPart::Peristyle).state, MonumentPartState::CompleteNotBuilt);
+	for (MonumentPart part : {MonumentPart::Columns, MonumentPart::Entablature, MonumentPart::Pediment})
+		EXPECT_EQ(ReportOf(b, part).state, MonumentPartState::Absent) << static_cast<int>(part);
+
+	const std::vector<float> &v = b.mesh->GetVertices();
+	double lo[3] = {1e30, 1e30, 1e30}, hi[3] = {-1e30, -1e30, -1e30};
+	for (std::size_t i = 0; i < v.size(); ++i)
+	{
+		lo[i % 3] = std::min(lo[i % 3], double(v[i]));
+		hi[i % 3] = std::max(hi[i % 3], double(v[i]));
+	}
+	// Emprise et hauteur en pieds de [P] (stylobate + 2 x (2 x 2,325 + 0,335) ; 1,814 + 2 x 1,693 + 0,858), a la
+	// precision des sommets en float ; puis aux metres imprimes du README, une demi-unite par terme arrondi
+	// (stylobate et deux fois la saillie totale : trois).
+	constexpr double kFloatVertexTolerance = 1e-5;
+	EXPECT_NEAR(hi[0] - lo[0], 111.311 * kMonumentFoot, kFloatVertexTolerance);
+	EXPECT_NEAR(hi[1] - lo[1], 238.111 * kMonumentFoot, kFloatVertexTolerance);
+	EXPECT_NEAR(hi[2] - lo[2], 6.058 * kMonumentFoot, kFloatVertexTolerance);
+	EXPECT_NEAR(hi[0] - lo[0], 30.889 + 2.0 * 1.519, 3.0 * kPrintedHalfUnit);
+	EXPECT_NEAR(hi[1] - lo[1], 69.537 + 2.0 * 1.519, 3.0 * kPrintedHalfUnit);
+	EXPECT_NEAR(hi[2] - lo[2], 1.846, kPrintedHalfUnit);
+	EXPECT_NEAR(hi[0] - lo[0], parthenon.krepisControls.footprintWidth, kPrintedHalfUnit);
+	EXPECT_NEAR(hi[1] - lo[1], parthenon.krepisControls.footprintLength, kPrintedHalfUnit);
+
+	// Axes : facade (Y = -halfDepth) le long de X, aux y du README ; flanc droit (X = +halfWidth) aux -x.
+	const PeristyleLayout layout = LayoutPeristyle(MonumentPeristyleSettings(parthenon));
+	ASSERT_EQ(layout.columns.size(), 46u);
+	EXPECT_EQ(layout.front, 8);
+	EXPECT_EQ(layout.flank, 17);
+	const double kAxisTolerance = 1e-12 * layout.halfDepth;
+	std::vector<double> frontX, rightY, minusX;
+	for (const PeristyleColumn &c : layout.columns)
+	{
+		if (std::abs(c.y + layout.halfDepth) <= kAxisTolerance)
+			frontX.push_back(c.x);
+		if (std::abs(c.x - layout.halfWidth) <= kAxisTolerance)
+			rightY.push_back(c.y);
+	}
+	for (double x : parthenon.controls.flankAxesX)
+		minusX.push_back(-x);
+	std::sort(frontX.begin(), frontX.end());
+	std::sort(rightY.begin(), rightY.end());
+	std::sort(minusX.begin(), minusX.end());
+	ASSERT_EQ(frontX.size(), 8u);
+	ASSERT_EQ(frontX.size(), parthenon.controls.frontAxesY.size());
+	ASSERT_EQ(rightY.size(), 17u);
+	ASSERT_EQ(rightY.size(), minusX.size());
+	for (std::size_t i = 0; i < frontX.size(); ++i)
+		EXPECT_NEAR(frontX[i], parthenon.controls.frontAxesY[i], kPrintedHalfUnit) << i;
+	for (std::size_t i = 0; i < rightY.size(); ++i)
+		EXPECT_NEAR(rightY[i], minusX[i], kPrintedHalfUnit) << i;
 }

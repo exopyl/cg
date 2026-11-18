@@ -1,4 +1,4 @@
-// Document du monument "monument/v9" : lecteur strict a exception, documents
+// Document du monument "monument/v10" : lecteur strict a exception, documents
 // embarques, conversion vers les reglages du temple et mode partiel.
 #include <cgarchi/classical_monument.h>
 
@@ -42,7 +42,7 @@ namespace
 	constexpr const char *kStatusNames[] = {"lu", "d\303\251duit", "mesur\303\251", "convention", "manquant"};
 
 	// Unites du document, dans l'ordre de MonumentUnit, en octets UTF-8 (degre).
-	constexpr const char *kUnitNames[] = {"m", "in", "mm", "1", "ft", "\302\260", "ratio"};
+	constexpr const char *kUnitNames[] = {"m", "in", "mm", "1", "ft", "ft+in", "\302\260", "ratio"};
 	static_assert(std::size(kUnitNames) == static_cast<std::size_t>(MonumentUnit::Ratio) + 1,
 	              "un nom par MonumentUnit, dans l'ordre");
 
@@ -70,8 +70,8 @@ namespace
 	constexpr SeriesWords kRakingWords = {kRakingMemberNames, static_cast<int>(std::size(kRakingMemberNames)), "height",
 	                                      "raking member", "a raking height series"};
 
-	// Feet : pieds d'une cote en pieds et pouces, cle "<nom>Ft" ; Angle : en degres ; Ratio : rapport "1 : r".
-	enum class Quantity { Length, Count, Feet, Angle, Ratio };
+	// Angle : en degres ; Ratio : rapport "1 : r".
+	enum class Quantity { Length, Count, Angle, Ratio };
 
 	// Lecteur strict commun ; chaque refus est garde, puis leve en une fois.
 	class Reader final : public json_reader::StrictReader
@@ -129,14 +129,16 @@ namespace
 			r.Error(json_reader::Join(path, "readme"), "empty place");
 	}
 
-	// `unit` : une des sept ; "1" pour un compte et lui seul, "ft" pour des pieds et eux seuls, "°" pour un
-	// angle et lui seul, "ratio" pour un rapport et lui seul.
-	bool ReadUnit (Reader &r, const json &obj, const std::string &path, Quantity quantity, MonumentUnit &out)
+	// `unit` : une des huit ; "1" pour un compte et lui seul, "°" pour un angle et lui seul, "ratio" pour un
+	// rapport et lui seul ; "ft+in" pour une longueur dont `pairAllowed` admet la cote a deux nombres (une valeur,
+	// et non une suite, un polygone, un controle ou un profil).
+	bool ReadUnit (Reader &r, const json &obj, const std::string &path, Quantity quantity, MonumentUnit &out,
+	               bool pairAllowed = false)
 	{
 		int unit = -1;
 		if (!r.Enum(obj, path, "unit",
 		            {kUnitNames[0], kUnitNames[1], kUnitNames[2], kUnitNames[3], kUnitNames[4], kUnitNames[5],
-		             kUnitNames[6]},
+		             kUnitNames[6], kUnitNames[7]},
 		            unit))
 			return false;
 		out = static_cast<MonumentUnit>(unit);
@@ -146,20 +148,14 @@ namespace
 			                                             kUnitNames[unit] + "\"");
 			return false;
 		}
-		if (quantity == Quantity::Feet && out != MonumentUnit::Foot)
-		{
-			r.Error(json_reader::Join(path, "unit"), std::string("a feet value requires unit \"ft\", not \"") +
-			                                             kUnitNames[unit] + "\"");
-			return false;
-		}
 		if (quantity == Quantity::Length && out == MonumentUnit::One)
 		{
 			r.Error(json_reader::Join(path, "unit"), "unit \"1\" on a length");
 			return false;
 		}
-		if (quantity == Quantity::Length && out == MonumentUnit::Foot)
+		if (quantity == Quantity::Length && out == MonumentUnit::FootInch && !pairAllowed)
 		{
-			r.Error(json_reader::Join(path, "unit"), "unit \"ft\" outside a feet key");
+			r.Error(json_reader::Join(path, "unit"), "unit \"ft+in\" outside a length value");
 			return false;
 		}
 		if (quantity == Quantity::Length && out == MonumentUnit::Degree)
@@ -241,7 +237,7 @@ namespace
 			const std::string path = json_reader::Join(parent, key);
 			m_r.Known(*v, path, {"value", "unit", "status", "sources", "readme"});
 			m_r.Require(*v, path, {"unit", "status", "sources", "readme"});
-			ReadUnit(m_r, *v, path, quantity, out.unit);
+			const bool hasUnit = ReadUnit(m_r, *v, path, quantity, out.unit, true);
 
 			const bool hasStatus = ReadStatus(m_r, *v, path, out.status);
 			ReadPlace(m_r, *v, path, out.readme);
@@ -264,7 +260,9 @@ namespace
 			}
 			if (!value)
 				return;
-			if (quantity == Quantity::Count || quantity == Quantity::Feet)
+			if (hasUnit && out.unit == MonumentUnit::FootInch)
+				FeetAndInches(*value, json_reader::Join(path, "value"), out);
+			else if (quantity == Quantity::Count)
 			{
 				int n = 0;
 				if (m_r.Integer(*v, path, "value", 1, kCountMax, n))
@@ -391,6 +389,53 @@ namespace
 		const std::set<std::string> &Cited () const { return m_cited; }
 
 	private:
+		// Cote "ft+in" (regle R6 du script) : [pieds, pouces], pieds entiers de [1, kCountMax], pouces finis >= 0.
+		void FeetAndInches (const json &pair, const std::string &valuePath, MonumentValue &out)
+		{
+			if (!pair.is_array())
+			{
+				m_r.TypeError(valuePath, "an array [feet, inches]", pair);
+				return;
+			}
+			if (pair.size() != 2)
+			{
+				m_r.Error(valuePath, "expected [feet, inches], not " + std::to_string(pair.size()) + " element(s)");
+				return;
+			}
+			bool ok = true;
+			const json &feet = pair[0], &inches = pair[1];
+			const std::string feetPath = json_reader::Indexed(valuePath, 0);
+			const std::string inchesPath = json_reader::Indexed(valuePath, 1);
+			const double ft = feet.is_number() ? feet.get<double>() : 0.0;
+			if (!feet.is_number() || !std::isfinite(ft) || std::floor(ft) != ft)
+			{
+				m_r.TypeError(feetPath, "an integer", feet);
+				ok = false;
+			}
+			else if (ft < 1.0 || ft > kCountMax)
+			{
+				m_r.Error(feetPath, json_reader::NumberText(ft, kNumberPrecision) + " outside [1, " +
+				                        std::to_string(kCountMax) + "]");
+				ok = false;
+			}
+			const double in = inches.is_number() ? inches.get<double>() : 0.0;
+			if (!inches.is_number())
+			{
+				m_r.TypeError(inchesPath, "a number", inches);
+				ok = false;
+			}
+			else if (!(std::isfinite(in) && in >= 0.0))
+			{
+				m_r.Error(inchesPath, json_reader::NumberText(in, kNumberPrecision) + " outside " +
+				                          json_reader::AtLeast(0.0).Text(kNumberPrecision));
+				ok = false;
+			}
+			if (!ok)
+				return;
+			out.value = ft;
+			out.inches = in;
+		}
+
 		// "lu" et "mesure" citent une source au moins ; "manquant" n'en cite aucune.
 		void CheckSources (const std::string &path, MonumentStatus status, const std::vector<std::string> &sources)
 		{
@@ -712,37 +757,28 @@ namespace
 		{
 			const std::string p = "entablature";
 			r.Known(*e, p,
-			        {"architraveHeightFt", "architraveHeightIn", "taeniaHeight", "regulaHeight", "guttaeHeight",
-			         "architraveFaceHeight", "friezeHeightFt", "friezeHeightIn", "triglyphCapitalHeight",
-			         "corniceHeightFt", "corniceHeightIn", "mutulePlateHeight", "dripHeight", "coronaHeight",
-			         "filletHeight", "crownHeight", "architraveTopProjection", "architraveFootProjection",
+			        {"architraveHeight", "taeniaHeight", "regulaHeight", "guttaeHeight", "architraveFaceHeight",
+			         "friezeHeight", "triglyphCapitalHeight", "corniceHeight", "mutulePlateHeight", "dripHeight",
+			         "coronaHeight", "filletHeight", "crownHeight", "architraveTopProjection", "architraveFootProjection",
 			         "taeniaProjection", "triglyphFace", "triglyphCapitalBandProjection",
 			         "triglyphCapitalListelProjection", "triglyphCapitalListelHeight", "triglyphCapitalBandHeight",
 			         "metopeFace", "mutulePlateProjection", "dripProjection", "coronaProjection", "filletProjection",
-			         "crownProjection", "innerFace", "triglyphWidthFt", "triglyphWidthIn", "metopeWidthFt",
-			         "metopeWidthIn", "triglyphDivisions", "channelDepth", "regulaProjection", "regulaGuttaCount",
-			         "regulaGuttaDiameter", "regulaGuttaGap", "regulaGuttaTopProjection", "regulaGuttaFootProjection",
-			         "mutuleWidthFt", "mutuleWidthIn", "mutuleDepth", "soffitSlope", "mutuleGuttaFrontDiameter",
-			         "mutuleGuttaMiddleDiameter", "mutuleGuttaRearDiameter", "mutuleGuttaFrontGap", "mutuleGuttaRearGap",
-			         "mutuleGuttaHeight", "mutuleGuttaEdgeAxis", "mutuleGuttaPerRow", "mutuleGuttaFootFlare"});
+			         "crownProjection", "innerFace", "triglyphWidth", "metopeWidth", "triglyphDivisions", "channelDepth",
+			         "regulaProjection", "regulaGuttaCount", "regulaGuttaDiameter", "regulaGuttaGap",
+			         "regulaGuttaTopProjection", "regulaGuttaFootProjection", "mutuleWidth", "mutuleDepth", "soffitSlope",
+			         "mutuleGuttaFrontDiameter", "mutuleGuttaMiddleDiameter", "mutuleGuttaRearDiameter",
+			         "mutuleGuttaFrontGap", "mutuleGuttaRearGap", "mutuleGuttaHeight", "mutuleGuttaEdgeAxis",
+			         "mutuleGuttaPerRow", "mutuleGuttaFootFlare"});
 			MonumentEntablature &m = data.entablature;
-			const std::pair<const char *, MonumentValue *> feet[] = {
-				{"architraveHeightFt", &m.architraveHeightFt},
-				{"friezeHeightFt", &m.friezeHeightFt},
-				{"corniceHeightFt", &m.corniceHeightFt},
-				{"triglyphWidthFt", &m.triglyphWidthFt},
-				{"metopeWidthFt", &m.metopeWidthFt},
-				{"mutuleWidthFt", &m.mutuleWidthFt},
-			};
 			const std::pair<const char *, MonumentValue *> lengths[] = {
-				{"architraveHeightIn", &m.architraveHeightIn},
+				{"architraveHeight", &m.architraveHeight},
 				{"taeniaHeight", &m.taeniaHeight},
 				{"regulaHeight", &m.regulaHeight},
 				{"guttaeHeight", &m.guttaeHeight},
 				{"architraveFaceHeight", &m.architraveFaceHeight},
-				{"friezeHeightIn", &m.friezeHeightIn},
+				{"friezeHeight", &m.friezeHeight},
 				{"triglyphCapitalHeight", &m.triglyphCapitalHeight},
-				{"corniceHeightIn", &m.corniceHeightIn},
+				{"corniceHeight", &m.corniceHeight},
 				{"mutulePlateHeight", &m.mutulePlateHeight},
 				{"dripHeight", &m.dripHeight},
 				{"coronaHeight", &m.coronaHeight},
@@ -763,15 +799,15 @@ namespace
 				{"filletProjection", &m.filletProjection},
 				{"crownProjection", &m.crownProjection},
 				{"innerFace", &m.innerFace},
-				{"triglyphWidthIn", &m.triglyphWidthIn},
-				{"metopeWidthIn", &m.metopeWidthIn},
+				{"triglyphWidth", &m.triglyphWidth},
+				{"metopeWidth", &m.metopeWidth},
 				{"channelDepth", &m.channelDepth},
 				{"regulaProjection", &m.regulaProjection},
 				{"regulaGuttaDiameter", &m.regulaGuttaDiameter},
 				{"regulaGuttaGap", &m.regulaGuttaGap},
 				{"regulaGuttaTopProjection", &m.regulaGuttaTopProjection},
 				{"regulaGuttaFootProjection", &m.regulaGuttaFootProjection},
-				{"mutuleWidthIn", &m.mutuleWidthIn},
+				{"mutuleWidth", &m.mutuleWidth},
 				{"mutuleDepth", &m.mutuleDepth},
 				{"mutuleGuttaFrontDiameter", &m.mutuleGuttaFrontDiameter},
 				{"mutuleGuttaMiddleDiameter", &m.mutuleGuttaMiddleDiameter},
@@ -782,8 +818,6 @@ namespace
 				{"mutuleGuttaEdgeAxis", &m.mutuleGuttaEdgeAxis},
 				{"mutuleGuttaFootFlare", &m.mutuleGuttaFootFlare},
 			};
-			for (const auto &[key, value] : feet)
-				values.Value(*e, p, key, Quantity::Feet, *value);
 			for (const auto &[key, value] : lengths)
 				values.Value(*e, p, key, Quantity::Length, *value);
 			values.Value(*e, p, "regulaGuttaCount", Quantity::Count, m.regulaGuttaCount);
@@ -859,14 +893,12 @@ namespace
 		if (const json *f = OptionalBlock(r, doc, "pediment", data.present.pediment))
 		{
 			const std::string p = "pediment";
-			r.Known(*f, p, {"apexRiseFt", "apexRiseIn", "rakingRun", "rakingProjectionFt", "rakingProjectionIn",
-			                "tympanumFace", "rakingHeights", "rakingSection", "sima"});
+			r.Known(*f, p, {"apexRise", "rakingRun", "rakingProjection", "tympanumFace", "rakingHeights", "rakingSection",
+			                "sima"});
 			MonumentPediment &m = data.pediment;
-			values.Value(*f, p, "apexRiseFt", Quantity::Feet, m.apexRiseFt);
-			values.Value(*f, p, "apexRiseIn", Quantity::Length, m.apexRiseIn);
+			values.Value(*f, p, "apexRise", Quantity::Length, m.apexRise);
 			values.Value(*f, p, "rakingRun", Quantity::Ratio, m.rakingRun);
-			values.Value(*f, p, "rakingProjectionFt", Quantity::Feet, m.rakingProjectionFt);
-			values.Value(*f, p, "rakingProjectionIn", Quantity::Length, m.rakingProjectionIn);
+			values.Value(*f, p, "rakingProjection", Quantity::Length, m.rakingProjection);
 			values.Value(*f, p, "tympanumFace", Quantity::Length, m.tympanumFace);
 			values.RakingHeights(*f, p, "rakingHeights", m.rakingHeights);
 			values.Polygon(*f, p, "rakingSection", m.rakingSection);
@@ -940,14 +972,50 @@ namespace
 		return static_cast<int>(x);
 	}
 
-	// Valeur en pouces employee par une difference calculee en pouces : presente et
-	// d'unite "in", sinon refus nomme.
-	double RequiredInches (const MonumentValue &v, const char *key)
+	// Longueur employee par une conversion, dans son unite d'ecriture : `unit` recoit l'unite scalaire du nombre
+	// rendu. Une cote "ft+in" est rendue en pouces, pieds x 12 + pouces : le produit par 12 est exact pour des
+	// pieds entiers, si bien que la somme ne depend pas d'une contraction FMA. Refus de MonumentLength.
+	double WrittenLength (const MonumentValue &v, std::string_view key, MonumentUnit &unit)
 	{
 		const double x = Required(v, key);
-		if (v.unit != MonumentUnit::Inch)
-			throw std::invalid_argument(std::string("Monument : '") + key + "' n'est pas en pouces (unite \"in\" attendue)");
-		return x;
+		if (v.unit != MonumentUnit::FootInch)
+		{
+			MonumentMetres(1.0, v.unit, key);   // refus d'une unite qui n'est pas une longueur
+			unit = v.unit;
+			return x;
+		}
+		if (!(x >= 1.0 && x <= kCountMax && std::floor(x) == x))
+			throw std::invalid_argument("Monument : '" + std::string(key) +
+			                            "' n'est pas une cote en pieds et pouces : pieds non entiers ou < 1");
+		if (!(std::isfinite(v.inches) && v.inches >= 0.0))
+			throw std::invalid_argument("Monument : '" + std::string(key) +
+			                            "' n'est pas une cote en pieds et pouces : pouces non finis ou < 0");
+		unit = MonumentUnit::Inch;
+		return x * 12.0 + v.inches;
+	}
+
+	// Deux operandes d'un calcul de longueur (registre section 10.14) : de meme unite, chacun dans cette unite
+	// (pouces pour deux cotes "ft+in"), et le resultat du calcul se convertit en metres en dernier, une fois, par
+	// MonumentMetres (unit) ; d'unites differentes, chacun d'abord en metres, et unit vaut Metre.
+	struct CommonUnitOperands
+	{
+		double       a = 0.0, b = 0.0;
+		MonumentUnit unit = MonumentUnit::Metre;
+	};
+
+	CommonUnitOperands InCommonUnit (const MonumentValue &a, const char *keyA, const MonumentValue &b, const char *keyB)
+	{
+		CommonUnitOperands o;
+		MonumentUnit unitA = MonumentUnit::Metre, unitB = MonumentUnit::Metre;
+		o.a = WrittenLength(a, keyA, unitA);
+		o.b = WrittenLength(b, keyB, unitB);
+		o.unit = unitA;
+		if (a.unit == b.unit)
+			return o;
+		o.a = MonumentMetres(o.a, unitA, keyA);
+		o.b = MonumentMetres(o.b, unitB, keyB);
+		o.unit = MonumentUnit::Metre;
+		return o;
 	}
 
 	// Angle employe par une conversion : present et en degres, sinon refus nomme.
@@ -975,6 +1043,9 @@ double MonumentMetres (double value, MonumentUnit unit, std::string_view key)
 		throw std::invalid_argument("Monument : '" + std::string(key) + "' n'est pas une longueur (unite sans dimension)");
 	case MonumentUnit::Foot:
 		return value * kMonumentFoot;
+	case MonumentUnit::FootInch:
+		throw std::invalid_argument("Monument : '" + std::string(key) +
+		                            "' est une cote en pieds et pouces, deux nombres (MonumentLength)");
 	case MonumentUnit::Degree:
 		throw std::invalid_argument("Monument : '" + std::string(key) + "' n'est pas une longueur (angle en degres)");
 	case MonumentUnit::Ratio:
@@ -985,29 +1056,9 @@ double MonumentMetres (double value, MonumentUnit unit, std::string_view key)
 
 double MonumentLength (const MonumentValue &v, std::string_view key)
 {
-	// Des pieds seuls ne font pas une longueur du README : ils sont la moitie d'une cote en pieds et pouces.
-	if (v.unit == MonumentUnit::Foot)
-		throw std::invalid_argument("Monument : '" + std::string(key) +
-		                            "' est en pieds, partie d'une cote en pieds et pouces (MonumentFeetAndInches)");
-	return MonumentMetres(Required(v, key), v.unit, key);
-}
-
-double MonumentFeetAndInches (const MonumentValue &feet, const MonumentValue &inches, std::string_view key)
-{
-	const std::string feetKey = std::string(key) + "Ft";
-	const std::string inchesKey = std::string(key) + "In";
-	const double ft = Required(feet, feetKey);
-	const double in = Required(inches, inchesKey);
-	if (feet.unit != MonumentUnit::Foot)
-		throw std::invalid_argument("Monument : '" + feetKey + "' n'est pas en pieds (unite \"ft\" attendue)");
-	if (!(ft >= 1.0 && ft <= kCountMax && std::floor(ft) == ft))
-		throw std::invalid_argument("Monument : '" + feetKey + "' n'est pas un nombre entier de pieds >= 1");
-	if (inches.unit != MonumentUnit::Inch)
-		throw std::invalid_argument("Monument : '" + inchesKey + "' n'est pas en pouces (unite \"in\" attendue)");
-	if (!(std::isfinite(in) && in >= 0.0))
-		throw std::invalid_argument("Monument : '" + inchesKey + "' n'est pas un nombre fini de pouces >= 0");
-	// ft x 12 est exact pour ft entier ; le seul produit inexact vient en dernier, rien a contracter.
-	return (ft * 12.0 + in) * kMonumentInch;
+	MonumentUnit unit = MonumentUnit::Metre;
+	const double written = WrittenLength(v, key, unit);
+	return MonumentMetres(written, unit, key);
 }
 
 double MonumentRatio (const MonumentValue &v, std::string_view key)
@@ -1049,6 +1100,11 @@ const MonumentData &EmbeddedMonument (std::string_view name)
 	if (name == "temple-ares")
 	{
 		static const MonumentData data = ParseMonument(TempleAresJson());
+		return data;
+	}
+	if (name == "temple-parthenon")
+	{
+		static const MonumentData data = ParseMonument(TempleParthenonJson());
 		return data;
 	}
 	throw std::invalid_argument("Monument : '" + std::string(name) + "' n'est pas un monument embarque");
@@ -1174,8 +1230,9 @@ GreekEntablatureSettings MonumentEntablatureSettings (const MonumentData &data)
 		throw std::invalid_argument("Monument : 'entablature.innerFace' donnee, la convention EN1 ne vaut que manquante");
 
 	// Le chapiteau du triglyphe est lu deux fois : sa hauteur (corps de la frise) et son partage
-	// (deux bandes). Un desaccord deplacerait le dessus de la frise ; 1e-9 in est au-dessus du bruit
-	// d'une somme et en deca du plus petit ecart ecrivable (1e-3 in).
+	// (deux bandes). Un desaccord deplacerait le dessus de la frise. Tolerance : une longueur de
+	// reference, 1e-9 in en metres, quelle que soit l'unite des trois valeurs ; au-dessus du bruit
+	// d'une somme en metres et en deca du plus petit ecart ecrit par la source (1e-3 in).
 	constexpr double kCapitalPartitionTolerance = 1e-9 * kMonumentInch;
 	const double capital = MonumentLength(e.triglyphCapitalHeight, "entablature.triglyphCapitalHeight");
 	const double capitalBand = MonumentLength(e.triglyphCapitalBandHeight, "entablature.triglyphCapitalBandHeight");
@@ -1229,20 +1286,21 @@ GreekEntablatureSettings MonumentEntablatureSettings (const MonumentData &data)
 	// corps de la frise : la frise sans le chapiteau du triglyphe, porte par l'anneau (EN8).
 	const double regulaZone = MonumentLength(e.regulaHeight, "entablature.regulaHeight") +
 	                          MonumentLength(e.guttaeHeight, "entablature.guttaeHeight");
-	const double friezeBody = MonumentFeetAndInches(e.friezeHeightFt, e.friezeHeightIn, "entablature.friezeHeight") -
-	                          capital;
+	const double friezeBody = MonumentLength(e.friezeHeight, "entablature.friezeHeight") - capital;
 	// Sous-face inclinee (EN21, EN22, D3-67) : pivot sur la face de la plaque, profondeur L le long de la pente ;
-	// dos P - L cos theta et montee L sin theta en pouces, puis un seul produit par le pouce.
+	// dos P - L cos theta et montee L sin theta dans l'unite commune de P et L, convertis en dernier (registre
+	// section 10.14) : un seul produit par le pouce pour deux valeurs en pouces.
 	// Pente dans ]0, 90[ degres : au-dela, cos et sin rendraient la geometrie d'une autre pente (374 celle de 14).
 	const double slopeDegrees = RequiredDegrees(e.soffitSlope, "entablature.soffitSlope");
 	if (!(slopeDegrees > 0.0 && slopeDegrees < 90.0))
 		throw std::invalid_argument("Monument : 'entablature.soffitSlope' vaut " + std::to_string(slopeDegrees) +
 		                            " degres, hors de ]0, 90[");
 	const double slope = slopeDegrees * (kPi / 180.0);
-	const double plate = RequiredInches(e.mutulePlateProjection, "entablature.mutulePlateProjection");
-	const double depth = RequiredInches(e.mutuleDepth, "entablature.mutuleDepth");
-	const double mutuleBack = (plate - depth * std::cos(slope)) * kMonumentInch;
-	const double mutuleRise = (depth * std::sin(slope)) * kMonumentInch;
+	const CommonUnitOperands mutule = InCommonUnit(e.mutulePlateProjection, "entablature.mutulePlateProjection",
+	                                               e.mutuleDepth, "entablature.mutuleDepth");
+	const double mutuleBack =
+		MonumentMetres(mutule.a - mutule.b * std::cos(slope), mutule.unit, "entablature.mutuleDepth");
+	const double mutuleRise = MonumentMetres(mutule.b * std::sin(slope), mutule.unit, "entablature.mutuleDepth");
 
 	GreekEntablatureSettings s;
 	s.bands = {
@@ -1267,7 +1325,7 @@ GreekEntablatureSettings MonumentEntablatureSettings (const MonumentData &data)
 	s.corner = DoricCornerStrategy::CornerTriglyphEqualMetopes;
 
 	GreekTriglyphSettings &t = s.triglyph;
-	t.width = MonumentFeetAndInches(e.triglyphWidthFt, e.triglyphWidthIn, "entablature.triglyphWidth");
+	t.width = MonumentLength(e.triglyphWidth, "entablature.triglyphWidth");
 	t.face = MonumentLength(e.triglyphFace, "entablature.triglyphFace");
 	t.divisionWidths.reserve(n);
 	t.divisionIsChannel.reserve(n);
@@ -1313,7 +1371,7 @@ GreekEntablatureSettings MonumentEntablatureSettings (const MonumentData &data)
 	// (EN22), avec leurs gouttes.
 	GreekMutuleSettings plates;
 	plates.band = 6;
-	plates.width = MonumentFeetAndInches(e.mutuleWidthFt, e.mutuleWidthIn, "entablature.mutuleWidth");
+	plates.width = MonumentLength(e.mutuleWidth, "entablature.mutuleWidth");
 	plates.face = mutules;
 	plates.rise = mutuleRise;
 	plates.guttae = std::move(guttae);
@@ -1334,7 +1392,7 @@ GreekPedimentSettings MonumentPedimentSettings (const MonumentData &data)
 		                            "differentes");
 
 	GreekPedimentSettings s;
-	s.apexRise = MonumentFeetAndInches(f.apexRiseFt, f.apexRiseIn, "pediment.apexRise");
+	s.apexRise = MonumentLength(f.apexRise, "pediment.apexRise");
 	s.rakingRun = MonumentRatio(f.rakingRun, "pediment.rakingRun");
 	s.tympanumFace = MonumentLength(f.tympanumFace, "pediment.tympanumFace");
 	// Un seul produit par coordonnee (MonumentMetres) : u depuis le nu du tympan, h normale a la pente (PE1).
@@ -1434,8 +1492,7 @@ namespace
 			        {"entablature.regulaHeight", &e.regulaHeight},
 			        {"entablature.guttaeHeight", &e.guttaeHeight},
 			        {"entablature.architraveFaceHeight", &e.architraveFaceHeight},
-			        {"entablature.friezeHeightFt", &e.friezeHeightFt},
-			        {"entablature.friezeHeightIn", &e.friezeHeightIn},
+			        {"entablature.friezeHeight", &e.friezeHeight},
 			        {"entablature.triglyphCapitalHeight", &e.triglyphCapitalHeight},
 			        {"entablature.mutulePlateHeight", &e.mutulePlateHeight},
 			        {"entablature.dripHeight", &e.dripHeight},
@@ -1456,16 +1513,14 @@ namespace
 			        {"entablature.coronaProjection", &e.coronaProjection},
 			        {"entablature.filletProjection", &e.filletProjection},
 			        {"entablature.crownProjection", &e.crownProjection},
-			        {"entablature.triglyphWidthFt", &e.triglyphWidthFt},
-			        {"entablature.triglyphWidthIn", &e.triglyphWidthIn},
+			        {"entablature.triglyphWidth", &e.triglyphWidth},
 			        {"entablature.regulaProjection", &e.regulaProjection},
 			        {"entablature.regulaGuttaCount", &e.regulaGuttaCount},
 			        {"entablature.regulaGuttaDiameter", &e.regulaGuttaDiameter},
 			        {"entablature.regulaGuttaGap", &e.regulaGuttaGap},
 			        {"entablature.regulaGuttaTopProjection", &e.regulaGuttaTopProjection},
 			        {"entablature.regulaGuttaFootProjection", &e.regulaGuttaFootProjection},
-			        {"entablature.mutuleWidthFt", &e.mutuleWidthFt},
-			        {"entablature.mutuleWidthIn", &e.mutuleWidthIn},
+			        {"entablature.mutuleWidth", &e.mutuleWidth},
 			        {"entablature.mutuleDepth", &e.mutuleDepth},
 			        {"entablature.soffitSlope", &e.soffitSlope},
 			        {"entablature.mutuleGuttaFrontDiameter", &e.mutuleGuttaFrontDiameter},
@@ -1481,8 +1536,7 @@ namespace
 		case MonumentPart::Pediment:
 		{
 			const MonumentPediment &f = d.pediment;
-			return {{"pediment.apexRiseFt", &f.apexRiseFt},
-			        {"pediment.apexRiseIn", &f.apexRiseIn},
+			return {{"pediment.apexRise", &f.apexRise},
 			        {"pediment.rakingRun", &f.rakingRun},
 			        {"pediment.tympanumFace", &f.tympanumFace}};
 		}
@@ -1534,8 +1588,8 @@ std::vector<std::string> MissingMonumentKeys (const MonumentData &data, Monument
 	{
 		if (!value->value)
 			missing.emplace_back(key);
-		// Suite du triglyphe a sa place au document, entre metopeWidthIn (non consommee) et regulaProjection.
-		if (part == MonumentPart::Entablature && std::string_view(key) == "entablature.triglyphWidthIn")
+		// Suite du triglyphe a sa place au document, entre metopeWidth (non consommee) et regulaProjection.
+		if (part == MonumentPart::Entablature && std::string_view(key) == "entablature.triglyphWidth")
 		{
 			const MonumentDivisions &dv = data.entablature.triglyphDivisions;
 			if (dv.status == MonumentStatus::Missing || dv.values.empty())

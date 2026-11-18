@@ -1,5 +1,5 @@
 {
-  "schema": "monument/v9",
+  "schema": "monument/v10",
   "monument": "temple-hephaistos",
   "source": {
     "document": "Architecture/Antique/TempleHephaistos/README.md",
@@ -374,16 +374,9 @@
     }
   },
   "entablature": {
-    "architraveHeightFt": {
-      "value": 2,
-      "unit": "ft",
-      "status": "lu",
-      "sources": ["S"],
-      "readme": "§6.1, l. 251"
-    },
-    "architraveHeightIn": {
-      "value": 8.9,
-      "unit": "in",
+    "architraveHeight": {
+      "value": [2, 8.9],
+      "unit": "ft+in",
       "status": "lu",
       "sources": ["S"],
       "readme": "§6.1, l. 251"
@@ -416,16 +409,9 @@
       "sources": ["S"],
       "readme": "§6.1, l. 255"
     },
-    "friezeHeightFt": {
-      "value": 2,
-      "unit": "ft",
-      "status": "lu",
-      "sources": ["S"],
-      "readme": "§6.1, l. 256"
-    },
-    "friezeHeightIn": {
-      "value": 8.55,
-      "unit": "in",
+    "friezeHeight": {
+      "value": [2, 8.55],
+      "unit": "ft+in",
       "status": "lu",
       "sources": ["S"],
       "readme": "§6.1, l. 256"
@@ -437,16 +423,9 @@
       "sources": ["S"],
       "readme": "§6.1, l. 257"
     },
-    "corniceHeightFt": {
-      "value": 1,
-      "unit": "ft",
-      "status": "lu",
-      "sources": ["S"],
-      "readme": "§6.1, l. 258"
-    },
-    "corniceHeightIn": {
-      "value": 0.45,
-      "unit": "in",
+    "corniceHeight": {
+      "value": [1, 0.45],
+      "unit": "ft+in",
       "status": "lu",
       "sources": ["S"],
       "readme": "§6.1, l. 258"
@@ -590,30 +569,16 @@
       "sources": [],
       "readme": "§6.2, l. 285"
     },
-    "triglyphWidthFt": {
-      "value": 1,
-      "unit": "ft",
+    "triglyphWidth": {
+      "value": [1, 8.3],
+      "unit": "ft+in",
       "status": "lu",
       "sources": ["S"],
       "readme": "§6.3, l. 292"
     },
-    "triglyphWidthIn": {
-      "value": 8.3,
-      "unit": "in",
-      "status": "lu",
-      "sources": ["S"],
-      "readme": "§6.3, l. 292"
-    },
-    "metopeWidthFt": {
-      "value": 2,
-      "unit": "ft",
-      "status": "lu",
-      "sources": ["S"],
-      "readme": "§6.3, l. 293"
-    },
-    "metopeWidthIn": {
-      "value": 6.475,
-      "unit": "in",
+    "metopeWidth": {
+      "value": [2, 6.475],
+      "unit": "ft+in",
       "status": "lu",
       "sources": ["S"],
       "readme": "§6.3, l. 293"
@@ -675,16 +640,9 @@
       "sources": ["S"],
       "readme": "§6.2, l. 274"
     },
-    "mutuleWidthFt": {
-      "value": 1,
-      "unit": "ft",
-      "status": "lu",
-      "sources": ["S"],
-      "readme": "§6.4, l. 315"
-    },
-    "mutuleWidthIn": {
-      "value": 8.75,
-      "unit": "in",
+    "mutuleWidth": {
+      "value": [1, 8.75],
+      "unit": "ft+in",
       "status": "lu",
       "sources": ["S"],
       "readme": "§6.4, l. 315"
@@ -975,16 +933,9 @@
     }
   },
   "pediment": {
-    "apexRiseFt": {
-      "value": 5,
-      "unit": "ft",
-      "status": "lu",
-      "sources": ["S"],
-      "readme": "§9, l. 608"
-    },
-    "apexRiseIn": {
-      "value": 9.75,
-      "unit": "in",
+    "apexRise": {
+      "value": [5, 9.75],
+      "unit": "ft+in",
       "status": "lu",
       "sources": ["S"],
       "readme": "§9, l. 608"
@@ -996,16 +947,9 @@
       "sources": ["O"],
       "readme": "§9, l. 609"
     },
-    "rakingProjectionFt": {
-      "value": 1,
-      "unit": "ft",
-      "status": "lu",
-      "sources": ["S"],
-      "readme": "§9, l. 611"
-    },
-    "rakingProjectionIn": {
-      "value": 8.85,
-      "unit": "in",
+    "rakingProjection": {
+      "value": [1, 8.85],
+      "unit": "ft+in",
       "status": "lu",
       "sources": ["S"],
       "readme": "§9, l. 611"

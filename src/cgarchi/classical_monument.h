@@ -21,7 +21,7 @@ namespace classical
 {
 
 // ============================================================================
-//  Document du monument "monument/v9" : valeurs du README du monument, avec
+//  Document du monument "monument/v10" : valeurs du README du monument, avec
 //  leur unite, leur statut, leurs sources et leur lieu ; conversion vers les
 //  reglages du temple
 // ============================================================================
@@ -33,27 +33,30 @@ namespace classical
 // stylobate). Il est ecrit par le script du monument (src/cgarchi/data/
 // <monument>_from_readme.py, moteur monument_from_readme.py),
 // jamais a la main, et embarque a la build (classical_monument_data.h). Schema :
-// src/cgarchi/schemas/monument-v9.schema.
+// src/cgarchi/schemas/monument-v10.schema.
 //
 // Statuts : les mots du README, liste fermee. Une valeur "manquant" n'a pas de
 // cle "value" ; toute autre en a une. "lu" et "mesure" citent au moins une
 // source ; "deduit" et "convention" peuvent n'en citer aucune ; "manquant" n'en
 // cite aucune. Toute valeur porte son lieu dans le README ("readme").
 //
-// Unites (D3-37, amende par D3-52, D3-75 et le registre MO, unite "ratio") :
-// chaque valeur porte "unit", liste fermee "m", "in", "mm", "1", "ft", "°",
-// "ratio" ; "1" pour un compte et lui seul ; "ft" pour les pieds d'une cote en
-// pieds et pouces et pour eux seuls : cle "<nom>Ft", entier >= 1, a cote de la
-// cle "<nom>In" de ses pouces ; "°" (degre) pour un angle et lui seul
-// (entablature.soffitSlope, et le controle pedimentControls.rakingSlope) ;
-// "ratio" pour un rapport "1 : r" du README et lui seul, valeur r reelle > 0
-// (pediment.rakingRun). Une valeur manquante
-// porte l'unite attendue. La conversion en metres est ici (MonumentLength,
-// MonumentFeetAndInches), jamais dans le script : 1 in = 0,0254 m, 1 ft = 12 in
-// (README section 1.1).
+// Unites (D3-37, amende par D3-52, D3-75, le registre MO, unite "ratio", et le
+// registre section 10.14, unites de longueur) : chaque valeur porte "unit",
+// liste fermee "m", "in", "mm", "1", "ft", "ft+in", "°", "ratio". Longueurs :
+// "m", "in", "mm" et "ft" (pieds decimaux), partout ou une longueur est lue ;
+// "ft+in" pour une cote en pieds et pouces, valeur [pieds, pouces], pieds
+// entiers >= 1 et pouces finis >= 0, sur une valeur de longueur seulement (ni
+// suite, ni polygone, ni controle). "1" pour un compte et lui seul ; "°"
+// (degre) pour un angle et lui seul (entablature.soffitSlope, et le controle
+// pedimentControls.rakingSlope) ; "ratio" pour un rapport "1 : r" du README et
+// lui seul, valeur r reelle > 0 (pediment.rakingRun). Une valeur manquante
+// porte l'unite attendue. Le document garde chaque valeur dans l'unite de sa
+// source ; la conversion en metres, reference interne, est ici
+// (MonumentLength), jamais dans le script : 1 in = 0,0254 m, 1 ft = 12 in =
+// 0,3048 m (README section 1.1).
 //
 // Formes de valeur (plan 3 section 20.5, choix de format) : une cote en pieds et
-// pouces occupe deux cles ; la division du triglyphe est une suite (values,
+// pouces est une seule valeur ; la division du triglyphe est une suite (values,
 // kinds) lue telle qu'ecrite, mots du README "demi-canal", "bande", "canal" ;
 // les hauteurs de la corniche rampante, de meme (mots "listel", "filet",
 // "larmier", "gorge de la sous-face (bec)") ; la section de la corniche
@@ -66,7 +69,7 @@ namespace classical
 // long de x ; (X, Y, Z) = (y, -x, z + stylobateTop), quart de tour direct ;
 // cotes : est = Front, nord = Right, ouest = Back, sud = Left.
 
-constexpr const char *kMonumentSchema = "monument/v9";
+constexpr const char *kMonumentSchema = "monument/v10";
 
 // Pouce anglais en metres (README section 1.1).
 constexpr double kMonumentInch = 0.0254;
@@ -78,38 +81,37 @@ constexpr double kMonumentFoot = 0.3048;
 // "manquant".
 enum class MonumentStatus { Read, Deduced, Measured, Convention, Missing };
 
-// Unites du document, dans l'ordre : "m", "in", "mm", "1", "ft", "°", "ratio".
-enum class MonumentUnit { Metre, Inch, Millimetre, One, Foot, Degree, Ratio };
+// Unites du document, dans l'ordre : "m", "in", "mm", "1", "ft", "ft+in", "°",
+// "ratio".
+enum class MonumentUnit { Metre, Inch, Millimetre, One, Foot, FootInch, Degree, Ratio };
 
 struct MonumentValue
 {
-	std::optional<double>    value;     // vide si et seulement si status == Missing
+	std::optional<double>    value;     // vide si et seulement si status == Missing ; "ft+in" : les pieds
+	double                   inches = 0.0;   // "ft+in" : les pouces de la cote ; 0 pour toute autre unite
 	MonumentUnit             unit = MonumentUnit::Metre;   // presente aussi pour manquant : unite attendue
 	MonumentStatus           status = MonumentStatus::Missing;
 	std::vector<std::string> sources;   // identifiants de MonumentData::sources
 	std::string              readme;    // lieu de la valeur dans le README : "§3.2, l. 86"
 };
 
-// Longueur `value` exprimee en `unit`, en metres. Leve std::invalid_argument,
-// prefixe "Monument : " et cle entre apostrophes, si unit est "1" (sans
-// dimension), "°" (un angle), "ratio" (un rapport) ou hors de l'enumeration. "ft" vaut kMonumentFoot ;
-// une cote en pieds et pouces passe par MonumentFeetAndInches.
+// Longueur `value` exprimee en `unit`, en metres, par un seul produit (ou un
+// seul quotient pour "mm") : "in" vaut kMonumentInch, "ft" kMonumentFoot. Leve
+// std::invalid_argument, prefixe "Monument : " et cle entre apostrophes, si
+// unit est "1" (sans dimension), "ft+in" (une cote a deux nombres : passer par
+// MonumentLength), "°" (un angle), "ratio" (un rapport) ou hors de
+// l'enumeration.
 double MonumentMetres (double value, MonumentUnit unit, std::string_view key);
 
-// Valeur d'une longueur en metres. Leve std::invalid_argument, prefixe
-// "Monument : " et cle entre apostrophes, si la valeur est manquante, sans
-// dimension, un angle, ou en pieds (moitie d'une cote en pieds et pouces :
-// passer par MonumentFeetAndInches).
+// Valeur d'une longueur en metres, entree unique des longueurs : "m", "in",
+// "mm" et "ft" par MonumentMetres ; "ft+in" par (pieds x 12 + pouces) x
+// kMonumentInch, ou le produit par 12 est exact et le produit par le pouce vient
+// en dernier, si bien que le resultat ne depend pas d'une contraction FMA (plan
+// 3, MS-40). Leve std::invalid_argument, prefixe "Monument : " et cle entre
+// apostrophes, si la valeur est manquante, sans dimension, un angle, un
+// rapport, ou une cote "ft+in" dont les pieds ne sont pas un entier >= 1 ou
+// dont les pouces ne sont pas finis et >= 0.
 double MonumentLength (const MonumentValue &v, std::string_view key);
-
-// Cote en pieds et pouces, en metres : (pieds x 12 + pouces) x kMonumentInch.
-// `key` est la cle commune, sans suffixe ("entablature.friezeHeight") ; les
-// refus nomment "<key>Ft" ou "<key>In". Leve std::invalid_argument, prefixe
-// "Monument : ", si l'une des deux valeurs manque, si les pieds ne sont pas en
-// "ft" ou pas un entier >= 1, ou si les pouces ne sont pas en "in", finis et
-// >= 0. Le produit par 12 est exact et le produit par kMonumentInch vient en
-// dernier : le resultat ne depend pas d'une contraction FMA (plan 3, MS-40).
-double MonumentFeetAndInches (const MonumentValue &feet, const MonumentValue &inches, std::string_view key);
 
 // Rapport "1 : r" du README : la valeur r. Leve std::invalid_argument, prefixe
 // "Monument : " et cle entre apostrophes, si la valeur manque ou si son unite
@@ -234,24 +236,22 @@ struct MonumentDivisions
 // gouttes par rang (compte) ; evasement du pied, en diametre.
 struct MonumentEntablature
 {
-	MonumentValue architraveHeightFt, architraveHeightIn, taeniaHeight, regulaHeight, guttaeHeight,
-	              architraveFaceHeight;
-	MonumentValue friezeHeightFt, friezeHeightIn, triglyphCapitalHeight;
-	MonumentValue corniceHeightFt, corniceHeightIn, mutulePlateHeight, dripHeight, coronaHeight, filletHeight,
-	              crownHeight;
+	MonumentValue architraveHeight, taeniaHeight, regulaHeight, guttaeHeight, architraveFaceHeight;
+	MonumentValue friezeHeight, triglyphCapitalHeight;
+	MonumentValue corniceHeight, mutulePlateHeight, dripHeight, coronaHeight, filletHeight, crownHeight;
 	MonumentValue architraveTopProjection, architraveFootProjection, taeniaProjection, triglyphFace;
 	MonumentValue triglyphCapitalBandProjection, triglyphCapitalListelProjection;
 	MonumentValue triglyphCapitalListelHeight, triglyphCapitalBandHeight;   // partage, convention de la source
 	MonumentValue metopeFace;                                               // nu des metopes
 	MonumentValue mutulePlateProjection, dripProjection, coronaProjection, filletProjection, crownProjection;
 	MonumentValue innerFace;                                                // face interieure du peristyle
-	MonumentValue triglyphWidthFt, triglyphWidthIn;
-	MonumentValue metopeWidthFt, metopeWidthIn;                             // metope lue : controle
+	MonumentValue triglyphWidth;
+	MonumentValue metopeWidth;                                              // metope lue : controle
 	MonumentDivisions triglyphDivisions;
 	MonumentValue channelDepth;                                             // profondeur mesuree : controle de EN11
 	MonumentValue regulaProjection, regulaGuttaCount, regulaGuttaDiameter, regulaGuttaGap;
 	MonumentValue regulaGuttaTopProjection, regulaGuttaFootProjection;
-	MonumentValue mutuleWidthFt, mutuleWidthIn, mutuleDepth;
+	MonumentValue mutuleWidth, mutuleDepth;
 	MonumentValue soffitSlope;                                              // "°"
 	MonumentValue mutuleGuttaFrontDiameter, mutuleGuttaMiddleDiameter, mutuleGuttaRearDiameter;
 	MonumentValue mutuleGuttaFrontGap, mutuleGuttaRearGap, mutuleGuttaHeight, mutuleGuttaEdgeAxis;
@@ -333,7 +333,7 @@ struct MonumentPolygon
 // section) ; sima, acroteres et tuiles.
 struct MonumentPediment
 {
-	MonumentValue         apexRiseFt, apexRiseIn, rakingRun, rakingProjectionFt, rakingProjectionIn, tympanumFace;
+	MonumentValue         apexRise, rakingRun, rakingProjection, tympanumFace;
 	MonumentRakingHeights rakingHeights;
 	MonumentPolygon       rakingSection;
 	MonumentValue         sima;
@@ -371,20 +371,22 @@ struct MonumentData
 	MonumentBlocks                     present;
 };
 
-// Lecture stricte d'un document "monument/v9" (json_reader::StrictReader). Leve
+// Lecture stricte d'un document "monument/v10" (json_reader::StrictReader). Leve
 // std::runtime_error si le document est refuse ; le message porte chaque refus,
-// une ligne chacun, "monument/v9 <chemin> : <motif>". Blocs facultatifs (registre
+// une ligne chacun, "monument/v10 <chemin> : <motif>". Blocs facultatifs (registre
 // MO-P2) : krepis, peristyle, columns, entablature et pediment ; un bloc present
 // porte toutes ses cles. Refus : texte illisible ; cle en double ; schema autre
-// que "monument/v9" ; cle inconnue, a tout niveau ; cle absente d'un bloc
+// que "monument/v10" ; cle inconnue, a tout niveau ; cle absente d'un bloc
 // present (controls.frontSum et controls.flankSum exceptees) ; peristyle sans
 // controls, controls sans peristyle, krepisControls sans krepis, columnControls
 // sans columns, entablatureControls sans entablature, pedimentControls sans
-// pediment ("requires block \"<partie>\"") ; null ; type faux ; status hors des cinq ; unit hors des sept,
-// "1", "ft", "°" ou "ratio" sur une longueur, autre que "1" sur un compte, autre
-// que "ft" sur une cle "<nom>Ft", autre que "°" sur un angle, autre que "ratio"
-// sur un rapport ; value absente pour un statut autre que manquant, presente
-// pour manquant ; longueur, angle ou rapport non fini ou <= 0 ; compte ou pieds non entiers ou < 1 ; source inconnue de la table, ou
+// pediment ("requires block \"<partie>\"") ; null ; type faux ; status hors des cinq ; unit hors des huit,
+// "1", "°" ou "ratio" sur une longueur, "ft+in" ailleurs que sur une valeur de
+// longueur (suite, polygone, controle, profil), autre que "1" sur un compte,
+// autre que "°" sur un angle, autre que "ratio" sur un rapport ; value absente
+// pour un statut autre que manquant, presente pour manquant ; longueur, angle ou
+// rapport non fini ou <= 0 ; compte non entier ou < 1 ; cote "ft+in" qui n'est
+// pas une liste de deux nombres, pieds non entiers ou < 1, pouces < 0 ; source inconnue de la table, ou
 // entree de la table jamais citee ; lu ou mesure sans source ; manquant avec une
 // source ; readme vide ; sha256 hors de [0-9a-f]{64} ; bytes < 1 ; liste de
 // coordonnees de controle vide, coordonnee non finie, ou coordonnees non
@@ -399,8 +401,8 @@ struct MonumentData
 MonumentData ParseMonument (std::string_view jsonText);
 
 // Document embarque du monument `name` : "temple-hephaistos"
-// (data/temple_hephaistos.json) ou "temple-ares" (data/temple_ares.json), lu une
-// fois. Leve std::invalid_argument, prefixe "Monument : " et nom entre
+// (data/temple_hephaistos.json), "temple-ares" (data/temple_ares.json) ou
+// "temple-parthenon" (data/temple_parthenon.json), lu une fois. Leve std::invalid_argument, prefixe "Monument : " et nom entre
 // apostrophes, pour tout autre nom ; une lecture en echec leve a chaque appel. La
 // reference designe un objet statique local : valide pour la duree du programme,
 // premiere lecture sure entre fils.
@@ -460,29 +462,30 @@ GreekDoricColumnSettings MonumentColumnSettings (const MonumentData &data, bool 
 
 // Entablement du README (sections 6.1 a 6.4 ; registre EN1, EN2, EN5, EN8, EN9,
 // EN11, EN15, EN17 a EN24, classical_orders_implementation.md section 10.10).
-// Memes regles d'erreur que les autres conversions (MonumentLength,
-// MonumentFeetAndInches ; regulaGuttaCount et mutuleGuttaPerRow comme des
-// comptes), plus les refus nommes :
+// Memes regles d'erreur que les autres conversions (MonumentLength ;
+// regulaGuttaCount et mutuleGuttaPerRow comme des comptes), plus les refus
+// nommes :
 //   - 'entablature.innerFace' si elle n'est pas manquante (EN1 ne vaut que
 //     manquante) ;
 //   - 'entablature.triglyphCapitalBandHeight' si bande + listel s'ecarte de la
-//     hauteur du chapiteau de plus de 1e-9 in ;
+//     hauteur du chapiteau de plus de 1e-9 in, longueur de reference ;
 //   - 'entablature.triglyphDivisions' si la suite est vide, de listes de tailles
 //     differentes, sans demi-canal a chaque bout, avec un demi-canal a
 //     l'interieur, sans canal, ou si les canaux, ou les deux demi-canaux, n'ont
 //     pas tous la meme largeur ;
-//   - 'entablature.mutulePlateProjection' ou 'entablature.mutuleDepth' si elle
-//     manque ou n'est pas en pouces (le dos des mutules se calcule en pouces) ;
 //   - 'entablature.soffitSlope' si elle manque, n'est pas en degres, ou n'est pas
 //     dans ]0, 90[ degres.
-// Onze bandes, de bas en haut, valeurs en pouces telles qu'ecrites (EN9) : face
+// Onze bandes, de bas en haut, valeurs telles qu'ecrites (EN9) : face
 // lisse de l'architrave, inclinee de la saillie du pied a celle du haut ; zone
 // des regulae et des gouttes, verticale au nu du haut de l'architrave ; tenia ;
 // frise (friezeBand = 3), au nu des metopes, hauteur de la frise moins le
 // chapiteau du triglyphe ; bande et listel du chapiteau du triglyphe, continus
 // (EN8) ; plaque des mutules, verticale au dos des mutules sous la sous-face
-// inclinee (EN21, EN22, D3-67) : avec P = mutulePlateProjection et L = mutuleDepth
-// en pouces, theta = soffitSlope x pi / 180, dos (P - L cos theta) x kMonumentInch ;
+// inclinee (EN21, EN22, D3-67) : avec P = mutulePlateProjection et L = mutuleDepth,
+// theta = soffitSlope x pi / 180, dos P - L cos theta, calcule dans l'unite
+// commune de P et L puis converti en metres en dernier (un seul produit par le
+// pouce pour deux valeurs en pouces), ou depuis P et L en metres si leurs
+// unites different (registre section 10.14) ;
 // bec sous le larmier ; larmier ; filet ; listel de couronnement. innerFace = saillie du
 // pied de la face de l'architrave (EN1). Triglyphe : largeur en pieds et pouces,
 // face, divisions lues, canal pour tout mot autre que "bande" ; profondeurs par
@@ -498,7 +501,7 @@ GreekDoricColumnSettings MonumentColumnSettings (const MonumentData &data, bool 
 // regulaGuttaFootProjection au pied a regulaGuttaTopProjection en tete, 8 cotes
 // (format) ; hauteur des gouttes : zone des regulae moins la regula. Mutules
 // (EN21, EN22) : bande 6, largeur en pieds et pouces, face mutulePlateProjection
-// (pivot de la sous-face), montee (L sin theta) x kMonumentInch. Gouttes des
+// (pivot de la sous-face), montee L sin theta, meme regle d'unite que le dos. Gouttes des
 // mutules (EN23, EN24, D3-76 a D3-78) : diametres de tete et vides entre tetes lus,
 // du devant vers le dos ; mutuleGuttaPerRow par rang ; axes extremes a
 // mutuleGuttaEdgeAxis ; hauteur mutuleGuttaHeight ; conicity, radiale, la moitie de
@@ -509,8 +512,9 @@ GreekEntablatureSettings MonumentEntablatureSettings (const MonumentData &data);
 
 // Fronton du README (section 9 ; registre PE1, PE2' a PE4', PE5,
 // classical_orders_implementation.md section 10.11) :
-//   - apexRise = (apexRiseFt x 12 + apexRiseIn) x kMonumentInch
-//     (MonumentFeetAndInches), jusqu'au haut de la corniche rampante ;
+//   - apexRise = MonumentLength (apexRise), (pieds x 12 + pouces) x
+//     kMonumentInch pour une cote "ft+in", jusqu'au haut de la corniche
+//     rampante ;
 //   - rakingRun = MonumentRatio (rakingRun), la pente 1 : r ;
 //   - tympanumFace = MonumentLength (tympanumFace) ;
 //   - rakingSection : un sommet (u, z) par sommet (u[k], h[k]) du polygone, dans
@@ -573,10 +577,9 @@ struct MonumentBuild
 // consommees si le bloc est absent. Une suite (entablature.triglyphDivisions) ou
 // un polygone (pediment.rakingSection) est manquant si son statut l'est ou s'il
 // est vide. Cles consommees : krepis 10 (toutes sauf cornerMargin), peristyle 6,
-// colonnes 21 (toutes sauf grooveDepth), entablement 48 (toutes sauf
-// architraveHeightFt, architraveHeightIn, corniceHeightFt, corniceHeightIn,
-// innerFace, metopeWidthFt, metopeWidthIn et channelDepth), fronton 5
-// (apexRiseFt, apexRiseIn, rakingRun, tympanumFace, rakingSection).
+// colonnes 21 (toutes sauf grooveDepth), entablement 45 (toutes sauf
+// architraveHeight, corniceHeight, innerFace, metopeWidth et channelDepth),
+// fronton 4 (apexRise, rakingRun, tympanumFace, rakingSection).
 std::vector<std::string> MissingMonumentKeys (const MonumentData &data, MonumentPart part);
 
 // Maillage des parties construites et rapport des cinq parties. Aiguillage :

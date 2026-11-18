@@ -1,9 +1,9 @@
-"""Moteur de derivation d'un document "monument/v9" depuis le README d'un monument.
+"""Moteur de derivation d'un document "monument/v10" depuis le README d'un monument.
 
 Le moteur porte les regles de lecture, l'ordre des cles du format et le rendu ; les
 tables d'un monument (selecteurs, nom, chemin du README, blocs documentes) sont dans
 son module, qui est aussi son point d'entree : temple_hephaistos_from_readme.py,
-temple_ares_from_readme.py. Les README sont tenus hors du depot, dans les documents
+temple_ares_from_readme.py, temple_parthenon_from_readme.py. Les README sont tenus hors du depot, dans les documents
 de l'utilisateur ; les JSON produits sont commites a cote des scripts et embarques
 dans cgarchi (embed_file.cmake).
 
@@ -37,10 +37,11 @@ Regles d'extraction (plan_implementation_03_revision.md, sections 15.3, 18.5, 20
     selecteur : le script verifie les statuts, il n'en attribue aucun ;
   - la valeur est recopiee en texte, virgule decimale changee en point, sans
     passer par un flottant, avec l'unite que le motif exige ("m", "in", "mm", "ft",
-    "°" pour un angle, "ratio" pour un rapport (regle R12), ou "1" pour un compte) ;
-    aucune conversion d'unite, aucun calcul. Seule la
-    notation « ± » des coordonnees de la section 4.3 est developpee en deux
-    valeurs. L'unite "ft" est reservee aux cles qui finissent par « Ft ».
+    "ft+in" pour une cote en pieds et pouces (regle R6), "°" pour un angle, "ratio"
+    pour un rapport (regle R12), ou "1" pour un compte) ; aucune conversion d'unite,
+    aucun calcul. Seule la notation « ± » des coordonnees de la section 4.3 est
+    developpee en deux valeurs. "ft" est une unite de longueur ordinaire, pieds
+    decimaux.
 Regles de lecture des chapitres 5 et 6 (registre MO3) :
   - R1, clause etiquetee : la cellule de statut se coupe en clauses a « ; » et a
     « . » suivi d'un mot a majuscule initiale, hors parentheses ; une clause
@@ -58,8 +59,10 @@ Regles de lecture des chapitres 5 et 6 (registre MO3) :
     termes « mot nombre [unite] » separes par « , » et clos par « ; » ; le nombre
     de termes et l'unite finale sont exiges, toute unite intermediaire est
     l'unite finale ; chaque terme garde son mot ;
-  - R6, pieds et pouces (« 2 ft 8,55 in ») : une cle et une unite par groupe,
-    chaque unite suivant directement son groupe ; pieds entiers ; aucune somme ;
+  - R6, pieds et pouces (« 2 ft 8,55 in ») : une cle d'unite "ft+in" par cote,
+    deux groupes, pieds entiers >= 1 suivis directement de « ft », puis pouces
+    suivis directement de « in » ; la valeur est la paire [pieds, pouces], recopiee ;
+    aucune somme ;
   - R8, unite partagee par « et » (« 0,685 et 0,916 m ») : comme « → » et « × »,
     les groupes separes par « et » prennent l'unite qui suit le dernier ;
   - R9, unite collee au nombre (« 14° ») : l'unite « ° » suit directement l'unique
@@ -96,19 +99,20 @@ if sys.version_info < (3, 10):  # noqa: UP036
     sys.exit(f"monument_from_readme.py demande Python 3.10 ou plus recent, "
              f"lance par {sys.version.split()[0]}")
 
-SCHEMA = "monument/v9"
+SCHEMA = "monument/v10"
 
 STATUSES = ("lu", "déduit", "mesuré", "convention", "manquant")
-UNITS = ("m", "in", "mm", "ft", "1", "°", "ratio")
+UNITS = ("m", "in", "mm", "ft", "ft+in", "1", "°", "ratio")
 # Regle R12 : rapport « 1 : nombre », le nombre seul recopie.
 RATIO = "ratio"
 RATIO_LEAD = "1 : "
 # Regle R9 : unites ecrites collees au nombre, sans blanc.
 GLUED_UNITS = ("°",)
 # Regle R11 : unite d'une liste de sommets, ecrite en toutes lettres dans la phrase « en <mot>. » qui precede l'amorce.
-UNIT_WORDS = {"m": "mètres", "in": "pouces", "mm": "millimètres"}
-FOOT = "ft"
-FOOT_KEY_SUFFIX = "Ft"
+UNIT_WORDS = {"m": "mètres", "in": "pouces", "mm": "millimètres", "ft": "pieds"}
+# Regle R6 : cote en pieds et pouces, une cle, valeur [pieds, pouces] ; unites ecrites apres chaque groupe.
+FEET_INCHES = "ft+in"
+FEET_INCHES_PARTS = ("ft", "in")
 # Typographie du README : signe moins et signe de multiplication, distincts de « - » et de « x ».
 MINUS = "\u2212"
 TIMES = "\u00d7"
@@ -141,7 +145,7 @@ JsonValue = dict | list | str | int | Raw
 class RowSelector:
     """Une ligne de tableau : section, debut du libelle, motif d'une cellule de valeur."""
 
-    keys: tuple[str, ...]      # une cle par groupe du motif (aucune pour une valeur manquante)
+    keys: tuple[str, ...]      # une cle par groupe du motif, deux groupes pour "ft+in" (R6)
     section: str               # numero de section : « 2. », « 3.2 »
     label: str                 # debut de la premiere cellule
     pattern: str               # motif de la cellule de valeur, sans ancre
@@ -152,7 +156,6 @@ class RowSelector:
     anchored: bool = True      # le motif commence la cellule ; sinon, regle R2
     status_label: str = ""     # regle R1 : etiquette de la clause de statut
     exact: bool = False        # libelle egal a la premiere cellule, et non son debut
-    group_units: tuple[str, ...] = ()   # regle R6 : une unite par groupe ; vide : `unit` pour tous
 
 
 @dataclass(frozen=True)
@@ -291,17 +294,16 @@ SECTION_ORDER = {
     "columnControls": ("shaftHeight", "footFluteChord", "fluteCentralRadius", "fluteLateralRadius", "topFluteDepth",
                        "cornerFluteChord", "cornerFluteDepth", "capitalHeight", "annuletsAndRelief", "upperRadius",
                        "echinusLipRetreat", "echinusProfile"),
-    "entablature": ("architraveHeightFt", "architraveHeightIn", "taeniaHeight", "regulaHeight", "guttaeHeight",
-                    "architraveFaceHeight", "friezeHeightFt", "friezeHeightIn", "triglyphCapitalHeight",
-                    "corniceHeightFt", "corniceHeightIn", "mutulePlateHeight", "dripHeight", "coronaHeight",
-                    "filletHeight", "crownHeight", "architraveTopProjection", "architraveFootProjection",
-                    "taeniaProjection", "triglyphFace", "triglyphCapitalBandProjection",
+    "entablature": ("architraveHeight", "taeniaHeight", "regulaHeight", "guttaeHeight", "architraveFaceHeight",
+                    "friezeHeight", "triglyphCapitalHeight", "corniceHeight", "mutulePlateHeight", "dripHeight",
+                    "coronaHeight", "filletHeight", "crownHeight", "architraveTopProjection",
+                    "architraveFootProjection", "taeniaProjection", "triglyphFace", "triglyphCapitalBandProjection",
                     "triglyphCapitalListelProjection", "triglyphCapitalListelHeight", "triglyphCapitalBandHeight",
                     "metopeFace", "mutulePlateProjection", "dripProjection", "coronaProjection", "filletProjection",
-                    "crownProjection", "innerFace", "triglyphWidthFt", "triglyphWidthIn", "metopeWidthFt",
-                    "metopeWidthIn", "triglyphDivisions", "channelDepth", "regulaProjection", "regulaGuttaCount",
-                    "regulaGuttaDiameter", "regulaGuttaGap", "regulaGuttaTopProjection", "regulaGuttaFootProjection",
-                    "mutuleWidthFt", "mutuleWidthIn", "mutuleDepth", "soffitSlope", "mutuleGuttaFrontDiameter",
+                    "crownProjection", "innerFace", "triglyphWidth", "metopeWidth", "triglyphDivisions",
+                    "channelDepth", "regulaProjection", "regulaGuttaCount", "regulaGuttaDiameter", "regulaGuttaGap",
+                    "regulaGuttaTopProjection", "regulaGuttaFootProjection", "mutuleWidth", "mutuleDepth",
+                    "soffitSlope", "mutuleGuttaFrontDiameter",
                     "mutuleGuttaMiddleDiameter", "mutuleGuttaRearDiameter", "mutuleGuttaFrontGap", "mutuleGuttaRearGap",
                     "mutuleGuttaHeight", "mutuleGuttaEdgeAxis", "mutuleGuttaPerRow", "mutuleGuttaFootFlare"),
     "entablatureControls": ("total", "corniceSum", "triglyphDivisionSum", "frontMetope", "flankMetope",
@@ -315,8 +317,7 @@ SECTION_ORDER = {
                             "mutuleFrontTopZ", "soffitBackZ", "soffitRise", "geisonBackStep", "dripTopZ",
                             "soffitPivotProjection", "mutuleGuttaRadialFlare", "mutuleGuttaRadialFlareExact",
                             "mutuleGuttaFrontFootProjection"),
-    "pediment": ("apexRiseFt", "apexRiseIn", "rakingRun", "rakingProjectionFt", "rakingProjectionIn", "tympanumFace",
-                 "rakingHeights", "rakingSection", "sima"),
+    "pediment": ("apexRise", "rakingRun", "rakingProjection", "tympanumFace", "rakingHeights", "rakingSection", "sima"),
     "pedimentControls": ("apexRise", "rakingSlope", "eaveHalfSpan", "rakingHeight", "rakingHeightM",
                          "rakingVerticalHeight", "rakingVerticalHeightM", "rakingProjection", "tympanumFaceM",
                          "rakingListelProjection", "rakingCoronaProjection", "rakingBottomFilletProjection",
@@ -408,19 +409,21 @@ def unit_follows_groups(unit: str, pattern: str) -> bool:
     return re.match(rf" {re.escape(unit)}(?![A-Za-z])", pattern[groups[-1].end():]) is not None
 
 
-def unit_follows_each_group(units: tuple[str, ...], pattern: str) -> bool:
-    """Regle R6 : vrai si le motif a autant de groupes que d'unites, et si chaque groupe est suivi
-    directement de sa propre unite. « 2 ft 8,55 in » : « ft » suit les pieds, « in » les pouces."""
+def feet_inches_pattern(pattern: str, keys: int) -> bool:
+    """Regle R6 : vrai si le motif a deux groupes par cle, des pieds entiers ({FEET_GROUP}) suivis
+    directement de « ft », puis des pouces ({NUM}) suivis directement de « in ».
+    « 2 ft 8,55 in » : « ft » suit les pieds, « in » les pouces."""
     groups = list(GROUP_RE.finditer(pattern))
-    if len(groups) != len(units):
+    if len(groups) != len(FEET_INCHES_PARTS) * keys:
         return False
-    return all(re.match(rf" {re.escape(u)}(?![A-Za-z])", pattern[g.end():]) is not None
-               for g, u in zip(groups, units, strict=True))
+    shapes = (FEET_GROUP, NUM) * keys
+    return all(g.group(0) == shape and re.match(rf" {re.escape(u)}(?![A-Za-z])", pattern[g.end():]) is not None
+               for g, shape, u in zip(groups, shapes, FEET_INCHES_PARTS * keys, strict=True))
 
 
-def key_units(sel: RowSelector) -> tuple[str, ...]:
-    """Unite de chaque cle d'un selecteur de ligne, dans l'ordre des cles."""
-    return sel.group_units or (sel.unit,) * len(sel.keys)
+def groups_per_key(unit: str) -> int:
+    """Groupes du motif lus par chaque cle : deux pour une cote en pieds et pouces, un sinon."""
+    return len(FEET_INCHES_PARTS) if unit == FEET_INCHES else 1
 
 
 def check_status(clause: str, status: str, sources: tuple[str, ...], references: dict[str, str]) -> str:
@@ -487,7 +490,7 @@ def read_references(lines: list[Line]) -> dict[str, str]:
     return refs
 
 
-def value_object(value: Raw | None, unit: str, status: str, sources: tuple[str, ...], place: str) -> dict:
+def value_object(value: Raw | list[Raw] | None, unit: str, status: str, sources: tuple[str, ...], place: str) -> dict:
     obj: dict = {}
     if value is not None:
         obj["value"] = value
@@ -513,18 +516,15 @@ def check_selectors(tables: ModuleType) -> list[str]:
                 *tables.CONTROLS, *tables.PROFILES):
         name = getattr(sel, "key", None) or ", ".join(sel.keys)
         keys = sel.keys if isinstance(sel, RowSelector) else (sel.key,)
-        units = key_units(sel) if isinstance(sel, RowSelector) else (sel.unit,)
-        outside = [u for u in (sel.unit, *units) if u not in UNITS]
-        if outside:
-            errors.append(f"{name} : unite « {outside[0]} » hors de {list(UNITS)}")
+        if sel.unit not in UNITS:
+            errors.append(f"{name} : unite « {sel.unit} » hors de {list(UNITS)}")
             continue
-        if len(units) != len(keys):
-            errors.append(f"{name} : {len(units)} unite(s) pour {len(keys)} cle(s)")
+        if sel.unit == FEET_INCHES and not isinstance(sel, RowSelector):
+            errors.append(f"{name} : unite « {FEET_INCHES} » reservee aux selecteurs de ligne (regle R6)")
             continue
-        misplaced = [k for k, u in zip(keys, units, strict=True) if (u == FOOT) != k.endswith(FOOT_KEY_SUFFIX)]
-        if misplaced:
-            errors.append(f"{name} : unite « {FOOT} » reservee aux cles « …{FOOT_KEY_SUFFIX} », "
-                          f"en defaut sur {misplaced}")
+        if sel.unit == FEET_INCHES and sel.status != "manquant":
+            if not feet_inches_pattern(sel.pattern, len(keys)):
+                errors.append(f"{name} : motif sans « pieds entiers ft pouces in » par cle (regle R6)")
             continue
         if isinstance(sel, SeriesSelector):
             if sel.count < 1 or not sel.words or sel.unit == "1":
@@ -535,10 +535,6 @@ def check_selectors(tables: ModuleType) -> list[str]:
                 errors.append(f"{name} : liste de moins de 3 sommets, d'unite sans mot (R11) ou sans etiquette de statut")
             continue
         if sel.unit == "1" or getattr(sel, "status", "") == "manquant":
-            continue
-        if isinstance(sel, RowSelector) and sel.group_units:
-            if sel.group_units[-1] != sel.unit or not unit_follows_each_group(sel.group_units, sel.pattern):
-                errors.append(f"{name} : unites {list(sel.group_units)} ne suivent pas chacune son groupe")
             continue
         if isinstance(sel, (TableSelector, ProfileSelector)):
             ok = f"({sel.unit})" in sel.value_row
@@ -589,8 +585,16 @@ def apply_rows(tables: ModuleType, lines: list[Line],
         if sel.status == "manquant":
             values[sel.keys[0]] = value_object(None, sel.unit, sel.status, sel.sources, place)
             continue
-        for key, unit, text in zip(sel.keys, key_units(sel), matches[0].groups(), strict=True):
-            values[key] = value_object(decimal_text(text), unit, sel.status, sel.sources, place)
+        per = groups_per_key(sel.unit)
+        texts = matches[0].groups()
+        if len(texts) != per * len(sel.keys):
+            errors.append(f"{where} : {len(texts)} groupe(s) captures pour {len(sel.keys)} cle(s) d'unite "
+                          f"« {sel.unit} »")
+            continue
+        for i, key in enumerate(sel.keys):
+            parts = [decimal_text(t) for t in texts[i * per:(i + 1) * per]]
+            values[key] = value_object(parts if sel.unit == FEET_INCHES else parts[0], sel.unit, sel.status,
+                                       sel.sources, place)
 
 
 def series_terms(body: str, sel: SeriesSelector) -> tuple[list[tuple[str, str, str | None]], str]:
