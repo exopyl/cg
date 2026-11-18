@@ -160,7 +160,7 @@ std::unique_ptr<Mesh> BuildKrepisMesh (const KrepisSettings &settings, const Ref
 	if (stations.x.empty () && stations.y.empty () && stations.xLower.empty () && stations.yLower.empty ())
 	{
 		std::unique_ptr<Mesh> mesh = BuildKrepisMesh (settings);
-		sizes.assign (built.steps.size (), KrepisStepSize {16, 12});
+		sizes.assign (built.steps.size (), kKrepisPlainStepSize);
 		if (layout)
 			*layout = std::move (built);
 		if (steps)

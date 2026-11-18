@@ -1,20 +1,25 @@
-// Document du monument "monument/v8" : lecteur strict a exception, document
-// embarque et conversion vers les reglages du temple.
+// Document du monument "monument/v9" : lecteur strict a exception, documents
+// embarques, conversion vers les reglages du temple et mode partiel.
 #include <cgarchi/classical_monument.h>
 
 #include <cgarchi/classical_monument_data.h>
 #include <cgarchi/json_reader.h>
+#include "mesh.h"
 
 #include <nlohmann/json.hpp>
 
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <iterator>
 #include <limits>
+#include <memory>
+#include <optional>
 #include <regex>
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <utility>
 
 namespace cgarchi
@@ -104,6 +109,17 @@ namespace
 		if (!r.Require(obj, parent, {key}))
 			return nullptr;
 		return r.Object(obj, parent, key);
+	}
+
+	// Bloc facultatif a la racine : nullptr s'il est absent ou n'est pas un objet (refus deja signale) ;
+	// `present` vrai s'il est un objet.
+	const json *OptionalBlock (Reader &r, const json &doc, const char *key, bool &present)
+	{
+		if (!json_reader::Member(doc, key))
+			return nullptr;
+		const json *block = r.Object(doc, std::string(), key);
+		present = block != nullptr;
+		return block;
 	}
 
 	// `readme` : chaine non vide.
@@ -501,12 +517,12 @@ namespace
 		}
 	}
 
-	void ReadResult (Reader &r, const json &controls, const char *key, double &out)
+	void ReadResult (Reader &r, const json &controls, const char *parent, const char *key, double &out)
 	{
-		const json *s = RequiredObject(r, controls, "controls", key);
+		const json *s = RequiredObject(r, controls, parent, key);
 		if (!s)
 			return;
-		const std::string path = json_reader::Join("controls", key);
+		const std::string path = json_reader::Join(parent, key);
 		r.Known(*s, path, {"value", "readme"});
 		r.Require(*s, path, {"value", "readme"});
 		std::string place;
@@ -573,14 +589,14 @@ namespace
 
 		r.Known(doc, std::string(),
 		        {"schema", "monument", "source", "sources", "krepis", "peristyle", "columns", "controls",
-		         "columnControls", "entablature", "entablatureControls", "pediment", "pedimentControls"});
+		         "krepisControls", "columnControls", "entablature", "entablatureControls", "pediment", "pedimentControls"});
 		r.Require(doc, std::string(), {"monument"});
 		r.String(doc, std::string(), "monument", data.monument);
 		ReadSourceDocument(r, doc, data.source);
 		ReadSourceTable(r, doc, data.sources);
 
 		DocumentReader values(r, data.sources);
-		if (const json *k = RequiredObject(r, doc, std::string(), "krepis"))
+		if (const json *k = OptionalBlock(r, doc, "krepis", data.present.krepis))
 		{
 			const std::string p = "krepis";
 			r.Known(*k, p, {"stylobateWidth", "stylobateLength", "stepCount", "stylobateHeight", "secondStepHeight",
@@ -599,7 +615,7 @@ namespace
 			values.Value(*k, p, "euthynteriaHeight", Quantity::Length, m.euthynteriaHeight);
 			values.Value(*k, p, "euthynteriaTread", Quantity::Length, m.euthynteriaTread);
 		}
-		if (const json *s = RequiredObject(r, doc, std::string(), "peristyle"))
+		if (const json *s = OptionalBlock(r, doc, "peristyle", data.present.peristyle))
 		{
 			const std::string p = "peristyle";
 			r.Known(*s, p, {"frontColumns", "flankColumns", "frontSpacing", "flankSpacing", "frontCornerSpacing",
@@ -612,7 +628,7 @@ namespace
 			values.Value(*s, p, "frontCornerSpacing", Quantity::Length, m.frontCornerSpacing);
 			values.Value(*s, p, "flankCornerSpacing", Quantity::Length, m.flankCornerSpacing);
 		}
-		if (const json *c = RequiredObject(r, doc, std::string(), "columns"))
+		if (const json *c = OptionalBlock(r, doc, "columns", data.present.columns))
 		{
 			const std::string p = "columns";
 			r.Known(*c, p, {"lowerDiameter", "cornerLowerDiameter", "upperDiameter", "height", "fluteCount",
@@ -648,15 +664,27 @@ namespace
 			values.Value(*c, p, "fluteCount", Quantity::Count, m.fluteCount);
 			values.Value(*c, p, "annuletCount", Quantity::Count, m.annuletCount);
 		}
-		if (const json *c = RequiredObject(r, doc, std::string(), "controls"))
+		if (const json *c = OptionalBlock(r, doc, "controls", data.present.controls))
 		{
 			r.Known(*c, "controls", {"frontAxesY", "flankAxesX", "frontSum", "flankSum"});
 			ReadAxes(r, *c, "frontAxesY", data.controls.frontAxesY);
 			ReadAxes(r, *c, "flankAxesX", data.controls.flankAxesX);
-			ReadResult(r, *c, "frontSum", data.controls.frontSum);
-			ReadResult(r, *c, "flankSum", data.controls.flankSum);
+			for (const auto &[key, sum] : {std::make_pair("frontSum", &data.controls.frontSum),
+			                               std::make_pair("flankSum", &data.controls.flankSum)})
+				if (json_reader::Member(*c, key))
+				{
+					double value = 0.0;
+					ReadResult(r, *c, "controls", key, value);
+					*sum = value;
+				}
 		}
-		if (const json *c = RequiredObject(r, doc, std::string(), "columnControls"))
+		if (const json *c = OptionalBlock(r, doc, "krepisControls", data.present.krepisControls))
+		{
+			r.Known(*c, "krepisControls", {"footprintWidth", "footprintLength"});
+			ReadResult(r, *c, "krepisControls", "footprintWidth", data.krepisControls.footprintWidth);
+			ReadResult(r, *c, "krepisControls", "footprintLength", data.krepisControls.footprintLength);
+		}
+		if (const json *c = OptionalBlock(r, doc, "columnControls", data.present.columnControls))
 		{
 			r.Known(*c, "columnControls",
 			        {"shaftHeight", "footFluteChord", "fluteCentralRadius", "fluteLateralRadius", "topFluteDepth",
@@ -680,7 +708,7 @@ namespace
 				ReadControl(r, *c, "columnControls", key, Quantity::Length, *value);
 			ReadProfileControl(r, *c, "echinusProfile", m.echinusProfile);
 		}
-		if (const json *e = RequiredObject(r, doc, std::string(), "entablature"))
+		if (const json *e = OptionalBlock(r, doc, "entablature", data.present.entablature))
 		{
 			const std::string p = "entablature";
 			r.Known(*e, p,
@@ -763,7 +791,7 @@ namespace
 			values.Value(*e, p, "soffitSlope", Quantity::Angle, m.soffitSlope);
 			values.Divisions(*e, p, "triglyphDivisions", m.triglyphDivisions);
 		}
-		if (const json *c = RequiredObject(r, doc, std::string(), "entablatureControls"))
+		if (const json *c = OptionalBlock(r, doc, "entablatureControls", data.present.entablatureControls))
 		{
 			const char *p = "entablatureControls";
 			r.Known(*c, p,
@@ -828,7 +856,7 @@ namespace
 			for (const auto &[key, value] : counts)
 				ReadControl(r, *c, p, key, Quantity::Count, *value);
 		}
-		if (const json *f = RequiredObject(r, doc, std::string(), "pediment"))
+		if (const json *f = OptionalBlock(r, doc, "pediment", data.present.pediment))
 		{
 			const std::string p = "pediment";
 			r.Known(*f, p, {"apexRiseFt", "apexRiseIn", "rakingRun", "rakingProjectionFt", "rakingProjectionIn",
@@ -844,7 +872,7 @@ namespace
 			values.Polygon(*f, p, "rakingSection", m.rakingSection);
 			values.Value(*f, p, "sima", Quantity::Length, m.sima);
 		}
-		if (const json *c = RequiredObject(r, doc, std::string(), "pedimentControls"))
+		if (const json *c = OptionalBlock(r, doc, "pedimentControls", data.present.pedimentControls))
 		{
 			const char *p = "pedimentControls";
 			r.Known(*c, p,
@@ -870,6 +898,22 @@ namespace
 				ReadControl(r, *c, p, key, Quantity::Length, *value);
 			ReadControl(r, *c, p, "rakingSlope", Quantity::Angle, m.rakingSlope);
 		}
+
+		// Blocs de controles et leur partie (MO-P2) : un controle sans sa partie est refuse ; les axes sont
+		// exiges par le peristyle.
+		const MonumentBlocks &b = data.present;
+		const std::tuple<bool, const char *, bool, const char *> controlsOf[] = {
+			{b.controls, "controls", b.peristyle, "peristyle"},
+			{b.krepisControls, "krepisControls", b.krepis, "krepis"},
+			{b.columnControls, "columnControls", b.columns, "columns"},
+			{b.entablatureControls, "entablatureControls", b.entablature, "entablature"},
+			{b.pedimentControls, "pedimentControls", b.pediment, "pediment"},
+		};
+		for (const auto &[controls, controlsKey, part, partKey] : controlsOf)
+			if (controls && !part)
+				r.Error(controlsKey, std::string("requires block \"") + partKey + "\"");
+		if (b.peristyle && json_reader::Member(doc, "controls") == nullptr)
+			r.Require(doc, std::string(), {"controls"});
 
 		for (const auto &entry : data.sources)
 			if (values.Cited().count(entry.first) == 0)
@@ -995,10 +1039,24 @@ MonumentData ParseMonument (std::string_view jsonText)
 	return data;
 }
 
+const MonumentData &EmbeddedMonument (std::string_view name)
+{
+	if (name == "temple-hephaistos")
+	{
+		static const MonumentData data = ParseMonument(TempleHephaistosJson());
+		return data;
+	}
+	if (name == "temple-ares")
+	{
+		static const MonumentData data = ParseMonument(TempleAresJson());
+		return data;
+	}
+	throw std::invalid_argument("Monument : '" + std::string(name) + "' n'est pas un monument embarque");
+}
+
 const MonumentData &HephaistosMonument ()
 {
-	static const MonumentData data = ParseMonument(TempleHephaistosJson());
-	return data;
+	return EmbeddedMonument("temple-hephaistos");
 }
 
 MonumentFramePoint TempleFrameFromMonument (double x, double y, double z, double stylobateTop)
@@ -1287,16 +1345,267 @@ GreekPedimentSettings MonumentPedimentSettings (const MonumentData &data)
 	return s;
 }
 
+namespace
+{
+	// Temple du README : krepis, peristyle et colonnes, puis l'entablement et le fronton demandes. Un fronton sans
+	// entablement est refuse par LayoutTemple, non ici.
+	TempleSettings TempleSettingsOf (const MonumentData &data, bool withEntablature, bool withPediment)
+	{
+		TempleSettings t;
+		t.krepis = MonumentKrepisSettings(data);
+		t.peristyle = MonumentPeristyleSettings(data);
+		t.column = MonumentColumnSettings(data, false);
+		t.cornerColumn = MonumentColumnSettings(data, true);
+		if (withEntablature)
+			t.entablature = MonumentEntablatureSettings(data);
+		if (withPediment)
+			t.pediment = MonumentPedimentSettings(data);
+		return t;
+	}
+}
+
 TempleSettings MonumentTempleSettings (const MonumentData &data)
 {
-	TempleSettings t;
-	t.krepis = MonumentKrepisSettings(data);
-	t.peristyle = MonumentPeristyleSettings(data);
-	t.column = MonumentColumnSettings(data, false);
-	t.cornerColumn = MonumentColumnSettings(data, true);
-	t.entablature = MonumentEntablatureSettings(data);
-	t.pediment = MonumentPedimentSettings(data);
-	return t;
+	return TempleSettingsOf(data, true, true);
+}
+
+namespace
+{
+	constexpr std::size_t kPartCount = 5;
+
+	using ConsumedValues = std::vector<std::pair<const char *, const MonumentValue *>>;
+
+	// Cles consommees par la conversion de chaque partie (MO-P1), dans l'ordre du document. Hors table : les cles
+	// que la conversion exige manquantes (gardes GD3d, EN1, PE4) et celles qu'elle ne lit pas.
+	ConsumedValues ConsumedValuesOf (const MonumentData &d, MonumentPart part)
+	{
+		switch (part)
+		{
+		case MonumentPart::Krepis:
+		{
+			const MonumentKrepis &k = d.krepis;
+			return {{"krepis.stylobateWidth", &k.stylobateWidth},     {"krepis.stylobateLength", &k.stylobateLength},
+			        {"krepis.stepCount", &k.stepCount},               {"krepis.stylobateHeight", &k.stylobateHeight},
+			        {"krepis.secondStepHeight", &k.secondStepHeight}, {"krepis.thirdStepHeight", &k.thirdStepHeight},
+			        {"krepis.secondStepTread", &k.secondStepTread},   {"krepis.thirdStepTread", &k.thirdStepTread},
+			        {"krepis.euthynteriaHeight", &k.euthynteriaHeight},
+			        {"krepis.euthynteriaTread", &k.euthynteriaTread}};
+		}
+		case MonumentPart::Peristyle:
+		{
+			const MonumentPeristyle &p = d.peristyle;
+			return {{"peristyle.frontColumns", &p.frontColumns},
+			        {"peristyle.flankColumns", &p.flankColumns},
+			        {"peristyle.frontSpacing", &p.frontSpacing},
+			        {"peristyle.flankSpacing", &p.flankSpacing},
+			        {"peristyle.frontCornerSpacing", &p.frontCornerSpacing},
+			        {"peristyle.flankCornerSpacing", &p.flankCornerSpacing}};
+		}
+		case MonumentPart::Columns:
+		{
+			const MonumentColumns &c = d.columns;
+			return {{"columns.lowerDiameter", &c.lowerDiameter},
+			        {"columns.cornerLowerDiameter", &c.cornerLowerDiameter},
+			        {"columns.upperDiameter", &c.upperDiameter},
+			        {"columns.height", &c.height},
+			        {"columns.fluteCount", &c.fluteCount},
+			        {"columns.fluteDepth", &c.fluteDepth},
+			        {"columns.entasisSagitta", &c.entasisSagitta},
+			        {"columns.entasisHeight", &c.entasisHeight},
+			        {"columns.abacusHeight", &c.abacusHeight},
+			        {"columns.abacusHalfWidth", &c.abacusHalfWidth},
+			        {"columns.echinusHeight", &c.echinusHeight},
+			        {"columns.echinusJunctionDepth", &c.echinusJunctionDepth},
+			        {"columns.echinusJunctionRetreat", &c.echinusJunctionRetreat},
+			        {"columns.echinusTopRetreat", &c.echinusTopRetreat},
+			        {"columns.echinusLipRadius", &c.echinusLipRadius},
+			        {"columns.annuletCount", &c.annuletCount},
+			        {"columns.annuletsHeight", &c.annuletsHeight},
+			        {"columns.annuletsTopRetreat", &c.annuletsTopRetreat},
+			        {"columns.annuletsBottomRetreat", &c.annuletsBottomRetreat},
+			        {"columns.hypotrachelionHeight", &c.hypotrachelionHeight},
+			        {"columns.grooveHeight", &c.grooveHeight}};
+		}
+		case MonumentPart::Entablature:
+		{
+			// La suite triglyphDivisions est traitee a part (MissingMonumentKeys).
+			const MonumentEntablature &e = d.entablature;
+			return {{"entablature.taeniaHeight", &e.taeniaHeight},
+			        {"entablature.regulaHeight", &e.regulaHeight},
+			        {"entablature.guttaeHeight", &e.guttaeHeight},
+			        {"entablature.architraveFaceHeight", &e.architraveFaceHeight},
+			        {"entablature.friezeHeightFt", &e.friezeHeightFt},
+			        {"entablature.friezeHeightIn", &e.friezeHeightIn},
+			        {"entablature.triglyphCapitalHeight", &e.triglyphCapitalHeight},
+			        {"entablature.mutulePlateHeight", &e.mutulePlateHeight},
+			        {"entablature.dripHeight", &e.dripHeight},
+			        {"entablature.coronaHeight", &e.coronaHeight},
+			        {"entablature.filletHeight", &e.filletHeight},
+			        {"entablature.crownHeight", &e.crownHeight},
+			        {"entablature.architraveTopProjection", &e.architraveTopProjection},
+			        {"entablature.architraveFootProjection", &e.architraveFootProjection},
+			        {"entablature.taeniaProjection", &e.taeniaProjection},
+			        {"entablature.triglyphFace", &e.triglyphFace},
+			        {"entablature.triglyphCapitalBandProjection", &e.triglyphCapitalBandProjection},
+			        {"entablature.triglyphCapitalListelProjection", &e.triglyphCapitalListelProjection},
+			        {"entablature.triglyphCapitalListelHeight", &e.triglyphCapitalListelHeight},
+			        {"entablature.triglyphCapitalBandHeight", &e.triglyphCapitalBandHeight},
+			        {"entablature.metopeFace", &e.metopeFace},
+			        {"entablature.mutulePlateProjection", &e.mutulePlateProjection},
+			        {"entablature.dripProjection", &e.dripProjection},
+			        {"entablature.coronaProjection", &e.coronaProjection},
+			        {"entablature.filletProjection", &e.filletProjection},
+			        {"entablature.crownProjection", &e.crownProjection},
+			        {"entablature.triglyphWidthFt", &e.triglyphWidthFt},
+			        {"entablature.triglyphWidthIn", &e.triglyphWidthIn},
+			        {"entablature.regulaProjection", &e.regulaProjection},
+			        {"entablature.regulaGuttaCount", &e.regulaGuttaCount},
+			        {"entablature.regulaGuttaDiameter", &e.regulaGuttaDiameter},
+			        {"entablature.regulaGuttaGap", &e.regulaGuttaGap},
+			        {"entablature.regulaGuttaTopProjection", &e.regulaGuttaTopProjection},
+			        {"entablature.regulaGuttaFootProjection", &e.regulaGuttaFootProjection},
+			        {"entablature.mutuleWidthFt", &e.mutuleWidthFt},
+			        {"entablature.mutuleWidthIn", &e.mutuleWidthIn},
+			        {"entablature.mutuleDepth", &e.mutuleDepth},
+			        {"entablature.soffitSlope", &e.soffitSlope},
+			        {"entablature.mutuleGuttaFrontDiameter", &e.mutuleGuttaFrontDiameter},
+			        {"entablature.mutuleGuttaMiddleDiameter", &e.mutuleGuttaMiddleDiameter},
+			        {"entablature.mutuleGuttaRearDiameter", &e.mutuleGuttaRearDiameter},
+			        {"entablature.mutuleGuttaFrontGap", &e.mutuleGuttaFrontGap},
+			        {"entablature.mutuleGuttaRearGap", &e.mutuleGuttaRearGap},
+			        {"entablature.mutuleGuttaHeight", &e.mutuleGuttaHeight},
+			        {"entablature.mutuleGuttaEdgeAxis", &e.mutuleGuttaEdgeAxis},
+			        {"entablature.mutuleGuttaPerRow", &e.mutuleGuttaPerRow},
+			        {"entablature.mutuleGuttaFootFlare", &e.mutuleGuttaFootFlare}};
+		}
+		case MonumentPart::Pediment:
+		{
+			const MonumentPediment &f = d.pediment;
+			return {{"pediment.apexRiseFt", &f.apexRiseFt},
+			        {"pediment.apexRiseIn", &f.apexRiseIn},
+			        {"pediment.rakingRun", &f.rakingRun},
+			        {"pediment.tympanumFace", &f.tympanumFace}};
+		}
+		}
+		throw std::invalid_argument("Monument : partie hors de l'enumeration");
+	}
+
+	bool PartPresent (const MonumentData &d, MonumentPart part)
+	{
+		switch (part)
+		{
+		case MonumentPart::Krepis:      return d.present.krepis;
+		case MonumentPart::Peristyle:   return d.present.peristyle;
+		case MonumentPart::Columns:     return d.present.columns;
+		case MonumentPart::Entablature: return d.present.entablature;
+		case MonumentPart::Pediment:    return d.present.pediment;
+		}
+		throw std::invalid_argument("Monument : partie hors de l'enumeration");
+	}
+
+	// Plages des degres de la krepis de BuildKrepisMesh sans stations : kKrepisPlainStepSize par degre, concatenes.
+	std::vector<TempleMeshPart> KrepisParts (const Mesh &mesh, std::size_t steps)
+	{
+		constexpr unsigned kStepVertices = kKrepisPlainStepSize.vertices, kStepFaces = kKrepisPlainStepSize.faces;
+		if (static_cast<std::size_t>(mesh.GetNVertices()) != steps * kStepVertices ||
+		    static_cast<std::size_t>(mesh.GetNFaces()) != steps * kStepFaces)
+			throw std::logic_error("Monument : krepis de taille inattendue");
+		std::vector<TempleMeshPart> parts;
+		parts.reserve(steps);
+		for (std::size_t k = 0; k < steps; ++k)
+		{
+			TempleMeshPart part;
+			part.address = {TempleElement::KrepisStep, PeristyleSide::Front, static_cast<int>(k)};
+			part.firstVertex = static_cast<unsigned>(k) * kStepVertices;
+			part.vertexCount = kStepVertices;
+			part.firstFace = static_cast<unsigned>(k) * kStepFaces;
+			part.faceCount = kStepFaces;
+			parts.push_back(part);
+		}
+		return parts;
+	}
+}
+
+std::vector<std::string> MissingMonumentKeys (const MonumentData &data, MonumentPart part)
+{
+	std::vector<std::string> missing;
+	const ConsumedValues values = ConsumedValuesOf(data, part);
+	for (const auto &[key, value] : values)
+	{
+		if (!value->value)
+			missing.emplace_back(key);
+		// Suite du triglyphe a sa place au document, entre metopeWidthIn (non consommee) et regulaProjection.
+		if (part == MonumentPart::Entablature && std::string_view(key) == "entablature.triglyphWidthIn")
+		{
+			const MonumentDivisions &dv = data.entablature.triglyphDivisions;
+			if (dv.status == MonumentStatus::Missing || dv.values.empty())
+				missing.emplace_back("entablature.triglyphDivisions");
+		}
+	}
+	if (part == MonumentPart::Pediment)
+	{
+		const MonumentPolygon &p = data.pediment.rakingSection;
+		if (p.status == MonumentStatus::Missing || p.u.empty())
+			missing.emplace_back("pediment.rakingSection");
+	}
+	return missing;
+}
+
+MonumentBuild BuildMonumentMesh (const MonumentData &data)
+{
+	MonumentBuild build;
+	std::array<bool, kPartCount> complete{};
+	for (std::size_t i = 0; i < kPartCount; ++i)
+	{
+		const MonumentPart part = static_cast<MonumentPart>(i);
+		MonumentPartReport &r = build.report[i];
+		r.part = part;
+		if (!PartPresent(data, part))
+			r.state = MonumentPartState::Absent;
+		else
+		{
+			r.missingKeys = MissingMonumentKeys(data, part);
+			r.state = r.missingKeys.empty() ? MonumentPartState::Built : MonumentPartState::Incomplete;
+		}
+		complete[i] = r.state == MonumentPartState::Built;
+	}
+	// Dependances en chaine (MO-P3) : la premiere partie non complete bloque toutes les suivantes completes.
+	std::array<bool, kPartCount> buildable{};
+	std::optional<MonumentPart> firstIncomplete;
+	for (std::size_t i = 0; i < kPartCount; ++i)
+	{
+		buildable[i] = complete[i] && !firstIncomplete;
+		if (complete[i] && firstIncomplete)
+		{
+			build.report[i].state = MonumentPartState::Blocked;
+			build.report[i].blockedBy = firstIncomplete;
+		}
+		if (!complete[i] && !firstIncomplete)
+			firstIncomplete = static_cast<MonumentPart>(i);
+	}
+	const auto can = [&](MonumentPart part) { return buildable[static_cast<std::size_t>(part)]; };
+
+	if (can(MonumentPart::Columns))
+	{
+		const TempleSettings settings =
+			TempleSettingsOf(data, can(MonumentPart::Entablature), can(MonumentPart::Pediment));
+		build.mesh = BuildTempleMesh(settings, nullptr, &build.parts);
+		return build;
+	}
+	if (can(MonumentPart::Peristyle))
+	{
+		LayoutPeristyle(MonumentPeristyleSettings(data));   // MO-P5 : validation seule, aucune geometrie
+		build.report[static_cast<std::size_t>(MonumentPart::Peristyle)].state = MonumentPartState::CompleteNotBuilt;
+	}
+	if (can(MonumentPart::Krepis))
+	{
+		KrepisLayout layout;
+		build.mesh = BuildKrepisMesh(MonumentKrepisSettings(data), &layout);
+		build.parts = KrepisParts(*build.mesh, layout.steps.size());
+		return build;
+	}
+	build.mesh = std::make_unique<Mesh>();
+	return build;
 }
 
 } // namespace classical

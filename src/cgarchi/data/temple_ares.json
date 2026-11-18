@@ -1,0 +1,157 @@
+{
+  "schema": "monument/v9",
+  "monument": "temple-ares",
+  "source": {
+    "document": "Architecture/Antique/TempleAres/README.md",
+    "sha256": "efc96fbb3db9f05ef3f7b55c4a3505352c55564d40e7d67a347d04093e86d50b",
+    "bytes": 51634,
+    "derivedBy": "src/cgarchi/data/temple_ares_from_readme.py"
+  },
+  "sources": {
+    "A": "W. B. Dinsmoor, « The Temple of Ares at Athens », *Hesperia* 9, 1940, p. 1-52, `1940 - William Bell Dinsmoor, The Temple of Ares at Athens (Hesperia 9).pdf` (texte : `…-extracted.txt` ; page du PDF = page imprimée) ; fig. 12 à part : `1940 - Dinsmoor - fig. 12 - sima rampante et sima des flancs.png`",
+    "M": "M. H. McAllister, « The Temple of Ares at Athens: A Review of the Evidence », *Hesperia* 28, 1959, p. 1-64, pl. A et 1-7, `1959 - Marian Holland McAllister, The Temple of Ares at Athens, A Review of the Evidence (Hesperia 28).pdf` (texte : `…-extracted.txt` ; page du PDF = page imprimée)"
+  },
+  "krepis": {
+    "stylobateWidth": {
+      "value": 14.231,
+      "unit": "m",
+      "status": "déduit",
+      "sources": ["M"],
+      "readme": "§3.3, l. 90"
+    },
+    "stylobateLength": {
+      "value": 33.047,
+      "unit": "m",
+      "status": "déduit",
+      "sources": ["M"],
+      "readme": "§3.3, l. 90"
+    },
+    "stepCount": {
+      "value": 3,
+      "unit": "1",
+      "status": "lu",
+      "sources": ["M"],
+      "readme": "§3.3, l. 79"
+    },
+    "stylobateHeight": {
+      "value": 0.356,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["M"],
+      "readme": "§3.3, l. 80"
+    },
+    "secondStepHeight": {
+      "value": 0.356,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["M"],
+      "readme": "§3.3, l. 81"
+    },
+    "thirdStepHeight": {
+      "value": 0.356,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["M"],
+      "readme": "§3.3, l. 82"
+    },
+    "secondStepTread": {
+      "value": 0.395,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["M"],
+      "readme": "§3.3, l. 84"
+    },
+    "thirdStepTread": {
+      "value": 0.395,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["M"],
+      "readme": "§3.3, l. 85"
+    },
+    "cornerMargin": {
+      "value": 0.0475,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["M"],
+      "readme": "§3.3, l. 87"
+    },
+    "euthynteriaHeight": {
+      "value": 0.303,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["M"],
+      "readme": "§3.3, l. 78"
+    },
+    "euthynteriaTread": {
+      "value": 0.157,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["M"],
+      "readme": "§3.3, l. 86"
+    }
+  },
+  "peristyle": {
+    "frontColumns": {
+      "value": 6,
+      "unit": "1",
+      "status": "lu",
+      "sources": ["A"],
+      "readme": "§2, l. 43"
+    },
+    "flankColumns": {
+      "value": 13,
+      "unit": "1",
+      "status": "lu",
+      "sources": ["A"],
+      "readme": "§2, l. 43"
+    },
+    "frontSpacing": {
+      "value": 2.688,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["M"],
+      "readme": "§4.1, l. 103"
+    },
+    "flankSpacing": {
+      "value": 2.688,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["M"],
+      "readme": "§4.1, l. 104"
+    },
+    "frontCornerSpacing": {
+      "value": 2.489,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["M"],
+      "readme": "§4.1, l. 106"
+    },
+    "flankCornerSpacing": {
+      "value": 2.489,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["M"],
+      "readme": "§4.1, l. 107"
+    }
+  },
+  "controls": {
+    "frontAxesY": {
+      "values": [-6.521, -4.032, -1.344, 1.344, 4.032, 6.521],
+      "readme": "§4.3, l. 125"
+    },
+    "flankAxesX": {
+      "values": [-15.929, -13.440, -10.752, -8.064, -5.376, -2.688, 0, 2.688, 5.376, 8.064, 10.752, 13.440, 15.929],
+      "readme": "§4.3, l. 130"
+    }
+  },
+  "krepisControls": {
+    "footprintWidth": {
+      "value": 16.125,
+      "readme": "§12, l. 419"
+    },
+    "footprintLength": {
+      "value": 34.941,
+      "readme": "§12, l. 420"
+    }
+  }
+}

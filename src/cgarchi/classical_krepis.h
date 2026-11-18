@@ -98,6 +98,10 @@ struct KrepisStepSize
 	unsigned vertices = 0, faces = 0;
 };
 
+// Taille d'un degre de BuildKrepisMesh sans stations : un extrudeToMesh de
+// rectangle, 16 sommets et 12 faces.
+constexpr KrepisStepSize kKrepisPlainStepSize {16, 12};
+
 // Krepis a stations (raffinement, registre RF5 et KR1 amendee) : par degre, dans
 // l'ordre de layout.steps, sommets non partages entre degres, un solide ferme du
 // meme volume que sans stations. Dessus : grille des abscisses {-demi-cote,

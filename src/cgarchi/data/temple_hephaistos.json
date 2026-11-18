@@ -1,14 +1,14 @@
 {
-  "schema": "monument/v8",
+  "schema": "monument/v9",
   "monument": "temple-hephaistos",
   "source": {
     "document": "Architecture/Antique/TempleHephaistos/README.md",
-    "sha256": "2b21a78b6fb260775cda997e1377705e04885d98b71c9c04c1a4ae8a6061eef3",
-    "bytes": 131793,
+    "sha256": "d8fe5c06db1b6acd9d5f3f8397f83aafeb77a8bc56463c62da80ae83eb7b2cf2",
+    "bytes": 131884,
     "derivedBy": "src/cgarchi/data/temple_hephaistos_from_readme.py"
   },
   "sources": {
-    "D": "W. B. Dinsmoor, *The Architecture of Ancient Greece* (refonte d'Anderson et Spiers), `General/1950 - …Dinsmoor….pdf`",
+    "D": "W. B. Dinsmoor, *The Architecture of Ancient Greece* (refonte d'Anderson et Spiers), **édition de 1927** (préface de mars 1927 ; le nom du fichier porte « 1950 » à tort), `General/1950 - …Dinsmoor….pdf`",
     "L": "J.-D. Le Roy, *Les Ruines des plus beaux monuments de la Grèce*, 1770, pl. XVII, `TempleHephaistos/Plan_of_the_Temple_of_Hephaestus….jpg`",
     "O": "W. B. Dinsmoor, *Observations on the Hephaisteion*, *Hesperia*, Supplement V, 1941 (réimpr. 1975), `TempleHephaistos/1941 - William Bell Dinsmoor, Observations on the Hephaisteion (Hesperia Suppl. 5).pdf` (texte : `…-extracted.txt`). Pages citées : pages imprimées ; page du PDF = page imprimée + 3",
     "S": "J. Stuart et N. Revett, *The Antiquities of Athens*, vol. III, chap. I, « Of the Temple of Theseus », `General/1726 - Sturt Revett - Antiquities of Athens, vol. III.pdf` (planches datées de 1794 ; exemplaire Internet Archive `antiqvitiesAthe3Stua`)",

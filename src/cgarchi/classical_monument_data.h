@@ -5,8 +5,10 @@
 namespace cgarchi
 {
 
-// Texte UTF-8 de src/cgarchi/data/temple_hephaistos.json, embarque a la build
-// (embed_file.cmake). Valide pour la duree du programme.
+// Textes UTF-8 des documents des monuments, embarques a la build
+// (embed_file.cmake) : src/cgarchi/data/temple_hephaistos.json et
+// src/cgarchi/data/temple_ares.json. Valides pour la duree du programme.
 std::string_view TempleHephaistosJson ();
+std::string_view TempleAresJson ();
 
 } // namespace cgarchi

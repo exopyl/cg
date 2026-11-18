@@ -1,15 +1,18 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "monument-v8",
-  "title": "Monument (v8)",
-  "description": "Document d'un monument, à la forme de sa source : sections et valeurs du README du monument, chacune avec son unité telle qu'écrite, dans son repère. Écrit par src/cgarchi/data/temple_hephaistos_from_readme.py, jamais à la main. Lecteur : ParseMonument (src/cgarchi/classical_monument.h).",
-  "$comment": "Règles que ce fichier n'exprime pas, tenues par le lecteur : `value` est requise si et seulement si `status` n'est pas « manquant » ; « lu » et « mesuré » citent au moins une source, « manquant » aucune ; chaque source citée est une clé de `sources`, et chaque clé de `sources` est citée ; `readme` n'est pas vide ; les coordonnées de contrôle sont strictement croissantes ; les deux listes d'un profil de contrôle ont la même longueur, non nulle, et ses profondeurs sont strictement croissantes ; l'unité « ft » est celle des seules clés `…Ft`, et ces clés n'en ont pas d'autre ; l'unité « ° » est celle des seuls angles (`$defs/angle`, `$defs/angleControl`) ; l'unité « ratio » est celle des seuls rapports (`$defs/ratio`) ; une suite de divisions ou de hauteurs n'est jamais « manquant », et ses deux listes ont la même longueur, non nulle ; un polygone n'est jamais « manquant », ses deux listes `u` et `h` ont la même longueur, au moins 3, et ses coordonnées sont finies et >= 0. Les clés en double sont refusées. Les contrôles du péristyle (`controls`) sont en mètres.",
+  "$id": "monument-v9",
+  "title": "Monument (v9)",
+  "description": "Document d'un monument, à la forme de sa source : sections et valeurs du README du monument, chacune avec son unité telle qu'écrite, dans son repère. Écrit par le script d'un monument (src/cgarchi/data/<monument>_from_readme.py, moteur monument_from_readme.py), jamais à la main. Lecteur : ParseMonument (src/cgarchi/classical_monument.h).",
+  "$comment": "Règles que ce fichier n'exprime pas, tenues par le lecteur : `value` est requise si et seulement si `status` n'est pas « manquant » ; « lu » et « mesuré » citent au moins une source, « manquant » aucune ; chaque source citée est une clé de `sources`, et chaque clé de `sources` est citée ; `readme` n'est pas vide ; les coordonnées de contrôle sont strictement croissantes ; les deux listes d'un profil de contrôle ont la même longueur, non nulle, et ses profondeurs sont strictement croissantes ; l'unité « ft » est celle des seules clés `…Ft`, et ces clés n'en ont pas d'autre ; l'unité « ° » est celle des seuls angles (`$defs/angle`, `$defs/angleControl`) ; l'unité « ratio » est celle des seuls rapports (`$defs/ratio`) ; une suite de divisions ou de hauteurs n'est jamais « manquant », et ses deux listes ont la même longueur, non nulle ; un polygone n'est jamais « manquant », ses deux listes `u` et `h` ont la même longueur, au moins 3, et ses coordonnées sont finies et >= 0. Les clés en double sont refusées. Les contrôles du péristyle (`controls`) et de la krépis (`krepisControls`) sont en mètres. Blocs : `krepis`, `peristyle`, `columns`, `entablature` et `pediment` sont facultatifs ; un bloc absent est une partie non documentée, un bloc présent porte toutes ses clés. Les blocs de contrôle et leur partie sont liés par `dependentRequired`.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "monument", "source", "sources", "krepis", "peristyle", "columns", "controls", "columnControls",
-               "entablature", "entablatureControls", "pediment", "pedimentControls"],
+  "required": ["schema", "monument", "source", "sources"],
+  "dependentRequired": {
+    "peristyle": ["controls"], "controls": ["peristyle"], "krepisControls": ["krepis"], "columnControls": ["columns"],
+    "entablatureControls": ["entablature"], "pedimentControls": ["pediment"]
+  },
   "properties": {
-    "schema":   { "const": "monument/v8" },
+    "schema":   { "const": "monument/v9" },
     "monument": { "type": "string" },
     "source": {
       "type": "object",
@@ -99,12 +102,22 @@
       "type": "object",
       "description": "Résultats imprimés par le README, relus et recalculés par les tests ; sans statut ; en mètres.",
       "additionalProperties": false,
-      "required": ["frontAxesY", "flankAxesX", "frontSum", "flankSum"],
+      "required": ["frontAxesY", "flankAxesX"],
       "properties": {
         "frontAxesY": { "$ref": "#/$defs/axes" },
         "flankAxesX": { "$ref": "#/$defs/axes" },
         "frontSum":   { "$ref": "#/$defs/result" },
         "flankSum":   { "$ref": "#/$defs/result" }
+      }
+    },
+    "krepisControls": {
+      "type": "object",
+      "description": "Emprise de l'euthyntéria imprimée par le README (contrôles), sans statut ; en mètres.",
+      "additionalProperties": false,
+      "required": ["footprintWidth", "footprintLength"],
+      "properties": {
+        "footprintWidth":  { "$ref": "#/$defs/result" },
+        "footprintLength": { "$ref": "#/$defs/result" }
       }
     },
     "columnControls": {

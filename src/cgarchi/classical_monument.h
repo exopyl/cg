@@ -1,7 +1,9 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -19,7 +21,7 @@ namespace classical
 {
 
 // ============================================================================
-//  Document du monument "monument/v8" : valeurs du README du monument, avec
+//  Document du monument "monument/v9" : valeurs du README du monument, avec
 //  leur unite, leur statut, leurs sources et leur lieu ; conversion vers les
 //  reglages du temple
 // ============================================================================
@@ -28,9 +30,10 @@ namespace classical
 // dans l'unite ou le README l'ecrit (metres, pouces et pieds de Stuart et
 // Revett, millimetres), dans le repere du README (x vers l'est, y vers le nord,
 // z vers le haut depuis le dessus du stylobate, origine au centre du
-// stylobate). Il est ecrit par src/cgarchi/data/temple_hephaistos_from_readme.py,
+// stylobate). Il est ecrit par le script du monument (src/cgarchi/data/
+// <monument>_from_readme.py, moteur monument_from_readme.py),
 // jamais a la main, et embarque a la build (classical_monument_data.h). Schema :
-// src/cgarchi/schemas/monument-v8.schema.
+// src/cgarchi/schemas/monument-v9.schema.
 //
 // Statuts : les mots du README, liste fermee. Une valeur "manquant" n'a pas de
 // cle "value" ; toute autre en a une. "lu" et "mesure" citent au moins une
@@ -63,7 +66,7 @@ namespace classical
 // long de x ; (X, Y, Z) = (y, -x, z + stylobateTop), quart de tour direct ;
 // cotes : est = Front, nord = Right, ouest = Back, sud = Left.
 
-constexpr const char *kMonumentSchema = "monument/v8";
+constexpr const char *kMonumentSchema = "monument/v9";
 
 // Pouce anglais en metres (README section 1.1).
 constexpr double kMonumentInch = 0.0254;
@@ -157,7 +160,26 @@ struct MonumentColumns
 struct MonumentControls
 {
 	std::vector<double> frontAxesY, flankAxesX;   // section 4.3, repere du README, strictement croissants
-	double frontSum = 0.0, flankSum = 0.0;        // section 12, sommes de facade et de flanc
+	// Section 12, sommes de facade et de flanc ; cles facultatives, vides si absentes.
+	std::optional<double> frontSum, flankSum;
+};
+
+// Controles de la krepis (bloc krepisControls), memes regles que MonumentControls :
+// emprise de l'euthynteria imprimee par le README, largeur (facade) et longueur.
+// Cles exigees du bloc : valeurs significatives si et seulement si
+// MonumentBlocks::krepisControls ; 0 sinon.
+struct MonumentKrepisControls
+{
+	double footprintWidth = 0.0, footprintLength = 0.0;
+};
+
+// Blocs presents au document. Un bloc absent est une partie non documentee : ses
+// valeurs restent celles par defaut, manquantes.
+struct MonumentBlocks
+{
+	bool krepis = false, peristyle = false, columns = false, entablature = false, pediment = false;
+	bool controls = false, krepisControls = false, columnControls = false, entablatureControls = false,
+	     pedimentControls = false;
 };
 
 // Controle de la colonne : nombre imprime par le README, avec son unite.
@@ -345,13 +367,20 @@ struct MonumentData
 	MonumentEntablatureControls        entablatureControls;
 	MonumentPediment                   pediment;
 	MonumentPedimentControls           pedimentControls;
+	MonumentKrepisControls             krepisControls;
+	MonumentBlocks                     present;
 };
 
-// Lecture stricte d'un document "monument/v8" (json_reader::StrictReader). Leve
+// Lecture stricte d'un document "monument/v9" (json_reader::StrictReader). Leve
 // std::runtime_error si le document est refuse ; le message porte chaque refus,
-// une ligne chacun, "monument/v8 <chemin> : <motif>". Refus : texte illisible ;
-// cle en double ; schema autre que "monument/v8" ; cle inconnue ou absente, a
-// tout niveau ; null ; type faux ; status hors des cinq ; unit hors des sept,
+// une ligne chacun, "monument/v9 <chemin> : <motif>". Blocs facultatifs (registre
+// MO-P2) : krepis, peristyle, columns, entablature et pediment ; un bloc present
+// porte toutes ses cles. Refus : texte illisible ; cle en double ; schema autre
+// que "monument/v9" ; cle inconnue, a tout niveau ; cle absente d'un bloc
+// present (controls.frontSum et controls.flankSum exceptees) ; peristyle sans
+// controls, controls sans peristyle, krepisControls sans krepis, columnControls
+// sans columns, entablatureControls sans entablature, pedimentControls sans
+// pediment ("requires block \"<partie>\"") ; null ; type faux ; status hors des cinq ; unit hors des sept,
 // "1", "ft", "°" ou "ratio" sur une longueur, autre que "1" sur un compte, autre
 // que "ft" sur une cle "<nom>Ft", autre que "°" sur un angle, autre que "ratio"
 // sur un rapport ; value absente pour un statut autre que manquant, presente
@@ -369,9 +398,15 @@ struct MonumentData
 // manquant ; controle d'angle autre que "°".
 MonumentData ParseMonument (std::string_view jsonText);
 
-// Le document embarque (data/temple_hephaistos.json), lu une fois. Une lecture
-// en echec leve a chaque appel. La reference designe un objet statique local :
-// valide pour la duree du programme, premiere lecture sure entre fils.
+// Document embarque du monument `name` : "temple-hephaistos"
+// (data/temple_hephaistos.json) ou "temple-ares" (data/temple_ares.json), lu une
+// fois. Leve std::invalid_argument, prefixe "Monument : " et nom entre
+// apostrophes, pour tout autre nom ; une lecture en echec leve a chaque appel. La
+// reference designe un objet statique local : valide pour la duree du programme,
+// premiere lecture sure entre fils.
+const MonumentData &EmbeddedMonument (std::string_view name);
+
+// EmbeddedMonument ("temple-hephaistos").
 const MonumentData &HephaistosMonument ();
 
 // Point du repere du README dans le repere du temple (D2-5, D3-16) :
@@ -494,6 +529,70 @@ GreekPedimentSettings MonumentPedimentSettings (const MonumentData &data);
 // entablement (MonumentEntablatureSettings) et fronton
 // (MonumentPedimentSettings).
 TempleSettings MonumentTempleSettings (const MonumentData &data);
+
+// ============================================================================
+//  Mode partiel : seules les parties completement renseignees sont construites
+// ============================================================================
+//
+// Registre MO-P1 a MO-P6 (classical_orders_implementation.md section 10.13).
+// Parties, dans l'ordre des dependances : krepis <- peristyle (axes) <- colonnes
+// <- entablement <- fronton (MO-P3). Une partie est complete quand son bloc est
+// present et que toutes les cles que sa conversion consomme sont renseignees
+// (MO-P1) ; une cle dont la conversion exige qu'elle soit manquante
+// (columns.grooveDepth, entablature.innerFace, pediment.sima) n'est pas
+// consommee. Une partie n'est construite que si elle est complete et que toutes
+// ses dependances le sont. Le peristyle n'a pas de geometrie propre (MO-P4) :
+// sans colonnes, il n'est que valide par LayoutPeristyle (MO-P5).
+
+enum class MonumentPart { Krepis, Peristyle, Columns, Entablature, Pediment };
+
+// Built : construite. CompleteNotBuilt : complete, dependances completes, sans
+// geometrie (peristyle sans colonnes, valide par LayoutPeristyle). Incomplete :
+// bloc present, cles consommees manquantes (missingKeys). Absent : bloc absent.
+// Blocked : complete, une dependance ne l'est pas (blockedBy). Un bloc absent
+// est Absent et un bloc incomplet Incomplete, quelles que soient ses dependances.
+enum class MonumentPartState { Built, CompleteNotBuilt, Incomplete, Absent, Blocked };
+
+struct MonumentPartReport
+{
+	MonumentPart              part = MonumentPart::Krepis;
+	MonumentPartState         state = MonumentPartState::Absent;
+	std::vector<std::string>  missingKeys;   // Incomplete : cles consommees manquantes, ordre du document
+	std::optional<MonumentPart> blockedBy;   // Blocked : premiere dependance non complete, depuis la krepis
+};
+
+struct MonumentBuild
+{
+	std::unique_ptr<Mesh>             mesh;     // jamais nul ; vide si aucune partie n'est construite
+	std::vector<TempleMeshPart>       parts;    // plages du maillage, comme BuildTempleMesh
+	std::array<MonumentPartReport, 5> report;   // indice : static_cast<int> (MonumentPart)
+};
+
+// Cles consommees par la conversion de `part` et manquantes dans `data`, chemin
+// complet ("columns.height"), dans l'ordre du document : toutes les cles
+// consommees si le bloc est absent. Une suite (entablature.triglyphDivisions) ou
+// un polygone (pediment.rakingSection) est manquant si son statut l'est ou s'il
+// est vide. Cles consommees : krepis 10 (toutes sauf cornerMargin), peristyle 6,
+// colonnes 21 (toutes sauf grooveDepth), entablement 48 (toutes sauf
+// architraveHeightFt, architraveHeightIn, corniceHeightFt, corniceHeightIn,
+// innerFace, metopeWidthFt, metopeWidthIn et channelDepth), fronton 5
+// (apexRiseFt, apexRiseIn, rakingRun, tympanumFace, rakingSection).
+std::vector<std::string> MissingMonumentKeys (const MonumentData &data, MonumentPart part);
+
+// Maillage des parties construites et rapport des cinq parties. Aiguillage :
+//   - colonnes construites : TempleSettings des parties construites
+//     (entablement et fronton seulement s'ils le sont), puis BuildTempleMesh ;
+//     les cinq parties construites, exactement
+//     BuildTempleMesh (MonumentTempleSettings (data)) ;
+//   - sinon krepis construite : LayoutPeristyle si le peristyle est complete
+//     et non bloque, puis BuildKrepisMesh, une partie KrepisStep par degre
+//     (adresse KrepisStep, index du degre, 16 sommets et 12 faces chacune) ;
+//   - sinon maillage vide.
+// Les exceptions des conversions et des validations (LayoutPeristyle,
+// LayoutKrepis, LayoutTemple) remontent telles quelles. Le peristyle construit
+// avec les colonnes est Built. TE3 et TE4 (pieds sur le stylobate, colonnes
+// disjointes) ne sont controles qu'avec les colonnes.
+MonumentBuild BuildMonumentMesh (const MonumentData &data);
 
 } // namespace classical
 } // namespace cgarchi
