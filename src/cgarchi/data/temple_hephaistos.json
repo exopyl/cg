@@ -1,14 +1,16 @@
 {
-  "schema": "monument/v10",
+  "schema": "monument/v14",
   "monument": "temple-hephaistos",
   "source": {
     "document": "Architecture/Antique/TempleHephaistos/README.md",
-    "sha256": "d8fe5c06db1b6acd9d5f3f8397f83aafeb77a8bc56463c62da80ae83eb7b2cf2",
-    "bytes": 131884,
+    "sha256": "b15888ff472e066561837af5c6600d3209956391e077f4d15b4d8ba74bc7b4d4",
+    "bytes": 210700,
     "derivedBy": "src/cgarchi/data/temple_hephaistos_from_readme.py"
   },
   "sources": {
+    "B": "O. Broneer, « Notes on the Interior of the Hephaisteion », *Hesperia* 14, 1945, p. 246-258, `TempleHephaistos/1945 - Oscar Broneer, …pdf`",
     "D": "W. B. Dinsmoor, *The Architecture of Ancient Greece* (refonte d'Anderson et Spiers), **édition de 1927** (préface de mars 1927 ; le nom du fichier porte « 1950 » à tort), `General/1950 - …Dinsmoor….pdf`",
+    "H": "W. B. Dinsmoor, « The Internal Colonnade of the Hephaisteion », *Hesperia* 37, 1968, p. 159-177, `TempleHephaistos/1968 - William Bell Dinsmoor, The Internal Colonnade of the Hephaisteion (Hesperia 37).pdf` (texte : `…-extracted.txt`)",
     "L": "J.-D. Le Roy, *Les Ruines des plus beaux monuments de la Grèce*, 1770, pl. XVII, `TempleHephaistos/Plan_of_the_Temple_of_Hephaestus….jpg`",
     "O": "W. B. Dinsmoor, *Observations on the Hephaisteion*, *Hesperia*, Supplement V, 1941 (réimpr. 1975), `TempleHephaistos/1941 - William Bell Dinsmoor, Observations on the Hephaisteion (Hesperia Suppl. 5).pdf` (texte : `…-extracted.txt`). Pages citées : pages imprimées ; page du PDF = page imprimée + 3",
     "S": "J. Stuart et N. Revett, *The Antiquities of Athens*, vol. III, chap. I, « Of the Temple of Theseus », `General/1726 - Sturt Revett - Antiquities of Athens, vol. III.pdf` (planches datées de 1794 ; exemplaire Internet Archive `antiqvitiesAthe3Stua`)",
@@ -303,11 +305,11 @@
     },
     "frontSum": {
       "value": 13.718,
-      "readme": "§12, l. 734"
+      "readme": "§12, l. 984"
     },
     "flankSum": {
       "value": 31.770,
-      "readme": "§12, l. 735"
+      "readme": "§12, l. 985"
     }
   },
   "columnControls": {
@@ -349,17 +351,17 @@
     "capitalHeight": {
       "value": 19.884,
       "unit": "in",
-      "readme": "§12, l. 742"
+      "readme": "§12, l. 992"
     },
     "annuletsAndRelief": {
       "value": 7.134,
       "unit": "in",
-      "readme": "§12, l. 743"
+      "readme": "§12, l. 993"
     },
     "upperRadius": {
       "value": 15.317,
       "unit": "in",
-      "readme": "§12, l. 744"
+      "readme": "§12, l. 994"
     },
     "echinusLipRetreat": {
       "value": 0.42,
@@ -564,9 +566,10 @@
       "readme": "§6.2, l. 284"
     },
     "innerFace": {
-      "unit": "m",
-      "status": "manquant",
-      "sources": [],
+      "value": 19.891,
+      "unit": "in",
+      "status": "déduit",
+      "sources": ["S"],
       "readme": "§6.2, l. 285"
     },
     "triglyphWidth": {
@@ -734,12 +737,12 @@
     "corniceSum": {
       "value": 12.45,
       "unit": "in",
-      "readme": "§12, l. 739"
+      "readme": "§12, l. 989"
     },
     "triglyphDivisionSum": {
       "value": 20.3,
       "unit": "in",
-      "readme": "§12, l. 738"
+      "readme": "§12, l. 988"
     },
     "frontMetope": {
       "value": 0.778,
@@ -938,28 +941,28 @@
       "unit": "ft+in",
       "status": "lu",
       "sources": ["S"],
-      "readme": "§9, l. 608"
+      "readme": "§9, l. 847"
     },
     "rakingRun": {
       "value": 4.0846,
       "unit": "ratio",
       "status": "lu",
       "sources": ["O"],
-      "readme": "§9, l. 609"
+      "readme": "§9, l. 848"
     },
     "rakingProjection": {
       "value": [1, 8.85],
       "unit": "ft+in",
       "status": "lu",
       "sources": ["S"],
-      "readme": "§9, l. 611"
+      "readme": "§9, l. 850"
     },
     "tympanumFace": {
       "value": 18.125,
       "unit": "in",
       "status": "déduit",
       "sources": ["S"],
-      "readme": "§9, l. 611"
+      "readme": "§9, l. 850"
     },
     "rakingHeights": {
       "values": [1.05, 0.35, 4.2, 1.45, 0.65],
@@ -967,7 +970,7 @@
       "unit": "in",
       "status": "lu",
       "sources": ["S"],
-      "readme": "§9, l. 610"
+      "readme": "§9, l. 849"
     },
     "rakingSection": {
       "u": [0, 0.85, 0.85, 2.2, 2.2, 11.2, 14.1, 15.9, 17.0, 17.6, 18.2, 18.8, 19.36, 19.36, 19.65, 20.85, 20.85, 0],
@@ -975,80 +978,1004 @@
       "unit": "in",
       "status": "mesuré",
       "sources": ["S"],
-      "readme": "§9, l. 611"
+      "readme": "§9, l. 850"
     },
     "sima": {
       "unit": "m",
       "status": "manquant",
       "sources": [],
-      "readme": "§9, l. 616"
+      "readme": "§9, l. 855"
     }
   },
   "pedimentControls": {
     "apexRise": {
       "value": 1.772,
       "unit": "m",
-      "readme": "§9, l. 608"
+      "readme": "§9, l. 847"
     },
     "rakingSlope": {
       "value": 13.76,
       "unit": "°",
-      "readme": "§9, l. 609"
+      "readme": "§9, l. 848"
     },
     "eaveHalfSpan": {
       "value": 7.238,
       "unit": "m",
-      "readme": "§9, l. 609"
+      "readme": "§9, l. 848"
     },
     "rakingHeight": {
       "value": 7.70,
       "unit": "in",
-      "readme": "§9, l. 610"
+      "readme": "§9, l. 849"
     },
     "rakingHeightM": {
       "value": 0.196,
       "unit": "m",
-      "readme": "§9, l. 610"
+      "readme": "§9, l. 849"
     },
     "rakingVerticalHeight": {
       "value": 7.93,
       "unit": "in",
-      "readme": "§9, l. 610"
+      "readme": "§9, l. 849"
     },
     "rakingVerticalHeightM": {
       "value": 0.201,
       "unit": "m",
-      "readme": "§9, l. 610"
+      "readme": "§9, l. 849"
     },
     "rakingProjection": {
       "value": 0.530,
       "unit": "m",
-      "readme": "§9, l. 611"
+      "readme": "§9, l. 850"
     },
     "tympanumFaceM": {
       "value": 0.460,
       "unit": "m",
-      "readme": "§9, l. 611"
+      "readme": "§9, l. 850"
     },
     "rakingListelProjection": {
       "value": 20.85,
       "unit": "in",
-      "readme": "§9, l. 611"
+      "readme": "§9, l. 850"
     },
     "rakingCoronaProjection": {
       "value": 19.36,
       "unit": "in",
-      "readme": "§9, l. 611"
+      "readme": "§9, l. 850"
     },
     "rakingBottomFilletProjection": {
       "value": 0.85,
       "unit": "in",
-      "readme": "§9, l. 611"
+      "readme": "§9, l. 850"
     },
     "rakingCoronaGap": {
       "value": 0.11,
       "unit": "in",
-      "readme": "§9, l. 611"
+      "readme": "§9, l. 850"
+    }
+  },
+  "cella": {
+    "toichobateRise": {
+      "value": 0.098,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 603"
+    },
+    "pteronEast": {
+      "value": 4.963,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 605"
+    },
+    "pteronWest": {
+      "value": 4.243,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 606"
+    },
+    "toichobateOverhang": {
+      "value": 0.098,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 608"
+    },
+    "longWallThickness": {
+      "value": 0.761,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 612"
+    },
+    "longWallSpan": {
+      "value": 6.230,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 613"
+    },
+    "wallTop": {
+      "value": 7.358,
+      "unit": "m",
+      "status": "déduit",
+      "sources": ["O"],
+      "readme": "§7.8, l. 615"
+    },
+    "eastCrossWallPosition": {
+      "value": 5.032,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 616"
+    },
+    "eastCrossWallThickness": {
+      "value": 0.808,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 617"
+    },
+    "westCrossWallPosition": {
+      "value": 3.817,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 618"
+    },
+    "westCrossWallThickness": {
+      "value": 0.761,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 619"
+    },
+    "doorWidth": {
+      "value": 2.705,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.8, l. 621"
+    },
+    "lintelHeight": {
+      "value": 5.410,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.8, l. 622"
+    },
+    "doorJambOffset": {
+      "value": 1.7625,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.8, l. 624"
+    },
+    "thresholdLength": {
+      "value": 3.810,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 625"
+    },
+    "thresholdProjection": {
+      "value": 0.369,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 626"
+    },
+    "thresholdDepth": {
+      "value": 0.808,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.8, l. 629"
+    },
+    "naosFloorHeight": {
+      "value": 0.300,
+      "unit": "m",
+      "status": "déduit",
+      "sources": ["O"],
+      "readme": "§7.8, l. 631"
+    },
+    "eastAntaRetreat": {
+      "value": 0.097,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 632"
+    },
+    "westAntaRetreat": {
+      "value": 0.087,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 633"
+    },
+    "antaInnerProjection": {
+      "value": 0.104,
+      "unit": "m",
+      "status": "déduit",
+      "sources": ["S"],
+      "readme": "§7.8, l. 636"
+    },
+    "antaOuterProjection": {
+      "value": 0.086,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.8, l. 637"
+    },
+    "antaHeadLength": {
+      "value": 0.97,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§7.8, l. 635"
+    },
+    "porchColumnDiameter": {
+      "value": 1.006,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§7.8, l. 640"
+    },
+    "porchColumnHeight": {
+      "value": 5.611,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 641"
+    },
+    "porchColumnOffset": {
+      "value": 1.247,
+      "unit": "m",
+      "status": "déduit",
+      "sources": ["S"],
+      "readme": "§7.8, l. 644"
+    },
+    "pronaosColumnAxis": {
+      "value": 10.26,
+      "unit": "m",
+      "status": "mesuré",
+      "sources": ["S"],
+      "readme": "§7.8, l. 645"
+    },
+    "opisthodomosColumnAxis": {
+      "value": 11.05,
+      "unit": "m",
+      "status": "déduit",
+      "sources": ["O"],
+      "readme": "§7.8, l. 646"
+    },
+    "porchArchitraveHeight": {
+      "value": 0.840,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.8, l. 647"
+    },
+    "porchFriezeHeight": {
+      "value": 0.808,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§7.8, l. 649"
+    },
+    "porchEntablatureDepth": {
+      "value": 0.999,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.8, l. 652"
+    },
+    "porchEntablatureFront": {
+      "value": 0.4995,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.8, l. 655"
+    }
+  },
+  "cellaControls": {
+    "toichobateBottomZ": {
+      "value": -0.260,
+      "readme": "§7.8, l. 602"
+    },
+    "toichobateEastX": {
+      "value": 10.9215,
+      "readme": "§7.8, l. 605"
+    },
+    "toichobateWestX": {
+      "value": -11.6415,
+      "readme": "§7.8, l. 606"
+    },
+    "toichobateWidth": {
+      "value": 7.948,
+      "readme": "§7.8, l. 607"
+    },
+    "longWallInnerY": {
+      "value": 3.115,
+      "readme": "§7.8, l. 613"
+    },
+    "longWallOuterY": {
+      "value": 3.876,
+      "readme": "§7.8, l. 613"
+    },
+    "longWallLength": {
+      "value": 22.379,
+      "readme": "§7.8, l. 614"
+    },
+    "eastCrossWallEastX": {
+      "value": 5.8895,
+      "readme": "§7.8, l. 616"
+    },
+    "eastCrossWallWestX": {
+      "value": 5.0815,
+      "readme": "§7.8, l. 616"
+    },
+    "westCrossWallWestX": {
+      "value": -7.8245,
+      "readme": "§7.8, l. 618"
+    },
+    "westCrossWallEastX": {
+      "value": -7.0635,
+      "readme": "§7.8, l. 618"
+    },
+    "naosLength": {
+      "value": 12.145,
+      "readme": "§7.8, l. 620"
+    },
+    "doorLintelZ": {
+      "value": 5.710,
+      "readme": "§7.8, l. 622"
+    },
+    "eastAntaX": {
+      "value": 10.8245,
+      "readme": "§7.8, l. 632"
+    },
+    "westAntaX": {
+      "value": -11.5545,
+      "readme": "§7.8, l. 633"
+    },
+    "antaInnerY": {
+      "value": 3.011,
+      "readme": "§7.8, l. 636"
+    },
+    "antaFaceWidth": {
+      "value": 0.951,
+      "readme": "§7.8, l. 634"
+    },
+    "porchArchitraveBottomZ": {
+      "value": 5.709,
+      "readme": "§7.8, l. 653"
+    },
+    "porchArchitraveTopZ": {
+      "value": 6.549,
+      "readme": "§7.8, l. 653"
+    },
+    "porchFriezeTopZ": {
+      "value": 7.357,
+      "readme": "§7.8, l. 653"
+    }
+  },
+  "interior": {
+    "spacing": {
+      "value": 2.344,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 665"
+    },
+    "eastAxisOffset": {
+      "value": 1.296,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 666"
+    },
+    "westAxisOffset": {
+      "value": 1.473,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 667"
+    },
+    "wallAxisOffset": {
+      "value": 0.771,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 668"
+    },
+    "naveLevel": {
+      "value": 0.300,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.9, l. 670"
+    },
+    "lowerColumnHeight": {
+      "value": 3.912,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 671"
+    },
+    "lowerColumnLowerDiameter": {
+      "value": 0.734,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 674"
+    },
+    "lowerColumnUpperDiameter": {
+      "value": 0.571,
+      "unit": "m",
+      "status": "déduit",
+      "sources": ["H"],
+      "readme": "§7.9, l. 675"
+    },
+    "lowerCapitalHeight": {
+      "value": 0.367,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.9, l. 676"
+    },
+    "lowerAbacus": {
+      "value": 0.824,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.9, l. 677"
+    },
+    "lowerEpistyleHeight": {
+      "value": 0.580,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 679"
+    },
+    "lowerEpistyleSoffit": {
+      "value": 0.68,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 680"
+    },
+    "upperColumnHeight": {
+      "value": 2.566,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 684"
+    },
+    "upperColumnLowerDiameter": {
+      "value": 0.557,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 686"
+    },
+    "upperColumnUpperDiameter": {
+      "value": 0.447,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 687"
+    },
+    "upperCapitalHeight": {
+      "value": 0.275,
+      "unit": "m",
+      "status": "convention",
+      "sources": ["O"],
+      "readme": "§7.9, l. 688"
+    },
+    "upperAbacus": {
+      "value": 0.60,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["B"],
+      "readme": "§7.9, l. 689"
+    },
+    "fluteCount": {
+      "value": 16,
+      "unit": "1",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.9, l. 691"
+    },
+    "upperEpistyleHeight": {
+      "value": 0.409,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 692"
+    },
+    "upperEpistyleSoffit": {
+      "value": 0.514,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 693"
+    },
+    "courseHeight": {
+      "value": 0.409,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.9, l. 699"
+    },
+    "courseThickness": {
+      "value": 0.410,
+      "unit": "m",
+      "status": "convention",
+      "sources": ["O"],
+      "readme": "§7.9, l. 701"
+    },
+    "corniceHeight": {
+      "value": 0.207,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 704"
+    },
+    "corniceProjection": {
+      "value": 0.016,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["H"],
+      "readme": "§7.9, l. 705"
+    },
+    "pocketCeiling": {
+      "value": 8.073,
+      "unit": "m",
+      "status": "déduit",
+      "sources": ["O"],
+      "readme": "§7.9, l. 709"
+    },
+    "pocketMargin": {
+      "value": 0.410,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.9, l. 711"
+    }
+  },
+  "interiorControls": {
+    "eastWallX": {
+      "value": 5.0815,
+      "readme": "§7.9, l. 664"
+    },
+    "flankAxis1X": {
+      "value": 3.7855,
+      "readme": "§7.9, l. 666"
+    },
+    "flankAxis2X": {
+      "value": 1.4415,
+      "readme": "§7.9, l. 666"
+    },
+    "flankAxis3X": {
+      "value": -0.9025,
+      "readme": "§7.9, l. 666"
+    },
+    "flankAxis4X": {
+      "value": -3.2465,
+      "readme": "§7.9, l. 666"
+    },
+    "flankAxis5X": {
+      "value": -5.5905,
+      "readme": "§7.9, l. 666"
+    },
+    "westAxisX": {
+      "value": -5.5905,
+      "readme": "§7.9, l. 667"
+    },
+    "westWallX": {
+      "value": -7.0635,
+      "readme": "§7.9, l. 667"
+    },
+    "naosLength": {
+      "value": 12.145,
+      "readme": "§7.9, l. 667"
+    },
+    "lateralAxisY": {
+      "value": 2.344,
+      "readme": "§7.9, l. 668"
+    },
+    "lowerAbacusTopZ": {
+      "value": 4.212,
+      "readme": "§7.9, l. 673"
+    },
+    "lowerEpistyleTopZ": {
+      "value": 4.792,
+      "readme": "§7.9, l. 682"
+    },
+    "upperAbacusTopZ": {
+      "value": 7.358,
+      "readme": "§7.9, l. 685"
+    },
+    "upperEpistyleTopZ": {
+      "value": 7.767,
+      "readme": "§7.9, l. 695"
+    },
+    "courseTopZ": {
+      "value": 7.767,
+      "readme": "§7.9, l. 703"
+    },
+    "corniceTopZ": {
+      "value": 7.974,
+      "readme": "§7.9, l. 707"
+    },
+    "pocketBottomZ": {
+      "value": 7.694,
+      "readme": "§7.9, l. 710"
+    },
+    "pocketEastX": {
+      "value": 5.4915,
+      "readme": "§7.9, l. 711"
+    },
+    "pocketWestX": {
+      "value": -7.4735,
+      "readme": "§7.9, l. 711"
+    },
+    "pocketHalfWidthY": {
+      "value": 3.525,
+      "readme": "§7.9, l. 711"
+    }
+  },
+  "epicranitis": {
+    "height": {
+      "value": 0.207,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["O"],
+      "readme": "§7.10, l. 720"
+    },
+    "innerOffset": {
+      "value": 0.410,
+      "unit": "m",
+      "status": "convention",
+      "sources": ["O"],
+      "readme": "§7.10, l. 723"
+    },
+    "listelHeight": {
+      "value": 1.15,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§7.10, l. 729"
+    },
+    "filletHeight": {
+      "value": 0.4,
+      "unit": "in",
+      "status": "déduit",
+      "sources": ["S"],
+      "readme": "§7.10, l. 730"
+    },
+    "listelProjection": {
+      "value": 1.8,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§7.10, l. 734"
+    },
+    "bandProjection": {
+      "value": 1.9,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§7.10, l. 735"
+    }
+  },
+  "epicranitisControls": {
+    "topZ": {
+      "value": 7.565,
+      "readme": "§7.10, l. 721"
+    },
+    "porchCrownBottomZ": {
+      "value": 7.357,
+      "readme": "§7.10, l. 740"
+    },
+    "porchCrownHeight": {
+      "value": 0.208,
+      "readme": "§7.10, l. 741"
+    },
+    "innerFaceY": {
+      "value": 3.525,
+      "readme": "§7.10, l. 723"
+    },
+    "wallBandY": {
+      "value": 3.924,
+      "readme": "§7.10, l. 742"
+    },
+    "eastBandX": {
+      "value": 10.808,
+      "readme": "§7.10, l. 742"
+    },
+    "westBandX": {
+      "value": -11.598,
+      "readme": "§7.10, l. 742"
+    }
+  },
+  "porchExtension": {
+    "eastSpan": {
+      "value": 1.816,
+      "unit": "m",
+      "status": "déduit",
+      "sources": ["O", "S"],
+      "readme": "§7.10, l. 746"
+    }
+  },
+  "porchExtensionControls": {
+    "ringInnerY": {
+      "value": 5.778,
+      "readme": "§7.10, l. 746"
+    },
+    "architraveFootZ": {
+      "value": 5.715,
+      "readme": "§7.10, l. 749"
+    }
+  },
+  "eastCeiling": {
+    "beamCount": {
+      "value": 7,
+      "unit": "1",
+      "status": "mesuré",
+      "sources": ["S"],
+      "readme": "§7.11, l. 757"
+    },
+    "beamSpacing": {
+      "value": 1.417,
+      "unit": "m",
+      "status": "mesuré",
+      "sources": ["S"],
+      "readme": "§7.11, l. 758"
+    },
+    "beamWidth": {
+      "value": 0.525,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§7.11, l. 760"
+    },
+    "beamHeight": {
+      "value": 0.525,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.11, l. 762"
+    },
+    "beamWestBearing": {
+      "value": 0.4995,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.11, l. 766"
+    },
+    "endMassifWidth": {
+      "value": 0.391,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§7.11, l. 770"
+    },
+    "corniceHeight": {
+      "value": 0.232,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§7.11, l. 774"
+    },
+    "corniceProjection": {
+      "value": 2.634,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§7.11, l. 777"
+    },
+    "bandHeight": {
+      "value": 0.089,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§7.11, l. 778"
+    },
+    "corniceDepth": {
+      "value": 0.4995,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.11, l. 783"
+    },
+    "cofferPitch": {
+      "value": 0.426,
+      "unit": "m",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§7.11, l. 794"
+    },
+    "cofferOpening": {
+      "value": 9.55,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§7.11, l. 794"
+    },
+    "cofferFrame": {
+      "value": 2.6,
+      "unit": "in",
+      "status": "lu",
+      "sources": ["S"],
+      "readme": "§7.11, l. 794"
+    },
+    "cofferDepth": {
+      "value": 0.132,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.11, l. 796"
+    },
+    "cofferRows": {
+      "value": 2,
+      "unit": "1",
+      "status": "convention",
+      "sources": ["S"],
+      "readme": "§7.11, l. 798"
+    }
+  },
+  "eastCeilingControls": {
+    "beamOuterAxisY": {
+      "value": 4.251,
+      "readme": "§7.11, l. 759"
+    },
+    "beamBottomZ": {
+      "value": 7.565,
+      "readme": "§7.11, l. 763"
+    },
+    "beamTopZ": {
+      "value": 8.090,
+      "readme": "§7.11, l. 764"
+    },
+    "beamWestEndX": {
+      "value": 10.26,
+      "readme": "§7.11, l. 766"
+    },
+    "beamEastEndX": {
+      "value": 14.804,
+      "readme": "§7.11, l. 768"
+    },
+    "beamLength": {
+      "value": 4.544,
+      "readme": "§7.11, l. 768"
+    },
+    "clearBay": {
+      "value": 0.892,
+      "readme": "§7.11, l. 769"
+    },
+    "massifFaceY": {
+      "value": 5.387,
+      "readme": "§7.11, l. 770"
+    },
+    "edgeBay": {
+      "value": 0.8735,
+      "readme": "§7.11, l. 772"
+    },
+    "corniceTopZ": {
+      "value": 7.797,
+      "readme": "§7.11, l. 776"
+    },
+    "bandTopZ": {
+      "value": 7.886,
+      "readme": "§7.11, l. 779"
+    },
+    "slabThickness": {
+      "value": 0.204,
+      "readme": "§7.11, l. 791"
+    },
+    "cofferFloor": {
+      "value": 0.072,
+      "readme": "§7.11, l. 797"
+    },
+    "cofferRun": {
+      "value": 4.044,
+      "readme": "§7.11, l. 800"
+    },
+    "cofferMargin": {
+      "value": 0.105,
+      "readme": "§7.11, l. 800"
+    }
+  },
+  "flankCeilings": {
+    "beamSpacing": {
+      "value": 1.33,
+      "unit": "m",
+      "status": "convention",
+      "sources": ["S"],
+      "readme": "§7.11, l. 802"
+    },
+    "firstBeamOffset": {
+      "value": 0.665,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.11, l. 803"
+    },
+    "eastBeamCount": {
+      "value": 7,
+      "unit": "1",
+      "status": "déduit",
+      "sources": [],
+      "readme": "§7.11, l. 804"
+    },
+    "westBeamCount": {
+      "value": 8,
+      "unit": "1",
+      "status": "déduit",
+      "sources": [],
+      "readme": "§7.11, l. 804"
+    },
+    "beamWidth": {
+      "value": 0.525,
+      "unit": "m",
+      "status": "convention",
+      "sources": ["S"],
+      "readme": "§7.11, l. 805"
+    },
+    "beamHeight": {
+      "value": 0.525,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.11, l. 806"
+    },
+    "peristyleGap": {
+      "value": 0.170,
+      "unit": "m",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.11, l. 811"
+    },
+    "cofferRows": {
+      "value": 1,
+      "unit": "1",
+      "status": "convention",
+      "sources": [],
+      "readme": "§7.11, l. 799"
+    }
+  },
+  "flankCeilingsControls": {
+    "lastEastAxisX": {
+      "value": 8.645,
+      "readme": "§7.11, l. 804"
+    },
+    "lastWestAxisX": {
+      "value": -9.975,
+      "readme": "§7.11, l. 804"
+    },
+    "wallEndY": {
+      "value": 3.525,
+      "readme": "§7.11, l. 809"
+    },
+    "peristyleEndY": {
+      "value": 5.608,
+      "readme": "§7.11, l. 811"
+    },
+    "beamLength": {
+      "value": 2.083,
+      "readme": "§7.11, l. 811"
+    },
+    "cofferRun": {
+      "value": 1.732,
+      "readme": "§7.11, l. 800"
+    },
+    "cofferMargin": {
+      "value": 0.014,
+      "readme": "§7.11, l. 800"
     }
   }
 }

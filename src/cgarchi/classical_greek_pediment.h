@@ -72,10 +72,22 @@ struct GreekPedimentSettings
 // et le maillage la refuse par la garde float, avant la garde du sens.
 void ValidateGreekPedimentSettings (const GreekPedimentSettings &pediment, const GreekEntablatureSettings &entablature);
 
+// Poche du comble (registre CE-14) : boite ouverte par le bas, de la base du
+// comble (zBase = zFoot + z11) a zTop, sur l'emprise [x0, x1] x [y0, y1].
+// Coordonnees dans le repere du temple, celui des sommets du fronton (zTop est
+// une cote absolue, comme zBase) ; le fronton ne connait pas ce qui l'occupe.
+struct RoofPocket
+{
+	double x0 = 0.0, x1 = 0.0;   // emprise en X, x0 < x1
+	double y0 = 0.0, y1 = 0.0;   // emprise en Y, y0 < y1
+	double zTop = 0.0;           // plafond, > zBase
+};
+
 // Pieces du fronton, apres une seule validation (fronton et entablement), dans
 // l'ordre des parties du temple : corniche rampante Front, corniche rampante
-// Back, comble. `peristyle` et `zFoot` : ceux de l'anneau (SweepRectangularRing
-// sur halfWidth, halfDepth, a la cote zFoot).
+// Back, comble (une piece, ou ses tranches avec plusieurs poches). `peristyle`
+// et `zFoot` : ceux de l'anneau (SweepRectangularRing sur halfWidth, halfDepth,
+// a la cote zFoot).
 //
 // Repere, calcule une fois : zBase = zFoot + z11, l'expression du dessus de
 // l'anneau ; s = hypot (r, 1) / r ; T = h du dernier sommet ; H_b = apexRise -
@@ -117,10 +129,65 @@ void ValidateGreekPedimentSettings (const GreekPedimentSettings &pediment, const
 // appele sur chaque piece des qu'elle est construite, avant la suivante ; une
 // exception qu'il leve arrete la construction et remonte telle quelle ; aucune
 // piece n'est alors rendue.
+//
+// Poches (`pockets`, CE-14, CE-34) : Lambda inchanges dans tous les cas ; le
+// comble depend du nombre de poches. Aucune : le prisme ci-dessus. Une seule :
+// une piece, decrite ci-dessous. Plusieurs : une piece par tranche (voir plus
+// bas).
+//
+// Une poche : comble creuse d'une boite ouverte
+// par le bas, de zBase a zTop sur [x0, x1] x [y0, y1]. Sommets : les 6 du
+// prisme, dans le meme ordre, puis les 4 coins du bas de la poche (z = zBase)
+// et les 4 du plafond (z = zTop), chacun dans l'ordre (x0, y0), (x1, y0),
+// (x1, y1), (x0, y1) ; 14 sommets. Triangles : les 4 des pans, les 2 des
+// abouts, la base en couronne (8), les 4 parois (8) et le plafond (2) ; 24
+// triangles, normales sortantes du solide (vers le vide dans la poche). Les
+// coordonnees des sommets de la poche sont des copies des bornes et de zBase,
+// sans produit (rien a contracter en FMA).
+//
+// Plusieurs poches : comble en tranches le long de Y. Bornes des tranches :
+// {-yTympanum, y0 et y1 de chaque poche, +yTympanum}, triees, sans doublon.
+// Dans la tranche [y0, y1], les poches actives (celles dont l'emprise couvre la
+// tranche) sont triees par x0 ; contour (X, Z) : (-xTop, zBase), puis pour
+// chaque poche (x0, zBase), (x0, zTop), (x1, zTop), (x1, zBase), puis
+// (xTop, zBase) et (0, ridge[T]) ; la tranche est detail::PrismMesh de ce
+// contour le long de Y, de y0 a y1 (sommets confondus et alignes retires : deux
+// poches au contact par une face partagent leur paroi). Pieces dans l'ordre des
+// Y croissants, apres les deux Lambda. Les coordonnees sont des copies des
+// bornes, de zBase, de xTop et du faite, sans produit.
+//
+// Refus des poches, std::invalid_argument prefixe "Fronton : ", apres ceux
+// ci-dessus et dans cet ordre, chaque poche dans l'ordre de la liste :
+//   - 'roofPocket' : une borne non finie ;
+//   - 'roofPocket.x', 'roofPocket.y' : emprise vide ou inversee (x0 >= x1,
+//     y0 >= y1) ;
+//   - 'roofPocket.zTop' si zTop <= zBase ;
+//   - 'roofPocket.x' si x0 <= -xTop ou x1 >= xTop (bord de la base, pied d'un
+//     pan) ; 'roofPocket.y' si y0 <= -yTympanum ou y1 >= yTympanum (tympan) ;
+//   - 'roofPocket.zTop' si un coin du plafond n'est pas strictement sous les
+//     pans : avec xm = max (-x0, x1), (zTop - zBase) xTop doit etre <
+//     (ridge[T] - zBase) (xTop - xm), produits arrondis en double, jamais
+//     contractes (meme verdict sur toute cible) ;
+//   - 'roofPocket' si l'un de ces criteres stricts tombe une fois les
+//     coordonnees arrondies en float (poche au contact du comble en float) ;
+// puis, avec plusieurs poches :
+//   - "'roofPocket' : les poches k et l se recouvrent" (k < l, rangs dans la
+//     liste a partir de 0) si leurs emprises ont une intersection d'aire non
+//     nulle ; le contact par une face est admis ; le verdict en double vaut pour
+//     les bornes arrondies en float (arrondi monotone) ;
+//   - "sommets confondus en float : bornes de deux poches" si deux bornes Y
+//     distinctes des tranches, ou deux bornes X distinctes d'une meme tranche
+//     ({-xTop, x0 et x1 des poches actives, xTop}), se confondent une fois
+//     arrondies en float ;
+//   - "sommets confondus en float : plafonds de deux poches au contact" si deux
+//     poches d'une meme tranche se touchent par une face (x1 de l'une egal au x0
+//     de l'autre) et que leurs plafonds, distincts en double, se confondent en
+//     float (la paroi entre eux serait degeneree).
 std::vector<std::unique_ptr<Mesh>> BuildGreekPedimentPieceMeshes (const GreekPedimentSettings &pediment,
                                                                   const GreekEntablatureSettings &entablature,
                                                                   const PeristyleLayout &peristyle, double zFoot,
-                                                                  const std::function<void (const Mesh &)> &afterEach = {});
+                                                                  const std::function<void (const Mesh &)> &afterEach = {},
+                                                                  const std::vector<RoofPocket> &pockets = {});
 
 struct RefinementStations;   // classical_temple_refinement.h
 
@@ -145,12 +212,15 @@ struct RefinementStations;   // classical_temple_refinement.h
 // stations.yLower non finies ou non strictement croissantes ; une station
 // confondue en float avec sa voisine, un pied ou le faite d'une trajectoire.
 // Sans station dans ]-xTop, xTop[ ni dans ]-yTympanum, yTympanum[, les pieces de
-// la fonction sans stations, au bit pres.
+// la fonction sans stations, au bit pres. Une liste de poches non vide est
+// refusee apres la validation des reglages, avant les refus du maillage :
+// "Fronton : 'roofPocket' ne se combine pas avec les stations du raffinement".
 std::vector<std::unique_ptr<Mesh>> BuildGreekPedimentPieceMeshes (const GreekPedimentSettings &pediment,
                                                                   const GreekEntablatureSettings &entablature,
                                                                   const PeristyleLayout &peristyle, double zFoot,
                                                                   const RefinementStations &stations,
-                                                                  const std::function<void (const Mesh &)> &afterEach = {});
+                                                                  const std::function<void (const Mesh &)> &afterEach = {},
+                                                                  const std::vector<RoofPocket> &pockets = {});
 
 } // namespace classical
 } // namespace cgarchi

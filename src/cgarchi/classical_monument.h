@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -21,7 +22,7 @@ namespace classical
 {
 
 // ============================================================================
-//  Document du monument "monument/v10" : valeurs du README du monument, avec
+//  Document du monument "monument/v14" : valeurs du README du monument, avec
 //  leur unite, leur statut, leurs sources et leur lieu ; conversion vers les
 //  reglages du temple
 // ============================================================================
@@ -33,7 +34,7 @@ namespace classical
 // stylobate). Il est ecrit par le script du monument (src/cgarchi/data/
 // <monument>_from_readme.py, moteur monument_from_readme.py),
 // jamais a la main, et embarque a la build (classical_monument_data.h). Schema :
-// src/cgarchi/schemas/monument-v10.schema.
+// src/cgarchi/schemas/monument-v14.schema.
 //
 // Statuts : les mots du README, liste fermee. Une valeur "manquant" n'a pas de
 // cle "value" ; toute autre en a une. "lu" et "mesure" citent au moins une
@@ -69,7 +70,7 @@ namespace classical
 // long de x ; (X, Y, Z) = (y, -x, z + stylobateTop), quart de tour direct ;
 // cotes : est = Front, nord = Right, ouest = Back, sud = Left.
 
-constexpr const char *kMonumentSchema = "monument/v10";
+constexpr const char *kMonumentSchema = "monument/v14";
 
 // Pouce anglais en metres (README section 1.1).
 constexpr double kMonumentInch = 0.0254;
@@ -175,13 +176,157 @@ struct MonumentKrepisControls
 	double footprintWidth = 0.0, footprintLength = 0.0;
 };
 
+// README section 7.8 : cella et porches, longueurs de segments sans signe, dans le
+// repere du README (est, ouest, sud). Les parties Cella et Porches (MO-P3) se
+// partagent le bloc ; MissingMonumentKeys dit lesquelles chacune consomme.
+struct MonumentCella
+{
+	MonumentValue toichobateRise, pteronEast, pteronWest, toichobateOverhang;
+	MonumentValue longWallThickness, longWallSpan, wallTop;
+	MonumentValue eastCrossWallPosition, eastCrossWallThickness, westCrossWallPosition, westCrossWallThickness;
+	MonumentValue doorWidth, lintelHeight, doorJambOffset;   // jambage sud depuis le nu interieur du mur sud
+	MonumentValue thresholdLength, thresholdProjection, thresholdDepth, naosFloorHeight;
+	MonumentValue eastAntaRetreat, westAntaRetreat, antaInnerProjection, antaOuterProjection, antaHeadLength;
+	MonumentValue porchColumnDiameter, porchColumnHeight, porchColumnOffset, pronaosColumnAxis, opisthodomosColumnAxis;
+	MonumentValue porchArchitraveHeight, porchFriezeHeight, porchEntablatureDepth, porchEntablatureFront;
+};
+
+// Controles de la cella (bloc cellaControls, regle R13 du script), sans statut, en
+// metres : coordonnees signees du repere du README, cotes z depuis le dessus du
+// stylobate, grandeurs des notations « ± » (InnerY, OuterY), cotes de controle.
+// 0 si le bloc est absent.
+struct MonumentCellaControls
+{
+	double toichobateBottomZ = 0.0, toichobateEastX = 0.0, toichobateWestX = 0.0, toichobateWidth = 0.0;
+	double longWallInnerY = 0.0, longWallOuterY = 0.0, longWallLength = 0.0;
+	double eastCrossWallEastX = 0.0, eastCrossWallWestX = 0.0, westCrossWallWestX = 0.0, westCrossWallEastX = 0.0;
+	double naosLength = 0.0, doorLintelZ = 0.0, eastAntaX = 0.0, westAntaX = 0.0, antaInnerY = 0.0, antaFaceWidth = 0.0;
+	double porchArchitraveBottomZ = 0.0, porchArchitraveTopZ = 0.0, porchFriezeTopZ = 0.0;
+};
+
+// README section 7.9 : interieur du naos, longueurs de segments sans signe depuis
+// les nus du naos de la section 7.8, cotes z depuis le dessus du stylobate, dans
+// le repere du README (est, ouest). Colonnade : entraxe, axe de la premiere
+// colonne des flancs depuis le nu est, axe ouest depuis le nu ouest (controle de
+// fermeture), axes des flancs depuis les nus des murs longs ; niveau de la nef
+// (pied des colonnes). Colonnes inferieures et superieures : hauteur, chapiteau
+// compris, diametres inferieur et superieur, hauteur du chapiteau, cote de
+// l'abaque ; cannelures (compte, aux deux etages). Epistyles : hauteur et
+// sous-face. Assise XVII interieure : hauteur et epaisseur. Corniche
+// interieure : hauteur et saillie. Poche du comble : plafond, debord sur les nus.
+struct MonumentInterior
+{
+	MonumentValue spacing, eastAxisOffset, westAxisOffset, wallAxisOffset, naveLevel;
+	MonumentValue lowerColumnHeight, lowerColumnLowerDiameter, lowerColumnUpperDiameter, lowerCapitalHeight, lowerAbacus;
+	MonumentValue lowerEpistyleHeight, lowerEpistyleSoffit;
+	MonumentValue upperColumnHeight, upperColumnLowerDiameter, upperColumnUpperDiameter, upperCapitalHeight, upperAbacus;
+	MonumentValue fluteCount;
+	MonumentValue upperEpistyleHeight, upperEpistyleSoffit;
+	MonumentValue courseHeight, courseThickness, corniceHeight, corniceProjection;
+	MonumentValue pocketCeiling, pocketMargin;
+};
+
+// Controles de l'interieur (bloc interiorControls, regle R13 du script), sans
+// statut, en metres : coordonnees signees du repere du README (nu est, axes des
+// flancs de l'est vers l'ouest, axe et nu ouest, emprise de la poche),
+// grandeurs des notations « ± » (axes lateraux, demi-largeur de la poche),
+// longueur du naos et cotes z. 0 si le bloc est absent.
+struct MonumentInteriorControls
+{
+	double eastWallX = 0.0;
+	std::array<double, 5> flankAxesX {};
+	double westAxisX = 0.0, westWallX = 0.0, naosLength = 0.0, lateralAxisY = 0.0;
+	double lowerAbacusTopZ = 0.0, lowerEpistyleTopZ = 0.0, upperAbacusTopZ = 0.0, upperEpistyleTopZ = 0.0;
+	double courseTopZ = 0.0, corniceTopZ = 0.0, pocketBottomZ = 0.0;
+	double pocketEastX = 0.0, pocketWestX = 0.0, pocketHalfWidthY = 0.0;
+};
+
+// README section 7.10 : assise XVII exterieure (epicranitis et couronnement de
+// la frise des porches). Hauteur sur le dessus des murs ; face interieure depuis
+// le nu interieur des murs du naos ; hauteurs du listel et du filet, saillies du
+// listel et de la bande a meandre sur le nu, en pouces de [S].
+struct MonumentEpicranitis
+{
+	MonumentValue height, innerOffset, listelHeight, filletHeight, listelProjection, bandProjection;
+};
+
+// Controles du couronnement (bloc epicranitisControls, regle R13 du script),
+// sans statut, en metres : dessus commun, dessous et hauteur du couronnement de
+// la frise des porches, cotes z depuis le dessus du stylobate ; grandeurs des
+// notations « ± » (face interieure de l'epicranitis, nu de la bande a meandre
+// des murs longs) ; nus des bandes des couronnements est et ouest, coordonnees
+// signees du repere du README. 0 si le bloc est absent.
+struct MonumentEpicranitisControls
+{
+	double topZ = 0.0, porchCrownBottomZ = 0.0, porchCrownHeight = 0.0;
+	double innerFaceY = 0.0, wallBandY = 0.0, eastBandX = 0.0, westBandX = 0.0;
+};
+
+// README section 7.10 : prolongement est de l'entablement des porches, longueur
+// par cote, des faces exterieures des antes a la face interieure de
+// l'entablement du peristyle.
+struct MonumentPorchExtension
+{
+	MonumentValue eastSpan;
+};
+
+// Controles du prolongement est (bloc porchExtensionControls, regle R13), sans
+// statut, en metres : grandeur de la face interieure de l'entablement du
+// peristyle (« ± »), dessous de l'architrave prolongee. 0 si le bloc est absent.
+struct MonumentPorchExtensionControls
+{
+	double ringInnerY = 0.0, architraveFootZ = 0.0;
+};
+
+// README section 7.11 : plafond du pteron est et corniche des fronts des porches.
+// Poutres (nombre et rangs de caissons : comptes) ; bout ouest depuis le nu de la
+// frise des porches ; massif de bout depuis la face interieure de l'entablement
+// du peristyle ; saillie de la corniche, ouverture et cadre des caissons en
+// pouces de [S].
+struct MonumentEastCeiling
+{
+	MonumentValue beamCount, beamSpacing, beamWidth, beamHeight, beamWestBearing, endMassifWidth, corniceHeight,
+	              corniceProjection, bandHeight, corniceDepth, cofferPitch, cofferOpening, cofferFrame, cofferDepth,
+	              cofferRows;
+};
+
+// Controles du plafond est (bloc eastCeilingControls, regle R13), sans statut, en
+// metres : grandeurs des notations « ± », cotes z depuis le dessus du stylobate,
+// coordonnees signees du repere du README, longueurs. 0 si le bloc est absent.
+struct MonumentEastCeilingControls
+{
+	double beamOuterAxisY = 0.0, beamBottomZ = 0.0, beamTopZ = 0.0, beamWestEndX = 0.0, beamEastEndX = 0.0;
+	double beamLength = 0.0, clearBay = 0.0, massifFaceY = 0.0, edgeBay = 0.0, corniceTopZ = 0.0, bandTopZ = 0.0;
+	double slabThickness = 0.0, cofferFloor = 0.0, cofferRun = 0.0, cofferMargin = 0.0;
+};
+
+// README section 7.11 : plafonds des pterons nord et sud. Poutres transversales
+// (pas, premier axe depuis l'axe transversal, nombres a l'est et a l'ouest :
+// comptes), section, bout cote peristyle depuis la face interieure de
+// l'entablement du flanc, rangs de caissons.
+struct MonumentFlankCeilings
+{
+	MonumentValue beamSpacing, firstBeamOffset, eastBeamCount, westBeamCount, beamWidth, beamHeight, peristyleGap,
+	              cofferRows;
+};
+
+// Controles des plafonds des flancs (bloc flankCeilingsControls, regle R13), sans
+// statut, en metres. 0 si le bloc est absent.
+struct MonumentFlankCeilingsControls
+{
+	double lastEastAxisX = 0.0, lastWestAxisX = 0.0, wallEndY = 0.0, peristyleEndY = 0.0, beamLength = 0.0;
+	double cofferRun = 0.0, cofferMargin = 0.0;
+};
+
 // Blocs presents au document. Un bloc absent est une partie non documentee : ses
 // valeurs restent celles par defaut, manquantes.
 struct MonumentBlocks
 {
-	bool krepis = false, peristyle = false, columns = false, entablature = false, pediment = false;
+	bool krepis = false, peristyle = false, columns = false, entablature = false, pediment = false, cella = false,
+	     interior = false, epicranitis = false, porchExtension = false, eastCeiling = false, flankCeilings = false;
 	bool controls = false, krepisControls = false, columnControls = false, entablatureControls = false,
-	     pedimentControls = false;
+	     pedimentControls = false, cellaControls = false, interiorControls = false, epicranitisControls = false,
+	     porchExtensionControls = false, eastCeilingControls = false, flankCeilingsControls = false;
 };
 
 // Controle de la colonne : nombre imprime par le README, avec son unite.
@@ -368,19 +513,40 @@ struct MonumentData
 	MonumentPediment                   pediment;
 	MonumentPedimentControls           pedimentControls;
 	MonumentKrepisControls             krepisControls;
+	MonumentCella                      cella;
+	MonumentCellaControls              cellaControls;
+	MonumentInterior                   interior;
+	MonumentInteriorControls           interiorControls;
+	MonumentEpicranitis                epicranitis;
+	MonumentEpicranitisControls        epicranitisControls;
+	MonumentPorchExtension             porchExtension;
+	MonumentPorchExtensionControls     porchExtensionControls;
+	MonumentEastCeiling                eastCeiling;
+	MonumentEastCeilingControls        eastCeilingControls;
+	MonumentFlankCeilings              flankCeilings;
+	MonumentFlankCeilingsControls      flankCeilingsControls;
 	MonumentBlocks                     present;
 };
 
-// Lecture stricte d'un document "monument/v10" (json_reader::StrictReader). Leve
+// Lecture stricte d'un document "monument/v14" (json_reader::StrictReader). Leve
 // std::runtime_error si le document est refuse ; le message porte chaque refus,
-// une ligne chacun, "monument/v10 <chemin> : <motif>". Blocs facultatifs (registre
-// MO-P2) : krepis, peristyle, columns, entablature et pediment ; un bloc present
-// porte toutes ses cles. Refus : texte illisible ; cle en double ; schema autre
-// que "monument/v10" ; cle inconnue, a tout niveau ; cle absente d'un bloc
-// present (controls.frontSum et controls.flankSum exceptees) ; peristyle sans
+// une ligne chacun, "monument/v14 <chemin> : <motif>". Blocs facultatifs (registre
+// MO-P2) : krepis, peristyle, columns, entablature, pediment, cella, interior,
+// epicranitis, porchExtension, eastCeiling et flankCeilings ; un bloc present
+// porte toutes ses cles. Refus :
+// texte illisible ; cle en double ; schema autre que "monument/v14" ; cle
+// inconnue, a tout niveau ; cle absente d'un
+// bloc present (controls.frontSum et controls.flankSum exceptees) ; peristyle sans
 // controls, controls sans peristyle, krepisControls sans krepis, columnControls
 // sans columns, entablatureControls sans entablature, pedimentControls sans
-// pediment ("requires block \"<partie>\"") ; null ; type faux ; status hors des cinq ; unit hors des huit,
+// pediment, cellaControls sans cella, interior sans cella, interiorControls sans
+// interior, epicranitis sans cella, epicranitisControls sans epicranitis,
+// porchExtension sans epicranitis, porchExtensionControls sans porchExtension,
+// eastCeiling sans porchExtension, eastCeilingControls sans eastCeiling,
+// flankCeilings sans eastCeiling, flankCeilingsControls sans flankCeilings
+// ("requires block \"<partie>\"") ; controle de cellaControls,
+// d'interiorControls, d'epicranitisControls, de porchExtensionControls,
+// d'eastCeilingControls ou de flankCeilingsControls non fini ; null ; type faux ; status hors des cinq ; unit hors des huit,
 // "1", "°" ou "ratio" sur une longueur, "ft+in" ailleurs que sur une valeur de
 // longueur (suite, polygone, controle, profil), autre que "1" sur un compte,
 // autre que "°" sur un angle, autre que "ratio" sur un rapport ; value absente
@@ -465,8 +631,6 @@ GreekDoricColumnSettings MonumentColumnSettings (const MonumentData &data, bool 
 // Memes regles d'erreur que les autres conversions (MonumentLength ;
 // regulaGuttaCount et mutuleGuttaPerRow comme des comptes), plus les refus
 // nommes :
-//   - 'entablature.innerFace' si elle n'est pas manquante (EN1 ne vaut que
-//     manquante) ;
 //   - 'entablature.triglyphCapitalBandHeight' si bande + listel s'ecarte de la
 //     hauteur du chapiteau de plus de 1e-9 in, longueur de reference ;
 //   - 'entablature.triglyphDivisions' si la suite est vide, de listes de tailles
@@ -486,8 +650,9 @@ GreekDoricColumnSettings MonumentColumnSettings (const MonumentData &data, bool 
 // commune de P et L puis converti en metres en dernier (un seul produit par le
 // pouce pour deux valeurs en pouces), ou depuis P et L en metres si leurs
 // unites different (registre section 10.14) ;
-// bec sous le larmier ; larmier ; filet ; listel de couronnement. innerFace = saillie du
-// pied de la face de l'architrave (EN1). Triglyphe : largeur en pieds et pouces,
+// bec sous le larmier ; larmier ; filet ; listel de couronnement. innerFace =
+// entablature.innerFace si elle est donnee (MonumentLength), saillie du pied de la
+// face de l'architrave sinon (EN1 en repli, CE-32). Triglyphe : largeur en pieds et pouces,
 // face, divisions lues, canal pour tout mot autre que "bande" ; profondeurs par
 // l'angle droit (EN11) : canal, la moitie de sa largeur ; demi-canal, sa
 // largeur. La profondeur mesuree (channelDepth) n'entre pas. Angle de la frise
@@ -531,24 +696,124 @@ GreekPedimentSettings MonumentPedimentSettings (const MonumentData &data);
 
 // Temple du README : krepis, peristyle, colonne courante, colonne d'angle,
 // entablement (MonumentEntablatureSettings) et fronton
-// (MonumentPedimentSettings).
+// (MonumentPedimentSettings). Sans cella : le temple exterieur, que les
+// raffinements acceptent ; la cella s'y ajoute par MonumentCellaSettings.
 TempleSettings MonumentTempleSettings (const MonumentData &data);
+
+// Cella du README (section 7.8 ; registre CE-1 a CE-9,
+// classical_orders_implementation.md section 10.16), sans colonnes de porche :
+// chaque longueur par MonumentLength, un seul produit, dans le repere du temple
+// (MO2) : est = Front, ouest = Back ; pteronEast -> frontPteron, pteronWest ->
+// backPteron, eastCrossWall* -> frontCrossWall*, westCrossWall* ->
+// backCrossWall*, eastAntaRetreat -> frontAntaRetreat, westAntaRetreat ->
+// backAntaRetreat, pronaosColumnAxis -> frontPorchAxis, opisthodomosColumnAxis ->
+// backPorchAxis ; doorJambOffset, depuis le nu interieur du mur sud (y < 0 au
+// README, X < 0 au temple), est celui du mur Left. Les autres cles gardent leur
+// nom. Memes regles d'erreur que les autres conversions ; reglages non valides
+// ici (LayoutGreekCella et LayoutTemple les valident).
+CellaSettings MonumentCellaSettings (const MonumentData &data);
+
+// Colonnes des porches (registre CE-6) : la colonne courante du README
+// (MonumentColumnSettings (data, false)), diametre inferieur
+// cella.porchColumnDiameter et hauteur cella.porchColumnHeight ; le chapiteau et
+// le diametre superieur sont ceux du peristyle (README section 7.3, section 11
+// point 4), le fut seul est raccourci ; cannelures au meme rapport profondeur /
+// corde, entasis mise a l'echelle du fut : fleche et cote du maximum
+// multipliees par le rapport des hauteurs de fut, porche sur peristyle. Ecart
+// des axes : cella.porchColumnOffset. Memes regles d'erreur que
+// MonumentColumnSettings.
+GreekPorchColumnsSettings MonumentPorchSettings (const MonumentData &data);
+
+// Interieur du README (section 7.9 ; registre CE-15 et suivantes,
+// classical_orders_implementation.md section 10.16) : longueurs par
+// MonumentLength, dans le repere du temple (MO2) : eastAxisOffset ->
+// frontAxisOffset, westAxisOffset -> backAxisOffset ; les autres cles gardent
+// leur nom. Colonnes de chaque etage (registre CE-16 a CE-18), depuis la
+// colonne courante du README (MonumentColumnSettings (data, false)) :
+//   - diametres inferieur et superieur et hauteur lus ; fluteCount cannelures,
+//     au rapport profondeur / corde du peristyle (section homothetique) ;
+//   - entasis : fleche multipliee par le rapport des diametres inferieurs,
+//     cote du maximum par le rapport des hauteurs de fut (meme position
+//     relative sur le fut) ;
+//   - chapiteau : hauteurs de ses membres (rainure, gorgerin, annelets, droite
+//     et levre de l'echine, abaque) multipliees par kh = hauteur lue / hauteur
+//     du chapiteau du peristyle ; saillies depuis le sommet du fut (GD5)
+//     multipliees par kp = (abaque lu / 2 - diametre superieur lu / 2) /
+//     saillie de l'abaque du peristyle, si bien que l'abaque est celui lu et
+//     contient l'echine reduite ; rayon de la levre multiplie par le rapport
+//     des demi-cordes jonction-tete (arc semblable) ; rainure par GD3d sur le
+//     nouveau fut.
+// Memes regles d'erreur que les autres conversions (fluteCount comme un
+// compte) ; reglages non valides ici (LayoutGreekNaosInterior et LayoutTemple
+// les valident).
+NaosInteriorSettings MonumentInteriorSettings (const MonumentData &data);
+
+// Couronnement du README (section 7.10 ; registre CE-23 et suivantes) : chaque
+// longueur par MonumentLength (les pouces de [S] convertis par un seul produit),
+// les cles gardent leur nom. Memes regles d'erreur que les autres conversions ;
+// reglages non valides ici (LayoutGreekEpicranitis et LayoutTemple les
+// valident).
+EpicranitisSettings MonumentEpicranitisSettings (const MonumentData &data);
+
+// Prolongement est du README (section 7.10) : eastSpan par MonumentLength.
+// Memes regles d'erreur ; reglage non valide ici (LayoutGreekPorchExtension).
+PorchExtensionSettings MonumentPorchExtensionSettings (const MonumentData &data);
+
+// Plafond est du README (section 7.11 ; registre CE-32 et suivantes) : chaque
+// longueur par MonumentLength (les pouces de [S] convertis par un seul produit),
+// beamCount et cofferRows comme des comptes (RequiredCount, comme fluteCount) ;
+// corniceHeight, corniceProjection, bandHeight et corniceDepth vont a
+// EastCeilingSettings::cornice, cofferPitch, cofferOpening, cofferFrame et
+// cofferDepth a EastCeilingSettings::coffers. Memes regles d'erreur que les
+// autres conversions ; reglages non valides ici (LayoutGreekEastCeiling et
+// LayoutTemple les valident).
+EastCeilingSettings MonumentEastCeilingSettings (const MonumentData &data);
+
+// Plafonds des flancs du README (section 7.11) : longueurs par MonumentLength,
+// comptes comme fluteCount ; est et ouest du README deviennent front et back du
+// temple (MO2) : eastBeamCount -> frontBeamCount, westBeamCount ->
+// backBeamCount. Memes regles d'erreur ; reglages non valides ici.
+FlankCeilingSettings MonumentFlankCeilingSettings (const MonumentData &data);
 
 // ============================================================================
 //  Mode partiel : seules les parties completement renseignees sont construites
 // ============================================================================
 //
 // Registre MO-P1 a MO-P6 (classical_orders_implementation.md section 10.13).
-// Parties, dans l'ordre des dependances : krepis <- peristyle (axes) <- colonnes
-// <- entablement <- fronton (MO-P3). Une partie est complete quand son bloc est
-// present et que toutes les cles que sa conversion consomme sont renseignees
-// (MO-P1) ; une cle dont la conversion exige qu'elle soit manquante
-// (columns.grooveDepth, entablature.innerFace, pediment.sima) n'est pas
-// consommee. Une partie n'est construite que si elle est complete et que toutes
-// ses dependances le sont. Le peristyle n'a pas de geometrie propre (MO-P4) :
-// sans colonnes, il n'est que valide par LayoutPeristyle (MO-P5).
+// Dependances (MO-P3, table, chaque partie avec toutes ses dependances, dans
+// l'ordre de l'enumeration) : peristyle <- krepis ; colonnes <- krepis,
+// peristyle ; entablement <- krepis, peristyle, colonnes ; fronton <- krepis,
+// peristyle, colonnes, entablement ; cella <- krepis ; porches <- krepis,
+// peristyle, colonnes, cella ; interieur <- krepis, peristyle, colonnes, cella
+// (ses colonnes derivent de celle du peristyle) ; epicranitis <- krepis, cella ;
+// prolongement est <- krepis, peristyle, colonnes, entablement, cella,
+// epicranitis (il pose sur les abaques et bute contre l'anneau) ; plafond est <-
+// les memes, plus le prolongement est (il pose sur son couronnement et bute
+// contre l'anneau) ; plafonds des flancs <- les memes, plus le plafond est
+// (grille des caissons, dessous des dalles). Aucun plafond ne depend du fronton
+// ni de l'interieur : sans fronton, pas de comble ni de poche. Pour les cinq
+// premieres parties, c'est la chaine
+// krepis <- peristyle <- colonnes <- entablement <- fronton. Une partie est
+// complete quand son bloc est present et que toutes les cles que sa conversion
+// consomme sont renseignees (MO-P1) ; une cle dont la conversion exige qu'elle
+// soit manquante (columns.grooveDepth, pediment.sima) n'est pas consommee, ni une
+// cle facultative, a repli : entablature.innerFace (EN1). Cella et porches partagent le bloc cella ; l'interieur,
+// l'epicranitis, le prolongement est et les plafonds ont chacun le leur
+// (interior, epicranitis, porchExtension, eastCeiling, flankCeilings). Une partie n'est
+// construite que si elle est complete et que toutes ses dependances le sont. Le
+// peristyle n'a pas de geometrie propre (MO-P4) : sans colonnes, il n'est que
+// valide par LayoutPeristyle (MO-P5).
 
-enum class MonumentPart { Krepis, Peristyle, Columns, Entablature, Pediment };
+enum class MonumentPart
+{
+	Krepis, Peristyle, Columns, Entablature, Pediment, Cella, Porches, Interior, Epicranitis, PorchExtension,
+	EastCeiling, FlankCeilings
+};
+
+constexpr std::size_t kMonumentPartCount = 12;
+
+// Dependances de `part` (MO-P3), dans l'ordre de l'enumeration.
+std::vector<MonumentPart> MonumentPartDependencies (MonumentPart part);
 
 // Built : construite. CompleteNotBuilt : complete, dependances completes, sans
 // geometrie (peristyle sans colonnes, valide par LayoutPeristyle). Incomplete :
@@ -562,14 +827,14 @@ struct MonumentPartReport
 	MonumentPart              part = MonumentPart::Krepis;
 	MonumentPartState         state = MonumentPartState::Absent;
 	std::vector<std::string>  missingKeys;   // Incomplete : cles consommees manquantes, ordre du document
-	std::optional<MonumentPart> blockedBy;   // Blocked : premiere dependance non complete, depuis la krepis
+	std::optional<MonumentPart> blockedBy;   // Blocked : premiere dependance non complete, dans l'ordre de la table
 };
 
 struct MonumentBuild
 {
-	std::unique_ptr<Mesh>             mesh;     // jamais nul ; vide si aucune partie n'est construite
-	std::vector<TempleMeshPart>       parts;    // plages du maillage, comme BuildTempleMesh
-	std::array<MonumentPartReport, 5> report;   // indice : static_cast<int> (MonumentPart)
+	std::unique_ptr<Mesh>                              mesh;     // jamais nul ; vide si aucune partie n'est construite
+	std::vector<TempleMeshPart>                        parts;    // plages du maillage, comme BuildTempleMesh
+	std::array<MonumentPartReport, kMonumentPartCount> report;   // indice : static_cast<int> (MonumentPart)
 };
 
 // Cles consommees par la conversion de `part` et manquantes dans `data`, chemin
@@ -578,20 +843,60 @@ struct MonumentBuild
 // un polygone (pediment.rakingSection) est manquant si son statut l'est ou s'il
 // est vide. Cles consommees : krepis 10 (toutes sauf cornerMargin), peristyle 6,
 // colonnes 21 (toutes sauf grooveDepth), entablement 45 (toutes sauf
-// architraveHeight, corniceHeight, innerFace, metopeWidth et channelDepth),
-// fronton 4 (apexRise, rakingRun, tympanumFace, rakingSection).
+// architraveHeight, corniceHeight, innerFace, facultative a repli, metopeWidth et
+// channelDepth),
+// fronton 4 (apexRise, rakingRun, tympanumFace, rakingSection), cella 30 (toutes
+// sauf porchColumnDiameter et porchColumnOffset), porches 3 (porchColumnDiameter,
+// porchColumnHeight, porchColumnOffset), la hauteur consommee aussi par la cella
+// (pied de l'architrave des porches) ; les axes des porches sont lus par la
+// cella, dont les porches dependent ; interieur 26 (toutes) ; epicranitis 6
+// (toutes) ; prolongement est 1 (eastSpan).
 std::vector<std::string> MissingMonumentKeys (const MonumentData &data, MonumentPart part);
 
-// Maillage des parties construites et rapport des cinq parties. Aiguillage :
+// Document prive de la partie `part` : son bloc et ses controles retires
+// (drapeau faux, valeurs par defaut), puis, de proche en proche, tout bloc qui
+// exigeait un bloc retire (table MO-P2 du lecteur : controles, interieur et
+// epicranitis sur la cella, prolongement est sur l'epicranitis). Cella et
+// Porches retirent le meme bloc, cella. Le resultat respecte MO-P2.
+MonumentData MonumentWithoutPart (const MonumentData &data, MonumentPart part);
+
+// Temple exterieur du document : MonumentWithoutPart (data, Cella), qui retire la
+// cella, les porches, l'interieur, l'epicranitis, le prolongement est et les
+// plafonds, avec leurs controles ; ces parties sont alors Absent au rapport.
+MonumentData MonumentExterior (const MonumentData &data);
+
+// Rapport des douze parties, celui que BuildMonumentMesh rend, sans maillage ni
+// validation : Absent, Incomplete (missingKeys), Blocked (blockedBy, premiere
+// dependance non complete dans l'ordre de la table), Built pour une partie
+// complete dont toutes les dependances le sont, sauf le peristyle :
+// CompleteNotBuilt quand les colonnes ne sont pas construites. Leve d'abord
+// std::invalid_argument "Monument : '<bloc>' demande le bloc '<bloc>'" si les
+// drapeaux `present` contredisent les dependances de blocs du lecteur (MO-P2),
+// par la meme table : un MonumentData modifie a la main ne peut pas presenter un
+// bloc sans celui qu'il exige.
+std::array<MonumentPartReport, kMonumentPartCount> ReportMonumentParts (const MonumentData &data);
+
+// Maillage des parties construites et rapport des douze parties. Aiguillage :
 //   - colonnes construites : TempleSettings des parties construites
-//     (entablement et fronton seulement s'ils le sont), puis BuildTempleMesh ;
-//     les cinq parties construites, exactement
-//     BuildTempleMesh (MonumentTempleSettings (data)) ;
+//     (entablement, fronton, cella, interieur, epicranitis, prolongement est,
+//     plafond est et plafonds des flancs seulement s'ils le sont ; colonnes des
+//     porches avec la cella si les porches le sont), puis BuildTempleMesh ; les
+//     douze parties construites,
+//     exactement BuildTempleMesh de MonumentTempleSettings (data) augmente de
+//     MonumentCellaSettings (data), de MonumentPorchSettings (data), de
+//     MonumentInteriorSettings (data), de MonumentEpicranitisSettings (data), de
+//     MonumentPorchExtensionSettings (data), de MonumentEastCeilingSettings
+//     (data) et de MonumentFlankCeilingSettings (data) ; sans cella au document,
+//     exactement BuildTempleMesh (MonumentTempleSettings (data)) ;
 //   - sinon krepis construite : LayoutPeristyle si le peristyle est complete
 //     et non bloque, puis BuildKrepisMesh, une partie KrepisStep par degre
-//     (adresse KrepisStep, index du degre, 16 sommets et 12 faces chacune) ;
+//     (adresse KrepisStep, index du degre, 16 sommets et 12 faces chacune),
+//     puis, si la cella est construite, ses pieces (LayoutGreekCella,
+//     BuildGreekCellaPieces ; adresse TempleAddressOf), sans colonnes de porche,
+//     puis, si l'epicranitis est construite, ses pieces (LayoutGreekEpicranitis,
+//     BuildGreekEpicranitisPieces), sans controle contre l'anneau ;
 //   - sinon maillage vide.
-// Les exceptions des conversions et des validations (LayoutPeristyle,
+// Le refus MO-P2 de ReportMonumentParts, puis les exceptions des conversions et des validations (LayoutPeristyle,
 // LayoutKrepis, LayoutTemple) remontent telles quelles. Le peristyle construit
 // avec les colonnes est Built. TE3 et TE4 (pieds sur le stylobate, colonnes
 // disjointes) ne sont controles qu'avec les colonnes.

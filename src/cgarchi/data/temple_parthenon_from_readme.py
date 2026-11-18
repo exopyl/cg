@@ -10,8 +10,9 @@ controles ; la colonne, l'entablement et le fronton sont absents (mode partiel,
 registre MO-P2).
 
 Les cotes de Penrose ([P]) sont lues en pieds anglais decimaux, entre parentheses
-apres le metre de conversion (regle R2) ; le debord du stylobate, que [P] ne donne
-pas, est lu en metres chez Dinsmoor 1968 ([H]).
+apres le metre de conversion (regle R2) ; le debord du stylobate, en metres, est
+deduit de la pl. IV de [P], et les entraxes d'angle en sont deduits (decisions D1 et
+D4 du README).
 
 Usage :
     python -I temple_parthenon_from_readme.py --readme <README.md> --write [--out <json>]
@@ -59,14 +60,14 @@ ROWS = (
     feet(("krepis.thirdStepHeight",), "3.2", "Troisième degré : hauteur", "lu", ("P",)),
     feet(("krepis.secondStepTread",), "3.2", "Giron des degrés, deuxième degré", "lu", ("P",)),
     feet(("krepis.thirdStepTread",), "3.2", "Giron des degrés, troisième degré", "lu", ("P",)),
-    RowSelector(("krepis.cornerMargin",), "3.2", "Débord du stylobate au-delà du fût", rf"\*\*{NUM} m\*\*", "m", "lu",
-                ("H",)),
+    RowSelector(("krepis.cornerMargin",), "3.2", "Débord du stylobate au-delà du fût", rf"\*\*{NUM} m\*\*", "m", "déduit",
+                ("P",)),
     feet(("krepis.euthynteriaHeight",), "3.2", "Euthyntéria (assise de réglage) : hauteur retenue", "convention", ()),
     feet(("krepis.euthynteriaTread",), "3.2", "Euthyntéria (assise de réglage) : giron", "déduit", ("P",)),
     feet(("peristyle.frontSpacing",), "4.1", "Entraxe courant, façades", "lu", ("P",)),
     feet(("peristyle.flankSpacing",), "4.1", "Entraxe courant, flancs", "lu", ("P",)),
-    feet(("peristyle.frontCornerSpacing",), "4.1", "Entraxe d'angle, façades", "déduit", ("H",)),
-    feet(("peristyle.flankCornerSpacing",), "4.1", "Entraxe d'angle, flancs", "déduit", ()),
+    feet(("peristyle.frontCornerSpacing",), "4.1", "Entraxe d'angle, façades", "déduit", ("P",)),
+    feet(("peristyle.flankCornerSpacing",), "4.1", "Entraxe d'angle, flancs", "déduit", ("P",)),
 )
 
 SERIES = ()

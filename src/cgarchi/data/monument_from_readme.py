@@ -1,4 +1,4 @@
-"""Moteur de derivation d'un document "monument/v10" depuis le README d'un monument.
+"""Moteur de derivation d'un document "monument/v14" depuis le README d'un monument.
 
 Le moteur porte les regles de lecture, l'ordre des cles du format et le rendu ; les
 tables d'un monument (selecteurs, nom, chemin du README, blocs documentes) sont dans
@@ -10,7 +10,9 @@ dans cgarchi (embed_file.cmake).
 Blocs : un monument documente une partie des blocs du format (BLOCKS de son module).
 Un bloc documente porte toutes ses cles (SECTION_ORDER), hors OPTIONAL_KEYS ; un bloc
 non documente est absent du document. Une valeur lue hors des blocs documentes, ou une
-cle exigee non lue, est un refus.
+cle exigee non lue, est un refus. Un bloc qui demande un autre bloc (REQUIRES : l'interieur
+et l'epicranitis demandent la cella, le prolongement est demande l'epicranitis, le plafond
+est le prolongement est, les plafonds des flancs le plafond est) est refuse sans lui.
 
 Usage :
     python -I <monument>_from_readme.py --readme <README.md> --write [--out <json>]
@@ -76,6 +78,12 @@ Regles de lecture des chapitres 5 et 6 (registre MO3) :
   - R12, rapport « 1 : nombre » (« 1 : 4,0846 ») : unite "ratio" ; le motif ecrit
     « 1 : » juste devant son unique groupe decimal ; la valeur recopiee est le
     nombre de droite, sans le « 1 : ».
+Regle de lecture des controles de la cella, de l'interieur et du couronnement (sections 7.8 a 7.10) :
+  - R13, coordonnee signee : un controle sans statut ni unite (metres), lu dans une
+    cellule de sa ligne par un motif a un seul groupe SIGNED ; le signe moins du
+    README (« − ») devient « - », le « + » est retire, la virgule decimale devient un
+    point. Une notation « ±3,115 » se lit par un motif qui ecrit « ± » hors du
+    groupe : la valeur recopiee est la grandeur, sans signe.
 """
 
 from __future__ import annotations
@@ -99,7 +107,7 @@ if sys.version_info < (3, 10):  # noqa: UP036
     sys.exit(f"monument_from_readme.py demande Python 3.10 ou plus recent, "
              f"lance par {sys.version.split()[0]}")
 
-SCHEMA = "monument/v10"
+SCHEMA = "monument/v14"
 
 STATUSES = ("lu", "déduit", "mesuré", "convention", "manquant")
 UNITS = ("m", "in", "mm", "ft", "ft+in", "1", "°", "ratio")
@@ -117,6 +125,8 @@ FEET_INCHES_PARTS = ("ft", "in")
 MINUS = "\u2212"
 TIMES = "\u00d7"
 NUM = r"(\d+(?:,\d+)?)"
+# Regle R13 : coordonnee signee, signe moins typographique ou plus facultatif.
+SIGNED = rf"([{MINUS}+]?\d+(?:,\d+)?)"
 # Regle R6 : pieds entiers >= 1 (« 0 ft » refuse, comme par le schema et le lecteur) ; ni chiffre ni virgule
 # devant, pour que « 2,5 ft » soit refuse sans ancrage.
 FEET_GROUP = r"([1-9]\d*)"
@@ -267,6 +277,18 @@ class ControlSelector:
 
 
 @dataclass(frozen=True)
+class CoordinateSelector:
+    """Regle R13 : controle sans statut, coordonnee signee en metres, reperee par son motif dans une cellule de sa
+    ligne ; une seule occurrence."""
+
+    key: str
+    section: str
+    label: str                 # debut de la premiere cellule
+    cell: int                  # cellule lue ; -1 : cellule de statut
+    pattern: str               # un seul groupe, SIGNED ou NUM
+
+
+@dataclass(frozen=True)
 class ProfileSelector:
     """Controle de la colonne : tableau de points (en-tete numerique, ligne de valeurs)."""
 
@@ -322,6 +344,43 @@ SECTION_ORDER = {
                          "rakingVerticalHeight", "rakingVerticalHeightM", "rakingProjection", "tympanumFaceM",
                          "rakingListelProjection", "rakingCoronaProjection", "rakingBottomFilletProjection",
                          "rakingCoronaGap"),
+    "cella": ("toichobateRise", "pteronEast", "pteronWest", "toichobateOverhang", "longWallThickness", "longWallSpan",
+              "wallTop", "eastCrossWallPosition", "eastCrossWallThickness", "westCrossWallPosition",
+              "westCrossWallThickness", "doorWidth", "lintelHeight", "doorJambOffset", "thresholdLength",
+              "thresholdProjection", "thresholdDepth", "naosFloorHeight", "eastAntaRetreat", "westAntaRetreat",
+              "antaInnerProjection", "antaOuterProjection", "antaHeadLength", "porchColumnDiameter",
+              "porchColumnHeight", "porchColumnOffset", "pronaosColumnAxis", "opisthodomosColumnAxis",
+              "porchArchitraveHeight", "porchFriezeHeight", "porchEntablatureDepth", "porchEntablatureFront"),
+    "cellaControls": ("toichobateBottomZ", "toichobateEastX", "toichobateWestX", "toichobateWidth", "longWallInnerY",
+                      "longWallOuterY", "longWallLength", "eastCrossWallEastX", "eastCrossWallWestX",
+                      "westCrossWallWestX", "westCrossWallEastX", "naosLength", "doorLintelZ", "eastAntaX",
+                      "westAntaX", "antaInnerY", "antaFaceWidth", "porchArchitraveBottomZ", "porchArchitraveTopZ",
+                      "porchFriezeTopZ"),
+    "interior": ("spacing", "eastAxisOffset", "westAxisOffset", "wallAxisOffset", "naveLevel", "lowerColumnHeight",
+                 "lowerColumnLowerDiameter", "lowerColumnUpperDiameter", "lowerCapitalHeight", "lowerAbacus",
+                 "lowerEpistyleHeight", "lowerEpistyleSoffit", "upperColumnHeight", "upperColumnLowerDiameter",
+                 "upperColumnUpperDiameter", "upperCapitalHeight", "upperAbacus", "fluteCount", "upperEpistyleHeight",
+                 "upperEpistyleSoffit", "courseHeight", "courseThickness", "corniceHeight", "corniceProjection",
+                 "pocketCeiling", "pocketMargin"),
+    "interiorControls": ("eastWallX", "flankAxis1X", "flankAxis2X", "flankAxis3X", "flankAxis4X", "flankAxis5X",
+                         "westAxisX", "westWallX", "naosLength", "lateralAxisY", "lowerAbacusTopZ",
+                         "lowerEpistyleTopZ", "upperAbacusTopZ", "upperEpistyleTopZ", "courseTopZ", "corniceTopZ",
+                         "pocketBottomZ", "pocketEastX", "pocketWestX", "pocketHalfWidthY"),
+    "epicranitis": ("height", "innerOffset", "listelHeight", "filletHeight", "listelProjection", "bandProjection"),
+    "epicranitisControls": ("topZ", "porchCrownBottomZ", "porchCrownHeight", "innerFaceY", "wallBandY", "eastBandX",
+                            "westBandX"),
+    "porchExtension": ("eastSpan",),
+    "porchExtensionControls": ("ringInnerY", "architraveFootZ"),
+    "eastCeiling": ("beamCount", "beamSpacing", "beamWidth", "beamHeight", "beamWestBearing", "endMassifWidth",
+                    "corniceHeight", "corniceProjection", "bandHeight", "corniceDepth", "cofferPitch", "cofferOpening",
+                    "cofferFrame", "cofferDepth", "cofferRows"),
+    "eastCeilingControls": ("beamOuterAxisY", "beamBottomZ", "beamTopZ", "beamWestEndX", "beamEastEndX", "beamLength",
+                            "clearBay", "massifFaceY", "edgeBay", "corniceTopZ", "bandTopZ", "slabThickness",
+                            "cofferFloor", "cofferRun", "cofferMargin"),
+    "flankCeilings": ("beamSpacing", "firstBeamOffset", "eastBeamCount", "westBeamCount", "beamWidth", "beamHeight",
+                      "peristyleGap", "cofferRows"),
+    "flankCeilingsControls": ("lastEastAxisX", "lastWestAxisX", "wallEndY", "peristyleEndY", "beamLength", "cofferRun",
+                              "cofferMargin"),
 }
 
 # Cles qu'un bloc documente peut ne pas porter.
@@ -329,9 +388,17 @@ OPTIONAL_KEYS = frozenset({"controls.frontSum", "controls.flankSum"})
 
 # Bloc de controles -> bloc de sa partie, sans lequel il est refuse.
 CONTROLS_OF = {"controls": "peristyle", "krepisControls": "krepis", "columnControls": "columns",
-               "entablatureControls": "entablature", "pedimentControls": "pediment"}
+               "entablatureControls": "entablature", "pedimentControls": "pediment", "cellaControls": "cella",
+               "interiorControls": "interior", "epicranitisControls": "epicranitis",
+               "porchExtensionControls": "porchExtension", "eastCeilingControls": "eastCeiling",
+               "flankCeilingsControls": "flankCeilings"}
 # Blocs de controles exiges par leur partie : les axes du peristyle.
 REQUIRED_CONTROLS = frozenset({"controls"})
+# Bloc de partie -> bloc de partie qu'il demande : l'interieur et l'epicranitis sont construits sur la cella, le
+# prolongement est continue le couronnement de l'epicranitis, le plafond est pose sur le prolongement est, les
+# plafonds des flancs prennent la grille des caissons et le dessous des dalles du plafond est.
+REQUIRES = {"interior": "cella", "epicranitis": "cella", "porchExtension": "epicranitis",
+            "eastCeiling": "porchExtension", "flankCeilings": "eastCeiling"}
 
 
 class DerivationError(Exception):
@@ -901,6 +968,36 @@ def apply_controls(tables: ModuleType, lines: list[Line],
                            "readme": readme_place(sel.section, ln.number)}
 
 
+def signed_text(text: str) -> Raw:
+    """Regle R13 : « −11,6415 » -> -11.6415, « +10,9215 » -> 10.9215."""
+    sign = "-" if text.startswith(MINUS) else ""
+    return Raw(sign + text.lstrip(MINUS + "+").replace(",", "."))
+
+
+def apply_coordinates(tables: ModuleType, lines: list[Line],
+                      values: dict, errors: list[str]) -> None:
+    for sel in getattr(tables, "COORDINATES", ()):
+        if re.compile(sel.pattern).groups != 1:
+            errors.append(f"{sel.key} : motif a {re.compile(sel.pattern).groups} groupe(s), un attendu (regle R13)")
+            continue
+        hits = table_rows(lines, sel.section, sel.label, False)
+        if len(hits) != 1:
+            errors.append(f"{sel.key} : {len(hits)} ligne(s) « {sel.label} » en section {sel.section}"
+                          f"{at_lines(hits)}, une attendue")
+            continue
+        cells = cells_of(hits[0].text)
+        if not -len(cells) <= sel.cell < len(cells):
+            errors.append(f"{sel.key}, README l. {hits[0].number} : {len(cells)} cellule(s), cellule {sel.cell} attendue")
+            continue
+        found = list(re.finditer(sel.pattern, cells[sel.cell]))
+        if len(found) != 1:
+            errors.append(f"{sel.key}, README l. {hits[0].number} : motif trouve {len(found)} fois dans "
+                          f"« {cells[sel.cell]} », une attendue")
+            continue
+        values[sel.key] = {"value": signed_text(found[0].group(1)),
+                           "readme": readme_place(sel.section, hits[0].number)}
+
+
 def apply_profiles(tables: ModuleType, lines: list[Line],
                 values: dict, errors: list[str]) -> None:
     for sel in tables.PROFILES:
@@ -952,6 +1049,7 @@ def derive(readme: bytes, tables: ModuleType) -> dict:
     apply_axes(tables, lines, values, errors)
     apply_results(tables, lines, values, errors)
     apply_controls(tables, lines, values, errors)
+    apply_coordinates(tables, lines, values, errors)
     apply_profiles(tables, lines, values, errors)
     errors.extend(block_errors(tables.BLOCKS, values))
     if errors:
@@ -982,6 +1080,8 @@ def block_errors(blocks: tuple[str, ...], values: dict) -> list[str]:
                if c in blocks and part not in blocks]
     errors += [f"bloc « {part} » documente sans le bloc « {c} »" for c, part in CONTROLS_OF.items()
                if c in REQUIRED_CONTROLS and part in blocks and c not in blocks]
+    errors += [f"bloc « {b} » documente sans le bloc « {needed} »" for b, needed in REQUIRES.items()
+               if b in blocks and needed not in blocks]
     errors += [f"{key} : lue hors des blocs documentes {list(blocks)}" for key in values
                if key.split(".")[0] not in blocks]
     errors += [f"{section}.{key} : cle exigee du bloc documente « {section} », non lue"

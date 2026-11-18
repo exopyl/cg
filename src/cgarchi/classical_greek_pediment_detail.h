@@ -61,11 +61,20 @@ void CheckPediment (const GreekPedimentSettings &&, const CheckedEntablature &) 
 // une copie egale des reglages est refusee.
 std::vector<std::unique_ptr<Mesh>> BuildPedimentPieces (const CheckedPediment &p, const CheckedEntablature &e,
                                                         const PeristyleLayout &peristyle, double zFoot,
-                                                        const std::function<void (const Mesh &)> &afterEach);
+                                                        const std::function<void (const Mesh &)> &afterEach,
+                                                        const std::vector<RoofPocket> &pockets = {});
 std::vector<std::unique_ptr<Mesh>> BuildPedimentPieces (const CheckedPediment &p, const CheckedEntablature &e,
                                                         const PeristyleLayout &peristyle, double zFoot,
                                                         const RefinementStations &stations,
-                                                        const std::function<void (const Mesh &)> &afterEach);
+                                                        const std::function<void (const Mesh &)> &afterEach,
+                                                        const std::vector<RoofPocket> &pockets = {});
+
+// Critere de poche des BuildGreekPedimentPieceMeshes (emprise, plafond au-dessus
+// de la base, bords de la base et tympans, coins du plafond strictement sous les
+// pans), en double puis sur les coordonnees arrondies en float, sur le repere du
+// fronton : vrai si `pocket` serait refusee contre le comble. Ne leve pas.
+bool PocketMeetsRoof (const CheckedPediment &p, const CheckedEntablature &e, const PeristyleLayout &peristyle, double zFoot,
+                      const RoofPocket &pocket);
 
 // Pieds foot[k] = r (H_b + h_k s) des sommets de la section, dans son ordre :
 // les valeurs du repere des constructions, par la meme fonction.

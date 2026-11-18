@@ -32,7 +32,7 @@ add_custom_command(
     VERBATIM)
 target_sources(cgarchi PRIVATE "${CGARCHI_ORDERS_CPP}")
 
-# Documents des monuments ("monument/v10"), embarques de meme, un par monument,
+# Documents des monuments ("monument/v14"), embarques de meme, un par monument,
 # liste explicite : nom du JSON, puis fonction qui le rend
 # (classical_monument_data.h). Chaque JSON est la sortie de
 # data/<nom>_from_readme.py sur le README de l'utilisateur, hors du depot : le

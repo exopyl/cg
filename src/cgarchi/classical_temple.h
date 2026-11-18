@@ -5,8 +5,12 @@
 #include <optional>
 #include <vector>
 
+#include <cgarchi/classical_greek_ceiling.h>
+#include <cgarchi/classical_greek_cella.h>
+#include <cgarchi/classical_greek_cella_crown.h>
 #include <cgarchi/classical_greek_doric_column.h>
 #include <cgarchi/classical_greek_entablature.h>
+#include <cgarchi/classical_greek_naos_interior.h>
 #include <cgarchi/classical_greek_pediment.h>
 #include <cgarchi/classical_krepis.h>
 #include <cgarchi/classical_peristyle.h>
@@ -91,6 +95,59 @@ namespace classical
 // finale, avant un seul arrondi float ; la krepis, l'anneau et le fronton sont
 // re-tessellees par les stations. Les contacts horizontaux et inclines ne sont
 // plus coplanaires qu'a l'ecart d'interpolation pres (registre RF6, TE5).
+//
+// Cella optionnelle (classical_greek_cella.h ; registre CE-1 a CE-9, section
+// 10.16) : absente, le temple est celui des autres parties, au bit pres.
+// Presente, ses pieces s'ajoutent apres toutes les autres, celles du comble
+// comprises, puis les colonnes des porches : sans interieur, le maillage sans
+// cella est un prefixe du maillage avec cella. Refusee avec un raffinement
+// (CE-9). Contacts
+// admis en plus (TE5, CE-8), tous coplanaires : C1, dessous du toichobate sur le
+// dessus du stylobate ; C2, pieds des murs, du sol du naos, du seuil, des antes
+// et des colonnes des porches sur le dessus du toichobate ; C3, faces du sol du
+// naos contre les murs et le seuil ; C4, bouts des murs de refend contre les nus
+// interieurs des murs longs ; C5, seuil dans l'echancrure du mur de refend
+// avant ; C6, dos des antes contre les bouts des murs longs ; C7, dessous de
+// l'architrave des porches sur les antes, les murs longs et les abaques des
+// colonnes des porches, et son dos contre les murs longs ; C8, dessous de la
+// frise sur l'architrave et son dos contre les murs longs.
+//
+// Interieur optionnel du naos (classical_greek_naos_interior.h ; registre CE-15
+// et suivantes, section 10.16), qui demande une cella : absent, le temple est
+// celui des autres parties, au bit pres. Present, ses pieces s'ajoutent apres
+// les colonnes des porches, puis ses colonnes, et, avec un fronton, le comble
+// recoit la poche de l'interieur (RoofPocket, CE-14). Le maillage avec
+// interieur et celui sans interieur ont donc en commun, au bit pres : tout ce
+// qui precede le comble ; les 6 premiers sommets du comble ; les sommets de la
+// cella et des colonnes des porches, decales des 8 sommets de la poche (leurs
+// indices de faces aussi). Sans fronton, le maillage sans interieur en est un
+// prefixe. Refuse avec un raffinement, avant la cella (CE-9). Contacts admis en
+// plus (TE5), tous coplanaires sauf les onglets : I1, pieds des colonnes
+// inferieures sur le sol du naos ; I2, dessus des abaques sous les epistyles et
+// pieds des colonnes superieures sur l'epistyle inferieur ; I3, onglets des
+// epistyles et de la corniche au retour du fond, dans le plan vertical a 45
+// degres ; I4, bouts avant des epistyles contre le mur de refend avant et
+// l'assise XVII avant ; I5, corniche sur l'epistyle superieur ; I6, assise XVII
+// sur le dessus des murs, ses coins entre eux ; I7, faces exterieures de
+// l'assise XVII contre les parois de la poche du comble.
+//
+// Couronnement optionnel de la cella (classical_greek_cella_crown.h ; registre
+// CE-23 et suivantes, section 10.16), qui demande une cella : absent, le temple
+// est celui des autres parties, au bit pres ; present, ses pieces s'ajoutent
+// apres les colonnes de l'interieur, si bien que le maillage sans couronnement
+// en est un prefixe. Prolongement est optionnel, qui demande le couronnement et
+// l'entablement : ses pieces suivent celles du couronnement. Refuses avec un
+// raffinement (CE-9). Contacts admis en plus (TE5), tous coplanaires, aucun avec
+// le comble : K1, corps et bandes des murs sur le dessus des murs ; K2,
+// couronnements et leurs bandes sur le dessus de la frise des porches ; K3, face
+// interieure de l'epicranitis et bouts des assises des porches contre l'assise
+// XVII interieure ; K4, bouts des assises des murs contre le dos des
+// couronnements ; K5, joints de l'assise : corps entre eux, dos des bandes sur
+// les corps, onglets des bandes entre eux (plan vertical a 45 degres) ; K6,
+// architrave prolongee sur les abaques du peristyle, et bouts du prolongement
+// contre la face interieure de l'anneau ; K7 et K8, bouts de l'architrave, de
+// la frise et du couronnement prolonges contre ceux des porches, faces
+// confondues (DuplicateFace) quand les sections sont egales.
 
 struct TempleSettings
 {
@@ -101,9 +158,24 @@ struct TempleSettings
 	std::optional<GreekEntablatureSettings> entablature;   // absent : krepis et peristyle seuls
 	std::optional<GreekPedimentSettings>    pediment;      // absent : temple sans fronton, au bit pres ; demande un entablement
 	std::optional<TempleRefinementSettings> refinement;    // absent : temple sans raffinement, au bit pres
+	std::optional<CellaSettings>            cella;         // absent : temple sans cella, au bit pres ; refuse le raffinement
+	std::optional<NaosInteriorSettings>     interior;      // absent : temple sans interieur, au bit pres ; demande une cella
+	std::optional<EpicranitisSettings>      epicranitis;   // absent : temple sans couronnement, au bit pres ; demande une cella
+	std::optional<PorchExtensionSettings>   porchExtension;   // absent : sans prolongement est ; demande le couronnement
+	std::optional<EastCeilingSettings>      eastCeiling;      // absent : sans plafond est ; demande le prolongement est
+	std::optional<FlankCeilingSettings>     flankCeilings;    // absent : sans plafonds des flancs ; demande le plafond est
 };
 
-enum class TempleElement { KrepisStep, Column, Entablature, Triglyph, Regula, Mutule, RakingCornice, Roof };
+enum class TempleElement
+{
+	KrepisStep, Column, Entablature, Triglyph, Regula, Mutule, RakingCornice, Roof,
+	Toichobate, NaosFloor, LongWall, CrossWall, Threshold, Anta, PorchArchitrave, PorchFrieze, PorchColumn,
+	InteriorCourse, InteriorLowerEpistyle, InteriorUpperEpistyle, InteriorCornice, InteriorLowerColumn,
+	InteriorUpperColumn,
+	EpicranitisCourse, EpicranitisPorchCourse, EpicranitisCrossCourse, PorchCrown, CrownMoulding,
+	ExtensionArchitrave, ExtensionFrieze, ExtensionCrown, ExtensionMoulding,
+	CeilingBeam, PorchCornice, PorchBand, CeilingSlab
+};
 
 // Adresse stable (DG-4) : ne depend que des comptes et de la strategie d'angle
 // de la frise, pas des longueurs. Par defaut, index = -1 : TempleAddress {} ne
@@ -118,9 +190,37 @@ struct TempleAddress
 	// cote (FriezePiece::rank) ; une piece d'angle a le rang 0 du cote qu'elle
 	// ouvre. Regula : rang du triglyphe qui la porte (OrnamentPiece::rank), une
 	// goutte n'ayant pas d'adresse propre. Mutule : rang le long de son cote.
-	// Corniche rampante : 0, de cote Front ou Back. Comble : 0, cote Front.
+	// Corniche rampante : 0, de cote Front ou Back. Comble : 0, cote Front ; avec
+	// plusieurs poches, rang de la tranche par Y croissants (depend des longueurs,
+	// registre CE-34).
+	// Cella (CellaPiece) : son cote et son rang ; colonne de porche : cote de
+	// son porche, rang 0 en X < 0, 1 en X > 0. Interieur (NaosInteriorPiece) :
+	// son cote, rang 0 ; colonne de l'interieur : son cote et son rang
+	// (NaosInteriorColumn). Couronnement (EpicranitisPiece) et prolongement est
+	// (PorchExtensionPiece) : le cote et le rang de la piece. Plafonds
+	// (CeilingPiece) : le cote et le rang de la piece.
 	int index = -1;
 };
+
+// Adresse d'une piece de la cella : element du meme nom, cote et rang de la
+// piece.
+TempleAddress TempleAddressOf (const CellaPiece &piece);
+
+// Adresse d'une piece de l'interieur : InteriorCourse, InteriorLowerEpistyle,
+// InteriorUpperEpistyle ou InteriorCornice, cote et rang de la piece.
+TempleAddress TempleAddressOf (const NaosInteriorPiece &piece);
+
+// Adresse d'une piece du couronnement : EpicranitisCourse, EpicranitisPorchCourse,
+// EpicranitisCrossCourse, PorchCrown ou CrownMoulding, cote et rang de la piece.
+TempleAddress TempleAddressOf (const EpicranitisPiece &piece);
+
+// Adresse d'une piece du prolongement est : ExtensionArchitrave, ExtensionFrieze,
+// ExtensionCrown ou ExtensionMoulding, cote et rang de la piece.
+TempleAddress TempleAddressOf (const PorchExtensionPiece &piece);
+
+// Adresse d'une piece des plafonds : CeilingBeam, PorchCornice, PorchBand ou
+// CeilingSlab, cote et rang de la piece.
+TempleAddress TempleAddressOf (const CeilingPiece &piece);
 
 struct TemplePlacement   // une colonne
 {
@@ -151,6 +251,18 @@ struct TempleLayout
 	// Avec un raffinement : stations nominales (NominalRefinementStations),
 	// deplacees hors des coordonnees structurelles au maillage ; absentes sinon.
 	std::optional<RefinementStations> stations;
+	// Avec une cella : LayoutGreekCella sur la krepis ; absente sinon.
+	std::optional<CellaLayout> cella;
+	// Avec un interieur : LayoutGreekNaosInterior sur la cella ; absent sinon.
+	std::optional<NaosInteriorLayout> interior;
+	// Avec un couronnement : LayoutGreekEpicranitis sur la cella ; absent sinon.
+	std::optional<EpicranitisLayout> epicranitis;
+	// Avec un prolongement est : LayoutGreekPorchExtension ; absent sinon.
+	std::optional<PorchExtensionLayout> porchExtension;
+	// Avec un plafond est : LayoutGreekEastCeiling ; absent sinon.
+	std::optional<EastCeilingLayout> eastCeiling;
+	// Avec des plafonds des flancs : LayoutGreekFlankCeilings ; absents sinon.
+	std::optional<FlankCeilingLayout> flankCeilings;
 };
 
 // Valide les composants : krepis, peristyle, puis les deux jeux de reglages de
@@ -216,6 +328,49 @@ struct TempleLayout
 // corniche rampante en X (kRefinementClearance max (1, rakingRun))
 // (LongestClearanceBlock), sinon refus "Raffinement :
 // 'refinement.chordDeviation' donne sur l'axe X (ou Y) une fenetre de station".
+// Avec une cella, d'abord, avant tout refus du raffinement : std::invalid_argument
+// "Temple : 'cella' et 'refinement' ..." si les deux sont presents (CE-9 : la
+// cella n'a pas de raffinements, README section 7.8, decision D8, et le champ de
+// courbure ne s'y applique pas) ; puis LayoutGreekCella (exceptions "Cella : "
+// telles quelles) ; puis "Temple : 'cella'" si l'emprise du toichobate touche la
+// boite de demi-cote `overall` d'une colonne du peristyle, si, avec un
+// entablement, elle n'est pas strictement a l'interieur de la face interieure de
+// l'anneau (demi-distances des axes moins innerFace), ou si la cote la plus haute
+// de la cella depasse le dessus de l'anneau, sous le comble (CE-4).
+// Avec un interieur, avant la cella : std::invalid_argument "Temple :
+// 'interior' et 'refinement' ..." avec un raffinement (CE-9), puis "Temple :
+// 'interior' demande une cella" sans cella ; apres la cella,
+// LayoutGreekNaosInterior (exceptions "Interieur : " telles quelles). La poche
+// n'est validee contre le comble qu'au maillage (BuildGreekPedimentPieceMeshes,
+// refus "Fronton : 'roofPocket...'").
+// Avec un couronnement, avant la cella : "Temple : 'epicranitis' et
+// 'refinement' ..." avec un raffinement (CE-9), puis "Temple : 'epicranitis'
+// demande une cella" sans cella ; avec un prolongement est, de meme, "Temple :
+// 'porchExtension' et 'refinement' ...", puis "Temple : 'porchExtension' demande
+// le couronnement" sans couronnement, et "... demande un entablement" sans
+// entablement. Apres l'interieur : LayoutGreekEpicranitis (exceptions
+// "Couronnement : " telles quelles) ; "Temple : 'epicranitis.innerOffset'" avec un
+// interieur dont l'assise XVII n'a pas cette epaisseur (CE-24) ; avec un
+// entablement, "Temple : 'epicranitis'" si l'emprise du couronnement n'est pas
+// strictement dans la face interieure de l'anneau, ou si son dessus n'est pas
+// sous le dessus de l'anneau (CE-4 etendu) ; puis LayoutGreekPorchExtension
+// (exceptions "Prolongement : " telles quelles), sur la face interieure de
+// l'anneau par l'expression de SweepRectangularRing, ses bouts y etant egaux.
+// Avec un plafond est, avant la cella : "Temple : 'eastCeiling' et 'refinement'
+// ..." avec un raffinement (CE-9), puis "... demande le prolongement est" sans
+// prolongement (lequel demande un entablement) ; avec des
+// plafonds des flancs, de meme, "Temple : 'flankCeilings' et 'refinement' ...",
+// "... demande le plafond est". Apres le prolongement : LayoutGreekEastCeiling (exceptions "Plafond
+// est : " telles quelles), sur la face interieure de l'anneau (RingInnerOf) ;
+// avec un fronton, "Temple : 'eastCeiling.bandHeight' met le dessus de la corniche
+// et du bandeau du porche ouest au contact ou au-dessus d'un pan du comble" si la
+// poche ouest tombe sous le critere de poche du fronton (detail::PocketMeetsRoof),
+// en double puis en float, puis "Temple : 'eastCeiling.beamHeight' met le dessus
+// des pieces au contact ou au-dessus d'un pan du comble" si la poche est y tombe ;
+// puis LayoutGreekFlankCeilings (exceptions "Plafonds des flancs : "
+// telles quelles) et, avec un fronton, "Temple : 'flankCeilings.peristyleGap'
+// laisse le dessus des poutres et des dalles au contact ou au-dessus d'un pan du
+// comble" si l'une des deux poches des flancs tombe sous le meme critere (CE-42).
 void ValidateTempleSettings (const TempleSettings &settings);
 
 // Placements, sans maillage. Valide d'abord, comme ValidateTempleSettings.
@@ -285,7 +440,8 @@ std::size_t CountTempleMeshFaces (const TempleSettings &settings);
 // rang) ; toutes les pieces hors anneau sont construites apres une seule
 // validation des reglages, a la mise en place ; puis, avec un
 // fronton, la corniche rampante Front (adresse RakingCornice, Front, 0), la
-// corniche rampante Back (RakingCornice, Back, 0) et le comble (Roof, Front, 0),
+// corniche rampante Back (RakingCornice, Back, 0) et le comble (Roof, Front, 0 ;
+// avec plusieurs poches, ses tranches par Y croissants, Roof, Front, rang),
 // par BuildGreekPedimentPieceMeshes sur les demi-distances des axes, a la cote
 // entablatureFoot. Toute cote de l'entablement vaut float (entablatureFoot
 // + z) : le dessous de l'anneau est, au bit pres, a la cote du sommet des
@@ -318,6 +474,28 @@ std::size_t CountTempleMeshFaces (const TempleSettings &settings);
 // grille, ceux des coupes de l'anneau (RefineRingSectionWidth). Refus
 // "Anneau : " et "Fronton : " des surcharges a stations, tels quels.
 // CountTempleMeshFaces a les memes refus.
+// Avec une cella, apres le comble : les pieces de BuildGreekCellaPieces, dans
+// leur ordre (adresse TempleAddressOf, translation nulle), puis une copie
+// translatee du tour de la colonne de porche par placement de
+// CellaLayout::porchColumns (adresse PorchColumn, cote et rang du placement) ;
+// pied de chaque colonne de porche a la cote float du dessus du toichobate.
+// Avec un interieur : comble creuse de la poche de NaosInteriorLayout::pocket
+// (BuildGreekPedimentPieceMeshes) ; apres les colonnes des porches, les pieces
+// de BuildGreekNaosInteriorPieces, dans leur ordre (adresse TempleAddressOf,
+// translation nulle), puis une copie translatee du tour de la colonne
+// inferieure ou superieure par placement de NaosInteriorLayout::columns
+// (adresse InteriorLowerColumn ou InteriorUpperColumn, cote et rang).
+// Avec un couronnement, apres les colonnes de l'interieur : les pieces de
+// BuildGreekEpicranitisPieces, puis, avec un prolongement est, celles de
+// BuildGreekPorchExtensionPieces, dans leur ordre (adresse TempleAddressOf,
+// translation nulle).
+// Avec un plafond est, apres le prolongement : les pieces de
+// BuildGreekEastCeilingPieces, puis, avec des plafonds des flancs, celles de
+// BuildGreekFlankCeilingPieces, dans leur ordre (adresse TempleAddressOf,
+// translation nulle). Poches du comble (CE-34), dans cet ordre : interieur,
+// plafond est (EastCeilingLayout::eastPocket), porche ouest (westPocket),
+// flancs Left puis Right (FlankCeilingLayout::pockets) ;
+// plusieurs poches donnent le comble en tranches.
 std::unique_ptr<Mesh> BuildTempleMesh (const TempleSettings &settings, TempleLayout *layout = nullptr,
                                        std::vector<TempleMeshPart> *parts = nullptr);
 

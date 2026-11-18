@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <cgarchi/classical_greek_pediment_detail.h>
+#include <cgarchi/classical_greek_prism_detail.h>
 #include <cgarchi/classical_greek_section_detail.h>
 #include <cgarchi/classical_mesh.h>
 #include <cgarchi/classical_partition.h>
@@ -231,6 +232,176 @@ std::unique_ptr<Mesh> RoofMesh (const Frame &f)
 	PushTriangle (triangles, 0, 1, 2, false);
 	PushTriangle (triangles, m, m + 1, m + 2, true);
 	return MakeTriangleMesh (positions, triangles);
+}
+
+// Criteres stricts de la poche contre le comble, sur des coordonnees donnees
+// (en double, ou arrondies en float puis relues en double). Rend le champ fautif
+// et la regle, ou deux chaines vides. Produits du critere des pans arrondis en
+// double avant la comparaison, jamais contractes en FMA.
+std::pair<std::string, std::string> PocketConflict (double x0, double x1, double y0, double y1, double zTop, double xTop,
+                                                    double yTympanum, double zBase, double zRidge)
+{
+	if (!(x0 < x1))
+		return {"roofPocket.x", "a une emprise vide ou inversee : x0 < x1 attendu"};
+	if (!(y0 < y1))
+		return {"roofPocket.y", "a une emprise vide ou inversee : y0 < y1 attendu"};
+	if (!(zTop > zBase))
+		return {"roofPocket.zTop", "doit etre au-dessus de la base du comble, zFoot + z11"};
+	if (!(-xTop < x0 && x1 < xTop))
+		return {"roofPocket.x", "touche ou traverse un bord de la base du comble : -xTop < x0 et x1 < xTop attendus"};
+	if (!(-yTympanum < y0 && y1 < yTympanum))
+		return {"roofPocket.y", "touche ou traverse un tympan : -yTympanum < y0 et y1 < yTympanum attendus"};
+	const double xFar = std::max (-x0, x1);
+	const volatile double ceiling = (zTop - zBase) * xTop;
+	const volatile double pan = (zRidge - zBase) * (xTop - xFar);
+	if (!(ceiling < pan))
+		return {"roofPocket.zTop", "touche ou traverse un pan : un coin du plafond n'est pas strictement sous les pans"};
+	return {};
+}
+
+void RequirePocket (const Frame &f, const RoofPocket &p)
+{
+	if (!(std::isfinite (p.x0) && std::isfinite (p.x1) && std::isfinite (p.y0) && std::isfinite (p.y1) && std::isfinite (p.zTop)))
+		Fail ("roofPocket", "a une borne non finie");
+	const double zRidge = f.ridge.back ();
+	const std::pair<std::string, std::string> exact =
+	    PocketConflict (p.x0, p.x1, p.y0, p.y1, p.zTop, f.xTop, f.yTympanum, f.zBase, zRidge);
+	if (!exact.first.empty ())
+		Fail (exact.first, exact.second);
+	auto rounded = [] (double v) { return static_cast<double> (static_cast<float> (v)); };
+	const std::pair<std::string, std::string> stored =
+	    PocketConflict (rounded (p.x0), rounded (p.x1), rounded (p.y0), rounded (p.y1), rounded (p.zTop), rounded (f.xTop),
+	                    rounded (f.yTympanum), rounded (f.zBase), rounded (zRidge));
+	if (!stored.first.empty ())
+		Fail ("roofPocket", "touche le comble une fois les sommets arrondis en float (" + stored.first + " " + stored.second + ")");
+}
+
+// Comble a poche : sommets du prisme (RoofMesh), puis le bas de la poche
+// (6 .. 9, z = zBase) et son plafond (10 .. 13, z = zTop), coins dans l'ordre
+// (x0, y0), (x1, y0), (x1, y1), (x0, y1). Pans, abouts, base en couronne de
+// normale -z, parois de normale vers le vide, plafond de normale -z.
+std::unique_ptr<Mesh> RoofMeshWithPocket (const Frame &f, const RoofPocket &p)
+{
+	const std::size_t T = f.ridge.size () - 1;
+	const std::array<std::array<double, 2>, 3> triangle = {{{-f.xTop, f.zBase}, {f.xTop, f.zBase}, {0.0, f.ridge[T]}}};
+	const unsigned m = static_cast<unsigned> (triangle.size ());
+	const std::array<std::array<double, 2>, 4> corners = {{{p.x0, p.y0}, {p.x1, p.y0}, {p.x1, p.y1}, {p.x0, p.y1}}};
+	std::vector<std::array<double, 3>> positions;
+	positions.reserve (2 * m + 2 * corners.size ());
+	for (const double y : {-f.yTympanum, f.yTympanum})
+		for (const std::array<double, 2> &q : triangle)
+			positions.push_back ({q[0], y, q[1]});
+	for (const double z : {f.zBase, p.zTop})
+		for (const std::array<double, 2> &c : corners)
+			positions.push_back ({c[0], c[1], z});
+
+	std::vector<std::array<unsigned, 3>> triangles;
+	triangles.reserve (24);
+	for (unsigned k = 1; k < m; ++k)
+	{
+		const unsigned j = (k + 1) % m;
+		PushTriangle (triangles, m + k, m + j, j, false);
+		PushTriangle (triangles, m + k, j, k, false);
+	}
+	PushTriangle (triangles, 0, 1, 2, false);
+	PushTriangle (triangles, m, m + 1, m + 2, true);
+	// Bord de la base, sens direct vu de +z : (-xTop, -yT), (xTop, -yT), (xTop, yT), (-xTop, yT).
+	const std::array<unsigned, 4> outer = {0, 1, m + 1, m};
+	const unsigned low = 2 * m, high = low + 4;
+	for (unsigned k = 0; k < 4; ++k)
+	{
+		const unsigned j = (k + 1) % 4;
+		PushTriangle (triangles, outer[k], low + k, low + j, false);
+		PushTriangle (triangles, outer[k], low + j, outer[j], false);
+	}
+	for (unsigned k = 0; k < 4; ++k)
+	{
+		const unsigned j = (k + 1) % 4;
+		PushTriangle (triangles, low + k, high + k, high + j, false);
+		PushTriangle (triangles, low + k, high + j, low + j, false);
+	}
+	PushTriangle (triangles, high, high + 2, high + 1, false);
+	PushTriangle (triangles, high, high + 3, high + 2, false);
+	return MakeTriangleMesh (positions, triangles);
+}
+
+// Intervalles ouverts ]a0, a1[ et ]b0, b1[ d'intersection non vide.
+bool OpenIntervalsMeet (double a0, double a1, double b0, double b1)
+{
+	return std::max (a0, b0) < std::min (a1, b1);
+}
+
+bool PocketsOverlap (const RoofPocket &a, const RoofPocket &b)
+{
+	return OpenIntervalsMeet (a.x0, a.x1, b.x0, b.x1) && OpenIntervalsMeet (a.y0, a.y1, b.y0, b.y1);
+}
+
+// Poches deux a deux (CE-34) : emprises d'intersection d'aire nulle, le contact
+// par une face admis. Verdict en double, qui vaut aussi pour les bornes
+// arrondies en float : l'arrondi est monotone, deux emprises disjointes ou au
+// contact le restent.
+void RequireSeparatePockets (const std::vector<RoofPocket> &pockets)
+{
+	for (std::size_t k = 0; k < pockets.size (); ++k)
+		for (std::size_t l = k + 1; l < pockets.size (); ++l)
+			if (PocketsOverlap (pockets[k], pockets[l]))
+				Fail ("roofPocket", ": les poches " + std::to_string (k) + " et " + std::to_string (l) + " se recouvrent");
+}
+
+// Bornes triees, sans doublon ; refus si deux bornes distinctes se confondent
+// une fois arrondies en float.
+std::vector<double> DistinctPocketBounds (std::vector<double> bounds)
+{
+	std::sort (bounds.begin (), bounds.end ());
+	bounds.erase (std::unique (bounds.begin (), bounds.end ()), bounds.end ());
+	for (std::size_t k = 1; k < bounds.size (); ++k)
+		if (static_cast<float> (bounds[k - 1]) == static_cast<float> (bounds[k]))
+			throw std::invalid_argument ("Fronton : sommets confondus en float : bornes de deux poches");
+	return bounds;
+}
+
+// Comble en tranches le long de Y (CE-34), une piece par tranche, par Y
+// croissants. Les contours de toutes les tranches sont formes, et leurs bornes
+// verifiees, avant le premier maillage.
+std::vector<std::unique_ptr<Mesh>> RoofSliceMeshes (const Frame &f, const std::vector<RoofPocket> &pockets)
+{
+	const std::size_t T = f.ridge.size () - 1;
+	std::vector<double> ys {-f.yTympanum, f.yTympanum};
+	for (const RoofPocket &p : pockets)
+		ys.insert (ys.end (), {p.y0, p.y1});
+	ys = DistinctPocketBounds (std::move (ys));
+
+	std::vector<std::vector<std::array<double, 2>>> outlines;
+	outlines.reserve (ys.size () - 1);
+	for (std::size_t i = 0; i + 1 < ys.size (); ++i)
+	{
+		std::vector<const RoofPocket *> active;
+		for (const RoofPocket &p : pockets)
+			if (OpenIntervalsMeet (p.y0, p.y1, ys[i], ys[i + 1]))
+				active.push_back (&p);
+		std::sort (active.begin (), active.end (), [] (const RoofPocket *a, const RoofPocket *b) { return a->x0 < b->x0; });
+		std::vector<double> xs {-f.xTop, f.xTop};
+		for (const RoofPocket *p : active)
+			xs.insert (xs.end (), {p->x0, p->x1});
+		DistinctPocketBounds (std::move (xs));
+
+		for (std::size_t k = 1; k < active.size (); ++k)
+			if (active[k - 1]->x1 == active[k]->x0 && active[k - 1]->zTop != active[k]->zTop &&
+			    static_cast<float> (active[k - 1]->zTop) == static_cast<float> (active[k]->zTop))
+				throw std::invalid_argument ("Fronton : sommets confondus en float : plafonds de deux poches au contact");
+
+		std::vector<std::array<double, 2>> outline {{-f.xTop, f.zBase}};
+		for (const RoofPocket *p : active)
+			outline.insert (outline.end (), {{p->x0, f.zBase}, {p->x0, p->zTop}, {p->x1, p->zTop}, {p->x1, f.zBase}});
+		outline.insert (outline.end (), {{f.xTop, f.zBase}, {0.0, f.ridge[T]}});
+		outlines.push_back (std::move (outline));
+	}
+
+	std::vector<std::unique_ptr<Mesh>> slices;
+	slices.reserve (outlines.size ());
+	for (std::size_t i = 0; i < outlines.size (); ++i)
+		slices.push_back (detail::PrismMesh (outlines[i], detail::Extrusion::AlongY, -ys[i + 1], -ys[i]));
+	return slices;
 }
 
 } // namespace
@@ -512,14 +683,25 @@ void RequireStations (const std::vector<double> &s, const char *name)
 
 std::vector<std::unique_ptr<Mesh>> detail::BuildPedimentPieces (const CheckedPediment &pediment, const CheckedEntablature &entablature,
                                                                 const PeristyleLayout &peristyle, double zFoot,
-                                                                const std::function<void (const Mesh &)> &afterEach)
+                                                                const std::function<void (const Mesh &)> &afterEach,
+                                                                const std::vector<RoofPocket> &pockets)
 {
 	const Prepared prepared = Prepare (pediment, entablature, peristyle, zFoot);
 	const Frame &f = prepared.frame;
 	const std::vector<std::array<unsigned, 3>> &caps = prepared.caps;
+	for (const RoofPocket &p : pockets)
+		RequirePocket (f, p);
+	// Aiguillage (CE-34) : 0 poche, le prisme ; 1, le comble a poche ; plusieurs, les tranches, formees et
+	// verifiees avant la premiere piece.
+	std::vector<std::unique_ptr<Mesh>> slices;
+	if (pockets.size () > 1)
+	{
+		RequireSeparatePockets (pockets);
+		slices = RoofSliceMeshes (f, pockets);
+	}
 
 	std::vector<std::unique_ptr<Mesh>> meshes;
-	meshes.reserve (3);
+	meshes.reserve (2 + std::max<std::size_t> (1, slices.size ()));
 	auto keep = [&] (std::unique_ptr<Mesh> mesh) {
 		if (afterEach)
 			afterEach (*mesh);
@@ -527,15 +709,24 @@ std::vector<std::unique_ptr<Mesh>> detail::BuildPedimentPieces (const CheckedPed
 	};
 	keep (LambdaMesh (f, caps, false));
 	keep (LambdaMesh (f, caps, true));
-	keep (RoofMesh (f));
+	if (pockets.empty ())
+		keep (RoofMesh (f));
+	else if (pockets.size () == 1)
+		keep (RoofMeshWithPocket (f, pockets.front ()));
+	else
+		for (std::unique_ptr<Mesh> &slice : slices)
+			keep (std::move (slice));
 	return meshes;
 }
 
 std::vector<std::unique_ptr<Mesh>> detail::BuildPedimentPieces (const CheckedPediment &pediment, const CheckedEntablature &entablature,
                                                                 const PeristyleLayout &peristyle, double zFoot,
                                                                 const RefinementStations &stations,
-                                                                const std::function<void (const Mesh &)> &afterEach)
+                                                                const std::function<void (const Mesh &)> &afterEach,
+                                                                const std::vector<RoofPocket> &pockets)
 {
+	if (!pockets.empty ())
+		Fail ("roofPocket", "ne se combine pas avec les stations du raffinement");
 	const Prepared prepared = Prepare (pediment, entablature, peristyle, zFoot);
 	const Frame &f = prepared.frame;
 	RequireStations (stations.x, "x");
@@ -590,23 +781,36 @@ std::vector<double> detail::PedimentFeet (const CheckedPediment &p)
 	return feet;
 }
 
+bool detail::PocketMeetsRoof (const CheckedPediment &p, const CheckedEntablature &e, const PeristyleLayout &peristyle, double zFoot,
+                              const RoofPocket &q)
+{
+	const Frame f = FrameOf (p.Settings (), e.Settings (), peristyle, zFoot);
+	const double zRidge = f.ridge.back ();
+	auto r = [] (double v) { return static_cast<double> (static_cast<float> (v)); };
+	return !PocketConflict (q.x0, q.x1, q.y0, q.y1, q.zTop, f.xTop, f.yTympanum, f.zBase, zRidge).first.empty () ||
+	       !PocketConflict (r (q.x0), r (q.x1), r (q.y0), r (q.y1), r (q.zTop), r (f.xTop), r (f.yTympanum), r (f.zBase),
+	                        r (zRidge)).first.empty ();
+}
+
 std::vector<std::unique_ptr<Mesh>> BuildGreekPedimentPieceMeshes (const GreekPedimentSettings &pediment,
                                                                   const GreekEntablatureSettings &entablature,
                                                                   const PeristyleLayout &peristyle, double zFoot,
-                                                                  const std::function<void (const Mesh &)> &afterEach)
+                                                                  const std::function<void (const Mesh &)> &afterEach,
+                                                                  const std::vector<RoofPocket> &pockets)
 {
 	const detail::CheckedEntablature e = detail::CheckEntablature (entablature);
-	return detail::BuildPedimentPieces (detail::CheckPediment (pediment, e), e, peristyle, zFoot, afterEach);
+	return detail::BuildPedimentPieces (detail::CheckPediment (pediment, e), e, peristyle, zFoot, afterEach, pockets);
 }
 
 std::vector<std::unique_ptr<Mesh>> BuildGreekPedimentPieceMeshes (const GreekPedimentSettings &pediment,
                                                                   const GreekEntablatureSettings &entablature,
                                                                   const PeristyleLayout &peristyle, double zFoot,
                                                                   const RefinementStations &stations,
-                                                                  const std::function<void (const Mesh &)> &afterEach)
+                                                                  const std::function<void (const Mesh &)> &afterEach,
+                                                                  const std::vector<RoofPocket> &pockets)
 {
 	const detail::CheckedEntablature e = detail::CheckEntablature (entablature);
-	return detail::BuildPedimentPieces (detail::CheckPediment (pediment, e), e, peristyle, zFoot, stations, afterEach);
+	return detail::BuildPedimentPieces (detail::CheckPediment (pediment, e), e, peristyle, zFoot, stations, afterEach, pockets);
 }
 
 std::size_t detail::PedimentOwnValidations () noexcept

@@ -1,4 +1,4 @@
-// Document du monument "monument/v10" : lecteur strict a exception, documents
+// Document du monument "monument/v14" : lecteur strict a exception, documents
 // embarques, conversion vers les reglages du temple et mode partiel.
 #include <cgarchi/classical_monument.h>
 
@@ -8,6 +8,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -102,6 +103,15 @@ namespace
 
 		std::vector<std::string> m_faults;
 	};
+
+	// StrictReader::Known sur une liste construite a l'execution : chaque membre de `obj` absent de `names` est
+	// refuse, « unknown field ».
+	void KnownKeys (Reader &r, const json &obj, const std::string &parent, const std::vector<const char *> &names)
+	{
+		for (auto it = obj.begin(); it != obj.end(); ++it)
+			if (std::none_of(names.begin(), names.end(), [&](const char *n) { return it.key() == n; }))
+				r.Error(json_reader::Join(parent, it.key()), "unknown field");
+	}
 
 	// Membre objet requis : nullptr s'il manque ou n'est pas un objet (refus deja signale).
 	const json *RequiredObject (Reader &r, const json &obj, const std::string &parent, const char *key)
@@ -619,6 +629,67 @@ namespace
 				        "not strictly greater than the previous depth");
 	}
 
+	// Dependances de blocs (MO-P2) : un bloc present exige un autre bloc. Table unique du lecteur
+	// (`requires block`), du rapport des parties (ReportMonumentParts) et du retrait d'une partie
+	// (MonumentWithoutPart).
+	struct BlockDependency
+	{
+		bool        present;
+		const char *block;
+		bool        neededPresent;
+		const char *needed;
+	};
+
+	std::array<BlockDependency, 16> BlockDependencies (const MonumentBlocks &b)
+	{
+		return {{{b.controls, "controls", b.peristyle, "peristyle"},
+		         {b.krepisControls, "krepisControls", b.krepis, "krepis"},
+		         {b.columnControls, "columnControls", b.columns, "columns"},
+		         {b.entablatureControls, "entablatureControls", b.entablature, "entablature"},
+		         {b.pedimentControls, "pedimentControls", b.pediment, "pediment"},
+		         {b.cellaControls, "cellaControls", b.cella, "cella"},
+		         {b.interior, "interior", b.cella, "cella"},
+		         {b.interiorControls, "interiorControls", b.interior, "interior"},
+		         {b.epicranitis, "epicranitis", b.cella, "cella"},
+		         {b.epicranitisControls, "epicranitisControls", b.epicranitis, "epicranitis"},
+		         {b.porchExtension, "porchExtension", b.epicranitis, "epicranitis"},
+		         {b.porchExtensionControls, "porchExtensionControls", b.porchExtension, "porchExtension"},
+		         {b.eastCeiling, "eastCeiling", b.porchExtension, "porchExtension"},
+		         {b.eastCeilingControls, "eastCeilingControls", b.eastCeiling, "eastCeiling"},
+		         {b.flankCeilings, "flankCeilings", b.eastCeiling, "eastCeiling"},
+		         {b.flankCeilingsControls, "flankCeilingsControls", b.flankCeilings, "flankCeilings"}}};
+	}
+
+	// Retire le bloc `block` : drapeau faux, valeurs par defaut (manquantes).
+	void ClearBlock (MonumentData &d, std::string_view block)
+	{
+		MonumentBlocks &p = d.present;
+		if (block == "krepis")                      { p.krepis = false; d.krepis = {}; }
+		else if (block == "krepisControls")         { p.krepisControls = false; d.krepisControls = {}; }
+		else if (block == "peristyle")              { p.peristyle = false; d.peristyle = {}; }
+		else if (block == "controls")               { p.controls = false; d.controls = {}; }
+		else if (block == "columns")                { p.columns = false; d.columns = {}; }
+		else if (block == "columnControls")         { p.columnControls = false; d.columnControls = {}; }
+		else if (block == "entablature")            { p.entablature = false; d.entablature = {}; }
+		else if (block == "entablatureControls")    { p.entablatureControls = false; d.entablatureControls = {}; }
+		else if (block == "pediment")               { p.pediment = false; d.pediment = {}; }
+		else if (block == "pedimentControls")       { p.pedimentControls = false; d.pedimentControls = {}; }
+		else if (block == "cella")                  { p.cella = false; d.cella = {}; }
+		else if (block == "cellaControls")          { p.cellaControls = false; d.cellaControls = {}; }
+		else if (block == "interior")               { p.interior = false; d.interior = {}; }
+		else if (block == "interiorControls")       { p.interiorControls = false; d.interiorControls = {}; }
+		else if (block == "epicranitis")            { p.epicranitis = false; d.epicranitis = {}; }
+		else if (block == "epicranitisControls")    { p.epicranitisControls = false; d.epicranitisControls = {}; }
+		else if (block == "porchExtension")         { p.porchExtension = false; d.porchExtension = {}; }
+		else if (block == "porchExtensionControls") { p.porchExtensionControls = false; d.porchExtensionControls = {}; }
+		else if (block == "eastCeiling")            { p.eastCeiling = false; d.eastCeiling = {}; }
+		else if (block == "eastCeilingControls")    { p.eastCeilingControls = false; d.eastCeilingControls = {}; }
+		else if (block == "flankCeilings")          { p.flankCeilings = false; d.flankCeilings = {}; }
+		else if (block == "flankCeilingsControls")  { p.flankCeilingsControls = false; d.flankCeilingsControls = {}; }
+		else
+			throw std::logic_error("Monument : bloc inconnu");
+	}
+
 	void ReadDocument (Reader &r, const json &doc, MonumentData &data)
 	{
 		if (!doc.is_object())
@@ -634,7 +705,10 @@ namespace
 
 		r.Known(doc, std::string(),
 		        {"schema", "monument", "source", "sources", "krepis", "peristyle", "columns", "controls",
-		         "krepisControls", "columnControls", "entablature", "entablatureControls", "pediment", "pedimentControls"});
+		         "krepisControls", "columnControls", "entablature", "entablatureControls", "pediment", "pedimentControls",
+		         "cella", "cellaControls", "interior", "interiorControls", "epicranitis", "epicranitisControls",
+		         "porchExtension", "porchExtensionControls", "eastCeiling", "eastCeilingControls", "flankCeilings",
+		         "flankCeilingsControls"});
 		r.Require(doc, std::string(), {"monument"});
 		r.String(doc, std::string(), "monument", data.monument);
 		ReadSourceDocument(r, doc, data.source);
@@ -930,20 +1004,325 @@ namespace
 				ReadControl(r, *c, p, key, Quantity::Length, *value);
 			ReadControl(r, *c, p, "rakingSlope", Quantity::Angle, m.rakingSlope);
 		}
+		if (const json *c = OptionalBlock(r, doc, "cella", data.present.cella))
+		{
+			const std::string p = "cella";
+			MonumentCella &m = data.cella;
+			const std::pair<const char *, MonumentValue *> lengths[] = {
+				{"toichobateRise", &m.toichobateRise},
+				{"pteronEast", &m.pteronEast},
+				{"pteronWest", &m.pteronWest},
+				{"toichobateOverhang", &m.toichobateOverhang},
+				{"longWallThickness", &m.longWallThickness},
+				{"longWallSpan", &m.longWallSpan},
+				{"wallTop", &m.wallTop},
+				{"eastCrossWallPosition", &m.eastCrossWallPosition},
+				{"eastCrossWallThickness", &m.eastCrossWallThickness},
+				{"westCrossWallPosition", &m.westCrossWallPosition},
+				{"westCrossWallThickness", &m.westCrossWallThickness},
+				{"doorWidth", &m.doorWidth},
+				{"lintelHeight", &m.lintelHeight},
+				{"doorJambOffset", &m.doorJambOffset},
+				{"thresholdLength", &m.thresholdLength},
+				{"thresholdProjection", &m.thresholdProjection},
+				{"thresholdDepth", &m.thresholdDepth},
+				{"naosFloorHeight", &m.naosFloorHeight},
+				{"eastAntaRetreat", &m.eastAntaRetreat},
+				{"westAntaRetreat", &m.westAntaRetreat},
+				{"antaInnerProjection", &m.antaInnerProjection},
+				{"antaOuterProjection", &m.antaOuterProjection},
+				{"antaHeadLength", &m.antaHeadLength},
+				{"porchColumnDiameter", &m.porchColumnDiameter},
+				{"porchColumnHeight", &m.porchColumnHeight},
+				{"porchColumnOffset", &m.porchColumnOffset},
+				{"pronaosColumnAxis", &m.pronaosColumnAxis},
+				{"opisthodomosColumnAxis", &m.opisthodomosColumnAxis},
+				{"porchArchitraveHeight", &m.porchArchitraveHeight},
+				{"porchFriezeHeight", &m.porchFriezeHeight},
+				{"porchEntablatureDepth", &m.porchEntablatureDepth},
+				{"porchEntablatureFront", &m.porchEntablatureFront},
+			};
+			std::vector<const char *> known;
+			known.reserve(std::size(lengths));
+			for (const auto &[key, value] : lengths)
+				known.push_back(key);
+			KnownKeys(r, *c, p, known);
+			for (const auto &[key, value] : lengths)
+				values.Value(*c, p, key, Quantity::Length, *value);
+		}
+		if (const json *c = OptionalBlock(r, doc, "cellaControls", data.present.cellaControls))
+		{
+			const char *p = "cellaControls";
+			MonumentCellaControls &m = data.cellaControls;
+			const std::pair<const char *, double *> results[] = {
+				{"toichobateBottomZ", &m.toichobateBottomZ},
+				{"toichobateEastX", &m.toichobateEastX},
+				{"toichobateWestX", &m.toichobateWestX},
+				{"toichobateWidth", &m.toichobateWidth},
+				{"longWallInnerY", &m.longWallInnerY},
+				{"longWallOuterY", &m.longWallOuterY},
+				{"longWallLength", &m.longWallLength},
+				{"eastCrossWallEastX", &m.eastCrossWallEastX},
+				{"eastCrossWallWestX", &m.eastCrossWallWestX},
+				{"westCrossWallWestX", &m.westCrossWallWestX},
+				{"westCrossWallEastX", &m.westCrossWallEastX},
+				{"naosLength", &m.naosLength},
+				{"doorLintelZ", &m.doorLintelZ},
+				{"eastAntaX", &m.eastAntaX},
+				{"westAntaX", &m.westAntaX},
+				{"antaInnerY", &m.antaInnerY},
+				{"antaFaceWidth", &m.antaFaceWidth},
+				{"porchArchitraveBottomZ", &m.porchArchitraveBottomZ},
+				{"porchArchitraveTopZ", &m.porchArchitraveTopZ},
+				{"porchFriezeTopZ", &m.porchFriezeTopZ},
+			};
+			std::vector<const char *> known;
+			known.reserve(std::size(results));
+			for (const auto &[key, value] : results)
+				known.push_back(key);
+			KnownKeys(r, *c, p, known);
+			for (const auto &[key, value] : results)
+				ReadResult(r, *c, p, key, *value);
+		}
+		if (const json *c = OptionalBlock(r, doc, "interior", data.present.interior))
+		{
+			const std::string p = "interior";
+			MonumentInterior &m = data.interior;
+			const std::pair<const char *, MonumentValue *> lengths[] = {
+				{"spacing", &m.spacing},
+				{"eastAxisOffset", &m.eastAxisOffset},
+				{"westAxisOffset", &m.westAxisOffset},
+				{"wallAxisOffset", &m.wallAxisOffset},
+				{"naveLevel", &m.naveLevel},
+				{"lowerColumnHeight", &m.lowerColumnHeight},
+				{"lowerColumnLowerDiameter", &m.lowerColumnLowerDiameter},
+				{"lowerColumnUpperDiameter", &m.lowerColumnUpperDiameter},
+				{"lowerCapitalHeight", &m.lowerCapitalHeight},
+				{"lowerAbacus", &m.lowerAbacus},
+				{"lowerEpistyleHeight", &m.lowerEpistyleHeight},
+				{"lowerEpistyleSoffit", &m.lowerEpistyleSoffit},
+				{"upperColumnHeight", &m.upperColumnHeight},
+				{"upperColumnLowerDiameter", &m.upperColumnLowerDiameter},
+				{"upperColumnUpperDiameter", &m.upperColumnUpperDiameter},
+				{"upperCapitalHeight", &m.upperCapitalHeight},
+				{"upperAbacus", &m.upperAbacus},
+				{"upperEpistyleHeight", &m.upperEpistyleHeight},
+				{"upperEpistyleSoffit", &m.upperEpistyleSoffit},
+				{"courseHeight", &m.courseHeight},
+				{"courseThickness", &m.courseThickness},
+				{"corniceHeight", &m.corniceHeight},
+				{"corniceProjection", &m.corniceProjection},
+				{"pocketCeiling", &m.pocketCeiling},
+				{"pocketMargin", &m.pocketMargin},
+			};
+			std::vector<const char *> known;
+			known.reserve(std::size(lengths) + 1);
+			for (const auto &[key, value] : lengths)
+				known.push_back(key);
+			known.push_back("fluteCount");
+			KnownKeys(r, *c, p, known);
+			for (const auto &[key, value] : lengths)
+				values.Value(*c, p, key, Quantity::Length, *value);
+			values.Value(*c, p, "fluteCount", Quantity::Count, m.fluteCount);
+		}
+		if (const json *c = OptionalBlock(r, doc, "interiorControls", data.present.interiorControls))
+		{
+			const char *p = "interiorControls";
+			MonumentInteriorControls &m = data.interiorControls;
+			const std::pair<const char *, double *> results[] = {
+				{"eastWallX", &m.eastWallX},
+				{"flankAxis1X", &m.flankAxesX[0]},
+				{"flankAxis2X", &m.flankAxesX[1]},
+				{"flankAxis3X", &m.flankAxesX[2]},
+				{"flankAxis4X", &m.flankAxesX[3]},
+				{"flankAxis5X", &m.flankAxesX[4]},
+				{"westAxisX", &m.westAxisX},
+				{"westWallX", &m.westWallX},
+				{"naosLength", &m.naosLength},
+				{"lateralAxisY", &m.lateralAxisY},
+				{"lowerAbacusTopZ", &m.lowerAbacusTopZ},
+				{"lowerEpistyleTopZ", &m.lowerEpistyleTopZ},
+				{"upperAbacusTopZ", &m.upperAbacusTopZ},
+				{"upperEpistyleTopZ", &m.upperEpistyleTopZ},
+				{"courseTopZ", &m.courseTopZ},
+				{"corniceTopZ", &m.corniceTopZ},
+				{"pocketBottomZ", &m.pocketBottomZ},
+				{"pocketEastX", &m.pocketEastX},
+				{"pocketWestX", &m.pocketWestX},
+				{"pocketHalfWidthY", &m.pocketHalfWidthY},
+			};
+			std::vector<const char *> known;
+			known.reserve(std::size(results));
+			for (const auto &[key, value] : results)
+				known.push_back(key);
+			KnownKeys(r, *c, p, known);
+			for (const auto &[key, value] : results)
+				ReadResult(r, *c, p, key, *value);
+		}
+		if (const json *c = OptionalBlock(r, doc, "epicranitis", data.present.epicranitis))
+		{
+			const std::string p = "epicranitis";
+			MonumentEpicranitis &m = data.epicranitis;
+			const std::pair<const char *, MonumentValue *> lengths[] = {
+				{"height", &m.height},
+				{"innerOffset", &m.innerOffset},
+				{"listelHeight", &m.listelHeight},
+				{"filletHeight", &m.filletHeight},
+				{"listelProjection", &m.listelProjection},
+				{"bandProjection", &m.bandProjection},
+			};
+			std::vector<const char *> known;
+			known.reserve(std::size(lengths));
+			for (const auto &[key, value] : lengths)
+				known.push_back(key);
+			KnownKeys(r, *c, p, known);
+			for (const auto &[key, value] : lengths)
+				values.Value(*c, p, key, Quantity::Length, *value);
+		}
+		if (const json *c = OptionalBlock(r, doc, "epicranitisControls", data.present.epicranitisControls))
+		{
+			const char *p = "epicranitisControls";
+			MonumentEpicranitisControls &m = data.epicranitisControls;
+			const std::pair<const char *, double *> results[] = {
+				{"topZ", &m.topZ},
+				{"porchCrownBottomZ", &m.porchCrownBottomZ},
+				{"porchCrownHeight", &m.porchCrownHeight},
+				{"innerFaceY", &m.innerFaceY},
+				{"wallBandY", &m.wallBandY},
+				{"eastBandX", &m.eastBandX},
+				{"westBandX", &m.westBandX},
+			};
+			std::vector<const char *> known;
+			known.reserve(std::size(results));
+			for (const auto &[key, value] : results)
+				known.push_back(key);
+			KnownKeys(r, *c, p, known);
+			for (const auto &[key, value] : results)
+				ReadResult(r, *c, p, key, *value);
+		}
+		if (const json *c = OptionalBlock(r, doc, "porchExtension", data.present.porchExtension))
+		{
+			const std::string p = "porchExtension";
+			KnownKeys(r, *c, p, {"eastSpan"});
+			values.Value(*c, p, "eastSpan", Quantity::Length, data.porchExtension.eastSpan);
+		}
+		if (const json *c = OptionalBlock(r, doc, "porchExtensionControls", data.present.porchExtensionControls))
+		{
+			const char *p = "porchExtensionControls";
+			MonumentPorchExtensionControls &m = data.porchExtensionControls;
+			KnownKeys(r, *c, p, {"ringInnerY", "architraveFootZ"});
+			ReadResult(r, *c, p, "ringInnerY", m.ringInnerY);
+			ReadResult(r, *c, p, "architraveFootZ", m.architraveFootZ);
+		}
+		if (const json *c = OptionalBlock(r, doc, "eastCeiling", data.present.eastCeiling))
+		{
+			const std::string p = "eastCeiling";
+			MonumentEastCeiling &m = data.eastCeiling;
+			const std::pair<const char *, MonumentValue *> fields[] = {
+				{"beamCount", &m.beamCount},
+				{"beamSpacing", &m.beamSpacing},
+				{"beamWidth", &m.beamWidth},
+				{"beamHeight", &m.beamHeight},
+				{"beamWestBearing", &m.beamWestBearing},
+				{"endMassifWidth", &m.endMassifWidth},
+				{"corniceHeight", &m.corniceHeight},
+				{"corniceProjection", &m.corniceProjection},
+				{"bandHeight", &m.bandHeight},
+				{"corniceDepth", &m.corniceDepth},
+				{"cofferPitch", &m.cofferPitch},
+				{"cofferOpening", &m.cofferOpening},
+				{"cofferFrame", &m.cofferFrame},
+				{"cofferDepth", &m.cofferDepth},
+				{"cofferRows", &m.cofferRows},
+			};
+			std::vector<const char *> known;
+			known.reserve(std::size(fields));
+			for (const auto &[key, value] : fields)
+				known.push_back(key);
+			KnownKeys(r, *c, p, known);
+			for (const auto &[key, value] : fields)
+				values.Value(*c, p, key, std::string_view(key) == "beamCount" || std::string_view(key) == "cofferRows" ? Quantity::Count : Quantity::Length, *value);
+		}
+		if (const json *c = OptionalBlock(r, doc, "eastCeilingControls", data.present.eastCeilingControls))
+		{
+			const char *p = "eastCeilingControls";
+			MonumentEastCeilingControls &m = data.eastCeilingControls;
+			const std::pair<const char *, double *> results[] = {
+				{"beamOuterAxisY", &m.beamOuterAxisY},
+				{"beamBottomZ", &m.beamBottomZ},
+				{"beamTopZ", &m.beamTopZ},
+				{"beamWestEndX", &m.beamWestEndX},
+				{"beamEastEndX", &m.beamEastEndX},
+				{"beamLength", &m.beamLength},
+				{"clearBay", &m.clearBay},
+				{"massifFaceY", &m.massifFaceY},
+				{"edgeBay", &m.edgeBay},
+				{"corniceTopZ", &m.corniceTopZ},
+				{"bandTopZ", &m.bandTopZ},
+				{"slabThickness", &m.slabThickness},
+				{"cofferFloor", &m.cofferFloor},
+				{"cofferRun", &m.cofferRun},
+				{"cofferMargin", &m.cofferMargin},
+			};
+			std::vector<const char *> known;
+			known.reserve(std::size(results));
+			for (const auto &[key, value] : results)
+				known.push_back(key);
+			KnownKeys(r, *c, p, known);
+			for (const auto &[key, value] : results)
+				ReadResult(r, *c, p, key, *value);
+		}
+		if (const json *c = OptionalBlock(r, doc, "flankCeilings", data.present.flankCeilings))
+		{
+			const std::string p = "flankCeilings";
+			MonumentFlankCeilings &m = data.flankCeilings;
+			const std::pair<const char *, MonumentValue *> fields[] = {
+				{"beamSpacing", &m.beamSpacing},
+				{"firstBeamOffset", &m.firstBeamOffset},
+				{"eastBeamCount", &m.eastBeamCount},
+				{"westBeamCount", &m.westBeamCount},
+				{"beamWidth", &m.beamWidth},
+				{"beamHeight", &m.beamHeight},
+				{"peristyleGap", &m.peristyleGap},
+				{"cofferRows", &m.cofferRows},
+			};
+			std::vector<const char *> known;
+			known.reserve(std::size(fields));
+			for (const auto &[key, value] : fields)
+				known.push_back(key);
+			KnownKeys(r, *c, p, known);
+			for (const auto &[key, value] : fields)
+				values.Value(*c, p, key, std::string_view(key) == "eastBeamCount" || std::string_view(key) == "westBeamCount" ||
+				                                std::string_view(key) == "cofferRows" ? Quantity::Count : Quantity::Length, *value);
+		}
+		if (const json *c = OptionalBlock(r, doc, "flankCeilingsControls", data.present.flankCeilingsControls))
+		{
+			const char *p = "flankCeilingsControls";
+			MonumentFlankCeilingsControls &m = data.flankCeilingsControls;
+			const std::pair<const char *, double *> results[] = {
+				{"lastEastAxisX", &m.lastEastAxisX},
+				{"lastWestAxisX", &m.lastWestAxisX},
+				{"wallEndY", &m.wallEndY},
+				{"peristyleEndY", &m.peristyleEndY},
+				{"beamLength", &m.beamLength},
+				{"cofferRun", &m.cofferRun},
+				{"cofferMargin", &m.cofferMargin},
+			};
+			std::vector<const char *> known;
+			known.reserve(std::size(results));
+			for (const auto &[key, value] : results)
+				known.push_back(key);
+			KnownKeys(r, *c, p, known);
+			for (const auto &[key, value] : results)
+				ReadResult(r, *c, p, key, *value);
+		}
 
 		// Blocs de controles et leur partie (MO-P2) : un controle sans sa partie est refuse ; les axes sont
 		// exiges par le peristyle.
 		const MonumentBlocks &b = data.present;
-		const std::tuple<bool, const char *, bool, const char *> controlsOf[] = {
-			{b.controls, "controls", b.peristyle, "peristyle"},
-			{b.krepisControls, "krepisControls", b.krepis, "krepis"},
-			{b.columnControls, "columnControls", b.columns, "columns"},
-			{b.entablatureControls, "entablatureControls", b.entablature, "entablature"},
-			{b.pedimentControls, "pedimentControls", b.pediment, "pediment"},
-		};
-		for (const auto &[controls, controlsKey, part, partKey] : controlsOf)
-			if (controls && !part)
-				r.Error(controlsKey, std::string("requires block \"") + partKey + "\"");
+		for (const BlockDependency &dep : BlockDependencies(b))
+			if (dep.present && !dep.neededPresent)
+				r.Error(dep.block, std::string("requires block \"") + dep.needed + "\"");
 		if (b.peristyle && json_reader::Member(doc, "controls") == nullptr)
 			r.Require(doc, std::string(), {"controls"});
 
@@ -1225,9 +1604,6 @@ GreekDoricColumnSettings MonumentColumnSettings (const MonumentData &data, bool 
 GreekEntablatureSettings MonumentEntablatureSettings (const MonumentData &data)
 {
 	const MonumentEntablature &e = data.entablature;
-	// EN1 s'applique a une face interieure manquante ; une face donnee demanderait sa propre lecture.
-	if (e.innerFace.status != MonumentStatus::Missing)
-		throw std::invalid_argument("Monument : 'entablature.innerFace' donnee, la convention EN1 ne vaut que manquante");
 
 	// Le chapiteau du triglyphe est lu deux fois : sa hauteur (corps de la frise) et son partage
 	// (deux bandes). Un desaccord deplacerait le dessus de la frise. Tolerance : une longueur de
@@ -1317,7 +1693,9 @@ GreekEntablatureSettings MonumentEntablatureSettings (const MonumentData &data)
 		{MonumentLength(e.crownHeight, "entablature.crownHeight"), crown, crown},
 	};
 	s.friezeBand = 3;
-	s.innerFace = architraveFoot;   // EN1
+	// EN1 en repli (CE-32) : face interieure lue si donnee, au nu du pied de l'architrave sinon.
+	s.innerFace = e.innerFace.status == MonumentStatus::Missing ? architraveFoot
+	                                                           : MonumentLength(e.innerFace, "entablature.innerFace");
 	// EN15 : triglyphe d'angle et deux metopes egales dans la travee d'angle, premiere solution du
 	// README (section 6.3, ligne "Metopes d'angle" : « la regle grecque (convention) ») ; la
 	// contraction relevee du peristyle reste celle
@@ -1427,14 +1805,212 @@ TempleSettings MonumentTempleSettings (const MonumentData &data)
 	return TempleSettingsOf(data, true, true);
 }
 
+CellaSettings MonumentCellaSettings (const MonumentData &data)
+{
+	const MonumentCella &c = data.cella;
+	CellaSettings s;
+	s.toichobateRise = MonumentLength(c.toichobateRise, "cella.toichobateRise");
+	s.frontPteron = MonumentLength(c.pteronEast, "cella.pteronEast");
+	s.backPteron = MonumentLength(c.pteronWest, "cella.pteronWest");
+	s.toichobateOverhang = MonumentLength(c.toichobateOverhang, "cella.toichobateOverhang");
+	s.longWallThickness = MonumentLength(c.longWallThickness, "cella.longWallThickness");
+	s.longWallSpan = MonumentLength(c.longWallSpan, "cella.longWallSpan");
+	s.wallTop = MonumentLength(c.wallTop, "cella.wallTop");
+	s.frontCrossWallPosition = MonumentLength(c.eastCrossWallPosition, "cella.eastCrossWallPosition");
+	s.frontCrossWallThickness = MonumentLength(c.eastCrossWallThickness, "cella.eastCrossWallThickness");
+	s.backCrossWallPosition = MonumentLength(c.westCrossWallPosition, "cella.westCrossWallPosition");
+	s.backCrossWallThickness = MonumentLength(c.westCrossWallThickness, "cella.westCrossWallThickness");
+	s.doorWidth = MonumentLength(c.doorWidth, "cella.doorWidth");
+	s.lintelHeight = MonumentLength(c.lintelHeight, "cella.lintelHeight");
+	s.doorJambOffset = MonumentLength(c.doorJambOffset, "cella.doorJambOffset");
+	s.thresholdLength = MonumentLength(c.thresholdLength, "cella.thresholdLength");
+	s.thresholdProjection = MonumentLength(c.thresholdProjection, "cella.thresholdProjection");
+	s.thresholdDepth = MonumentLength(c.thresholdDepth, "cella.thresholdDepth");
+	s.naosFloorHeight = MonumentLength(c.naosFloorHeight, "cella.naosFloorHeight");
+	s.frontAntaRetreat = MonumentLength(c.eastAntaRetreat, "cella.eastAntaRetreat");
+	s.backAntaRetreat = MonumentLength(c.westAntaRetreat, "cella.westAntaRetreat");
+	s.antaInnerProjection = MonumentLength(c.antaInnerProjection, "cella.antaInnerProjection");
+	s.antaOuterProjection = MonumentLength(c.antaOuterProjection, "cella.antaOuterProjection");
+	s.antaHeadLength = MonumentLength(c.antaHeadLength, "cella.antaHeadLength");
+	s.porchColumnHeight = MonumentLength(c.porchColumnHeight, "cella.porchColumnHeight");
+	s.frontPorchAxis = MonumentLength(c.pronaosColumnAxis, "cella.pronaosColumnAxis");
+	s.backPorchAxis = MonumentLength(c.opisthodomosColumnAxis, "cella.opisthodomosColumnAxis");
+	s.porchArchitraveHeight = MonumentLength(c.porchArchitraveHeight, "cella.porchArchitraveHeight");
+	s.porchFriezeHeight = MonumentLength(c.porchFriezeHeight, "cella.porchFriezeHeight");
+	s.porchEntablatureDepth = MonumentLength(c.porchEntablatureDepth, "cella.porchEntablatureDepth");
+	s.porchEntablatureFront = MonumentLength(c.porchEntablatureFront, "cella.porchEntablatureFront");
+	return s;
+}
+
+GreekPorchColumnsSettings MonumentPorchSettings (const MonumentData &data)
+{
+	const MonumentCella &c = data.cella;
+	const GreekDoricColumnSettings peristyle = MonumentColumnSettings(data, false);
+	// Chapiteau du peristyle, inchange (README section 7.3) : seul le fut change de hauteur.
+	double capital = peristyle.hypotrachelionHeight + peristyle.echinusHeight + peristyle.abacusHeight;
+	for (const GreekDoricAnnulet &a : peristyle.annulets)
+		capital += a.height;
+	GreekPorchColumnsSettings s;
+	s.column = peristyle;
+	s.column.lowerDiameter = MonumentLength(c.porchColumnDiameter, "cella.porchColumnDiameter");
+	s.column.height = MonumentLength(c.porchColumnHeight, "cella.porchColumnHeight");
+	const double scale = (s.column.height - capital) / (peristyle.height - capital);
+	s.column.entasisSagitta = peristyle.entasisSagitta * scale;
+	s.column.entasisHeight = peristyle.entasisHeight * scale;
+	s.offset = MonumentLength(c.porchColumnOffset, "cella.porchColumnOffset");
+	return s;
+}
+
 namespace
 {
-	constexpr std::size_t kPartCount = 5;
+	// Colonne d'un etage de l'interieur (registre CE-16 a CE-18) : celle du peristyle, fut et chapiteau reduits.
+	GreekDoricColumnSettings InteriorColumn (const GreekDoricColumnSettings &peristyle, double lowerDiameter,
+	                                         double upperDiameter, double height, double capitalHeight, double abacus,
+	                                         int flutes)
+	{
+		double capital = peristyle.hypotrachelionHeight + peristyle.echinusHeight + peristyle.abacusHeight;
+		for (const GreekDoricAnnulet &a : peristyle.annulets)
+			capital += a.height;
+		const double kh = capitalHeight / capital;
+		const double upperRadius = 0.5 * upperDiameter;
+		const double kp = (0.5 * abacus - upperRadius) / peristyle.abacusProjection;
+		const double shaftScale = (height - capitalHeight) / (peristyle.height - capital);
 
+		GreekDoricColumnSettings s = peristyle;
+		s.height = height;
+		s.lowerDiameter = lowerDiameter;
+		s.upperDiameter = upperDiameter;
+		s.entasisSagitta = peristyle.entasisSagitta * (lowerDiameter / peristyle.lowerDiameter);
+		s.entasisHeight = peristyle.entasisHeight * shaftScale;
+		s.fluteCount = flutes;
+
+		s.hypotrachelionHeight = peristyle.hypotrachelionHeight * kh;
+		s.grooveHeight = peristyle.grooveHeight * kh;
+		for (GreekDoricAnnulet &a : s.annulets)
+		{
+			a.height *= kh;
+			a.projection *= kp;
+		}
+		s.echinusHeight = peristyle.echinusHeight * kh;
+		s.echinusJunctionHeight = peristyle.echinusJunctionHeight * kh;
+		s.echinusFootProjection = peristyle.echinusFootProjection * kp;
+		s.echinusJunctionProjection = peristyle.echinusJunctionProjection * kp;
+		s.echinusTopProjection = peristyle.echinusTopProjection * kp;
+		// Levre : arc semblable entre la jonction et la tete reduites, rayon au rapport des cordes.
+		const double chord = std::hypot(peristyle.echinusTopProjection - peristyle.echinusJunctionProjection,
+		                                peristyle.echinusHeight - peristyle.echinusJunctionHeight);
+		const double scaledChord = std::hypot(s.echinusTopProjection - s.echinusJunctionProjection,
+		                                      s.echinusHeight - s.echinusJunctionHeight);
+		s.echinusLipRadius = peristyle.echinusLipRadius * (scaledChord / chord);
+		s.abacusHeight = peristyle.abacusHeight * kh;
+		s.abacusProjection = 0.5 * abacus - upperRadius;
+
+		// Rainure : GD3d sur le nouveau fut et le nouveau nombre de cannelures.
+		s.grooveDepth =
+			upperRadius * (1.0 - GreekDoricFluteBottomRatio(flutes, s.fluteSection, s.fluteDepthRatio)) + s.grooveHeight;
+		return s;
+	}
+}
+
+NaosInteriorSettings MonumentInteriorSettings (const MonumentData &data)
+{
+	const MonumentInterior &v = data.interior;
+	const GreekDoricColumnSettings peristyle = MonumentColumnSettings(data, false);
+	const int flutes = RequiredCount(v.fluteCount, "interior.fluteCount");
+	const auto L = [](const MonumentValue &x, const char *key) { return MonumentLength(x, key); };
+	NaosInteriorSettings s;
+	s.spacing = L(v.spacing, "interior.spacing");
+	s.frontAxisOffset = L(v.eastAxisOffset, "interior.eastAxisOffset");
+	s.backAxisOffset = L(v.westAxisOffset, "interior.westAxisOffset");
+	s.wallAxisOffset = L(v.wallAxisOffset, "interior.wallAxisOffset");
+	s.naveLevel = L(v.naveLevel, "interior.naveLevel");
+	s.lowerColumn = InteriorColumn(peristyle, L(v.lowerColumnLowerDiameter, "interior.lowerColumnLowerDiameter"),
+	                               L(v.lowerColumnUpperDiameter, "interior.lowerColumnUpperDiameter"),
+	                               L(v.lowerColumnHeight, "interior.lowerColumnHeight"),
+	                               L(v.lowerCapitalHeight, "interior.lowerCapitalHeight"),
+	                               L(v.lowerAbacus, "interior.lowerAbacus"), flutes);
+	s.upperColumn = InteriorColumn(peristyle, L(v.upperColumnLowerDiameter, "interior.upperColumnLowerDiameter"),
+	                               L(v.upperColumnUpperDiameter, "interior.upperColumnUpperDiameter"),
+	                               L(v.upperColumnHeight, "interior.upperColumnHeight"),
+	                               L(v.upperCapitalHeight, "interior.upperCapitalHeight"),
+	                               L(v.upperAbacus, "interior.upperAbacus"), flutes);
+	s.lowerEpistyleHeight = L(v.lowerEpistyleHeight, "interior.lowerEpistyleHeight");
+	s.lowerEpistyleSoffit = L(v.lowerEpistyleSoffit, "interior.lowerEpistyleSoffit");
+	s.upperEpistyleHeight = L(v.upperEpistyleHeight, "interior.upperEpistyleHeight");
+	s.upperEpistyleSoffit = L(v.upperEpistyleSoffit, "interior.upperEpistyleSoffit");
+	s.courseHeight = L(v.courseHeight, "interior.courseHeight");
+	s.courseThickness = L(v.courseThickness, "interior.courseThickness");
+	s.corniceHeight = L(v.corniceHeight, "interior.corniceHeight");
+	s.corniceProjection = L(v.corniceProjection, "interior.corniceProjection");
+	s.pocketCeiling = L(v.pocketCeiling, "interior.pocketCeiling");
+	s.pocketMargin = L(v.pocketMargin, "interior.pocketMargin");
+	return s;
+}
+
+EpicranitisSettings MonumentEpicranitisSettings (const MonumentData &data)
+{
+	const MonumentEpicranitis &v = data.epicranitis;
+	EpicranitisSettings s;
+	s.height = MonumentLength(v.height, "epicranitis.height");
+	s.innerOffset = MonumentLength(v.innerOffset, "epicranitis.innerOffset");
+	s.listelHeight = MonumentLength(v.listelHeight, "epicranitis.listelHeight");
+	s.filletHeight = MonumentLength(v.filletHeight, "epicranitis.filletHeight");
+	s.listelProjection = MonumentLength(v.listelProjection, "epicranitis.listelProjection");
+	s.bandProjection = MonumentLength(v.bandProjection, "epicranitis.bandProjection");
+	return s;
+}
+
+PorchExtensionSettings MonumentPorchExtensionSettings (const MonumentData &data)
+{
+	PorchExtensionSettings s;
+	s.eastSpan = MonumentLength(data.porchExtension.eastSpan, "porchExtension.eastSpan");
+	return s;
+}
+
+EastCeilingSettings MonumentEastCeilingSettings (const MonumentData &data)
+{
+	const MonumentEastCeiling &v = data.eastCeiling;
+	EastCeilingSettings s;
+	s.beamCount = RequiredCount(v.beamCount, "eastCeiling.beamCount");
+	s.beamSpacing = MonumentLength(v.beamSpacing, "eastCeiling.beamSpacing");
+	s.beamWidth = MonumentLength(v.beamWidth, "eastCeiling.beamWidth");
+	s.beamHeight = MonumentLength(v.beamHeight, "eastCeiling.beamHeight");
+	s.beamWestBearing = MonumentLength(v.beamWestBearing, "eastCeiling.beamWestBearing");
+	s.endMassifWidth = MonumentLength(v.endMassifWidth, "eastCeiling.endMassifWidth");
+	s.cornice.height = MonumentLength(v.corniceHeight, "eastCeiling.corniceHeight");
+	s.cornice.projection = MonumentLength(v.corniceProjection, "eastCeiling.corniceProjection");
+	s.cornice.bandHeight = MonumentLength(v.bandHeight, "eastCeiling.bandHeight");
+	s.cornice.depth = MonumentLength(v.corniceDepth, "eastCeiling.corniceDepth");
+	s.coffers.pitch = MonumentLength(v.cofferPitch, "eastCeiling.cofferPitch");
+	s.coffers.opening = MonumentLength(v.cofferOpening, "eastCeiling.cofferOpening");
+	s.coffers.frame = MonumentLength(v.cofferFrame, "eastCeiling.cofferFrame");
+	s.coffers.depth = MonumentLength(v.cofferDepth, "eastCeiling.cofferDepth");
+	s.cofferRows = RequiredCount(v.cofferRows, "eastCeiling.cofferRows");
+	return s;
+}
+
+FlankCeilingSettings MonumentFlankCeilingSettings (const MonumentData &data)
+{
+	const MonumentFlankCeilings &v = data.flankCeilings;
+	FlankCeilingSettings s;
+	s.beamSpacing = MonumentLength(v.beamSpacing, "flankCeilings.beamSpacing");
+	s.firstBeamOffset = MonumentLength(v.firstBeamOffset, "flankCeilings.firstBeamOffset");
+	s.frontBeamCount = RequiredCount(v.eastBeamCount, "flankCeilings.eastBeamCount");
+	s.backBeamCount = RequiredCount(v.westBeamCount, "flankCeilings.westBeamCount");
+	s.beamWidth = MonumentLength(v.beamWidth, "flankCeilings.beamWidth");
+	s.beamHeight = MonumentLength(v.beamHeight, "flankCeilings.beamHeight");
+	s.peristyleGap = MonumentLength(v.peristyleGap, "flankCeilings.peristyleGap");
+	s.cofferRows = RequiredCount(v.cofferRows, "flankCeilings.cofferRows");
+	return s;
+}
+
+namespace
+{
 	using ConsumedValues = std::vector<std::pair<const char *, const MonumentValue *>>;
 
 	// Cles consommees par la conversion de chaque partie (MO-P1), dans l'ordre du document. Hors table : les cles
-	// que la conversion exige manquantes (gardes GD3d, EN1, PE4) et celles qu'elle ne lit pas.
+	// que la conversion exige manquantes (gardes GD3d, PE4), les cles facultatives a repli (entablature.innerFace,
+	// EN1) et celles qu'elle ne lit pas.
 	ConsumedValues ConsumedValuesOf (const MonumentData &d, MonumentPart part)
 	{
 		switch (part)
@@ -1540,6 +2116,123 @@ namespace
 			        {"pediment.rakingRun", &f.rakingRun},
 			        {"pediment.tympanumFace", &f.tympanumFace}};
 		}
+		case MonumentPart::Cella:
+		{
+			// Tout le bloc sauf le diametre et l'ecart des colonnes des porches : la hauteur des colonnes donne le pied
+			// de l'architrave des porches, leurs axes la ligne sur laquelle elle est centree.
+			const MonumentCella &c = d.cella;
+			return {{"cella.toichobateRise", &c.toichobateRise},
+			        {"cella.pteronEast", &c.pteronEast},
+			        {"cella.pteronWest", &c.pteronWest},
+			        {"cella.toichobateOverhang", &c.toichobateOverhang},
+			        {"cella.longWallThickness", &c.longWallThickness},
+			        {"cella.longWallSpan", &c.longWallSpan},
+			        {"cella.wallTop", &c.wallTop},
+			        {"cella.eastCrossWallPosition", &c.eastCrossWallPosition},
+			        {"cella.eastCrossWallThickness", &c.eastCrossWallThickness},
+			        {"cella.westCrossWallPosition", &c.westCrossWallPosition},
+			        {"cella.westCrossWallThickness", &c.westCrossWallThickness},
+			        {"cella.doorWidth", &c.doorWidth},
+			        {"cella.lintelHeight", &c.lintelHeight},
+			        {"cella.doorJambOffset", &c.doorJambOffset},
+			        {"cella.thresholdLength", &c.thresholdLength},
+			        {"cella.thresholdProjection", &c.thresholdProjection},
+			        {"cella.thresholdDepth", &c.thresholdDepth},
+			        {"cella.naosFloorHeight", &c.naosFloorHeight},
+			        {"cella.eastAntaRetreat", &c.eastAntaRetreat},
+			        {"cella.westAntaRetreat", &c.westAntaRetreat},
+			        {"cella.antaInnerProjection", &c.antaInnerProjection},
+			        {"cella.antaOuterProjection", &c.antaOuterProjection},
+			        {"cella.antaHeadLength", &c.antaHeadLength},
+			        {"cella.porchColumnHeight", &c.porchColumnHeight},
+			        {"cella.pronaosColumnAxis", &c.pronaosColumnAxis},
+			        {"cella.opisthodomosColumnAxis", &c.opisthodomosColumnAxis},
+			        {"cella.porchArchitraveHeight", &c.porchArchitraveHeight},
+			        {"cella.porchFriezeHeight", &c.porchFriezeHeight},
+			        {"cella.porchEntablatureDepth", &c.porchEntablatureDepth},
+			        {"cella.porchEntablatureFront", &c.porchEntablatureFront}};
+		}
+		case MonumentPart::Porches:
+		{
+			// Les axes des porches sont lus par la cella (ligne des axes de l'architrave), dont les porches dependent.
+			const MonumentCella &c = d.cella;
+			return {{"cella.porchColumnDiameter", &c.porchColumnDiameter},
+			        {"cella.porchColumnHeight", &c.porchColumnHeight},
+			        {"cella.porchColumnOffset", &c.porchColumnOffset}};
+		}
+		case MonumentPart::Interior:
+		{
+			const MonumentInterior &i = d.interior;
+			return {{"interior.spacing", &i.spacing},
+			        {"interior.eastAxisOffset", &i.eastAxisOffset},
+			        {"interior.westAxisOffset", &i.westAxisOffset},
+			        {"interior.wallAxisOffset", &i.wallAxisOffset},
+			        {"interior.naveLevel", &i.naveLevel},
+			        {"interior.lowerColumnHeight", &i.lowerColumnHeight},
+			        {"interior.lowerColumnLowerDiameter", &i.lowerColumnLowerDiameter},
+			        {"interior.lowerColumnUpperDiameter", &i.lowerColumnUpperDiameter},
+			        {"interior.lowerCapitalHeight", &i.lowerCapitalHeight},
+			        {"interior.lowerAbacus", &i.lowerAbacus},
+			        {"interior.lowerEpistyleHeight", &i.lowerEpistyleHeight},
+			        {"interior.lowerEpistyleSoffit", &i.lowerEpistyleSoffit},
+			        {"interior.upperColumnHeight", &i.upperColumnHeight},
+			        {"interior.upperColumnLowerDiameter", &i.upperColumnLowerDiameter},
+			        {"interior.upperColumnUpperDiameter", &i.upperColumnUpperDiameter},
+			        {"interior.upperCapitalHeight", &i.upperCapitalHeight},
+			        {"interior.upperAbacus", &i.upperAbacus},
+			        {"interior.fluteCount", &i.fluteCount},
+			        {"interior.upperEpistyleHeight", &i.upperEpistyleHeight},
+			        {"interior.upperEpistyleSoffit", &i.upperEpistyleSoffit},
+			        {"interior.courseHeight", &i.courseHeight},
+			        {"interior.courseThickness", &i.courseThickness},
+			        {"interior.corniceHeight", &i.corniceHeight},
+			        {"interior.corniceProjection", &i.corniceProjection},
+			        {"interior.pocketCeiling", &i.pocketCeiling},
+			        {"interior.pocketMargin", &i.pocketMargin}};
+		}
+		case MonumentPart::Epicranitis:
+		{
+			const MonumentEpicranitis &e = d.epicranitis;
+			return {{"epicranitis.height", &e.height},
+			        {"epicranitis.innerOffset", &e.innerOffset},
+			        {"epicranitis.listelHeight", &e.listelHeight},
+			        {"epicranitis.filletHeight", &e.filletHeight},
+			        {"epicranitis.listelProjection", &e.listelProjection},
+			        {"epicranitis.bandProjection", &e.bandProjection}};
+		}
+		case MonumentPart::PorchExtension:
+			return {{"porchExtension.eastSpan", &d.porchExtension.eastSpan}};
+		case MonumentPart::EastCeiling:
+		{
+			const MonumentEastCeiling &e = d.eastCeiling;
+			return {{"eastCeiling.beamCount", &e.beamCount},
+			        {"eastCeiling.beamSpacing", &e.beamSpacing},
+			        {"eastCeiling.beamWidth", &e.beamWidth},
+			        {"eastCeiling.beamHeight", &e.beamHeight},
+			        {"eastCeiling.beamWestBearing", &e.beamWestBearing},
+			        {"eastCeiling.endMassifWidth", &e.endMassifWidth},
+			        {"eastCeiling.corniceHeight", &e.corniceHeight},
+			        {"eastCeiling.corniceProjection", &e.corniceProjection},
+			        {"eastCeiling.bandHeight", &e.bandHeight},
+			        {"eastCeiling.corniceDepth", &e.corniceDepth},
+			        {"eastCeiling.cofferPitch", &e.cofferPitch},
+			        {"eastCeiling.cofferOpening", &e.cofferOpening},
+			        {"eastCeiling.cofferFrame", &e.cofferFrame},
+			        {"eastCeiling.cofferDepth", &e.cofferDepth},
+			        {"eastCeiling.cofferRows", &e.cofferRows}};
+		}
+		case MonumentPart::FlankCeilings:
+		{
+			const MonumentFlankCeilings &f = d.flankCeilings;
+			return {{"flankCeilings.beamSpacing", &f.beamSpacing},
+			        {"flankCeilings.firstBeamOffset", &f.firstBeamOffset},
+			        {"flankCeilings.eastBeamCount", &f.eastBeamCount},
+			        {"flankCeilings.westBeamCount", &f.westBeamCount},
+			        {"flankCeilings.beamWidth", &f.beamWidth},
+			        {"flankCeilings.beamHeight", &f.beamHeight},
+			        {"flankCeilings.peristyleGap", &f.peristyleGap},
+			        {"flankCeilings.cofferRows", &f.cofferRows}};
+		}
 		}
 		throw std::invalid_argument("Monument : partie hors de l'enumeration");
 	}
@@ -1553,6 +2246,13 @@ namespace
 		case MonumentPart::Columns:     return d.present.columns;
 		case MonumentPart::Entablature: return d.present.entablature;
 		case MonumentPart::Pediment:    return d.present.pediment;
+		case MonumentPart::Cella:       return d.present.cella;
+		case MonumentPart::Porches:     return d.present.cella;
+		case MonumentPart::Interior:    return d.present.interior;
+		case MonumentPart::Epicranitis: return d.present.epicranitis;
+		case MonumentPart::PorchExtension: return d.present.porchExtension;
+		case MonumentPart::EastCeiling: return d.present.eastCeiling;
+		case MonumentPart::FlankCeilings: return d.present.flankCeilings;
 		}
 		throw std::invalid_argument("Monument : partie hors de l'enumeration");
 	}
@@ -1605,14 +2305,125 @@ std::vector<std::string> MissingMonumentKeys (const MonumentData &data, Monument
 	return missing;
 }
 
-MonumentBuild BuildMonumentMesh (const MonumentData &data)
+std::vector<MonumentPart> MonumentPartDependencies (MonumentPart part)
 {
-	MonumentBuild build;
+	using P = MonumentPart;
+	switch (part)
+	{
+	case P::Krepis:      return {};
+	case P::Peristyle:   return {P::Krepis};
+	case P::Columns:     return {P::Krepis, P::Peristyle};
+	case P::Entablature: return {P::Krepis, P::Peristyle, P::Columns};
+	case P::Pediment:    return {P::Krepis, P::Peristyle, P::Columns, P::Entablature};
+	case P::Cella:       return {P::Krepis};
+	case P::Porches:     return {P::Krepis, P::Peristyle, P::Columns, P::Cella};
+	case P::Interior:    return {P::Krepis, P::Peristyle, P::Columns, P::Cella};
+	case P::Epicranitis: return {P::Krepis, P::Cella};
+	case P::PorchExtension:
+		return {P::Krepis, P::Peristyle, P::Columns, P::Entablature, P::Cella, P::Epicranitis};
+	case P::EastCeiling:
+		return {P::Krepis, P::Peristyle, P::Columns, P::Entablature, P::Cella, P::Epicranitis, P::PorchExtension};
+	case P::FlankCeilings:
+		return {P::Krepis, P::Peristyle, P::Columns, P::Entablature, P::Cella, P::Epicranitis, P::PorchExtension,
+		        P::EastCeiling};
+	}
+	throw std::invalid_argument("Monument : partie hors de l'enumeration");
+}
+
+namespace
+{
+	// Piece deja dans le repere du temple et son adresse.
+	struct AddressedPiece
+	{
+		const Mesh   *mesh = nullptr;
+		TempleAddress address;
+	};
+
+	// Krepis de BuildKrepisMesh, puis, s'il y en a, les pieces de la cella et du couronnement, deja dans le repere du
+	// temple : sommets recopies, faces decalees, une partie par piece.
+	std::unique_ptr<Mesh> AppendPieces (const Mesh &krepis, const std::vector<AddressedPiece> &pieces,
+	                                    std::vector<TempleMeshPart> &parts)
+	{
+		std::vector<float> vertices = krepis.GetVertices();
+		std::vector<unsigned> faces;
+		std::size_t faceCount = krepis.GetNFaces();
+		for (const AddressedPiece &piece : pieces)
+			faceCount += piece.mesh->GetNFaces();
+		faces.reserve(3 * faceCount);
+		for (unsigned f = 0; f < krepis.GetNFaces(); ++f)
+			for (unsigned k = 0; k < 3; ++k)
+				faces.push_back(static_cast<unsigned>(krepis.GetFaceVertex(f, k)));
+		for (const AddressedPiece &piece : pieces)
+		{
+			TempleMeshPart part;
+			part.address = piece.address;
+			part.firstVertex = static_cast<unsigned>(vertices.size() / 3);
+			part.firstFace = static_cast<unsigned>(faces.size() / 3);
+			const std::vector<float> &v = piece.mesh->GetVertices();
+			vertices.insert(vertices.end(), v.begin(), v.end());
+			for (unsigned f = 0; f < piece.mesh->GetNFaces(); ++f)
+				for (unsigned k = 0; k < 3; ++k)
+					faces.push_back(part.firstVertex + static_cast<unsigned>(piece.mesh->GetFaceVertex(f, k)));
+			part.vertexCount = static_cast<unsigned>(vertices.size() / 3) - part.firstVertex;
+			part.faceCount = static_cast<unsigned>(faces.size() / 3) - part.firstFace;
+			parts.push_back(part);
+		}
+		auto mesh = std::make_unique<Mesh>();
+		mesh->SetVertices(static_cast<unsigned>(vertices.size() / 3), vertices.data());
+		mesh->SetFaces(static_cast<unsigned>(faces.size() / 3), 3, faces.data());
+		return mesh;
+	}
+}
+
+MonumentData MonumentWithoutPart (const MonumentData &data, MonumentPart part)
+{
+	MonumentData out = data;
+	switch (part)
+	{
+	case MonumentPart::Krepis:         ClearBlock(out, "krepis"); break;
+	case MonumentPart::Peristyle:      ClearBlock(out, "peristyle"); break;
+	case MonumentPart::Columns:        ClearBlock(out, "columns"); break;
+	case MonumentPart::Entablature:    ClearBlock(out, "entablature"); break;
+	case MonumentPart::Pediment:       ClearBlock(out, "pediment"); break;
+	case MonumentPart::Cella:
+	case MonumentPart::Porches:        ClearBlock(out, "cella"); break;
+	case MonumentPart::Interior:       ClearBlock(out, "interior"); break;
+	case MonumentPart::Epicranitis:    ClearBlock(out, "epicranitis"); break;
+	case MonumentPart::PorchExtension: ClearBlock(out, "porchExtension"); break;
+	case MonumentPart::EastCeiling:    ClearBlock(out, "eastCeiling"); break;
+	case MonumentPart::FlankCeilings:  ClearBlock(out, "flankCeilings"); break;
+	}
+	// Blocs qui exigeaient un bloc retire, de proche en proche (MO-P2).
+	for (bool changed = true; changed;)
+	{
+		changed = false;
+		for (const BlockDependency &dep : BlockDependencies(out.present))
+			if (dep.present && !dep.neededPresent)
+			{
+				ClearBlock(out, dep.block);
+				changed = true;
+			}
+	}
+	return out;
+}
+
+MonumentData MonumentExterior (const MonumentData &data)
+{
+	return MonumentWithoutPart(data, MonumentPart::Cella);
+}
+
+std::array<MonumentPartReport, kMonumentPartCount> ReportMonumentParts (const MonumentData &data)
+{
+	for (const BlockDependency &dep : BlockDependencies(data.present))
+		if (dep.present && !dep.neededPresent)
+			throw std::invalid_argument(std::string("Monument : '") + dep.block + "' demande le bloc '" + dep.needed + "'");
+	constexpr std::size_t kPartCount = kMonumentPartCount;
+	std::array<MonumentPartReport, kPartCount> report;
 	std::array<bool, kPartCount> complete{};
 	for (std::size_t i = 0; i < kPartCount; ++i)
 	{
 		const MonumentPart part = static_cast<MonumentPart>(i);
-		MonumentPartReport &r = build.report[i];
+		MonumentPartReport &r = report[i];
 		r.part = part;
 		if (!PartPresent(data, part))
 			r.state = MonumentPartState::Absent;
@@ -1623,39 +2434,88 @@ MonumentBuild BuildMonumentMesh (const MonumentData &data)
 		}
 		complete[i] = r.state == MonumentPartState::Built;
 	}
-	// Dependances en chaine (MO-P3) : la premiere partie non complete bloque toutes les suivantes completes.
+	// Table des dependances (MO-P3) : une partie complete est bloquee par sa premiere dependance non complete.
 	std::array<bool, kPartCount> buildable{};
-	std::optional<MonumentPart> firstIncomplete;
 	for (std::size_t i = 0; i < kPartCount; ++i)
 	{
-		buildable[i] = complete[i] && !firstIncomplete;
-		if (complete[i] && firstIncomplete)
+		if (!complete[i])
+			continue;
+		std::optional<MonumentPart> blocker;
+		for (const MonumentPart dependency : MonumentPartDependencies(static_cast<MonumentPart>(i)))
+			if (!blocker && !complete[static_cast<std::size_t>(dependency)])
+				blocker = dependency;
+		buildable[i] = !blocker;
+		if (blocker)
 		{
-			build.report[i].state = MonumentPartState::Blocked;
-			build.report[i].blockedBy = firstIncomplete;
+			report[i].state = MonumentPartState::Blocked;
+			report[i].blockedBy = blocker;
 		}
-		if (!complete[i] && !firstIncomplete)
-			firstIncomplete = static_cast<MonumentPart>(i);
 	}
-	const auto can = [&](MonumentPart part) { return buildable[static_cast<std::size_t>(part)]; };
+	// MO-P4 : sans colonnes, le peristyle n'a pas de geometrie propre.
+	if (buildable[static_cast<std::size_t>(MonumentPart::Peristyle)] && !buildable[static_cast<std::size_t>(MonumentPart::Columns)])
+		report[static_cast<std::size_t>(MonumentPart::Peristyle)].state = MonumentPartState::CompleteNotBuilt;
+	return report;
+}
+
+MonumentBuild BuildMonumentMesh (const MonumentData &data)
+{
+	MonumentBuild build;
+	build.report = ReportMonumentParts(data);
+	const auto can = [&](MonumentPart part) {
+		const MonumentPartState state = build.report[static_cast<std::size_t>(part)].state;
+		return state == MonumentPartState::Built || state == MonumentPartState::CompleteNotBuilt;
+	};
 
 	if (can(MonumentPart::Columns))
 	{
-		const TempleSettings settings =
-			TempleSettingsOf(data, can(MonumentPart::Entablature), can(MonumentPart::Pediment));
+		TempleSettings settings = TempleSettingsOf(data, can(MonumentPart::Entablature), can(MonumentPart::Pediment));
+		if (can(MonumentPart::Cella))
+		{
+			settings.cella = MonumentCellaSettings(data);
+			if (can(MonumentPart::Porches))
+				settings.cella->porches = MonumentPorchSettings(data);
+			if (can(MonumentPart::Interior))
+				settings.interior = MonumentInteriorSettings(data);
+			if (can(MonumentPart::Epicranitis))
+				settings.epicranitis = MonumentEpicranitisSettings(data);
+			if (can(MonumentPart::PorchExtension))
+				settings.porchExtension = MonumentPorchExtensionSettings(data);
+			if (can(MonumentPart::EastCeiling))
+				settings.eastCeiling = MonumentEastCeilingSettings(data);
+			if (can(MonumentPart::FlankCeilings))
+				settings.flankCeilings = MonumentFlankCeilingSettings(data);
+		}
 		build.mesh = BuildTempleMesh(settings, nullptr, &build.parts);
 		return build;
 	}
 	if (can(MonumentPart::Peristyle))
 	{
 		LayoutPeristyle(MonumentPeristyleSettings(data));   // MO-P5 : validation seule, aucune geometrie
-		build.report[static_cast<std::size_t>(MonumentPart::Peristyle)].state = MonumentPartState::CompleteNotBuilt;
 	}
 	if (can(MonumentPart::Krepis))
 	{
 		KrepisLayout layout;
 		build.mesh = BuildKrepisMesh(MonumentKrepisSettings(data), &layout);
 		build.parts = KrepisParts(*build.mesh, layout.steps.size());
+		if (can(MonumentPart::Cella))
+		{
+			const CellaSettings cella = MonumentCellaSettings(data);
+			const CellaLayout cellaLayout = LayoutGreekCella(cella, layout);
+			const std::vector<CellaPiece> cellaPieces = BuildGreekCellaPieces(cella, cellaLayout);
+			std::vector<EpicranitisPiece> crownPieces;
+			if (can(MonumentPart::Epicranitis))
+			{
+				const EpicranitisSettings crown = MonumentEpicranitisSettings(data);
+				crownPieces = BuildGreekEpicranitisPieces(crown, LayoutGreekEpicranitis(crown, cellaLayout));
+			}
+			std::vector<AddressedPiece> pieces;
+			pieces.reserve(cellaPieces.size() + crownPieces.size());
+			for (const CellaPiece &piece : cellaPieces)
+				pieces.push_back({piece.mesh.get(), TempleAddressOf(piece)});
+			for (const EpicranitisPiece &piece : crownPieces)
+				pieces.push_back({piece.mesh.get(), TempleAddressOf(piece)});
+			build.mesh = AppendPieces(*build.mesh, pieces, build.parts);
+		}
 		return build;
 	}
 	build.mesh = std::make_unique<Mesh>();

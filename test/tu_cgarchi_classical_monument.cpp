@@ -38,7 +38,7 @@
 #include "greek_doric_test_support.h"
 
 // ===========================================================================
-//  Document du monument "monument/v10" : lecteur, schema, conversions, mode partiel
+//  Document du monument "monument/v14" : lecteur, schema, conversions, mode partiel
 // ===========================================================================
 //
 // Donnee : le document embarque, derive du README du temple d'Hephaistos. Les
@@ -122,7 +122,7 @@ std::string RefusalOf (const std::string &text)
 	return std::string();
 }
 
-// Le document est refuse, et le message porte "monument/v10 <path> : <motif>".
+// Le document est refuse, et le message porte "monument/v14 <path> : <motif>".
 void ExpectRefused (const std::string &text, const std::string &path, const std::string &motif)
 {
 	const std::string message = RefusalOf(text);
@@ -244,6 +244,124 @@ std::vector<std::pair<std::string, const MonumentValue *>> AllValues (const Monu
 		{"pediment.tympanumFace", &d.pediment.tympanumFace},
 		{"pediment.sima", &d.pediment.sima},
 	};
+}
+
+// Cles du bloc cella, dans l'ordre du document.
+std::vector<std::pair<std::string, const MonumentValue *>> CellaValues (const MonumentData &d)
+{
+	const MonumentCella &c = d.cella;
+	return {{"cella.toichobateRise", &c.toichobateRise},
+	        {"cella.pteronEast", &c.pteronEast},
+	        {"cella.pteronWest", &c.pteronWest},
+	        {"cella.toichobateOverhang", &c.toichobateOverhang},
+	        {"cella.longWallThickness", &c.longWallThickness},
+	        {"cella.longWallSpan", &c.longWallSpan},
+	        {"cella.wallTop", &c.wallTop},
+	        {"cella.eastCrossWallPosition", &c.eastCrossWallPosition},
+	        {"cella.eastCrossWallThickness", &c.eastCrossWallThickness},
+	        {"cella.westCrossWallPosition", &c.westCrossWallPosition},
+	        {"cella.westCrossWallThickness", &c.westCrossWallThickness},
+	        {"cella.doorWidth", &c.doorWidth},
+	        {"cella.lintelHeight", &c.lintelHeight},
+	        {"cella.doorJambOffset", &c.doorJambOffset},
+	        {"cella.thresholdLength", &c.thresholdLength},
+	        {"cella.thresholdProjection", &c.thresholdProjection},
+	        {"cella.thresholdDepth", &c.thresholdDepth},
+	        {"cella.naosFloorHeight", &c.naosFloorHeight},
+	        {"cella.eastAntaRetreat", &c.eastAntaRetreat},
+	        {"cella.westAntaRetreat", &c.westAntaRetreat},
+	        {"cella.antaInnerProjection", &c.antaInnerProjection},
+	        {"cella.antaOuterProjection", &c.antaOuterProjection},
+	        {"cella.antaHeadLength", &c.antaHeadLength},
+	        {"cella.porchColumnDiameter", &c.porchColumnDiameter},
+	        {"cella.porchColumnHeight", &c.porchColumnHeight},
+	        {"cella.porchColumnOffset", &c.porchColumnOffset},
+	        {"cella.pronaosColumnAxis", &c.pronaosColumnAxis},
+	        {"cella.opisthodomosColumnAxis", &c.opisthodomosColumnAxis},
+	        {"cella.porchArchitraveHeight", &c.porchArchitraveHeight},
+	        {"cella.porchFriezeHeight", &c.porchFriezeHeight},
+	        {"cella.porchEntablatureDepth", &c.porchEntablatureDepth},
+	        {"cella.porchEntablatureFront", &c.porchEntablatureFront}};
+}
+
+std::vector<std::pair<std::string, const MonumentValue *>> InteriorValues (const MonumentData &d)
+{
+	const MonumentInterior &i = d.interior;
+	return {{"interior.spacing", &i.spacing},
+	        {"interior.eastAxisOffset", &i.eastAxisOffset},
+	        {"interior.westAxisOffset", &i.westAxisOffset},
+	        {"interior.wallAxisOffset", &i.wallAxisOffset},
+	        {"interior.naveLevel", &i.naveLevel},
+	        {"interior.lowerColumnHeight", &i.lowerColumnHeight},
+	        {"interior.lowerColumnLowerDiameter", &i.lowerColumnLowerDiameter},
+	        {"interior.lowerColumnUpperDiameter", &i.lowerColumnUpperDiameter},
+	        {"interior.lowerCapitalHeight", &i.lowerCapitalHeight},
+	        {"interior.lowerAbacus", &i.lowerAbacus},
+	        {"interior.lowerEpistyleHeight", &i.lowerEpistyleHeight},
+	        {"interior.lowerEpistyleSoffit", &i.lowerEpistyleSoffit},
+	        {"interior.upperColumnHeight", &i.upperColumnHeight},
+	        {"interior.upperColumnLowerDiameter", &i.upperColumnLowerDiameter},
+	        {"interior.upperColumnUpperDiameter", &i.upperColumnUpperDiameter},
+	        {"interior.upperCapitalHeight", &i.upperCapitalHeight},
+	        {"interior.upperAbacus", &i.upperAbacus},
+	        {"interior.fluteCount", &i.fluteCount},
+	        {"interior.upperEpistyleHeight", &i.upperEpistyleHeight},
+	        {"interior.upperEpistyleSoffit", &i.upperEpistyleSoffit},
+	        {"interior.courseHeight", &i.courseHeight},
+	        {"interior.courseThickness", &i.courseThickness},
+	        {"interior.corniceHeight", &i.corniceHeight},
+	        {"interior.corniceProjection", &i.corniceProjection},
+	        {"interior.pocketCeiling", &i.pocketCeiling},
+	        {"interior.pocketMargin", &i.pocketMargin}};
+}
+
+std::vector<std::pair<std::string, const MonumentValue *>> EpicranitisValues (const MonumentData &d)
+{
+	const MonumentEpicranitis &e = d.epicranitis;
+	return {{"epicranitis.height", &e.height},
+	        {"epicranitis.innerOffset", &e.innerOffset},
+	        {"epicranitis.listelHeight", &e.listelHeight},
+	        {"epicranitis.filletHeight", &e.filletHeight},
+	        {"epicranitis.listelProjection", &e.listelProjection},
+	        {"epicranitis.bandProjection", &e.bandProjection}};
+}
+
+std::vector<std::pair<std::string, const MonumentValue *>> PorchExtensionValues (const MonumentData &d)
+{
+	return {{"porchExtension.eastSpan", &d.porchExtension.eastSpan}};
+}
+
+std::vector<std::pair<std::string, const MonumentValue *>> EastCeilingValues (const MonumentData &d)
+{
+	const MonumentEastCeiling &e = d.eastCeiling;
+	return {{"eastCeiling.beamCount", &e.beamCount},
+	        {"eastCeiling.beamSpacing", &e.beamSpacing},
+	        {"eastCeiling.beamWidth", &e.beamWidth},
+	        {"eastCeiling.beamHeight", &e.beamHeight},
+	        {"eastCeiling.beamWestBearing", &e.beamWestBearing},
+	        {"eastCeiling.endMassifWidth", &e.endMassifWidth},
+	        {"eastCeiling.corniceHeight", &e.corniceHeight},
+	        {"eastCeiling.corniceProjection", &e.corniceProjection},
+	        {"eastCeiling.bandHeight", &e.bandHeight},
+	        {"eastCeiling.corniceDepth", &e.corniceDepth},
+	        {"eastCeiling.cofferPitch", &e.cofferPitch},
+	        {"eastCeiling.cofferOpening", &e.cofferOpening},
+	        {"eastCeiling.cofferFrame", &e.cofferFrame},
+	        {"eastCeiling.cofferDepth", &e.cofferDepth},
+	        {"eastCeiling.cofferRows", &e.cofferRows}};
+}
+
+std::vector<std::pair<std::string, const MonumentValue *>> FlankCeilingsValues (const MonumentData &d)
+{
+	const MonumentFlankCeilings &f = d.flankCeilings;
+	return {{"flankCeilings.beamSpacing", &f.beamSpacing},
+	        {"flankCeilings.firstBeamOffset", &f.firstBeamOffset},
+	        {"flankCeilings.eastBeamCount", &f.eastBeamCount},
+	        {"flankCeilings.westBeamCount", &f.westBeamCount},
+	        {"flankCeilings.beamWidth", &f.beamWidth},
+	        {"flankCeilings.beamHeight", &f.beamHeight},
+	        {"flankCeilings.peristyleGap", &f.peristyleGap},
+	        {"flankCeilings.cofferRows", &f.cofferRows}};
 }
 
 // Cotes en pieds et pouces du document (regle R6 du script) : les seules valeurs d'unite "ft+in".
@@ -441,7 +559,7 @@ void RequiredPaths (const json &doc, const json &schemaIn, const json &root, std
 
 json SchemaFile ()
 {
-	const std::filesystem::path path = std::filesystem::path("src") / "cgarchi" / "schemas" / "monument-v10.schema";
+	const std::filesystem::path path = std::filesystem::path("src") / "cgarchi" / "schemas" / "monument-v14.schema";
 	std::ifstream in(path, std::ios::binary);
 	if (!in)
 		return json();
@@ -485,7 +603,20 @@ TEST(TEST_cgarchi_classical_monument, every_value_has_a_closed_status_a_readme_p
 	const MonumentData &data = HephaistosMonument();
 	std::set<MonumentStatus> seen;
 	std::set<std::string> cited;
-	for (const auto &[key, v] : AllValues(data))
+	std::vector<std::pair<std::string, const MonumentValue *>> values = AllValues(data);
+	const std::vector<std::pair<std::string, const MonumentValue *>> cella = CellaValues(data);
+	values.insert(values.end(), cella.begin(), cella.end());
+	const std::vector<std::pair<std::string, const MonumentValue *>> interior = InteriorValues(data);
+	values.insert(values.end(), interior.begin(), interior.end());
+	const std::vector<std::pair<std::string, const MonumentValue *>> crown = EpicranitisValues(data);
+	values.insert(values.end(), crown.begin(), crown.end());
+	const std::vector<std::pair<std::string, const MonumentValue *>> extension = PorchExtensionValues(data);
+	values.insert(values.end(), extension.begin(), extension.end());
+	const std::vector<std::pair<std::string, const MonumentValue *>> east = EastCeilingValues(data);
+	values.insert(values.end(), east.begin(), east.end());
+	const std::vector<std::pair<std::string, const MonumentValue *>> flanks = FlankCeilingsValues(data);
+	values.insert(values.end(), flanks.begin(), flanks.end());
+	for (const auto &[key, v] : values)
 	{
 		SCOPED_TRACE(key);
 		seen.insert(v->status);
@@ -516,8 +647,8 @@ TEST(TEST_cgarchi_classical_monument, the_reader_refuses_a_value_without_a_valid
 {
 	const std::string h = "krepis.stylobateHeight";
 	const auto at = [](json &d) -> json & { return d["krepis"]["stylobateHeight"]; };
-	// Valeur manquante du document : la face interieure de l'architrave (EN1).
-	const auto eu = [](json &d) -> json & { return d["entablature"]["innerFace"]; };
+	// Valeur manquante du document : la sima du fronton.
+	const auto eu = [](json &d) -> json & { return d["pediment"]["sima"]; };
 
 	ExpectEditRefused([&](json &d) { at(d).erase("status"); }, h + ".status", "required field is missing");
 	ExpectEditRefused([&](json &d) { at(d)["status"] = kHypothesis; }, h + ".status",
@@ -525,7 +656,7 @@ TEST(TEST_cgarchi_classical_monument, the_reader_refuses_a_value_without_a_valid
 	ExpectEditRefused([&](json &d) { at(d)["status"] = nullptr; }, h + ".status", "expected a string, not null");
 	ExpectEditRefused([&](json &d) { at(d)["value"] = nullptr; }, h + ".value", "expected a number, not null");
 	ExpectEditRefused([&](json &d) { at(d).erase("value"); }, h + ".value", "required field is missing");
-	ExpectEditRefused([&](json &d) { eu(d)["value"] = 1.0; }, "entablature.innerFace.value",
+	ExpectEditRefused([&](json &d) { eu(d)["value"] = 1.0; }, "pediment.sima.value",
 	                  "status \"manquant\" admits no value");
 	ExpectEditRefused([&](json &d) { at(d)["sources"] = {"X"}; }, h + ".sources[0]", "unknown source \"X\"");
 	ExpectEditRefused([&](json &d) { d["sources"]["Z"] = "absente du README"; }, "sources.Z",
@@ -534,13 +665,69 @@ TEST(TEST_cgarchi_classical_monument, the_reader_refuses_a_value_without_a_valid
 	                  "status \"lu\" requires a source");
 	ExpectEditRefused([&](json &d) { at(d)["status"] = kMeasured; at(d)["sources"] = json::array(); }, h + ".sources",
 	                  std::string("status \"") + kMeasured + "\" requires a source");
-	ExpectEditRefused([&](json &d) { eu(d)["sources"] = {"S"}; }, "entablature.innerFace.sources",
+	ExpectEditRefused([&](json &d) { eu(d)["sources"] = {"S"}; }, "pediment.sima.sources",
 	                  "status \"manquant\" admits no source");
 	ExpectEditRefused([&](json &d) { at(d)["readme"] = ""; }, h + ".readme", "empty place");
 	ExpectEditRefused([&](json &d) { d["extra"] = 1; }, "extra", "unknown field");
 	ExpectEditRefused([&](json &d) { d["krepis"]["extra"] = 1; }, "krepis.extra", "unknown field");
 	ExpectEditRefused([&](json &d) { at(d)["extra"] = 1; }, h + ".extra", "unknown field");
-	// Version : seule monument/v10 est lue ; v1 a v9 sont refusees (D2-8).
+	// Version : seule monument/v14 est lue ; v1 a v13 sont refusees (D2-8).
+	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v13"; }, "schema", "unsupported schema \"monument/v13\"");
+	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v12"; }, "schema", "unsupported schema \"monument/v12\"");
+	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v11"; }, "schema", "unsupported schema \"monument/v11\"");
+	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v10"; }, "schema", "unsupported schema \"monument/v10\"");
+	// Un document de forme v13 (sans plafonds) sous l'etiquette v14 est accepte, de meme un document de forme v12
+	// (sans couronnement ni prolongement), un
+	// document de forme v11 (sans interieur) et de forme v10 (sans cella ni interieur) : les blocs sont facultatifs.
+	// Une cle de la cella, de l'interieur ou du couronnement retiree, ou inconnue, est refusee et nommee ; les
+	// controles exigent leur bloc, l'interieur et le couronnement exigent la cella, le prolongement le couronnement.
+	{
+		json v13 = EmbeddedDocument();
+		for (const char *block : {"eastCeiling", "eastCeilingControls", "flankCeilings", "flankCeilingsControls"})
+			v13.erase(block);
+		EXPECT_EQ(RefusalOf(v13.dump()), "");
+		json v12 = v13;
+		for (const char *block : {"epicranitis", "epicranitisControls", "porchExtension", "porchExtensionControls"})
+			v12.erase(block);
+		EXPECT_EQ(RefusalOf(v12.dump()), "");
+		json v11 = v12;
+		v11.erase("interior");
+		v11.erase("interiorControls");
+		v11["sources"].erase("B");   // citee par le seul interieur (interior.upperAbacus)
+		EXPECT_EQ(RefusalOf(v11.dump()), "");
+		json v10 = v11;
+		v10.erase("cella");
+		v10.erase("cellaControls");
+		v10["sources"].erase("H");   // citee par la seule cella (cella.lintelHeight)
+		EXPECT_EQ(RefusalOf(v10.dump()), "");
+	}
+	ExpectEditRefused([&](json &d) { d["interior"].erase("pocketCeiling"); }, "interior.pocketCeiling",
+	                  "required field is missing");
+	ExpectEditRefused([&](json &d) { d["interior"]["pocketDepth"] = d["interior"]["pocketMargin"]; }, "interior.pocketDepth",
+	                  "unknown field");
+	ExpectEditRefused([&](json &d) { d["interiorControls"]["extra"] = d["interiorControls"]["naosLength"]; },
+	                  "interiorControls.extra", "unknown field");
+	ExpectEditRefused([&](json &d) { d.erase("interior"); }, "interiorControls", "requires block \"interior\"");
+	ExpectEditRefused([&](json &d) { d.erase("cella"); }, "interior", "requires block \"cella\"");
+	ExpectEditRefused([&](json &d) { d.erase("cella"); }, "epicranitis", "requires block \"cella\"");
+	ExpectEditRefused([&](json &d) { d.erase("epicranitis"); }, "porchExtension", "requires block \"epicranitis\"");
+	ExpectEditRefused([&](json &d) { d.erase("epicranitis"); }, "epicranitisControls", "requires block \"epicranitis\"");
+	ExpectEditRefused([&](json &d) { d.erase("porchExtension"); }, "porchExtensionControls",
+	                  "requires block \"porchExtension\"");
+	ExpectEditRefused([&](json &d) { d["epicranitis"].erase("filletHeight"); }, "epicranitis.filletHeight",
+	                  "required field is missing");
+	ExpectEditRefused([&](json &d) { d["epicranitisControls"]["extra"] = d["epicranitisControls"]["topZ"]; },
+	                  "epicranitisControls.extra", "unknown field");
+	ExpectEditRefused([&](json &d) { d["porchExtension"]["eastSpan"]["value"] = 0.0; }, "porchExtension.eastSpan.value",
+	                  "0 outside (0, inf]");
+	ExpectEditRefused([&](json &d) { d["cella"].erase("wallTop"); }, "cella.wallTop", "required field is missing");
+	ExpectEditRefused([&](json &d) { d["cella"]["doorHeight"] = d["cella"]["doorWidth"]; }, "cella.doorHeight",
+	                  "unknown field");
+	ExpectEditRefused([&](json &d) { d["cellaControls"]["extra"] = d["cellaControls"]["naosLength"]; },
+	                  "cellaControls.extra", "unknown field");
+	ExpectEditRefused([&](json &d) { d.erase("cella"); }, "cellaControls", "requires block \"cella\"");
+	ExpectEditRefused([&](json &d) { d["cella"]["doorWidth"]["value"] = 0.0; }, "cella.doorWidth.value",
+	                  "0 outside (0, inf]");
 	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v1"; }, "schema", "unsupported schema \"monument/v1\"");
 	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v2"; }, "schema", "unsupported schema \"monument/v2\"");
 	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v3"; }, "schema", "unsupported schema \"monument/v3\"");
@@ -550,12 +737,12 @@ TEST(TEST_cgarchi_classical_monument, the_reader_refuses_a_value_without_a_valid
 	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v7"; }, "schema", "unsupported schema \"monument/v7\"");
 	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v8"; }, "schema", "unsupported schema \"monument/v8\"");
 	ExpectEditRefused([&](json &d) { d["schema"] = "monument/v9"; }, "schema", "unsupported schema \"monument/v9\"");
-	// Un document de forme v9 (cote en pieds et pouces sur deux cles) sous l'etiquette v10 est refuse, cles nommees.
+	// Un document de forme v9 (cote en pieds et pouces sur deux cles) sous l'etiquette v12 est refuse, cles nommees.
 	ExpectEditRefused([&](json &d) { d["entablature"]["friezeHeightFt"] = d["entablature"]["friezeHeight"]; },
 	                  "entablature.friezeHeightFt", "unknown field");
 	ExpectEditRefused([&](json &d) { d["entablature"].erase("friezeHeight"); }, "entablature.friezeHeight",
 	                  "required field is missing");
-	// Un document de forme v7 (euthynteria manquante d'une cle, sans pente) sous l'etiquette v10 est refuse, cles
+	// Un document de forme v7 (euthynteria manquante d'une cle, sans pente) sous l'etiquette v12 est refuse, cles
 	// nommees.
 	ExpectEditRefused([&](json &d) { d["pediment"].erase("rakingRun"); }, "pediment.rakingRun", "required field is missing");
 	ExpectEditRefused([&](json &d) { d["krepis"]["euthynteria"] = d["krepis"]["euthynteriaHeight"]; }, "krepis.euthynteria",
@@ -576,13 +763,13 @@ TEST(TEST_cgarchi_classical_monument, the_reader_refuses_a_value_without_a_valid
 	                                   d.erase("krepis"); },
 	                  "krepisControls", "requires block \"krepis\"");
 	ExpectEditRefused([&](json &d) { d["controls"].erase("frontAxesY"); }, "controls.frontAxesY", "required field is missing");
-	// Un document de forme v5 (sans sous-face inclinee ni gouttes des mutules) sous l'etiquette v10 est refuse, cles
+	// Un document de forme v5 (sans sous-face inclinee ni gouttes des mutules) sous l'etiquette v12 est refuse, cles
 	// nommees.
 	ExpectEditRefused([&](json &d) { d["entablature"].erase("soffitSlope"); }, "entablature.soffitSlope",
 	                  "required field is missing");
 	ExpectEditRefused([&](json &d) { d["entablatureControls"].erase("mutuleGuttaRows"); },
 	                  "entablatureControls.mutuleGuttaRows", "required field is missing");
-	// Un document de forme v3 (sans les controles d'angle) sous l'etiquette v10 est refuse, cle nommee.
+	// Un document de forme v3 (sans les controles d'angle) sous l'etiquette v12 est refuse, cle nommee.
 	ExpectEditRefused([&](json &d) { d["entablatureControls"].erase("cornerTriglyphOffset"); },
 	                  "entablatureControls.cornerTriglyphOffset", "required field is missing");
 	// De meme un document de forme v4 (sans regulae ni mutules) : premieres cles absentes nommees.
@@ -636,7 +823,7 @@ TEST(TEST_cgarchi_classical_monument, the_reader_refuses_a_value_without_a_valid
 TEST(TEST_cgarchi_classical_monument, the_document_conforms_to_its_schema_file_and_every_required_key_is_required_by_the_reader)
 {
 	const json schema = SchemaFile();
-	ASSERT_TRUE(schema.is_object()) << "src/cgarchi/schemas/monument-v10.schema illisible depuis le repertoire courant";
+	ASSERT_TRUE(schema.is_object()) << "src/cgarchi/schemas/monument-v14.schema illisible depuis le repertoire courant";
 	const json doc = EmbeddedDocument();
 	EXPECT_EQ(Violation(doc, schema, schema, std::string()), "");
 	// Controle positif : le document complet est accepte, si bien que chaque refus
@@ -674,9 +861,15 @@ TEST(TEST_cgarchi_classical_monument, the_document_conforms_to_its_schema_file_a
 	// profil et ses 4 cles, une suite de divisions et ses 6 cles, 10 + 9 + 4 + 18 controles de l'entablement (dont
 	// ceux de l'angle, des gouttes, du dos des mutules, de la sous-face inclinee et des gouttes des mutules) et 3 par
 	// controle ; fronton : 5 cles de valeur (rapport et 2 cotes "ft+in" compris) et 4 par valeur, une suite de
-	// hauteurs et un polygone et leurs 6 cles, 13 controles (pente comprise) et 3 par controle.
+	// hauteurs et un polygone et leurs 6 cles, 13 controles (pente comprise) et 3 par controle ; cella : 32 cles de
+	// valeur et 4 par valeur, 20 controles (regle R13) et 2 par controle ; interieur : 26 cles de valeur (compte
+	// compris) et 4 par valeur, 20 controles et 2 par controle ; couronnement : 6 cles de valeur et 4 par valeur,
+	// 7 controles et 2 par controle ; prolongement est : 1 cle de valeur et ses 4, 2 controles et 2 par controle ;
+	// plafond est : 15 cles de valeur (deux comptes compris) et 4 par valeur, 15 controles et 2 par controle ; plafonds
+	// des flancs : 8 cles de valeur (trois comptes compris) et 4 par valeur, 7 controles et 2 par controle.
 	EXPECT_EQ(paths.size(), 4u + 4u + (39u + 49u) * 5u + (2u * 3u + 2u * 2u) + 11u * 4u + 5u + 7u +
-	                            (10u + 9u + 4u + 18u) * 4u + 5u * 5u + 2u * 7u + 13u * 4u);
+	                            (10u + 9u + 4u + 18u) * 4u + 5u * 5u + 2u * 7u + 13u * 4u + 32u * 5u + 20u * 3u +
+	                            26u * 5u + 20u * 3u + 6u * 5u + 7u * 3u + 1u * 5u + 2u * 3u + 15u * 5u + 15u * 3u + 8u * 5u + 7u * 3u);
 	for (const std::vector<std::string> &path : paths)
 	{
 		std::string dotted, pointer;
@@ -932,13 +1125,21 @@ TEST(TEST_cgarchi_classical_monument, a_missing_value_is_refused_where_a_convers
 	// Entablement. Controle positif : le document embarque se convertit, si bien que chaque refus
 	// ci-dessous tient a la modification.
 	EXPECT_NO_THROW(MonumentEntablatureSettings(base));
-	// EN1 ne vaut que pour une face interieure manquante.
+	// EN1 en repli (CE-32) : une face interieure donnee est lue, quelle que soit sa valeur ; manquante, elle est
+	// au nu du pied de l'architrave.
 	json inner = EmbeddedDocument();
 	inner["entablature"]["innerFace"] = {{"value", 0.494}, {"unit", "m"}, {"status", "convention"},
 	                                     {"sources", json::array()}, {"readme", std::string(kSection) + "6.2"}};
 	const MonumentData givenInner = ParseMonument(inner.dump());
-	expectThrowNaming([&] { MonumentEntablatureSettings(givenInner); }, "'entablature.innerFace'");
-	expectThrowNaming([&] { MonumentTempleSettings(givenInner); }, "'entablature.innerFace'");
+	EXPECT_EQ(MonumentEntablatureSettings(givenInner).innerFace, 0.494);
+	EXPECT_EQ(MonumentEntablatureSettings(base).innerFace, Length(base.entablature.innerFace));
+	MonumentData missingInner = base;
+	missingInner.entablature.innerFace.value.reset();
+	missingInner.entablature.innerFace.status = MonumentStatus::Missing;
+	missingInner.entablature.innerFace.sources.clear();
+	EXPECT_EQ(MonumentEntablatureSettings(missingInner).innerFace,
+	          Length(base.entablature.architraveFootProjection));
+	EXPECT_NE(MonumentEntablatureSettings(missingInner).innerFace, MonumentEntablatureSettings(base).innerFace);
 	// Partage du chapiteau du triglyphe incoherent avec sa hauteur : listel de 1,1 in.
 	MonumentData partition = base;
 	partition.entablature.triglyphCapitalListelHeight.value = 1.1;
@@ -1631,9 +1832,11 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_values_are_read_with_their
 	EXPECT_EQ(e.metopeFace.sources, s);
 	EXPECT_EQ(e.channelDepth.status, MonumentStatus::Measured);
 	EXPECT_EQ(e.channelDepth.sources, s);
-	EXPECT_EQ(e.innerFace.status, MonumentStatus::Missing);
-	EXPECT_FALSE(e.innerFace.value.has_value());
-	EXPECT_EQ(e.innerFace.unit, MonumentUnit::Metre);
+	// Face interieure (C4-9) : 3 ft 3,35 in - 19,459 in, deduit des pl. VI et VIII de [S].
+	EXPECT_EQ(e.innerFace.status, MonumentStatus::Deduced);
+	EXPECT_EQ(e.innerFace.sources, s);
+	EXPECT_EQ(Value(e.innerFace), 19.891);
+	EXPECT_EQ(e.innerFace.unit, MonumentUnit::Inch);
 	// Lieux de cinq cles temoins.
 	const std::string section = kSection;
 	EXPECT_EQ(e.friezeHeight.readme, section + "6.1, l. 256");
@@ -1798,13 +2001,13 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_values_are_read_with_their
 		EXPECT_EQ(document["entablatureControls"][key]["readme"].get<std::string>(), section + place);
 	}
 
-	// Fronton (l. 608, 610, 611, 616) : valeurs telles qu'ecrites (pieds des cotes "ft+in", leurs pouces ensuite),
+	// Fronton (l. 847, 849, 850, 855) : valeurs telles qu'ecrites (pieds des cotes "ft+in", leurs pouces ensuite),
 	// avec leur statut et leur lieu ; la sima est manquante, sans valeur ni source.
 	const MonumentPediment &f = d.pediment;
 	const std::tuple<const char *, const MonumentValue *, double, MonumentStatus, const char *> pediment[] = {
-		{"apexRise", &f.apexRise, 5.0, lu, "9, l. 608"},
-		{"rakingProjection", &f.rakingProjection, 1.0, lu, "9, l. 611"},
-		{"tympanumFace", &f.tympanumFace, 18.125, deduit, "9, l. 611"},
+		{"apexRise", &f.apexRise, 5.0, lu, "9, l. 847"},
+		{"rakingProjection", &f.rakingProjection, 1.0, lu, "9, l. 850"},
+		{"tympanumFace", &f.tympanumFace, 18.125, deduit, "9, l. 850"},
 	};
 	for (const auto &[key, v, written, status, place] : pediment)
 	{
@@ -1817,44 +2020,44 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_values_are_read_with_their
 	EXPECT_EQ(f.sima.status, MonumentStatus::Missing);
 	EXPECT_FALSE(f.sima.value.has_value());
 	EXPECT_TRUE(f.sima.sources.empty());
-	EXPECT_EQ(f.sima.readme, section + "9, l. 616");
-	// Hauteurs de la corniche rampante (l. 610), de haut en bas, mots dans l'ordre (R5).
+	EXPECT_EQ(f.sima.readme, section + "9, l. 855");
+	// Hauteurs de la corniche rampante (l. 849), de haut en bas, mots dans l'ordre (R5).
 	using R = MonumentRakingMember;
 	EXPECT_EQ(f.rakingHeights.values, (std::vector<double>{1.05, 0.35, 4.2, 1.45, 0.65}));
 	EXPECT_EQ(f.rakingHeights.kinds, (std::vector<R>{R::Listel, R::Fillet, R::Corona, R::Drip, R::Fillet}));
 	EXPECT_EQ(f.rakingHeights.status, lu);
 	EXPECT_EQ(f.rakingHeights.sources, s);
-	EXPECT_EQ(f.rakingHeights.readme, section + "9, l. 610");
-	// Section (l. 611, R11) : 18 sommets dans l'ordre du README, mesures [S].
+	EXPECT_EQ(f.rakingHeights.readme, section + "9, l. 849");
+	// Section (l. 850, R11) : 18 sommets dans l'ordre du README, mesures [S].
 	EXPECT_EQ(f.rakingSection.u, (std::vector<double>{0, 0.85, 0.85, 2.2, 2.2, 11.2, 14.1, 15.9, 17.0, 17.6, 18.2, 18.8,
 	                                                  19.36, 19.36, 19.65, 20.85, 20.85, 0}));
 	EXPECT_EQ(f.rakingSection.h, (std::vector<double>{0, 0, 0.65, 0.65, 2.1, 2.1, 2.0, 1.67, 1.36, 1.16, 0.87, 0.35, 0.35,
 	                                                  6.65, 7.3, 7.4, 7.7, 7.7}));
 	EXPECT_EQ(f.rakingSection.status, mesure);
 	EXPECT_EQ(f.rakingSection.sources, s);
-	EXPECT_EQ(f.rakingSection.readme, section + "9, l. 611");
+	EXPECT_EQ(f.rakingSection.readme, section + "9, l. 850");
 	// Pente 1 : r (R12) : lue [O] en tete de la cellule « Pente des rampants », avec son lieu.
 	EXPECT_EQ(Value(f.rakingRun), 4.0846);
 	EXPECT_EQ(f.rakingRun.status, lu);
 	EXPECT_EQ(f.rakingRun.sources, (std::vector<std::string>{"O"}));
-	EXPECT_EQ(f.rakingRun.readme, section + "9, l. 609");
+	EXPECT_EQ(f.rakingRun.readme, section + "9, l. 848");
 	// Les treize controles du fronton, tels qu'ecrits, avec leur unite et leur lieu.
 	const MonumentPedimentControls &fc = d.pedimentControls;
 	const MonumentUnit deg = MonumentUnit::Degree;
 	const std::tuple<const char *, const MonumentControlValue *, double, MonumentUnit, const char *> pedimentChecks[] = {
-		{"apexRise", &fc.apexRise, 1.772, m, "9, l. 608"},
-		{"rakingSlope", &fc.rakingSlope, 13.76, deg, "9, l. 609"},
-		{"eaveHalfSpan", &fc.eaveHalfSpan, 7.238, m, "9, l. 609"},
-		{"rakingHeight", &fc.rakingHeight, 7.70, in, "9, l. 610"},
-		{"rakingHeightM", &fc.rakingHeightM, 0.196, m, "9, l. 610"},
-		{"rakingVerticalHeight", &fc.rakingVerticalHeight, 7.93, in, "9, l. 610"},
-		{"rakingVerticalHeightM", &fc.rakingVerticalHeightM, 0.201, m, "9, l. 610"},
-		{"rakingProjection", &fc.rakingProjection, 0.530, m, "9, l. 611"},
-		{"tympanumFaceM", &fc.tympanumFaceM, 0.460, m, "9, l. 611"},
-		{"rakingListelProjection", &fc.rakingListelProjection, 20.85, in, "9, l. 611"},
-		{"rakingCoronaProjection", &fc.rakingCoronaProjection, 19.36, in, "9, l. 611"},
-		{"rakingBottomFilletProjection", &fc.rakingBottomFilletProjection, 0.85, in, "9, l. 611"},
-		{"rakingCoronaGap", &fc.rakingCoronaGap, 0.11, in, "9, l. 611"},
+		{"apexRise", &fc.apexRise, 1.772, m, "9, l. 847"},
+		{"rakingSlope", &fc.rakingSlope, 13.76, deg, "9, l. 848"},
+		{"eaveHalfSpan", &fc.eaveHalfSpan, 7.238, m, "9, l. 848"},
+		{"rakingHeight", &fc.rakingHeight, 7.70, in, "9, l. 849"},
+		{"rakingHeightM", &fc.rakingHeightM, 0.196, m, "9, l. 849"},
+		{"rakingVerticalHeight", &fc.rakingVerticalHeight, 7.93, in, "9, l. 849"},
+		{"rakingVerticalHeightM", &fc.rakingVerticalHeightM, 0.201, m, "9, l. 849"},
+		{"rakingProjection", &fc.rakingProjection, 0.530, m, "9, l. 850"},
+		{"tympanumFaceM", &fc.tympanumFaceM, 0.460, m, "9, l. 850"},
+		{"rakingListelProjection", &fc.rakingListelProjection, 20.85, in, "9, l. 850"},
+		{"rakingCoronaProjection", &fc.rakingCoronaProjection, 19.36, in, "9, l. 850"},
+		{"rakingBottomFilletProjection", &fc.rakingBottomFilletProjection, 0.85, in, "9, l. 850"},
+		{"rakingCoronaGap", &fc.rakingCoronaGap, 0.11, in, "9, l. 850"},
 	};
 	for (const auto &[key, control, written, unit, place] : pedimentChecks)
 	{
@@ -2136,7 +2339,7 @@ TEST(TEST_cgarchi_classical_monument, the_entablature_settings_of_the_readme_are
 	            1e-12);
 	EXPECT_EQ(s.friezeBand, 3);
 	EXPECT_LT(s.bands[0].topProjection, s.bands[0].projection);   // face lisse inclinee vers l'axe (l. 271)
-	EXPECT_EQ(s.innerFace, Length(e.architraveFootProjection));   // EN1
+	EXPECT_EQ(s.innerFace, Length(e.innerFace));   // face lue ; EN1 en repli seulement
 
 	// Triglyphe : largeur en pieds et pouces, face, divisions lues, profondeurs par l'angle droit (EN11).
 	const GreekTriglyphSettings &t = s.triglyph;
@@ -3279,8 +3482,10 @@ TEST(TEST_cgarchi_classical_monument, the_pediments_of_the_readme_rest_on_their_
 
 namespace {
 
-constexpr std::array<MonumentPart, 5> kParts = {MonumentPart::Krepis, MonumentPart::Peristyle, MonumentPart::Columns,
-                                                MonumentPart::Entablature, MonumentPart::Pediment};
+constexpr std::array<MonumentPart, kMonumentPartCount> kParts = {
+	MonumentPart::Krepis,   MonumentPart::Peristyle, MonumentPart::Columns, MonumentPart::Entablature,
+	MonumentPart::Pediment, MonumentPart::Cella,     MonumentPart::Porches, MonumentPart::Interior,
+	MonumentPart::Epicranitis, MonumentPart::PorchExtension, MonumentPart::EastCeiling, MonumentPart::FlankCeilings};
 
 MonumentPart PartOfKey (const std::string &key)
 {
@@ -3358,6 +3563,61 @@ std::vector<double> ConvertedPart (const MonumentData &d, MonumentPart part)
 			out.insert(out.end(), {p.u, p.z});
 		break;
 	}
+	case MonumentPart::Cella:
+	{
+		const CellaSettings s = MonumentCellaSettings(d);
+		out = {s.toichobateRise, s.frontPteron, s.backPteron, s.toichobateOverhang, s.longWallThickness,
+		       s.longWallSpan, s.wallTop, s.frontCrossWallPosition, s.frontCrossWallThickness,
+		       s.backCrossWallPosition, s.backCrossWallThickness, s.doorWidth, s.lintelHeight, s.doorJambOffset,
+		       s.thresholdLength, s.thresholdProjection, s.thresholdDepth, s.naosFloorHeight, s.frontAntaRetreat,
+		       s.backAntaRetreat, s.antaInnerProjection, s.antaOuterProjection, s.antaHeadLength,
+		       s.porchColumnHeight, s.frontPorchAxis, s.backPorchAxis, s.porchArchitraveHeight, s.porchFriezeHeight,
+		       s.porchEntablatureDepth, s.porchEntablatureFront, s.porches ? 1.0 : 0.0};
+		break;
+	}
+	case MonumentPart::Porches:
+	{
+		// Colonne du peristyle convertie au passage : seuls les champs propres aux porches sont aplatis.
+		const GreekPorchColumnsSettings s = MonumentPorchSettings(d);
+		out = {s.column.lowerDiameter, s.column.height, s.column.entasisSagitta, s.column.entasisHeight, s.offset};
+		break;
+	}
+	case MonumentPart::Interior:
+	{
+		const NaosInteriorSettings s = MonumentInteriorSettings(d);
+		out = {s.spacing, s.frontAxisOffset, s.backAxisOffset, s.wallAxisOffset, s.naveLevel, s.lowerEpistyleHeight,
+		       s.lowerEpistyleSoffit, s.upperEpistyleHeight, s.upperEpistyleSoffit, s.courseHeight, s.courseThickness,
+		       s.corniceHeight, s.corniceProjection, s.pocketCeiling, s.pocketMargin};
+		for (const GreekDoricColumnSettings *c : {&s.lowerColumn, &s.upperColumn})
+			out.insert(out.end(), {c->height, c->lowerDiameter, c->upperDiameter, double(c->fluteCount), c->abacusProjection,
+			                       c->abacusHeight, c->echinusHeight, c->entasisSagitta});
+		break;
+	}
+	case MonumentPart::Epicranitis:
+	{
+		const EpicranitisSettings s = MonumentEpicranitisSettings(d);
+		out = {s.height, s.innerOffset, s.listelHeight, s.filletHeight, s.listelProjection, s.bandProjection};
+		break;
+	}
+	case MonumentPart::PorchExtension:
+		out = {MonumentPorchExtensionSettings(d).eastSpan};
+		break;
+	case MonumentPart::EastCeiling:
+	{
+		const EastCeilingSettings s = MonumentEastCeilingSettings(d);
+		out = {double(s.beamCount),   s.beamSpacing,        s.beamWidth,           s.beamHeight,
+		       s.beamWestBearing,     s.endMassifWidth,     s.cornice.height,      s.cornice.projection,
+		       s.cornice.bandHeight,  s.cornice.depth,      s.coffers.pitch,       s.coffers.opening,
+		       s.coffers.frame,       s.coffers.depth,      double(s.cofferRows)};
+		break;
+	}
+	case MonumentPart::FlankCeilings:
+	{
+		const FlankCeilingSettings s = MonumentFlankCeilingSettings(d);
+		out = {s.beamSpacing, s.firstBeamOffset, double(s.frontBeamCount), double(s.backBeamCount),
+		       s.beamWidth,   s.beamHeight,      s.peristyleGap,           double(s.cofferRows)};
+		break;
+	}
 	}
 	return out;
 }
@@ -3429,7 +3689,7 @@ TEST(TEST_cgarchi_classical_monument, the_consumed_keys_of_each_part_are_exactly
 	const MonumentData &heph = HephaistosMonument();
 	std::map<MonumentPart, std::vector<double>> reference;
 	std::set<std::string> consumed;
-	const std::array<std::size_t, 5> counts = {10u, 6u, 21u, 45u, 4u};
+	const std::array<std::size_t, kMonumentPartCount> counts = {10u, 6u, 21u, 45u, 4u, 30u, 3u, 26u, 6u, 1u, 15u, 8u};
 	for (MonumentPart part : kParts)
 	{
 		// Bloc absent : toutes les cles consommees manquent.
@@ -3444,7 +3704,7 @@ TEST(TEST_cgarchi_classical_monument, the_consumed_keys_of_each_part_are_exactly
 	for (const auto &[key, value] : AllValues(heph))
 	{
 		if (value->status == MonumentStatus::Missing)
-			continue;   // gardes GD3d, EN1, PE4 : manquantes au document, hors table
+			continue;   // gardes GD3d, PE4 : manquantes au document, hors table
 		SCOPED_TRACE(key);
 		const MonumentPart part = PartOfKey(key);
 		const MonumentData d = WithMissing(key);
@@ -3461,14 +3721,89 @@ TEST(TEST_cgarchi_classical_monument, the_consumed_keys_of_each_part_are_exactly
 			EXPECT_TRUE(MissingMonumentKeys(d, part).empty());
 			const std::string refusal = ConversionRefusal(d, part);
 			EXPECT_EQ(refusal, "");
+			// Cle facultative a repli (EN1) : manquante, elle change les reglages sans refus.
 			if (refusal.empty())
-				EXPECT_TRUE(ConvertedPart(d, part) == reference[part]);
+				EXPECT_EQ(ConvertedPart(d, part) == reference[part], key != "entablature.innerFace");
 		}
 	}
-	// 86 cles consommees moins la suite et le polygone ; non listees et renseignees : cornerMargin, 4 de
-	// l'entablement, 1 du fronton.
+	// 86 cles consommees moins la suite et le polygone ; non listees et renseignees : cornerMargin, 5 de
+	// l'entablement (dont innerFace, a repli), 1 du fronton.
 	EXPECT_EQ(listed, 84);
-	EXPECT_EQ(unlisted, 6);
+	EXPECT_EQ(unlisted, 7);
+
+	// Cella et porches, qui se partagent le bloc : chaque cle mise a manquant, pour chacune des deux parties.
+	std::map<MonumentPart, std::set<std::string>> tableOf;
+	for (MonumentPart part : {MonumentPart::Cella, MonumentPart::Porches})
+	{
+		const std::vector<std::string> all = MissingMonumentKeys(MonumentData{}, part);
+		tableOf[part].insert(all.begin(), all.end());
+	}
+	int cellaListed = 0, porchesListed = 0, shared = 0;
+	for (const auto &[key, value] : CellaValues(heph))
+	{
+		SCOPED_TRACE(key);
+		const MonumentData d = WithMissing(key);
+		bool inBoth = true;
+		for (MonumentPart part : {MonumentPart::Cella, MonumentPart::Porches})
+		{
+			if (tableOf[part].count(key))
+			{
+				(part == MonumentPart::Cella ? cellaListed : porchesListed) += 1;
+				EXPECT_EQ(MissingMonumentKeys(d, part), std::vector<std::string>{key});
+				const std::string refusal = ConversionRefusal(d, part);
+				EXPECT_NE(refusal.find("'" + key + "'"), std::string::npos) << refusal;
+			}
+			else
+			{
+				inBoth = false;
+				EXPECT_TRUE(MissingMonumentKeys(d, part).empty());
+				const std::string refusal = ConversionRefusal(d, part);
+				EXPECT_EQ(refusal, "");
+				if (refusal.empty())
+					EXPECT_TRUE(ConvertedPart(d, part) == reference[part]);
+			}
+		}
+		shared += inBoth ? 1 : 0;
+	}
+	// 30 cles de la cella, 3 des porches, dont une commune (hauteur des colonnes des porches) ; aucune cle du
+	// bloc n'est hors des deux tables.
+	EXPECT_EQ(cellaListed, 30);
+	EXPECT_EQ(porchesListed, 3);
+	EXPECT_EQ(shared, 1);
+	EXPECT_EQ(cellaListed + porchesListed - shared, static_cast<int>(CellaValues(heph).size()));
+
+	// Interieur, sur son propre bloc : chaque cle mise a manquant est consommee et nommee par la conversion.
+	int interiorListed = 0;
+	for (const auto &[key, value] : InteriorValues(heph))
+	{
+		SCOPED_TRACE(key);
+		const MonumentData d = WithMissing(key);
+		++interiorListed;
+		EXPECT_EQ(MissingMonumentKeys(d, MonumentPart::Interior), std::vector<std::string>{key});
+		const std::string refusal = ConversionRefusal(d, MonumentPart::Interior);
+		EXPECT_NE(refusal.find("'" + key + "'"), std::string::npos) << refusal;
+	}
+	EXPECT_EQ(interiorListed, 26);
+
+	// Couronnement, prolongement est et plafonds, chacun sur son bloc : chaque cle mise a manquant est consommee et
+	// nommee.
+	for (const auto &[part, values] : {std::make_pair(MonumentPart::Epicranitis, EpicranitisValues(heph)),
+	                                   std::make_pair(MonumentPart::PorchExtension, PorchExtensionValues(heph)),
+	                                   std::make_pair(MonumentPart::EastCeiling, EastCeilingValues(heph)),
+	                                   std::make_pair(MonumentPart::FlankCeilings, FlankCeilingsValues(heph))})
+	{
+		int crownListed = 0;
+		for (const auto &[key, value] : values)
+		{
+			SCOPED_TRACE(key);
+			const MonumentData d = WithMissing(key);
+			++crownListed;
+			EXPECT_EQ(MissingMonumentKeys(d, part), std::vector<std::string>{key});
+			const std::string refusal = ConversionRefusal(d, part);
+			EXPECT_NE(refusal.find("'" + key + "'"), std::string::npos) << refusal;
+		}
+		EXPECT_EQ(static_cast<std::size_t>(crownListed), counts[static_cast<std::size_t>(part)]);
+	}
 
 	// Suite et polygone, jamais manquants au document : rendus manquants dans le C++.
 	MonumentData noDivisions = heph;
@@ -3487,32 +3822,81 @@ TEST(TEST_cgarchi_classical_monument, the_consumed_keys_of_each_part_are_exactly
 	EXPECT_NE(ConversionRefusal(noSection, MonumentPart::Pediment).find("'pediment.rakingSection'"), std::string::npos);
 }
 
-// P2 (lot B3) : aiguillage. Tout complet : exactement BuildTempleMesh (MonumentTempleSettings). Hauteur de colonne
-// manquante : la krepis seule, prefixe du temple (positions comparees en float, -0.0f et +0.0 confondus, RP1).
+// P2 (lots B3, C1, C2) : aiguillage. Tout complet : exactement BuildTempleMesh de MonumentTempleSettings augmente de
+// la cella, des porches et de l'interieur. Sans interieur, le temple exterieur (MonumentTempleSettings) est le
+// prefixe du temple a cella, au memcmp (avec l'interieur, le comble change : test N2,
+// tu_cgarchi_classical_naos_interior.cpp). Hauteur de colonne manquante : la krepis, prefixe du temple (positions
+// comparees en float, -0.0f et +0.0 confondus, RP1), puis la cella sans porches, pieces identiques a celles du temple
+// a cella.
 TEST(TEST_cgarchi_classical_monument, the_monument_build_is_the_temple_mesh_or_its_krepis_prefix)
 {
 	const MonumentData &heph = HephaistosMonument();
+	std::vector<TempleMeshPart> exteriorParts;
+	const std::unique_ptr<Mesh> exterior = BuildTempleMesh(MonumentTempleSettings(heph), nullptr, &exteriorParts);
+	EXPECT_EQ(exterior->GetNVertices(), 514846);
+	EXPECT_EQ(exterior->GetNFaces(), 1016552u);
+	TempleSettings full = MonumentTempleSettings(heph);
+	full.cella = MonumentCellaSettings(heph);
+	full.cella->porches = MonumentPorchSettings(heph);
 	std::vector<TempleMeshPart> parts;
-	const std::unique_ptr<Mesh> temple = BuildTempleMesh(MonumentTempleSettings(heph), nullptr, &parts);
+	const std::unique_ptr<Mesh> temple = BuildTempleMesh(full, nullptr, &parts);
+	TempleSettings fullInterior = full;
+	fullInterior.interior = MonumentInteriorSettings(heph);
+	fullInterior.epicranitis = MonumentEpicranitisSettings(heph);
+	fullInterior.porchExtension = MonumentPorchExtensionSettings(heph);
+	fullInterior.eastCeiling = MonumentEastCeilingSettings(heph);
+	fullInterior.flankCeilings = MonumentFlankCeilingSettings(heph);
+	std::vector<TempleMeshPart> interiorParts;
+	const std::unique_ptr<Mesh> interiorTemple = BuildTempleMesh(fullInterior, nullptr, &interiorParts);
 	const MonumentBuild all = BuildMonumentMesh(heph);
 	ASSERT_TRUE(all.mesh);
-	EXPECT_EQ(all.mesh->GetNVertices(), 514846);
-	EXPECT_EQ(all.mesh->GetNFaces(), 1016552u);
-	ASSERT_EQ(all.mesh->GetNVertices(), temple->GetNVertices());
-	ASSERT_EQ(all.mesh->GetNFaces(), temple->GetNFaces());
-	EXPECT_EQ(std::memcmp(all.mesh->GetVertices().data(), temple->GetVertices().data(),
-	                      temple->GetVertices().size() * sizeof(float)), 0);
+	ASSERT_EQ(all.mesh->GetNVertices(), interiorTemple->GetNVertices());
+	ASSERT_EQ(all.mesh->GetNFaces(), interiorTemple->GetNFaces());
+	EXPECT_EQ(std::memcmp(all.mesh->GetVertices().data(), interiorTemple->GetVertices().data(),
+	                      interiorTemple->GetVertices().size() * sizeof(float)), 0);
 	bool sameFaces = true;
-	for (unsigned f = 0; sameFaces && f < temple->GetNFaces(); ++f)
+	for (unsigned f = 0; sameFaces && f < interiorTemple->GetNFaces(); ++f)
 		for (unsigned j = 0; j < 3; ++j)
-			sameFaces = sameFaces && all.mesh->GetFaceVertex(f, j) == temple->GetFaceVertex(f, j);
+			sameFaces = sameFaces && all.mesh->GetFaceVertex(f, j) == interiorTemple->GetFaceVertex(f, j);
 	EXPECT_TRUE(sameFaces);
-	ASSERT_EQ(all.parts.size(), parts.size());
+	ASSERT_EQ(all.parts.size(), interiorParts.size());
 	for (MonumentPart part : kParts)
 	{
 		EXPECT_EQ(ReportOf(all, part).state, MonumentPartState::Built) << static_cast<int>(part);
 		EXPECT_TRUE(ReportOf(all, part).missingKeys.empty());
 	}
+
+	// Prefixe : les 514 846 premiers sommets et 1 016 552 premieres faces du temple a cella sont ceux du temple
+	// exterieur, au memcmp ; les plages de l'exterieur sont les premieres plages ; 15 pieces de la cella et 4
+	// colonnes de porche ensuite.
+	ASSERT_GT(temple->GetNVertices(), exterior->GetNVertices());
+	ASSERT_GT(temple->GetNFaces(), exterior->GetNFaces());
+	EXPECT_EQ(std::memcmp(temple->GetVertices().data(), exterior->GetVertices().data(),
+	                      exterior->GetVertices().size() * sizeof(float)), 0);
+	std::vector<unsigned> prefix(3 * static_cast<std::size_t>(exterior->GetNFaces())), reference(prefix.size());
+	for (unsigned f = 0; f < exterior->GetNFaces(); ++f)
+		for (unsigned j = 0; j < 3; ++j)
+		{
+			prefix[3 * f + j] = static_cast<unsigned>(temple->GetFaceVertex(f, j));
+			reference[3 * f + j] = static_cast<unsigned>(exterior->GetFaceVertex(f, j));
+		}
+	EXPECT_EQ(std::memcmp(prefix.data(), reference.data(), prefix.size() * sizeof(unsigned)), 0);
+	ASSERT_EQ(parts.size(), exteriorParts.size() + 15u + 4u);
+	for (std::size_t k = 0; k < exteriorParts.size(); ++k)
+	{
+		EXPECT_EQ(parts[k].firstVertex, exteriorParts[k].firstVertex) << k;
+		EXPECT_EQ(parts[k].faceCount, exteriorParts[k].faceCount) << k;
+	}
+	EXPECT_EQ(parts[exteriorParts.size()].address.element, TempleElement::Toichobate);
+	EXPECT_EQ(parts[exteriorParts.size()].firstVertex, exterior->GetNVertices());
+	EXPECT_EQ(parts.back().address.element, TempleElement::PorchColumn);
+	// Interieur, colonnes de l'interieur, couronnement, prolongement, plafonds, et les 8 tranches de plus du comble.
+	EXPECT_EQ(all.parts.size(), parts.size() + 13u + 22u + 26u + 10u + 33u + 58u + 8u);
+	EXPECT_EQ(all.parts.back().address.element, TempleElement::CeilingSlab);
+	std::printf("temple a cella : %u sommets, %u faces ; ajoutes %u sommets, %u faces\n", temple->GetNVertices(),
+	            temple->GetNFaces(), temple->GetNVertices() - exterior->GetNVertices(),
+	            temple->GetNFaces() - exterior->GetNFaces());
+	RecordProperty("cella_faces", std::to_string(temple->GetNFaces() - exterior->GetNFaces()));
 
 	MonumentData noHeight = heph;
 	noHeight.columns.height.value.reset();
@@ -3520,17 +3904,14 @@ TEST(TEST_cgarchi_classical_monument, the_monument_build_is_the_temple_mesh_or_i
 	noHeight.columns.height.sources.clear();
 	const MonumentBuild krepis = BuildMonumentMesh(noHeight);
 	ASSERT_TRUE(krepis.mesh);
-	EXPECT_EQ(krepis.mesh->GetNVertices(), 64);
-	EXPECT_EQ(krepis.mesh->GetNFaces(), 48u);
 	const std::vector<float> &kv = krepis.mesh->GetVertices();
 	const std::vector<float> &tv = temple->GetVertices();
-	ASSERT_LE(kv.size(), tv.size());
-	for (std::size_t i = 0; i < kv.size(); ++i)
+	for (std::size_t i = 0; i < 3u * 64u; ++i)
 		EXPECT_TRUE(kv[i] == tv[i]) << i << " : " << kv[i] << " / " << tv[i];
-	for (unsigned f = 0; f < krepis.mesh->GetNFaces(); ++f)
+	for (unsigned f = 0; f < 48u; ++f)
 		for (unsigned j = 0; j < 3; ++j)
 			EXPECT_EQ(krepis.mesh->GetFaceVertex(f, j), temple->GetFaceVertex(f, j));
-	ASSERT_EQ(krepis.parts.size(), 4u);
+	ASSERT_EQ(krepis.parts.size(), 4u + 15u + 26u);
 	for (std::size_t k = 0; k < 4; ++k)
 	{
 		EXPECT_EQ(krepis.parts[k].address.element, TempleElement::KrepisStep);
@@ -3540,11 +3921,43 @@ TEST(TEST_cgarchi_classical_monument, the_monument_build_is_the_temple_mesh_or_i
 		EXPECT_EQ(krepis.parts[k].firstFace, parts[k].firstFace);
 		EXPECT_EQ(krepis.parts[k].faceCount, parts[k].faceCount);
 	}
+	// Pieces de la cella : memes adresses, memes sommets au bit pres que dans le temple complet.
+	for (std::size_t k = 0; k < 15; ++k)
+	{
+		const TempleMeshPart &a = krepis.parts[4 + k], &b = parts[exteriorParts.size() + k];
+		SCOPED_TRACE(k);
+		EXPECT_EQ(a.address.element, b.address.element);
+		EXPECT_EQ(a.address.side, b.address.side);
+		EXPECT_EQ(a.address.index, b.address.index);
+		ASSERT_EQ(a.vertexCount, b.vertexCount);
+		ASSERT_EQ(a.faceCount, b.faceCount);
+		EXPECT_EQ(std::memcmp(kv.data() + 3 * a.firstVertex, tv.data() + 3 * b.firstVertex, 3 * a.vertexCount * sizeof(float)),
+		          0);
+	}
+	// Pieces du couronnement, sans colonnes : memes adresses, memes sommets au bit pres que dans le temple complet, ou
+	// elles suivent les 8 tranches de plus du comble.
+	const std::vector<float> &av = all.mesh->GetVertices();
+	for (std::size_t k = 0; k < 26; ++k)
+	{
+		const TempleMeshPart &a = krepis.parts[4 + 15 + k], &b = all.parts[parts.size() + 8 + 13 + 22 + k];
+		SCOPED_TRACE(k);
+		EXPECT_EQ(a.address.element, b.address.element);
+		EXPECT_EQ(a.address.side, b.address.side);
+		EXPECT_EQ(a.address.index, b.address.index);
+		ASSERT_EQ(a.vertexCount, b.vertexCount);
+		ASSERT_EQ(a.faceCount, b.faceCount);
+		EXPECT_EQ(std::memcmp(kv.data() + 3 * a.firstVertex, av.data() + 3 * b.firstVertex, 3 * a.vertexCount * sizeof(float)),
+		          0);
+	}
+	EXPECT_EQ(krepis.parts.back().firstVertex + krepis.parts.back().vertexCount, krepis.mesh->GetNVertices());
 	EXPECT_EQ(ReportOf(krepis, MonumentPart::Krepis).state, MonumentPartState::Built);
 	EXPECT_EQ(ReportOf(krepis, MonumentPart::Peristyle).state, MonumentPartState::CompleteNotBuilt);
 	EXPECT_EQ(ReportOf(krepis, MonumentPart::Columns).state, MonumentPartState::Incomplete);
 	EXPECT_EQ(ReportOf(krepis, MonumentPart::Columns).missingKeys, std::vector<std::string>{"columns.height"});
-	for (MonumentPart part : {MonumentPart::Entablature, MonumentPart::Pediment})
+	EXPECT_EQ(ReportOf(krepis, MonumentPart::Cella).state, MonumentPartState::Built);
+	EXPECT_EQ(ReportOf(krepis, MonumentPart::Epicranitis).state, MonumentPartState::Built);
+	for (MonumentPart part : {MonumentPart::Entablature, MonumentPart::Pediment, MonumentPart::Porches,
+	                          MonumentPart::Interior, MonumentPart::PorchExtension})
 	{
 		EXPECT_EQ(ReportOf(krepis, part).state, MonumentPartState::Blocked);
 		EXPECT_TRUE(ReportOf(krepis, part).blockedBy == std::optional<MonumentPart>(MonumentPart::Columns));
@@ -3574,18 +3987,23 @@ TEST(TEST_cgarchi_classical_monument, the_monument_build_is_the_temple_mesh_or_i
 		EXPECT_TRUE(same);
 		RecordProperty("faces", std::to_string(ref->GetNFaces()));
 	};
-	TempleSettings noPedimentSettings = MonumentTempleSettings(heph);
+	TempleSettings noPedimentSettings = fullInterior;
 	noPedimentSettings.pediment.reset();
 	TempleSettings columnsSettings = noPedimentSettings;
 	columnsSettings.entablature.reset();
+	columnsSettings.porchExtension.reset();
+	columnsSettings.eastCeiling.reset();
+	columnsSettings.flankCeilings.reset();
 
 	const MonumentBuild noTympanum =
 		BuildMonumentMesh(withMissing([](MonumentData &d) -> MonumentValue & { return d.pediment.tympanumFace; }));
 	expectTempleOf(noTympanum, noPedimentSettings);
-	EXPECT_LT(noTympanum.mesh->GetNFaces(), temple->GetNFaces());
+	EXPECT_LT(noTympanum.mesh->GetNFaces(), interiorTemple->GetNFaces());
 	EXPECT_EQ(ReportOf(noTympanum, MonumentPart::Pediment).state, MonumentPartState::Incomplete);
 	EXPECT_EQ(ReportOf(noTympanum, MonumentPart::Pediment).missingKeys, std::vector<std::string>{"pediment.tympanumFace"});
-	for (MonumentPart part : {MonumentPart::Krepis, MonumentPart::Peristyle, MonumentPart::Columns, MonumentPart::Entablature})
+	for (MonumentPart part : {MonumentPart::Krepis, MonumentPart::Peristyle, MonumentPart::Columns, MonumentPart::Entablature,
+	                          MonumentPart::Cella, MonumentPart::Porches, MonumentPart::Interior, MonumentPart::Epicranitis,
+	                          MonumentPart::PorchExtension, MonumentPart::EastCeiling, MonumentPart::FlankCeilings})
 		EXPECT_EQ(ReportOf(noTympanum, part).state, MonumentPartState::Built) << static_cast<int>(part);
 
 	const MonumentBuild noDrip =
@@ -3598,18 +4016,120 @@ TEST(TEST_cgarchi_classical_monument, the_monument_build_is_the_temple_mesh_or_i
 	EXPECT_EQ(ReportOf(noDrip, MonumentPart::Pediment).state, MonumentPartState::Blocked);
 	EXPECT_TRUE(ReportOf(noDrip, MonumentPart::Pediment).blockedBy ==
 	            std::optional<MonumentPart>(MonumentPart::Entablature));
-	for (MonumentPart part : {MonumentPart::Krepis, MonumentPart::Peristyle, MonumentPart::Columns})
+	for (MonumentPart part : {MonumentPart::Krepis, MonumentPart::Peristyle, MonumentPart::Columns, MonumentPart::Cella,
+	                          MonumentPart::Porches, MonumentPart::Interior, MonumentPart::Epicranitis})
 		EXPECT_EQ(ReportOf(noDrip, part).state, MonumentPartState::Built) << static_cast<int>(part);
-	std::printf("faces : complet %u, sans fronton %u, sans entablement %u\n", temple->GetNFaces(),
+	EXPECT_EQ(ReportOf(noDrip, MonumentPart::PorchExtension).state, MonumentPartState::Blocked);
+	EXPECT_TRUE(ReportOf(noDrip, MonumentPart::PorchExtension).blockedBy ==
+	            std::optional<MonumentPart>(MonumentPart::Entablature));
+	EXPECT_EQ(ReportOf(noDrip, MonumentPart::EastCeiling).state, MonumentPartState::Blocked);
+	EXPECT_EQ(ReportOf(noDrip, MonumentPart::FlankCeilings).state, MonumentPartState::Blocked);
+	EXPECT_TRUE(ReportOf(noDrip, MonumentPart::EastCeiling).blockedBy ==
+	            std::optional<MonumentPart>(MonumentPart::Entablature));
+	std::printf("faces : complet %u, sans fronton %u, sans entablement %u\n", interiorTemple->GetNFaces(),
 	            noTympanum.mesh->GetNFaces(), noDrip.mesh->GetNFaces());
 }
 
-// P4 (revue des lots B) : le document d'Ares, a blocs absents, respecte le schema v10 ; dependentRequired lie
+// MO-P3 (lot C1) : la table des dependances redonne, pour les cinq parties d'avant la cella, la chaine krepis <-
+// peristyle <- colonnes <- entablement <- fronton : chaque partie depend exactement de toutes celles qui la
+// precedent. Sur toutes les combinaisons de completude des cinq parties, l'etat et blockedBy rendus par
+// BuildMonumentMesh sont ceux de la chaine (premiere partie non complete). Cella : krepis ; porches : krepis,
+// peristyle, colonnes, cella.
+TEST(TEST_cgarchi_classical_monument, the_dependency_table_gives_back_the_chain_of_the_five_exterior_parts)
+{
+	const std::array<MonumentPart, 5> chain = {MonumentPart::Krepis, MonumentPart::Peristyle, MonumentPart::Columns,
+	                                           MonumentPart::Entablature, MonumentPart::Pediment};
+	for (std::size_t i = 0; i < chain.size(); ++i)
+		EXPECT_EQ(MonumentPartDependencies(chain[i]), std::vector<MonumentPart>(chain.begin(), chain.begin() + i)) << i;
+	EXPECT_EQ(MonumentPartDependencies(MonumentPart::Cella), std::vector<MonumentPart>{MonumentPart::Krepis});
+	EXPECT_EQ(MonumentPartDependencies(MonumentPart::Porches),
+	          (std::vector<MonumentPart>{MonumentPart::Krepis, MonumentPart::Peristyle, MonumentPart::Columns,
+	                                     MonumentPart::Cella}));
+
+	// Completude par partie : une cle consommee mise a manquant rend la partie incomplete. Document sans cella, les
+	// cinq parties seules ; le maillage n'est pas compare ici (P2), seul le rapport.
+	const MonumentData &heph = HephaistosMonument();
+	const auto spoil = [](MonumentData &d, MonumentPart part) {
+		MonumentValue *v = nullptr;
+		switch (part)
+		{
+		case MonumentPart::Krepis:      v = &d.krepis.stylobateHeight; break;
+		case MonumentPart::Peristyle:   v = &d.peristyle.frontSpacing; break;
+		case MonumentPart::Columns:     v = &d.columns.height; break;
+		case MonumentPart::Entablature: v = &d.entablature.dripHeight; break;
+		case MonumentPart::Pediment:    v = &d.pediment.tympanumFace; break;
+		case MonumentPart::Cella:       v = &d.cella.wallTop; break;
+		case MonumentPart::Porches:     v = &d.cella.porchColumnDiameter; break;
+		case MonumentPart::Interior:    v = &d.interior.spacing; break;
+		case MonumentPart::Epicranitis: v = &d.epicranitis.height; break;
+		case MonumentPart::PorchExtension: v = &d.porchExtension.eastSpan; break;
+		}
+		v->value.reset();
+		v->status = MonumentStatus::Missing;
+		v->sources.clear();
+	};
+	int cases = 0;
+	for (unsigned mask = 0; mask < 32u; ++mask)
+	{
+		MonumentData d = heph;
+		d.present.cella = d.present.cellaControls = d.present.interior = d.present.interiorControls = false;
+		d.present.epicranitis = d.present.epicranitisControls = false;
+		d.present.porchExtension = d.present.porchExtensionControls = false;
+		d.present.eastCeiling = d.present.eastCeilingControls = false;
+		d.present.flankCeilings = d.present.flankCeilingsControls = false;
+		for (std::size_t i = 0; i < chain.size(); ++i)
+			if (mask & (1u << i))
+				spoil(d, chain[i]);
+		// Le rapport seul : une krepis incomplete ne construit rien, sans exception.
+		const MonumentBuild b = BuildMonumentMesh(d);
+		std::optional<MonumentPart> firstIncomplete;
+		for (std::size_t i = 0; i < chain.size(); ++i)
+		{
+			SCOPED_TRACE(std::to_string(mask) + " / " + std::to_string(i));
+			const MonumentPartReport &r = ReportOf(b, chain[i]);
+			const bool complete = (mask & (1u << i)) == 0;
+			if (!complete)
+				EXPECT_EQ(r.state, MonumentPartState::Incomplete);
+			else if (firstIncomplete)
+			{
+				EXPECT_EQ(r.state, MonumentPartState::Blocked);
+				EXPECT_TRUE(r.blockedBy == firstIncomplete);
+			}
+			else
+				EXPECT_TRUE(r.state == MonumentPartState::Built || r.state == MonumentPartState::CompleteNotBuilt);
+			if (!complete && !firstIncomplete)
+				firstIncomplete = chain[i];
+		}
+		for (MonumentPart part : {MonumentPart::Cella, MonumentPart::Porches, MonumentPart::Interior,
+		                          MonumentPart::Epicranitis, MonumentPart::PorchExtension})
+			EXPECT_EQ(ReportOf(b, part).state, MonumentPartState::Absent);
+		++cases;
+	}
+	EXPECT_EQ(cases, 32);
+
+	// Cella complete, porches incomplets : cella construite, porches Incomplete ; colonnes incompletes : porches
+	// bloques par les colonnes, cella construite (elle ne depend que de la krepis).
+	MonumentData noDiameter = heph;
+	spoil(noDiameter, MonumentPart::Porches);
+	const MonumentBuild b1 = BuildMonumentMesh(noDiameter);
+	EXPECT_EQ(ReportOf(b1, MonumentPart::Cella).state, MonumentPartState::Built);
+	EXPECT_EQ(ReportOf(b1, MonumentPart::Porches).state, MonumentPartState::Incomplete);
+	EXPECT_EQ(ReportOf(b1, MonumentPart::Porches).missingKeys, std::vector<std::string>{"cella.porchColumnDiameter"});
+	MonumentData noWallTop = heph;
+	spoil(noWallTop, MonumentPart::Cella);
+	const MonumentBuild b2 = BuildMonumentMesh(noWallTop);
+	EXPECT_EQ(ReportOf(b2, MonumentPart::Cella).state, MonumentPartState::Incomplete);
+	EXPECT_EQ(ReportOf(b2, MonumentPart::Porches).state, MonumentPartState::Blocked);
+	EXPECT_TRUE(ReportOf(b2, MonumentPart::Porches).blockedBy == std::optional<MonumentPart>(MonumentPart::Cella));
+	EXPECT_EQ(b2.mesh->GetNFaces(), 1016552u);
+}
+
+// P4 (revue des lots B) : le document d'Ares, a blocs absents, respecte le schema v14 ; dependentRequired lie
 // chaque bloc de controle a sa partie, et le lecteur refuse ce que le schema refuse.
 TEST(TEST_cgarchi_classical_monument, the_ares_document_conforms_to_the_schema_file_and_its_block_dependencies)
 {
 	const json schema = SchemaFile();
-	ASSERT_TRUE(schema.is_object()) << "src/cgarchi/schemas/monument-v10.schema illisible depuis le repertoire courant";
+	ASSERT_TRUE(schema.is_object()) << "src/cgarchi/schemas/monument-v14.schema illisible depuis le repertoire courant";
 	const std::string_view text = cgarchi::TempleAresJson();
 	const json ares = json::parse(text.begin(), text.end());
 	EXPECT_EQ(Violation(ares, schema, schema, std::string()), "");
@@ -3626,6 +4146,31 @@ TEST(TEST_cgarchi_classical_monument, the_ares_document_conforms_to_the_schema_f
 	json heph = EmbeddedDocument();
 	heph.erase("columns");
 	EXPECT_EQ(Violation(heph, schema, schema, std::string()), "columns : requis par columnControls");
+
+	// Chaque paire de dependentRequired : le bloc exige retire d'un document qui porte le bloc qui l'exige (Hephaistos,
+	// sinon Ares) viole le schema et est refuse par le lecteur, qui nomme la paire.
+	const json full = EmbeddedDocument();
+	EXPECT_EQ(Violation(full, schema, schema, std::string()), "");
+	EXPECT_EQ(RefusalOf(full.dump()), "");
+	std::size_t pairs = 0;
+	for (auto it = schema["dependentRequired"].begin(); it != schema["dependentRequired"].end(); ++it)
+		for (const json &needed : it.value())
+		{
+			const std::string block = it.key(), required = needed.get<std::string>();
+			SCOPED_TRACE(block + " -> " + required);
+			json doc = full.contains(block) ? full : ares;
+			ASSERT_TRUE(doc.contains(block) && doc.contains(required));
+			doc.erase(required);
+			EXPECT_EQ(Violation(doc, schema, schema, std::string()).rfind(required + " : requis par ", 0), 0u)
+				<< Violation(doc, schema, schema, std::string());
+			const std::string refusal = RefusalOf(doc.dump());
+			const std::string expected = block == "peristyle"
+			                                 ? std::string(kMonumentSchema) + " controls : required field is missing"
+			                                 : std::string(kMonumentSchema) + " " + block + " : requires block \"" + required + "\"";
+			EXPECT_NE(refusal.find(expected), std::string::npos) << refusal;
+			++pairs;
+		}
+	EXPECT_EQ(pairs, 17u);
 }
 
 // P3 (lot B4) : le temple d'Ares, krepis seule. Emprise de l'euthynteria et hauteur de la krepis du README
@@ -3636,7 +4181,7 @@ TEST(TEST_cgarchi_classical_monument, the_temple_of_ares_builds_its_krepis_and_v
 	EXPECT_EQ(ares.monument, "temple-ares");
 	EXPECT_EQ(ares.source.derivedBy, "src/cgarchi/data/temple_ares_from_readme.py");
 	EXPECT_TRUE(ares.present.krepis && ares.present.peristyle && ares.present.controls && ares.present.krepisControls);
-	EXPECT_FALSE(ares.present.columns || ares.present.entablature || ares.present.pediment);
+	EXPECT_FALSE(ares.present.columns || ares.present.entablature || ares.present.pediment || ares.present.cella);
 	EXPECT_THROW(EmbeddedMonument("temple-zeus"), std::invalid_argument);
 	EXPECT_EQ(&EmbeddedMonument("temple-hephaistos"), &HephaistosMonument());
 
@@ -3647,7 +4192,8 @@ TEST(TEST_cgarchi_classical_monument, the_temple_of_ares_builds_its_krepis_and_v
 	EXPECT_EQ(b.parts.size(), 4u);
 	EXPECT_EQ(ReportOf(b, MonumentPart::Krepis).state, MonumentPartState::Built);
 	EXPECT_EQ(ReportOf(b, MonumentPart::Peristyle).state, MonumentPartState::CompleteNotBuilt);
-	for (MonumentPart part : {MonumentPart::Columns, MonumentPart::Entablature, MonumentPart::Pediment})
+	for (MonumentPart part : {MonumentPart::Columns, MonumentPart::Entablature, MonumentPart::Pediment, MonumentPart::Cella,
+	                          MonumentPart::Porches})
 		EXPECT_EQ(ReportOf(b, part).state, MonumentPartState::Absent) << static_cast<int>(part);
 
 	const std::vector<float> &v = b.mesh->GetVertices();
@@ -3701,11 +4247,11 @@ TEST(TEST_cgarchi_classical_monument, the_temple_of_ares_builds_its_krepis_and_v
 	EXPECT_TRUE(ReportOf(none, MonumentPart::Peristyle).blockedBy == std::optional<MonumentPart>(MonumentPart::Krepis));
 }
 
-// Le document du Parthenon, a blocs absents et cotes en pieds decimaux, respecte le schema v10.
+// Le document du Parthenon, a blocs absents et cotes en pieds decimaux, respecte le schema v14.
 TEST(TEST_cgarchi_classical_monument, the_parthenon_document_conforms_to_the_schema_file)
 {
 	const json schema = SchemaFile();
-	ASSERT_TRUE(schema.is_object()) << "src/cgarchi/schemas/monument-v10.schema illisible depuis le repertoire courant";
+	ASSERT_TRUE(schema.is_object()) << "src/cgarchi/schemas/monument-v14.schema illisible depuis le repertoire courant";
 	const std::string_view text = cgarchi::TempleParthenonJson();
 	const json parthenon = json::parse(text.begin(), text.end());
 	EXPECT_EQ(Violation(parthenon, schema, schema, std::string()), "");
@@ -3723,7 +4269,8 @@ TEST(TEST_cgarchi_classical_monument, the_parthenon_builds_its_krepis_and_valida
 	EXPECT_EQ(parthenon.source.derivedBy, "src/cgarchi/data/temple_parthenon_from_readme.py");
 	EXPECT_TRUE(parthenon.present.krepis && parthenon.present.peristyle && parthenon.present.controls &&
 	            parthenon.present.krepisControls);
-	EXPECT_FALSE(parthenon.present.columns || parthenon.present.entablature || parthenon.present.pediment);
+	EXPECT_FALSE(parthenon.present.columns || parthenon.present.entablature || parthenon.present.pediment ||
+	             parthenon.present.cella);
 
 	const MonumentBuild b = BuildMonumentMesh(parthenon);
 	ASSERT_TRUE(b.mesh);
@@ -3732,7 +4279,8 @@ TEST(TEST_cgarchi_classical_monument, the_parthenon_builds_its_krepis_and_valida
 	EXPECT_EQ(b.parts.size(), 4u);
 	EXPECT_EQ(ReportOf(b, MonumentPart::Krepis).state, MonumentPartState::Built);
 	EXPECT_EQ(ReportOf(b, MonumentPart::Peristyle).state, MonumentPartState::CompleteNotBuilt);
-	for (MonumentPart part : {MonumentPart::Columns, MonumentPart::Entablature, MonumentPart::Pediment})
+	for (MonumentPart part : {MonumentPart::Columns, MonumentPart::Entablature, MonumentPart::Pediment, MonumentPart::Cella,
+	                          MonumentPart::Porches})
 		EXPECT_EQ(ReportOf(b, part).state, MonumentPartState::Absent) << static_cast<int>(part);
 
 	const std::vector<float> &v = b.mesh->GetVertices();

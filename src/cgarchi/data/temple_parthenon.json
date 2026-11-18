@@ -1,15 +1,14 @@
 {
-  "schema": "monument/v10",
+  "schema": "monument/v14",
   "monument": "temple-parthenon",
   "source": {
     "document": "Architecture/Antique/Parthenon/README.md",
-    "sha256": "4a4092b137f604356ad5b99ac7703e06c0ee5439573de6ae29eb1e93e964446f",
-    "bytes": 28780,
+    "sha256": "9484be88905d68a633021ebb9d643705336cdba425cc364a1d19002efd5165ec",
+    "bytes": 127654,
     "derivedBy": "src/cgarchi/data/temple_parthenon_from_readme.py"
   },
   "sources": {
     "D": "W. B. Dinsmoor, *The Architecture of Ancient Greece* (refonte d'Anderson et Spiers), `../General/1950 - William Bell Dinsmoor — The Architecture of Ancient Greece.pdf`. **Malgré le nom du fichier, édition de 1927** (préface de mars 1927)",
-    "H": "Dinsmoor 1968 (`../TempleHephaistos/`)",
     "P": "F. C. Penrose, *An Investigation of the Principles of Athenian Architecture*, 2ᵉ éd., Londres, 1888 (numérisation de la bibliothèque universitaire de Heidelberg), `1888 - Francis Cranmer Penrose, An Investigation of the Principles of Athenian Architecture (2nd ed.).pdf` (texte : `…-extracted.txt`). **Page imprimée = page du PDF − 14** pour le texte ; 47 planches non paginées, p. PDF 143 à 190"
   },
   "krepis": {
@@ -18,77 +17,77 @@
       "unit": "ft",
       "status": "lu",
       "sources": ["P"],
-      "readme": "§3.2, l. 62"
+      "readme": "§3.2, l. 72"
     },
     "stylobateLength": {
       "value": 228.141,
       "unit": "ft",
       "status": "lu",
       "sources": ["P"],
-      "readme": "§3.2, l. 63"
+      "readme": "§3.2, l. 73"
     },
     "stepCount": {
       "value": 3,
       "unit": "1",
       "status": "lu",
       "sources": ["P"],
-      "readme": "§3.2, l. 64"
+      "readme": "§3.2, l. 74"
     },
     "stylobateHeight": {
       "value": 1.814,
       "unit": "ft",
       "status": "lu",
       "sources": ["P"],
-      "readme": "§3.2, l. 65"
+      "readme": "§3.2, l. 75"
     },
     "secondStepHeight": {
       "value": 1.693,
       "unit": "ft",
       "status": "lu",
       "sources": ["P"],
-      "readme": "§3.2, l. 66"
+      "readme": "§3.2, l. 76"
     },
     "thirdStepHeight": {
       "value": 1.693,
       "unit": "ft",
       "status": "lu",
       "sources": ["P"],
-      "readme": "§3.2, l. 67"
+      "readme": "§3.2, l. 77"
     },
     "secondStepTread": {
       "value": 2.325,
       "unit": "ft",
       "status": "lu",
       "sources": ["P"],
-      "readme": "§3.2, l. 72"
+      "readme": "§3.2, l. 82"
     },
     "thirdStepTread": {
       "value": 2.325,
       "unit": "ft",
       "status": "lu",
       "sources": ["P"],
-      "readme": "§3.2, l. 73"
+      "readme": "§3.2, l. 83"
     },
     "cornerMargin": {
       "value": 0.046,
       "unit": "m",
-      "status": "lu",
-      "sources": ["H"],
-      "readme": "§3.2, l. 76"
+      "status": "déduit",
+      "sources": ["P"],
+      "readme": "§3.2, l. 86"
     },
     "euthynteriaHeight": {
       "value": 0.858,
       "unit": "ft",
       "status": "convention",
       "sources": [],
-      "readme": "§3.2, l. 69"
+      "readme": "§3.2, l. 79"
     },
     "euthynteriaTread": {
       "value": 0.335,
       "unit": "ft",
       "status": "déduit",
       "sources": ["P"],
-      "readme": "§3.2, l. 75"
+      "readme": "§3.2, l. 85"
     }
   },
   "peristyle": {
@@ -97,62 +96,62 @@
       "unit": "1",
       "status": "lu",
       "sources": ["D"],
-      "readme": "§2, l. 42"
+      "readme": "§2, l. 52"
     },
     "flankColumns": {
       "value": 17,
       "unit": "1",
       "status": "lu",
       "sources": ["D"],
-      "readme": "§2, l. 42"
+      "readme": "§2, l. 52"
     },
     "frontSpacing": {
       "value": 14.098,
       "unit": "ft",
       "status": "lu",
       "sources": ["P"],
-      "readme": "§4.1, l. 92"
+      "readme": "§4.1, l. 103"
     },
     "flankSpacing": {
       "value": 14.083,
       "unit": "ft",
       "status": "lu",
       "sources": ["P"],
-      "readme": "§4.1, l. 93"
+      "readme": "§4.1, l. 104"
     },
     "frontCornerSpacing": {
       "value": 12.081,
       "unit": "ft",
       "status": "déduit",
-      "sources": ["H"],
-      "readme": "§4.1, l. 95"
+      "sources": ["P"],
+      "readme": "§4.1, l. 106"
     },
     "flankCornerSpacing": {
       "value": 12.145,
       "unit": "ft",
       "status": "déduit",
-      "sources": [],
-      "readme": "§4.1, l. 96"
+      "sources": ["P"],
+      "readme": "§4.1, l. 107"
     }
   },
   "controls": {
     "frontAxesY": {
       "values": [-14.425, -10.743, -6.446, -2.149, 2.149, 6.446, 10.743, 14.425],
-      "readme": "§4.2, l. 106"
+      "readme": "§4.2, l. 118"
     },
     "flankAxesX": {
       "values": [-33.749, -30.047, -25.755, -21.462, -17.170, -12.877, -8.585, -4.292, 0, 4.292, 8.585, 12.877, 17.170, 21.462, 25.755, 30.047, 33.749],
-      "readme": "§4.2, l. 111"
+      "readme": "§4.2, l. 123"
     }
   },
   "krepisControls": {
     "footprintWidth": {
       "value": 33.928,
-      "readme": "§12, l. 301"
+      "readme": "§12, l. 561"
     },
     "footprintLength": {
       "value": 72.576,
-      "readme": "§12, l. 302"
+      "readme": "§12, l. 562"
     }
   }
 }

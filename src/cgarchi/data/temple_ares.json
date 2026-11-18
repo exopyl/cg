@@ -1,5 +1,5 @@
 {
-  "schema": "monument/v10",
+  "schema": "monument/v14",
   "monument": "temple-ares",
   "source": {
     "document": "Architecture/Antique/TempleAres/README.md",

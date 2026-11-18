@@ -275,6 +275,21 @@ struct Pieces
 	// Avec un raffinement : stations deplacees et tailles des degres.
 	std::optional<RefinementStations> stations;
 	std::vector<KrepisStepSize> krepisSteps;
+	// Avec une cella : ses pieces (BuildGreekCellaPieces) et, avec des porches, le
+	// tour de la colonne de porche.
+	std::vector<CellaPiece> cella;
+	std::unique_ptr<Mesh> porchColumn;
+	// Avec un interieur : ses pieces (BuildGreekNaosInteriorPieces) et les tours
+	// des colonnes inferieure et superieure.
+	std::vector<NaosInteriorPiece> interior;
+	std::unique_ptr<Mesh> lowerInteriorColumn, upperInteriorColumn;
+	// Avec un couronnement : ses pieces (BuildGreekEpicranitisPieces), puis celles du
+	// prolongement est (BuildGreekPorchExtensionPieces).
+	std::vector<EpicranitisPiece> epicranitis;
+	std::vector<PorchExtensionPiece> porchExtension;
+	// Avec un plafond est : ses pieces (BuildGreekEastCeilingPieces), puis celles des plafonds des flancs
+	// (BuildGreekFlankCeilingPieces).
+	std::vector<CeilingPiece> eastCeiling, flankCeilings;
 	std::size_t vertices = 0, faces = 0;
 
 	void Add (const Mesh &piece)
@@ -717,6 +732,20 @@ void RequireRefinedFacesWithinBound (const TempleSettings &s, const TempleLayout
 		                             " faces aux pieces a stations (majorant " + std::to_string (faces) + ")");
 }
 
+// Poches du comble (CE-14, CE-34), dans l'ordre des parties du temple qui en ont une : interieur du naos, plafond
+// est (pteron est, puis porche ouest), plafonds des flancs (Left, Right).
+std::vector<RoofPocket> RoofPocketsOf (const TempleLayout &layout)
+{
+	std::vector<RoofPocket> pockets;
+	if (layout.interior)
+		pockets.push_back (layout.interior->pocket);
+	if (layout.eastCeiling)
+		pockets.insert (pockets.end (), {layout.eastCeiling->eastPocket, layout.eastCeiling->westPocket});
+	if (layout.flankCeilings)
+		pockets.insert (pockets.end (), layout.flankCeilings->pockets.begin (), layout.flankCeilings->pockets.end ());
+	return pockets;
+}
+
 Pieces BuildPieces (const TempleSettings &settings, const TempleLayout &layout, TempleWork &work)
 {
 	Pieces p;
@@ -772,9 +801,155 @@ Pieces BuildPieces (const TempleSettings &settings, const TempleLayout &layout, 
 			                                         [&p] (const Mesh &piece) { p.Add (piece); });
 		else if (settings.pediment)
 			p.pediment = detail::BuildPedimentPieces (*work.pediment, checked, layout.peristyle, layout.entablatureFoot,
-			                                         [&p] (const Mesh &piece) { p.Add (piece); });
+			                                         [&p] (const Mesh &piece) { p.Add (piece); }, RoofPocketsOf (layout));
+	}
+	if (settings.cella && layout.cella)
+	{
+		p.cella = BuildGreekCellaPieces (*settings.cella, *layout.cella);
+		for (const CellaPiece &piece : p.cella)
+			p.Add (*piece.mesh);
+		if (settings.cella->porches)
+		{
+			p.porchColumn = BuildGreekDoricColumnMesh (settings.cella->porches->column);
+			for (std::size_t k = 0; k < layout.cella->porchColumns.size (); ++k)
+				p.Add (*p.porchColumn);
+		}
+	}
+	if (settings.interior && layout.interior)
+	{
+		p.interior = BuildGreekNaosInteriorPieces (*settings.interior, *layout.interior);
+		for (const NaosInteriorPiece &piece : p.interior)
+			p.Add (*piece.mesh);
+		p.lowerInteriorColumn = BuildGreekDoricColumnMesh (settings.interior->lowerColumn);
+		p.upperInteriorColumn = BuildGreekDoricColumnMesh (settings.interior->upperColumn);
+		for (const NaosInteriorColumn &c : layout.interior->columns)
+			p.Add (c.storey == NaosInteriorStorey::Lower ? *p.lowerInteriorColumn : *p.upperInteriorColumn);
+	}
+	if (settings.epicranitis && layout.epicranitis)
+	{
+		p.epicranitis = BuildGreekEpicranitisPieces (*settings.epicranitis, *layout.epicranitis);
+		for (const EpicranitisPiece &piece : p.epicranitis)
+			p.Add (*piece.mesh);
+		if (settings.porchExtension && layout.porchExtension)
+		{
+			p.porchExtension = BuildGreekPorchExtensionPieces (*settings.epicranitis, *layout.epicranitis, *layout.porchExtension);
+			for (const PorchExtensionPiece &piece : p.porchExtension)
+				p.Add (*piece.mesh);
+		}
+	}
+	if (settings.eastCeiling && layout.eastCeiling)
+	{
+		p.eastCeiling = BuildGreekEastCeilingPieces (*settings.eastCeiling, *layout.eastCeiling);
+		for (const CeilingPiece &piece : p.eastCeiling)
+			p.Add (*piece.mesh);
+		if (settings.flankCeilings && layout.flankCeilings)
+		{
+			p.flankCeilings = BuildGreekFlankCeilingPieces (*settings.flankCeilings, *settings.eastCeiling, *layout.flankCeilings);
+			for (const CeilingPiece &piece : p.flankCeilings)
+				p.Add (*piece.mesh);
+		}
 	}
 	return p;
+}
+
+// Face interieure de l'anneau : demi-largeur et demi-profondeur, par
+// l'expression de SweepRectangularRing (halfX + u, u = -innerFace).
+struct RingInner
+{
+	double halfWidth = 0.0, halfDepth = 0.0;
+};
+
+RingInner RingInnerOf (const PeristyleLayout &peristyle, const GreekEntablatureSettings &entablature)
+{
+	const double u = -entablature.innerFace;
+	return {peristyle.halfWidth + u, peristyle.halfDepth + u};
+}
+
+// Cella dans le temple (CE-4, CE-9) : refus du raffinement, mise en place
+// propre, emprise hors des colonnes du peristyle et, avec un entablement, a
+// l'interieur de l'anneau et sous son dessus.
+CellaLayout LayoutCellaInTemple (const TempleSettings &s, const TempleLayout &l, const TempleWork &work)
+{
+	CellaLayout cella = LayoutGreekCella (*s.cella, l.krepis);
+	for (const TemplePlacement &c : l.columns)
+	{
+		const double e = c.corner ? l.cornerColumnExtents.overall : l.columnExtents.overall;
+		const bool apartX = std::fabs (c.x) - e > cella.halfWidth;
+		const bool apartY = c.y + e < cella.front || c.y - e > cella.back;
+		if (!(apartX || apartY))
+			Fail ("cella", "place le toichobate au contact d'une colonne du peristyle");
+	}
+	if (s.entablature && work.entablature)
+	{
+		const RingInner ring = RingInnerOf (l.peristyle, *s.entablature);
+		if (!(cella.halfWidth < ring.halfWidth && -cella.front < ring.halfDepth && cella.back < ring.halfDepth))
+			Fail ("cella", "sort de la face interieure de l'anneau de l'entablement");
+		const double ringTop = l.entablatureFoot + work.entablature->Bounds ().back ();
+		if (!(cella.top < ringTop))
+			Fail ("cella", "depasse le dessus de l'entablement, sous le comble (registre CE-4)");
+	}
+	return cella;
+}
+
+// Couronnement dans le temple (CE-24, CE-4 etendu) : mise en place propre, face
+// interieure commune avec l'assise XVII interieure, et, avec un entablement,
+// emprise strictement dans la face interieure de l'anneau et dessus sous le sien.
+EpicranitisLayout LayoutEpicranitisInTemple (const TempleSettings &s, const TempleLayout &l, const TempleWork &work)
+{
+	EpicranitisLayout crown = LayoutGreekEpicranitis (*s.epicranitis, *l.cella);
+	if (s.interior && !(s.interior->courseThickness == s.epicranitis->innerOffset))
+		Fail ("epicranitis.innerOffset", "differe de 'interior.courseThickness' : la face interieure de l'epicranitis est "
+		                                 "celle de l'assise XVII interieure (registre CE-24)");
+	if (s.entablature && work.entablature)
+	{
+		const RingInner ring = RingInnerOf (l.peristyle, *s.entablature);
+		if (!(crown.halfWidth < ring.halfWidth && -crown.front < ring.halfDepth && crown.back < ring.halfDepth))
+			Fail ("epicranitis", "sort de la face interieure de l'anneau de l'entablement");
+		const double ringTop = l.entablatureFoot + work.entablature->Bounds ().back ();
+		if (!(crown.top < ringTop))
+			Fail ("epicranitis", "depasse le dessus de l'entablement, sous le comble (registre CE-4)");
+	}
+	return crown;
+}
+
+// Prolongement est dans le temple : bouts sur la face interieure de l'anneau
+// (RingInnerOf), pied au dessous de l'anneau.
+PorchExtensionLayout LayoutPorchExtensionInTemple (const TempleSettings &s, const TempleLayout &l)
+{
+	return LayoutGreekPorchExtension (*s.porchExtension, *l.epicranitis, RingInnerOf (l.peristyle, *s.entablature).halfWidth,
+	                                  l.entablatureFoot);
+}
+
+// Plafond est dans le temple : bouts et massif sur la face interieure de l'anneau (RingInnerOf), poche est sous les
+// pans du comble (critere du fronton, en double puis en float).
+EastCeilingLayout LayoutEastCeilingInTemple (const TempleSettings &s, const TempleLayout &l, const TempleWork &work)
+{
+	const RingInner ring = RingInnerOf (l.peristyle, *s.entablature);
+	EastCeilingLayout east = LayoutGreekEastCeiling (*s.eastCeiling, *l.epicranitis, ring.halfWidth, ring.halfDepth);
+	if (s.pediment && work.pediment)
+	{
+		const detail::CheckedEntablature &checked = work.entablature->Checked ();
+		if (detail::PocketMeetsRoof (*work.pediment, checked, l.peristyle, l.entablatureFoot, east.westPocket))
+			Fail ("eastCeiling.bandHeight", "met le dessus de la corniche et du bandeau du porche ouest au contact ou "
+			                                "au-dessus d'un pan du comble");
+		if (detail::PocketMeetsRoof (*work.pediment, checked, l.peristyle, l.entablatureFoot, east.eastPocket))
+			Fail ("eastCeiling.beamHeight", "met le dessus des pieces au contact ou au-dessus d'un pan du comble");
+	}
+	return east;
+}
+
+// Plafonds des flancs dans le temple : bout cote peristyle a peristyleGap de la face interieure de l'anneau
+// (RingInnerOf), poches des flancs sous les pans du comble (critere du fronton, en double puis en float, CE-42).
+FlankCeilingLayout LayoutFlankCeilingsInTemple (const TempleSettings &s, const TempleLayout &l, const TempleWork &work)
+{
+	const RingInner ring = RingInnerOf (l.peristyle, *s.entablature);
+	FlankCeilingLayout flanks = LayoutGreekFlankCeilings (*s.flankCeilings, *s.eastCeiling, *l.eastCeiling, ring.halfWidth);
+	if (s.pediment && work.pediment)
+		for (const RoofPocket &pocket : flanks.pockets)
+			if (detail::PocketMeetsRoof (*work.pediment, work.entablature->Checked (), l.peristyle, l.entablatureFoot, pocket))
+				Fail ("flankCeilings.peristyleGap", "laisse le dessus des poutres et des dalles au contact ou au-dessus d'un "
+				                                    "pan du comble");
+	return flanks;
 }
 
 // TE3 : le pied de chaque colonne dans le dessus du stylobate, bord compris.
@@ -848,6 +1023,65 @@ TempleLayout LayoutWithColumns (const TempleSettings &s, TempleWork &work)
 		work.pediment = detail::CheckPediment (*s.pediment, work.entablature->Checked ());
 		detail::RequirePedimentTopWithinCrown (*work.pediment, layout.peristyle.halfWidth);
 	}
+	if (s.interior)
+	{
+		if (s.refinement)
+			Fail ("interior", "et 'refinement' ne se combinent pas : l'interieur, comme la cella, n'a pas de raffinements "
+			                  "(README section 7.8, decision D8 ; registre CE-9)");
+		if (!s.cella)
+			Fail ("interior", "demande une cella");
+	}
+	if (s.epicranitis)
+	{
+		if (s.refinement)
+			Fail ("epicranitis", "et 'refinement' ne se combinent pas : le couronnement, comme la cella, n'a pas de "
+			                     "raffinements (README section 7.8, decision D8 ; registre CE-9)");
+		if (!s.cella)
+			Fail ("epicranitis", "demande une cella");
+	}
+	if (s.porchExtension)
+	{
+		if (s.refinement)
+			Fail ("porchExtension", "et 'refinement' ne se combinent pas : le prolongement est, comme la cella, n'a pas de "
+			                        "raffinements (registre CE-9)");
+		if (!s.epicranitis)
+			Fail ("porchExtension", "demande le couronnement ('epicranitis')");
+		if (!s.entablature)
+			Fail ("porchExtension", "demande un entablement");
+	}
+	if (s.eastCeiling)
+	{
+		if (s.refinement)
+			Fail ("eastCeiling", "et 'refinement' ne se combinent pas : les plafonds, comme la cella, n'ont pas de "
+			                     "raffinements (registre CE-9)");
+		if (!s.porchExtension)
+			Fail ("eastCeiling", "demande le prolongement est ('porchExtension'), qui demande un entablement");
+	}
+	if (s.flankCeilings)
+	{
+		if (s.refinement)
+			Fail ("flankCeilings", "et 'refinement' ne se combinent pas : les plafonds, comme la cella, n'ont pas de "
+			                       "raffinements (registre CE-9)");
+		if (!s.eastCeiling)
+			Fail ("flankCeilings", "demande le plafond est ('eastCeiling')");
+	}
+	if (s.cella)
+	{
+		if (s.refinement)
+			Fail ("cella", "et 'refinement' ne se combinent pas : la cella n'a pas de raffinements (README section 7.8, "
+			               "decision D8) et le champ de courbure ne s'y applique pas (registre CE-9)");
+		layout.cella = LayoutCellaInTemple (s, layout, work);
+	}
+	if (s.interior)
+		layout.interior = LayoutGreekNaosInterior (*s.interior, *layout.cella);
+	if (s.epicranitis)
+		layout.epicranitis = LayoutEpicranitisInTemple (s, layout, work);
+	if (s.porchExtension)
+		layout.porchExtension = LayoutPorchExtensionInTemple (s, layout);
+	if (s.eastCeiling)
+		layout.eastCeiling = LayoutEastCeilingInTemple (s, layout, work);
+	if (s.flankCeilings)
+		layout.flankCeilings = LayoutFlankCeilingsInTemple (s, layout, work);
 	if (s.refinement)
 	{
 		const TempleRefinementSettings &r = *s.refinement;
@@ -869,6 +1103,76 @@ TempleLayout LayoutWithColumns (const TempleSettings &s, TempleWork &work)
 }
 
 } // namespace
+
+TempleAddress TempleAddressOf (const CellaPiece &piece)
+{
+	TempleElement element = TempleElement::Toichobate;
+	switch (piece.element)
+	{
+	case CellaElement::Toichobate:      element = TempleElement::Toichobate; break;
+	case CellaElement::NaosFloor:       element = TempleElement::NaosFloor; break;
+	case CellaElement::LongWall:        element = TempleElement::LongWall; break;
+	case CellaElement::CrossWall:       element = TempleElement::CrossWall; break;
+	case CellaElement::Threshold:       element = TempleElement::Threshold; break;
+	case CellaElement::Anta:            element = TempleElement::Anta; break;
+	case CellaElement::PorchArchitrave: element = TempleElement::PorchArchitrave; break;
+	case CellaElement::PorchFrieze:     element = TempleElement::PorchFrieze; break;
+	}
+	return {element, piece.side, piece.index};
+}
+
+TempleAddress TempleAddressOf (const NaosInteriorPiece &piece)
+{
+	TempleElement element = TempleElement::InteriorCourse;
+	switch (piece.element)
+	{
+	case NaosInteriorElement::Course:        element = TempleElement::InteriorCourse; break;
+	case NaosInteriorElement::LowerEpistyle: element = TempleElement::InteriorLowerEpistyle; break;
+	case NaosInteriorElement::UpperEpistyle: element = TempleElement::InteriorUpperEpistyle; break;
+	case NaosInteriorElement::Cornice:       element = TempleElement::InteriorCornice; break;
+	}
+	return {element, piece.side, piece.index};
+}
+
+TempleAddress TempleAddressOf (const EpicranitisPiece &piece)
+{
+	TempleElement element = TempleElement::EpicranitisCourse;
+	switch (piece.element)
+	{
+	case EpicranitisElement::Course:      element = TempleElement::EpicranitisCourse; break;
+	case EpicranitisElement::PorchCourse: element = TempleElement::EpicranitisPorchCourse; break;
+	case EpicranitisElement::CrossCourse: element = TempleElement::EpicranitisCrossCourse; break;
+	case EpicranitisElement::Crown:       element = TempleElement::PorchCrown; break;
+	case EpicranitisElement::Moulding:    element = TempleElement::CrownMoulding; break;
+	}
+	return {element, piece.side, piece.index};
+}
+
+TempleAddress TempleAddressOf (const CeilingPiece &piece)
+{
+	TempleElement element = TempleElement::CeilingBeam;
+	switch (piece.element)
+	{
+	case CeilingElement::Beam:    element = TempleElement::CeilingBeam; break;
+	case CeilingElement::Cornice: element = TempleElement::PorchCornice; break;
+	case CeilingElement::Band:    element = TempleElement::PorchBand; break;
+	case CeilingElement::Slab:    element = TempleElement::CeilingSlab; break;
+	}
+	return {element, piece.side, piece.index};
+}
+
+TempleAddress TempleAddressOf (const PorchExtensionPiece &piece)
+{
+	TempleElement element = TempleElement::ExtensionArchitrave;
+	switch (piece.element)
+	{
+	case PorchExtensionElement::Architrave: element = TempleElement::ExtensionArchitrave; break;
+	case PorchExtensionElement::Frieze:     element = TempleElement::ExtensionFrieze; break;
+	case PorchExtensionElement::Crown:      element = TempleElement::ExtensionCrown; break;
+	case PorchExtensionElement::Moulding:   element = TempleElement::ExtensionMoulding; break;
+	}
+	return {element, piece.side, piece.index};
+}
 
 TempleLayout LayoutTemple (const TempleSettings &s)
 {
@@ -914,7 +1218,10 @@ std::unique_ptr<Mesh> BuildTempleMesh (const TempleSettings &settings, TempleLay
 	built_parts = pieces.stations ? SplitKrepis (whole, pieces.krepisSteps, acc.faces)
 	                              : SplitKrepis (whole, built.krepis.steps.size (), acc.faces);
 	built_parts.reserve (built.krepis.steps.size () + built.columns.size () + (pieces.ring ? 1 : 0) +
-	                     pieces.entablature.size () + pieces.pediment.size ());
+	                     pieces.entablature.size () + pieces.pediment.size () + pieces.cella.size () +
+	                     (built.cella ? built.cella->porchColumns.size () : 0) + pieces.interior.size () +
+	                     (built.interior ? built.interior->columns.size () : 0) + pieces.epicranitis.size () +
+	                     pieces.porchExtension.size () + pieces.eastCeiling.size () + pieces.flankCeilings.size ());
 	for (const TemplePlacement &p : built.columns)
 	{
 		Shear shear;
@@ -949,15 +1256,47 @@ std::unique_ptr<Mesh> BuildTempleMesh (const TempleSettings &settings, TempleLay
 			built_parts.push_back (append (*pieces.entablature[k], 0.0, 0.0, 0.0, {}, addresses[k]));
 		if (!pieces.pediment.empty ())
 		{
-			const TempleAddress pediment[] = {{TempleElement::RakingCornice, PeristyleSide::Front, 0},
-			                                  {TempleElement::RakingCornice, PeristyleSide::Back, 0},
-			                                  {TempleElement::Roof, PeristyleSide::Front, 0}};
-			if (pieces.pediment.size () != std::size (pediment))
+			// Corniches rampantes Front et Back, puis le comble : une piece, ou ses tranches par Y croissants (CE-34),
+			// d'index leur rang.
+			const TempleAddress raking[] = {{TempleElement::RakingCornice, PeristyleSide::Front, 0},
+			                                {TempleElement::RakingCornice, PeristyleSide::Back, 0}};
+			if (pieces.pediment.size () <= std::size (raking))
 				throw std::logic_error ("Temple : pieces du fronton et adresses en nombres differents");
 			for (std::size_t k = 0; k < pieces.pediment.size (); ++k)
-				built_parts.push_back (append (*pieces.pediment[k], 0.0, 0.0, 0.0, {}, pediment[k]));
+				built_parts.push_back (append (*pieces.pediment[k], 0.0, 0.0, 0.0, {},
+				                               k < std::size (raking)
+				                                   ? raking[k]
+				                                   : TempleAddress {TempleElement::Roof, PeristyleSide::Front,
+				                                                    static_cast<int> (k - std::size (raking))}));
 		}
 	}
+	// Cella : pieces deja dans le repere du temple, puis les colonnes des porches.
+	for (const CellaPiece &piece : pieces.cella)
+		built_parts.push_back (append (*piece.mesh, 0.0, 0.0, 0.0, {}, TempleAddressOf (piece)));
+	if (pieces.porchColumn)
+		for (const CellaPorchColumn &c : built.cella->porchColumns)
+			built_parts.push_back (append (*pieces.porchColumn, c.x, c.y, c.z, {}, {TempleElement::PorchColumn, c.side, c.index}));
+	// Interieur : pieces deja dans le repere du temple, puis les colonnes des deux etages.
+	for (const NaosInteriorPiece &piece : pieces.interior)
+		built_parts.push_back (append (*piece.mesh, 0.0, 0.0, 0.0, {}, TempleAddressOf (piece)));
+	if (built.interior && pieces.lowerInteriorColumn)
+		for (const NaosInteriorColumn &c : built.interior->columns)
+		{
+			const bool lower = c.storey == NaosInteriorStorey::Lower;
+			built_parts.push_back (append (lower ? *pieces.lowerInteriorColumn : *pieces.upperInteriorColumn, c.x, c.y, c.z, {},
+			                               {lower ? TempleElement::InteriorLowerColumn : TempleElement::InteriorUpperColumn, c.side,
+			                                c.index}));
+		}
+	// Couronnement puis prolongement est : pieces deja dans le repere du temple.
+	for (const EpicranitisPiece &piece : pieces.epicranitis)
+		built_parts.push_back (append (*piece.mesh, 0.0, 0.0, 0.0, {}, TempleAddressOf (piece)));
+	for (const PorchExtensionPiece &piece : pieces.porchExtension)
+		built_parts.push_back (append (*piece.mesh, 0.0, 0.0, 0.0, {}, TempleAddressOf (piece)));
+	// Plafond est, puis plafonds des flancs : pieces deja dans le repere du temple.
+	for (const CeilingPiece &piece : pieces.eastCeiling)
+		built_parts.push_back (append (*piece.mesh, 0.0, 0.0, 0.0, {}, TempleAddressOf (piece)));
+	for (const CeilingPiece &piece : pieces.flankCeilings)
+		built_parts.push_back (append (*piece.mesh, 0.0, 0.0, 0.0, {}, TempleAddressOf (piece)));
 
 	auto mesh = std::make_unique<Mesh> ();
 	mesh->SetVertices (static_cast<unsigned> (acc.vertices.size () / 3), acc.vertices.data ());

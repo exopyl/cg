@@ -1,18 +1,23 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "monument-v10",
-  "title": "Monument (v10)",
+  "$id": "monument-v14",
+  "title": "Monument (v14)",
   "description": "Document d'un monument, à la forme de sa source : sections et valeurs du README du monument, chacune avec son unité telle qu'écrite, dans son repère. Écrit par le script d'un monument (src/cgarchi/data/<monument>_from_readme.py, moteur monument_from_readme.py), jamais à la main. Lecteur : ParseMonument (src/cgarchi/classical_monument.h).",
-  "$comment": "Règles que ce fichier n'exprime pas, tenues par le lecteur : `value` est requise si et seulement si `status` n'est pas « manquant » ; « lu » et « mesuré » citent au moins une source, « manquant » aucune ; chaque source citée est une clé de `sources`, et chaque clé de `sources` est citée ; `readme` n'est pas vide ; les coordonnées de contrôle sont strictement croissantes ; les deux listes d'un profil de contrôle ont la même longueur, non nulle, et ses profondeurs sont strictement croissantes ; l'unité « ° » est celle des seuls angles (`$defs/angle`, `$defs/angleControl`) ; l'unité « ratio » est celle des seuls rapports (`$defs/ratio`) ; une suite de divisions ou de hauteurs n'est jamais « manquant », et ses deux listes ont la même longueur, non nulle ; un polygone n'est jamais « manquant », ses deux listes `u` et `h` ont la même longueur, au moins 3, et ses coordonnées sont finies et >= 0. Les clés en double sont refusées. Les contrôles du péristyle (`controls`) et de la krépis (`krepisControls`) sont en mètres. Blocs : `krepis`, `peristyle`, `columns`, `entablature` et `pediment` sont facultatifs ; un bloc absent est une partie non documentée, un bloc présent porte toutes ses clés. Les blocs de contrôle et leur partie sont liés par `dependentRequired`.",
+  "$comment": "Règles que ce fichier n'exprime pas, tenues par le lecteur : `value` est requise si et seulement si `status` n'est pas « manquant » ; « lu » et « mesuré » citent au moins une source, « manquant » aucune ; chaque source citée est une clé de `sources`, et chaque clé de `sources` est citée ; `readme` n'est pas vide ; les coordonnées de contrôle sont strictement croissantes ; les deux listes d'un profil de contrôle ont la même longueur, non nulle, et ses profondeurs sont strictement croissantes ; l'unité « ° » est celle des seuls angles (`$defs/angle`, `$defs/angleControl`) ; l'unité « ratio » est celle des seuls rapports (`$defs/ratio`) ; une suite de divisions ou de hauteurs n'est jamais « manquant », et ses deux listes ont la même longueur, non nulle ; un polygone n'est jamais « manquant », ses deux listes `u` et `h` ont la même longueur, au moins 3, et ses coordonnées sont finies et >= 0. Les clés en double sont refusées. Les contrôles du péristyle (`controls`) et de la krépis (`krepisControls`) sont en mètres. Blocs : `krepis`, `peristyle`, `columns`, `entablature`, `pediment`, `cella`, `interior`, `epicranitis`, `porchExtension`, `eastCeiling` et `flankCeilings` sont facultatifs ; un bloc absent est une partie non documentée, un bloc présent porte toutes ses clés. Les blocs de contrôle et leur partie sont liés par `dependentRequired`, de même que l'intérieur et l'épicranitis et la cella qui les porte, le prolongement est et l'épicranitis dont il continue le couronnement, le plafond est et le prolongement qui le porte, et les plafonds des flancs et le plafond est.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "monument", "source", "sources"],
   "dependentRequired": {
     "peristyle": ["controls"], "controls": ["peristyle"], "krepisControls": ["krepis"], "columnControls": ["columns"],
-    "entablatureControls": ["entablature"], "pedimentControls": ["pediment"]
+    "entablatureControls": ["entablature"], "pedimentControls": ["pediment"], "cellaControls": ["cella"],
+    "interior": ["cella"], "interiorControls": ["interior"], "epicranitis": ["cella"],
+    "epicranitisControls": ["epicranitis"], "porchExtension": ["epicranitis"],
+    "porchExtensionControls": ["porchExtension"], "eastCeiling": ["porchExtension"],
+    "eastCeilingControls": ["eastCeiling"], "flankCeilings": ["eastCeiling"],
+    "flankCeilingsControls": ["flankCeilings"]
   },
   "properties": {
-    "schema":   { "const": "monument/v10" },
+    "schema":   { "const": "monument/v14" },
     "monument": { "type": "string" },
     "source": {
       "type": "object",
@@ -306,6 +311,261 @@
         "rakingCoronaProjection":       { "$ref": "#/$defs/control" },
         "rakingBottomFilletProjection": { "$ref": "#/$defs/control" },
         "rakingCoronaGap":              { "$ref": "#/$defs/control" }
+      }
+    },
+    "cella": {
+      "type": "object",
+      "description": "Cella et porches (README section 7.8) : longueurs de segments, sans signe, depuis les faces et les bords nommés par le README ; les coordonnées signées sont des contrôles (`cellaControls`).",
+      "additionalProperties": false,
+      "required": ["toichobateRise", "pteronEast", "pteronWest", "toichobateOverhang", "longWallThickness", "longWallSpan", "wallTop", "eastCrossWallPosition", "eastCrossWallThickness", "westCrossWallPosition", "westCrossWallThickness", "doorWidth", "lintelHeight", "doorJambOffset", "thresholdLength", "thresholdProjection", "thresholdDepth", "naosFloorHeight", "eastAntaRetreat", "westAntaRetreat", "antaInnerProjection", "antaOuterProjection", "antaHeadLength", "porchColumnDiameter", "porchColumnHeight", "porchColumnOffset", "pronaosColumnAxis", "opisthodomosColumnAxis", "porchArchitraveHeight", "porchFriezeHeight", "porchEntablatureDepth", "porchEntablatureFront"],
+      "properties": {
+        "toichobateRise":         { "$ref": "#/$defs/length" },
+        "pteronEast":             { "$ref": "#/$defs/length" },
+        "pteronWest":             { "$ref": "#/$defs/length" },
+        "toichobateOverhang":     { "$ref": "#/$defs/length" },
+        "longWallThickness":      { "$ref": "#/$defs/length" },
+        "longWallSpan":           { "$ref": "#/$defs/length" },
+        "wallTop":                { "$ref": "#/$defs/length" },
+        "eastCrossWallPosition":  { "$ref": "#/$defs/length" },
+        "eastCrossWallThickness": { "$ref": "#/$defs/length" },
+        "westCrossWallPosition":  { "$ref": "#/$defs/length" },
+        "westCrossWallThickness": { "$ref": "#/$defs/length" },
+        "doorWidth":              { "$ref": "#/$defs/length" },
+        "lintelHeight":           { "$ref": "#/$defs/length" },
+        "doorJambOffset":         { "$ref": "#/$defs/length" },
+        "thresholdLength":        { "$ref": "#/$defs/length" },
+        "thresholdProjection":    { "$ref": "#/$defs/length" },
+        "thresholdDepth":         { "$ref": "#/$defs/length" },
+        "naosFloorHeight":        { "$ref": "#/$defs/length" },
+        "eastAntaRetreat":        { "$ref": "#/$defs/length" },
+        "westAntaRetreat":        { "$ref": "#/$defs/length" },
+        "antaInnerProjection":    { "$ref": "#/$defs/length" },
+        "antaOuterProjection":    { "$ref": "#/$defs/length" },
+        "antaHeadLength":         { "$ref": "#/$defs/length" },
+        "porchColumnDiameter":    { "$ref": "#/$defs/length" },
+        "porchColumnHeight":      { "$ref": "#/$defs/length" },
+        "porchColumnOffset":      { "$ref": "#/$defs/length" },
+        "pronaosColumnAxis":      { "$ref": "#/$defs/length" },
+        "opisthodomosColumnAxis": { "$ref": "#/$defs/length" },
+        "porchArchitraveHeight":  { "$ref": "#/$defs/length" },
+        "porchFriezeHeight":      { "$ref": "#/$defs/length" },
+        "porchEntablatureDepth":  { "$ref": "#/$defs/length" },
+        "porchEntablatureFront":  { "$ref": "#/$defs/length" }
+      }
+    },
+    "cellaControls": {
+      "type": "object",
+      "description": "Contrôles de la cella (README section 7.8, règle R13 du script) : coordonnées signées et cotes, en mètres, sans statut.",
+      "additionalProperties": false,
+      "required": ["toichobateBottomZ", "toichobateEastX", "toichobateWestX", "toichobateWidth", "longWallInnerY", "longWallOuterY", "longWallLength", "eastCrossWallEastX", "eastCrossWallWestX", "westCrossWallWestX", "westCrossWallEastX", "naosLength", "doorLintelZ", "eastAntaX", "westAntaX", "antaInnerY", "antaFaceWidth", "porchArchitraveBottomZ", "porchArchitraveTopZ", "porchFriezeTopZ"],
+      "properties": {
+        "toichobateBottomZ":      { "$ref": "#/$defs/result" },
+        "toichobateEastX":        { "$ref": "#/$defs/result" },
+        "toichobateWestX":        { "$ref": "#/$defs/result" },
+        "toichobateWidth":        { "$ref": "#/$defs/result" },
+        "longWallInnerY":         { "$ref": "#/$defs/result" },
+        "longWallOuterY":         { "$ref": "#/$defs/result" },
+        "longWallLength":         { "$ref": "#/$defs/result" },
+        "eastCrossWallEastX":     { "$ref": "#/$defs/result" },
+        "eastCrossWallWestX":     { "$ref": "#/$defs/result" },
+        "westCrossWallWestX":     { "$ref": "#/$defs/result" },
+        "westCrossWallEastX":     { "$ref": "#/$defs/result" },
+        "naosLength":             { "$ref": "#/$defs/result" },
+        "doorLintelZ":            { "$ref": "#/$defs/result" },
+        "eastAntaX":              { "$ref": "#/$defs/result" },
+        "westAntaX":              { "$ref": "#/$defs/result" },
+        "antaInnerY":             { "$ref": "#/$defs/result" },
+        "antaFaceWidth":          { "$ref": "#/$defs/result" },
+        "porchArchitraveBottomZ": { "$ref": "#/$defs/result" },
+        "porchArchitraveTopZ":    { "$ref": "#/$defs/result" },
+        "porchFriezeTopZ":        { "$ref": "#/$defs/result" }
+      }
+    },
+    "interior": {
+      "type": "object",
+      "description": "Intérieur du naos (README section 7.9) : longueurs de segments, sans signe, depuis les nus du naos de la section 7.8, et cotes z depuis le dessus du stylobate ; les coordonnées signées et les cotes déduites sont des contrôles (`interiorControls`). Demande le bloc `cella`.",
+      "additionalProperties": false,
+      "required": ["spacing", "eastAxisOffset", "westAxisOffset", "wallAxisOffset", "naveLevel", "lowerColumnHeight", "lowerColumnLowerDiameter", "lowerColumnUpperDiameter", "lowerCapitalHeight", "lowerAbacus", "lowerEpistyleHeight", "lowerEpistyleSoffit", "upperColumnHeight", "upperColumnLowerDiameter", "upperColumnUpperDiameter", "upperCapitalHeight", "upperAbacus", "fluteCount", "upperEpistyleHeight", "upperEpistyleSoffit", "courseHeight", "courseThickness", "corniceHeight", "corniceProjection", "pocketCeiling", "pocketMargin"],
+      "properties": {
+        "spacing":                  { "$ref": "#/$defs/length" },
+        "eastAxisOffset":           { "$ref": "#/$defs/length" },
+        "westAxisOffset":           { "$ref": "#/$defs/length" },
+        "wallAxisOffset":           { "$ref": "#/$defs/length" },
+        "naveLevel":                { "$ref": "#/$defs/length" },
+        "lowerColumnHeight":        { "$ref": "#/$defs/length" },
+        "lowerColumnLowerDiameter": { "$ref": "#/$defs/length" },
+        "lowerColumnUpperDiameter": { "$ref": "#/$defs/length" },
+        "lowerCapitalHeight":       { "$ref": "#/$defs/length" },
+        "lowerAbacus":              { "$ref": "#/$defs/length" },
+        "lowerEpistyleHeight":      { "$ref": "#/$defs/length" },
+        "lowerEpistyleSoffit":      { "$ref": "#/$defs/length" },
+        "upperColumnHeight":        { "$ref": "#/$defs/length" },
+        "upperColumnLowerDiameter": { "$ref": "#/$defs/length" },
+        "upperColumnUpperDiameter": { "$ref": "#/$defs/length" },
+        "upperCapitalHeight":       { "$ref": "#/$defs/length" },
+        "upperAbacus":              { "$ref": "#/$defs/length" },
+        "fluteCount":               { "$ref": "#/$defs/count" },
+        "upperEpistyleHeight":      { "$ref": "#/$defs/length" },
+        "upperEpistyleSoffit":      { "$ref": "#/$defs/length" },
+        "courseHeight":             { "$ref": "#/$defs/length" },
+        "courseThickness":          { "$ref": "#/$defs/length" },
+        "corniceHeight":            { "$ref": "#/$defs/length" },
+        "corniceProjection":        { "$ref": "#/$defs/length" },
+        "pocketCeiling":            { "$ref": "#/$defs/length" },
+        "pocketMargin":             { "$ref": "#/$defs/length" }
+      }
+    },
+    "interiorControls": {
+      "type": "object",
+      "description": "Contrôles de l'intérieur (README section 7.9, règle R13 du script) : coordonnées signées et cotes, en mètres, sans statut.",
+      "additionalProperties": false,
+      "required": ["eastWallX", "flankAxis1X", "flankAxis2X", "flankAxis3X", "flankAxis4X", "flankAxis5X", "westAxisX", "westWallX", "naosLength", "lateralAxisY", "lowerAbacusTopZ", "lowerEpistyleTopZ", "upperAbacusTopZ", "upperEpistyleTopZ", "courseTopZ", "corniceTopZ", "pocketBottomZ", "pocketEastX", "pocketWestX", "pocketHalfWidthY"],
+      "properties": {
+        "eastWallX":         { "$ref": "#/$defs/result" },
+        "flankAxis1X":       { "$ref": "#/$defs/result" },
+        "flankAxis2X":       { "$ref": "#/$defs/result" },
+        "flankAxis3X":       { "$ref": "#/$defs/result" },
+        "flankAxis4X":       { "$ref": "#/$defs/result" },
+        "flankAxis5X":       { "$ref": "#/$defs/result" },
+        "westAxisX":         { "$ref": "#/$defs/result" },
+        "westWallX":         { "$ref": "#/$defs/result" },
+        "naosLength":        { "$ref": "#/$defs/result" },
+        "lateralAxisY":      { "$ref": "#/$defs/result" },
+        "lowerAbacusTopZ":   { "$ref": "#/$defs/result" },
+        "lowerEpistyleTopZ": { "$ref": "#/$defs/result" },
+        "upperAbacusTopZ":   { "$ref": "#/$defs/result" },
+        "upperEpistyleTopZ": { "$ref": "#/$defs/result" },
+        "courseTopZ":        { "$ref": "#/$defs/result" },
+        "corniceTopZ":       { "$ref": "#/$defs/result" },
+        "pocketBottomZ":     { "$ref": "#/$defs/result" },
+        "pocketEastX":       { "$ref": "#/$defs/result" },
+        "pocketWestX":       { "$ref": "#/$defs/result" },
+        "pocketHalfWidthY":  { "$ref": "#/$defs/result" }
+      }
+    },
+    "epicranitis": {
+      "type": "object",
+      "description": "Assise XVII extérieure : épicranitis des murs et couronnement de la frise des porches (README section 7.10) : hauteur sur le dessus des murs, face intérieure depuis le nu intérieur des murs du naos, hauteurs du listel et du filet, saillies du listel et de la bande à méandre sur le nu. Demande le bloc `cella`.",
+      "additionalProperties": false,
+      "required": ["height", "innerOffset", "listelHeight", "filletHeight", "listelProjection", "bandProjection"],
+      "properties": {
+        "height":           { "$ref": "#/$defs/length" },
+        "innerOffset":      { "$ref": "#/$defs/length" },
+        "listelHeight":     { "$ref": "#/$defs/length" },
+        "filletHeight":     { "$ref": "#/$defs/length" },
+        "listelProjection": { "$ref": "#/$defs/length" },
+        "bandProjection":   { "$ref": "#/$defs/length" }
+      }
+    },
+    "epicranitisControls": {
+      "type": "object",
+      "description": "Contrôles du couronnement (README section 7.10, règle R13 du script) : dessus commun, dessous et hauteur du couronnement de la frise des porches, face intérieure et nus des bandes à méandre, en mètres, sans statut.",
+      "additionalProperties": false,
+      "required": ["topZ", "porchCrownBottomZ", "porchCrownHeight", "innerFaceY", "wallBandY", "eastBandX", "westBandX"],
+      "properties": {
+        "topZ":              { "$ref": "#/$defs/result" },
+        "porchCrownBottomZ": { "$ref": "#/$defs/result" },
+        "porchCrownHeight":  { "$ref": "#/$defs/result" },
+        "innerFaceY":        { "$ref": "#/$defs/result" },
+        "wallBandY":         { "$ref": "#/$defs/result" },
+        "eastBandX":         { "$ref": "#/$defs/result" },
+        "westBandX":         { "$ref": "#/$defs/result" }
+      }
+    },
+    "porchExtension": {
+      "type": "object",
+      "description": "Prolongement est de l'entablement des porches au-dessus des portiques latéraux (README section 7.10) : longueur par côté, des faces extérieures des antes à la face intérieure de l'entablement du péristyle (contrôle de fermeture). Demande le bloc `epicranitis`.",
+      "additionalProperties": false,
+      "required": ["eastSpan"],
+      "properties": {
+        "eastSpan": { "$ref": "#/$defs/length" }
+      }
+    },
+    "porchExtensionControls": {
+      "type": "object",
+      "description": "Contrôles du prolongement est (README section 7.10, règle R13 du script) : face intérieure de l'entablement du péristyle et dessous de l'architrave prolongée, en mètres, sans statut.",
+      "additionalProperties": false,
+      "required": ["ringInnerY", "architraveFootZ"],
+      "properties": {
+        "ringInnerY":      { "$ref": "#/$defs/result" },
+        "architraveFootZ": { "$ref": "#/$defs/result" }
+      }
+    },
+    "eastCeiling": {
+      "type": "object",
+      "description": "Plafond du ptéron est et corniche des fronts des porches (README section 7.11) : poutres (nombre, pas, largeur, hauteur, bout ouest), massif de bout, corniche à anthémion et bandeau (hauteurs, saillie, profondeur), caissons (pas, ouverture, cadre, profondeur, rangs par travée). Demande le bloc `porchExtension`.",
+      "additionalProperties": false,
+      "required": ["beamCount", "beamSpacing", "beamWidth", "beamHeight", "beamWestBearing", "endMassifWidth", "corniceHeight", "corniceProjection", "bandHeight", "corniceDepth", "cofferPitch", "cofferOpening", "cofferFrame", "cofferDepth", "cofferRows"],
+      "properties": {
+        "beamCount":         { "$ref": "#/$defs/count" },
+        "beamSpacing":       { "$ref": "#/$defs/length" },
+        "beamWidth":         { "$ref": "#/$defs/length" },
+        "beamHeight":        { "$ref": "#/$defs/length" },
+        "beamWestBearing":   { "$ref": "#/$defs/length" },
+        "endMassifWidth":    { "$ref": "#/$defs/length" },
+        "corniceHeight":     { "$ref": "#/$defs/length" },
+        "corniceProjection": { "$ref": "#/$defs/length" },
+        "bandHeight":        { "$ref": "#/$defs/length" },
+        "corniceDepth":      { "$ref": "#/$defs/length" },
+        "cofferPitch":       { "$ref": "#/$defs/length" },
+        "cofferOpening":     { "$ref": "#/$defs/length" },
+        "cofferFrame":       { "$ref": "#/$defs/length" },
+        "cofferDepth":       { "$ref": "#/$defs/length" },
+        "cofferRows":        { "$ref": "#/$defs/count" }
+      }
+    },
+    "eastCeilingControls": {
+      "type": "object",
+      "description": "Contrôles du plafond est (README section 7.11, règle R13 du script), en mètres, sans statut.",
+      "additionalProperties": false,
+      "required": ["beamOuterAxisY", "beamBottomZ", "beamTopZ", "beamWestEndX", "beamEastEndX", "beamLength", "clearBay", "massifFaceY", "edgeBay", "corniceTopZ", "bandTopZ", "slabThickness", "cofferFloor", "cofferRun", "cofferMargin"],
+      "properties": {
+        "beamOuterAxisY": { "$ref": "#/$defs/result" },
+        "beamBottomZ":    { "$ref": "#/$defs/result" },
+        "beamTopZ":       { "$ref": "#/$defs/result" },
+        "beamWestEndX":   { "$ref": "#/$defs/result" },
+        "beamEastEndX":   { "$ref": "#/$defs/result" },
+        "beamLength":     { "$ref": "#/$defs/result" },
+        "clearBay":       { "$ref": "#/$defs/result" },
+        "massifFaceY":    { "$ref": "#/$defs/result" },
+        "edgeBay":        { "$ref": "#/$defs/result" },
+        "corniceTopZ":    { "$ref": "#/$defs/result" },
+        "bandTopZ":       { "$ref": "#/$defs/result" },
+        "slabThickness":  { "$ref": "#/$defs/result" },
+        "cofferFloor":    { "$ref": "#/$defs/result" },
+        "cofferRun":      { "$ref": "#/$defs/result" },
+        "cofferMargin":   { "$ref": "#/$defs/result" }
+      }
+    },
+    "flankCeilings": {
+      "type": "object",
+      "description": "Plafonds des ptérons nord et sud (README section 7.11) : poutres transversales (pas, premier axe, nombres à l'est et à l'ouest, section, bout côté péristyle), rangs de caissons. Demande le bloc `eastCeiling`.",
+      "additionalProperties": false,
+      "required": ["beamSpacing", "firstBeamOffset", "eastBeamCount", "westBeamCount", "beamWidth", "beamHeight", "peristyleGap", "cofferRows"],
+      "properties": {
+        "beamSpacing":     { "$ref": "#/$defs/length" },
+        "firstBeamOffset": { "$ref": "#/$defs/length" },
+        "eastBeamCount":   { "$ref": "#/$defs/count" },
+        "westBeamCount":   { "$ref": "#/$defs/count" },
+        "beamWidth":       { "$ref": "#/$defs/length" },
+        "beamHeight":      { "$ref": "#/$defs/length" },
+        "peristyleGap":    { "$ref": "#/$defs/length" },
+        "cofferRows":      { "$ref": "#/$defs/count" }
+      }
+    },
+    "flankCeilingsControls": {
+      "type": "object",
+      "description": "Contrôles des plafonds des flancs (README section 7.11, règle R13 du script), en mètres, sans statut.",
+      "additionalProperties": false,
+      "required": ["lastEastAxisX", "lastWestAxisX", "wallEndY", "peristyleEndY", "beamLength", "cofferRun", "cofferMargin"],
+      "properties": {
+        "lastEastAxisX": { "$ref": "#/$defs/result" },
+        "lastWestAxisX": { "$ref": "#/$defs/result" },
+        "wallEndY":      { "$ref": "#/$defs/result" },
+        "peristyleEndY": { "$ref": "#/$defs/result" },
+        "beamLength":    { "$ref": "#/$defs/result" },
+        "cofferRun":     { "$ref": "#/$defs/result" },
+        "cofferMargin":  { "$ref": "#/$defs/result" }
       }
     }
   },
