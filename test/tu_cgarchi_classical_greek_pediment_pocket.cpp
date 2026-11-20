@@ -7,10 +7,12 @@
 #include <cstring>
 #include <functional>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <cgarchi/classical_greek_pediment.h>
@@ -336,25 +338,95 @@ double PrismVolume (const Fixture &f)
 	return X * (zR - zB) * 2.0 * Y;
 }
 
-struct SliceReport
+using Position = std::array<float, 3>;
+using Triangle = std::array<unsigned, 3>;
+
+// Reunion des tranches du comble (pieces 2 et suivantes), sommets confondus par position exacte (les tranches
+// voisines calculent leurs sommets communs sur les memes doubles).
+struct RoofUnion
 {
-	std::size_t slices = 0;
-	bool closed = true, contiguous = true;
-	double volume = 0.0;
+	std::vector<Position> positions;
+	std::vector<Triangle> faces;
 };
 
-// Tranches du comble (pieces 2 et suivantes) : chacune valide, d'une composante, de volume positif ; bornes Y
-// contigues au bit pres, par Y croissants.
-SliceReport SlicesOf (const std::vector<std::unique_ptr<Mesh>> &pieces)
+RoofUnion UnionOf (const std::vector<std::unique_ptr<Mesh>> &pieces)
 {
-	SliceReport s;
+	RoofUnion u;
+	std::map<Position, unsigned> index;
+	for (std::size_t k = 2; k < pieces.size (); ++k)
+	{
+		const Mesh &m = *pieces[k];
+		std::vector<unsigned> local (m.GetNVertices ());
+		for (unsigned v = 0; v < m.GetNVertices (); ++v)
+		{
+			Position q;
+			m.GetVertex (v, q.data ());
+			const auto inserted = index.emplace (q, static_cast<unsigned> (u.positions.size ()));
+			if (inserted.second)
+				u.positions.push_back (q);
+			local[v] = inserted.first->second;
+		}
+		for (unsigned f = 0; f < m.GetNFaces (); ++f)
+			u.faces.push_back ({local[static_cast<unsigned> (m.GetFaceVertex (f, 0))],
+			                    local[static_cast<unsigned> (m.GetFaceVertex (f, 1))],
+			                    local[static_cast<unsigned> (m.GetFaceVertex (f, 2))]});
+	}
+	return u;
+}
+
+// Aire de l'intersection de deux triangles d'un meme plan, en (x, z) : decoupe de Sutherland-Hodgman du premier par
+// les trois demi-plans du second, rendu direct.
+double OverlapArea (std::vector<std::array<double, 2>> a, std::array<std::array<double, 2>, 3> b)
+{
+	auto cross = [] (const std::array<double, 2> &o, const std::array<double, 2> &p, const std::array<double, 2> &q) {
+		return (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]);
+	};
+	if (cross (b[0], b[1], b[2]) < 0.0)
+		std::swap (b[1], b[2]);
+	for (std::size_t e = 0; e < 3 && !a.empty (); ++e)
+	{
+		const std::array<double, 2> &p = b[e], &q = b[(e + 1) % 3];
+		std::vector<std::array<double, 2>> out;
+		for (std::size_t i = 0; i < a.size (); ++i)
+		{
+			const std::array<double, 2> &s = a[i], &t = a[(i + 1) % a.size ()];
+			const double ds = cross (p, q, s), dt = cross (p, q, t);
+			if (ds >= 0.0)
+				out.push_back (s);
+			if ((ds >= 0.0) != (dt >= 0.0))
+			{
+				const double r = ds / (ds - dt);
+				out.push_back ({s[0] + r * (t[0] - s[0]), s[1] + r * (t[1] - s[1])});
+			}
+		}
+		a = std::move (out);
+	}
+	double area = 0.0;
+	for (std::size_t i = 0; i < a.size (); ++i)
+		area += a[i][0] * a[(i + 1) % a.size ()][1] - a[(i + 1) % a.size ()][0] * a[i][1];
+	return std::fabs (area) / 2.0;
+}
+
+// Releve du comble a poches : tranches (nombre, bornes Y contigues au bit pres par Y croissants) et leur reunion.
+// `closed` : chaque arete non orientee de la reunion portee par exactement deux faces, une dans chaque sens, et
+// aucune face degeneree. `overlaps` : paires de faces d'un meme plan y = cte (normale +-Y) dont l'intersection a une
+// aire non nulle (au-dela de 1e-9 m2). `volume` : volume signe de la reunion, en double sur les positions float.
+struct RoofReport
+{
+	std::size_t slices = 0;
+	bool contiguous = true, closed = true;
+	std::size_t degenerate = 0, unpairedEdges = 0, overlaps = 0, cutFaces = 0;
+	double volume = 0.0;
+	MeshValidationReport validation;
+};
+
+RoofReport RoofReportOf (const std::vector<std::unique_ptr<Mesh>> &pieces)
+{
+	RoofReport s;
 	float previousHigh = 0.0f;
 	for (std::size_t k = 2; k < pieces.size (); ++k)
 	{
 		const Mesh &m = *pieces[k];
-		const MeshValidationReport report = ValidateMesh (m);
-		s.closed = s.closed && report.IsValid () && report.components == 1u && report.signedVolume > 0.0;
-		s.volume += report.signedVolume;
 		float low = std::numeric_limits<float>::max (), high = std::numeric_limits<float>::lowest ();
 		for (unsigned v = 0; v < m.GetNVertices (); ++v)
 		{
@@ -368,7 +440,91 @@ SliceReport SlicesOf (const std::vector<std::unique_ptr<Mesh>> &pieces)
 		previousHigh = high;
 		++s.slices;
 	}
+
+	const RoofUnion u = UnionOf (pieces);
+	std::map<std::pair<unsigned, unsigned>, std::size_t> directed;
+	std::map<float, std::vector<std::size_t>> byPlane;
+	for (std::size_t f = 0; f < u.faces.size (); ++f)
+	{
+		const Triangle &t = u.faces[f];
+		const Position &a = u.positions[t[0]], &b = u.positions[t[1]], &c = u.positions[t[2]];
+		const double ux = static_cast<double> (b[0]) - a[0], uy = static_cast<double> (b[1]) - a[1], uz = static_cast<double> (b[2]) - a[2];
+		const double vx = static_cast<double> (c[0]) - a[0], vy = static_cast<double> (c[1]) - a[1], vz = static_cast<double> (c[2]) - a[2];
+		const double nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+		if (t[0] == t[1] || t[1] == t[2] || t[2] == t[0] || (nx == 0.0 && ny == 0.0 && nz == 0.0))
+			++s.degenerate;
+		s.volume += (a[0] * (static_cast<double> (b[1]) * c[2] - static_cast<double> (b[2]) * c[1]) +
+		             a[1] * (static_cast<double> (b[2]) * c[0] - static_cast<double> (b[0]) * c[2]) +
+		             a[2] * (static_cast<double> (b[0]) * c[1] - static_cast<double> (b[1]) * c[0])) /
+		            6.0;
+		for (std::size_t e = 0; e < 3; ++e)
+			++directed[{t[e], t[(e + 1) % 3]}];
+		if (a[1] == b[1] && b[1] == c[1])
+			byPlane[a[1]].push_back (f);
+	}
+	for (const auto &d : directed)
+	{
+		const auto back = directed.find ({d.first.second, d.first.first});
+		if (d.second != 1 || back == directed.end () || back->second != 1)
+			++s.unpairedEdges;
+	}
+	for (const auto &plane : byPlane)
+	{
+		const std::vector<std::size_t> &faces = plane.second;
+		s.cutFaces += faces.size ();
+		auto xz = [&u] (unsigned v) { return std::array<double, 2> {u.positions[v][0], u.positions[v][2]}; };
+		for (std::size_t i = 0; i < faces.size (); ++i)
+			for (std::size_t j = i + 1; j < faces.size (); ++j)
+			{
+				const Triangle &p = u.faces[faces[i]], &q = u.faces[faces[j]];
+				if (OverlapArea ({xz (p[0]), xz (p[1]), xz (p[2])}, {xz (q[0]), xz (q[1]), xz (q[2])}) > 1e-9)
+					++s.overlaps;
+			}
+	}
+	s.closed = s.degenerate == 0 && s.unpairedEdges == 0;
+
+	std::vector<float> vertices;
+	for (const Position &q : u.positions)
+		vertices.insert (vertices.end (), q.begin (), q.end ());
+	std::vector<unsigned> faces;
+	for (const Triangle &t : u.faces)
+		faces.insert (faces.end (), t.begin (), t.end ());
+	Mesh m;
+	m.SetVertices (static_cast<unsigned> (u.positions.size ()), vertices.data ());
+	m.SetFaces (static_cast<unsigned> (u.faces.size ()), 3, faces.data ());
+	s.validation = ValidateMesh (m);
 	return s;
+}
+
+// Temple d'Hephaistos complet du document : reglages de BuildMonumentMesh, toutes parties construites.
+const Fixture &CompleteHephaistos ()
+{
+	static const Fixture f ([] {
+		const MonumentData &d = HephaistosMonument ();
+		TempleSettings s = MonumentTempleSettings (d);
+		s.cella = MonumentCellaSettings (d);
+		s.cella->porches = MonumentPorchSettings (d);
+		s.interior = MonumentInteriorSettings (d);
+		s.epicranitis = MonumentEpicranitisSettings (d);
+		s.porchExtension = MonumentPorchExtensionSettings (d);
+		s.eastCeiling = MonumentEastCeilingSettings (d);
+		s.flankCeilings = MonumentFlankCeilingSettings (d);
+		return s;
+	}());
+	return f;
+}
+
+// Poches du temple dans l'ordre du temple : interieur, plafond est (pteron est, porche ouest), flancs.
+std::vector<RoofPocket> TemplePockets (const Fixture &f)
+{
+	std::vector<RoofPocket> pockets;
+	if (f.layout.interior)
+		pockets.push_back (f.layout.interior->pocket);
+	if (f.layout.eastCeiling)
+		pockets.insert (pockets.end (), {f.layout.eastCeiling->eastPocket, f.layout.eastCeiling->westPocket});
+	if (f.layout.flankCeilings)
+		pockets.insert (pockets.end (), f.layout.flankCeilings->pockets.begin (), f.layout.flankCeilings->pockets.end ());
+	return pockets;
 }
 
 } // namespace
@@ -395,44 +551,78 @@ TEST (TEST_cgarchi_classical_greek_pediment_pocket, one_pocket_gives_the_pinned_
 	}
 }
 
-// PP2 : deux et cinq poches. Nombre de tranches (bornes Y distinctes moins une), chaque tranche fermee, contigue a
-// la precedente ; somme des volumes = prisme - poches, a 1e-9 relatif ; Lambda inchanges. Avec des poches au contact
-// par une face (en X et en Y), les memes proprietes.
-TEST (TEST_cgarchi_classical_greek_pediment_pocket, several_pockets_slice_the_roof_along_y)
+// Cas d'essai des tranches, sur leur temple : nombre de tranches et de faces dans les plans y = cte (coupes et
+// tympans), mesures. « decales » : poches de tranches voisines au contact par une coupe, se recouvrant en partie en
+// X, de plafonds differents ; les parois et plafonds d'une tranche y sont coupes par les bornes et les plafonds de la
+// voisine. « temple » : les cinq poches du temple d'Hephaistos complet.
+struct SliceCase
 {
-	const Fixture &f = Hephaistos ();
-	const double prism = PrismVolume (f);
-	ASSERT_GT (prism, 0.0);
-	struct Case
-	{
-		const char *name;
-		std::vector<RoofPocket> pockets;
-		std::size_t slices;
-	};
-	const std::vector<Case> cases = {
-	    {"deux", {PocketAt (f, -3.0, 3.0, -5.0, 5.0, 0.3), PocketAt (f, 3.5, 5.0, -8.0, 9.0, 0.2)}, 5u},
+	const char *name;
+	const Fixture *fixture;
+	std::vector<RoofPocket> pockets;
+	std::size_t slices, cutFaces;
+};
+
+std::vector<SliceCase> SliceCases ()
+{
+	const Fixture &f = Hephaistos (), &complete = CompleteHephaistos ();
+	return {
+	    {"deux", &f, {PocketAt (f, -3.0, 3.0, -5.0, 5.0, 0.3), PocketAt (f, 3.5, 5.0, -8.0, 9.0, 0.2)}, 5u, 10u},
 	    {"cinq",
+	     &f,
 	     {PocketAt (f, -3.0, 3.0, -5.0, 5.0, 0.3), PocketAt (f, 3.5, 5.0, -8.0, 9.0, 0.2), PocketAt (f, -5.0, -3.5, -8.0, 9.0, 0.2),
 	      PocketAt (f, -2.0, 2.0, -12.0, -10.0, 0.25), PocketAt (f, -2.0, 2.0, 10.0, 12.0, 0.25)},
-	     9u},
+	     9u,
+	     22u},
 	    {"contact",
+	     &f,
 	     {PocketAt (f, -3.0, 3.0, -5.0, 5.0, 0.3), PocketAt (f, 3.0, 5.0, -8.0, 9.0, 0.2), PocketAt (f, -5.0, -3.0, -8.0, 9.0, 0.3),
 	      PocketAt (f, -2.0, 2.0, -12.0, -8.0, 0.25), PocketAt (f, -2.0, 2.0, -8.0, -5.0, 0.1)},
-	     6u},
+	     6u,
+	     26u},
+	    {"decales",
+	     &f,
+	     {PocketAt (f, -3.0, 1.0, -5.0, 0.0, 0.3), PocketAt (f, -1.0, 3.0, 0.0, 5.0, 0.2), PocketAt (f, 2.0, 4.0, -5.0, 0.0, 0.1),
+	      PocketAt (f, -4.0, -2.0, 5.0, 8.0, 0.25)},
+	     5u,
+	     24u},
+	    {"temple", &complete, TemplePockets (complete), 9u, 22u},
 	};
-	const std::vector<std::unique_ptr<Mesh>> plain = f.Build ({});
-	for (const Case &c : cases)
+}
+
+// Volume attendu, independant du maillage du comble a poches : prisme plein moins les boites des poches.
+double ExpectedVolume (const Fixture &f, const std::vector<RoofPocket> &pockets)
+{
+	double expected = PrismVolume (f);
+	for (const RoofPocket &p : pockets)
+		expected -= FloatVolume (p, f);
+	return expected;
+}
+
+// PP2 : nombre de tranches (bornes Y distinctes moins une), contigues par Y croissants ; Lambda inchanges ; reunion
+// des tranches fermee (aretes appariees, sans face degeneree), valide, d'une composante, de volume prisme - poches a
+// 1e-9 relatif. Avec des poches au contact par une face (en X et en Y), decalees d'une tranche a l'autre, et celles du
+// temple complet, les memes proprietes.
+TEST (TEST_cgarchi_classical_greek_pediment_pocket, several_pockets_slice_the_roof_along_y)
+{
+	const std::vector<SliceCase> cases = SliceCases ();
+	ASSERT_EQ (cases.back ().pockets.size (), 5u);
+	for (const SliceCase &c : cases)
 	{
 		SCOPED_TRACE (c.name);
+		const Fixture &f = *c.fixture;
+		ASSERT_GT (PrismVolume (f), 0.0);
+		const std::vector<std::unique_ptr<Mesh>> plain = f.Build ({});
 		const std::vector<std::unique_ptr<Mesh>> pieces = f.Build (c.pockets);
-		const SliceReport s = SlicesOf (pieces);
+		const RoofReport s = RoofReportOf (pieces);
 		EXPECT_EQ (s.slices, c.slices);
-		EXPECT_TRUE (s.closed);
 		EXPECT_TRUE (s.contiguous);
-		double expected = prism;
-		for (const RoofPocket &p : c.pockets)
-			expected -= FloatVolume (p, f);
+		EXPECT_TRUE (s.closed) << s.degenerate << " faces degenerees, " << s.unpairedEdges << " aretes non appariees";
+		EXPECT_TRUE (s.validation.IsValid ());
+		EXPECT_EQ (s.validation.components, 1u);
+		const double expected = ExpectedVolume (f, c.pockets);
 		EXPECT_NEAR (s.volume, expected, kRelativeVolume * expected);
+		EXPECT_NEAR (s.validation.signedVolume, expected, kRelativeVolume * expected);
 		for (std::size_t k = 0; k < 2; ++k)
 		{
 			const Roof a = RoofOf (*plain[k]);
@@ -441,7 +631,22 @@ TEST (TEST_cgarchi_classical_greek_pediment_pocket, several_pockets_slice_the_ro
 	}
 }
 
-// PP3 : recouvrement refuse, apres les refus de chaque poche ; poches contigues (contact par une face) acceptees.
+// PP5 : aucune face interne aux coupes. Dans un plan y = cte, les faces des deux tranches voisines ne se recouvrent
+// jamais (chaque bout ne couvre que la difference des deux sections) ; aux tympans, la section entiere. Sur les cas
+// de PP2, dont le comble du temple d'Hephaistos : aucun recouvrement, nombre de faces de ces plans fige.
+TEST (TEST_cgarchi_classical_greek_pediment_pocket, slices_leave_no_internal_face_at_their_cuts)
+{
+	for (const SliceCase &c : SliceCases ())
+	{
+		SCOPED_TRACE (c.name);
+		const RoofReport s = RoofReportOf (c.fixture->Build (c.pockets));
+		EXPECT_EQ (s.overlaps, 0u);
+		EXPECT_EQ (s.cutFaces, c.cutFaces);
+	}
+}
+
+// PP3 : recouvrement refuse, apres les refus de chaque poche ; poches contigues (contact par une face) acceptees,
+// contact par une arete seule refuse (PP4).
 TEST (TEST_cgarchi_classical_greek_pediment_pocket, overlapping_pockets_are_refused_and_contiguous_ones_accepted)
 {
 	const Fixture &f = Hephaistos ();
@@ -457,7 +662,8 @@ TEST (TEST_cgarchi_classical_greek_pediment_pocket, overlapping_pockets_are_refu
 
 	EXPECT_EQ (RefusalOf ([&] { f.Build ({a, PocketAt (f, 3.0, 4.0, -5.0, 5.0, 0.2)}); }), "");
 	EXPECT_EQ (RefusalOf ([&] { f.Build ({a, PocketAt (f, -3.0, 3.0, 5.0, 9.0, 0.3)}); }), "");
-	EXPECT_EQ (RefusalOf ([&] { f.Build ({a, PocketAt (f, 3.0, 4.0, 5.0, 9.0, 0.3)}); }), "");
+	EXPECT_EQ (RefusalOf ([&] { f.Build ({a, PocketAt (f, 3.0, 4.0, 5.0, 9.0, 0.3)}); }),
+	           "Fronton : 'roofPocket' : deux poches de tranches voisines ne se touchent que par une arete");
 }
 
 // PP4 : bornes de deux poches distinctes en double et confondues en float, en Y (toutes tranches) et en X (meme
@@ -478,8 +684,24 @@ TEST (TEST_cgarchi_classical_greek_pediment_pocket, pocket_bounds_merged_in_floa
 	ASSERT_EQ (static_cast<float> (zA), static_cast<float> (zB));
 	EXPECT_EQ (RefusalOf ([&] { f.Build ({a, {3.0, 4.0, -5.0, 5.0, zB}}); }),
 	           "Fronton : sommets confondus en float : plafonds de deux poches au contact");
-	// Bornes X confondues dans des tranches differentes : admises.
+	// Bornes X confondues dans des tranches separees par une autre : admises ; dans deux tranches voisines, elles se
+	// rencontrent dans leur plan de coupe : refusees, comme deux plafonds distincts en double, confondus en float, au
+	// droit d'une meme colonne de part et d'autre de la coupe.
 	EXPECT_EQ (RefusalOf ([&] { f.Build ({a, PocketAt (f, afterX, 4.0, 6.0, 9.0, 0.2)}); }), "");
+	EXPECT_EQ (RefusalOf ([&] { f.Build ({a, PocketAt (f, afterX, 4.0, 5.0, 9.0, 0.2)}); }), merged);
+	EXPECT_EQ (RefusalOf ([&] { f.Build ({a, {-1.0, 1.0, 5.0, 9.0, zB}}); }),
+	           "Fronton : sommets confondus en float : plafonds de deux poches au contact");
+	EXPECT_EQ (RefusalOf ([&] { f.Build ({a, {-1.0, 1.0, 5.0, 9.0, zA}}); }), "");
+	// Poches de tranches voisines au contact par une arete verticale seule (coins en damier dans le plan de coupe),
+	// dans les deux sens (plafonds egaux : PP3) : refusees ; les emprises se recouvrant en X :
+	// admises.
+	const std::string edge = "Fronton : 'roofPocket' : deux poches de tranches voisines ne se touchent que par une arete";
+	EXPECT_EQ (RefusalOf ([&] { f.Build ({PocketAt (f, -2.0, 0.0, -2.0, 2.0, 0.3), PocketAt (f, 0.0, 1.0, -3.0, -2.0, 0.2)}); }),
+	           edge);
+	EXPECT_EQ (RefusalOf ([&] { f.Build ({PocketAt (f, 0.0, 1.0, -2.0, 2.0, 0.2), PocketAt (f, -2.0, 0.0, -3.0, -2.0, 0.3)}); }),
+	           edge);
+	EXPECT_EQ (RefusalOf ([&] { f.Build ({PocketAt (f, -2.0, 0.0, -2.0, 2.0, 0.3), PocketAt (f, -0.5, 1.0, -3.0, -2.0, 0.2)}); }),
+	           "");
 
 	const RefinementStations none {};
 	const std::vector<std::vector<RoofPocket>> lists = {{a}, {a, PocketAt (f, 3.5, 4.0, 6.0, 9.0, 0.2)}};

@@ -183,6 +183,7 @@ public:
         p.pointSize  = static_cast<float>(m_pointSize->GetValue());
         p.lineColor  = m_lineColor->GetColour();
         p.pointColor = m_pointColor->GetColour();
+        p.creaseAngleDeg = CreaseFromSlider(m_creaseAngle->GetValue());
         return p;
     }
 
@@ -220,6 +221,15 @@ private:
     static int ClampInt(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
     static wxString PxLabel(int v) { return wxString::Format(wxT("%d px"), v); }
 
+    // Crease angle slider: 0 selects the meshes' own normals, 1..90 a
+    // threshold in degrees.
+    static float CreaseFromSlider(int v)
+        { return v <= 0 ? kCreaseAngleMeshNormals : static_cast<float>(v); }
+    static int SliderFromCrease(float deg)
+        { return deg < 0.0f ? 0 : ClampInt(static_cast<int>(deg + 0.5f), 1, 90); }
+    static wxString CreaseLabel(int v)
+        { return v <= 0 ? wxString(_("mesh normals")) : wxString::Format(wxT("%d\u00B0"), v); }
+
     // 3D Panel tab: two sliders driving the 3D view line width and point size.
     // Live-applied like the 2D Panel controls.
     wxPanel* BuildViewPage(wxWindow* parent, const PanelSettings& panel)
@@ -242,6 +252,12 @@ private:
         m_lineColor  = new wxColourPickerCtrl(page, wxID_ANY, panel.lineColor);
         m_pointColor = new wxColourPickerCtrl(page, wxID_ANY, panel.pointColor);
 
+        // Smooth shading: faces meeting at less than this angle are shaded
+        // smooth, sharper edges stay sharp. 0: the meshes' own normals.
+        m_creaseAngle = new wxSlider(page, wxID_ANY, SliderFromCrease(panel.creaseAngleDeg),
+                                     0, 90, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
+        m_creaseAngleLabel = new wxStaticText(page, wxID_ANY, CreaseLabel(m_creaseAngle->GetValue()));
+
         // label | control (grows) | value
         wxFlexGridSizer* grid = new wxFlexGridSizer(0, 3, 8, 10);
         grid->AddGrowableCol(1, 1);
@@ -257,6 +273,9 @@ private:
         grid->Add(new wxStaticText(page, wxID_ANY, _("Point color")), 0, wxALIGN_CENTER_VERTICAL);
         grid->Add(m_pointColor, 0, wxALIGN_CENTER_VERTICAL);
         grid->AddSpacer(0);
+        grid->Add(new wxStaticText(page, wxID_ANY, _("Crease angle")), 0, wxALIGN_CENTER_VERTICAL);
+        grid->Add(m_creaseAngle, 1, wxEXPAND);
+        grid->Add(m_creaseAngleLabel, 0, wxALIGN_CENTER_VERTICAL);
 
         wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
         sizer->Add(grid, 0, wxEXPAND | wxALL, 10);
@@ -264,6 +283,7 @@ private:
 
         m_lineWidth->Bind(wxEVT_SLIDER, &SettingsDialog::OnViewChanged, this);
         m_pointSize->Bind(wxEVT_SLIDER, &SettingsDialog::OnViewChanged, this);
+        m_creaseAngle->Bind(wxEVT_SLIDER, &SettingsDialog::OnViewChanged, this);
         m_lineColor->Bind(wxEVT_COLOURPICKER_CHANGED, &SettingsDialog::OnViewChanged, this);
         m_pointColor->Bind(wxEVT_COLOURPICKER_CHANGED, &SettingsDialog::OnViewChanged, this);
 
@@ -360,6 +380,7 @@ private:
     {
         m_lineWidthLabel->SetLabel(PxLabel(m_lineWidth->GetValue()));
         m_pointSizeLabel->SetLabel(PxLabel(m_pointSize->GetValue()));
+        m_creaseAngleLabel->SetLabel(CreaseLabel(m_creaseAngle->GetValue()));
         if (m_onPanelChanged)
             m_onPanelChanged(GetPanelSettings());
         event.Skip();
@@ -424,4 +445,6 @@ private:
     wxStaticText*       m_pointSizeLabel;
     wxColourPickerCtrl* m_lineColor;
     wxColourPickerCtrl* m_pointColor;
+    wxSlider*           m_creaseAngle;
+    wxStaticText*       m_creaseAngleLabel;
 };

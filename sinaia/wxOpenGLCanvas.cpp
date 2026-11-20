@@ -4,6 +4,7 @@
 #define _WINSOCKAPI_
 #include "../src/cgre/gl_wrapper.h"
 #include "../src/cgmath/cgmath.h"
+#include "../src/cgmath/turntable.h"
 #include "../src/cgmesh/bounding_box.h"
 #include "../src/cgmesh/cgmesh.h"
 #include "../src/cgmesh/mesh_data_manager.h"
@@ -161,18 +162,13 @@ MyGLCanvas::MyGLCanvas(wxWindow *parent, wxTextCtrl* pCtrlLog, int *args)
 	m_fBackgroundColor[2] = 0.894118f;   // 0xE4
 
 	rendering_properties_init (prop);
-	m_bBoundingBox = false;
 
 	m_pTrackball = new Ctrackball ();
 	m_pTrackball->set_zoom (-5.f);
-
-	m_pMesh = nullptr;
-
-	m_fFovy = 45.f;
-	m_fWindowWidth = 0.f;
-	m_fWindowHeight = 0.f;
-	m_fNear = 0.001f;
-	m_fFar = 100.0f;
+	// Mode de rotation choisi dans Options > 3D Panel > Trackballs : un onglet
+	// neuf le recoit avant tout geste.
+	if (const MyFrame* frame = dynamic_cast<MyFrame*>(wxGetTopLevelParent(parent)))
+		m_pTrackball->set_rotation_mode (frame->GetRotationMode ());
 
 	// Accepte le glisser-déposer de fichiers : chaque fichier lâché est ajouté à la scène.
 	SetDropTarget(new ModelDropTarget(this));
@@ -211,6 +207,17 @@ MyGLCanvas::~MyGLCanvas()
 	m_listId.clear ();
 	m_listSegments.clear ();
 */
+}
+
+void MyGLCanvas::SetCreaseAngle(float deg)
+{
+	if (deg == prop.crease_angle_deg)
+		return;
+	prop.crease_angle_deg = deg;
+	if (m_pVModels)
+		for (const auto& mdl : m_pVModels->GetModels())
+			mdl->m_meshNormals = false;
+	Refresh(false);
 }
 
 Mesh* MyGLCanvas::GetMesh(void)
@@ -512,6 +519,37 @@ void MyGLCanvas::SetCameraOrientation (float azimuthDeg, float elevationDeg)
 	Refresh (false);
 }
 
+void MyGLCanvas::SetCameraTurntable (float azimuthDeg, float elevationDeg)
+{
+	if (!m_pTrackball) return;
+
+	const double kDegToRad = 3.14159265358979323846 / 180.0;
+	const TMatrix4<float> r = RotationFromTurntable (azimuthDeg * kDegToRad,
+	                                                 elevationDeg * kDegToRad);
+	m_pTrackball->set_rotation (&r.at (0, 0));
+	Refresh (false);
+}
+
+void MyGLCanvas::SetRotationMode (Ctrackball::RotationMode mode)
+{
+	if (!m_pTrackball) return;
+	m_pTrackball->set_rotation_mode (mode);
+	Refresh (false);
+}
+
+void MyGLCanvas::StraightenHorizon ()
+{
+	if (!m_pTrackball) return;
+	m_pTrackball->straighten_horizon ();
+	Refresh (false);
+}
+
+Ctrackball::RotationMode MyGLCanvas::GetRotationMode () const
+{
+	return m_pTrackball ? m_pTrackball->get_rotation_mode ()
+	                    : Ctrackball::RotationMode::Trackball;
+}
+
 void MyGLCanvas::SetCameraZoom (float zoom)
 {
 	if (!m_pTrackball) return;
@@ -541,6 +579,15 @@ bool MyGLCanvas::GetCameraInfo (CameraInfo& info) const
 	info.sceneRadius   = m_pTrackball->get_depth_radius ();
 	info.framingRadius = m_pTrackball->get_framing_radius ();
 	info.fovYDeg       = m_pTrackball->get_fov_y_deg ();
+
+	const double kRadToDeg = 180.0 / 3.14159265358979323846;
+	const TurntableAngles angles = TurntableFromRotation (cam.GetRotation ());
+	info.rotationMode  = m_pTrackball->get_rotation_mode ();
+	info.azimuthDeg    = angles.azimuth   * kRadToDeg;
+	info.elevationDeg  = angles.elevation * kRadToDeg;
+	info.rollDeg       = RollOfRotation (cam.GetRotation ()) * kRadToDeg;
+	info.rotationSlowdown = m_pTrackball->get_rotation_slowdown ();
+	info.panSlowdown      = m_pTrackball->get_pan_slowdown ();
 
 	int w = 0, h = 0;
 	GetClientSize (&w, &h);
@@ -631,7 +678,7 @@ MyGLCanvas::ProjectedPoint MyGLCanvas::ProjectPoint (const float world[3]) const
 }
 
 // Repose l'orientation par defaut -- la vue trois-quarts de
-// Ctrackball::ResetTransformations, azimut 30 deg / elevation 20 deg -- puis
+// Ctrackball::ResetTransformations, azimut -30 deg / elevation 20 deg -- puis
 // recadre sur la scene visible, ce qui repose pivot et distance. C'est le
 // point de depart de toute capture de reference.
 void MyGLCanvas::ResetCamera ()
@@ -727,9 +774,10 @@ bool MyGLCanvas::SetCameraPivot (float x, float y, float z)
 	return true;
 }
 
-// Panoramique scripte. Il passe par le meme point d'entree que le glisser du
-// bouton du milieu, sinon le critere mesurerait une replique de la loi au lieu
-// de la loi.
+// Panoramique scripte, au pas brut. Il passe par le meme point d'entree que le
+// glisser du bouton du milieu, sinon le critere mesurerait une replique de la
+// loi au lieu de la loi ; le glisser y multiplie le deplacement par le facteur
+// de ralentissement de son geste.
 bool MyGLCanvas::PanCamera (float dx, float dy)
 {
 	if (!m_pTrackball)
@@ -968,15 +1016,18 @@ bool MyGLCanvas::ScreenToRay(float x, float y, float orig[3], float dir[3])
 
 MyGLCanvas::PickHit MyGLCanvas::PickModel(float x, float y)
 {
-	PickHit hit;
-	if (!m_pVModels)
-		return hit;
 	float o[3], d[3];
 	if (!ScreenToRay(x, y, o, d))
-		return hit;
+		return PickHit();
+	return PickModelAlongRay(o, d);
+}
 
-	Model* best = nullptr;
-	float  bestT = 1e30f;
+void MyGLCanvas::ImpactsAlongRay(const float o[3], const float d[3], std::vector<ModelRayImpact>& out)
+{
+	out.clear();
+	if (!m_pVModels)
+		return;
+
 	for (auto& mdl : m_pVModels->GetModels())
 	{
 		if (!mdl->m_visible)
@@ -993,36 +1044,186 @@ MyGLCanvas::PickHit MyGLCanvas::PickModel(float x, float y)
 
 		// 2) Départage par la SURFACE (BVH triangles) si le modèle en a une ;
 		//    sinon (nuage de points sans faces) repli sur la distance d'entrée AABB.
-		float t;
+		ModelRayImpact impact;
+		impact.model = mdl.get();
 		if (mdl->HasSurface())
 		{
-			t = mdl->RayNearestSurface(o, d);
-			if (t < 0.f)
+			impact.t = mdl->RayNearestSurface(o, d);
+			if (impact.t < 0.f)
 				continue;   // boîte touchée mais aucune face -> pas un survol réel
+			impact.surface = true;
 		}
 		else
 		{
-			t = tBox;
+			impact.t = tBox;
 		}
+		out.push_back(impact);
+	}
+}
 
-		if (t < bestT)
+MyGLCanvas::PickHit MyGLCanvas::PickModelAlongRay(const float o[3], const float d[3])
+{
+	PickHit hit;
+	std::vector<ModelRayImpact> impacts;
+	ImpactsAlongRay(o, d, impacts);
+
+	Model* best = nullptr;
+	float  bestT = 1e30f;
+	for (const ModelRayImpact& impact : impacts)
+	{
+		if (impact.t < bestT)
 		{
-			bestT = t;
-			best = mdl.get();
+			bestT = impact.t;
+			best = impact.model;
 		}
 	}
 
 	if (!best)
 		return hit;
 
-	// La direction rendue par ScreenToRay est normalisee (OrbitCamera::RayFromNdc
-	// divise par sa norme), donc bestT est une distance monde le long du rayon et
-	// non un parametre d'echelle arbitraire.
+	// La direction recue est normalisee (OrbitCamera::RayFromNdc divise par sa
+	// norme, et c'est la source de tous les rayons passes ici), donc bestT est
+	// une distance monde le long du rayon et non un parametre d'echelle
+	// arbitraire.
 	hit.model = best;
 	hit.t     = bestT;
 	for (int i = 0; i < 3; ++i)
 		hit.point[i] = o[i] + bestT * d[i];
 	return hit;
+}
+
+// RAYON DU CENTRE EXACT DE L'IMAGE, NDC (0, 0), et non d'un pixel : w/2 arrondi
+// tombe a un demi-pixel du centre pour une largeur impaire, et le point vise ne
+// serait plus sur l'axe de vue.
+//
+// Le choix de t suit Ctrackball::ChooseSlowdownScene : seuls les modeles a
+// faces donnent une surface, un impact au-dessus du plan de coupe
+// { 0, 0, -1, z_c } de mesh_renderer (z > z_c) n'est pas retenu, et la boite de
+// secours -- modeles visibles, base de coupe exclue, le meme ensemble que le
+// picking -- est limitee a z <= z_c.
+Ctrackball::SlowdownScene MyGLCanvas::SlowdownSceneOnViewAxis (bool* clippedHit, Model** model)
+{
+	if (clippedHit) *clippedHit = false;
+	if (model)      *model      = nullptr;
+	if (!m_pTrackball)
+		return Ctrackball::SlowdownScene ();
+
+	float o[3], d[3];
+	m_pTrackball->get_pick_ray (0.f, 0.f, o, d);
+	std::vector<ModelRayImpact> hits;
+	ImpactsAlongRay (o, d, hits);
+
+	std::vector<Ctrackball::SlowdownImpact> impacts;
+	impacts.reserve (hits.size ());
+	for (const ModelRayImpact& hit : hits)
+	{
+		Ctrackball::SlowdownImpact impact;
+		impact.t       = hit.t;
+		impact.z       = o[2] + hit.t * d[2];
+		impact.surface = hit.surface;
+		impacts.push_back (impact);
+	}
+
+	bool  hasBox = false;
+	float boxMin[3] = { 0.f, 0.f, 0.f }, boxMax[3] = { 0.f, 0.f, 0.f };
+	if (m_pVModels)
+	{
+		const BoundingBox box = m_pVModels->AggregateBBox (true);
+		if (!box.IsEmpty ())
+		{
+			box.GetMinMax (boxMin, boxMax);
+			hasBox = true;
+		}
+	}
+
+	Ctrackball::SlowdownClip clip;
+	clip.active = prop.clipping_plane_active != 0;
+	clip.z      = prop.clipping_plane_z;
+
+	const Ctrackball::SlowdownSceneChoice choice =
+		Ctrackball::ChooseSlowdownScene (impacts, hasBox, boxMin, boxMax, clip);
+	if (clippedHit) *clippedHit = choice.clippedHit;
+	if (model && choice.impact >= 0)
+		*model = hits[(size_t)choice.impact].model;
+	return choice.scene;
+}
+
+MyGLCanvas::SlowdownProbe MyGLCanvas::ProbeRotationSlowdown ()
+{
+	SlowdownProbe out;
+	if (!m_pTrackball)
+		return out;
+	const Ctrackball::SlowdownScene scene = SlowdownSceneOnViewAxis (&out.clippedHit, &out.model);
+	out.slowdown = m_pTrackball->evaluate_rotation_slowdown (scene);
+	out.valid    = true;
+	return out;
+}
+
+const char* MyGLCanvas::SlowdownSourceName (Ctrackball::SlowdownSource source)
+{
+	switch (source)
+	{
+	case Ctrackball::SlowdownSource::Surface:  return "hit";
+	case Ctrackball::SlowdownSource::SceneBox: return "box";
+	case Ctrackball::SlowdownSource::None:     return "none";
+	}
+	return "unknown";
+}
+
+MyGLCanvas::SlowdownProbe MyGLCanvas::BeginLeftRotation ()
+{
+	SlowdownProbe out;
+	if (!m_pTrackball)
+		return out;
+	const Ctrackball::SlowdownScene scene = SlowdownSceneOnViewAxis (&out.clippedHit, &out.model);
+	out.slowdown = m_pTrackball->begin_left_rotation (scene);
+	out.valid    = true;
+	return out;
+}
+
+MyGLCanvas::SlowdownProbe MyGLCanvas::BeginPan ()
+{
+	SlowdownProbe out;
+	if (!m_pTrackball)
+		return out;
+	const Ctrackball::SlowdownScene scene = SlowdownSceneOnViewAxis (&out.clippedHit, &out.model);
+	out.slowdown = m_pTrackball->begin_pan (scene);
+	out.valid    = true;
+	return out;
+}
+
+MyGLCanvas::OrbitDragStatus MyGLCanvas::OrbitDrag (float pressX, float pressY, float dx, float dy,
+                                                   int steps, SlowdownProbe* probe)
+{
+	if (!m_pTrackball)
+		return OrbitDragStatus::NoView;
+	int w = 0, h = 0;
+	GetClientSize (&w, &h);
+	if (w <= 0 || h <= 0)
+		return OrbitDragStatus::NoView;
+	if (m_pTrackball->tb_state == PRESSED)
+		return OrbitDragStatus::ButtonHeld;
+	if (steps < 1)
+		steps = 1;
+
+	const int x0 = (int)std::lround (pressX);
+	const int y0 = (int)std::lround (pressY);
+	m_pTrackball->mouse_press (LEFT_BUTTON, PRESSED, x0, y0);
+	const SlowdownProbe first = BeginLeftRotation ();
+
+	int x = x0, y = y0;
+	for (int i = 1; i <= steps; ++i)
+	{
+		x = x0 + (int)std::lround ((double)dx * i / steps);
+		y = y0 + (int)std::lround ((double)dy * i / steps);
+		m_pTrackball->mouse_move (x, y);
+	}
+	m_pTrackball->mouse_press (LEFT_BUTTON, RELEASED, x, y);
+
+	if (probe)
+		*probe = first;
+	Refresh (false);
+	return OrbitDragStatus::Ok;
 }
 
 // POSER LE PIVOT SUR LA SURFACE SOUS UN PIXEL. Point d'entree unique du geste
@@ -1452,10 +1653,16 @@ void MyGLCanvas::DrawGL()
 	}
 	// Parcourt les fichiers (Model) VISIBLES, puis leurs maillages. Le renderer
 	// indexe par Mesh* (GetMeshId), donc rien d'autre à gérer côté ids.
+	//
+	// Un Model passé aux normales du maillage (Traitements > Normales) reçoit
+	// les propriétés de la vue avec le seuil d'angle désactivé.
+	rendering_properties_s propMeshNormals = prop;
+	propMeshNormals.crease_angle_deg = kCreaseAngleMeshNormals;
 	if (m_pVModels)
 	for (const auto& mdl : m_pVModels->GetModels())
 	{
 		if (!mdl->m_visible) continue;
+		const rendering_properties_s& modelProp = mdl->m_meshNormals ? propMeshNormals : prop;
 		for (const auto& mesh : mdl->m_meshes.GetMeshes())
 		{
 			// CG_RENDERING_VBO: server-side buffers (positions, normals, UVs,
@@ -1468,7 +1675,7 @@ void MyGLCanvas::DrawGL()
 			int id = MeshRenderer::getInstance()->GetMeshId(mesh, CG_RENDERING_VBO);
 
 			// Update rendering properties from the canvas prop
-			MeshRenderer::getInstance()->SetProperties(id, prop);
+			MeshRenderer::getInstance()->SetProperties(id, modelProp);
 
 			MeshRenderer::getInstance()->Draw(id);
 		}
@@ -1721,6 +1928,21 @@ void MyGLCanvas::OnEraseBackground(wxEraseEvent& WXUNUSED(event))
     // Do nothing, to avoid flashing on MSW
 }
 
+namespace {
+
+// Seuil clic / glisser : a 3 px ou moins de l'enfoncement, le geste est un clic.
+// Il decide du depart de la rotation (bouton gauche) et du panoramique (bouton
+// du milieu) ; au bouton gauche, il decide aussi de la selection au
+// relachement, pour qu'un meme geste ne soit jamais clic et rotation.
+constexpr int kClickSlopSquaredPx = 9;
+
+bool WithinClickSlop (int dx, int dy)
+{
+	return dx * dx + dy * dy <= kClickSlopSquaredPx;
+}
+
+} // namespace
+
 //
 //
 //
@@ -1780,6 +2002,8 @@ void MyGLCanvas::OnMouse(wxMouseEvent& event)
 		}
 
 		m_pressX = event.GetX(); m_pressY = event.GetY();   // pour distinguer clic / glisser
+		m_leftRotationPending = true;
+		m_middlePanPending    = false;   // le trackball passe a la rotation
 		m_pTrackball->mouse_press (LEFT_BUTTON, PRESSED, event.GetX(), event.GetY());
 	}
 	else if (event.LeftUp())
@@ -1792,12 +2016,12 @@ void MyGLCanvas::OnMouse(wxMouseEvent& event)
 			return;
 		}
 
+		m_leftRotationPending = false;
 		m_pTrackball->mouse_press (LEFT_BUTTON, RELEASED, event.GetX(), event.GetY());
 
 		// Clic (déplacement négligeable depuis l'enfoncement) sur un modèle -> le
 		// sélectionner ; un glisser (rotation de la vue) ne sélectionne pas.
-		const int dx = event.GetX() - m_pressX, dy = event.GetY() - m_pressY;
-		if (dx*dx + dy*dy <= 9)   // seuil 3 px
+		if (WithinClickSlop (event.GetX() - m_pressX, event.GetY() - m_pressY))
 		{
 			Model* hit = PickModel(event.GetX(), event.GetY()).model;
 			if (hit && hit != m_selectedModel)
@@ -1810,6 +2034,8 @@ void MyGLCanvas::OnMouse(wxMouseEvent& event)
 	}
 	else if (event.RightDown())
 	{
+		m_leftRotationPending = false;   // le trackball passe au dolly
+		m_middlePanPending    = false;
 		m_pTrackball->mouse_press (RIGHT_BUTTON, PRESSED, event.GetX(), event.GetY());
 	}
 	else if (event.RightUp())
@@ -1818,10 +2044,14 @@ void MyGLCanvas::OnMouse(wxMouseEvent& event)
 	}
 	else if (event.MiddleDown())
 	{
+		m_leftRotationPending = false;   // le trackball passe au panoramique
+		m_middlePressX = event.GetX(); m_middlePressY = event.GetY();
+		m_middlePanPending = true;
 		m_pTrackball->mouse_press (MIDDLE_BUTTON, PRESSED, event.GetX(), event.GetY());
 	}
 	else if (event.MiddleUp())
 	{
+		m_middlePanPending = false;
 		m_pTrackball->mouse_press (MIDDLE_BUTTON, RELEASED, event.GetX(), event.GetY());
 	}
 	else if (event.Dragging())
@@ -1829,7 +2059,27 @@ void MyGLCanvas::OnMouse(wxMouseEvent& event)
 		if (m_altPivotGesture)
 			return;   // Alt + clic gauche vise, il ne fait pas tourner la vue
 
-		wxSize sz(GetClientSize());
+		// Tant que le geste reste dans le seuil de clic, la camera ne bouge pas :
+		// un clic de selection ne la touche jamais. Au franchissement, le facteur
+		// de ralentissement du geste est fige AVANT la premiere rotation ; le
+		// centre de rotation ne bouge pas.
+		if (m_leftRotationPending)
+		{
+			if (WithinClickSlop (event.GetX() - m_pressX, event.GetY() - m_pressY))
+				return;
+			m_leftRotationPending = false;
+			BeginLeftRotation ();
+		}
+		// Meme seuil et meme moment pour le panoramique du bouton du milieu : le
+		// facteur du pas de translation est fige avant le premier deplacement.
+		if (m_middlePanPending)
+		{
+			if (WithinClickSlop (event.GetX() - m_middlePressX, event.GetY() - m_middlePressY))
+				return;
+			m_middlePanPending = false;
+			BeginPan ();
+		}
+
 		m_pTrackball->mouse_move (event.GetX(), event.GetY());
 
 		// orientation has changed, redraw mesh

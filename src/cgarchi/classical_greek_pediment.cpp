@@ -4,13 +4,14 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <map>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include <cgarchi/classical_greek_pediment_detail.h>
-#include <cgarchi/classical_greek_prism_detail.h>
 #include <cgarchi/classical_greek_section_detail.h>
 #include <cgarchi/classical_mesh.h>
 #include <cgarchi/classical_partition.h>
@@ -360,19 +361,279 @@ std::vector<double> DistinctPocketBounds (std::vector<double> bounds)
 	return bounds;
 }
 
+// Dessous du comble dans une tranche : hauteur par intervalle de X, de -xTop a
+// xTop ; zBase hors des poches, zTop sur une poche. Deux intervalles voisins de
+// meme hauteur sont fusionnes : pas de sommet aligne sans paroi.
+struct SliceProfile
+{
+	std::vector<double> x;   // bornes croissantes, x.size () == z.size () + 1
+	std::vector<double> z;
+};
+
+SliceProfile ProfileOf (const Frame &f, const std::vector<const RoofPocket *> &active)
+{
+	SliceProfile p;
+	auto push = [&p] (double x1, double z) {
+		if (!p.z.empty () && p.z.back () == z)
+			p.x.back () = x1;
+		else
+		{
+			p.z.push_back (z);
+			p.x.push_back (x1);
+		}
+	};
+	p.x.push_back (-f.xTop);
+	for (const RoofPocket *q : active)
+	{
+		if (p.x.back () < q->x0)
+			push (q->x0, f.zBase);
+		push (q->x1, q->zTop);
+	}
+	push (f.xTop, f.zBase);
+	return p;
+}
+
+// Hauteur du profil sur la colonne qui commence en x0, borne du profil ou d'un
+// profil voisin, strictement avant xTop.
+double HeightFrom (const SliceProfile &p, double x0)
+{
+	const std::size_t k = static_cast<std::size_t> (std::upper_bound (p.x.begin (), p.x.end (), x0) - p.x.begin ()) - 1;
+	return p.z[k];
+}
+
+// Sommets d'un plan de coupe y = cte entre la tranche inferieure et la tranche
+// superieure (la meme aux deux abouts) : abscisses, bornes des deux profils, et
+// a chacune les hauteurs des colonnes qui la bordent dans les deux profils.
+// Toute face du comble dont un bord est dans ce plan est subdivisee par ces
+// sommets : aucune T-jonction.
+struct PlaneVertices
+{
+	std::vector<double> x;
+	std::vector<std::vector<double>> z;   // z[j] croissantes, sommets d'abscisse x[j]
+	std::vector<double> lower, upper;     // par colonne [x[j], x[j + 1]] : hauteurs des deux profils
+};
+
+void RequireDistinctInFloat (const std::vector<double> &values, const char *what)
+{
+	for (std::size_t k = 1; k < values.size (); ++k)
+		if (static_cast<float> (values[k - 1]) == static_cast<float> (values[k]))
+			throw std::invalid_argument (std::string ("Fronton : sommets confondus en float : ") + what);
+}
+
+PlaneVertices PlaneOf (const SliceProfile &lower, const SliceProfile &upper)
+{
+	PlaneVertices v;
+	v.x = lower.x;
+	v.x.insert (v.x.end (), upper.x.begin (), upper.x.end ());
+	std::sort (v.x.begin (), v.x.end ());
+	v.x.erase (std::unique (v.x.begin (), v.x.end ()), v.x.end ());
+	RequireDistinctInFloat (v.x, "bornes de deux poches");
+	const std::size_t columns = v.x.size () - 1;
+	v.lower.reserve (columns);
+	v.upper.reserve (columns);
+	for (std::size_t j = 0; j < columns; ++j)
+	{
+		v.lower.push_back (HeightFrom (lower, v.x[j]));
+		v.upper.push_back (HeightFrom (upper, v.x[j]));
+	}
+	// Contact par une arete seule : a une borne, une cote ou chaque tranche n'est
+	// pleine que d'un cote, et pas du meme ; l'arete y serait portee par quatre faces.
+	for (std::size_t j = 1; j < columns; ++j)
+	{
+		const double l0 = v.lower[j - 1], l1 = v.lower[j], u0 = v.upper[j - 1], u1 = v.upper[j];
+		if (std::max (l0, u1) < std::min (l1, u0) || std::max (l1, u0) < std::min (l0, u1))
+			throw std::invalid_argument ("Fronton : 'roofPocket' : deux poches de tranches voisines ne se touchent que par une arete");
+	}
+	v.z.resize (v.x.size ());
+	for (std::size_t j = 0; j < v.x.size (); ++j)
+	{
+		std::vector<double> &z = v.z[j];
+		for (const std::size_t c : {j - 1, j})
+			if (c < columns)
+				z.insert (z.end (), {v.lower[c], v.upper[c]});
+		std::sort (z.begin (), z.end ());
+		z.erase (std::unique (z.begin (), z.end ()), z.end ());
+		RequireDistinctInFloat (z, "plafonds de deux poches au contact");
+	}
+	return v;
+}
+
+// Une tranche en construction : sommets partages par position, triangles
+// orientes sur une normale sortante donnee.
+class SliceBuilder
+{
+public:
+	unsigned Vertex (double x, double y, double z)
+	{
+		const std::array<double, 3> q {x, y, z};
+		const auto found = index_.find (q);
+		if (found != index_.end ())
+			return found->second;
+		const unsigned v = static_cast<unsigned> (positions_.size ());
+		positions_.push_back (q);
+		index_.emplace (q, v);
+		return v;
+	}
+
+	// Triangle retourne au besoin pour que sa normale ait un produit scalaire
+	// positif avec `outward` ; normale calculee en double sur les positions.
+	void Triangle (std::array<unsigned, 3> t, const std::array<double, 3> &outward)
+	{
+		const std::array<double, 3> &a = positions_[t[0]], &b = positions_[t[1]], &c = positions_[t[2]];
+		const std::array<double, 3> u {b[0] - a[0], b[1] - a[1], b[2] - a[2]}, w {c[0] - a[0], c[1] - a[1], c[2] - a[2]};
+		const std::array<double, 3> n {u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]};
+		if (n[0] * outward[0] + n[1] * outward[1] + n[2] * outward[2] < 0.0)
+			std::swap (t[1], t[2]);
+		triangles_.push_back (t);
+	}
+
+	// Bande plane entre deux chaines de memes extremites, `low` dans un plan,
+	// `high` dans l'autre, abscisses `lowAt` et `highAt` le long de la bande.
+	void Band (const std::vector<unsigned> &low, const std::vector<double> &lowAt, const std::vector<unsigned> &high,
+	           const std::vector<double> &highAt, const std::array<double, 3> &outward)
+	{
+		std::vector<std::array<unsigned, 3>> band;
+		AppendZipper (low, lowAt, high, highAt, false, band);
+		for (const std::array<unsigned, 3> &t : band)
+			Triangle (t, outward);
+	}
+
+	// Bande horizontale a la cote z, de x0 a x1, entre le plan `low` (y0) et le
+	// plan `high` (y1) ; chaque bord porte toutes les abscisses de son plan dans
+	// [x0, x1].
+	void HorizontalBand (const PlaneVertices &low, double y0, const PlaneVertices &high, double y1, double x0, double x1,
+	                     double z, const std::array<double, 3> &outward)
+	{
+		HorizontalChain (low, y0, x0, x1, z, a_, aAt_);
+		HorizontalChain (high, y1, x0, x1, z, c_, cAt_);
+		Band (a_, aAt_, c_, cAt_, outward);
+	}
+
+	// Paroi a l'abscisse x, de z0 a z1, entre le plan `low` (y0) et le plan
+	// `high` (y1) ; chaque bord porte toutes les cotes de son plan a x dans
+	// [z0, z1].
+	void VerticalBand (const PlaneVertices &low, double y0, const PlaneVertices &high, double y1, double x, double z0,
+	                   double z1, const std::array<double, 3> &outward)
+	{
+		VerticalChain (low, y0, x, z0, z1, a_, aAt_);
+		VerticalChain (high, y1, x, z0, z1, c_, cAt_);
+		Band (a_, aAt_, c_, cAt_, outward);
+	}
+
+	// Rectangle d'un plan de coupe y, de x0 a x1 et de z0 a z1, ses deux cotes
+	// verticaux portant toutes les cotes du plan a leur abscisse.
+	void CutRectangle (const PlaneVertices &v, double y, double x0, double x1, double z0, double z1,
+	                   const std::array<double, 3> &outward)
+	{
+		VerticalChain (v, y, x0, z0, z1, a_, aAt_);
+		VerticalChain (v, y, x1, z0, z1, c_, cAt_);
+		Band (a_, aAt_, c_, cAt_, outward);
+	}
+
+	std::unique_ptr<Mesh> Build () const
+	{
+		return MakeTriangleMesh (positions_, triangles_);
+	}
+
+private:
+	void HorizontalChain (const PlaneVertices &v, double y, double x0, double x1, double z, std::vector<unsigned> &chain,
+	                      std::vector<double> &at)
+	{
+		chain.clear ();
+		at.clear ();
+		for (const double x : v.x)
+			if (x0 <= x && x <= x1)
+			{
+				chain.push_back (Vertex (x, y, z));
+				at.push_back (x);
+			}
+	}
+
+	void VerticalChain (const PlaneVertices &v, double y, double x, double z0, double z1, std::vector<unsigned> &chain,
+	                    std::vector<double> &at)
+	{
+		chain.clear ();
+		at.clear ();
+		const std::size_t j = static_cast<std::size_t> (std::lower_bound (v.x.begin (), v.x.end (), x) - v.x.begin ());
+		for (const double z : v.z[j])
+			if (z0 <= z && z <= z1)
+			{
+				chain.push_back (Vertex (x, y, z));
+				at.push_back (z);
+			}
+	}
+
+	std::vector<unsigned> a_, c_;
+	std::vector<double> aAt_, cAt_;
+	std::vector<std::array<double, 3>> positions_;
+	std::vector<std::array<unsigned, 3>> triangles_;
+	std::map<std::array<double, 3>, unsigned> index_;
+};
+
+// Tranche [y0, y1] de profil `p`, plans de coupe `low` (y0) et `high` (y1) ;
+// `front` et `back` : ses bouts sont les tympans.
+std::unique_ptr<Mesh> SliceMesh (const Frame &f, const SliceProfile &p, double y0, double y1, const PlaneVertices &low,
+                                 const PlaneVertices &high, bool front, bool back)
+{
+	const double zRidge = f.ridge.back (), rise = zRidge - f.zBase;
+	SliceBuilder b;
+	// Pans, sans sommet entre pied et faite.
+	for (const double side : {-1.0, 1.0})
+	{
+		const std::vector<unsigned> a {b.Vertex (side * f.xTop, y0, f.zBase), b.Vertex (0.0, y0, zRidge)};
+		const std::vector<unsigned> c {b.Vertex (side * f.xTop, y1, f.zBase), b.Vertex (0.0, y1, zRidge)};
+		const std::vector<double> at {0.0, 1.0};
+		b.Band (a, at, c, at, {side * rise, 0.0, f.xTop});
+	}
+	// Dessous : intervalles du profil (normale -z), parois entre eux (normale vers la colonne la plus haute).
+	for (std::size_t k = 0; k < p.z.size (); ++k)
+	{
+		b.HorizontalBand (low, y0, high, y1, p.x[k], p.x[k + 1], p.z[k], {0.0, 0.0, -1.0});
+		if (k > 0)
+			b.VerticalBand (low, y0, high, y1, p.x[k], std::min (p.z[k - 1], p.z[k]), std::max (p.z[k - 1], p.z[k]),
+			                {p.z[k] > p.z[k - 1] ? 1.0 : -1.0, 0.0, 0.0});
+	}
+	// Bouts aux tympans : la section pleine.
+	for (const bool atBack : {false, true})
+		if (atBack ? back : front)
+		{
+			const double y = atBack ? y1 : y0;
+			b.Triangle ({b.Vertex (-f.xTop, y, f.zBase), b.Vertex (f.xTop, y, f.zBase), b.Vertex (0.0, y, zRidge)},
+			            {0.0, atBack ? 1.0 : -1.0, 0.0});
+		}
+	// Bouts dans un plan de coupe : colonnes ou cette tranche est pleine et sa voisine vide, de la plus basse a la
+	// plus haute des deux hauteurs.
+	for (const bool atBack : {false, true})
+	{
+		if (atBack ? back : front)
+			continue;
+		const PlaneVertices &v = atBack ? high : low;
+		for (std::size_t j = 0; j + 1 < v.x.size (); ++j)
+		{
+			const double own = atBack ? v.lower[j] : v.upper[j], other = atBack ? v.upper[j] : v.lower[j];
+			if (own < other)
+				b.CutRectangle (v, atBack ? y1 : y0, v.x[j], v.x[j + 1], own, other, {0.0, atBack ? 1.0 : -1.0, 0.0});
+		}
+	}
+	return b.Build ();
+}
+
 // Comble en tranches le long de Y (CE-34), une piece par tranche, par Y
-// croissants. Les contours de toutes les tranches sont formes, et leurs bornes
+// croissants. Chaque tranche porte ses pans, son dessous (base, parois et
+// plafonds des poches) et, dans un plan de coupe, la seule partie de sa section
+// que la tranche voisine ne couvre pas ; aux tympans, sa section entiere. Les
+// tranches ne sont donc pas fermees une a une ; leur reunion, sommets confondus
+// par position, l'est. Profils et plans de coupe sont formes, et leurs bornes
 // verifiees, avant le premier maillage.
 std::vector<std::unique_ptr<Mesh>> RoofSliceMeshes (const Frame &f, const std::vector<RoofPocket> &pockets)
 {
-	const std::size_t T = f.ridge.size () - 1;
 	std::vector<double> ys {-f.yTympanum, f.yTympanum};
 	for (const RoofPocket &p : pockets)
 		ys.insert (ys.end (), {p.y0, p.y1});
 	ys = DistinctPocketBounds (std::move (ys));
 
-	std::vector<std::vector<std::array<double, 2>>> outlines;
-	outlines.reserve (ys.size () - 1);
+	std::vector<SliceProfile> profiles;
+	profiles.reserve (ys.size () - 1);
 	for (std::size_t i = 0; i + 1 < ys.size (); ++i)
 	{
 		std::vector<const RoofPocket *> active;
@@ -389,18 +650,22 @@ std::vector<std::unique_ptr<Mesh>> RoofSliceMeshes (const Frame &f, const std::v
 			if (active[k - 1]->x1 == active[k]->x0 && active[k - 1]->zTop != active[k]->zTop &&
 			    static_cast<float> (active[k - 1]->zTop) == static_cast<float> (active[k]->zTop))
 				throw std::invalid_argument ("Fronton : sommets confondus en float : plafonds de deux poches au contact");
-
-		std::vector<std::array<double, 2>> outline {{-f.xTop, f.zBase}};
-		for (const RoofPocket *p : active)
-			outline.insert (outline.end (), {{p->x0, f.zBase}, {p->x0, p->zTop}, {p->x1, p->zTop}, {p->x1, f.zBase}});
-		outline.insert (outline.end (), {{f.xTop, f.zBase}, {0.0, f.ridge[T]}});
-		outlines.push_back (std::move (outline));
+		profiles.push_back (ProfileOf (f, active));
 	}
+	// Les poches ne touchent pas les tympans : les tranches extremes sont pleines.
+	if (profiles.front ().z.size () != 1 || profiles.back ().z.size () != 1)
+		throw std::logic_error ("Fronton : poche dans une tranche extreme du comble");
+
+	const std::size_t n = profiles.size ();
+	std::vector<PlaneVertices> planes;
+	planes.reserve (n + 1);
+	for (std::size_t k = 0; k <= n; ++k)
+		planes.push_back (PlaneOf (profiles[k == 0 ? 0 : k - 1], profiles[k == n ? n - 1 : k]));
 
 	std::vector<std::unique_ptr<Mesh>> slices;
-	slices.reserve (outlines.size ());
-	for (std::size_t i = 0; i < outlines.size (); ++i)
-		slices.push_back (detail::PrismMesh (outlines[i], detail::Extrusion::AlongY, -ys[i + 1], -ys[i]));
+	slices.reserve (n);
+	for (std::size_t i = 0; i < n; ++i)
+		slices.push_back (SliceMesh (f, profiles[i], ys[i], ys[i + 1], planes[i], planes[i + 1], i == 0, i + 1 == n));
 	return slices;
 }
 

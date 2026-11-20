@@ -16,6 +16,7 @@
 #include "../cgimg/cgimg.h"
 #include "octree.h"
 #include "mesh_raycast.h"
+#include "mesh_crease_normals.h"
 
 extern "C" {
 #include "../../extern/glutess/glutess.h"
@@ -42,8 +43,11 @@ void Mesh::Init ()
 	m_points.clear();
 	m_tensors.clear();
 	m_revision = 0;
+	m_bboxRevision = (uint64_t)-1;
 	m_tensorsRevision = (uint64_t)-1;
 	m_tangentsRevision = (uint64_t)-1;
+	m_creaseNormals.reset ();
+	m_creaseRevision = (uint64_t)-1;
 }
 
 void Mesh::InitVertexColors (float r, float g, float b)
@@ -728,6 +732,57 @@ std::vector<unsigned int> Mesh::BuildTriangulation() const
 //
 namespace {
 
+constexpr unsigned int kNoSlot = 0xFFFFFFFFu;
+
+// Sommets de rendu du mode a seuil : ceux d'un meme sommet source forment une
+// liste chainee, et un coin reutilise le sommet de rendu qui porte deja sa
+// normale (egalite exacte, cf. CreaseNormals) et son indice d'UV.
+class CreaseSlotTable
+{
+public:
+    explicit CreaseSlotTable(unsigned int nVertices) : m_first(nVertices, kNoSlot)
+    {
+        m_next.reserve(nVertices);
+        m_uv.reserve(nVertices);
+    }
+
+    unsigned int Find(unsigned int vi, unsigned int uv, const float n[3],
+                      const std::vector<float>& normals) const
+    {
+        for (unsigned int s = m_first[vi]; s != kNoSlot; s = m_next[s])
+            if (m_uv[s] == uv &&
+                normals[3*(size_t)s + 0] == n[0] &&
+                normals[3*(size_t)s + 1] == n[1] &&
+                normals[3*(size_t)s + 2] == n[2])
+                return s;
+        return kNoSlot;
+    }
+
+    // `slot` doit valoir le nombre de sommets de rendu deja crees.
+    void Add(unsigned int vi, unsigned int uv, unsigned int slot)
+    {
+        m_next.push_back(m_first[vi]);
+        m_uv.push_back(uv);
+        m_first[vi] = slot;
+    }
+
+private:
+    std::vector<unsigned int> m_first, m_next, m_uv;
+};
+
+// Gram-Schmidt : retire de la tangente t (xyz) sa composante le long de n, et la
+// renormalise. Une tangente parallele a n est laissee telle quelle -- aucune
+// direction n'est meilleure qu'une autre. w (t[3]) n'est pas touche.
+void orthogonalizeTangent(float t[4], const float n[3])
+{
+    const float d = t[0]*n[0] + t[1]*n[1] + t[2]*n[2];
+    const float x = t[0] - d*n[0], y = t[1] - d*n[1], z = t[2] - d*n[2];
+    const float len = std::sqrt(x*x + y*y + z*z);
+    if (!(len > 1e-6f))
+        return;
+    t[0] = x / len; t[1] = y / len; t[2] = z / len;
+}
+
 void computeNewellNormal(Mesh::ConstFaceRef face, const Mesh& mesh, float outN[3])
 {
     const unsigned int n = face->GetNVertices();
@@ -763,9 +818,41 @@ void computeNewellNormal(Mesh::ConstFaceRef face, const Mesh& mesh, float outN[3
 
 Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat) const
 {
+    return BuildRenderData(flat, nullptr);
+}
+
+Mesh::PolygonRenderData Mesh::BuildCreaseRenderData(float creaseAngleDeg) const
+{
+    if (creaseAngleDeg < 0.0f)
+        return BuildRenderData(false, nullptr);
+    return BuildRenderData(false, GetCreaseNormals(creaseAngleDeg).get());
+}
+
+std::shared_ptr<const CreaseNormals> Mesh::GetCreaseNormals(float creaseAngleDeg) const
+{
+    if (!m_creaseNormals || m_creaseRevision != m_revision || m_creaseAngle != creaseAngleDeg)
+    {
+        m_creaseNormals.reset();   // libere l'ancien avant d'allouer le nouveau
+        m_creaseNormals = std::make_shared<const CreaseNormals>(ComputeCreaseNormals(*this, creaseAngleDeg));
+        m_creaseRevision = m_revision;
+        m_creaseAngle = creaseAngleDeg;
+    }
+    return m_creaseNormals;
+}
+
+void Mesh::ReleaseCreaseNormals() const
+{
+    m_creaseNormals.reset();
+}
+
+Mesh::PolygonRenderData Mesh::BuildRenderData(bool flat, const CreaseNormals* crease) const
+{
     PolygonRenderData out;
 
-    const bool hasNormals = !m_vertexNormals.empty();
+    if (crease)
+        flat = false;
+
+    const bool hasNormals = crease || !m_vertexNormals.empty();
     const bool hasUV      = !m_texCoords.empty();
     const bool hasColors  = !m_vertexColors.empty();
 
@@ -810,7 +897,9 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat) const
     // the face normal, so no slot is shared and each triangle is uniform.
     // Per-corner UVs force the same full expansion (seed nothing) so positions /
     // normals / texCoords / colors stay parallel as each face appends its corners.
-    if (!flat && !perCornerUV)
+    // Crease normals seed nothing either: a vertex gets one render-vertex per
+    // distinct (corner normal, UV index), created on first use.
+    if (!crease && !flat && !perCornerUV)
     {
         out.positions.assign(m_pVertices.begin(),           m_pVertices.end());
         if (hasNormals) out.normals.assign  (m_vertexNormals.begin(),       m_vertexNormals.end());
@@ -827,6 +916,11 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat) const
 
     GLUtesselator* tess = nullptr;
 
+    std::unique_ptr<CreaseSlotTable> slots;
+    if (crease)
+        slots = std::make_unique<CreaseSlotTable>(m_nVertices);
+    std::vector<unsigned int> local;   // render-vertex of each corner of the face
+
     for (unsigned int fi = 0; fi < GetNFaces (); ++fi)
     {
         auto face = FaceAt (fi);
@@ -834,10 +928,18 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat) const
         const unsigned int n = face->GetNVertices();
         if (n < 3) continue;
 
+        if (crease)
+        {
+            bool inRange = true;
+            for (unsigned int i = 0; i < n && inRange; ++i)
+                inRange = (unsigned int)face->GetVertex(i) < m_nVertices;
+            if (!inRange) continue;
+        }
+
         const unsigned int matId = (unsigned int)face->GetMaterialId();
         std::vector<unsigned int>& bucket = buckets[matId];
 
-        if (n == 3 && !flat && !perCornerUV)
+        if (!crease && n == 3 && !flat && !perCornerUV)
         {
             // Smooth triangle: index directly into the shared topology slots.
             bucket.push_back((unsigned int)face->GetVertex(0));
@@ -849,26 +951,56 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat) const
         // Flat triangles AND all N>=4 polygons: append N fresh render-vertices
         // carrying the face's (Newell) normal uniformly — for a triangle this is
         // its own face normal, giving true flat shading.
-        float fn[3];
-        computeNewellNormal(face, *this, fn);
+        float fn[3] = { 0.0f, 0.0f, 1.0f };
+        if (!crease)
+            computeNewellNormal(face, *this, fn);
 
         // Normal choice for the appended corners: the face (Newell) normal for
         // flat shading and for N>=4 polygons (unchanged — avoids fan-diagonal
         // kinks on non-planar n-gons); the per-vertex normal for a triangle that
         // is only expanded because of per-corner UVs, so smooth shading survives.
+        // Crease mode: the corner normal, for every face.
         const bool useFaceNormal = flat || (n >= 4);
+        const float* cornerNormals = crease
+            ? crease->cornerNormals.data() + 3 * (size_t)crease->cornerOffsets[fi]
+            : nullptr;
 
-        const unsigned int base = (unsigned int)(out.positions.size() / 3);
+        local.resize(n);
 
         for (unsigned int i = 0; i < n; ++i)
         {
             const unsigned int vi = face->GetVertex(i);
 
+            // Per-corner UV index when the face carries one (OBJ), else the
+            // vertex index (per-vertex UVs: 3DS/3DM, scalar-field colouring).
+            unsigned int uvIdx = vi;
+            if (hasUV && face->UsesTextureCoordinates () && face->HasTexCoordIndices ())
+                uvIdx = face->GetTexCoordIndex (i);
+
+            if (crease)
+            {
+                const unsigned int s = slots->Find(vi, uvIdx, cornerNormals + 3 * (size_t)i, out.normals);
+                if (s != kNoSlot)
+                {
+                    local[i] = s;
+                    continue;
+                }
+                slots->Add(vi, uvIdx, (unsigned int)(out.positions.size() / 3));
+            }
+
+            local[i] = (unsigned int)(out.positions.size() / 3);
+
             out.positions.push_back(m_pVertices[3*vi + 0]);
             out.positions.push_back(m_pVertices[3*vi + 1]);
             out.positions.push_back(m_pVertices[3*vi + 2]);
 
-            if (hasNormals)
+            if (crease)
+            {
+                out.normals.push_back(cornerNormals[3*i + 0]);
+                out.normals.push_back(cornerNormals[3*i + 1]);
+                out.normals.push_back(cornerNormals[3*i + 2]);
+            }
+            else if (hasNormals)
             {
                 if (useFaceNormal || 3*vi + 2 >= m_vertexNormals.size())
                 {
@@ -886,12 +1018,6 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat) const
 
             if (hasUV)
             {
-                // Per-corner UV index when the face carries one (OBJ), else the
-                // vertex index (per-vertex UVs: 3DS/3DM, scalar-field colouring).
-                unsigned int uvIdx = vi;
-                if (face->UsesTextureCoordinates () && face->HasTexCoordIndices ())
-                    uvIdx = face->GetTexCoordIndex (i);
-
                 if (2*uvIdx + 1 < m_texCoords.size())
                 {
                     out.texCoords.push_back(m_texCoords[2*uvIdx + 0]);
@@ -937,6 +1063,10 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat) const
                     out.tangents.push_back(0.0f);
                     out.tangents.push_back(1.0f);
                 }
+                // The base was orthogonalized against the vertex normal; the
+                // corner normal differs from it at a crease.
+                if (crease)
+                    orthogonalizeTangent(&out.tangents[out.tangents.size() - 4], cornerNormals + 3 * (size_t)i);
             }
 
             if (hasColors)
@@ -958,9 +1088,9 @@ Mesh::PolygonRenderData Mesh::BuildPolygonRenderData(bool flat) const
 
         forEachFaceTriangle(*this, fi, tess,
             [&](unsigned int a, unsigned int b, unsigned int c) {
-                bucket.push_back(base + a);
-                bucket.push_back(base + b);
-                bucket.push_back(base + c);
+                bucket.push_back(local[a]);
+                bucket.push_back(local[b]);
+                bucket.push_back(local[c]);
             });
     }
 
@@ -1195,8 +1325,16 @@ int Mesh::computebbox (void)
 	m_bbox.Clear();
 	for (int i = 0; i < m_nVertices; i++)
 		m_bbox.AddPoint(m_pVertices[3 * i], m_pVertices[3 * i + 1], m_pVertices[3 * i + 2]);
-	
+	m_bboxRevision = m_revision;
+
 	return 0;
+}
+
+const BoundingBox& Mesh::CurrentBBox ()
+{
+	if (m_bboxRevision != m_revision)
+		computebbox ();
+	return m_bbox;
 }
 
 int Mesh::SetVertexColor (unsigned int i, float r, float g, float b)
@@ -2118,6 +2256,154 @@ void Mesh::SplitVerticesByUVSeams (void)
 	else       m_vertexTangents.clear();
 
 	IncrementRevision();
+}
+
+//
+// Split vertices by corner normals (see header).
+int Mesh::SplitVerticesByCornerNormals (const std::vector<float> &cornerNormals)
+{
+	const unsigned int nf = GetNFaces ();
+	size_t nCorners = 0;
+	for (unsigned int f = 0; f < nf; ++f)
+		if (FaceExists (f))
+			nCorners += FaceArity (f);
+	if (cornerNormals.size () != 3 * nCorners)
+		return -1;
+
+	const size_t nv = m_nVertices;
+	const bool hasN  = m_vertexNormals.size ()  == 3 * nv;
+	const bool hasC  = m_vertexColors.size ()   == 3 * nv;
+	const bool hasUV = m_texCoords.size ()      == 2 * nv;
+	const bool hasU1 = m_texCoords1.size ()     == 2 * nv;
+	const bool hasT  = m_vertexTangents.size () == 4 * nv;
+	const bool hasTensors = m_tensors.size ()   == nv;
+	const bool hasTexIdx = !m_faceTexIndices.empty ();
+
+	// Slots 0..nv-1 are the source vertices; slotSource[s] is the source of slot s,
+	// and nextSlot chains the slots of a same source vertex (kNoSlot ends it).
+	std::vector<float> normals (3 * nv);
+	for (size_t v = 0; v < nv; ++v)
+	{
+		const bool keep = hasN && (m_vertexNormals[3 * v] != 0.0f ||
+		                           m_vertexNormals[3 * v + 1] != 0.0f ||
+		                           m_vertexNormals[3 * v + 2] != 0.0f);
+		normals[3 * v]     = keep ? m_vertexNormals[3 * v]     : 0.0f;
+		normals[3 * v + 1] = keep ? m_vertexNormals[3 * v + 1] : 0.0f;
+		normals[3 * v + 2] = keep ? m_vertexNormals[3 * v + 2] : 1.0f;
+	}
+	std::vector<char> used (nv, 0);
+	std::vector<unsigned int> nextSlot (nv, kNoSlot);
+	std::vector<unsigned int> slotSource;
+
+	size_t corner = 0;
+	for (unsigned int f = 0; f < nf; ++f)
+	{
+		if (!FaceExists (f))
+			continue;
+		const unsigned int begin = FaceBegin (f);
+		const unsigned int n = FaceArity (f);
+		for (unsigned int i = 0; i < n; ++i, ++corner)
+		{
+			const unsigned int v = m_faceVertices[begin + i];
+			if (v >= nv)
+				continue;
+			const float *cn = &cornerNormals[3 * corner];
+
+			unsigned int slot = v;
+			if (!used[v])
+			{
+				used[v] = 1;
+				normals[3 * (size_t)v]     = cn[0];
+				normals[3 * (size_t)v + 1] = cn[1];
+				normals[3 * (size_t)v + 2] = cn[2];
+			}
+			else
+			{
+				unsigned int last = v;
+				while (slot != kNoSlot &&
+				       !(normals[3 * (size_t)slot] == cn[0] &&
+				         normals[3 * (size_t)slot + 1] == cn[1] &&
+				         normals[3 * (size_t)slot + 2] == cn[2]))
+				{
+					last = slot;
+					slot = nextSlot[slot];
+				}
+				if (slot == kNoSlot)
+				{
+					slot = (unsigned int)(normals.size () / 3);
+					normals.insert (normals.end (), cn, cn + 3);
+					nextSlot.push_back (kNoSlot);
+					nextSlot[last] = slot;
+					slotSource.push_back (v);
+				}
+			}
+
+			if (slot != v)
+			{
+				m_faceVertices[begin + i] = slot;
+				if (hasUV && hasTexIdx && m_faceTexIndices[begin + i] == v)
+					m_faceTexIndices[begin + i] = slot;
+			}
+		}
+	}
+
+	const size_t added = slotSource.size ();
+	m_pVertices.reserve (3 * (nv + added));
+	for (unsigned int s : slotSource)
+		for (int k = 0; k < 3; ++k)
+			m_pVertices.push_back (m_pVertices[3 * (size_t)s + k]);
+	if (hasC)
+	{
+		m_vertexColors.reserve (3 * (nv + added));
+		for (unsigned int s : slotSource)
+			for (int k = 0; k < 3; ++k)
+				m_vertexColors.push_back (m_vertexColors[3 * (size_t)s + k]);
+	}
+	if (hasUV)
+	{
+		m_texCoords.reserve (2 * (nv + added));
+		for (unsigned int s : slotSource)
+			for (int k = 0; k < 2; ++k)
+				m_texCoords.push_back (m_texCoords[2 * (size_t)s + k]);
+		m_nTexCoords = (unsigned int)(nv + added);
+	}
+	if (hasU1)
+	{
+		m_texCoords1.reserve (2 * (nv + added));
+		for (unsigned int s : slotSource)
+			for (int k = 0; k < 2; ++k)
+				m_texCoords1.push_back (m_texCoords1[2 * (size_t)s + k]);
+	}
+	else
+		m_texCoords1.clear ();
+	if (hasT)
+	{
+		m_vertexTangents.reserve (4 * (nv + added));
+		for (unsigned int s : slotSource)
+			for (int k = 0; k < 4; ++k)
+				m_vertexTangents.push_back (m_vertexTangents[4 * (size_t)s + k]);
+	}
+	else
+		m_vertexTangents.clear ();
+	if (hasTensors)
+	{
+		m_tensors.reserve (nv + added);
+		for (unsigned int s : slotSource)
+			m_tensors.push_back (m_tensors[s]);
+	}
+	else
+		m_tensors.clear ();
+
+	m_vertexNormals = std::move (normals);
+	m_nVertices = (unsigned int)(nv + added);
+
+	// Les tangentes etaient orthogonales a l'ancienne normale du sommet.
+	if (hasT)
+		for (size_t s = 0; s < (size_t)m_nVertices; ++s)
+			orthogonalizeTangent (&m_vertexTangents[4 * s], &m_vertexNormals[3 * s]);
+
+	IncrementRevision ();
+	return (int)added;
 }
 
 // MergeVertices

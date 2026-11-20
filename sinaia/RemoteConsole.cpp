@@ -986,6 +986,31 @@ std::string cmdSvgExtrude(MyFrame* frame, const std::string& args)
 // C'est aussi le seul filet de ce module : cgre n'a aucun test, et la seule
 // facon de juger un rendu reste de le regarder.
 
+// Champs d'orientation communs a `camera show`, `mode`, `orient` et `orbit`,
+// une valeur par ligne.
+void appendOrientation(std::ostringstream& os, const MyGLCanvas::CameraInfo& info)
+{
+    os << "rotation_mode " << Ctrackball::RotationModeName(info.rotationMode) << "\n";
+    os << "azimuth_deg "    << info.azimuthDeg   << "\n";
+    os << "elevation_deg "  << info.elevationDeg << "\n";
+    os << "roll_deg "       << info.rollDeg      << "\n";
+}
+
+// Facteur de ralentissement de la rotation au centre de l'image : `camera slow`
+// et premier temps de `camera orbit`. `hitName` est copie sur le thread
+// principal : le Model touche n'est plus garanti vivant ici.
+void appendSlowdown(std::ostringstream& os, const MyGLCanvas::SlowdownProbe& probe,
+                    const std::string& hitName)
+{
+    os << "slow_reason " << MyGLCanvas::SlowdownSourceName(probe.slowdown.source) << "\n";
+    os << "slow_t "      << probe.slowdown.t << "\n";
+    os << "slow_d "      << probe.slowdown.d << "\n";
+    os << "slow_s "      << probe.slowdown.s << "\n";
+    os << "clipped_hit " << (probe.clippedHit ? 1 : 0) << "\n";
+    if (probe.model)
+        os << "hit " << (hitName.empty() ? std::string("unnamed") : hitName) << "\n";
+}
+
 std::string cmdCamera(MyFrame* frame, const std::string& args)
 {
     if (!frame) return "ERR frame unavailable\n";
@@ -1023,6 +1048,158 @@ std::string cmdCamera(MyFrame* frame, const std::string& args)
         os << "framing_radius " << info.framingRadius << "\n";
         os << "fov_y_deg "      << info.fovYDeg << "\n";
         os << "viewport "     << info.viewportWidth << " " << info.viewportHeight << "\n";
+        appendOrientation(os, info);
+        os << "rotation_slowdown " << info.rotationSlowdown << "\n";
+        os << "pan_slowdown " << info.panSlowdown << "\n";
+        os << "OK\n";
+        return os.str();
+    }
+
+    // MODE DE ROTATION du bouton gauche, sur la vue ACTIVE. Rien n'est ecrit
+    // dans les preferences : un script ne modifie pas celles de l'utilisateur.
+    // Passer en platine redresse la vue (roll_deg 0).
+    if (sub == "mode")
+    {
+        std::string mode;
+        iss >> mode;
+        if (!mode.empty() && mode != "turntable" && mode != "trackball")
+            return "ERR usage: camera mode [turntable|trackball]\n";
+
+        MyGLCanvas::CameraInfo info;
+        const bool ok = callOnMain([frame, mode, &info]() -> bool {
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            if (!c) return false;
+            if (mode == "turntable")
+                c->SetRotationMode(Ctrackball::RotationMode::Turntable);
+            else if (mode == "trackball")
+                c->SetRotationMode(Ctrackball::RotationMode::Trackball);
+            return c->GetCameraInfo(info);
+        });
+        if (!ok) return "ERR no active view\n";
+        std::ostringstream os;
+        appendOrientation(os, info);
+        os << "OK\n";
+        return os.str();
+    }
+
+    // REDRESSEMENT de l'horizon (Ctrackball::straighten_horizon), dans les deux
+    // modes : roulis retire, direction de vue, pivot et distance conserves.
+    if (sub == "straighten")
+    {
+        MyGLCanvas::CameraInfo info;
+        const bool ok = callOnMain([frame, &info]() -> bool {
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            if (!c) return false;
+            c->StraightenHorizon();
+            return c->GetCameraInfo(info);
+        });
+        if (!ok) return "ERR no active view\n";
+        std::ostringstream os;
+        os << "camera straighten\n";
+        appendOrientation(os, info);
+        os << "OK\n";
+        return os.str();
+    }
+
+    // PLATINE Z-UP : la fonction meme du geste platine, sans roulis. Pivot et
+    // distance inchanges.
+    if (sub == "orient")
+    {
+        float az = 0.f, el = 0.f;
+        iss >> az >> el;
+        if (iss.fail()) return "ERR usage: camera orient AZ EL   (degrees, Z up, EL in [-90, 90])\n";
+        MyGLCanvas::CameraInfo info;
+        const bool ok = callOnMain([frame, az, el, &info]() -> bool {
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            if (!c) return false;
+            c->SetCameraTurntable(az, el);
+            return c->GetCameraInfo(info);
+        });
+        if (!ok) return "ERR no active view\n";
+        std::ostringstream os;
+        os << "camera orient " << az << " " << el << "\n";
+        appendOrientation(os, info);
+        os << "OK\n";
+        return os.str();
+    }
+
+    // GLISSER GAUCHE scripte : meme chemin que la souris (MyGLCanvas::OrbitDrag),
+    // premier temps compris. Le pixel d'enfoncement vaut le centre du viewport
+    // par defaut ; STEPS evenements de deplacement (1 par defaut).
+    if (sub == "orbit")
+    {
+        float dx = 0.f, dy = 0.f;
+        iss >> dx >> dy;
+        if (iss.fail())
+            return "ERR usage: camera orbit DX DY [PX PY] [STEPS]   (screen pixels, y downwards)\n";
+        // Arguments facultatifs : STEPS seul, PX PY, ou PX PY STEPS. Chaque jeton
+        // est lu en entier, sans reste : « 2.5 » n'est pas un nombre de pas.
+        const char* kOrbitUsage =
+            "ERR usage: camera orbit DX DY [PX PY] [STEPS]   (screen pixels, y downwards; "
+            "STEPS integer in [1, 10000])\n";
+        const auto readFloat = [](const std::string& token, float& out) -> bool {
+            std::istringstream in(token);
+            in >> out;
+            return !in.fail() && (in >> std::ws).eof();
+        };
+        const auto readSteps = [](const std::string& token, int& out) -> bool {
+            std::istringstream in(token);
+            long value = 0;
+            in >> value;
+            if (in.fail() || !(in >> std::ws).eof() || value < 1 || value > 10000)
+                return false;
+            out = (int)value;
+            return true;
+        };
+
+        float px = 0.f, py = 0.f;
+        bool hasPress = false;
+        int steps = 1;
+        {
+            std::vector<std::string> extra;
+            std::string token;
+            while (iss >> token) extra.push_back(token);
+            bool ok = true;
+            if (extra.size() == 1)
+                ok = readSteps(extra[0], steps);
+            else if (extra.size() == 2 || extra.size() == 3)
+            {
+                ok = readFloat(extra[0], px) && readFloat(extra[1], py);
+                hasPress = true;
+                if (ok && extra.size() == 3)
+                    ok = readSteps(extra[2], steps);
+            }
+            else if (!extra.empty())
+                ok = false;
+            if (!ok)
+                return kOrbitUsage;
+        }
+
+        struct Reply { bool ok = false; bool held = false; MyGLCanvas::SlowdownProbe r; std::string hit; MyGLCanvas::CameraInfo info; float px = 0.f, py = 0.f; };
+        const Reply rep = callOnMain([frame, dx, dy, px, py, hasPress, steps]() -> Reply {
+            Reply out;
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            if (!c) return out;
+            int w = 0, h = 0;
+            c->GetClientSize(&w, &h);
+            out.px = hasPress ? px : 0.5f * (float)w;
+            out.py = hasPress ? py : 0.5f * (float)h;
+            const MyGLCanvas::OrbitDragStatus status = c->OrbitDrag(out.px, out.py, dx, dy, steps, &out.r);
+            out.held = (status == MyGLCanvas::OrbitDragStatus::ButtonHeld);
+            if (status != MyGLCanvas::OrbitDragStatus::Ok) return out;
+            if (out.r.model) out.hit = out.r.model->m_name;
+            out.ok = c->GetCameraInfo(out.info);
+            return out;
+        });
+        if (rep.held) return "ERR mouse button held on the view\n";
+        if (!rep.ok) return "ERR no active view\n";
+
+        std::ostringstream os;
+        os << "camera orbit " << dx << " " << dy << " " << rep.px << " " << rep.py << " " << steps << "\n";
+        appendSlowdown(os, rep.r, rep.hit);
+        os << "pivot "    << rep.info.pivot[0] << " " << rep.info.pivot[1] << " " << rep.info.pivot[2] << "\n";
+        os << "distance " << rep.info.distance << "\n";
+        appendOrientation(os, rep.info);
         os << "OK\n";
         return os.str();
     }
@@ -1263,9 +1440,41 @@ std::string cmdCamera(MyFrame* frame, const std::string& args)
         return os.str();
     }
 
-    // PANORAMIQUE scripte, en PIXELS ecran. Il emprunte le meme point d'entree
-    // que le glisser du bouton du milieu, donc le critere « le point sous le
-    // curseur y reste » porte sur la loi reelle et non sur une replique.
+    // DIAGNOSTIC DE LA ROTATION RALENTIE : ce que le premier glisser gauche
+    // figerait sur la vue courante (MyGLCanvas::ProbeRotationSlowdown). Rien
+    // n'est modifie : ni le pivot, ni la vue, ni le facteur du dernier geste.
+    if (sub == "slow")
+    {
+        struct Reply { MyGLCanvas::SlowdownProbe r; std::string hit; float last = 1.f; float lastPan = 1.f; };
+        const Reply rep = callOnMain([frame]() -> Reply {
+            Reply out;
+            MyGLCanvas* c = frame->GetActiveCanvas();
+            if (!c) return out;                    // valid reste false
+            out.r = c->ProbeRotationSlowdown();
+            if (out.r.model) out.hit = out.r.model->m_name;
+            MyGLCanvas::CameraInfo info;
+            if (c->GetCameraInfo(info))
+            {
+                out.last    = info.rotationSlowdown;
+                out.lastPan = info.panSlowdown;
+            }
+            return out;
+        });
+        if (!rep.r.valid)
+            return "ERR no active view\n";
+
+        std::ostringstream os;
+        appendSlowdown(os, rep.r, rep.hit);
+        os << "rotation_slowdown " << rep.last << "\n";
+        os << "pan_slowdown " << rep.lastPan << "\n";
+        os << "OK\n";
+        return os.str();
+    }
+
+    // PANORAMIQUE scripte, en PIXELS ecran, au pas brut. Il emprunte le meme
+    // point d'entree que le glisser du bouton du milieu, donc le critere « un
+    // point du plan du pivot reste sous le curseur » porte sur la loi reelle et
+    // non sur une replique ; le glisser y entre avec son facteur s.
     if (sub == "pan")
     {
         float dx = 0.f, dy = 0.f;
@@ -1376,8 +1585,9 @@ std::string cmdCamera(MyFrame* frame, const std::string& args)
         return os.str();
     }
 
-    return "ERR usage: camera [show|reset|azel AZ EL|zoom Z|dist D|pivot X Y Z|pivot auto|"
-           "pivot model N|pivot mat|pivot pick PX PY|pan DX DY|project X Y Z|"
+    return "ERR usage: camera [show|reset|mode [turntable|trackball]|straighten|orient AZ EL|"
+           "orbit DX DY [PX PY] [STEPS]|azel AZ EL|zoom Z|dist D|pivot X Y Z|pivot auto|"
+           "pivot model N|pivot mat|pivot pick PX PY|slow|pan DX DY|project X Y Z|"
            "unproject PX PY]\n";
 }
 
@@ -1566,13 +1776,42 @@ std::string cmdHelp()
         "  drop N                     move model N down onto the Z = 0 plane\n"
         "  normalize                  recentre + scale the active model to the target size\n"
         "  screenshot PATH            save current viewport to PATH as PNG\n"
-        "  camera [show|reset|azel AZ EL|zoom Z|dist D|pivot X Y Z|pivot auto|\n"
-        "          pivot model N|pivot mat|pivot pick PX PY|pan DX DY|\n"
-        "          project X Y Z|unproject PX PY]\n"
+        "  camera [show|reset|mode [turntable|trackball]|straighten|\n"
+        "          orient AZ EL|orbit DX DY [PX PY] [STEPS]|azel AZ EL|zoom Z|dist D|\n"
+        "          pivot X Y Z|pivot auto|pivot model N|pivot mat|pivot pick PX PY|\n"
+        "          slow|pan DX DY|project X Y Z|unproject PX PY]\n"
         "                             deterministic camera, for reference renders.\n"
         "                             show: pivot, eye, distance, near/far, depth\n"
         "                             sphere (centre + radius), framing radius,\n"
-        "                             fov and viewport -- one per line.\n"
+        "                             fov and viewport, then rotation_mode,\n"
+        "                             azimuth_deg, elevation_deg (Z up), roll_deg\n"
+        "                             (0 = level horizon),\n"
+        "                             rotation_slowdown (factor s of the current left\n"
+        "                             gesture or of the last left press) and\n"
+        "                             pan_slowdown (same for the middle button) --\n"
+        "                             one per line.\n"
+        "                             mode [turntable|trackball]: left-drag rotation\n"
+        "                             law of the ACTIVE view (no arg: report it).\n"
+        "                             turntable: azimuth about world Z, elevation\n"
+        "                             clamped to [-90, 90], level horizon; switching\n"
+        "                             to it straightens the view. trackball: free\n"
+        "                             virtual sphere. Preferences are not written.\n"
+        "                             straighten: remove the roll in either mode\n"
+        "                             (view direction, pivot, distance kept).\n"
+        "                             orient AZ EL: turntable orientation, degrees,\n"
+        "                             Z up, no roll; pivot and distance unchanged.\n"
+        "                             orbit DX DY [PX PY] [STEPS]: scripted left drag\n"
+        "                             of (DX, DY) px pressed at (PX, PY) (viewport\n"
+        "                             centre by default) in STEPS moves (integer,\n"
+        "                             1 to 10000, default 1),\n"
+        "                             through the mouse code path, first-drag\n"
+        "                             slowdown included. Replies the fields of slow,\n"
+        "                             pivot, distance and the orientation fields of\n"
+        "                             show. Refused while a mouse button is held on\n"
+        "                             the view.\n"
+        "                             azel AZ EL: LEGACY Y-up convention, kept for\n"
+        "                             reference renders; it introduces roll (90 deg\n"
+        "                             at azel 90 0). Use orient for a Z-up view.\n"
         "                             zoom Z: signed (negative = further away).\n"
         "                             dist D: same, positive form (D > 0).\n"
         "                             pivot X Y Z: orbit centre, distance unchanged.\n"
@@ -1588,9 +1827,29 @@ std::string cmdHelp()
         "                             with the pivot, the ray parameter t and the\n"
         "                             model hit. A ray that hits nothing is an error\n"
         "                             and leaves the pivot where it was.\n"
+        "                             slow: what the first left-drag or middle-drag\n"
+        "                             would freeze,\n"
+        "                             nothing is modified. The image-centre ray is\n"
+        "                             cast into the visible models: t = distance to\n"
+        "                             the nearest surface hit on a model with faces,\n"
+        "                             below the active cutting plane (slow_reason\n"
+        "                             hit); else, eye outside the visible models' box\n"
+        "                             cut at the plane (z <= plane z), t = ray entry\n"
+        "                             into that box (box); else s = 1 (none).\n"
+        "                             d = eye-to-pivot distance, rotation step\n"
+        "                             multiplied by s = clamp(t/d, 0.02, 1); the\n"
+        "                             middle-drag pan step too.\n"
+        "                             Replies slow_reason, slow_t, slow_d, slow_s,\n"
+        "                             clipped_hit (0/1: a surface hit above the\n"
+        "                             plane was discarded), hit (model name, if\n"
+        "                             any), rotation_slowdown (current left\n"
+        "                             gesture or last left press) and pan_slowdown\n"
+        "                             (same for the middle button).\n"
         "                             pan DX DY: screen-pixel pan. It MOVES THE\n"
-        "                             PIVOT, so the point under the cursor stays\n"
-        "                             under it at any distance.\n"
+        "                             PIVOT, so a point in the pivot plane stays\n"
+        "                             under the cursor at any distance. Raw step,\n"
+        "                             no slowdown (the middle-drag multiplies its\n"
+        "                             displacement by its frozen s).\n"
         "                             project X Y Z: world point -> viewport pixels,\n"
         "                             ORIGIN TOP-LEFT, y downwards, as mouse events.\n"
         "                             Errors out when the point is behind the eye or\n"

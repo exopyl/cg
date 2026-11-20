@@ -812,7 +812,7 @@ TEST(TEST_cgarchi_classical_naos_interior, the_dependency_table_covers_every_com
 	// Recoupement par la construction : cella incomplete, interieur et epicranitis bloques par la cella ; interieur
 	// incomplet, le temple du lot C1 augmente du couronnement et du prolongement (+ 592 faces, lot C3), du plafond est
 	// (+ 19 980 faces), des plafonds des flancs (+ 20 856 faces) et du comble en 7 tranches au lieu du prisme (poches du
-	// pteron est, du porche ouest et des flancs : 120 faces au lieu de 8) ; colonnes incompletes, interieur bloque par
+	// pteron est, du porche ouest et des flancs : 108 faces au lieu de 8) ; colonnes incompletes, interieur bloque par
 	// les colonnes.
 	MonumentData noWallTop = heph;
 	spoil(noWallTop, P::Cella);
@@ -824,7 +824,7 @@ TEST(TEST_cgarchi_classical_naos_interior, the_dependency_table_covers_every_com
 	spoil(noSpacing, P::Interior);
 	const MonumentBuild b2 = BuildMonumentMesh(noSpacing);
 	EXPECT_EQ(b2.report[static_cast<std::size_t>(P::Interior)].state, MonumentPartState::Incomplete);
-	EXPECT_EQ(b2.mesh->GetNFaces(), 1124316u + 440u + 152u + 19980u + 20856u - 8u + 120u);
+	EXPECT_EQ(b2.mesh->GetNFaces(), 1124316u + 440u + 152u + 19980u + 20856u - 8u + 108u);
 	EXPECT_EQ(b1.report[static_cast<std::size_t>(P::Epicranitis)].state, MonumentPartState::Blocked);
 	MonumentData noHeight = heph;
 	spoil(noHeight, P::Columns);

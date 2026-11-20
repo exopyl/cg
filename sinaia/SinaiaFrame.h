@@ -91,6 +91,8 @@ class MyFrame : public wxFrame
         ID_3D_SHADING,
         ID_3D_WARNING,
         ID_RENDER_SHOW_FPS,
+        ID_VIEW_ROTATION_TRACKBALL,
+        ID_VIEW_ROTATION_TURNTABLE,
 
 	ID_BUTTON_RENDERING_BGCOLOR,
 
@@ -200,6 +202,12 @@ public:
     // Active 3D canvas of the foreground notebook page, or nullptr if no
     // model is open. Used by the remote console.
     MyGLCanvas* GetActiveCanvas();
+
+    // Mode de rotation du bouton gauche choisi dans Options > 3D Panel >
+    // Trackballs, persiste sous /View/RotationMode. Chaque canvas le recoit a
+    // sa construction ; un changement par le menu l'applique a tous les
+    // onglets ouverts. `camera mode` ne modifie que la vue active.
+    Ctrackball::RotationMode GetRotationMode() const { return m_rotationMode; }
 
     // Load a model file into a new tab. Used by the remote console ('open'):
     // a failure is logged, never shown in a modal box that would stall a script.
@@ -341,6 +349,8 @@ private:
 	void On3DClippingPlane(wxCommandEvent& evt);
 
 	void OnToggleShowFps(wxCommandEvent& evt);
+	void OnRotationModeMenu(wxCommandEvent& evt);
+	void OnUpdateUIRotationMode(wxUpdateUIEvent& evt);
 
 	void OnBgColor(wxCommandEvent& evt);
 	void UpdateGeometry (void);
@@ -398,6 +408,8 @@ private:
     void SaveFavorites();                            // m_favorites -> wxConfig /Favorites
     wxString LoadLastDir();                          // wxConfig /General/LastDir
     void SaveLastDir(const wxString& dir);
+    void LoadRotationMode();                         // m_rotationMode <- wxConfig /View/RotationMode
+    void SaveRotationMode();                         // m_rotationMode -> wxConfig /View/RotationMode
 
     void UpdatePropertiesGrid();
     // Peuple le panneau "Models" (une ligne par Model de la vue courante, case = visible).
@@ -472,12 +484,16 @@ private:
 
     bool m_bShowFps = false;
 
+    // Voir GetRotationMode. Cle absente ou illisible : le defaut de Ctrackball.
+    Ctrackball::RotationMode m_rotationMode = Ctrackball::RotationMode::Trackball;
+
     // 3D view appearance edited via the "3D Panel" tab of the Settings dialog,
     // applied to every open canvas and to tabs created afterwards.
     float m_lineWidth = 2.0f;   // wireframe/edge line width (pixels)
     float m_pointSize = 3.0f;   // point size (pixels)
     wxColour m_lineColor  = wxColour(38, 115, 217);  // line ('l') primitive colour
     wxColour m_pointColor = wxColour(230, 51, 51);   // point ('p') primitive colour
+    float m_creaseAngleDeg = kDefaultCreaseAngleDeg;   // smooth shading crease angle (degrees)
 
     // Operations applied to a model on import (edited via File > Settings).
     ImportSettings m_importSettings;

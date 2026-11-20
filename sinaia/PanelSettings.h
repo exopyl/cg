@@ -2,6 +2,8 @@
 
 #include <wx/colour.h>
 
+#include "mesh_crease_normals.h"
+
 //
 // Appearance options for the application's notebook panels, edited via the
 // "2D Panel" tab of the Settings dialog. These used to live in the
@@ -27,4 +29,7 @@ struct PanelSettings
     // the steel blue / red the renderer used before they became configurable.
     wxColour lineColor  = wxColour(38, 115, 217);
     wxColour pointColor = wxColour(230, 51, 51);
+    // Smooth shading crease angle in degrees (kDefaultCreaseAngleDeg); negative
+    // (kCreaseAngleMeshNormals): the meshes' own per-vertex normals.
+    float creaseAngleDeg = kDefaultCreaseAngleDeg;
 };

@@ -4,12 +4,14 @@
 using namespace std;
 
 #include "../cgmesh/cgmesh.h"
+#include "../cgmesh/mesh_crease_normals.h"
 
 typedef struct vboInfo
 {
 	Mesh*     pMesh;        // kept for revision-based re-upload
 	uint64_t  revision;     // last uploaded mesh revision
 	bool      flat;         // last uploaded shading mode (flat vs smooth normals)
+	float     creaseAngleDeg; // last uploaded crease threshold (smooth only)
 
 	GLuint    vboPositions; // GL_ARRAY_BUFFER — vec3 per vertex
 	GLuint    vboNormals;   // 0 if absent
@@ -44,6 +46,11 @@ struct SurfaceDrawState
 {
 	//! Normales par face plutot que par sommet.
 	bool flat = false;
+
+	//! Ombrage lisse (flat faux) : seuil d'angle des normales, en degres
+	//! (Mesh::BuildCreaseRenderData). Negatif (kCreaseAngleMeshNormals) : les
+	//! normales par sommet du maillage. Change de valeur => reteleversement.
+	float creaseAngleDeg = kDefaultCreaseAngleDeg;
 
 	//! A FAUX : le materiau neutre est lie une fois, et les materiaux du
 	//! maillage -- donc leurs textures -- sont ignores quel que soit le contenu
@@ -110,7 +117,7 @@ public:
 	                         const SurfaceDrawState& state = {});
 
 private:
-	void uploadMesh(Mesh* mesh, vboInfo& info, bool flat);
+	void uploadMesh(Mesh* mesh, vboInfo& info, bool flat, float creaseAngleDeg);
 	void releaseBuffers(vboInfo& info);
 
 	int m_idCurrent;

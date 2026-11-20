@@ -10,7 +10,7 @@ Ce qui appartient au module :
 - géométrie analytique : `Plane`, `Circle`, `Ellipse`, `Arc`, `Sphere`, `Torus`, `Triangle` (`geometry.h`), `AABox`,
   droites, segments, rayons, quadriques, intersections algébriques ;
 - courbes génériques : Bézier, NURBS, courbes analytiques (`curve*.h`), aplatissement de Bézier ;
-- caméras (`TCamera`, `OrbitCamera`), générateur aléatoire ;
+- caméras (`TCamera`, `OrbitCamera`), orientation de platine Z-up (`turntable.h`), générateur aléatoire ;
 - typographie : lecture TrueType (`font.h`, stb_truetype) et mise en page de texte latin (`text_layout.h`). Elle
   sort de la définition « mathématiques » ; elle reste ici parce que `cgmesh` et `cggraph/nodes` la consomment tous deux.
 

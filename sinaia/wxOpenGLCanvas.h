@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstddef>
 #include <list>
+#include <vector>
 #include "../src/cgre/cgre.h"
 #include "../src/cgmesh/vmodels.h"
 #include "CuttingMat.h"
@@ -152,6 +153,13 @@ public:
 	void SetSmooth (bool bSmooth) { m_bSmooth = bSmooth; Refresh(false); };
 	bool GetSmooth (void) { return m_bSmooth; };
 
+	// Ombrage lisse : seuil d'angle des normales, en degres ; negatif
+	// (kCreaseAngleMeshNormals) pour les normales par sommet des maillages.
+	// Un CHANGEMENT de seuil rend la vue au seuil a tous les modeles, y compris
+	// ceux que Traitements > Normales avait passes aux normales du maillage.
+	void SetCreaseAngle (float deg);
+	float GetCreaseAngle (void) const { return prop.crease_angle_deg; };
+
 	// Width (in pixels) of the wireframe / edge lines drawn in the 3D view.
 	void SetLineWidth (float w) { prop.linesize = w; Refresh(false); };
 	float GetLineWidth (void) { return prop.linesize; };
@@ -184,19 +192,34 @@ public:
 	// C'est une convention Y-up, posee sur un monde Z-up : (0, 0) rend
 	// l'IDENTITE, c'est-a-dire une vue a la verticale depuis +Z. Elle ne
 	// coincide donc PAS avec l'orientation par defaut de ResetCamera, qui est
-	// la vue trois-quarts de Ctrackball::ResetTransformations.
+	// la vue trois-quarts de Ctrackball::ResetTransformations. Elle introduit du
+	// roulis (90 deg a azimut 90, elevation 0) : `camera azel` la garde parce que
+	// des mesures de reference en dependent. SetCameraTurntable est la forme
+	// Z-up sans roulis.
 	void  SetCameraOrientation (float azimuthDeg, float elevationDeg);
+	// Platine Z-up, en degres : R = RotationFromTurntable(az, el), la fonction
+	// meme du geste platine. Elevation bornee a [-90, 90]. Pivot et distance
+	// inchanges.
+	void  SetCameraTurntable (float azimuthDeg, float elevationDeg);
 	void  SetCameraZoom (float zoom);
 	float GetCameraZoom () const;
 	void  ResetCamera ();
+
+	// Mode de rotation du bouton gauche (Ctrackball::RotationMode). Passer en
+	// platine redresse la vue.
+	void  SetRotationMode (Ctrackball::RotationMode mode);
+	// Retire le roulis, dans les deux modes (Ctrackball::straighten_horizon).
+	void  StraightenHorizon ();
+	Ctrackball::RotationMode GetRotationMode () const;
 
 	// PIVOT. C'est un ETAT, pose par ces deux actions explicites et par les
 	// cadrages du chargement -- jamais derive au vol. Une bascule de visibilite
 	// ne le deplace donc PAS : faire sauter la vue sous l'utilisateur parce
 	// qu'il a masque un modele serait une regression, pas un service.
 	//
-	// SetCameraPivot ne touche pas a la distance ; FrameVisibleScene recadre sur
-	// la bbox agregee des modeles visibles, base de coupe exclue.
+	// SetCameraPivot ne touche pas a la distance (Ctrackball::set_pivot).
+	// FrameVisibleScene recadre sur la bbox agregee des modeles visibles, base
+	// de coupe exclue.
 	bool  SetCameraPivot (float x, float y, float z);
 	bool  FrameVisibleScene ();
 
@@ -222,9 +245,10 @@ public:
 	bool  FrameCuttingMat ();
 
 	// PANORAMIQUE scripte, en pixels ecran (origine en haut a gauche, comme les
-	// evenements souris). Meme chemin que le glisser du bouton du milieu : le
-	// critere « le point sous le curseur y reste » se mesure donc sur la loi
-	// reellement utilisee, et non sur une replique.
+	// evenements souris). Meme point d'entree que le glisser du bouton du milieu
+	// (Ctrackball::pan_screen), au pas brut : le glisser y entre avec le
+	// deplacement multiplie par le facteur de ralentissement du geste, ce
+	// panoramique scripte sans facteur.
 	bool  PanCamera (float dx, float dy);
 
 	// POSER LE PIVOT SUR LE POINT DE SURFACE SOUS UN PIXEL, sans toucher a la
@@ -260,6 +284,40 @@ public:
 	};
 	PivotPick SetPivotFromPixel (float pixelX, float pixelY);
 
+	// ROTATION RALENTIE DE PRES (Ctrackball::begin_left_rotation). Le canvas
+	// lance le rayon du CENTRE EXACT de l'image et le pique dans les modeles
+	// visibles ; une surface retiree par le plan de coupe actif ne compte pas.
+	// A defaut de surface, la boite des modeles visibles (cache de Mesh) sert de
+	// secours. Le facteur s et sa source viennent de Ctrackball.
+	struct SlowdownProbe
+	{
+		bool   valid      = false;             // false : pas de camera
+		Ctrackball::RotationSlowdown slowdown;
+		bool   clippedHit = false;             // surface touchee, retiree par la coupe
+		Model* model      = nullptr;           // modele touche (source Surface)
+	};
+	// Evalue s sur la vue courante, sans rien modifier : `camera slow`.
+	SlowdownProbe ProbeRotationSlowdown ();
+	static const char* SlowdownSourceName (Ctrackball::SlowdownSource source);
+
+	// GLISSER GAUCHE SCRIPTE : enfoncement au pixel (pressX, pressY), puis le
+	// premier temps de OnMouse au franchissement du seuil de clic
+	// (BeginLeftRotation, prive), puis `steps` deplacements reguliers jusqu'a
+	// (pressX + dx, pressY + dy), arrondis au pixel, puis relachement.
+	// `probe`, s'il est fourni, recoit le resultat du premier temps (statut Ok).
+	//
+	// Refuse, sans rien modifier, tant qu'un bouton de la souris est tenu sur
+	// la vue : le relachement simule laisserait le trackball au repos sous un
+	// bouton encore enfonce.
+	enum class OrbitDragStatus
+	{
+		Ok,
+		NoView,        // pas de camera, ou viewport vide
+		ButtonHeld     // un geste souris est en cours
+	};
+	OrbitDragStatus OrbitDrag (float pressX, float pressY, float dx, float dy, int steps,
+	                           SlowdownProbe* probe);
+
 	// ------------------------------------------------------------------
 	// INSTRUMENT DE MESURE de la camera
 	// ------------------------------------------------------------------
@@ -289,6 +347,18 @@ public:
 		float fovYDeg        = 0.f;
 		int   viewportWidth  = 0;
 		int   viewportHeight = 0;
+		// Orientation lue dans R par TurntableFromRotation et RollOfRotation, en
+		// degres. roll_deg vaut 0 pour un horizon droit.
+		Ctrackball::RotationMode rotationMode = Ctrackball::RotationMode::Trackball;
+		double azimuthDeg    = 0.0;
+		double elevationDeg  = 0.0;
+		double rollDeg       = 0.0;
+		// Facteur de ralentissement du geste gauche en cours ou du dernier
+		// enfoncement gauche (Ctrackball::get_rotation_slowdown).
+		float  rotationSlowdown = 1.f;
+		// Meme chose pour le panoramique du bouton du milieu
+		// (Ctrackball::get_pan_slowdown).
+		float  panSlowdown = 1.f;
 	};
 	bool GetCameraInfo (CameraInfo& info) const;
 
@@ -426,6 +496,29 @@ protected:
 private:
 	void InitGL();
 
+	// PREMIER TEMPS D'UNE ROTATION AU BOUTON GAUCHE, au franchissement du seuil
+	// de clic : point d'entree unique du glisser souris et de OrbitDrag. Il fige
+	// le facteur de ralentissement du geste ; ni le pivot ni la vue ne bougent.
+	SlowdownProbe BeginLeftRotation ();
+	// PREMIER TEMPS D'UN PANORAMIQUE AU BOUTON DU MILIEU, au franchissement du
+	// seuil de clic : meme scene et meme regle que BeginLeftRotation, le facteur
+	// fige est celui du pas de translation (Ctrackball::begin_pan).
+	SlowdownProbe BeginPan ();
+	// Rayon du centre exact de l'image, pique dans la scene visible.
+	Ctrackball::SlowdownScene SlowdownSceneOnViewAxis (bool* clippedHit, Model** model);
+
+	// Un impact par modele visible dont la boite est touchee, dans l'ordre des
+	// modeles : la surface la plus proche (BVH) si le modele a des faces,
+	// l'entree dans sa boite sinon. Source commune du picking et du
+	// ralentissement.
+	struct ModelRayImpact
+	{
+		Model* model   = nullptr;
+		float  t       = 0.f;     // distance le long du rayon, dir normalisee
+		bool   surface = false;   // false : entree dans la boite d'un modele sans faces
+	};
+	void ImpactsAlongRay (const float orig[3], const float dir[3], std::vector<ModelRayImpact>& out);
+
 	// Les deux moitiés d'un ajout, séparées pour qu'un lot ne recadre qu'une fois.
 	// AppendOneModel charge le fichier et l'insère dans la scène sans TOUCHER à la
 	// caméra ni redessiner ; FinishAppendBatch clôt le lot (recadrage, mode
@@ -527,28 +620,37 @@ private:
 	};
 	// N'inspecte que les Model visibles.
 	PickHit PickModel(float x, float y);
+	// Meme picking pour un rayon monde deja construit ; `dir` doit etre
+	// normalisee pour que PickHit::t soit une distance.
+	PickHit PickModelAlongRay(const float orig[3], const float dir[3]);
 
 	// Racine du groupe de partage GL (voir SetSharedContext). Appartient a
 	// MyFrame, qui la cree avant tout canvas et la conserve pour la duree de
 	// l'application : ce canvas n'en est jamais proprietaire.
 	static wxGLContext* s_pSharedContext;
 
-	bool m_bInitialized;
+	// Initialisations ici, et non seulement dans le constructeur : celui-ci rend
+	// la main avant de les poser quand le chargeur OpenGL echoue.
+	bool m_bInitialized = false;
 
 	// rendering modes
-	rendering_properties_s prop;
-	float m_fBackgroundColor[3];
-	bool m_bSmooth;
-	bool m_bBoundingBox;
+	rendering_properties_s prop {};
+	float m_fBackgroundColor[3] = { 0.f, 0.f, 0.f };
+	// Lisse : la valeur de rendering_properties_init (prop.smooth = 1), que
+	// rendu et barre d'outils lisent ensuite ici -- MyFrame pose les boutons
+	// Smooth et Flat d'apres GetSmooth () a chaque changement d'onglet.
+	bool m_bSmooth = true;
+	bool m_bBoundingBox = false;
 
-	Ctrackball *m_pTrackball;
+	// Possede, jamais libere (debt_sinaia.md).
+	Ctrackball *m_pTrackball = nullptr;
 
 	// Possede par le canvas : sa duree de vie est celle de la VUE, pas celle du
 	// modele affiche. Basculer d'un modele a l'autre ne doit pas relire l'asset.
 	CuttingMat m_cuttingMat;
 
 	//CRenderingEngine *m_pRenderingEngine;
-	int m_nId;
+	int m_nId = 0;
 	std::list<int> m_listId;
 
 	Mesh *m_pMesh = nullptr;
@@ -566,17 +668,31 @@ private:
 	// moment ou l'utilisateur vise.
 	bool     m_altPivotGesture = false;
 
+	// Vrai entre l'enfoncement du bouton gauche (sans Alt) et le premier glisser
+	// qui depasse le seuil de clic. Tant qu'il est leve, le geste est encore un
+	// clic : la camera ne bouge pas. Au franchissement du seuil, le facteur de
+	// ralentissement est fige (BeginLeftRotation), puis la rotation part de la
+	// position d'enfoncement.
+	bool     m_leftRotationPending = false;
+
+	// Meme regle pour le bouton du milieu : vrai entre l'enfoncement et le
+	// premier glisser qui depasse le seuil de clic, compte depuis
+	// (m_middlePressX, m_middlePressY). Au franchissement, le facteur du
+	// panoramique est fige (BeginPan), puis le panoramique part de la position
+	// d'enfoncement.
+	bool     m_middlePanPending = false;
+	int      m_middlePressX = 0, m_middlePressY = 0;
 
 	// viewport
-	float m_fFovy;
-	float m_fWindowWidth, m_fWindowHeight;
-	float m_fNear, m_fFar;
+	float m_fFovy = 45.f;
+	float m_fWindowWidth = 0.f, m_fWindowHeight = 0.f;
+	float m_fNear = 0.001f, m_fFar = 100.0f;
 
 	// NPR
 	//NPRManager *m_pNPRManager;
 
 	//ListNPRSegments m_listSegments;
-	float m_fNPRAngleThreshold;
+	float m_fNPRAngleThreshold = 0.f;
 
 	// FPS overlay
 	unsigned int m_fpsFrames = 0;

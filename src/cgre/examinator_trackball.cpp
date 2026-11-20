@@ -1,7 +1,12 @@
 #include <math.h>
+#include <cmath>
+#include <cstring>
+#include <limits>
 #include <stdio.h>
 
 #include "examinator_trackball.h"
+
+#include <cgmath/turntable.h>
 
 // Dolly rates, expressed as the exponent applied to the eye distance.
 // Right-drag over the full window height multiplies the distance by e^2 (7.4x);
@@ -13,35 +18,13 @@ static const float kWheelDollyRate = 0.1f;
 static const float kFallbackMinDistance = 0.01f;
 static const float kFallbackMaxDistance = 1000.f;
 
-// ORIENTATION PAR DEFAUT : vue trois-quarts, azimut -30 deg, elevation 20 deg.
-//
-// Le monde est Z-up. L'azimut est mesure dans le plan XY depuis +X vers +Y,
-// l'elevation au-dessus de ce plan : l'oeil se place donc sur la direction
-//
-//     r3 = ( cos(el).cos(az) , cos(el).sin(az) , sin(el) )
-//
-// vue depuis le quadrant x>0 y<0, legerement en surplomb. La verticale du monde
-// +Z reste vers le haut de l'image : la deuxieme ligne de R est +Z projete
-// orthogonalement a r3 puis normalise, et la premiere ligne ferme le triedre
-// direct. R est la rotation monde -> oeil, donc ces vecteurs en sont les
-// LIGNES ; le tableau ci-dessous est COLONNE-MAJEUR, m[4.colonne + ligne].
-//
-//     ligne 0 (droite ecran) = ( -sin(az)         ,  cos(az)         , 0       )
-//     ligne 1 (haut ecran)   = ( -sin(el).cos(az) , -sin(el).sin(az) , cos(el) )
-//     ligne 2 (vers l'oeil)  = (  cos(el).cos(az) ,  cos(el).sin(az) , sin(el) )
-//
-// L'ELEVATION DOIT RESTER FRANCHEMENT A L'ECART DE 90 DEG. A la verticale, la
-// direction de vue devient colineaire a +Z : la deuxieme ligne s'annule et
-// l'orientation cesse d'etre definie -- c'est la degenerescence signalee dans
-// orbit_camera.h. Les 20 deg retenus laissent 70 deg de marge ; une retouche
-// qui s'approche de la verticale doit d'abord choisir une autre reference de
-// haut d'ecran.
-static const GLfloat kDefaultViewRotation[16] = {
-	 0.5f,          -0.2961981f,     0.8137977f,     0.f,   // colonne 0
-	 0.8660254f,     0.1710101f,    -0.4698463f,     0.f,   // colonne 1
-	 0.f,            0.9396926f,     0.3420201f,     0.f,   // colonne 2
-	 0.f,            0.f,            0.f,            1.f    // colonne 3
-};
+// ORIENTATION PAR DEFAUT : la platine d'azimut -30 deg et d'elevation 20 deg,
+// vue trois-quarts depuis le quadrant x>0 y<0, legerement en surplomb, +Z vers
+// le haut de l'image. Convention des angles : turntable.h.
+static const double kDefaultAzimuthDeg   = -30.0;
+static const double kDefaultElevationDeg =  20.0;
+
+static const double kDegToRad = 3.14159265358979323846 / 180.0;
 
 Ctrackball::Ctrackball ()
 {
@@ -62,6 +45,17 @@ Ctrackball::Ctrackball ()
 	m_depthCenter[0] = m_depthCenter[1] = m_depthCenter[2] = 0.f;
 	m_depthRadius   = 0.f;
 	m_framingRadius = 0.f;
+
+	m_rotationMode    = RotationMode::Trackball;
+	m_rotationSlowdown = 1.f;
+	m_panSlowdown      = 1.f;
+	m_pressX = m_pressY = 0;
+	m_lastX  = m_lastY  = 0;
+	m_anchorValid     = false;
+	m_anchorX = m_anchorY = 0;
+	m_anchorAzimuth   = 0.0;
+	m_anchorElevation = 0.0;
+	m_anchorPivot.Set (0.f, 0.f, 0.f);
 }
 
 void
@@ -111,6 +105,10 @@ Ctrackball::mouse_press (int button, int state, int x, int y)
 				// rotation then keeps forever.
 				if (has_valid_dimensions ())
 					tbPointToVector(x, y, tb_lastposition);
+				m_pressX = x; m_pressY = y;
+				m_lastX  = x; m_lastY  = y;
+				m_anchorValid = false;
+				m_rotationSlowdown = 1.f;
 				break;
 
 			case RIGHT_BUTTON:
@@ -123,11 +121,15 @@ Ctrackball::mouse_press (int button, int state, int x, int y)
 				tb_state  = PRESSED;
 				tb_button = MIDDLE_BUTTON;
 				lastX = x; lastY = y;
+				m_panSlowdown = 1.f;
 				break;
 		}
     }
   else
-    tb_state = RELEASED;
+    {
+      tb_state = RELEASED;
+      m_anchorValid = false;
+    }
 }
 
 void
@@ -141,6 +143,12 @@ Ctrackball::mouse_move (int x, int y)
       switch (tb_button)
 	{
 	case  LEFT_BUTTON:
+	  m_lastX = x; m_lastY = y;
+	  if (m_rotationMode == RotationMode::Turntable)
+	    {
+	      turntable_move (x, y);
+	      break;
+	    }
 	  tbPointToVector(x, y, current_position);
 
 	  // The rotation angle is the geometric angle between the two trackball
@@ -169,7 +177,7 @@ Ctrackball::mouse_move (int x, int y)
 	    // degenere et reorthonormalise la rotation a chaque pas, ce que
 	    // l'aller-retour par la pile de matrices GL ne faisait ni l'un ni
 	    // l'autre -- et elle s'execute sans contexte GL, donc elle se teste.
-	    m_orbit.Orbit (axis, (float)angleRad);
+	    m_orbit.Orbit (axis, (float)(m_rotationSlowdown * angleRad));
 	  }
 
 	  // reset for next time
@@ -179,7 +187,7 @@ Ctrackball::mouse_move (int x, int y)
 	  break;
 
 	case MIDDLE_BUTTON:
-	  pan_screen ((float)(x - lastX), (float)(y - lastY));
+	  pan_screen (m_panSlowdown * (float)(x - lastX), m_panSlowdown * (float)(y - lastY));
 	  lastX = x; lastY = y;
 	  break;
 
@@ -310,16 +318,23 @@ void Ctrackball::set_camera (void)
 // lointain ou un tapis de 450 mm imposerait son echelle au zoom : un cube de
 // 0,1 unite pose a 500 mm demande d = 0,27 et se verrait refuser tout en deca
 // de 5,0, soit 2,4 % de la hauteur d'image au lieu de 54,5 %.
+float
+Ctrackball::get_min_distance () const
+{
+  return (m_framingRadius > 0.f)? m_framingRadius * 0.01f : kFallbackMinDistance;
+}
+
+float
+Ctrackball::get_max_distance () const
+{
+  return (m_framingRadius > 0.f)? m_framingRadius * 100.f : kFallbackMaxDistance;
+}
+
 void
 Ctrackball::set_distance (float distance)
 {
-  float minDistance = kFallbackMinDistance;
-  float maxDistance = kFallbackMaxDistance;
-  if (m_framingRadius > 0.f)
-    {
-      minDistance = m_framingRadius * 0.01f;
-      maxDistance = m_framingRadius * 100.f;
-    }
+  const float minDistance = get_min_distance ();
+  const float maxDistance = get_max_distance ();
 
   if (!(distance > minDistance))   // also catches NaN
     distance = minDistance;
@@ -334,6 +349,152 @@ Ctrackball::zoom_step (float steps)
 {
   // A positive step moves the eye closer, like a wheel rolled forward.
   set_distance (m_orbit.GetDistance () * expf (-kWheelDollyRate * steps));
+}
+
+namespace
+{
+
+// Distance d'entree du rayon o + t.dir dans la boite [mn, mx], pour une
+// origine HORS de la boite (test des dalles, en double). false si le rayon la
+// manque ou si elle est derriere l'origine.
+bool RayEntryIntoBox (const float o[3], const float dir[3],
+                      const float mn[3], const float mx[3], double& tEntry)
+{
+	double t0 = 0.0;
+	double t1 = std::numeric_limits<double>::infinity ();
+	for (int a = 0; a < 3; ++a)
+	{
+		if (dir[a] == 0.f)
+		{
+			if (o[a] < mn[a] || o[a] > mx[a])
+				return false;
+			continue;
+		}
+		double ta = ((double)mn[a] - (double)o[a]) / (double)dir[a];
+		double tb = ((double)mx[a] - (double)o[a]) / (double)dir[a];
+		if (ta > tb)
+		{
+			const double swap = ta; ta = tb; tb = swap;
+		}
+		if (ta > t0) t0 = ta;
+		if (tb < t1) t1 = tb;
+		if (t0 > t1)
+			return false;
+	}
+	tEntry = t0;
+	return true;
+}
+
+bool BoxContains (const float mn[3], const float mx[3], const float p[3])
+{
+	for (int a = 0; a < 3; ++a)
+		if (!(p[a] >= mn[a] && p[a] <= mx[a]))
+			return false;
+	return true;
+}
+
+} // namespace
+
+float
+Ctrackball::SlowdownFactor (float t, float d)
+{
+	// Les negations attrapent aussi NaN ; t = +inf echoue a ratio < 1.
+	if (!(t >= 0.f) || !(d > 0.f) || !std::isfinite (d))
+		return 1.f;
+	const float ratio = t / d;
+	if (!(ratio < 1.f))
+		return 1.f;
+	return (ratio < kSlowMin)? kSlowMin : ratio;
+}
+
+Ctrackball::RotationSlowdown
+Ctrackball::evaluate_rotation_slowdown (const SlowdownScene& scene) const
+{
+	RotationSlowdown out;
+	out.d = m_orbit.GetDistance ();
+
+	if (scene.surfaceHit)
+	{
+		out.source = SlowdownSource::Surface;
+		out.t      = scene.surfaceDepth;
+		out.s      = SlowdownFactor (out.t, out.d);
+		return out;
+	}
+
+	if (scene.hasBox)
+	{
+		float origin[3], direction[3];
+		get_pick_ray (0.f, 0.f, origin, direction);
+		double tEntry = 0.0;
+		if (!BoxContains (scene.boxMin, scene.boxMax, origin)
+		    && RayEntryIntoBox (origin, direction, scene.boxMin, scene.boxMax, tEntry))
+		{
+			out.source = SlowdownSource::SceneBox;
+			out.t      = (float)tEntry;
+			out.s      = SlowdownFactor (out.t, out.d);
+			return out;
+		}
+	}
+
+	out.source = SlowdownSource::None;
+	out.t      = 0.f;
+	out.s      = 1.f;
+	return out;
+}
+
+Ctrackball::SlowdownSceneChoice
+Ctrackball::ChooseSlowdownScene (const std::vector<SlowdownImpact>& impacts,
+                                 bool hasBox, const float boxMin[3], const float boxMax[3],
+                                 const SlowdownClip& clip)
+{
+	SlowdownSceneChoice out;
+
+	for (size_t i = 0; i < impacts.size (); ++i)
+	{
+		const SlowdownImpact& impact = impacts[i];
+		if (!impact.surface)
+			continue;
+		if (clip.active && impact.z > clip.z)
+		{
+			out.clippedHit = true;
+			continue;
+		}
+		if (out.impact < 0 || impact.t < out.scene.surfaceDepth)
+		{
+			out.impact             = (int)i;
+			out.scene.surfaceHit   = true;
+			out.scene.surfaceDepth = impact.t;
+		}
+	}
+
+	if (hasBox)
+	{
+		for (int a = 0; a < 3; ++a)
+		{
+			out.scene.boxMin[a] = boxMin[a];
+			out.scene.boxMax[a] = boxMax[a];
+		}
+		if (clip.active && clip.z < out.scene.boxMax[2])
+			out.scene.boxMax[2] = clip.z;
+		out.scene.hasBox = !(out.scene.boxMin[2] > out.scene.boxMax[2]);
+	}
+	return out;
+}
+
+Ctrackball::RotationSlowdown
+Ctrackball::begin_left_rotation (const SlowdownScene& scene)
+{
+	const RotationSlowdown out = evaluate_rotation_slowdown (scene);
+	m_rotationSlowdown = out.s;
+	return out;
+}
+
+Ctrackball::RotationSlowdown
+Ctrackball::begin_pan (const SlowdownScene& scene)
+{
+	const RotationSlowdown out = evaluate_rotation_slowdown (scene);
+	m_panSlowdown = out.s;
+	return out;
 }
 
 void
@@ -352,13 +513,129 @@ Ctrackball::pan_screen (float dx, float dy)
 
 void Ctrackball::ResetTransformations()
 {
-    m_orbit.SetRotation (kDefaultViewRotation);
+    const TMatrix4<float> r = RotationFromTurntable (kDefaultAzimuthDeg * kDegToRad,
+                                                     kDefaultElevationDeg * kDegToRad);
+    m_orbit.SetRotation (&r.at (0, 0));
+    rebase_left_gesture ();
 }
 
 void
 Ctrackball::set_pivot (float x, float y, float z)
 {
 	m_orbit.SetPivot (x, y, z);
+	rebase_left_gesture ();
+}
+
+const char*
+Ctrackball::RotationModeName (RotationMode mode)
+{
+	return (mode == RotationMode::Turntable) ? "turntable" : "trackball";
+}
+
+bool
+Ctrackball::ParseRotationMode (const char* name, RotationMode& mode)
+{
+	if (!name)
+		return false;
+	if (std::strcmp (name, "turntable") == 0)
+	{
+		mode = RotationMode::Turntable;
+		return true;
+	}
+	if (std::strcmp (name, "trackball") == 0)
+	{
+		mode = RotationMode::Trackball;
+		return true;
+	}
+	return false;
+}
+
+void
+Ctrackball::set_rotation_mode (RotationMode mode)
+{
+	if (mode == m_rotationMode)
+		return;
+	m_rotationMode = mode;
+	if (mode == RotationMode::Turntable)
+		straighten_horizon ();
+	rebase_left_gesture ();
+}
+
+void
+Ctrackball::straighten_horizon ()
+{
+	const TurntableAngles angles = TurntableFromRotation (m_orbit.GetRotation ());
+	const TMatrix4<float> r = RotationFromTurntable (angles.azimuth, angles.elevation);
+	m_orbit.SetRotation (&r.at (0, 0));
+	rebase_left_gesture ();
+}
+
+void
+Ctrackball::rebase_left_gesture ()
+{
+	if (tb_state != PRESSED || tb_button != LEFT_BUTTON)
+		return;
+	m_pressX = m_lastX;
+	m_pressY = m_lastY;
+	m_anchorValid = false;
+	if (has_valid_dimensions ())
+		tbPointToVector (m_lastX, m_lastY, tb_lastposition);
+}
+
+void
+Ctrackball::turntable_move (int x, int y)
+{
+	if (!m_anchorValid)
+	{
+		m_anchorX         = m_pressX;
+		m_anchorY         = m_pressY;
+		m_anchorRotation  = m_orbit.GetRotation ();
+		m_anchorPivot     = m_orbit.GetPivot ();
+		const TurntableAngles angles = TurntableFromRotation (m_anchorRotation);
+		m_anchorAzimuth   = angles.azimuth;
+		m_anchorElevation = angles.elevation;
+		m_anchorValid     = true;
+	}
+
+	// Deplacement nul : l'etat d'ancrage est restitue TEL QUEL, roulis compris.
+	// Le reconstruire par RotationFromTurntable perdrait ce roulis et les bits
+	// de R. L'ancrage n'est jamais anterieur a la derniere ecriture exterieure
+	// de l'orientation ou du pivot (rebase_left_gesture) : le pivot restitue est
+	// celui du geste en cours.
+	if (x == m_anchorX && y == m_anchorY)
+	{
+		m_orbit.SetRotation (&m_anchorRotation.at (0, 0));
+		m_orbit.SetPivot (m_anchorPivot);
+		return;
+	}
+
+	// Convention « on saisit l'objet » : vers la droite, la face avant suit le
+	// curseur, donc l'oeil part a gauche et l'azimut diminue ; vers le bas (y
+	// ecran croissant), le haut de l'objet vient vers soi et l'elevation croit.
+	const int side = (gl_window_width < gl_window_height)? gl_window_width : gl_window_height;
+	const double k = (double)m_rotationSlowdown * (double)kRotationRadiansPerSide / (double)side;
+	const double azimuth = m_anchorAzimuth - k * (double)(x - m_anchorX);
+	double elevation     = m_anchorElevation + k * (double)(y - m_anchorY);
+
+	// A la borne, l'ancrage est repose sur le pixel courant : le premier pixel
+	// de retour fait redescendre la vue, sans zone morte.
+	const bool clamped = (elevation > kTurntableMaxElevation || elevation < -kTurntableMaxElevation);
+	if (elevation > kTurntableMaxElevation)
+		elevation = kTurntableMaxElevation;
+	else if (elevation < -kTurntableMaxElevation)
+		elevation = -kTurntableMaxElevation;
+
+	const TMatrix4<float> r = RotationFromTurntable (azimuth, elevation);
+	if (clamped)
+	{
+		m_anchorX         = x;
+		m_anchorY         = y;
+		m_anchorAzimuth   = azimuth;
+		m_anchorElevation = elevation;
+		m_anchorRotation  = r;
+		m_anchorPivot     = m_orbit.GetPivot ();
+	}
+	m_orbit.SetRotation (&r.at (0, 0));
 }
 
 void
@@ -403,6 +680,7 @@ void
 Ctrackball::set_rotation (const float m[16])
 {
 	m_orbit.SetRotation (m);
+	rebase_left_gesture ();
 }
 
 void Ctrackball::getCameraPosition (float *x, float *y, float *z)

@@ -27,7 +27,9 @@ public:
 	Model(const Model&)            = delete;
 	Model& operator=(const Model&) = delete;
 
-	// Recalcule la bbox agrégée des maillages du modèle et la renvoie.
+	// Réagrège la bbox des maillages du modèle et la renvoie. Chaque maillage
+	// rend sa boîte à jour (Mesh::CurrentBBox) : seuls ceux dont la révision a
+	// changé sont reparcourus, le coût courant est en O(nombre de maillages).
 	const BoundingBox& ComputeBBox();
 
 	// Construit un BVH par maillage à faces (pour le picking sur la surface). À
@@ -47,6 +49,10 @@ public:
 	std::string m_path;            // chemin complet du fichier d'origine (infobulle)
 	VMeshes     m_meshes;          // maillages de CE fichier (possédés)
 	bool        m_visible = true;  // rendu ignoré si false
+	// Ombrage lissé avec les normales PAR SOMMET des maillages, et non les
+	// normales à seuil d'angle de la vue : posé quand un traitement calcule
+	// des normales que le rendu doit montrer.
+	bool        m_meshNormals = false;
 	BoundingBox m_bbox;            // bbox agrégée (cadrage + surbrillance au survol)
 
 private:

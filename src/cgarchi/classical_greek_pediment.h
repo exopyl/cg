@@ -148,13 +148,27 @@ struct RoofPocket
 // Plusieurs poches : comble en tranches le long de Y. Bornes des tranches :
 // {-yTympanum, y0 et y1 de chaque poche, +yTympanum}, triees, sans doublon.
 // Dans la tranche [y0, y1], les poches actives (celles dont l'emprise couvre la
-// tranche) sont triees par x0 ; contour (X, Z) : (-xTop, zBase), puis pour
-// chaque poche (x0, zBase), (x0, zTop), (x1, zTop), (x1, zBase), puis
-// (xTop, zBase) et (0, ridge[T]) ; la tranche est detail::PrismMesh de ce
-// contour le long de Y, de y0 a y1 (sommets confondus et alignes retires : deux
-// poches au contact par une face partagent leur paroi). Pieces dans l'ordre des
-// Y croissants, apres les deux Lambda. Les coordonnees sont des copies des
-// bornes, de zBase, de xTop et du faite, sans produit.
+// tranche) sont triees par x0 ; profil du dessous : hauteur zTop sur chaque
+// poche, zBase ailleurs, de -xTop a xTop, deux intervalles voisins de meme
+// hauteur confondus (deux poches au contact par une face, de meme plafond,
+// n'ont pas de paroi entre elles). Section de la tranche : sous les pans
+// (-xTop, zBase) - (0, ridge[T]) - (xTop, zBase), au-dessus du profil. Une piece
+// par tranche, dans l'ordre des Y croissants, apres les deux Lambda ; chacune
+// porte ses deux pans, le dessous (intervalles du profil, normale -z ; parois
+// entre eux, normale vers la colonne la plus haute) et ses bouts : a un tympan,
+// la section entiere ; dans un plan de coupe y = cte entre deux tranches, la seule partie
+// de sa section que la voisine ne couvre pas (colonnes ou son profil est plus
+// bas que celui de la voisine), jamais de face la ou les deux sections se
+// recouvrent. Les tranches ne sont donc pas fermees une a une ; leur reunion,
+// sommets confondus par position (au bit pres, calcules sur les memes doubles),
+// est fermee : chaque arete est portee par deux faces, une dans chaque sens,
+// sans T-jonction (dans un plan de coupe, tout bord de face est subdivise par
+// les bornes des deux profils et par les hauteurs des colonnes qui les
+// bordent) ; deux poches de tranches voisines qui ne se toucheraient que par
+// une arete verticale sont refusees (voir plus bas). Sommets d'une
+// piece dans l'ordre de premiere utilisation, sans doublon de position. Les
+// coordonnees sont des copies des bornes, de zBase, de xTop et du faite, sans
+// produit.
 //
 // Refus des poches, std::invalid_argument prefixe "Fronton : ", apres ceux
 // ci-dessus et dans cet ordre, chaque poche dans l'ordre de la liste :
@@ -182,7 +196,18 @@ struct RoofPocket
 //   - "sommets confondus en float : plafonds de deux poches au contact" si deux
 //     poches d'une meme tranche se touchent par une face (x1 de l'une egal au x0
 //     de l'autre) et que leurs plafonds, distincts en double, se confondent en
-//     float (la paroi entre eux serait degeneree).
+//     float (la paroi entre eux serait degeneree) ;
+//   - puis, plan de coupe par plan de coupe, par Y croissants : le premier des
+//     deux memes refus si deux bornes X distinctes des profils des deux
+//     tranches voisines se confondent en float ; "'roofPocket' : deux poches
+//     de tranches voisines ne se touchent que par une arete" si, a une borne
+//     x_j (colonnes l0, l1 du profil inferieur et u0, u1 du superieur, de part
+//     et d'autre de x_j), ]max (l0, u1), min (l1, u0)] ou ]max (l1, u0),
+//     min (l0, u1)] est non vide : une cote ou chaque tranche n'est pleine
+//     que d'un cote de x_j, et pas du meme (arete portee par quatre faces) ;
+//     enfin le second refus si deux hauteurs distinctes des colonnes qui
+//     bordent une meme borne, dans l'un ou l'autre profil, se confondent en
+//     float.
 std::vector<std::unique_ptr<Mesh>> BuildGreekPedimentPieceMeshes (const GreekPedimentSettings &pediment,
                                                                   const GreekEntablatureSettings &entablature,
                                                                   const PeristyleLayout &peristyle, double zFoot,

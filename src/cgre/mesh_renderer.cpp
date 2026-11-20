@@ -63,6 +63,7 @@ void rendering_properties_init (rendering_properties_s &prop)
 	prop.display_warning = 0;
 	prop.clipping_plane_active = 0;
 	prop.clipping_plane_z = 0.0f;
+	prop.crease_angle_deg = kDefaultCreaseAngleDeg;
 }
 
 float pointsize = 1.;
@@ -703,6 +704,7 @@ void MeshRenderer::Draw (int id)
 			// multi-material meshes); activates each material in turn.
 			SurfaceDrawState state;
 			state.flat             = !el.properties.smooth;
+			state.creaseAngleDeg   = el.properties.crease_angle_deg;
 			state.useMeshMaterials = ShadingUsesMeshMaterials (el.properties.shading);
 			state.allowPbr         = ShadingAllowsPbr (el.properties.shading);
 			state.useVertexColors  = el.properties.shading == CG_shading_mode::VertexColors;

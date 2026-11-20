@@ -13,6 +13,8 @@
 #include "tensor.h"
 #include "bounding_box.h"
 
+struct CreaseNormals;   // mesh_crease_normals.h
+
 //
 // class Mesh
 //
@@ -200,6 +202,33 @@ public:
 	// un appelant qui rappellerait cette fonction par image le paierait a
 	// chaque image. Un tel appelant doit mettre en cache, pas etre absous.
 	PolygonRenderData BuildPolygonRenderData(bool flat = false) const;
+
+	// Ombrage lisse a ARETES VIVES : les normales sont celles de
+	// ComputeCreaseNormals (mesh_crease_normals.h), calculees ici a partir de la
+	// geometrie, et non m_vertexNormals. Chaque face, triangle ou polygone, est
+	// developpee en ses coins ; deux coins d'un meme sommet ne partagent un
+	// sommet de rendu que s'ils portent la meme normale (et, pour des UV par
+	// coin, le meme indice d'UV). Une surface lisse partage donc ses sommets, une
+	// arete vive les dedouble. Le maillage n'est pas modifie.
+	//
+	// Les normales sont toujours emises, meme sur un maillage sans normales par
+	// sommet. Les tangentes sont reorthogonalisees contre la normale de coin.
+	// Memes regles d'appel que BuildPolygonRenderData : au (re)televersement,
+	// jamais par image.
+	//
+	// Seuil negatif (kCreaseAngleMeshNormals) : BuildPolygonRenderData (false),
+	// donc les normales par sommet du maillage.
+	PolygonRenderData BuildCreaseRenderData(float creaseAngleDeg) const;
+
+	// Normales a seuil du maillage, MISES EN CACHE : recalculees seulement quand
+	// la revision ou le seuil changent. Le cache coute 12 octets par coin, plus
+	// les offsets ; ReleaseCreaseNormals le libere. Une copie du maillage partage
+	// le resultat, qui est immuable.
+	//
+	// ⚠ Pas de synchronisation : deux fils qui appellent ces methodes sur le
+	// MEME maillage se disputent le cache.
+	std::shared_ptr<const CreaseNormals> GetCreaseNormals(float creaseAngleDeg) const;
+	void ReleaseCreaseNormals() const;
 
 	// Replace every N-gon face (N>=4) with (N-2) triangle Face objects
 	// (fan for convex, glutess for concave). Triangles are kept as-is.
@@ -636,6 +665,29 @@ public:
 	// ⚠ Cette suffisance est CONDITIONNELLE a l'asymetrie des deux jeux, dont
 	// la portee est enoncee une seule fois : voir GetTextureCoordinates1.
 	void SplitVerticesByUVSeams (void);
+	// Dedouble les sommets dont les coins portent des normales differentes, et
+	// ecrit ces normales par sommet. `cornerNormals` : 3 flottants par coin,
+	// faces dans l'ordre, coins dans l'ordre de la face, aucun pour une face
+	// supprimee -- la disposition de CreaseNormals (mesh_crease_normals.h).
+	//
+	// Le sommet v garde son indice et prend la normale de son premier coin ;
+	// chaque autre normale distincte (egalite exacte des trois composantes)
+	// ajoute un doublon en fin de tableau. Les points et les lignes, qui
+	// designent des sommets par indice, restent donc valides. Un sommet sans
+	// coin garde sa normale si elle est non nulle, et prend (0, 0, 1) sinon.
+	//
+	// Les couleurs, les UV paralleles aux sommets (jeux 0 et 1), les tangentes
+	// et les tenseurs sont recopies du sommet source vers ses doublons ; un
+	// indice d'UV de coin qui designait le sommet designe son doublon. Les
+	// tangentes sont ensuite reorthogonalisees contre la normale du sommet.
+	//
+	// Tableaux NON paralleles aux sommets : des UV du jeu 0 en pool ne sont pas
+	// touches (les indices de coin y renvoient) ; le jeu 1, les tangentes et les
+	// tenseurs sont VIDES, faute de pouvoir les reindexer.
+	//
+	// Rend -1 et ne modifie rien si la taille ne vaut pas 3 fois le nombre de
+	// coins ; le nombre de sommets ajoutes sinon. Incremente la revision.
+	int SplitVerticesByCornerNormals (const std::vector<float> &cornerNormals);
 	// Weld vertices closer than `tolerance`. The weld is geometric: vertex
 	// normals are NOT a criterion (callers recompute them afterwards), so all
 	// coincident vertices weld — including across facet boundaries of an STL —
@@ -665,6 +717,11 @@ public:
 	// maillage jamais passe par computebbox(), la boite est vide.
 	int computebbox (void);
 	const BoundingBox& bbox() const;
+	// Boite A JOUR : recalculee seulement si la revision a change depuis le
+	// dernier computebbox(). Sure parce que toute ecriture des positions
+	// incremente la revision (voir GetRevision) et qu'Init invalide
+	// l'estampille en meme temps qu'il remet la revision a zero.
+	const BoundingBox& CurrentBBox ();
 	float bbox_diagonal_length (void) const;
 	float GetLargestLength(void) const;
 
@@ -925,6 +982,12 @@ private:
 	// Les trous et les tranches orphelines disparaissent.
 	void KeepFaces (const std::vector<unsigned int> &keep);
 
+	// Corps commun de BuildPolygonRenderData et BuildCreaseRenderData.
+	// `crease` nul : disposition de BuildPolygonRenderData (flat). Non nul :
+	// normales de coin de `crease`, sommets de rendu partages par (sommet,
+	// normale, indice d'UV de coin) ; `flat` est alors ignore.
+	PolygonRenderData BuildRenderData (bool flat, const CreaseNormals *crease) const;
+
 private:
 	unsigned int m_nVertices;
 	std::vector<float> m_pVertices;
@@ -953,10 +1016,18 @@ private:
 	std::vector<float> m_faceNormals;
 
 	BoundingBox m_bbox;
+	// Revision a laquelle m_bbox a ete calculee ; (uint64_t)-1 : jamais.
+	uint64_t m_bboxRevision = (uint64_t)-1;
 
 	std::vector<std::optional<Tensor>>     m_tensors;
 
 	uint64_t m_revision = 0;
+
+	// Cache de GetCreaseNormals : resultat, revision et seuil de son calcul.
+	mutable std::shared_ptr<const CreaseNormals> m_creaseNormals;
+	mutable uint64_t m_creaseRevision = (uint64_t)-1;
+	mutable float m_creaseAngle = 0.0f;
+
 	// Geometry revision at which m_tensors was last computed; (uint64_t)-1
 	// means "never computed / invalid".
 	uint64_t m_tensorsRevision = (uint64_t)-1;

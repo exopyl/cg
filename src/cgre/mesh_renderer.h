@@ -92,6 +92,9 @@ typedef struct rendering_properties
 	float point_color[3];   // colour of the mesh's point ('p') primitives
 	int clipping_plane_active;
 	float clipping_plane_z;
+	// Ombrage lisse : seuil d'angle des normales, en degres. Negatif : les
+	// normales par sommet du maillage (cf. SurfaceDrawState::creaseAngleDeg).
+	float crease_angle_deg;
 
 	// NE RIEN METTRE ICI QUI ALLOUE. Cette structure est copiee par VALEUR a
 	// chaque maillage et a chaque image (MeshRenderer::SetProperties, puis le

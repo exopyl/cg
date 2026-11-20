@@ -242,6 +242,10 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_CHOICE(ID_3D_SHADING, MyFrame::On3DShading)
     EVT_MENU(ID_3D_CLIPPING, MyFrame::On3DClippingPlane)
     EVT_MENU(ID_RENDER_SHOW_FPS, MyFrame::OnToggleShowFps)
+    EVT_MENU(ID_VIEW_ROTATION_TRACKBALL, MyFrame::OnRotationModeMenu)
+    EVT_MENU(ID_VIEW_ROTATION_TURNTABLE, MyFrame::OnRotationModeMenu)
+    EVT_UPDATE_UI(ID_VIEW_ROTATION_TRACKBALL, MyFrame::OnUpdateUIRotationMode)
+    EVT_UPDATE_UI(ID_VIEW_ROTATION_TURNTABLE, MyFrame::OnUpdateUIRotationMode)
     EVT_MENU(ID_BUTTON_RENDERING_BGCOLOR, MyFrame::OnBgColor)
 
     EVT_BUTTON(ID_BUTTON_RENDERING_BGCOLOR, MyFrame::OnBgColor)
@@ -496,6 +500,14 @@ MyFrame::MyFrame(wxWindow* parent,
     panel_menu->Append(ID_BUTTON_RENDERING_BGCOLOR, _("Background"));
     panel_menu->AppendCheckItem(ID_RENDER_SHOW_FPS, _("Show FPS"));
     panel_menu->AppendCheckItem(ID_3D_CUTTING_MAT, _("Base de coupe"));
+    // Left-drag rotation law. The checked item is refreshed from the active
+    // view each time the menu opens (OnUpdateUIRotationMode).
+    wxMenu* trackballs_menu = new wxMenu;
+    trackballs_menu->AppendRadioItem(ID_VIEW_ROTATION_TRACKBALL, _("Trackball"),
+                                     _("Free rotation on a virtual sphere"));
+    trackballs_menu->AppendRadioItem(ID_VIEW_ROTATION_TURNTABLE, _("Turntable"),
+                                     _("Rotation about the vertical Z axis, level horizon"));
+    panel_menu->AppendSubMenu(trackballs_menu, wxT("Trackballs"));
     options_menu->AppendSubMenu(panel_menu, wxT("3D Panel"));
 
     wxMenu* windows_menu = new wxMenu;
@@ -930,6 +942,8 @@ MyFrame::MyFrame(wxWindow* parent,
     // Favorite Directories submenu, and open the Explorer at the last directory
     // used when it still exists.
     LoadFavorites();
+    // Avant CreateNotebook : le premier canvas lit le mode a sa construction.
+    LoadRotationMode();
     {
         const wxString lastDir = LoadLastDir();
         if (!lastDir.empty() && wxDirExists(lastDir))
@@ -1610,6 +1624,50 @@ void MyFrame::SaveLastDir(const wxString& dir)
     c->Flush();
 }
 
+void MyFrame::LoadRotationMode()
+{
+    wxString name;
+    Ctrackball::RotationMode mode = Ctrackball::RotationMode::Trackball;
+    if (wxConfig::Get()->Read(wxT("/View/RotationMode"), &name))
+        Ctrackball::ParseRotationMode(name.utf8_string().c_str(), mode);
+    m_rotationMode = mode;
+}
+
+void MyFrame::SaveRotationMode()
+{
+    wxConfigBase* c = wxConfig::Get();
+    c->Write(wxT("/View/RotationMode"), wxString::FromUTF8(Ctrackball::RotationModeName(m_rotationMode)));
+    c->Flush();
+}
+
+// Options > 3D Panel > Trackballs. Le mode vaut pour tous les onglets ouverts
+// et pour ceux qui s'ouvriront ; passer en platine redresse l'horizon de
+// chaque vue (MyGLCanvas::SetRotationMode), comme `camera mode turntable`.
+void MyFrame::OnRotationModeMenu(wxCommandEvent& evt)
+{
+    m_rotationMode = (evt.GetId() == ID_VIEW_ROTATION_TURNTABLE)
+                         ? Ctrackball::RotationMode::Turntable
+                         : Ctrackball::RotationMode::Trackball;
+    if (m_pCtrl)
+    {
+        for (size_t i = 0, n = m_pCtrl->GetPageCount(); i < n; ++i)
+            if (MyGLCanvas* pCanvas = dynamic_cast<MyGLCanvas*>(m_pCtrl->GetPage(i)))
+                pCanvas->SetRotationMode(m_rotationMode);
+    }
+    SaveRotationMode();
+}
+
+// L'element coche suit le mode REEL de la vue active, que `camera mode` a pu
+// changer seul ; sans vue, le mode du menu.
+void MyFrame::OnUpdateUIRotationMode(wxUpdateUIEvent& evt)
+{
+    const MyGLCanvas* canvas = GetActiveCanvas();
+    const Ctrackball::RotationMode mode = canvas ? canvas->GetRotationMode() : m_rotationMode;
+    const int checkedId = (mode == Ctrackball::RotationMode::Turntable) ? ID_VIEW_ROTATION_TURNTABLE
+                                                                        : ID_VIEW_ROTATION_TRACKBALL;
+    evt.Check(evt.GetId() == checkedId);
+}
+
 void MyFrame::OnFilesCtrlListItemActivated(wxListEvent& WXUNUSED(event))
 {
     long item = -1;
@@ -1783,6 +1841,7 @@ void MyFrame::OnNotebookPageChanged(wxAuiNotebookEvent& event)
         pGLCanvas->SetPointColor(m_pointColor.Red()   / 255.0f,
                                  m_pointColor.Green() / 255.0f,
                                  m_pointColor.Blue()  / 255.0f);
+        pGLCanvas->SetCreaseAngle(m_creaseAngleDeg);
 
         // Synchronize toolbar button states
         wxAuiToolBarItem* p;
@@ -3086,6 +3145,7 @@ void MyFrame::OnSettings(wxCommandEvent& WXUNUSED(event))
 	panel.pointSize     = m_pointSize;
 	panel.lineColor     = m_lineColor;
 	panel.pointColor    = m_pointColor;
+	panel.creaseAngleDeg = m_creaseAngleDeg;
 
 	// The 2D Panel options are applied live as the user edits them; the dialog
 	// calls back into ApplyPanelSettings on every change and restores this
@@ -3123,6 +3183,7 @@ void MyFrame::ApplyPanelSettings(const PanelSettings& panel)
 	m_pointSize = panel.pointSize;
 	m_lineColor  = panel.lineColor;
 	m_pointColor = panel.pointColor;
+	m_creaseAngleDeg = panel.creaseAngleDeg;
 	if (m_pCtrl)
 	{
 		for (size_t i = 0, n = m_pCtrl->GetPageCount(); i < n; ++i)
@@ -3138,6 +3199,7 @@ void MyFrame::ApplyPanelSettings(const PanelSettings& panel)
 				pCanvas->SetPointColor(m_pointColor.Red()   / 255.0f,
 				                       m_pointColor.Green() / 255.0f,
 				                       m_pointColor.Blue()  / 255.0f);
+				pCanvas->SetCreaseAngle(m_creaseAngleDeg);
 			}
 		}
 	}
@@ -4178,6 +4240,11 @@ void MyFrame::OnTreatmentApplyNormals(wxCommandEvent& WXUNUSED(event))
 		}
 		pMesh->IncrementRevision();
 	}
+
+	// Les normales calculees ne se voient qu'avec le seuil d'angle desactive
+	// pour ce modele : en ombrage lisse, la vue calcule sinon les siennes.
+	if (Model* pModel = pGLCanvas->GetTargetModel())
+		pModel->m_meshNormals = true;
 
 	pGLCanvas->Refresh();
 	*m_pWndLogging << wxString::Format(_T("Normals recomputed (method %d)\n"), sel);

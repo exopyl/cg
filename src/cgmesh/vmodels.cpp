@@ -40,8 +40,7 @@ const BoundingBox& Model::ComputeBBox()
 	for (Mesh* m : m_meshes.GetMeshes())
 		if (m)
 		{
-			m->computebbox();
-			m_bbox.AddBoundingBox(m->bbox());
+			m_bbox.AddBoundingBox(m->CurrentBBox());
 		}
 	return m_bbox;
 }

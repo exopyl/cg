@@ -916,8 +916,8 @@ TEST(TEST_cgarchi_classical_ceiling, the_mesh_with_ceilings_extends_the_mesh_wit
 	ASSERT_TRUE(before.mesh && after.mesh);
 	EXPECT_EQ(before.mesh->GetNVertices(), 805834);
 	EXPECT_EQ(before.mesh->GetNFaces(), 1598168);
-	EXPECT_EQ(after.mesh->GetNVertices(), 826538);
-	EXPECT_EQ(after.mesh->GetNFaces(), 1639180);
+	EXPECT_EQ(after.mesh->GetNVertices(), 826574);
+	EXPECT_EQ(after.mesh->GetNFaces(), 1639140);
 	EXPECT_EQ(before.report[static_cast<std::size_t>(MonumentPart::EastCeiling)].state, MonumentPartState::Absent);
 	EXPECT_EQ(after.report[static_cast<std::size_t>(MonumentPart::EastCeiling)].state, MonumentPartState::Built);
 

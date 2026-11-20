@@ -109,16 +109,17 @@ static bool MeshNeedsTangents (const Mesh* mesh)
 	return false;
 }
 
-void VBOManager::uploadMesh(Mesh* mesh, vboInfo& info, bool flat)
+void VBOManager::uploadMesh(Mesh* mesh, vboInfo& info, bool flat, float creaseAngleDeg)
 {
 	info.pMesh = mesh;
 
-	// Build the expanded per-polygon vertex layout: every face contributes
-	// its own N corners, each carrying the face's polygon normal. Adjacent
-	// faces do NOT share corners — this is what guarantees uniform shading
-	// within each polygon and eliminates fan-diagonal kinks on non-planar
-	// n-gons.
-	const Mesh::PolygonRenderData rd = mesh->BuildPolygonRenderData(flat);
+	// Flat: every face expanded into its own corners carrying the face normal.
+	// Smooth: normals with a crease angle -- smooth across facets flatter than
+	// the threshold, sharp beyond. A negative threshold selects the per-vertex
+	// normals of the mesh instead (Mesh::BuildCreaseRenderData).
+	const Mesh::PolygonRenderData rd = flat
+		? mesh->BuildPolygonRenderData(true)
+		: mesh->BuildCreaseRenderData(creaseAngleDeg);
 
 	info.hasNormals   = !rd.normals.empty();
 	info.hasColors    = !rd.colors.empty();
@@ -211,6 +212,7 @@ void VBOManager::uploadMesh(Mesh* mesh, vboInfo& info, bool flat)
 
 	info.revision = mesh->GetRevision();
 	info.flat = flat;
+	info.creaseAngleDeg = creaseAngleDeg;
 	(void)nRenderVerts;
 
 	// Un glBufferData a court de VRAM echoue en silence : sans ce controle, le
@@ -237,7 +239,7 @@ int VBOManager::addMesh (Mesh *mesh)
 	if (!mesh) return -1;
 
 	vboInfo info{};
-	uploadMesh(mesh, info, false); // smooth by default; re-uploaded on demand
+	uploadMesh(mesh, info, false, kDefaultCreaseAngleDeg); // smooth by default; re-uploaded on demand
 	if (info.iboIndices == 0)
 		return -1;
 
@@ -256,7 +258,7 @@ void VBOManager::Draw (int id)
 	// Pick up in-place mesh mutations (e.g. RemoteConsole `flip`), preserving
 	// the current shading mode.
 	if (info.pMesh && info.pMesh->GetRevision() != info.revision)
-		uploadMesh(info.pMesh, info, info.flat);
+		uploadMesh(info.pMesh, info, info.flat, info.creaseAngleDeg);
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glBindBuffer(GL_ARRAY_BUFFER, info.vboPositions);
@@ -427,10 +429,12 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 	vboInfo& info = it->second;
 
 	// Re-upload if the geometry changed (revision) OR the shading mode changed
-	// (flat vs smooth uses a different vertex/normal layout). Done first so the
-	// material-less fallback below also sees the up-to-date buffers.
-	if (info.pMesh && (info.pMesh->GetRevision() != info.revision || info.flat != state.flat))
-		uploadMesh(info.pMesh, info, state.flat);
+	// (flat vs smooth uses a different vertex/normal layout) OR, in smooth
+	// shading, the crease threshold changed. Done first so the material-less
+	// fallback below also sees the up-to-date buffers.
+	if (info.pMesh && (info.pMesh->GetRevision() != info.revision || info.flat != state.flat ||
+	                   (!state.flat && info.creaseAngleDeg != state.creaseAngleDeg)))
+		uploadMesh(info.pMesh, info, state.flat, state.creaseAngleDeg);
 
 	// No per-material grouping available: fall back to a single draw (the
 	// caller is expected to have activated the material already).

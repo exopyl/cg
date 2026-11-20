@@ -21,6 +21,9 @@ if (EMSCRIPTEN)
         # L'omettre casse le lien WASM -- et emsdk etant absent de la machine de
         # developpement, rien ici ne le signalerait.
         ${PROJECT_SOURCE_DIR}/mesh_raycast.cpp
+        # OBLIGATOIRE : Mesh::BuildCreaseRenderData (mesh.cpp) appelle
+        # ComputeCreaseNormals.
+        ${PROJECT_SOURCE_DIR}/mesh_crease_normals.cpp
         ${PROJECT_SOURCE_DIR}/normals.cpp
         ${PROJECT_SOURCE_DIR}/bounding_box.cpp
         ${PROJECT_SOURCE_DIR}/geometric_primitives.cpp
