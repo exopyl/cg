@@ -229,6 +229,7 @@ BEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(ID_Settings, MyFrame::OnSettings)
     EVT_MENU(wxID_EXIT, MyFrame::OnExit)
     EVT_MENU(wxID_ABOUT, MyFrame::OnAbout)
+    EVT_MENU(ID_HELP_SHORTCUTS, MyFrame::OnShortcuts)
     EVT_MENU(ID_3D_FRAME, MyFrame::On3DFrame)
     EVT_MENU(ID_3D_GRID, MyFrame::On3DGrid)
     EVT_MENU(ID_3D_CUTTING_MAT, MyFrame::On3DCuttingMat)
@@ -524,7 +525,11 @@ MyFrame::MyFrame(wxWindow* parent,
     windows_menu->AppendCheckItem(ID_ShowExplorer, _("Explorer"));
     options_menu->AppendSubMenu(windows_menu, wxT("Windows"));
 
+    // F1 : la touche d'aide usuelle, libre dans sinaia (aucun autre accélérateur
+    // ni gestionnaire de touche ne la lit). About reste en dernier.
     wxMenu* help_menu = new wxMenu;
+    help_menu->Append(ID_HELP_SHORTCUTS, _("&Shortcuts...\tF1"), _("List the keyboard and mouse shortcuts"));
+    help_menu->AppendSeparator();
     help_menu->Append(wxID_ABOUT, _("About..."));
 
     // Smoothing / Subdivision / Decimation now live as tabs of the "Treatments"
@@ -2791,6 +2796,14 @@ void MyFrame::OnAbout(wxCommandEvent& WXUNUSED(event))
 {
 	*m_pWndLogging << _T("OnAbout\n");
 	wxMessageBox(_("Sinaia\nAn interface for computational geometry\n(c) Copyright 2023, lsd"), _("About Sinaia"), wxOK, this);
+}
+
+void MyFrame::OnShortcuts(wxCommandEvent& WXUNUSED(event))
+{
+    if (!m_shortcutsDialog)
+        m_shortcutsDialog = new ShortcutsDialog(this, GetMenuBar());
+    m_shortcutsDialog->Show();
+    m_shortcutsDialog->Raise();
 }
 
 void MyFrame::OnNewGeometry(wxCommandEvent& event)

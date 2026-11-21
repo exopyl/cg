@@ -8,6 +8,8 @@
 #include "wx/spinctrl.h"
 #include "wx/listbase.h"
 #include "wx/bitmap.h"
+#include "wx/weakref.h"
+#include "ShortcutsDialog.h"
 
 #include <memory>
 #include <unordered_map>
@@ -93,6 +95,7 @@ class MyFrame : public wxFrame
         ID_RENDER_SHOW_FPS,
         ID_VIEW_ROTATION_TRACKBALL,
         ID_VIEW_ROTATION_TURNTABLE,
+        ID_HELP_SHORTCUTS,
 
 	ID_BUTTON_RENDERING_BGCOLOR,
 
@@ -315,6 +318,8 @@ private:
     void ApplyPanelSettings(const struct PanelSettings& panel);
     void OnExit(wxCommandEvent& evt);
     void OnAbout(wxCommandEvent& evt);
+    // Help > Shortcuts : une seule fenêtre à la fois, ramenée devant si elle existe.
+    void OnShortcuts(wxCommandEvent& evt);
     void OnTabAlignment(wxCommandEvent &evt);
 
     void OnDirCtrlSelectionChanged(wxTreeEvent& evt);
@@ -538,6 +543,9 @@ private:
     wxGenericDirCtrl* m_dcDirectory = nullptr;
     wxListCtrl* m_filesCtrl = nullptr;
     long m_filesCtxItem = -1;      // élément sous le clic droit (cible de Properties)
+
+    // Fenêtre Help > Shortcuts, non modale ; remise à nul par sa destruction.
+    wxWeakRef<ShortcutsDialog> m_shortcutsDialog;
 
     // Favorite directories: ordered list mirrored to wxConfig; the toolbar
     // dropdown menu is built on demand from it.

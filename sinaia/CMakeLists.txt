@@ -34,6 +34,7 @@ set(srcs
         PropertyPanel.cpp
         RemoteConsole.cpp
         SettingsPanel.cpp
+        ShortcutsDialog.cpp
         SinaiaApp.cpp
         SinaiaFrame.cpp
         wxOpenGLCanvas.cpp

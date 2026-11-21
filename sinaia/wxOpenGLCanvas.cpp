@@ -11,6 +11,7 @@
 
 #include "wxOpenGLCanvas.h"
 #include "SinaiaFrame.h"
+#include "ShortcutTable.h"
 #include <wx/statusbr.h>
 #include <wx/image.h>
 #include <wx/dnd.h>
@@ -2114,6 +2115,32 @@ void MyGLCanvas::OnMouse(wxMouseEvent& event)
 	}
 }
 
+namespace {
+
+// Codes wx des touches de sinaia::kCanvasKeyBindings. wx rend les lettres en
+// MAJUSCULE dans un evenement KEY_DOWN, quel que soit l'etat de Maj.
+std::optional<sinaia::CanvasKey> ToCanvasKey (int wxKeyCode)
+{
+	switch (wxKeyCode)
+	{
+	case 'F':      return sinaia::CanvasKey::F;
+	case WXK_UP:   return sinaia::CanvasKey::Up;
+	case WXK_DOWN: return sinaia::CanvasKey::Down;
+	default:       return std::nullopt;
+	}
+}
+
+unsigned CanvasModifiers (const wxKeyEvent& event)
+{
+	unsigned mods = sinaia::modifier::None;
+	if (event.ControlDown()) mods |= sinaia::modifier::Ctrl;
+	if (event.AltDown())     mods |= sinaia::modifier::Alt;
+	if (event.ShiftDown())   mods |= sinaia::modifier::Shift;
+	return mods;
+}
+
+} // namespace
+
 void MyGLCanvas::OnKeyDown(wxKeyEvent& event)
 {
 	// Le pas du plan de coupe se cale sur l'ECHELLE DU SUJET CADRE : clipping_plane_z
@@ -2130,16 +2157,25 @@ void MyGLCanvas::OnKeyDown(wxKeyEvent& event)
 	constexpr float kClipStepRatio = 0.0577350f;
 	const float step = (m_framingRadius > 0.f) ? m_framingRadius * kClipStepRatio : 0.05f;
 
-	switch (event.GetKeyCode())
+	const std::optional<sinaia::CanvasKey> key = ToCanvasKey(event.GetKeyCode());
+	const std::optional<sinaia::CanvasCommand> command =
+		key ? sinaia::FindCanvasCommand(*key, CanvasModifiers(event)) : std::nullopt;
+	if (!command)
 	{
-	case WXK_UP:
-	case WXK_DOWN:
+		event.Skip();
+		return;
+	}
+
+	switch (*command)
+	{
+	case sinaia::CanvasCommand::RaiseClippingPlane:
+	case sinaia::CanvasCommand::LowerClippingPlane:
 		if (!prop.clipping_plane_active)
 		{
-			if (m_CtrlLog) *m_CtrlLog << _T("Warning: Clipping plane is not active. Check the box in Rendering panel.\n");
+			if (m_CtrlLog) *m_CtrlLog << _T("Warning: Clipping plane is not active. Enable it with the Clipping toolbar button.\n");
 			break;
 		}
-		if (event.GetKeyCode() == WXK_UP)
+		if (*command == sinaia::CanvasCommand::RaiseClippingPlane)
 			prop.clipping_plane_z += step;
 		else
 			prop.clipping_plane_z -= step;
@@ -2149,23 +2185,14 @@ void MyGLCanvas::OnKeyDown(wxKeyEvent& event)
 		Update();
 		break;
 
-	// F comme « frame » : recentrer sur le modele SELECTIONNE. Sans selection on
-	// ne cadre PAS la scene entiere -- ce serait rendre la touche inoffensive au
-	// lieu de dire qu'il n'y a rien a viser, et l'utilisateur croirait avoir vise
-	// un modele.
-	//
-	// wx rend les codes de lettre en MAJUSCULE dans un evenement KEY_DOWN, quel
-	// que soit l'etat de la touche majuscule : un case 'f' ne se declencherait
-	// jamais.
-	case 'F':
+	// Recentrer sur le modele SELECTIONNE. Sans selection on ne cadre PAS la
+	// scene entiere -- ce serait rendre la touche inoffensive au lieu de dire
+	// qu'il n'y a rien a viser, et l'utilisateur croirait avoir vise un modele.
+	case sinaia::CanvasCommand::FrameSelectedModel:
 		if (!FrameSelectedModel())
 		{
 			if (m_CtrlLog) *m_CtrlLog << _T("Aucun modele selectionne : rien a recentrer.\n");
 		}
-		break;
-
-	default:
-		event.Skip();
 		break;
 	}
 }
