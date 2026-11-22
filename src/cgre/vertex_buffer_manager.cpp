@@ -6,6 +6,7 @@
 #include "gl_program.h"
 #include "material_renderer.h"
 #include "phong_extras.h"
+#include "polygon_offset.h"
 #include "surface_program.h"
 #include "../cgmesh/mesh_data_manager.h"
 // Obtenus aujourd'hui par transitivite via material_renderer.h : les nommer ici
@@ -287,10 +288,9 @@ void VBOManager::Draw (int id)
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info.iboIndices);
 
-	// Offset the surface so wireframe / vertex normals overlays don't z-fight
-	// (parity with VertexArrayManager::Draw).
+	// Decalage du remplissage sous les surimpressions : polygon_offset.h.
 	glEnable(GL_POLYGON_OFFSET_FILL);
-	glPolygonOffset(1.0f, 1.0f);
+	glPolygonOffset(cgre::kSurfacePolygonOffsetFactor, cgre::kSurfacePolygonOffsetUnits);
 
 	glDrawElements(GL_TRIANGLES, info.count, GL_UNSIGNED_INT, nullptr);
 
@@ -491,8 +491,9 @@ void VBOManager::DrawMaterialGroups (int id, const std::vector<int>& rendererIds
 
 	CGRE_CHECK_GL ("VBOManager::DrawMaterialGroups (etat client)");
 
+	// Decalage du remplissage sous les surimpressions : polygon_offset.h.
 	glEnable(GL_POLYGON_OFFSET_FILL);
-	glPolygonOffset(1.0f, 1.0f);
+	glPolygonOffset(cgre::kSurfacePolygonOffsetFactor, cgre::kSurfacePolygonOffsetUnits);
 
 	// Hors du mode « materiaux », un seul materiau pour tout le maillage : il est
 	// lie UNE FOIS, avant la boucle, et les plages ne le changent plus.

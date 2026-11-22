@@ -12,7 +12,9 @@ catalogues et leur sérialisation.
   paramétrée et son JSON v2 (`parameterized_gothic*`, `schemas/`), fusion des barres de moulure (`bar_fusion*`),
   contrôle d'impression (`CheckGothicPrint`, `gothic_print_json`), microarchitecture (`gothic_microarchitecture*`) ;
 - **classique** : les cinq ordres de Vignole (`classical_*`, `parameterized_classical`), dont les données
-  `data/cinq_ordres.json` sont embarquées dans le binaire à la construction (`CMakeLists.txt:19-33`) ;
+  `data/cinq_ordres.json` sont embarquées dans le binaire à la construction (`CMakeLists.txt:19-33`), et les
+  ornements sculptés du chapiteau corinthien (`classical_acanthus` : feuilles d'acanthe des rangs F et E en un
+  maillage à plages de pièces ; cotes lues et instruments de mesure dans `classical_acanthus_detail.h`) ;
 - **temple** : implantation des axes d'un péristyle, sans maillage, en unités de l'appelant (`classical_peristyle`) ;
 - **dorique grec** : une colonne sans base, à entasis, cannelures à arête vive et chapiteau à gorgerin cannelé et rainure, annelets en gradins, échine en droite et lèvre, et abaque, en unités de l'appelant ; réglages en valeur et fonctions pures, sans adaptateur ni catalogue (`classical_greek_doric_column`) ;
 - **krépis** : degrés rectangulaires sous le stylobate, placés puis maillés par `extrudeToMesh`, en unités de l'appelant ; réglages en valeur et fonctions pures, sans adaptateur ni catalogue (`classical_krepis`) ;
@@ -36,7 +38,8 @@ catalogues et leur sérialisation.
   leur `Reader`. La colonne classique a son document `"classical-column/v1"` (`parameterized_classical_json.h`,
   schéma `schemas/classical-column-v1.schema`) : `LoadClassicalColumnFromJson` et `ExportClassicalColumnJson`,
   fonctions pures sur `ClassicalColumnSettings`, ordre écrit par sa clé (`classical::OrderKey`), tous les champs
-  requis, clés en double refusées (`ParseRejectingDuplicateKeys`), écriture canonique relue à l'identique.
+  requis sauf `capitalOrnaments` (absent : `none`, écrit seulement hors de `none`), clés en double refusées
+  (`ParseRejectingDuplicateKeys`), écriture canonique relue à l'identique.
 
 Ce qui n'y appartient pas : les primitives génériques déjà offertes par `cgmesh` et `cgmath` (`appendMesh`,
 `Mesh::ComputeNormals`, tessellation, extrusion), que `cgarchi` réutilise. Quelques outils génériques y vivent

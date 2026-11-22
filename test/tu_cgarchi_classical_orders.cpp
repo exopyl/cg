@@ -571,10 +571,10 @@ std::string Defects (const MeshValidationReport &r)
 	return out;
 }
 
-MeshValidationReport Validate (const Mesh &mesh)
+MeshValidationReport Validate (const Mesh &mesh, unsigned expectedComponents = 1u)
 {
 	MeshValidationOptions options;
-	options.expectedComponents = 1u;
+	options.expectedComponents = expectedComponents;
 	return ValidateMesh (mesh, options);
 }
 
@@ -671,7 +671,7 @@ TEST (TEST_cgarchi_classical_orders, the_parameterized_column_follows_its_parame
 	          << " triangles, " << column.GetMesh ()->GetNVertices () << " sommets\n";
 
 	std::vector<Parameter> params = column.GetParameters ();
-	ASSERT_EQ (params.size (), 11u);
+	ASSERT_EQ (params.size (), 12u);
 	auto find = [&] (const char *name) -> Parameter & {
 		for (Parameter &p : params)
 			if (p.GetName () == name)
@@ -690,7 +690,9 @@ TEST (TEST_cgarchi_classical_orders, the_parameterized_column_follows_its_parame
 	column.Regenerate ();
 	const auto t1 = std::chrono::steady_clock::now ();
 	EXPECT_TRUE (column.LastError ().empty ()) << column.LastError ();
-	const MeshValidationReport big = Validate (*column.GetMesh ());
+	// Tour, 16 feuilles d'acanthe (rangs F et E), 8 tiges de caulicoles, 16 feuilles D, 8 volutes et 8 helices (ruban et
+	// oeil), 4 fleurons (rosace et tige), Capital ornaments a Light par defaut : 81 coques.
+	const MeshValidationReport big = Validate (*column.GetMesh (), 81u);
 	EXPECT_TRUE (big.IsValid ()) << Defects (big);
 	EXPECT_NEAR (big.bbMax[2] - big.bbMin[2], 64.0, 1e-3);
 	EXPECT_EQ (column.PlanConflicts ().size (), 1u);   // caulicoles (noyau) sous l'abaque

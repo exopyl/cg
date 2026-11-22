@@ -10,6 +10,7 @@
 #include "mesh_renderer.h"
 #include "material_renderer.h"
 #include "diagnostics.h"
+#include "polygon_offset.h"
 #include "../cgmesh/mesh_data_manager.h"
 
 // VERROU. Cette structure est copiee par valeur a chaque maillage et a chaque
@@ -206,8 +207,9 @@ void mesh_draw (Mesh *mesh, rendering_properties_s &prop, const vector<int>& mat
 	// polygons
 	if (prop.display_fill && !surfaceAlreadyDrawn)
 	{
+		// Decalage du remplissage sous les surimpressions : polygon_offset.h.
 		glEnable(GL_POLYGON_OFFSET_FILL);
-		glPolygonOffset(1.0, 1.0);
+		glPolygonOffset(cgre::kSurfacePolygonOffsetFactor, cgre::kSurfacePolygonOffsetUnits);
 
 		int i_current_material = -1;
 

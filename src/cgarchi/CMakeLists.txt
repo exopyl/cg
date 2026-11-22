@@ -32,6 +32,26 @@ add_custom_command(
     VERBATIM)
 target_sources(cgarchi PRIVATE "${CGARCHI_ORDERS_CPP}")
 
+# Gabarits plans de la feuille d'acanthe ("cgarchi-acanthus-leaves/2"), embarques
+# de meme. Le JSON est la sortie de data/acanthus_leaves_from_drawing.py sur
+# data/acanthus_drawing.json : le script se lance a la main (--write, --check),
+# jamais par la construction.
+set(CGARCHI_ACANTHUS_JSON "${PROJECT_SOURCE_DIR}/data/acanthus_leaves.json")
+set(CGARCHI_ACANTHUS_CPP  "${CMAKE_CURRENT_BINARY_DIR}/generated/acanthus_leaves_data.cpp")
+add_custom_command(
+    OUTPUT  "${CGARCHI_ACANTHUS_CPP}"
+    COMMAND ${CMAKE_COMMAND}
+            -DINPUT=${CGARCHI_ACANTHUS_JSON}
+            -DOUTPUT=${CGARCHI_ACANTHUS_CPP}
+            -DNAMESPACE=cgarchi
+            -DFUNCTION=AcanthusLeavesJson
+            -DHEADER=cgarchi/classical_acanthus_template.h
+            -P "${PROJECT_SOURCE_DIR}/embed_file.cmake"
+    DEPENDS "${CGARCHI_ACANTHUS_JSON}" "${PROJECT_SOURCE_DIR}/embed_file.cmake"
+    COMMENT "Embedding data/acanthus_leaves.json"
+    VERBATIM)
+target_sources(cgarchi PRIVATE "${CGARCHI_ACANTHUS_CPP}")
+
 # Documents des monuments ("monument/v14"), embarques de meme, un par monument,
 # liste explicite : nom du JSON, puis fonction qui le rend
 # (classical_monument_data.h). Chaque JSON est la sortie de

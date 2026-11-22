@@ -235,6 +235,7 @@ namespace
 	const std::vector<std::string> kOrderChoices {"Tuscan", "Doric", "Ionic", "Corinthian", "Composite"};
 	const std::vector<std::string> kCorniceChoices {"Dentils", "Mutules"};
 	const std::vector<std::string> kDoricFluteChoices {"Segment (A)", "Semicircle (B)"};
+	const std::vector<std::string> kCapitalOrnamentChoices {"None", "Light", "Heavy"};
 
 	// Vrai si les deux maillages ont les memes sommets au bit pres et les memes
 	// faces ; sinon `why` dit le premier ecart.
@@ -288,6 +289,7 @@ namespace
 			else if (n == "Doric cornice") p.SetInt (s.doricCornice);
 			else if (n == "Ornament envelope") p.SetBool (s.envelope);
 			else if (n == "Volutes") p.SetBool (s.volutes);
+			else if (n == "Capital ornaments") p.SetInt (s.capitalOrnaments);
 			else if (n == "Flutes") p.SetBool (s.flutes);
 			else if (n == "Doric flutes") p.SetInt (s.doricFlutes);
 			else if (n == "Radial segments") p.SetInt (s.radialSegments);
@@ -314,6 +316,7 @@ namespace
 		EXPECT_EQ (a.doricCornice, e.doricCornice);
 		EXPECT_EQ (a.envelope, e.envelope);
 		EXPECT_EQ (a.volutes, e.volutes);
+		EXPECT_EQ (a.capitalOrnaments, e.capitalOrnaments);
 		EXPECT_EQ (a.flutes, e.flutes);
 		EXPECT_EQ (a.doricFlutes, e.doricFlutes);
 		EXPECT_EQ (a.radialSegments, e.radialSegments);
@@ -356,6 +359,7 @@ TEST (TEST_cgarchi_classical_column, the_parameter_surface_of_the_classical_shap
 		{"Doric cornice",     Parameter::ENUM,  kCorniceChoices,    0.0,   0.0,    0.0},
 		{"Ornament envelope", Parameter::BOOL,  {},                 0.0,   0.0,    0.0},
 		{"Volutes",           Parameter::BOOL,  {},                 0.0,   0.0,    1.0},
+		{"Capital ornaments", Parameter::ENUM,  kCapitalOrnamentChoices, 0.0, 0.0,  1.0},
 		{"Flutes",            Parameter::BOOL,  {},                 0.0,   0.0,    0.0},
 		{"Doric flutes",      Parameter::ENUM,  kDoricFluteChoices, 0.0,   0.0,    0.0},
 		{"Radial segments",   Parameter::INT,   {},                 8.0,   256.0,  48.0},
@@ -372,6 +376,7 @@ TEST (TEST_cgarchi_classical_column, the_parameter_surface_of_the_classical_shap
 		{"Ornaments",         Parameter::BOOL,  {},                 0.0,   0.0,    1.0},
 		{"Ornament envelope", Parameter::BOOL,  {},                 0.0,   0.0,    0.0},
 		{"Volutes",           Parameter::BOOL,  {},                 0.0,   0.0,    1.0},
+		{"Capital ornaments", Parameter::ENUM,  kCapitalOrnamentChoices, 0.0, 0.0,  1.0},
 		{"Flutes",            Parameter::BOOL,  {},                 0.0,   0.0,    0.0},
 		{"Doric flutes",      Parameter::ENUM,  kDoricFluteChoices, 0.0,   0.0,    0.0},
 		{"Radial segments",   Parameter::INT,   {},                 8.0,   256.0,  48.0},
@@ -407,6 +412,7 @@ TEST (TEST_cgarchi_classical_column, the_parameterized_column_builds_what_the_pu
 		{"Doric cornice",     doricEntablature,  [] (ClassicalColumnSettings &s) { s.doricCornice = 1; }},
 		{"Ornament envelope", compositePedestal, [] (ClassicalColumnSettings &s) { s.envelope = true; }},
 		{"Volutes",           WithOrder (2),     [] (ClassicalColumnSettings &s) { s.volutes = false; }},
+		{"Capital ornaments", WithOrder (3),     [] (ClassicalColumnSettings &s) { s.capitalOrnaments = 1; }},
 		{"Flutes",            WithOrder (2),     [] (ClassicalColumnSettings &s) { s.flutes = true; }},
 		{"Doric flutes",      doricFluted,       [] (ClassicalColumnSettings &s) { s.doricFlutes = 1; }},
 		{"Radial segments",   {},                [] (ClassicalColumnSettings &s) { s.radialSegments = 64; }},
@@ -430,7 +436,7 @@ TEST (TEST_cgarchi_classical_column, the_parameterized_column_builds_what_the_pu
 		const std::unique_ptr<Mesh> pure = BuildClassicalColumnMesh (s, &profile, &conflicts);
 
 		cgarchi::ParameterizedClassicalColumn column;
-		ASSERT_EQ (SetByParameters (column, s), 11);
+		ASSERT_EQ (SetByParameters (column, s), 12);
 		column.Regenerate ();
 		ASSERT_TRUE (column.LastError ().empty ()) << column.LastError ();
 		ASSERT_NE (column.GetMesh (), nullptr);
@@ -494,6 +500,7 @@ TEST (TEST_cgarchi_classical_column, the_settings_are_clamped_to_the_bounds_of_t
 	highEnums.order = 9;          highEnumsClamped.order = classical::kOrderCount - 1;
 	highEnums.doricCornice = 5;   highEnumsClamped.doricCornice = 1;
 	highEnums.doricFlutes = 5;    highEnumsClamped.doricFlutes = 1;
+	highEnums.capitalOrnaments = 5; highEnumsClamped.capitalOrnaments = 2;
 	highEnums.module = 50.f;      highEnumsClamped.module = 10.f;
 	highEnums.radialSegments = 2; highEnumsClamped.radialSegments = 8;
 	highEnums.curveSegments = 0;  highEnumsClamped.curveSegments = 2;
@@ -503,6 +510,7 @@ TEST (TEST_cgarchi_classical_column, the_settings_are_clamped_to_the_bounds_of_t
 	highSegments.order = -3;             highSegmentsClamped.order = 0;
 	highSegments.doricCornice = -1;      highSegmentsClamped.doricCornice = 0;
 	highSegments.doricFlutes = -1;       highSegmentsClamped.doricFlutes = 0;
+	highSegments.capitalOrnaments = -1;  highSegmentsClamped.capitalOrnaments = 0;
 	highSegments.module = 0.01f;         highSegmentsClamped.module = 0.1f;
 	highSegments.radialSegments = 1000;  highSegmentsClamped.radialSegments = 256;
 	highSegments.curveSegments = 99;     highSegmentsClamped.curveSegments = 32;
@@ -530,6 +538,7 @@ TEST (TEST_cgarchi_classical_column, the_settings_are_clamped_to_the_bounds_of_t
 		SetParameterValue (ps, "Columns", columns[k]);
 		SetParameterValue (ps, "Doric cornice", c.in.doricCornice);
 		SetParameterValue (ps, "Doric flutes", c.in.doricFlutes);
+		SetParameterValue (ps, "Capital ornaments", c.in.capitalOrnaments);
 		SetParameterValue (ps, "Radial segments", c.in.radialSegments);
 		SetParameterValue (ps, "Curve segments", c.in.curveSegments);
 		colonnade.Regenerate ();
@@ -540,6 +549,7 @@ TEST (TEST_cgarchi_classical_column, the_settings_are_clamped_to_the_bounds_of_t
 		EXPECT_EQ (ParameterValue (ps, "Columns"), columnsClamped[k]);
 		EXPECT_EQ (ParameterValue (ps, "Doric cornice"), c.out.doricCornice);
 		EXPECT_EQ (ParameterValue (ps, "Doric flutes"), c.out.doricFlutes);
+		EXPECT_EQ (ParameterValue (ps, "Capital ornaments"), c.out.capitalOrnaments);
 		EXPECT_EQ (ParameterValue (ps, "Radial segments"), c.out.radialSegments);
 		EXPECT_EQ (ParameterValue (ps, "Curve segments"), c.out.curveSegments);
 	}
@@ -778,7 +788,9 @@ TEST (TEST_cgarchi_classical_column, the_colonnade_entablature_rests_on_the_top_
 				colonnade.Regenerate ();
 				ASSERT_TRUE (colonnade.LastError ().empty ()) << colonnade.LastError ();
 
-				const ClassicalColumnSettings s = LevelCase (o, pedestal != 0, false);
+				// Colonne de reference aux ornements du chapiteau de la colonnade.
+				ClassicalColumnSettings s = LevelCase (o, pedestal != 0, false);
+				s.capitalOrnaments = static_cast<int> (ParameterValue (ps, "Capital ornaments"));
 				const ClassicalColumnLevels levels = ComputeClassicalColumnLevels (s);
 				const unsigned columnVertices = BuildClassicalColumnMesh (s)->GetNVertices ();
 				const Mesh &m = *colonnade.GetMesh ();

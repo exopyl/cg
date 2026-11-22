@@ -84,6 +84,7 @@ namespace
         EXPECT_EQ(a.doricCornice, e.doricCornice);
         EXPECT_EQ(a.envelope, e.envelope);
         EXPECT_EQ(a.volutes, e.volutes);
+        EXPECT_EQ(a.capitalOrnaments, e.capitalOrnaments);
         EXPECT_EQ(a.flutes, e.flutes);
         EXPECT_EQ(a.doricFlutes, e.doricFlutes);
         EXPECT_EQ(a.radialSegments, e.radialSegments);
@@ -133,6 +134,8 @@ namespace
         with(&ClassicalColumnSettings::doricCornice, 1);
         with(&ClassicalColumnSettings::envelope, true);
         with(&ClassicalColumnSettings::volutes, false);
+        with(&ClassicalColumnSettings::capitalOrnaments, 1);
+        with(&ClassicalColumnSettings::capitalOrnaments, 2);
         with(&ClassicalColumnSettings::flutes, true);
         with(&ClassicalColumnSettings::doricFlutes, 1);
         with(&ClassicalColumnSettings::radialSegments, kClassicalRadialSegmentsMin);
@@ -352,6 +355,45 @@ TEST(TEST_cgarchi_classical_column_json, the_frozen_short_decimal_instance_is_re
     EXPECT_EQ(ExportClassicalColumnJson(*s), text);
 }
 
+// capitalOrnaments : absent vaut "none" quel que soit le defaut de la
+// structure ; ecrit seulement hors de "none" ; relu a l'identique.
+TEST(TEST_cgarchi_classical_column_json, capital_ornaments_is_optional_and_round_trips)
+{
+    const std::optional<ClassicalColumnSettings> old = LoadClassicalColumnFromJson(fixtureText(kInstancePath));
+    ASSERT_TRUE(old.has_value());
+    EXPECT_EQ(canonical().count("capitalOrnaments"), 0u);
+    EXPECT_EQ(old->capitalOrnaments, 0);
+
+    const char *const names[] = {"none", "light", "heavy"};
+    for (int value = 0; value < kCapitalOrnamentsCount; ++value)
+    {
+        SCOPED_TRACE(names[value]);
+        ClassicalColumnSettings s;
+        s.order = static_cast<int>(classical::Order::Corinthian);
+        s.capitalOrnaments = value;
+        const std::string text = ExportClassicalColumnJson(s);
+        const json doc = json::parse(text);
+        if (value == 0)
+            EXPECT_EQ(doc.count("capitalOrnaments"), 0u);
+        else
+            EXPECT_EQ(doc["capitalOrnaments"], names[value]);
+        const std::optional<ClassicalColumnSettings> back = LoadClassicalColumnFromJson(text);
+        ASSERT_TRUE(back.has_value());
+        expectSameSettings(*back, s);
+        EXPECT_EQ(ExportClassicalColumnJson(*back), text);
+
+        json spelled = canonical();
+        spelled["capitalOrnaments"] = names[value];
+        const std::optional<ClassicalColumnSettings> read = LoadClassicalColumnFromJson(spelled.dump());
+        ASSERT_TRUE(read.has_value());
+        EXPECT_EQ(read->capitalOrnaments, value);
+    }
+
+    ClassicalColumnSettings outside;
+    outside.capitalOrnaments = kCapitalOrnamentsCount;
+    EXPECT_THROW(ExportClassicalColumnJson(outside), std::invalid_argument);
+}
+
 // Un refus par motif : code, chemin JSON et message exacts.
 TEST(TEST_cgarchi_classical_column_json, each_refusal_names_its_code_path_and_message)
 {
@@ -394,6 +436,10 @@ TEST(TEST_cgarchi_classical_column_json, each_refusal_names_its_code_path_and_me
          {GothicBuildError::JsonValue, "doricCornice", "unknown value \"modillions\" (expected one of: dentils, mutules)"}},
         {"cannelure inconnue", with("doricFlutes", "A"),
          {GothicBuildError::JsonValue, "doricFlutes", "unknown value \"A\" (expected one of: segment60, semicircle)"}},
+        {"ornements inconnus", with("capitalOrnaments", "medium"),
+         {GothicBuildError::JsonValue, "capitalOrnaments", "unknown value \"medium\" (expected one of: none, light, heavy)"}},
+        {"ornements en booleen", with("capitalOrnaments", true),
+         {GothicBuildError::JsonType, "capitalOrnaments", "expected a string, not boolean"}},
         {"reglage absent", without("volutes"), {GothicBuildError::JsonMissing, "volutes", "required field is missing"}},
         {"schema absent", without("schema"), {GothicBuildError::JsonMissing, "schema", "required field is missing"}},
         {"schema inconnu", with("schema", "gothic-window/v2"),
@@ -584,8 +630,11 @@ TEST(TEST_cgarchi_classical_column_json, the_schema_file_has_the_fields_and_doma
         properties.insert(it.key());
     for (const json &r : schema["required"])
         required.insert(r.get<std::string>());
-    EXPECT_EQ(properties, written);
+    // capitalOrnaments, facultatif, n'est ecrit que hors de "none".
+    EXPECT_EQ(written.count("capitalOrnaments"), 0u);
     EXPECT_EQ(required, written);
+    written.insert("capitalOrnaments");
+    EXPECT_EQ(properties, written);
     EXPECT_EQ(schema["additionalProperties"], false);
     EXPECT_EQ(schema["properties"]["schema"]["const"], kClassicalColumnSchema);
 
@@ -604,6 +653,7 @@ TEST(TEST_cgarchi_classical_column_json, the_schema_file_has_the_fields_and_doma
                                 : p.GetName() == "Module"            ? "module"
                                 : p.GetName() == "Doric cornice"     ? "doricCornice"
                                 : p.GetName() == "Doric flutes"      ? "doricFlutes"
+                                : p.GetName() == "Capital ornaments" ? "capitalOrnaments"
                                 : p.GetName() == "Radial segments"   ? "radialSegments"
                                 : p.GetName() == "Curve segments"    ? "curveSegments"
                                 : std::string();
@@ -633,7 +683,7 @@ TEST(TEST_cgarchi_classical_column_json, the_schema_file_has_the_fields_and_doma
         }
         ++checked;
     }
-    EXPECT_EQ(checked, 6u);
+    EXPECT_EQ(checked, 7u);
 
     // La fixture et les documents ecrits respectent le schema ; un document
     // hors domaine ne le respecte pas.
