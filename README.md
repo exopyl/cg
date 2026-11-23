@@ -516,6 +516,7 @@ n'hérite pas de `_base`. Les presets dérivés ne sont pas répétés : `ci-lin
 | `ENABLE_POISSON`             | Reconstruction de surface Poisson (`POISSONRECON_DIR`)          | `OFF`  | —        | —               | **`ON`**   | **`ON`**     | `OFF`        |
 | `ENABLE_ONNX`                | Source de profondeur ONNX (requiert `EXTERN_ONNXRUNTIME`)       | `OFF`  | —        | —               | —          | `OFF`        | `OFF`        |
 | `ENABLE_RECONSTRUCTION_CLI`  | Exécutable `reconstruction-cli` (implique `ENABLE_ONNX`)        | `OFF`  | —        | —               | —          | `OFF`        | `OFF`        |
+| `ENABLE_CGARCHI_CLI`         | Exécutable `cgarchi-cli` (colonnes de Vignole, serveur MCP)     | `OFF`  | —        | —               | —          | —            | —            |
 | `ENABLE_CGNET_DEMO`          | Exécutable de démo cgnet (Windows)                              | `OFF`  | `OFF`    | `OFF`           | `OFF`      | `OFF`        | `OFF`        |
 | `ENABLE_BENCHMARKS`          | Bancs `cg_bench` (§10), ignorée sous sanitizers                 | `OFF`  | —        | —               | —          | —            | —            |
 | `CG_ENABLE_SANITIZERS`       | ASan (+ UBSan hors MSVC)                                        | `OFF`  | —        | —               | —          | —            | —            |

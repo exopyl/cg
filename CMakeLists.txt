@@ -168,6 +168,7 @@ if (ENABLE_SINAIA)
 endif ()
 set(ENABLE_MAKER Off CACHE BOOL "Build the maker WebAssembly module (Emscripten only).")
 set(ENABLE_CGNET_DEMO Off CACHE BOOL "Build the cgnet_demo executable.")
+set(ENABLE_CGARCHI_CLI Off CACHE BOOL "Build the cgarchi-cli executable (classical columns to OBJ/GLB/STL; used by the cgarchi MCP server).")
 set(ENABLE_RECONSTRUCTION_CLI Off CACHE BOOL "Build the reconstruction-cli executable (image-based 3D reconstruction; links ONNX Runtime).")
 set(ENABLE_ONNX Off CACHE BOOL "Enable the ONNX depth source in cgmesh (links ONNX Runtime).")
 set(EXTERN_ONNXRUNTIME "" CACHE PATH "Path to ONNX Runtime prebuilt dir.")
@@ -332,6 +333,10 @@ endif ()
 
 if ( ENABLE_RECONSTRUCTION_CLI )
 	add_subdirectory(reconstruction-cli)
+endif ()
+
+if ( ENABLE_CGARCHI_CLI )
+	add_subdirectory(cgarchi-cli)
 endif ()
 
 # Canvas nodal : le canvas lui-meme (commun aux hotes) puis l'hote natif.
