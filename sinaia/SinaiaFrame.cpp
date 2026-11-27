@@ -2125,9 +2125,8 @@ void MyFrame::OnSceneChanged()
     UpdateContextualPanes();
 }
 
-// Dessine les icônes œil / œil barré / poser / recharger / poubelle (16x16) une
-// seule fois. Fond blanc
-// rendu transparent par un masque -> s'intègre aux boutons quel que soit le thème.
+// Construit une seule fois les icônes de la liste des Models (16x16). Recharger et
+// poubelle sont tracées au DC sur fond blanc, rendu transparent par un masque.
 void MyFrame::BuildModelsIcons()
 {
     auto make = [](void(*draw)(wxMemoryDC&)) -> wxBitmap {
@@ -2142,30 +2141,38 @@ void MyFrame::BuildModelsIcons()
         bmp.SetMask(new wxMask(bmp, *wxWHITE));
         return bmp;
     };
-    m_iconEye = make([](wxMemoryDC& dc) {                 // œil ouvert
-        dc.DrawEllipse(1, 4, 14, 8);
-        dc.SetBrush(*wxBLACK_BRUSH);
-        dc.DrawCircle(8, 8, 2);
-    });
-    m_iconEyeOff = make([](wxMemoryDC& dc) {              // œil barré (masqué)
-        dc.DrawEllipse(1, 4, 14, 8);
-        dc.SetBrush(*wxBLACK_BRUSH);
-        dc.DrawCircle(8, 8, 2);
-        dc.DrawLine(2, 13, 14, 3);
-    });
+    // Œil et « poser sur Z = 0 » : vectoriels, donc anticrénelés et nets à toute
+    // échelle d'affichage. Couleur = texte du thème, substituée au jeton COLOR.
+    const wxString ink = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT)
+                             .GetAsString(wxC2S_HTML_SYNTAX);
+    auto svg = [&ink](const wxString& body) -> wxBitmapBundle {
+        wxString doc = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' "
+                       "viewBox='0 0 16 16'>" + body + "</svg>";
+        doc.Replace("COLOR", ink);
+        return wxBitmapBundle::FromSVG(doc.utf8_str().data(), wxSize(16, 16));
+    };
+    // Amande à pointes vives et pupille pleine.
+    static const char* const kEye =
+        "<path d='M1.2 8C3.4 4.2 5.6 3.3 8 3.3S12.6 4.2 14.8 8C12.6 11.8 10.4 12.7 8 12.7S3.4 11.8 1.2 8Z' "
+        "fill='none' stroke='COLOR' stroke-width='1.3' stroke-linejoin='round'/>"
+        "<circle cx='8' cy='8' r='2.4' fill='COLOR'/>";
+    m_iconEye = svg(kEye);
+    // Masqué : le même œil estompé, barré d'un trait plein.
+    m_iconEyeOff = svg(wxString("<g opacity='0.45'>") + kEye + "</g>"
+        "<path d='M2.5 13.5L13.5 2.5' stroke='COLOR' stroke-width='1.6' stroke-linecap='round'/>");
+    // Flèche descendante vers un plan vu en perspective : le plan Z = 0.
+    m_iconDrop = svg(
+        "<path d='M8 1.5V9.5' stroke='COLOR' stroke-width='1.6' stroke-linecap='round'/>"
+        "<path d='M4.8 6.6L8 9.8L11.2 6.6' fill='none' stroke='COLOR' stroke-width='1.6' "
+        "stroke-linecap='round' stroke-linejoin='round'/>"
+        "<path d='M4 12H15L12 15H1Z' fill='COLOR' fill-opacity='0.3' stroke='COLOR' "
+        "stroke-width='1' stroke-linejoin='round'/>");
     m_iconTrash = make([](wxMemoryDC& dc) {               // poubelle
         dc.DrawLine(3, 4, 13, 4);                         // couvercle
         dc.DrawLine(6, 2, 10, 2);                         // poignée
         dc.DrawRectangle(4, 5, 8, 9);                     // bac
         dc.DrawLine(7, 7, 7, 12);                         // stries
         dc.DrawLine(9, 7, 9, 12);
-    });
-    m_iconDrop = make([](wxMemoryDC& dc) {                // flèche vers un socle (ramener sur Z = 0)
-        dc.DrawLine(8, 1, 8, 8);                          // hampe
-        dc.SetBrush(*wxBLACK_BRUSH);
-        wxPoint head[3] = { wxPoint(4, 7), wxPoint(12, 7), wxPoint(8, 12) };   // pointe
-        dc.DrawPolygon(3, head);
-        dc.DrawLine(1, 14, 15, 14);                       // le plan Z = 0
     });
     m_iconRefresh = make([](wxMemoryDC& dc) {             // flèche circulaire (recharger)
         dc.DrawEllipticArc(3, 3, 10, 10, 55, 340);        // cercle ouvert en haut-droite

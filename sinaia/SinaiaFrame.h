@@ -556,7 +556,8 @@ private:
     // seulement) + bouton poubelle. Reconstruit par UpdateModelsList.
     wxScrolledWindow* m_modelsPanel = nullptr;
     std::vector<wxStaticText*> m_modelRowLabels;   // libellés des lignes (surbrillance survol)
-    wxBitmap m_iconEye, m_iconEyeOff, m_iconTrash, m_iconRefresh, m_iconDrop;
+    wxBitmapBundle m_iconEye, m_iconEyeOff, m_iconDrop;
+    wxBitmap m_iconTrash, m_iconRefresh;
     void BuildModelsIcons();          // dessine les icônes une fois
     void ToggleModelVisibility(int index);    // œil : bascule Model::m_visible
     // Ramene le Model de la ligne sur le plan Z = 0 (cote de depart d'une chaine

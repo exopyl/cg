@@ -105,67 +105,53 @@ static const char *stop_xpm[] = {
 /*** icons for OpenGL modes ***/
 /******************************/
 
+// 16x16 comme toutes les icones de la barre : une taille differente decale
+// l'icone par rapport a ses voisines.
 static const char *grid_xpm[] = {
-"17 17 17 1",
+"16 16 2 1",
 " 	c None",
 ".	c #000000",
-"+	c #800000",
-"@	c #008000",
-"#	c #808000",
-"$	c #000080",
-"%	c #800080",
-"&	c #008080",
-"*	c #808080",
-"=	c #C0C0C0",
-"-	c #FF0000",
-";	c #00FF00",
-">	c #FFFF00",
-",	c #0000FF",
-"'	c #FF00FF",
-")	c #00FFFF",
-"!	c #FFFFFF",
-".................",
-".   .   .   .   .",
-".   .   .   .   .",
-".   .   .   .   .",
-".................",
-".   .   .   .   .",
-".   .   .   .   .",
-".   .   .   .   .",
-".................",
-".   .   .   .   .",
-".   .   .   .   .",
-".   .   .   .   .",
-".................",
-".   .   .   .   .",
-".   .   .   .   .",
-".   .   .   .   .",
-"................."};
+"................",
+".    .    .    .",
+".    .    .    .",
+".    .    .    .",
+".    .    .    .",
+"................",
+".    .    .    .",
+".    .    .    .",
+".    .    .    .",
+".    .    .    .",
+"................",
+".    .    .    .",
+".    .    .    .",
+".    .    .    .",
+".    .    .    .",
+"................"};
 
 // Base de coupe : la plaque vert sombre et son quadrillage clair, aux couleurs
-// de l'asset (FOND, MINEUR et MAJEUR de base_coupe_texture.py). Un trait fort
-// au milieu de chaque axe rappelle le majeur tous les 5 du tapis reel.
+// de l'asset (FOND et MAJEUR de base_coupe_texture.py). Trois cases de 4 px par
+// axe, traits symetriques : un pas plus fin (ou un trait mineur intercale) bat
+// en moire des que la barre d'outils met l'icone a l'echelle.
 static const char *cutting_mat_xpm[] = {
-"16 16 4 1",
+"16 16 3 1",
 "G	c #397E52",
-"m	c #84BC98",
 "M	c #EEFAF2",
 ".	c #1F4A30",
 "................",
-".GGmGGMGGmGGmGG.",
-".GGmGGMGGmGGmGG.",
-".mmmmmMmmmmmmmm.",
-".GGmGGMGGmGGmGG.",
-".GGmGGMGGmGGmGG.",
+".GGGGMGGGGMGGGG.",
+".GGGGMGGGGMGGGG.",
+".GGGGMGGGGMGGGG.",
+".GGGGMGGGGMGGGG.",
 ".MMMMMMMMMMMMMM.",
-".GGmGGMGGmGGmGG.",
-".GGmGGMGGmGGmGG.",
-".mmmmmMmmmmmmmm.",
-".GGmGGMGGmGGmGG.",
-".GGmGGMGGmGGmGG.",
-".mmmmmMmmmmmmmm.",
-".GGmGGMGGmGGmGG.",
-".GGmGGMGGmGGmGG.",
+".GGGGMGGGGMGGGG.",
+".GGGGMGGGGMGGGG.",
+".GGGGMGGGGMGGGG.",
+".GGGGMGGGGMGGGG.",
+".MMMMMMMMMMMMMM.",
+".GGGGMGGGGMGGGG.",
+".GGGGMGGGGMGGGG.",
+".GGGGMGGGGMGGGG.",
+".GGGGMGGGGMGGGG.",
 "................"};
 
 static const char *light_xpm[] = {
