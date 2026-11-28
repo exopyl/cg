@@ -3,12 +3,14 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <iostream>
 #include <memory>
 #include <numeric>
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include <cgarchi/classical_orders.h>
 #include <cgarchi/classical_orders_data.h>
@@ -19,6 +21,7 @@
 #include "../src/cgmesh/mesh.h"
 #include "../src/cgmesh/mesh_validation.h"
 #include "../src/cgmesh/polygon_extrude.h"
+#include "colonnade_test_support.h"
 
 // ===========================================================================
 //  Colonnade, entablement file et ornements d'entablement
@@ -147,7 +150,8 @@ struct Fingerprint
 };
 
 // Empreintes des 48 configurations de Classical Column (parametres par defaut,
-// Volutes coche, Flutes decoche), donnees du 2026-11-05.
+// Volutes coche, Flutes decoche, Capital ornaments a None : le tour seul),
+// donnees du 2026-11-05.
 const Fingerprint kColumnFingerprints[] = {
 	{ 0, 0, 0, 0, 0, 3358u, 6712u, 44.244948832821507, -1.375, -1.375, 0, 1.375, 1.375, 14, 767472374.72254503 },
 	{ 0, 0, 0, 0, 1, 3358u, 6712u, 44.244948832821507, -1.375, -1.375, 0, 1.375, 1.375, 14, 767472374.72254503 },
@@ -199,7 +203,8 @@ const Fingerprint kColumnFingerprints[] = {
 	{ 4, 0, 1, 1, 1, 15394u, 30784u, 171.58367108524158, -2.8333332538604736, -2.8333332538604736, 0, 2.8333332538604736, 2.8333332538604736, 32, 76111596838.331741 },
 };
 
-Fingerprint Measure (int order, int cornice, int pedestal, int entablature, int envelope, int curveSegments = 6)
+Fingerprint Measure (int order, int cornice, int pedestal, int entablature, int envelope, int curveSegments = 6,
+                     int capitalOrnaments = 0)
 {
 	cgarchi::ParameterizedClassicalColumn c;
 	std::vector<Parameter> ps = c.GetParameters ();
@@ -211,6 +216,7 @@ Fingerprint Measure (int order, int cornice, int pedestal, int entablature, int 
 		if (p.GetName () == "Entablature") p.SetBool (entablature != 0);
 		if (p.GetName () == "Ornament envelope") p.SetBool (envelope != 0);
 		if (p.GetName () == "Curve segments") p.SetInt (curveSegments);
+		if (p.GetName () == "Capital ornaments") p.SetInt (capitalOrnaments);
 	}
 	c.Regenerate ();
 	const Mesh &m = *c.GetMesh ();
@@ -269,6 +275,20 @@ TEST (TEST_cgarchi_classical_colonnade, the_classical_column_keeps_its_fingerpri
 		EXPECT_TRUE (Matches (now, ref, why)) << ref.order << ref.cornice << ref.pedestal << ref.entablature << ref.envelope
 		                                      << " : " << why;
 	}
+	// Corinthien a Light : le tour de l'empreinte, les 16 feuilles des rangs F et E, les 8 tiges des caulicoles et les
+	// 16 feuilles D, les 8 volutes, les 8 helices et les 4 fleurons et leurs tiges (79 232 triangles, 39 776 sommets) ; comptes seuls, la forme des pieces
+	// etant couverte par les tests de l'acanthe.
+	unsigned corinthian = 0;
+	for (const Fingerprint &ref : kColumnFingerprints)
+	{
+		if (ref.order != 3)
+			continue;
+		++corinthian;
+		const Fingerprint light = Measure (ref.order, ref.cornice, ref.pedestal, ref.entablature, ref.envelope, 6, 1);
+		EXPECT_EQ (light.vertices, ref.vertices + 39776u) << ref.pedestal << ref.entablature << ref.envelope;
+		EXPECT_EQ (light.faces, ref.faces + 79232u) << ref.pedestal << ref.entablature << ref.envelope;
+	}
+	EXPECT_EQ (corinthian, 8u);
 	// Negatif : un segment de courbe de plus change l'empreinte.
 	const Fingerprint &first = kColumnFingerprints[0];
 	std::string why;
@@ -388,6 +408,9 @@ TEST (TEST_cgarchi_classical_colonnade, a_plain_colonnade_is_n_translated_column
 			cgarchi::ClassicalColumnSettings s;
 			s.order = o;
 			s.pedestal = pedestal != 0;
+			for (const Parameter &p : colonnade->GetParameters ())
+				if (p.GetName () == "Capital ornaments")
+					s.capitalOrnaments = p.GetInt ();   // ornements du chapiteau de la colonnade
 			ColumnProfile profile;
 			const std::unique_ptr<Mesh> column = cgarchi::BuildClassicalColumnMesh (s, &profile);
 			const ColumnProfile section = BuildEntablatureSection (order, EntablatureOptions {});
@@ -691,6 +714,138 @@ TEST (TEST_cgarchi_classical_colonnade, the_cost_is_measured_and_large_meshes_ar
 		std::cout << "[ mesure ] colonnade " << c.label << " : " << faces << " triangles, Regenerate "
 		          << std::chrono::duration<double, std::milli> (t1 - t0).count () << " ms (Debug)"
 		          << (col->Warnings ().empty () ? "" : " ; avertissement") << '\n';
+	}
+}
+
+// K61 : colonnade corinthienne (registre AC-75). Faces = N x colonne + E (N), E (N) l'entablement balaye et ses
+// ornements, a N = 1, 3, 4 (Light) et 1 (Heavy) ; colonne seule 92 880 (Light) et 343 472 (Heavy) faces. Banniere
+// au-dela de 300 000 faces : absente a N = 3 Light, presente a N = 4 Light et a N = 1 Heavy ; son conseil sur Capital
+// ornaments descend d'un niveau.
+TEST (TEST_cgarchi_classical_colonnade, the_corinthian_colonnade_counts_and_banner_follow_the_level)
+{
+	constexpr unsigned kColumnFaces[] = {0u, 92880u, 343472u};
+	const char *const kAdvice[] = {"", "Capital ornaments a None", "Capital ornaments a Light"};
+	struct Case
+	{
+		int level, columns;
+		unsigned entablature;
+		bool banner;
+	};
+	const Case cases[] = {{1, 1, 1116u, false}, {1, 3, 2316u, false}, {1, 4, 2916u, true}, {2, 1, 1116u, true}};
+	EXPECT_EQ (cgarchi::ParameterizedClassicalColonnade::kColonnadeFaceWarning, 300000u);
+	for (const Case &c : cases)
+	{
+		SCOPED_TRACE (std::to_string (c.level) + " / " + std::to_string (c.columns));
+		cgarchi::ClassicalColumnSettings s;
+		s.order = static_cast<int> (Order::Corinthian);
+		s.capitalOrnaments = c.level;
+		EXPECT_EQ (static_cast<unsigned> (cgarchi::BuildClassicalColumnMesh (s)->GetNFaces ()), kColumnFaces[c.level]);
+
+		auto colonnade = std::make_unique<cgarchi::ParameterizedClassicalColonnade> ();
+		std::vector<Parameter> ps = colonnade->GetParameters ();
+		for (Parameter &p : ps)
+		{
+			if (p.GetName () == "Order") p.SetInt (static_cast<int> (Order::Corinthian));
+			if (p.GetName () == "Columns") p.SetInt (c.columns);
+			if (p.GetName () == "Capital ornaments") p.SetInt (c.level);
+		}
+		colonnade->Regenerate ();
+		ASSERT_TRUE (colonnade->LastError ().empty ()) << colonnade->LastError ();
+		const unsigned faces = static_cast<unsigned> (colonnade->GetMesh ()->GetNFaces ());
+		EXPECT_EQ (faces, static_cast<unsigned> (c.columns) * kColumnFaces[c.level] + c.entablature);
+		const std::string &banner = colonnade->Warnings ();
+		EXPECT_EQ (!banner.empty (), c.banner) << banner;
+		if (c.banner)
+		{
+			EXPECT_NE (banner.find (kAdvice[c.level]), std::string::npos) << banner;
+			EXPECT_EQ (banner.find (kAdvice[3 - c.level]), std::string::npos) << banner;
+		}
+		std::cout << "[ mesure ] K61 colonnade corinthienne, niveau " << c.level << ", " << c.columns << " colonnes : " << faces
+		          << " faces, E (N) " << faces - static_cast<unsigned> (c.columns) * kColumnFaces[c.level]
+		          << (banner.empty () ? "" : " ; banniere : " + banner) << '\n';
+	}
+
+	// Sans ornement de chapiteau construit (ordre ionique ; corinthien a « Volutes » decoche), la banniere au-dela du
+	// seuil ne parle pas de Capital ornaments, quel que soit le niveau regle.
+	struct Plain
+	{
+		Order order;
+		int columns;
+		bool flutes, volutes;
+		const char *label;
+	};
+	const Plain plain[] = {{Order::Ionic, 12, true, true, "ionique cannele a volutes, 12 colonnes"},
+	                       {Order::Corinthian, 12, true, false, "corinthien cannele, Volutes decoche, 12 colonnes"}};
+	for (const Plain &c : plain)
+	{
+		SCOPED_TRACE (c.label);
+		auto colonnade = std::make_unique<cgarchi::ParameterizedClassicalColonnade> ();
+		std::vector<Parameter> ps = colonnade->GetParameters ();
+		for (Parameter &p : ps)
+		{
+			if (p.GetName () == "Order") p.SetInt (static_cast<int> (c.order));
+			if (p.GetName () == "Columns") p.SetInt (c.columns);
+			if (p.GetName () == "Flutes") p.SetBool (c.flutes);
+			if (p.GetName () == "Volutes") p.SetBool (c.volutes);
+			if (p.GetName () == "Capital ornaments") p.SetInt (static_cast<int> (OrnamentDetail::Heavy));
+		}
+		colonnade->Regenerate ();
+		ASSERT_TRUE (colonnade->LastError ().empty ()) << colonnade->LastError ();
+		const unsigned faces = static_cast<unsigned> (colonnade->GetMesh ()->GetNFaces ());
+		const std::string &banner = colonnade->Warnings ();
+		EXPECT_GT (faces, cgarchi::ParameterizedClassicalColonnade::kColonnadeFaceWarning);
+		EXPECT_FALSE (banner.empty ());
+		EXPECT_EQ (banner.find ("Capital ornaments"), std::string::npos) << banner;
+		std::cout << "[ mesure ] K61 " << c.label << " : " << faces << " faces ; banniere : " << banner << '\n';
+	}
+}
+
+// K62 : le maillage de la colonnade est, a l'octet, celui d'appendMesh successifs (copies translatees de la colonne,
+// puis entablement et familles d'ornements) : sommets float compares par leurs octets, faces indice par indice. Les
+// 5 ordres a N = 1, 3, 12 (Capital ornaments par defaut) et le corinthien None, Light, Heavy a N = 1, 4.
+TEST (TEST_cgarchi_classical_colonnade, the_assembly_equals_successive_appends)
+{
+	struct Case
+	{
+		int order, columns, level;
+	};
+	std::vector<Case> cases;
+	for (int o = 0; o < kOrderCount; ++o)
+		for (const int columns : {1, 3, 12})
+			cases.push_back ({o, columns, -1});
+	for (const int level : {0, 1, 2})
+		for (const int columns : {1, 4})
+			cases.push_back ({static_cast<int> (Order::Corinthian), columns, level});
+	for (const Case &c : cases)
+	{
+		SCOPED_TRACE (std::to_string (c.order) + " / " + std::to_string (c.columns) + " / " + std::to_string (c.level));
+		auto colonnade = std::make_unique<cgarchi::ParameterizedClassicalColonnade> ();
+		std::vector<Parameter> ps = colonnade->GetParameters ();
+		for (Parameter &p : ps)
+		{
+			if (p.GetName () == "Order") p.SetInt (c.order);
+			if (p.GetName () == "Columns") p.SetInt (c.columns);
+			if (c.level >= 0 && p.GetName () == "Capital ornaments") p.SetInt (c.level);
+		}
+		colonnade->Regenerate ();
+		ASSERT_TRUE (colonnade->LastError ().empty ()) << colonnade->LastError ();
+		const Mesh &built = *colonnade->GetMesh ();
+		const std::unique_ptr<Mesh> reference = colonnade_test::ReferenceAssembly (colonnade_test::MakeColonnadePieces (c.order, c.columns, c.level));
+		ASSERT_EQ (built.GetNVertices (), reference->GetNVertices ());
+		ASSERT_EQ (built.GetNFaces (), reference->GetNFaces ());
+		const std::vector<float> &a = built.GetVertices (), &b = reference->GetVertices ();
+		ASSERT_EQ (a.size (), b.size ());
+		EXPECT_EQ (std::memcmp (a.data (), b.data (), a.size () * sizeof (float)), 0);
+		long long firstDifferent = -1;
+		for (unsigned f = 0; f < built.GetNFaces () && firstDifferent < 0; ++f)
+		{
+			if (built.GetFaceNVertices (f) != 3)
+				firstDifferent = f;
+			for (unsigned k = 0; k < 3 && firstDifferent < 0; ++k)
+				if (built.GetFaceVertex (f, k) != reference->GetFaceVertex (f, k))
+					firstDifferent = f;
+		}
+		EXPECT_EQ (firstDifferent, -1);
 	}
 }
 

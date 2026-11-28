@@ -36,6 +36,8 @@ namespace
 	// Valeurs de doricCornice et de doricFlutes, dans l'ordre de leurs indices.
 	constexpr const char *kDoricCorniceNames[] = {"dentils", "mutules"};
 	constexpr const char *kDoricFluteNames[]   = {"segment60", "semicircle"};
+	constexpr const char *kCapitalOrnamentNames[] = {"none", "light", "heavy"};
+	static_assert(std::size(kCapitalOrnamentNames) == kCapitalOrnamentsCount, "un nom par choix de capitalOrnaments");
 
 	static_assert(classical::kOrderCount == 5, "LoadClassicalColumnFromJson enumere une cle par ordre");
 
@@ -86,7 +88,7 @@ namespace
 
 		const std::string root;
 		r.Known(doc, root, {"schema", "order", "module", "pedestal", "entablature", "doricCornice", "envelope",
-		                    "volutes", "flutes", "doricFlutes", "radialSegments", "curveSegments"});
+		                    "volutes", "capitalOrnaments", "flutes", "doricFlutes", "radialSegments", "curveSegments"});
 		r.Require(doc, root, {"order", "module", "pedestal", "entablature", "doricCornice", "envelope", "volutes",
 		                      "flutes", "doricFlutes", "radialSegments", "curveSegments"});
 
@@ -97,6 +99,11 @@ namespace
 		r.Enum(doc, root, "doricCornice", {kDoricCorniceNames[0], kDoricCorniceNames[1]}, s.doricCornice);
 		r.Boolean(doc, root, "envelope", s.envelope);
 		r.Boolean(doc, root, "volutes", s.volutes);
+		// Facultatif : absent vaut "none", quel que soit le defaut de la structure.
+		s.capitalOrnaments = 0;
+		if (doc.contains("capitalOrnaments"))
+			r.Enum(doc, root, "capitalOrnaments", {kCapitalOrnamentNames[0], kCapitalOrnamentNames[1], kCapitalOrnamentNames[2]},
+			       s.capitalOrnaments);
 		r.Boolean(doc, root, "flutes", s.flutes);
 		r.Enum(doc, root, "doricFlutes", {kDoricFluteNames[0], kDoricFluteNames[1]}, s.doricFlutes);
 		r.Integer(doc, root, "radialSegments", kClassicalRadialSegmentsMin, kClassicalRadialSegmentsMax, s.radialSegments);
@@ -175,6 +182,7 @@ std::string ExportClassicalColumnJson (const ClassicalColumnSettings &s)
 	checkIndex("order", s.order, classical::kOrderCount);
 	checkIndex("doricCornice", s.doricCornice, static_cast<int>(std::size(kDoricCorniceNames)));
 	checkIndex("doricFlutes", s.doricFlutes, static_cast<int>(std::size(kDoricFluteNames)));
+	checkIndex("capitalOrnaments", s.capitalOrnaments, static_cast<int>(std::size(kCapitalOrnamentNames)));
 	checkRange("radialSegments", s.radialSegments, kClassicalRadialSegmentsMin, kClassicalRadialSegmentsMax);
 	checkRange("curveSegments", s.curveSegments, kClassicalCurveSegmentsMin, kClassicalCurveSegmentsMax);
 	if (!(s.module >= kClassicalModuleMin && s.module <= kClassicalModuleMax))
@@ -191,6 +199,8 @@ std::string ExportClassicalColumnJson (const ClassicalColumnSettings &s)
 	j["doricCornice"]   = kDoricCorniceNames[s.doricCornice];
 	j["envelope"]       = s.envelope;
 	j["volutes"]        = s.volutes;
+	if (s.capitalOrnaments != 0)
+		j["capitalOrnaments"] = kCapitalOrnamentNames[s.capitalOrnaments];
 	j["flutes"]         = s.flutes;
 	j["doricFlutes"]    = kDoricFluteNames[s.doricFlutes];
 	j["radialSegments"] = s.radialSegments;

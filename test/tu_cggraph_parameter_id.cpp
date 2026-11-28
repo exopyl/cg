@@ -182,6 +182,55 @@ bool AcceptedKeys (const std::string &typeName, std::set<std::string> &keys)
 	return false;
 }
 
+// Parametres ajoutes au catalogue apres la fixture gelee (nom ecrit dans le
+// document). Liste fermee : une cle absente d'ici reste comparee a l'octet.
+const std::set<std::string> kKeysAfterQ3 {"Capital ornaments"};
+
+// `document` prive des objets de parametre dont le "name" est dans `keys`,
+// ligne a ligne dans la mise en forme de SaveGraph (un objet de parametre
+// s'ouvre par une ligne "{" et se ferme par une ligne "}" ou "},", ses champs
+// sur des lignes propres). `removed` recoit le nombre d'objets retires.
+std::string WithoutParameters (const std::string &document, const std::set<std::string> &keys, std::size_t &removed)
+{
+	std::vector<std::string> lines;
+	for (std::size_t start = 0; start <= document.size ();)
+	{
+		const std::size_t end = document.find ('\n', start);
+		lines.push_back (document.substr (start, end == std::string::npos ? std::string::npos : end - start));
+		if (end == std::string::npos)
+			break;
+		start = end + 1;
+	}
+	auto trimmed = [] (const std::string &line) {
+		const std::size_t b = line.find_first_not_of ('\t');
+		return b == std::string::npos ? std::string () : line.substr (b);
+	};
+	removed = 0;
+	for (std::size_t i = 0; i < lines.size (); ++i)
+	{
+		bool listed = false;
+		for (const std::string &key : keys)
+			listed = listed || trimmed (lines[i]) == "\"name\": \"" + key + "\",";
+		if (!listed)
+			continue;
+		std::size_t open = i;
+		while (open > 0 && trimmed (lines[open]) != "{")
+			--open;
+		std::size_t close = i;
+		while (close + 1 < lines.size () && trimmed (lines[close]) != "}" && trimmed (lines[close]) != "},")
+			++close;
+		if (trimmed (lines[close]) == "}" && open > 0 && trimmed (lines[open - 1]) == "},")
+			lines[open - 1].pop_back ();   // l'objet retire etait le dernier : la virgule du precedent tombe
+		lines.erase (lines.begin () + static_cast<std::ptrdiff_t> (open), lines.begin () + static_cast<std::ptrdiff_t> (close) + 1);
+		i = open - 1;
+		++removed;
+	}
+	std::string out;
+	for (std::size_t i = 0; i < lines.size (); ++i)
+		out += (i ? "\n" : "") + lines[i];
+	return out;
+}
+
 // Un noeud par liaison du catalogue, dans l'ordre de ShapeBindings (), puis la
 // fenetre gothique, qui a son propre descripteur. Valeurs par defaut.
 std::string CatalogueDocument ()
@@ -199,7 +248,16 @@ TEST (TEST_cggraph_parameter_id, the_catalogue_document_is_written_byte_for_byte
 {
 	const std::string before = WithoutCarriageReturns (ReadText (kBeforeQ3));
 	ASSERT_FALSE (before.empty ()) << kBeforeQ3;
-	EXPECT_EQ (CatalogueDocument (), before);
+	// Les cles posterieures a Q3 (kKeysAfterQ3) sont retirees du document
+	// courant, et de lui seul ; leur nombre est fige : un retrait vide ne
+	// masquerait plus rien.
+	std::size_t removed = 0;
+	const std::string current = WithoutParameters (CatalogueDocument (), kKeysAfterQ3, removed);
+	EXPECT_EQ (removed, 2u);   // Classical Column et Classical Colonnade
+	EXPECT_EQ (current, before);
+	std::size_t none = 0;
+	EXPECT_EQ (WithoutParameters (before, kKeysAfterQ3, none), before);
+	EXPECT_EQ (none, 0u);
 }
 
 TEST (TEST_cggraph_parameter_id, every_key_of_a_document_written_before_is_still_an_id_of_its_type)

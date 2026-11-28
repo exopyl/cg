@@ -1,11 +1,16 @@
 #include <cgarchi/parameterized_classical.h>
 
 #include <algorithm>
+#include <array>
 #include <exception>
 #include <string>
+#include <vector>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 
+#include <cgarchi/classical_acanthus.h>
+#include <cgarchi/classical_acanthus_detail.h>
 #include <cgarchi/classical_colonnade.h>
 #include <cgarchi/classical_entablature.h>
 #include <cgarchi/classical_ionic_capital.h>
@@ -27,6 +32,7 @@ void ClampClassicalColumnSettings (ClassicalColumnSettings &s)
 	s.order = std::clamp (s.order, 0, classical::kOrderCount - 1);
 	s.doricCornice = std::clamp (s.doricCornice, 0, 1);
 	s.doricFlutes = std::clamp (s.doricFlutes, 0, 1);
+	s.capitalOrnaments = std::clamp (s.capitalOrnaments, 0, kCapitalOrnamentsCount - 1);
 	s.module = std::clamp (s.module, kClassicalModuleMin, kClassicalModuleMax);
 	s.radialSegments = std::clamp (s.radialSegments, kClassicalRadialSegmentsMin, kClassicalRadialSegmentsMax);
 	s.curveSegments = std::clamp (s.curveSegments, kClassicalCurveSegmentsMin, kClassicalCurveSegmentsMax);
@@ -75,6 +81,54 @@ double LatheScale (const classical::OrderData &order, const ClassicalColumnSetti
 	return settings.module / order.partsPerModule;
 }
 
+// Conseil de la banniere de la colonnade sur Capital ornaments : un niveau de
+// moins (Heavy : Light ; Light : None), si l'ornement du chapiteau est construit.
+std::string CapitalOrnamentsAdvice (const classical::OrderData &order, const ClassicalColumnSettings &settings)
+{
+	if (order.order != classical::Order::Corinthian || !settings.volutes)
+		return {};
+	switch (static_cast<classical::OrnamentDetail> (settings.capitalOrnaments))
+	{
+	case classical::OrnamentDetail::Heavy:
+		return ", ou regler Capital ornaments a Light";
+	case classical::OrnamentDetail::Light:
+		return ", ou regler Capital ornaments a None";
+	default:
+		return {};
+	}
+}
+
+// Ajoute a `dest` les sommets (convertis en float) et les triangles de
+// l'ornement, indices decales du nombre de sommets de `dest` : meme maillage
+// que appendMesh (dest, *BuildCorinthianOrnament (...).mesh), sans construire
+// le maillage intermediaire.
+void AppendOrnament (Mesh &dest, const classical::detail::OrnamentGeometry &ornament)
+{
+	const unsigned destNV = dest.GetNVertices ();
+	const unsigned destNF = dest.GetNFaces ();
+	const std::size_t srcNV = ornament.positions.size ();
+	const std::size_t srcNF = ornament.triangles.size ();
+	std::vector<float> verts;
+	verts.reserve (3 * (destNV + srcNV));
+	for (unsigned i = 0; i < destNV; ++i)
+	{
+		float v[3];
+		dest.GetVertex (i, v);
+		verts.insert (verts.end (), {v[0], v[1], v[2]});
+	}
+	for (const std::array<double, 3> &p : ornament.positions)
+		verts.insert (verts.end (), {static_cast<float> (p[0]), static_cast<float> (p[1]), static_cast<float> (p[2])});
+	std::vector<unsigned> faces;
+	faces.reserve (3 * (destNF + srcNF));
+	for (unsigned i = 0; i < destNF; ++i)
+		for (unsigned j = 0; j < 3; ++j)
+			faces.push_back (static_cast<unsigned> (dest.GetFaceVertex (i, j)));
+	for (const std::array<unsigned, 3> &t : ornament.triangles)
+		faces.insert (faces.end (), {t[0] + destNV, t[1] + destNV, t[2] + destNV});
+	dest.SetVertices (static_cast<unsigned> (destNV + srcNV), verts.data ());
+	dest.SetFaces (static_cast<unsigned> (destNF + srcNF), 3, faces.data ());
+}
+
 } // namespace
 
 std::unique_ptr<Mesh> BuildClassicalColumnMesh (const ClassicalColumnSettings &settings,
@@ -82,6 +136,10 @@ std::unique_ptr<Mesh> BuildClassicalColumnMesh (const ClassicalColumnSettings &s
                                                 std::vector<classical::PlanConflict> *conflictsOut)
 {
 	const classical::OrderData &order = CheckedOrder (settings, "BuildClassicalColumnMesh");
+	if (settings.capitalOrnaments < 0 || settings.capitalOrnaments >= kCapitalOrnamentsCount)
+		throw std::invalid_argument ("BuildClassicalColumnMesh : capitalOrnaments " +
+		                             std::to_string (settings.capitalOrnaments) + " hors de [0, " +
+		                             std::to_string (kCapitalOrnamentsCount) + ")");
 	const classical::ColumnOptions options = ColumnOptionsOf (order, settings);
 	const classical::ColumnProfile profile = classical::BuildColumnProfile (order, options);
 	if (conflictsOut)
@@ -98,6 +156,17 @@ std::unique_ptr<Mesh> BuildClassicalColumnMesh (const ClassicalColumnSettings &s
 		volute.scale = lathe.scale;
 		for (const std::unique_ptr<Mesh> &bolster : classical::BuildIonicVolutes (order, profile, volute))
 			appendMesh (*mesh, *bolster);
+	}
+	// « Volutes » porte tout l'ornement sculpte du chapiteau : decoche, le
+	// corinthien est rendu par sa corbeille seule.
+	if (order.order == classical::Order::Corinthian && settings.volutes &&
+	    settings.capitalOrnaments != static_cast<int> (classical::OrnamentDetail::None))
+	{
+		classical::AcanthusOptions acanthus;
+		acanthus.detail = static_cast<classical::OrnamentDetail> (settings.capitalOrnaments);
+		acanthus.scale = lathe.scale;
+		acanthus.radialSegments = lathe.radialSegments;
+		AppendOrnament (*mesh, classical::detail::BuildCorinthianOrnamentGeometry (order, profile, acanthus));
 	}
 	if (profileOut)
 		*profileOut = profile;
@@ -145,7 +214,11 @@ ClassicalColumnLevels ComputeClassicalColumnLevels (const ClassicalColumnSetting
 	return levels;
 }
 
-ParameterizedClassicalColumn::ParameterizedClassicalColumn () { Regenerate (); }
+ParameterizedClassicalColumn::ParameterizedClassicalColumn ()
+{
+	m_settings.capitalOrnaments = static_cast<int> (classical::OrnamentDetail::Light);
+	Regenerate ();
+}
 
 std::vector<Parameter> ParameterizedClassicalColumn::GetParameters ()
 {
@@ -158,6 +231,7 @@ std::vector<Parameter> ParameterizedClassicalColumn::GetParameters ()
 		Parameter::MakeEnum ("Doric cornice", &s.doricCornice, {"Dentils", "Mutules"}),
 		Parameter::MakeBool ("Ornament envelope", &s.envelope),
 		Parameter::MakeBool ("Volutes", &s.volutes),
+		Parameter::MakeEnum ("Capital ornaments", &s.capitalOrnaments, {"None", "Light", "Heavy"}),
 		Parameter::MakeBool ("Flutes", &s.flutes),
 		Parameter::MakeEnum ("Doric flutes", &s.doricFlutes, {"Segment (A)", "Semicircle (B)"}),
 		Parameter::MakeInt ("Radial segments", &s.radialSegments, kClassicalRadialSegmentsMin, kClassicalRadialSegmentsMax),
@@ -186,7 +260,57 @@ void ParameterizedClassicalColumn::Regenerate ()
 	m_pMesh->ComputeNormals ();
 }
 
-ParameterizedClassicalColonnade::ParameterizedClassicalColonnade () { Regenerate (); }
+std::unique_ptr<Mesh> AssembleColonnadeMesh (const Mesh &column, const std::vector<double> &axes, double scale,
+                                             const std::vector<const Mesh *> &rest)
+{
+	std::size_t vertices = axes.size () * column.GetNVertices (), faces = axes.size () * column.GetNFaces ();
+	for (const Mesh *piece : rest)
+	{
+		vertices += piece->GetNVertices ();
+		faces += piece->GetNFaces ();
+	}
+	std::vector<float> positions;
+	std::vector<unsigned int> indices;
+	positions.reserve (3 * vertices);
+	indices.reserve (3 * faces);
+	const auto appendFaces = [&indices] (const Mesh &piece, unsigned int offset) {
+		for (unsigned int f = 0; f < piece.GetNFaces (); ++f)
+			for (unsigned int k = 0; k < 3; ++k)
+				indices.push_back (static_cast<unsigned int> (piece.GetFaceVertex (f, k)) + offset);
+	};
+
+	const std::vector<float> &source = column.GetVertices ();
+	for (const double axis : axes)
+	{
+		const unsigned int offset = static_cast<unsigned int> (positions.size () / 3);
+		const float dx = static_cast<float> (axis * scale);
+		for (std::size_t i = 0; i < source.size (); i += 3)
+		{
+			positions.push_back (source[i] + dx);
+			positions.push_back (source[i + 1]);
+			positions.push_back (source[i + 2]);
+		}
+		appendFaces (column, offset);
+	}
+	for (const Mesh *piece : rest)
+	{
+		const unsigned int offset = static_cast<unsigned int> (positions.size () / 3);
+		const std::vector<float> &p = piece->GetVertices ();
+		positions.insert (positions.end (), p.begin (), p.end ());
+		appendFaces (*piece, offset);
+	}
+
+	auto mesh = std::make_unique<Mesh> ();
+	mesh->SetVertices (static_cast<unsigned int> (positions.size () / 3), positions.data ());
+	mesh->SetFaces (static_cast<unsigned int> (indices.size () / 3), 3, indices.data ());
+	return mesh;
+}
+
+ParameterizedClassicalColonnade::ParameterizedClassicalColonnade ()
+{
+	m_settings.capitalOrnaments = static_cast<int> (classical::OrnamentDetail::Light);
+	Regenerate ();
+}
 
 std::vector<Parameter> ParameterizedClassicalColonnade::GetParameters ()
 {
@@ -200,6 +324,7 @@ std::vector<Parameter> ParameterizedClassicalColonnade::GetParameters ()
 		Parameter::MakeBool ("Ornaments", &m_ornaments),
 		Parameter::MakeBool ("Ornament envelope", &s.envelope),
 		Parameter::MakeBool ("Volutes", &s.volutes),
+		Parameter::MakeEnum ("Capital ornaments", &s.capitalOrnaments, {"None", "Light", "Heavy"}),
 		Parameter::MakeBool ("Flutes", &s.flutes),
 		Parameter::MakeEnum ("Doric flutes", &s.doricFlutes, {"Segment (A)", "Semicircle (B)"}),
 		Parameter::MakeInt ("Radial segments", &s.radialSegments, kClassicalRadialSegmentsMin, kClassicalRadialSegmentsMax),
@@ -226,37 +351,27 @@ void ParameterizedClassicalColonnade::Regenerate ()
 		const std::unique_ptr<Mesh> column = BuildClassicalColumnMesh (s, &columnProfile);
 		const classical::ColonnadeLayout layout = classical::LayoutColonnade (order, m_columns);
 
-		auto mesh = std::make_unique<Mesh> ();
-		for (double axis : layout.axes)
-		{
-			Mesh copy (*column);
-			for (unsigned i = 0; i < copy.GetNVertices (); ++i)
-			{
-				float v[3];
-				copy.GetVertex (i, v);
-				copy.SetVertex (i, v[0] + static_cast<float> (axis * scale), v[1], v[2]);
-			}
-			appendMesh (*mesh, copy);
-		}
-
 		classical::EntablatureOptions entablature;
 		entablature.doricCornice = s.doricCornice ? classical::DoricCornice::Mutules : classical::DoricCornice::Dentils;
 		entablature.ornaments = m_ornaments;
 		entablature.curveSegments = s.curveSegments;
 		const classical::ColumnProfile section = classical::BuildEntablatureSection (order, entablature);
-		appendMesh (*mesh, *classical::SweepEntablature (section, layout.halfLength, scale, columnProfile.height));
+		const std::unique_ptr<Mesh> swept = classical::SweepEntablature (section, layout.halfLength, scale, columnProfile.height);
+		std::vector<const Mesh *> rest {swept.get ()};
 
+		std::vector<std::pair<classical::OrnamentKind, std::unique_ptr<Mesh>>> ornaments;
 		if (m_ornaments)
 		{
 			const auto placements = classical::PlaceEntablatureOrnaments (order, layout, section, entablature.doricCornice);
 			// Gouttes : 6 cotes au moins, Curve segments au-dela.
-			for (const auto &family : classical::BuildOrnamentMeshes (order, layout, placements, columnProfile.height, scale,
-			                                                          std::max (6, s.curveSegments)))
-				appendMesh (*mesh, *family.second);
+			ornaments = classical::BuildOrnamentMeshes (order, layout, placements, columnProfile.height, scale, std::max (6, s.curveSegments));
+			for (const auto &family : ornaments)
+				rest.push_back (family.second.get ());
 		}
+		std::unique_ptr<Mesh> mesh = AssembleColonnadeMesh (*column, layout.axes, scale, rest);
 		if (mesh->GetNFaces () > kColonnadeFaceWarning)
 			m_warnings = std::to_string (mesh->GetNFaces ()) + " faces (au-dela de " + std::to_string (kColonnadeFaceWarning) +
-			             ") : reduire Columns, Radial segments ou Curve segments, ou decocher Flutes";
+			             ") : reduire Columns, Radial segments ou Curve segments, decocher Flutes" + CapitalOrnamentsAdvice (order, s);
 		m_pMesh = mesh.release ();
 	}
 	catch (const std::exception &e)

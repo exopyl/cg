@@ -28,6 +28,7 @@ set(headers
     phong_extras.h
     material_renderer.h
     mesh_renderer.h
+    polygon_offset.h
     vertex_buffer_manager.h
     widgets_renderer.h
     )

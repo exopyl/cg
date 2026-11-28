@@ -16,7 +16,7 @@ namespace cgarchi
 // de la scene. Les classes parametrees bornent les reglages a chaque Regenerate
 // (Module dans [0,1 ; 10], Radial segments dans [8 ; 256], Curve segments dans
 // [2 ; 32], enumerations ramenees dans leur domaine) ; BuildClassicalColumnMesh
-// ne les borne pas et rejette un `order` hors domaine.
+// ne les borne pas et rejette un `order` ou un `capitalOrnaments` hors domaine.
 struct ClassicalColumnSettings
 {
 	int   order = 0;              // classical::Order
@@ -26,6 +26,7 @@ struct ClassicalColumnSettings
 	int   doricCornice = 0;       // classical::DoricCornice
 	bool  envelope = false;
 	bool  volutes = true;
+	int   capitalOrnaments = 0;   // classical::OrnamentDetail : 0 None, 1 Light, 2 Heavy
 	bool  flutes = false;
 	int   doricFlutes = 0;        // 0 : A (Segment60), 1 : B (Semicircle)
 	int   radialSegments = 48;
@@ -37,13 +38,16 @@ struct ClassicalColumnSettings
 constexpr float kClassicalModuleMin = 0.1f, kClassicalModuleMax = 10.f;
 constexpr int   kClassicalRadialSegmentsMin = 8, kClassicalRadialSegmentsMax = 256;
 constexpr int   kClassicalCurveSegmentsMin = 2, kClassicalCurveSegmentsMax = 32;
+// Choix de capitalOrnaments (classical::OrnamentDetail).
+constexpr int   kCapitalOrnamentsCount = 3;
 
 // Maillage d'une colonne (tour sur plan, coussinets ioniques), axe Z, pied a
 // z = 0 ; une partie de module vaut settings.module / parties par module unites.
 // `profile` et `conflicts`, s'ils sont fournis, recoivent le profil (en parties)
 // et ses jonctions croisees. Le maillage rendu appartient a l'appelant.
 // Leve std::invalid_argument si settings.order est hors de
-// [0, classical::kOrderCount), avant d'ecrire `*profile` ou `*conflicts`. Leve
+// [0, classical::kOrderCount) ou settings.capitalOrnaments hors de
+// [0, kCapitalOrnamentsCount), avant d'ecrire `*profile` ou `*conflicts`. Leve
 // une std::exception sur tout autre echec ; `*profile` n'est alors pas ecrit,
 // `*conflicts` peut l'avoir ete.
 std::unique_ptr<Mesh> BuildClassicalColumnMesh (const ClassicalColumnSettings &settings,
@@ -102,7 +106,13 @@ ClassicalColumnLevels ComputeClassicalColumnLevels (const ClassicalColumnSetting
 // vif du fut ; « Doric flutes » choisit la section du dorique, A (arc de 60
 // degres) ou B (demi-cercle). Les conges du fut sont toujours modelises.
 //
-// Hors perimetre : volutes composites, acanthe, caulicoles, fleurons,
+// Corinthien : « Capital ornaments » (None, Light, Heavy) ajoute les feuilles
+// d'acanthe des rangs F et E (classical_acanthus.h), concatenees au tour en un
+// seul maillage, si « Volutes » est coche : decoche, il coupe tout l'ornement
+// sculpte. Defaut : Light pour une colonne ou une colonnade neuve ; None pour
+// ClassicalColumnSettings () et pour un document classical-column/v1 sans le
+// champ.
+// Hors perimetre : volutes composites, volutes et helices des caulicoles, fleurons,
 // triglyphes, metopes, gouttes, denticules, mutules, modillons, rudentures ;
 // l'entablement est un ressaut carre sur la colonne, pas une poutre filee. Les
 // ornements a deux surfaces sont rendus par leur noyau ou par leur enveloppe
@@ -139,6 +149,16 @@ private:
 	std::string m_lastError;
 };
 
+// Maillage de la colonnade : une copie de `column` par axe, translatee de
+// axis * scale en x (translation ajoutee en float a chaque x), dans l'ordre des
+// axes, puis chaque maillage de `rest` tel quel, dans l'ordre. Sommets puis
+// faces (triangles) de chaque piece, indices decales du nombre de sommets qui la
+// precedent : le maillage d'appendMesh successifs sur un maillage vide.
+// Precondition, non verifiee : les pointeurs de `rest` sont non nuls, et
+// `column` et chaque piece de `rest` sont triangules.
+std::unique_ptr<Mesh> AssembleColonnadeMesh (const Mesh &column, const std::vector<double> &axes, double scale,
+                                             const std::vector<const Mesh *> &rest);
+
 // Colonnade de N colonnes d'un ordre, a l'entraxe AxisSpacing, sous un
 // entablement file en coupe symetrique (classical_entablature.h), avec ses
 // ornements (classical_colonnade.h). Colonnes, entablement et familles
@@ -160,7 +180,9 @@ public:
 	const std::string &LastError () const { return m_lastError; }
 
 	// Avertissements de la derniere generation (maillage au-dela de
-	// kColonnadeFaceWarning faces) ; vide sinon.
+	// kColonnadeFaceWarning faces) ; vide sinon. Corinthien a ornements du
+	// chapiteau : le conseil sur Capital ornaments descend d'un niveau (Heavy :
+	// Light ; Light : None).
 	const std::string &Warnings () const { return m_warnings; }
 
 	static constexpr unsigned kColonnadeFaceWarning = 300000;

@@ -3,7 +3,7 @@
 // Document JSON des reglages d'une colonne classique (ClassicalColumnSettings),
 // schema "classical-column/v1" : src/cgarchi/schemas/classical-column-v1.schema.
 //
-// Un objet plat, un champ par reglage, tous requis :
+// Un objet plat, un champ par reglage, tous requis sauf capitalOrnaments :
 //
 //   schema          "classical-column/v1"
 //   order           cle de l'ordre (classical::OrderKey) : "toscan", "dorique",
@@ -13,6 +13,10 @@
 //   pedestal, entablature, envelope, volutes, flutes   booleens
 //   doricCornice    "dentils" | "mutules"            (classical::DoricCornice)
 //   doricFlutes     "segment60" | "semicircle"       (classical::FluteSection)
+//   capitalOrnaments "none" | "light" | "heavy"      (classical::OrnamentDetail),
+//                   facultatif : absent vaut "none" ; ecrit seulement s'il n'est
+//                   pas "none", si bien qu'un document sans ornement reste
+//                   lisible par un lecteur qui ignore le champ
 //   radialSegments  entier, [kClassicalRadialSegmentsMin, kClassicalRadialSegmentsMax]
 //   curveSegments   entier, [kClassicalCurveSegmentsMin, kClassicalCurveSegmentsMax]
 //
@@ -37,7 +41,7 @@ constexpr const char *kClassicalColumnSchema = "classical-column/v1";
 //   - json_parse : texte illisible ;
 //   - json_schema : `schema` autre que "classical-column/v1" (version future
 //     comprise), champ inconnu, cle en double ;
-//   - json_missing : `schema` ou un reglage absent ;
+//   - json_missing : `schema` ou un reglage requis absent ;
 //   - json_type : type faux, racine non objet ;
 //   - json_value : valeur hors domaine, ordre inconnu, nombre non fini (en
 //     double ou une fois arrondi en float).
